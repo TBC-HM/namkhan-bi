@@ -1,12 +1,21 @@
 // app/api/sop/generate/route.ts
-// PBS 2026-07-07: Thin AI relay. Takes { property_id, dept_code, purpose }, returns
-// { draft: {title, short_summary, author, sop_date, bullets, primary_audience} }.
+// PBS 2026-07-07 · 2026-07-08: Thin AI relay. Takes { property_id, dept_code,
+// purpose, propertyContext? } and returns { draft: {...} }.
 //
-// Uses Anthropic Claude if ANTHROPIC_API_KEY is set in Vercel env; else falls back
-// to a deterministic template stub so the UI is fully wired even before the key
-// is present in the vault (flag: ai_stub=true).
+// 2026-07-08 (bug-3 fix): system prompt is now assembled from three parts:
+//   1. Active agent instruction body from knowledge.sop_agent_instructions
+//      (scope='all', active=true). PBS can edit this on
+//      /operations/qa/agent-instructions without a code deploy.
+//   2. Property context block (rooms / facilities / spa / activities /
+//      seasons / location) — sent by the client, produced by
+//      lib/propertyContext.ts.
+//   3. Small return-shape reminder.
+//
+// Falls back to a deterministic stub if ANTHROPIC_API_KEY is missing so the UI
+// stays wired.
 
 import { NextResponse } from 'next/server';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +24,7 @@ interface Body {
   property_id: number;
   dept_code:   string;
   purpose:     string;
+  propertyContext?: string;   // pre-rendered plain-text block from the client
 }
 
 interface Draft {
@@ -40,9 +50,19 @@ const DEPT_LABEL: Record<string, string> = {
   sales: 'Sales',
   finance: 'Finance',
   it: 'IT',
+  activities: 'Activities',
+  retail: 'Retail',
+  transport: 'Transport',
+  reception: 'Reception',
+  security: 'Security',
+  wellness: 'Wellness',
+  sustainability: 'Sustainability',
+  safety: 'Safety',
+  laundry: 'Laundry',
+  purchasing: 'Purchasing',
+  guest_relations: 'Guest Relations',
 };
 
-// Match SopBrowser normDept for consistent audience naming.
 function audienceFor(dept: string): string {
   return `${(DEPT_LABEL[dept] ?? dept).toLowerCase().replace(/[^a-z]/g, '_')}_staff`;
 }
@@ -52,12 +72,11 @@ function todayISO(): string {
 }
 
 function stubDraft(purpose: string, dept: string): Draft {
-  // Cheap deterministic scaffold — 7 generic bullets tailored by dept label.
-  const label = DEPT_LABEL[dept] ?? dept;
+  const dlabel = DEPT_LABEL[dept] ?? dept;
   const shortPurpose = purpose.split(/[.\n]/)[0].trim().slice(0, 80);
   const title = shortPurpose.length > 5
-    ? `${label} · ${shortPurpose.charAt(0).toUpperCase() + shortPurpose.slice(1)}`
-    : `${label} · ${purpose.slice(0, 40)}`;
+    ? `${dlabel} · ${shortPurpose.charAt(0).toUpperCase() + shortPurpose.slice(1)}`
+    : `${dlabel} · ${purpose.slice(0, 40)}`;
   return {
     title,
     short_summary: `Standard procedure covering: ${purpose.trim().slice(0, 140)}`,
@@ -68,24 +87,48 @@ function stubDraft(purpose: string, dept: string): Draft {
       `Confirm the guest / stakeholder need and scope for: ${shortPurpose || purpose.slice(0, 40)}.`,
       `Prepare all required tools and materials at the start of shift.`,
       `Follow department safety and hygiene protocols throughout.`,
-      `Execute the core steps in the sequence defined by the ${label} manager.`,
-      `Verify quality against the ${label} checklist before completion.`,
-      `Log the action in the daily ${label} report with timestamp and initials.`,
-      `Escalate any deviation or incident to the HoD ${label} within 15 minutes.`,
+      `Execute the core steps in the sequence defined by the ${dlabel} manager.`,
+      `Verify quality against the ${dlabel} checklist before completion.`,
+      `Log the action in the daily ${dlabel} report with timestamp and initials.`,
+      `Escalate any deviation or incident to the HoD ${dlabel} within 15 minutes.`,
     ],
   };
 }
 
-async function callAnthropic(purpose: string, dept: string, propertyId: number): Promise<Draft | null> {
+async function loadActiveInstruction(): Promise<string | null> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data, error } = await sb
+      .from('v_sop_agent_instructions')
+      .select('body')
+      .eq('scope', 'all')
+      .eq('active', true)
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    const body = (data as { body?: string } | null)?.body;
+    return body ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function callAnthropic(
+  purpose: string,
+  dept: string,
+  propertyId: number,
+  propertyContextBlock: string,
+): Promise<Draft | null> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
 
-  const label = DEPT_LABEL[dept] ?? dept;
+  const dlabel = DEPT_LABEL[dept] ?? dept;
   const propertyLabel = propertyId === 260955 ? 'Namkhan (boutique river-lodge, Luang Prabang)'
     : propertyId === 1000001 ? 'Donna Portals (boutique apart-hotel, Panama)'
     : `property ${propertyId}`;
 
-  const system = `You are a senior hotel operations consultant writing a Standard Operating Procedure (SOP).
+  // 1. Agent instructions from DB (PBS-editable). Fallback to a small builtin.
+  const instruction = (await loadActiveInstruction()) ?? `You are a senior hotel operations consultant writing a Standard Operating Procedure (SOP).
 Produce JSON only — no prose wrapper — with EXACTLY this shape:
 {
   "title": "Concise, professional SOP title (max 80 chars)",
@@ -93,11 +136,18 @@ Produce JSON only — no prose wrapper — with EXACTLY this shape:
   "primary_audience": "lowercase_snake_case audience (e.g. housekeeping_staff)",
   "bullets": ["7 to 9 actionable steps, each 1-2 lines, starting with an imperative verb"]
 }`;
+
+  const system = [
+    instruction,
+    '',
+    propertyContextBlock || '(no property context supplied)',
+  ].join('\n');
+
   const user = `Property: ${propertyLabel}
-Department: ${label}
+Department: ${dlabel}
 Purpose: ${purpose}
 
-Generate a professional hotel SOP. Bullets must be specific and executable — no generic filler.`;
+Generate a professional hotel SOP for this property, department, and purpose. Bullets must be specific and executable — no generic filler. Reference only real facilities from the property context above.`;
 
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -109,7 +159,7 @@ Generate a professional hotel SOP. Bullets must be specific and executable — n
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 1200,
+        max_tokens: 1500,
         system,
         messages: [{ role: 'user', content: user }],
       }),
@@ -140,6 +190,7 @@ export async function POST(req: Request) {
     const propertyId = Number(b.property_id);
     const dept       = String(b.dept_code || '');
     const purpose    = String(b.purpose || '').trim();
+    const ctxBlock   = String(b.propertyContext || '').trim();
 
     if (!Number.isFinite(propertyId) || propertyId <= 0) {
       return NextResponse.json({ error: 'property_id is required' }, { status: 400 });
@@ -147,7 +198,7 @@ export async function POST(req: Request) {
     if (!dept) return NextResponse.json({ error: 'dept_code is required' }, { status: 400 });
     if (!purpose) return NextResponse.json({ error: 'purpose is required' }, { status: 400 });
 
-    const ai = await callAnthropic(purpose, dept, propertyId);
+    const ai = await callAnthropic(purpose, dept, propertyId, ctxBlock);
     if (ai) return NextResponse.json({ ok: true, draft: ai, ai_stub: false });
 
     const stub = stubDraft(purpose, dept);
