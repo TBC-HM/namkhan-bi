@@ -40,12 +40,16 @@ interface Props {
   emptyText?: string;
   maxRender?: number;
   storageKey?: string;   // scope dismiss state per block (e.g. "behaviour_signals")
+  /** PBS 2026-07-08: when true, skip the internal green/dark title pill so the
+   *  block can be embedded inside a Container primitive with a canonical title. */
+  bare?: boolean;
 }
 
 export default function ConclusionBlock({
   insights,
   title = 'CONCLUSIONS',
   subtitle,
+  bare = false,
   emptyText = 'Nothing to flag right now — targets met.',
   maxRender = 12,
   storageKey = 'default',
@@ -111,19 +115,21 @@ export default function ConclusionBlock({
   const hiddenCount = mounted ? dismissed.size : 0;
 
   return (
-    <div style={box}>
-      <div style={header}>
-        <span style={pill}>{title}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 10, color: '#5A5A5A', display: 'flex', gap: 10, alignItems: 'center' }}>
-          <span>{visible.length} shown{sorted.length > visible.length ? ` · ${sorted.length - visible.length} dismissed` : ''}</span>
-          {hiddenCount > 0 && (
-            <button onClick={restoreAll} style={restoreBtn}>restore</button>
-          )}
-        </span>
-      </div>
+    <div style={bare ? bareBox : box}>
+      {!bare && (
+        <div style={header}>
+          <span style={pill}>{title}</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#5A5A5A', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <span>{visible.length} shown{sorted.length > visible.length ? ` · ${sorted.length - visible.length} dismissed` : ''}</span>
+            {hiddenCount > 0 && (
+              <button onClick={restoreAll} style={restoreBtn}>restore</button>
+            )}
+          </span>
+        </div>
+      )}
 
-      <div style={{ padding: 8 }}>
-        {subtitle && <div style={{ fontSize: 10, color: '#5A5A5A', margin: '2px 4px 8px' }}>{subtitle}</div>}
+      <div style={{ padding: bare ? 0 : 8 }}>
+        {!bare && subtitle && <div style={{ fontSize: 10, color: '#5A5A5A', margin: '2px 4px 8px' }}>{subtitle}</div>}
 
         {render.length === 0 && (
           <div style={{ fontSize: 11, color: '#8A8A8A', padding: '18px 6px', textAlign: 'center', fontStyle: 'italic' }}>
@@ -232,6 +238,7 @@ export default function ConclusionBlock({
 
 const box: React.CSSProperties = { border: '1px solid #E6DFCC', borderRadius: 6, background: '#FFFFFF', overflow: 'hidden' };
 const header: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#FAFAF7', borderBottom: '1px solid #E6DFCC' };
+const bareBox: React.CSSProperties = { background: 'transparent', border: 'none' };
 const pill: React.CSSProperties = { display: 'inline-block', padding: '3px 8px', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: '#FFFFFF', background: '#1B1B1B', borderRadius: 99 };
 const row: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid #F5F0E1' };
 const restoreBtn: React.CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#5A5A5A', padding: '2px 6px', borderRadius: 3, cursor: 'pointer' };
