@@ -148,10 +148,13 @@ export function SortableTable<Row extends { id: number | string }>({
 
 // ─── Add-recipient inline form ─────────────────────────────────────
 
-export function AddRecipientForm({ propertyId }: { propertyId: number }) {
+export interface ReportOption { value: string; label: string }
+
+export function AddRecipientForm({ propertyId, reportOptions }: { propertyId: number; reportOptions: ReportOption[] }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [template, setTemplate] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [template, setTemplate] = useState<string>(reportOptions[0]?.value ?? 'daily');
+  const [cadence, setCadence] = useState<'daily'|'weekly'|'monthly'>('daily');
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const submit = () => {
@@ -161,7 +164,7 @@ export function AddRecipientForm({ propertyId }: { propertyId: number }) {
         const r = await fetch('/api/revenue/reports/recipient/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ property_id: propertyId, template_key: template, email: email.trim(), name: name.trim() || null }),
+          body: JSON.stringify({ property_id: propertyId, template_key: template, cadence, email: email.trim(), name: name.trim() || null }),
         });
         if (!r.ok) throw new Error(`add failed (${r.status})`);
         setMsg('✓ added');
@@ -174,15 +177,17 @@ export function AddRecipientForm({ propertyId }: { propertyId: number }) {
   };
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-      {/* PBS 2026-07-08: explicit "which report" dropdown. The cadence is baked
-          into each option's name so the operator picks the report, not a frequency. */}
-      <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A', marginRight: 4 }}>
-        Report
-      </label>
-      <select value={template} onChange={(e) => setTemplate(e.target.value as 'daily' | 'weekly' | 'monthly')} style={inputStyle}>
-        <option value="daily">Daily revenue report — every day 08:00</option>
-        <option value="weekly">Weekly revenue report — every Monday 08:00</option>
-        <option value="monthly">Monthly revenue report — 1st of month 08:00</option>
+      {/* PBS 2026-07-08: Report picker (any report from lib/dept-cfg + the 3 built-in scheduled reports)
+          + explicit cadence picker. Reason: the old inline dropdown was a cadence disguised as report picker. */}
+      <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A', marginRight: 4 }}>Report</label>
+      <select value={template} onChange={(e) => setTemplate(e.target.value)} style={{ ...inputStyle, minWidth: 240 }}>
+        {reportOptions.map((r) => (<option key={r.value} value={r.value}>{r.label}</option>))}
+      </select>
+      <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A' }}>Cadence</label>
+      <select value={cadence} onChange={(e) => setCadence(e.target.value as 'daily'|'weekly'|'monthly')} style={inputStyle}>
+        <option value="daily">Daily · 08:00</option>
+        <option value="weekly">Weekly · Mon 08:00</option>
+        <option value="monthly">Monthly · 1st 08:00</option>
       </select>
       <input placeholder="email"  value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...inputStyle, minWidth: 200 }} />
       <input placeholder="name (optional)" value={name} onChange={(e) => setName(e.target.value)} style={{ ...inputStyle, minWidth: 150 }} />
@@ -199,26 +204,30 @@ export function AddRecipientForm({ propertyId }: { propertyId: number }) {
 export interface ScheduledRow {
   id: number;
   property_id: number;
-  template_key: 'daily' | 'weekly' | 'monthly';
+  template_key: string;   // any report key (daily/weekly/monthly + dept-cfg types)
+  cadence: 'daily' | 'weekly' | 'monthly';
   email: string;
   name: string | null;
   next_fire_at: string | null;
   created_at: string;
 }
 
-export function ScheduledReportsTable({ rows, propertyId }: { rows: ScheduledRow[]; propertyId: number }) {
+export function ScheduledReportsTable({ rows, propertyId, reportOptions }: {
+  rows: ScheduledRow[]; propertyId: number; reportOptions: ReportOption[];
+}) {
+  const labelFor = (key: string) => reportOptions.find((o) => o.value === key)?.label ?? key;
   return (
     <>
-      <AddRecipientForm propertyId={propertyId} />
+      <AddRecipientForm propertyId={propertyId} reportOptions={reportOptions} />
       <SortableTable<ScheduledRow>
         rows={rows}
         emptyLabel="No scheduled reports yet — add a recipient above."
         bulkVerb="Dismiss selected"
         defaultSort={{ key: 'next_fire_at', dir: 'asc' }}
         columns={[
-          { key: 'email', label: 'Receiver' },
-          { key: 'template_key', label: 'Report', render: (r) => ({ daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[r.template_key]) },
-          { key: 'template_key', label: 'Frequency', render: (r) => ({ daily: 'every day', weekly: 'every Monday', monthly: '1st of month' }[r.template_key]) },
+          { key: 'email',        label: 'Receiver' },
+          { key: 'template_key', label: 'Report',    render: (r) => labelFor(r.template_key) },
+          { key: 'cadence',      label: 'Frequency', render: (r) => ({ daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[r.cadence] ?? r.cadence) },
           { key: 'next_fire_at', label: 'Next date', render: (r) => (r.next_fire_at ? new Date(r.next_fire_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—') },
         ]}
         onBulkDelete={async (ids) => {
