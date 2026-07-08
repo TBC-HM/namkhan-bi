@@ -9,11 +9,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default function PropertyChannelSourcePage({
-  params,
+  params, searchParams,
 }: {
   params: { property_id: string; source: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const pid = Number(params.property_id);
   if (!Number.isFinite(pid)) notFound();
-  return <ChannelSourceBody params={{ source: params.source }} propertyId={pid} />;
+  return <ChannelSourceBody params={{ source: params.source }} searchParams={searchParams} propertyId={pid} />;
 }
