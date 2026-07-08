@@ -3,7 +3,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import type { SetSummaryRow } from './types';
 
@@ -41,7 +41,7 @@ export default function SetTabs({ sets, selectedSetId }: Props) {
       {sets.map((s) => {
         const active = s.set_id === selectedSetId;
         return (
-          <Link
+          <TenantLink
             key={s.set_id}
             href={`/revenue/compset?set=${s.set_id}`}
             style={{
@@ -74,7 +74,7 @@ export default function SetTabs({ sets, selectedSetId }: Props) {
             <StatusPill tone={FRESHNESS_TONE[s.data_freshness]}>
               {FRESHNESS_LABEL[s.data_freshness]}
             </StatusPill>
-          </Link>
+          </TenantLink>
         );
       })}
     </div>
