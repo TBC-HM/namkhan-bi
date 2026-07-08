@@ -128,15 +128,15 @@ export async function POST(req: Request) {
 
     const r = data as { id: number; invoice_number: string; subtotal: number; tax_amount: number; total: number };
 
-    // 3. Record recurring cadence + recipient_id via direct update
+    // 3. Record recurring cadence + recipient_id via SECURITY DEFINER RPC.
+    // PBS 2026-07-08: was `sb.schema('holding').from('invoices').update(patch)` — PostgREST
+    // does not expose the `holding` schema, so the update silently no-op'd. Use RPC now.
     if (recipient_id || body.recurring_cadence) {
-      const patch: Record<string, unknown> = {};
-      if (recipient_id) patch.recipient_id = recipient_id;
-      if (body.recurring_cadence) {
-        patch.recurring_cadence = body.recurring_cadence;
-        patch.recurring_next_at = addToDate(new Date().toISOString().slice(0, 10), body.recurring_cadence);
-      }
-      await sb.schema('holding').from('invoices').update(patch).eq('id', r.id);
+      await sb.rpc('fn_holding_invoice_apply_meta', {
+        p_id: r.id,
+        p_recipient_id: recipient_id,
+        p_recurring_cadence: body.recurring_cadence ?? null,
+      });
     }
 
     const html = renderInvoiceHtml(body, r.invoice_number, Number(r.subtotal), Number(r.tax_amount), Number(r.total));
