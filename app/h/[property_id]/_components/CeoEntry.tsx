@@ -7,8 +7,17 @@
 //   - 3-container row: Attention · Docs · Tasks
 //   - Bug tracker container at the bottom
 // All primitives paper-white + hairline + ink · matches /revenue/channels/[source] pattern.
+//
+// PBS 2026-07-08 (v3): fix Donna $0 bug + currency plumbing.
+//   - was: read `public.v_kpi_daily` (hardcoded WHERE property_id=260955) so
+//     Donna returned zero rows -> every tile 0 · $0 · $0 · $0.
+//   - now: read `public.v_kpi_daily_property` (bridge over kpi.v_kpi_daily) with
+//     `.eq('property_id', cfg.propertyId)` -- multi-tenant, filtered per property.
+//   - currency prop reads `cfg.baseCurrency` (EUR for Donna, USD for Namkhan);
+//     no more hardcoded 'USD' in KpiTile props.
+//   - all internal Links now use TenantLink so /h/{property_id} sticks on nav.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps, type KpiComparison } from '@/app/(cockpit)/_design';
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
 import HodTasksList from '@/app/revenue/_components/HodTasksList';
@@ -22,18 +31,19 @@ export interface CeoConfig {
   ceoAvatar: string;
   ceoTagline: string;
   humanPartner: string;
+  baseCurrency?: string; // PBS 2026-07-08: 'USD' | 'EUR' | ... -- falls back to view row value
 }
 
 const NAMKHAN_ID = 260955;
 const DONNA_ID   = 1000001;
 
 interface KpiRow {
-  metric_date: string;
+  night_date: string;
+  base_currency: string;
   rooms_available: number;
   rooms_sold: number;
   rooms_revenue: number;
   total_revenue: number;
-  is_actual: boolean;
 }
 
 interface BugRow  { id: number; body: string; status: string; created_at: string; fix_link: string | null; fix_label: string | null }
@@ -56,6 +66,23 @@ function isoBack(days: number): string {
   return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 }
 
+// PBS 2026-07-08: hardcoded fallback so Donna doesn't show $ if the view is
+// missing base_currency for some reason.
+function fallbackCurrency(pid: number): string {
+  if (pid === NAMKHAN_ID) return 'USD';
+  if (pid === DONNA_ID)   return 'EUR';
+  return 'USD';
+}
+
+function currencySymbol(code: string): string {
+  switch (code) {
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'LAK': return '₭';
+    default:    return '$';
+  }
+}
+
 export default async function CeoEntry({
   cfg,
   searchParams,
@@ -68,19 +95,29 @@ export default async function CeoEntry({
   const d30      = isoBack(30);
   const d90      = isoBack(90);
   const d365     = isoBack(365);
-  // PBS 2026-07-02: main tile value is YTD (Jan 1 of current year → today).
+  // PBS 2026-07-02: main tile value is YTD (Jan 1 of current year -> today).
   const dYtd     = `${new Date().getFullYear()}-01-01`;
   const yearNow  = new Date().getFullYear();
-  // PBS 2026-07-02: SDLY YTD — Jan 1 of prior year through same month/day of prior year.
+  // PBS 2026-07-02: SDLY YTD -- Jan 1 of prior year through same month/day of prior year.
   const dSdlyStart = `${yearNow - 1}-01-01`;
   const dSdlyEnd   = new Date(new Date().setFullYear(yearNow - 1)).toISOString().slice(0, 10);
 
-  // Namkhan-only view today. Donna would need its own view — safe fallback.
-  const kpiView = cfg.propertyId === NAMKHAN_ID ? 'v_kpi_daily' : null;
-  const kpiSelect = 'metric_date,rooms_available,rooms_sold,rooms_revenue,total_revenue,is_actual';
-  const pull = (from: string, to: string = today) => kpiView
-    ? Promise.resolve(supabase.from(kpiView).select(kpiSelect).gte('metric_date', from).lte('metric_date', to).eq('is_actual', true)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[])
-    : Promise.resolve([] as KpiRow[]);
+  // PBS 2026-07-08 v3: multi-tenant view + property_id filter.
+  // Old code hardcoded to Namkhan-only `public.v_kpi_daily`; Donna returned zero rows.
+  const kpiSelect = 'night_date,base_currency,rooms_available,rooms_sold,rooms_revenue,total_revenue';
+  const pull = async (from: string, to: string = today): Promise<KpiRow[]> => {
+    try {
+      const { data } = await supabase
+        .from('v_kpi_daily_property')
+        .select(kpiSelect)
+        .eq('property_id', cfg.propertyId)
+        .gte('night_date', from)
+        .lte('night_date', to);
+      return (data ?? []) as KpiRow[];
+    } catch {
+      return [] as KpiRow[];
+    }
+  };
 
   const [kpi30, kpi90, kpi365, kpiYtd, kpiSdlyYtd, bugsRes] = await Promise.all([
     pull(d30),
@@ -90,7 +127,7 @@ export default async function CeoEntry({
     pull(dSdlyStart, dSdlyEnd),
     Promise.resolve(supabase.from('cockpit_bugs').select('id,body,status,created_at,fix_link,fix_label').neq('status', 'archived').order('created_at', { ascending: false }).limit(10)).then(r => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]),
   ]);
-  // Attention / Docs surfaces not yet installed — render empty state.
+  // Attention / Docs surfaces not yet installed -- render empty state.
   // Tasks now use the shared HodTasksList primitive (client component with add/due/repeat/delete).
   const attnRes: Array<{ id: string; label: string; severity: 'high'|'medium'|'low'; href: string | null }> = [];
   const docsRes: Array<{ id: string; label: string; href: string | null; uploaded_at: string }> = [];
@@ -100,6 +137,13 @@ export default async function CeoEntry({
   const A365      = agg(kpi365);
   const AYtd      = agg(kpiYtd);
   const ASdlyYtd  = agg(kpiSdlyYtd);
+
+  // PBS 2026-07-08: currency comes from cfg > first row.base_currency > property fallback.
+  const currencyCode: string = cfg.baseCurrency
+    ?? (kpiYtd[0]?.base_currency)
+    ?? (kpi365[0]?.base_currency)
+    ?? fallbackCurrency(cfg.propertyId);
+  const cSym = currencySymbol(currencyCode);
 
   // Delta helper: % change vs SDLY YTD. Positive = better (revenue/RevPAR/ADR/occ).
   const pctDelta = (now: number, prior: number): { value: number; direction: 'up' | 'down' | 'flat' } => {
@@ -121,22 +165,23 @@ export default async function CeoEntry({
     { label: 'L365d', value: v365, format, direction: 'flat' },
   ];
 
-  // PBS 2026-07-02: main = YTD (Jan 1 → today). delta = SDLY YTD %. compare[] = trailing L30/L90/L365.
+  // PBS 2026-07-02: main = YTD (Jan 1 -> today). delta = SDLY YTD %. compare[] = trailing L30/L90/L365.
+  // PBS 2026-07-08: currency prop = currencyCode (was hardcoded 'USD').
   const tiles: KpiTileProps[] = [
     { label: 'Occupancy',     value: `${AYtd.occ.toFixed(1)}%`,        size: 'md',
-      footnote: `rooms sold ÷ rooms available · YTD ${yearNow} · SDLY ${(ASdlyYtd.occ).toFixed(1)}%`,
+      footnote: `rooms sold / rooms available · YTD ${yearNow} · SDLY ${(ASdlyYtd.occ).toFixed(1)}%`,
       delta:   { value: dOcc.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dOcc.direction,    isGoodWhenUp: true },
       compare: cmp(Number(A30.occ.toFixed(1)), Number(A90.occ.toFixed(1)), Number(A365.occ.toFixed(1)), 'percent') },
-    { label: 'ADR',           value: Math.round(AYtd.adr),    currency: 'USD', size: 'md',
-      footnote: `rooms revenue ÷ rooms sold · YTD ${yearNow} · SDLY $${Math.round(ASdlyYtd.adr)}`,
+    { label: 'ADR',           value: Math.round(AYtd.adr),    currency: currencyCode, size: 'md',
+      footnote: `rooms revenue / rooms sold · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.adr)}`,
       delta:   { value: dAdr.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dAdr.direction,    isGoodWhenUp: true },
       compare: cmp(Math.round(A30.adr), Math.round(A90.adr), Math.round(A365.adr), 'currency') },
-    { label: 'RevPAR',        value: Math.round(AYtd.revpar), currency: 'USD', size: 'md',
-      footnote: `rooms revenue ÷ rooms available · YTD ${yearNow} · SDLY $${Math.round(ASdlyYtd.revpar)}`,
+    { label: 'RevPAR',        value: Math.round(AYtd.revpar), currency: currencyCode, size: 'md',
+      footnote: `rooms revenue / rooms available · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.revpar)}`,
       delta:   { value: dRevpar.value, period: `vs SDLY YTD ${yearNow - 1}`, direction: dRevpar.direction, isGoodWhenUp: true },
       compare: cmp(Math.round(A30.revpar), Math.round(A90.revpar), Math.round(A365.revpar), 'currency') },
-    { label: 'Rooms revenue', value: Math.round(AYtd.rev),    currency: 'USD', size: 'md',
-      footnote: `rooms-only revenue · consumed nights (excl. cancels / no-shows / F&B / extras) · YTD ${yearNow} · SDLY $${Math.round(ASdlyYtd.rev).toLocaleString('en-US')}`,
+    { label: 'Rooms revenue', value: Math.round(AYtd.rev),    currency: currencyCode, size: 'md',
+      footnote: `rooms-only revenue · consumed nights (excl. cancels / no-shows / F&B / extras) · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.rev).toLocaleString('en-US')}`,
       delta:   { value: dRev.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dRev.direction,    isGoodWhenUp: true },
       compare: cmp(Math.round(A30.rev), Math.round(A90.rev), Math.round(A365.rev), 'currency') },
   ];
@@ -172,7 +217,7 @@ export default async function CeoEntry({
           </div>
         </div>
         <span style={{ padding: '3px 10px', background: '#EEF5EE', border: '1px solid #C8DFC8', color: '#2C5F4F', borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
-          🟢 Active
+          Active
         </span>
       </div>
 
@@ -200,7 +245,7 @@ export default async function CeoEntry({
                 {[
                   { label: 'How is the resort doing today?', href: `/h/${cfg.propertyId}/revenue/pulse` },
                   { label: 'Any leakage flags?',             href: `/h/${cfg.propertyId}/revenue/leakage` },
-                  { label: 'This week\'s pickup',            href: `/h/${cfg.propertyId}/revenue/pickup` },
+                  { label: 'This week pickup',               href: `/h/${cfg.propertyId}/revenue/pickup` },
                 ].map((chip) => (
                   <ChipHint key={chip.label} label={chip.label} href={chip.href} />
                 ))}
@@ -210,7 +255,7 @@ export default async function CeoEntry({
                 border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 600,
                 letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
               }}>
-                Ask →
+                Ask
               </button>
             </div>
           </form>
@@ -226,13 +271,13 @@ export default async function CeoEntry({
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
         <Container title={`Attention · ${attnRes.length}`} subtitle="leakage · opportunities · watchlist">
           {attnRes.length === 0 ? (
-            <EmptyBlock>No attention items. Nova will surface leakage and pickup flags here as they land.</EmptyBlock>
+            <EmptyBlock>No attention items. {cfg.ceoName} will surface leakage and pickup flags here as they land.</EmptyBlock>
           ) : (
             <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {attnRes.map((a) => (
                 <li key={a.id} style={{ padding: '8px 10px', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 4, fontSize: 12 }}>
                   <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: severityTone[a.severity] ?? '#8A8A8A', marginRight: 8 }} />
-                  {a.href ? <Link href={a.href} style={{ color: '#1B1B1B', textDecoration: 'underline', textDecorationColor: '#C79A6B' }}>{a.label}</Link> : a.label}
+                  {a.href ? <TenantLink href={a.href} style={{ color: '#1B1B1B', textDecoration: 'underline', textDecorationColor: '#C79A6B' }}>{a.label}</TenantLink> : a.label}
                 </li>
               ))}
             </ul>
@@ -241,7 +286,7 @@ export default async function CeoEntry({
 
         <Container title={`Docs · ${docsRes.length}`} subtitle="uploads · reports">
           {docsRes.length === 0 ? (
-            <EmptyBlock>Drop docs Nova should read. Reports will queue here after their scheduled runs.</EmptyBlock>
+            <EmptyBlock>Drop docs {cfg.ceoName} should read. Reports will queue here after their scheduled runs.</EmptyBlock>
           ) : (
             <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {docsRes.map((d) => (
@@ -261,7 +306,7 @@ export default async function CeoEntry({
 
       {/* Bug tracker */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title={`Bugs & fixes · ${bugsRes.length}`} subtitle="reported by Nova / by chat · click a done bug to see the fix">
+        <Container title={`Bugs & fixes · ${bugsRes.length}`} subtitle={`reported by ${cfg.ceoName} / by chat · click a done bug to see the fix`}>
           {bugsRes.length === 0 ? (
             <EmptyBlock>No open bugs. When you flag something in chat it lands here.</EmptyBlock>
           ) : (
@@ -286,7 +331,7 @@ export default async function CeoEntry({
         </Container>
       </div>
 
-      {/* Booking activity — new bookings + cancellations · 1–7d window */}
+      {/* Booking activity -- new bookings + cancellations · 1-7d window */}
       <div style={{ gridColumn: '1 / -1' }}>
         <BookingActivity propertyId={cfg.propertyId} searchParams={searchParams} />
       </div>
