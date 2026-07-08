@@ -8,8 +8,7 @@
 //   None · LW (last week) · LM (last month) · SDLY · STLY · Budget
 // All keys map through lib/period.ts → CompareKey.
 
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 interface Option {
   cmp: string;
   label: string;
@@ -61,7 +60,7 @@ export default function CompareSelector({
         params.set('cmp', o.cmp);
         const isActive = active === o.cmp;
         return (
-          <Link
+          <TenantLink
             key={o.cmp}
             href={`${basePath}?${params.toString()}`}
             prefetch={false}
@@ -75,7 +74,7 @@ export default function CompareSelector({
             }}
           >
             {o.label}
-          </Link>
+          </TenantLink>
         );
       })}
     </div>
