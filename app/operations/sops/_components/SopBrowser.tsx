@@ -1,9 +1,10 @@
 'use client';
 
 // app/operations/sops/_components/SopBrowser.tsx
-// PBS 2026-07-08: Client-side search + grouped SOP list. SOPs are shared across
-// properties (no property_id filter in v_sop_catalog) so the same table renders
-// on both Namkhan and Donna URLs.
+// PBS 2026-07-08 · 2026-07-07 (Generate): Client-side search + grouped SOP list.
+// Now surfaces AI-generated SOPs with a small "AI" chip on the code cell, and
+// renders a "+ Generate SOP" button when `generateHref` prop is passed.
+// SOPs are property-scoped (see /operations/sops page.tsx filter).
 
 import { useMemo, useState } from 'react';
 
@@ -14,6 +15,11 @@ export interface SopRow {
   visual_required: boolean;
   kb_links_count: number | null; legal_links_count: number | null; susty_links_count: number | null;
   created_at: string; updated_at: string;
+  // PBS 2026-07-07: exposed by v_sop_catalog for the Generate feature. Optional so
+  // pre-existing callers don't need to change; the browser only surfaces `source`
+  // as an "AI" chip when non-null.
+  property_id?: number | null;
+  source?: string | null;
 }
 
 const WHITE = '#FFFFFF';
@@ -45,7 +51,7 @@ function normDept(code: string): string {
   return map[cu] ?? code;
 }
 
-export default function SopBrowser({ sops }: { sops: SopRow[] }) {
+export default function SopBrowser({ sops, generateHref }: { sops: SopRow[]; generateHref?: string }) {
   const [query, setQuery] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('all');
 
@@ -112,6 +118,19 @@ export default function SopBrowser({ sops }: { sops: SopRow[] }) {
         <span style={{ fontSize: 11, color: INK_M }}>
           {filtered.length} of {sops.length} SOP{sops.length === 1 ? '' : 's'}
         </span>
+        {generateHref && (
+          <a
+            href={generateHref}
+            style={{
+              marginLeft: 'auto', padding: '6px 12px',
+              background: '#0F5B4A', color: WHITE, border: '1px solid #0F5B4A',
+              borderRadius: 4, fontSize: 11, fontWeight: 600,
+              textDecoration: 'none', letterSpacing: '0.02em',
+            }}
+          >
+            + Generate SOP
+          </a>
+        )}
       </div>
 
       {/* Dept chip nav */}
@@ -153,7 +172,14 @@ export default function SopBrowser({ sops }: { sops: SopRow[] }) {
               <tbody>
                 {list.map((s) => (
                   <tr key={s.sop_code} style={{ borderBottom: '1px solid ' + CREAM }}>
-                    <td style={{ padding: '8px 12px', color: INK, fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11 }}>{s.sop_code}</td>
+                    <td style={{ padding: '8px 12px', color: INK, fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11 }}>
+                      {s.sop_code}
+                      {(s.source === 'ai_generated' || s.source === 'ai_stub') && (
+                        <span title={s.source === 'ai_stub' ? 'AI stub (deterministic)' : 'AI-generated (Claude)'} style={{ marginLeft: 6, padding: '1px 6px', background: CREAM, color: INK_S, borderRadius: 99, fontSize: 9, fontWeight: 600, letterSpacing: '0.04em' }}>
+                          AI
+                        </span>
+                      )}
+                    </td>
                     <td style={{ padding: '8px 12px', color: INK, fontWeight: 600 }}>{s.title}</td>
                     <td style={{ padding: '8px 12px', color: INK_M, fontSize: 11 }}>{s.primary_audience ?? '—'}</td>
                     <td style={{ padding: '8px 12px', color: INK_S, fontSize: 11, lineHeight: 1.4, maxWidth: 400 }}>{s.short_summary}</td>
