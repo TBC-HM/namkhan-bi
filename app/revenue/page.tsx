@@ -16,7 +16,7 @@ import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import ReportBuilder from './_components/ReportBuilder';
-import { ScheduledReportsTable, SendLogTable, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
+import { ScheduledReportsTable, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
 import BugsList from './_components/BugsList';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
@@ -332,13 +332,10 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </Container>
       </div>
 
-      <div style={fullRow}>
-        <Container title="Reports · send log"
-                   subtitle="Every report ever sent · sort any column · bulk-delete with checkboxes"
-                   density="compact">
-          <SendLogTable rows={sendLogRows} />
-        </Container>
-      </div>
+      {/* PBS 2026-07-08: Send log container removed. Only "Scheduled reports"
+          stays — the goal is that PBS knows to whom he scheduled what. A full
+          send log becomes noise on the HoD. Sends still persist in
+          documentation.revenue_report_sends for audit if ever needed. */}
 
       {/* Conclusions — rev-manager forward brief.
           PBS 2026-07-08 (final): wrapped in a canonical Container so the title
