@@ -3,7 +3,7 @@
 // fix-in-PMS workflow. Reads guest.mv_guest_profile and flags rows that need
 // cleanup. Every flag wired off real columns. No invented errors.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -167,7 +167,7 @@ export default async function MessyDataPage() {
               <span style={metaDim}>same email · multiple guest_id</span>
             </StatusCell>
             <span style={{ flex: 1 }} />
-            <Link
+            <TenantLink
               href="/guest/directory"
               style={{
                 padding: '4px 10px',
@@ -184,7 +184,7 @@ export default async function MessyDataPage() {
               }}
             >
               ← DIRECTORY
-            </Link>
+            </TenantLink>
           </>
         }
       />
