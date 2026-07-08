@@ -8,7 +8,7 @@
 // every table cell is pre-formatted as a string in the data array.
 
 import {
-  DashboardPage, Container, KpiTile, Chart,
+  DashboardPage, Container, KpiTile, TrendTile, Chart,
   MonthCalendar, PickupTabs,
   type ChartSeries, type DashboardTab, type KpiTileProps, type CalendarDay,
 } from '@/app/(cockpit)/_design';
@@ -24,6 +24,8 @@ import {
   getPulseTodayPickup,
   getPulseTodayCancellations,
   getPulseUpcomingEvents,
+  getPulseRnSold30d,
+  type PulseRnSoldDay,
   type PulseDailyRow,
   type PulseKpiSnapshot,
   type PulseSourceRow,
@@ -108,7 +110,7 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const stlyFrom = shiftDate(heroFrom, -365);
   const stlyTo = shiftDate(heroTo, -365);
 
-  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, cancellations, events] =
+  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, cancellations, events, rnSold30d] =
     await Promise.all([
       getPulseHeadlineKpis(pid, anchor),
       getPulsePerformanceSummary(pid, anchor),
@@ -119,7 +121,14 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
       getPulseTodayPickup(pid, shiftDate(anchor, pickupOffset)),
       getPulseTodayCancellations(pid, shiftDate(anchor, pickupOffset)),
       getPulseUpcomingEvents(pid, anchor, shiftDate(anchor, 30), 30),
-    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulsePickupRow[], PulseEventRow[]];
+      getPulseRnSold30d(pid),
+    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulsePickupRow[], PulseEventRow[], PulseRnSoldDay[]];
+
+  // PBS 2026-07-08: avg RN sold per day over the last 30 nights (both properties).
+  const rnSoldSeries = rnSold30d.map((r) => ({ date: r.night_date, value: r.rooms_sold }));
+  const avgRnSold = rnSoldSeries.length > 0
+    ? rnSoldSeries.reduce((s, r) => s + r.value, 0) / rnSoldSeries.length
+    : 0;
 
   // ─── headline tiles ──────────────────────────────────────────────────
   const occΔ    = pctChange(headline.occupancyPct, headline.stlyOccupancyPct);
@@ -292,6 +301,21 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
           {/* PBS 2026-07-08: tile grid mirrors the HoD page (Vector) — 160px min / 8px gap — so the two pages read as one. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
             {headlineTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
+
+      {/* PBS 2026-07-08: new TrendTile — avg room-nights sold per day over the last 30d.
+          Powered by public.v_pulse_rn_sold_30d (property-scoped, both properties). */}
+      <div style={fullRow}>
+        <Container title="Trend · last 30 days" subtitle="daily room-nights sold · dashed line = average" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
+            <TrendTile
+              label="Avg RN sold · 30d"
+              value={avgRnSold.toFixed(1)}
+              series={rnSoldSeries}
+              footnote={`${rnSoldSeries.length} days · ${Math.round(rnSoldSeries.reduce((s, r) => s + r.value, 0))} rooms sold total`}
+            />
           </div>
         </Container>
       </div>
