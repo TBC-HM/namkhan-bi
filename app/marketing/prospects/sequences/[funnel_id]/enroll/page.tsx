@@ -1,6 +1,6 @@
 // app/marketing/prospects/sequences/[funnel_id]/enroll/page.tsx
 // PBS 2026-07-05: enroll subscribers by tag into a sequence.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -25,7 +25,7 @@ export default async function EnrollPage({ params }: { params: { funnel_id: stri
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title={`Sequences · Enroll subscribers · ${funnel.name}`} subtitle={`state: ${funnel.status} · ${funnel.steps_count} steps`} tabs={tabs}>
         <div style={{ gridColumn:'1 / -1' }}>
-          <Link href={`/marketing/prospects/sequences/${funnel.funnel_id}`} style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequence</Link>
+          <TenantLink href={`/marketing/prospects/sequences/${funnel.funnel_id}`} style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequence</TenantLink>
         </div>
         <div style={{ gridColumn:'1 / -1' }}>
           <EnrollForm funnel_id={funnel.funnel_id} defaultTag={funnel.target_tag_key ?? ''} tags={tags} />
