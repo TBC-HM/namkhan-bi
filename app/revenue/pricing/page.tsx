@@ -139,6 +139,10 @@ export default async function PricingPage({ searchParams, propertyId }: { search
 
 
   // ─── Tab: Restrictions (MinLOS + stop-sell) ───────────────────────────
+  // PBS 2026-07-08 SEMANTIC FIX: split BAR (base rate plan MIN) from package
+  // MLS (derived/standalone MAX). Old page did MAX across ALL plans → showed
+  // 12/4/3 nights on days where a walk-in on BAR flex would face MLS=1.
+  // Source: public.v_rate_inventory_typed (join on rate_plans.rate_type).
   if (tab === 'restrictions') {
     const roff = Math.max(0, Math.min(11, Number(searchParams.roff ?? 0)));
     const todayD = new Date(); todayD.setUTCHours(0,0,0,0);
@@ -146,27 +150,62 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     const endD = new Date(startD); endD.setUTCDate(startD.getUTCDate() + 6);
     const fromIso = startD.toISOString().slice(0,10);
     const toIso = endD.toISOString().slice(0,10);
-    const [roomTypes, inventory] = await Promise.all([
+    const [roomTypes, invResp] = await Promise.all([
       getRoomTypes(pid),
-      getRateInventory(fromIso, toIso, { propertyId: pid }),
+      supabase
+        .from('v_rate_inventory_typed')
+        .select('room_type_id, inventory_date, minimum_stay, stop_sell, rate_plan_type')
+        .eq('property_id', pid)
+        .gte('inventory_date', fromIso)
+        .lte('inventory_date', toIso),
     ]);
+    type InvRow = {
+      room_type_id: number;
+      inventory_date: string;
+      minimum_stay: number | null;
+      stop_sell: boolean | null;
+      rate_plan_type: 'base' | 'derived' | 'standalone' | null;
+    };
+    const inv: InvRow[] = (invResp.data ?? []) as InvRow[];
+    const baseRows = inv.filter((r) => r.rate_plan_type === 'base');
+    const pkgRows  = inv.filter((r) => r.rate_plan_type === 'derived' || r.rate_plan_type === 'standalone');
+
     const dateCols: string[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(startD); d.setUTCDate(startD.getUTCDate() + i);
       dateCols.push(d.toISOString().slice(0,10));
     }
-    const cellMap = new Map<string, number>();
-    for (const r of inventory) {
-      const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
+    const WEEKDAY = (iso: string) => {
+      const dt = new Date(`${iso}T00:00:00Z`);
+      return dt.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+    };
+
+    // BAR cell = MIN(minimum_stay) on base rows (99 if any stop_sell).
+    const barCellMap = new Map<string, number>();
+    for (const r of baseRows) {
+      const stop = Boolean(r.stop_sell);
       const mls  = Number(r.minimum_stay ?? 1);
-      const value = stop ? 99 : mls;
-      const date = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
-      const rt = roomTypes.find((x) => x.room_type_id === r.room_type_id);
+      const date = String(r.inventory_date ?? '').slice(0, 10);
+      const rt   = roomTypes.find((x) => x.room_type_id === r.room_type_id);
       const rtName = rt?.room_type_name ?? `room_${r.room_type_id}`;
       const key = `${date}|${rtName}`;
-      const cur = cellMap.get(key);
-      if (cur == null || value > cur) cellMap.set(key, value);
+      if (stop) { barCellMap.set(key, 99); continue; }
+      const cur = barCellMap.get(key);
+      // MIN semantics: lowest MLS on base plans = true BAR restriction.
+      if (cur == null || cur === 99 || mls < cur) barCellMap.set(key, mls);
     }
+    // Package cell = MAX(minimum_stay) on derived/standalone (advisory).
+    const pkgCellMap = new Map<string, number>();
+    for (const r of pkgRows) {
+      const mls  = Number(r.minimum_stay ?? 1);
+      const date = String(r.inventory_date ?? '').slice(0, 10);
+      const rt   = roomTypes.find((x) => x.room_type_id === r.room_type_id);
+      const rtName = rt?.room_type_name ?? `room_${r.room_type_id}`;
+      const key = `${date}|${rtName}`;
+      const cur = pkgCellMap.get(key);
+      if (cur == null || mls > cur) pkgCellMap.set(key, mls);
+    }
+
     const roomNames = Array.from(new Set(roomTypes.map((rt) => rt.room_type_name))).sort();
     const rhref = (n: number) => `${basePath}?tab=restrictions&roff=${n}`;
     const pillStyle: React.CSSProperties = {
@@ -174,54 +213,95 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       background: '#FFFFFF', color: '#000', fontSize: 11, fontWeight: 500, textDecoration: 'none',
       letterSpacing: '0.06em', textTransform: 'uppercase',
     };
+    const navBlock = (
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <a href={rhref(Math.max(0, roff - 1))} style={{ ...pillStyle, opacity: roff === 0 ? 0.4 : 1, pointerEvents: roff === 0 ? 'none' : 'auto' }}>← prev 7</a>
+        {roff !== 0 && <a href={rhref(0)} style={pillStyle}>today</a>}
+        <a href={rhref(Math.min(11, roff + 1))} style={{ ...pillStyle, opacity: roff >= 11 ? 0.4 : 1, pointerEvents: roff >= 11 ? 'none' : 'auto' }}>next 7 →</a>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#5A5A5A', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{fromIso} → {toIso}</span>
+      </div>
+    );
+
+    // Donna empty state: rate_inventory doesn't feed Mews yet.
+    if (baseRows.length === 0 && pkgRows.length === 0) {
+      return (
+        <DashboardPage title="Revenue · Calendar" subtitle={`restrictions · ${fromIso} → ${toIso}`} tabs={tabs}>
+          {stripBlock}
+          <div style={fullRow}>
+            <Container title="Length-of-stay restrictions" subtitle={`${fromIso} → ${toIso}`}>
+              {navBlock}
+              <div style={{
+                background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 6,
+                padding: '32px 24px', textAlign: 'center', color: '#5A5A5A', fontSize: 13, lineHeight: 1.5,
+              }}>
+                Restrictions view is Cloudbeds-only. Mews restrictions ingestion is not yet wired.
+              </div>
+            </Container>
+          </div>
+        </DashboardPage>
+      );
+    }
+
+    const renderGrid = (cellMap: Map<string, number>) => (
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed', background: '#FFFFFF' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid #E6DFCC', fontWeight: 600, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Room type</th>
+            {dateCols.map((d) => (
+              <th key={d} style={{ textAlign: 'center', padding: '6px 4px', borderBottom: '1px solid #E6DFCC', fontWeight: 600, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', width: 72 }}>
+                {WEEKDAY(d)} {d.slice(5)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {roomNames.map((room) => (
+            <tr key={room}>
+              <td style={{ padding: '6px 8px', borderBottom: '1px solid #E6DFCC', fontWeight: 500, fontSize: 12, background: '#FFFFFF' }}>{room}</td>
+              {dateCols.map((d) => {
+                const v = cellMap.get(`${d}|${room}`);
+                const bg = v === 99 ? '#FCE7E6' : (v != null && v > 1) ? '#FEF8E0' : '#FFFFFF';
+                const txt = v === 99 ? '×' : v != null ? String(v) : '·';
+                const color = v === 99 ? '#900' : '#1B1B1B';
+                return (
+                  <td key={d} style={{ padding: '6px 4px', borderBottom: '1px solid #E6DFCC', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontSize: 12, background: bg, color, width: 72 }}>
+                    {txt}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+          {roomNames.length === 0 && (
+            <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: '#5A5A5A', background: '#FFFFFF' }}>No room types found</td></tr>
+          )}
+        </tbody>
+      </table>
+    );
+
     return (
       <DashboardPage title="Revenue · Calendar" subtitle={`restrictions · ${fromIso} → ${toIso}`} tabs={tabs}>
         {stripBlock}
         <div style={fullRow}>
           <Container
-            title="Next 7 days"
-            subtitle={`WIRED — rate_inventory.minimum_stay + stop_sell from Cloudbeds. Cell = min nights for room×date; 99 (red) = stop-sell. Window: ${fromIso} → ${toIso}.`}
+            title="Length-of-stay restrictions · BAR only · next 7 days"
+            subtitle="MIN(minimum_stay) on rate_type='base' plans only. This is what a walk-in guest faces on the standard flex rate."
           >
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-              <a href={rhref(Math.max(0, roff - 1))} style={{ ...pillStyle, opacity: roff === 0 ? 0.4 : 1, pointerEvents: roff === 0 ? 'none' : 'auto' }}>← prev 7</a>
-              {roff !== 0 && <a href={rhref(0)} style={pillStyle}>today</a>}
-              <a href={rhref(Math.min(11, roff + 1))} style={{ ...pillStyle, opacity: roff >= 11 ? 0.4 : 1, pointerEvents: roff >= 11 ? 'none' : 'auto' }}>next 7 →</a>
-              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#5A5A5A', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{fromIso} → {toIso}</span>
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid #000', fontWeight: 600, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Room type</th>
-                  {dateCols.map((d) => (
-                    <th key={d} style={{ textAlign: 'center', padding: '6px 4px', borderBottom: '1px solid #000', fontWeight: 600, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', width: 64 }}>
-                      {d.slice(5)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {roomNames.map((room) => (
-                  <tr key={room}>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #F0F0F0', fontWeight: 500, fontSize: 12 }}>{room}</td>
-                    {dateCols.map((d) => {
-                      const v = cellMap.get(`${d}|${room}`);
-                      const bg = v === 99 ? '#FCE7E6' : (v != null && v > 1) ? '#FEF8E0' : '#FFFFFF';
-                      const txt = v === 99 ? '×' : v != null ? String(v) : '·';
-                      const color = v === 99 ? '#900' : '#000';
-                      return (
-                        <td key={d} style={{ padding: '6px 4px', borderBottom: '1px solid #F0F0F0', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontSize: 12, background: bg, color, width: 64 }}>
-                          {txt}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-                {roomNames.length === 0 && (
-                  <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: '#5A5A5A' }}>No room types found</td></tr>
-                )}
-              </tbody>
-            </table>
+            {navBlock}
+            {renderGrid(barCellMap)}
           </Container>
+        </div>
+        <div style={fullRow}>
+          <Container
+            title="Package rate plan MLS (advisory)"
+            subtitle="MAX(minimum_stay) across derived/standalone plans (Members, Stay 4 Pay 3, Long Stay, Retreats). NOT a BAR restriction — reflects the longest package length offered."
+          >
+            {renderGrid(pkgCellMap)}
+          </Container>
+        </div>
+        <div style={fullRow}>
+          <div style={{ padding: '8px 12px', fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em' }}>
+            · = open · N = min nights · × = stop-sell (99)
+          </div>
         </div>
       </DashboardPage>
     );
