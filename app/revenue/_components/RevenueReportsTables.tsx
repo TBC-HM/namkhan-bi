@@ -229,6 +229,17 @@ export function ScheduledReportsTable({ rows, propertyId, reportOptions }: {
           { key: 'template_key', label: 'Report',    render: (r) => labelFor(r.template_key) },
           { key: 'cadence',      label: 'Frequency', render: (r) => ({ daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[r.cadence] ?? r.cadence) },
           { key: 'next_fire_at', label: 'Next date', render: (r) => (r.next_fire_at ? new Date(r.next_fire_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—') },
+          // PBS 2026-07-08: Preview link per row — opens the report preview page in a new tab.
+          { key: 'template_key', label: 'Preview', align: 'center', render: (r) => {
+            const key = ['daily','weekly','monthly'].includes(r.template_key) ? r.template_key : 'daily';
+            return (
+              <a href={`/revenue/reports/scheduled/${key}/preview?property_id=${r.property_id}`}
+                 target="_blank" rel="noopener noreferrer"
+                 style={{ padding: '3px 10px', border: '1px solid #084838', color: '#084838', borderRadius: 4, fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
+                Preview
+              </a>
+            );
+          }},
         ]}
         onBulkDelete={async (ids) => {
           const r = await fetch('/api/revenue/reports/recipient/dismiss', {
