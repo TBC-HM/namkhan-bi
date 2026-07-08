@@ -76,12 +76,14 @@ export default function UnpaidBillsActions({ rows }: { rows: UnpaidBillRow[] }) 
       <a
         href={csvHref}
         download={`namkhan_unpaid_bills_${new Date().toISOString().slice(0, 10)}.csv`}
+        title="Download CSV"
+        aria-label="Download CSV"
         style={S.btn}
       >
-        ↓ Download CSV
+        <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>⬇</span>
       </a>
-      <a href={mailtoHref} style={S.btn}>
-        ✉ Send to accountant
+      <a href={mailtoHref} title="Send to accountant" aria-label="Send to accountant" style={S.btn}>
+        <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>✉</span>
       </a>
     </div>
   );
