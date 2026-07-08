@@ -1172,10 +1172,11 @@ const HOLDING_FINANCE_CFG: DeptCfg = {
   hodTagline: 'Holding finance · issue invoices to DMCs / partners / third parties · running invoice numbers.',
   chatPlaceholder: 'e.g. generate an invoice for X for Y amount.',
   storageKeyPrefix: 'hold-finance',
-  // PBS 2026-07-08: Invoices sub-tab surfaces the invoice generator.
+  // PBS 2026-07-08: Invoices + editable Template sub-tabs.
   subPages: [
-    { label: 'HoD',      href: '/holding/finance'         },
-    { label: 'Invoices', href: '/holding/finance/invoices' },
+    { label: 'HoD',      href: '/holding/finance'                  },
+    { label: 'Invoices', href: '/holding/finance/invoices'          },
+    { label: 'Template', href: '/holding/finance/invoices/template' },
   ],
   quickChips: [],
   defaultAttn: [],
