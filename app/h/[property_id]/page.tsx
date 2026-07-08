@@ -1,11 +1,13 @@
 // app/h/[property_id]/page.tsx
 // PBS 2026-07-02: switched from legacy DeptEntry (dark chrome / 2688-line shell)
 // to new-design CeoEntry (paper-white · DashboardPage · Container · KpiTile).
-// Legacy DeptEntry stays intact — still used by the 7 dept hubs. This page
+// Legacy DeptEntry stays intact -- still used by the 7 dept hubs. This page
 // (the property landing = CEO home) is the pilot for the new design.
 //
-// 2026-07-02b: forward searchParams to CeoEntry so BookingActivity's
-// 1–7d day-picker (?activityDays=…) round-trips.
+// 2026-07-02b: forward searchParams to CeoEntry so BookingActivity 1-7d day-picker
+// (?activityDays=...) round-trips.
+//
+// 2026-07-08: pass baseCurrency so KpiTile renders EUR on Donna instead of USD.
 
 import CeoEntry, { type CeoConfig } from './_components/CeoEntry';
 
@@ -21,18 +23,20 @@ const CEO_BY_PROPERTY: Record<number, CeoConfig> = {
     propertyLabel: 'The Namkhan',
     ceoRole:       'hotel_ceo_namkhan',
     ceoName:       'Nova',
-    ceoAvatar:     '🌟',
+    ceoAvatar:     'N',
     ceoTagline:    'AI Hotel CEO · The Namkhan · Ask anything cross-department.',
     humanPartner:  'Narout',
+    baseCurrency:  'USD',
   },
   [DONNA_PROPERTY_ID]: {
     propertyId:    DONNA_PROPERTY_ID,
     propertyLabel: 'Donna Portals',
     ceoRole:       'hotel_ceo_donna',
     ceoName:       'Orion',
-    ceoAvatar:     '🌌',
+    ceoAvatar:     'O',
     ceoTagline:    'AI Hotel CEO · Donna Portals · Ask anything cross-department.',
     humanPartner:  'Maxi',
+    baseCurrency:  'EUR',
   },
 };
 
@@ -49,9 +53,10 @@ export default async function PropertyHome({
     propertyLabel: 'Property',
     ceoRole: 'hotel_ceo',
     ceoName: 'CEO',
-    ceoAvatar: '🏨',
+    ceoAvatar: 'H',
     ceoTagline: 'AI Hotel CEO.',
-    humanPartner: '—',
+    humanPartner: '-',
+    baseCurrency: 'USD',
   };
   return <CeoEntry cfg={cfg} searchParams={searchParams} />;
 }
