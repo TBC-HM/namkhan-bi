@@ -5,8 +5,7 @@
 'use client';
 
 import { useMemo, useState, lazy, Suspense } from 'react';
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 const SkillsTab = lazy(() => import('./tabs/SkillsTab'));
 
 interface RosterAgent {
@@ -193,7 +192,7 @@ function AgentCard({ agent, propertyId }: { agent: RosterAgent; propertyId: numb
   const lastRun = agent.last_run_at ? humanTime(agent.last_run_at) : null;
 
   return (
-    <Link
+    <TenantLink
       href={`/h/${propertyId}/it/cockpit/chat/${agent.role}`}
       style={{
         textDecoration: 'none',
@@ -258,7 +257,7 @@ function AgentCard({ agent, propertyId }: { agent: RosterAgent; propertyId: numb
         <span>·</span>
         <span>${cost30d.toFixed(2)}/30d</span>
       </div>
-    </Link>
+    </TenantLink>
   );
 }
 
