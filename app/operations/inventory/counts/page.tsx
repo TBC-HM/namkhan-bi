@@ -3,7 +3,7 @@
 // Mode A: list of recent counts (?mode=list, default)
 // Mode B: new count entry for a specific location (?mode=new&location=N)
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Card from '@/components/sections/Card';
 import { getRecentCounts, getInvLocations, getOpenCountsForLocation } from '@/lib/inv-data';
 import CountForm, { type CountRow } from '../_components/CountForm';
@@ -33,10 +33,10 @@ export default async function CountsPage({ searchParams }: Props) {
       <Card title="Start a new count" emphasis="select a location" sub="Mobile-first count entry · saves a draft you can submit later">
         <div className="inv-loc-grid">
           {(locations as any[]).map((l) => (
-            <Link key={l.location_id} href={`?mode=new&location=${l.location_id}`} className="inv-loc-card">
+            <TenantLink key={l.location_id} href={`?mode=new&location=${l.location_id}`} className="inv-loc-card">
               <div className="inv-loc-name">{l.location_name}</div>
               <div className="inv-loc-meta">{l.area_type}{l.responsible_dept ? ` · ${l.responsible_dept}` : ''}</div>
-            </Link>
+            </TenantLink>
           ))}
         </div>
       </Card>
@@ -85,12 +85,12 @@ async function NewCountFormCard({ locationId }: { locationId: number }) {
       sub={`${rows.length} item${rows.length === 1 ? '' : 's'} expected at this location`}
     >
       <p>
-        <Link href="/operations/inventory/counts">← Back to counts list</Link>
+        <TenantLink href="/operations/inventory/counts">← Back to counts list</TenantLink>
       </p>
 
       {rows.length === 0 ? (
         <p className="empty-state">
-          No items have a par level set for this location yet. Set par in <Link href="/operations/inventory/catalog">/catalog</Link> first.
+          No items have a par level set for this location yet. Set par in <TenantLink href="/operations/inventory/catalog">/catalog</TenantLink> first.
         </p>
       ) : (
         <CountForm locationId={locationId} rows={rows} />
