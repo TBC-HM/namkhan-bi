@@ -10,7 +10,7 @@
 //   • v_retreats                → published retreat count
 
 import type { CSSProperties } from 'react';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, KpiTile,
   type DashboardTab, type KpiTileProps,
