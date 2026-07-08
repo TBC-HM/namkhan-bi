@@ -16,7 +16,7 @@
 // ND button (deploy feed) intentionally retained on the right edge —
 // see components/nav/NDButton.tsx.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import NDButton from './NDButton';
@@ -104,10 +104,10 @@ export default function TopNav() {
           const active = pathname.startsWith(it.href);
           const href = qs ? `${it.href}?${qs}` : it.href;
           return (
-            <Link key={it.href} href={href} className={active ? 'top-menu-link active' : 'top-menu-link'}>
+            <TenantLink key={it.href} href={href} className={active ? 'top-menu-link active' : 'top-menu-link'}>
               <span className="top-menu-title">{it.title}</span>
               <span className="top-menu-sub">{it.sub}</span>
-            </Link>
+            </TenantLink>
           );
         })}
       </nav>
