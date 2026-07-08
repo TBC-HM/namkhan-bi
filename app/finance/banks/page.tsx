@@ -12,7 +12,7 @@
 //
 // PBS 2026-05-15.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
 import { FINANCE_SUBPAGES } from '../_subpages';
@@ -243,9 +243,9 @@ function OverviewTab({
             borderRadius: 4, cursor: 'pointer', fontWeight: 700,
           }}>Apply</button>
           {(q || period !== 'ytd' || type !== 'all') && (
-            <Link href="/finance/banks?tab=overview" style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-xs)', textDecoration: 'underline', alignSelf: 'center' }}>
+            <TenantLink href="/finance/banks?tab=overview" style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-xs)', textDecoration: 'underline', alignSelf: 'center' }}>
               clear
-            </Link>
+            </TenantLink>
           )}
         </form>
       </Container>
@@ -444,7 +444,7 @@ function ReconcileTab({ health, candidates }: { health: ReconcileHealth; candida
 // ═══════════════════════════════════════════════════════════════════════
 function TabLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
-    <Link href={href} style={{
+    <TenantLink href={href} style={{
       padding: '10px 20px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
       letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
       textDecoration: 'none', fontWeight: active ? 700 : 500,
@@ -453,7 +453,7 @@ function TabLink({ href, active, children }: { href: string; active: boolean; ch
       marginBottom: -1,
     }}>
       {children}
-    </Link>
+    </TenantLink>
   );
 }
 
