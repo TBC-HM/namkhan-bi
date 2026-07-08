@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import type { Prospect, IcpSegment, GuestCohort } from '@/lib/sales-leads';
 
 interface DraftRow {
@@ -250,7 +250,7 @@ export default function LeadsClient({ prospects, kpis, icp, cohorts, recentDraft
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       <button type="button" onClick={() => draftOutreach(p)} disabled={busy} style={btnBrass}>✦ AI draft</button>
                       {p.last_outreach_draft_id && (
-                        <Link href={`/sales/inquiries?cat=all&status=drafted`} style={btn}>open draft →</Link>
+                        <TenantLink href={`/sales/inquiries?cat=all&status=drafted`} style={btn}>open draft →</TenantLink>
                       )}
                       <button type="button" onClick={() => deleteProspect(p.id)} disabled={busy} style={{ ...btn, color: 'var(--st-bad)' }}>×</button>
                     </div>
