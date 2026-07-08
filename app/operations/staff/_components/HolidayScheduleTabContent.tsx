@@ -25,6 +25,44 @@ import {
 } from './school-holidays-data';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
+// ── PBS 2026-07-08 filter-row styles (design_system v9: paper + hairline) ──
+const filterRow: React.CSSProperties = {
+  marginTop: 12, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+  padding: '6px 0', borderBottom: '1px solid #E6DFCC',
+};
+const rowLabel: React.CSSProperties = {
+  fontSize: 11, fontWeight: 600, color: '#5A5A5A',
+  letterSpacing: '0.04em', textTransform: 'uppercase',
+  marginRight: 8,
+};
+const statusHint: React.CSSProperties = {
+  fontSize: 10, color: '#5A5A5A',
+  letterSpacing: '0.06em', textTransform: 'uppercase',
+};
+const legendChip: React.CSSProperties = {
+  display: 'inline-flex', gap: 4, alignItems: 'center',
+  fontSize: 9, color: '#5A5A5A', letterSpacing: '0.06em', textTransform: 'uppercase',
+};
+function pillStyle(active: boolean, isOff: boolean): React.CSSProperties {
+  return {
+    padding: '4px 10px',
+    fontSize: 12,
+    fontWeight: active ? 700 : 500,
+    color: active ? (isOff ? '#B8542A' : '#1B1B1B') : '#5A5A5A',
+    background: '#FFFFFF',
+    border: '1px solid #E6DFCC',
+    borderRadius: 4,
+    borderBottom: active
+      ? `2px solid ${isOff ? '#B8542A' : '#084838'}`
+      : '1px solid #E6DFCC',
+    textDecoration: 'none',
+    letterSpacing: '0.02em',
+    display: 'inline-flex',
+    alignItems: 'center',
+    lineHeight: 1.2,
+  };
+}
+
 interface DemandEvent {
   event_id: string;
   date_start: string;
@@ -247,39 +285,36 @@ export default async function HolidayScheduleTabContent({
         </div>
       </Container>
 
-      {/* PBS 2026-05-14 — School-holidays overlay dropdown.
-          PBS 2026-05-16 — palette swap to Asia for Namkhan, plus Events toggle. */}
-      <section style={{ marginTop: 18, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{
-          fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-          letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-          color: 'var(--brass)',
-        }}>School holidays</span>
-        {([['all', '🌍 All (overlay)'] as [string, string]]
-          .concat(palette.map((s) => [s, `${SOURCE_META[s].flag} ${SOURCE_META[s].label}`] as [string, string]))
-          .concat([['none', '— off'] as [string, string]])
-        ).map(([k, label]) => {
-          const active = requestedSchool === k;
+      {/* PBS 2026-07-08 filter rows — retype to design_system v9 (paper #FFFFFF,
+          hairline #E6DFCC, system font, dark-green underline for active).
+          "All" is the leftmost (first) chip in the School holidays row. "Off"
+          now uses `school=none` and `events=off` explicitly so buildHref can
+          never emit a stale URL that leaves the previous overlay stuck on. */}
+      <section style={filterRow}>
+        <span style={rowLabel}>School holidays</span>
+        {([['all', '🌍', 'All'] as [string, string, string]]
+          .concat(palette.map((s) => [s, SOURCE_META[s].flag, SOURCE_META[s].label] as [string, string, string]))
+          .concat([['none', '⊘', 'Off'] as [string, string, string]])
+        ).map(([k, icon, label]) => {
+          const active = requestedSchool === k
+            || (k === 'all' && requestedSchool === 'all')
+            || (k === 'none' && (requestedSchool === 'none' || !enabledSources));
+          const isOff = k === 'none';
           return (
             <a key={k}
-              href={buildHref({ y: String(selectedYear), school: k, ...(eventsOn ? { events: 'on' } : {}) })}
-              style={{
-                padding: '4px 10px',
-                fontFamily: 'var(--mono)', fontSize: 11,
-                letterSpacing: '0.10em',
-                color: active ? 'var(--ink)' : 'var(--ink-mute)',
-                background: active ? 'var(--paper-warm)' : 'transparent',
-                border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
-                borderRadius: 999, textDecoration: 'none',
-                fontWeight: active ? 600 : 400,
-              }}>{label}</a>
+              href={buildHref({ y: String(selectedYear), school: k, events: eventsOn ? 'on' : 'off' })}
+              style={pillStyle(active, isOff)}
+              aria-current={active ? 'page' : undefined}
+            >
+              <span style={{ marginRight: 6 }}>{icon}</span>{label}
+            </a>
           );
         })}
         {enabledSources && enabledSources.size > 1 && (
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginLeft: 8 }}>
             {[1, 2, 3, 4].map((n) => (
-              <span key={n} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--ink-mute)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                <span style={{ width: 12, height: 12, borderRadius: 2, background: densityColor(n), border: '1px solid var(--line-soft)' }} />
+              <span key={n} style={legendChip}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: densityColor(n), border: '1px solid #E6DFCC' }} />
                 {n === 4 ? '4+' : n}
               </span>
             ))}
@@ -287,69 +322,44 @@ export default async function HolidayScheduleTabContent({
         )}
       </section>
 
-      {/* PBS 2026-05-16 — Events overlay toggle. Pulls marketing.calendar_events
-          and marks each day with a small brass dot + tooltip. Same data source
-          as /marketing/events. */}
-      <section style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{
-          fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-          letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-          color: 'var(--brass)',
-        }}>Events</span>
+      <section style={filterRow}>
+        <span style={rowLabel}>Events</span>
         {([
-          ['on',  '✦ Show demand events'],
-          ['off', '— off'],
-        ] as Array<[string, string]>).map(([k, label]) => {
+          ['on',  '✦', 'Show'],
+          ['off', '⊘', 'Off'],
+        ] as Array<[string, string, string]>).map(([k, icon, label]) => {
           const active = (k === 'on' && eventsOn) || (k === 'off' && !eventsOn);
+          const isOff = k === 'off';
           return (
             <a key={k}
-              href={buildHref({ y: String(selectedYear), school: String(requestedSchool), ...(k === 'on' ? { events: 'on' } : {}) })}
-              style={{
-                padding: '4px 10px',
-                fontFamily: 'var(--mono)', fontSize: 11,
-                letterSpacing: '0.10em',
-                color: active ? 'var(--ink)' : 'var(--ink-mute)',
-                background: active ? 'var(--paper-warm)' : 'transparent',
-                border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
-                borderRadius: 999, textDecoration: 'none',
-                fontWeight: active ? 600 : 400,
-              }}>{label}</a>
+              href={buildHref({ y: String(selectedYear), school: String(requestedSchool), events: k })}
+              style={pillStyle(active, isOff)}
+              aria-current={active ? 'page' : undefined}
+            >
+              <span style={{ marginRight: 6 }}>{icon}</span>{label}
+            </a>
           );
         })}
         {eventsOn && (
-          <span style={{
-            fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 'var(--ls-extra)',
-            textTransform: 'uppercase', color: 'var(--ink-mute)',
-          }}>{demandEvents.length} event{demandEvents.length === 1 ? '' : 's'} · {selectedYear}</span>
+          <span style={statusHint}>
+            {demandEvents.length} event{demandEvents.length === 1 ? '' : 's'} · {selectedYear}
+          </span>
         )}
       </section>
 
-      {/* Year toggle */}
-      <section style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{
-          fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-          letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-          color: 'var(--brass)',
-        }}>Year</span>
+      <section style={filterRow}>
+        <span style={rowLabel}>Year</span>
         {yearsAvailable.map((y) => (
           <a
             key={y}
-            href={buildHref({ y: String(y), school: String(requestedSchool), ...(eventsOn ? { events: 'on' } : {}) })}
-            style={{
-              padding: '4px 12px',
-              fontFamily: 'var(--mono)', fontSize: 11,
-              letterSpacing: '0.14em', textTransform: 'uppercase',
-              color: y === selectedYear ? 'var(--ink)' : 'var(--ink-mute)',
-              background: y === selectedYear ? 'var(--paper-warm)' : 'transparent',
-              border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
-              borderRadius: 4, textDecoration: 'none',
-              fontWeight: y === selectedYear ? 600 : 400,
-            }}
+            href={buildHref({ y: String(y), school: String(requestedSchool), events: eventsOn ? 'on' : 'off' })}
+            style={pillStyle(y === selectedYear, false)}
+            aria-current={y === selectedYear ? 'page' : undefined}
           >
             {y}
           </a>
         ))}
-        <span style={{ marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--ink-mute)' }}>
+        <span style={{ ...statusHint, marginLeft: 'auto' }}>
           static · holidays-data.ts
         </span>
       </section>
