@@ -10,7 +10,7 @@
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { SALES_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
@@ -251,7 +251,7 @@ function FilterGroup({ label, current, options, paramKey }: {
           ? `/sales/accounts`
           : `/sales/accounts?${paramKey}=${opt.key}`;
         return (
-          <Link
+          <TenantLink
             key={opt.key}
             href={href}
             style={{
@@ -267,7 +267,7 @@ function FilterGroup({ label, current, options, paramKey }: {
               borderRadius: 3,
               textDecoration: 'none',
             }}
-          >{opt.label}</Link>
+          >{opt.label}</TenantLink>
         );
       })}
     </div>
