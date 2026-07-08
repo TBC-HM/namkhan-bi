@@ -22,20 +22,14 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Calendar', href: '/revenue/pricing' },
     ],
   },
-  // PBS 2026-07-07 pm: Pickup gets its own Month/Day sub-strip. Must come BEFORE
-  // the Demand & Pace group (findSubGroup returns first match); /revenue/pickup
-  // therefore removed from that group's members list below.
-  {
-    parentHref: '/revenue/pickup',
-    members: ['/revenue/pickup', '/revenue/pickup-day'],
-    tabs: [
-      { label: 'Month', href: '/revenue/pickup'     },
-      { label: 'Day',   href: '/revenue/pickup-day' },
-    ],
-  },
+  // PBS 2026-07-08: Pickup Month/Day dropped from nav-subgroups. Was causing
+  // the Demand & Pace strip to disappear when landing on /revenue/pickup.
+  // Month/Day is now rendered inline inside the Pickup page body (like a
+  // /pricing-tab strip), so Pickup keeps the Demand | Pace | Pickup |
+  // Cancellations sub-strip while still switching Month ↔ Day.
   {
     parentHref: '/revenue/demand',
-    members: ['/revenue/demand', '/revenue/pace', '/revenue/cancellations'],
+    members: ['/revenue/demand', '/revenue/pace', '/revenue/pickup', '/revenue/pickup-day', '/revenue/cancellations'],
     tabs: [
       { label: 'Demand',        href: '/revenue/demand'        },
       { label: 'Pace',          href: '/revenue/pace'          },
