@@ -24,13 +24,22 @@ interface Props {
   hrefPrefix?: string;
 }
 
+// PBS 2026-07-08: expose the 3 scheduled reports (Daily / Weekly / Monthly) as
+// first-class options alongside whatever the department config supplies.
+const BUILTIN_REPORTS: ReportTypeDef[] = [
+  { value: 'scheduled-daily',   label: 'Daily (scheduled)',   hrefBase: '/revenue/reports/scheduled/daily/preview',   dimGroups: [] },
+  { value: 'scheduled-weekly',  label: 'Weekly (scheduled)',  hrefBase: '/revenue/reports/scheduled/weekly/preview',  dimGroups: [] },
+  { value: 'scheduled-monthly', label: 'Monthly (scheduled)', hrefBase: '/revenue/reports/scheduled/monthly/preview', dimGroups: [] },
+] as unknown as ReportTypeDef[];
+
 export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
-  const [reportType, setReportType] = useState<string>(reportTypes[0]?.value ?? '');
+  const allReports = useMemo(() => [...BUILTIN_REPORTS, ...reportTypes], [reportTypes]);
+  const [reportType, setReportType] = useState<string>(allReports[0]?.value ?? '');
   const [schedule, setSchedule] = useState<Schedule>('once');
   const [emails, setEmails] = useState<string[]>([]);
   const [emailDraft, setEmailDraft] = useState('');
 
-  const def = useMemo(() => reportTypes.find((rt) => rt.value === reportType), [reportType, reportTypes]);
+  const def = useMemo(() => allReports.find((rt) => rt.value === reportType), [reportType, allReports]);
 
   function addEmail(raw: string) {
     const e = raw.trim().toLowerCase();
@@ -60,7 +69,7 @@ export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
       <div style={rowStyle}>
         <label style={labelInlineStyle}>Report</label>
         <select value={reportType} onChange={(e) => setReportType(e.target.value)} style={selectStyle}>
-          {reportTypes.map((rt) => (
+          {allReports.map((rt) => (
             <option key={rt.value} value={rt.value}>{rt.label}</option>
           ))}
         </select>
