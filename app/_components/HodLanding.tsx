@@ -8,7 +8,7 @@
 // the 4-up row and Build-a-report. Each HoD page evaluates its own rules
 // server-side and passes the resulting Insight[] via the prop.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile,
   type KpiTileProps,
@@ -86,7 +86,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       title={`${cfg.pillTitle ?? slug} · ${cfg.hodName}`}
       subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
       tabs={hodTabs}
-      action={<Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>}
+      action={<TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</TenantLink>}
     >
       {tiles.length > 0 && (
         <div style={fullRow}>
