@@ -6,6 +6,7 @@
 
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { LighthouseNav, type LighthouseView, LIGHTHOUSE_VIEWS } from './LighthouseNav';
+import LighthouseActions from './LighthouseActions';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
@@ -67,7 +68,7 @@ export function LighthouseShell({
     active: s.href.endsWith('/compset') || s.href.endsWith('/lighthouse'),
   }));
   return (
-    <DashboardPage title={title} subtitle={subtitle} tabs={tabs}>
+    <DashboardPage title={title} subtitle={subtitle} tabs={tabs} action={<LighthouseActions propertyId={pid} />}>
       <div style={{ gridColumn: '1 / -1' }}>
         <LighthouseNav active={view} />
       </div>
