@@ -5,7 +5,7 @@
 // EUR currency throughout. Namkhan redirects to /operations/restaurant.
 // Uses only server-formatted strings + primitives (no client fn props).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { redirect } from 'next/navigation';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '@/app/operations/_subpages';
@@ -235,9 +235,9 @@ export default async function DonnaRestaurantPage({ params, searchParams }: Prop
   const opPills = (
     <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 4, border: '1px solid #E0E0E0', overflow: 'hidden' }}>
       {(['yesterday', '7d', '30d', 'ytd'] as const).map((p) => (
-        <Link key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>
+        <TenantLink key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>
           {p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}
-        </Link>
+        </TenantLink>
       ))}
     </div>
   );
