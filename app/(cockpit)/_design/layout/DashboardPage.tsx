@@ -18,6 +18,11 @@
 // so the Revenue area lost the strip when it migrated to primitives. We now
 // render HeaderPills inside the stickyTop block, one row above the page title,
 // matching "one line below the main menu" placement.
+//
+// 2026-07-08 (PBS): TabStrip + ParentLink now rewrite unprefixed tab hrefs to
+// the current tenant via prefixTabHref (same helper the SubTabStrip already
+// uses). Before this, main-strip tabs like `/revenue/pulse` bumped Donna
+// operators back to the Namkhan default surface on every top-strip click.
 
 'use client';
 
@@ -58,7 +63,7 @@ export default function DashboardPage(props: DashboardPageProps) {
           </div>
           {action && <div style={S.action}>{action}</div>}
         </header>
-        {smartTabs && smartTabs.length > 0 && <TabStrip tabs={smartTabs} />}
+        {smartTabs && smartTabs.length > 0 && <TabStrip pathname={pathname} tabs={smartTabs} />}
         {subGroup && <SubTabStrip pathname={pathname} tabs={subGroup.tabs} />}
       </div>
       <main style={S.body}>{children}</main>
@@ -91,7 +96,7 @@ function SubTabStrip({ pathname, tabs }: { pathname: string; tabs: { label: stri
   );
 }
 
-function TabStrip({ tabs }: { tabs: DashboardTab[] }) {
+function TabStrip({ pathname, tabs }: { pathname: string; tabs: DashboardTab[] }) {
   // Split "HoD" entries off the regular tab list — they render as a
   // left-aligned breadcrumb so the rest of the strip becomes a secondary
   // sub-nav under the HoD landing.
@@ -101,25 +106,27 @@ function TabStrip({ tabs }: { tabs: DashboardTab[] }) {
     <nav style={S.tabStrip} role="tablist" aria-label="Page sections">
       {parents.length > 0 && (
         <div style={S.parentGroup}>
-          {parents.map((t) => <ParentLink key={t.key} tab={t} />)}
+          {parents.map((t) => <ParentLink key={t.key} pathname={pathname} tab={t} />)}
         </div>
       )}
       {others.length > 0 && (
         <div style={S.tabGroup}>
-          {others.map((t) => <TabButton key={t.key} tab={t} />)}
+          {others.map((t) => <TabButton key={t.key} pathname={pathname} tab={t} />)}
         </div>
       )}
     </nav>
   );
 }
 
-function ParentLink({ tab }: { tab: DashboardTab }) {
+function ParentLink({ pathname, tab }: { pathname: string; tab: DashboardTab }) {
   const label = `← ${tab.label}`;
-  if (tab.href) return <a href={tab.href} style={S.parentLink}>{label}</a>;
+  // PBS 2026-07-08: preserve tenant prefix on parent hrefs (was hardcoded
+  // like `/revenue`, bumping Donna operators to the Namkhan default surface).
+  if (tab.href) return <a href={prefixTabHref(pathname, tab.href)} style={S.parentLink}>{label}</a>;
   return <button type="button" onClick={tab.onSelect} style={S.parentLink}>{label}</button>;
 }
 
-function TabButton({ tab }: { tab: DashboardTab }) {
+function TabButton({ pathname, tab }: { pathname: string; tab: DashboardTab }) {
   const active = !!tab.active;
   const content: ReactNode = (
     <span style={S.tabInner}>
@@ -128,7 +135,10 @@ function TabButton({ tab }: { tab: DashboardTab }) {
     </span>
   );
   const baseStyle: CSSProperties = { ...S.tab, ...(active ? S.tabActive : null) };
-  if (tab.href) return <a href={tab.href} role="tab" aria-selected={active} style={baseStyle}>{content}</a>;
+  // PBS 2026-07-08: same tenant-prefix rewrite as SubTabStrip so main-strip
+  // tabs stick on /h/{property_id}. Without this, every top-strip click on
+  // Donna URLs bumped the operator back to the Namkhan default.
+  if (tab.href) return <a href={prefixTabHref(pathname, tab.href)} role="tab" aria-selected={active} style={baseStyle}>{content}</a>;
   return <button type="button" role="tab" aria-selected={active} onClick={tab.onSelect} style={baseStyle}>{content}</button>;
 }
 
