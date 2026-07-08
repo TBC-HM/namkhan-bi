@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { Drawer, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 import type { DmcContract } from '@/lib/dmc';
 // PBS 2026-06-29: import the pure matcher from the client-safe sub-module
@@ -123,9 +123,9 @@ export default function ChannelDrillDrawer({ rows, currencyCode, basePath, dmcCo
       subtitle={isBdc ? 'Booking.com · hardwired data on full page' : `Channel summary · ${active ? 'click "Open full page" for daily trend + room mix' : 'no bookings in active window'}`}
       width="lg"
       footer={
-        <Link href={fullPageHref} style={ctaStyle} onClick={onClose}>
+        <TenantLink href={fullPageHref} style={ctaStyle} onClick={onClose}>
           Open full page →
-        </Link>
+        </TenantLink>
       }
     >
       {active ? (
@@ -191,9 +191,9 @@ function DmcContractPanel({ contract }: { contract: DmcContract }) {
         <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink, #1B1B1B)' }}>
           DMC Contract · {contract.partner_short_name}
         </h3>
-        <Link href={partnerHref} style={{ fontSize: 11, color: 'var(--primary, #1F3A2E)', textDecoration: 'underline' }}>
+        <TenantLink href={partnerHref} style={{ fontSize: 11, color: 'var(--primary, #1F3A2E)', textDecoration: 'underline' }}>
           Open in B2B →
-        </Link>
+        </TenantLink>
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8, fontSize: 12 }}>
