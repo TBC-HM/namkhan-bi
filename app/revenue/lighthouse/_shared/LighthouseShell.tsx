@@ -30,7 +30,7 @@ export function SampleBanner({ snapshotDate }: { snapshotDate: string | null }) 
       borderRadius: 4, fontSize: 11, color: '#5A4A00', marginBottom: 10,
       display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
     }}>
-      <span style={{ fontWeight: 700 }}>Sample data — Donna Portals demo</span>
+      <span style={{ fontWeight: 700 }}>Sample data</span>
       <span>Snapshot loaded: <code>{snapshotDate ?? '—'}</code></span>
       <span>· Daily Lighthouse xlsx ingestion is not yet wired</span>
     </div>
@@ -73,3 +73,4 @@ export function LighthouseShell({
     </DashboardPage>
   );
 }
+
