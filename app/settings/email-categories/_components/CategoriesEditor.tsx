@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 interface CategoryRow {
   key: string; label: string; display_order: number; active: boolean;
   default_category: boolean; description: string | null;
@@ -80,7 +79,7 @@ export default function CategoriesEditor({ categories: initCats, rules: initRule
     <div style={{ marginTop: 14 }}>
       <div style={{ marginBottom: 10, padding: 10, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 6, fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>
         Rules are evaluated in priority order (lower number first). First match wins. The default fallback (currently <strong>{cats.find(c => c.default_category)?.label ?? '—'}</strong>) catches anything not matched.
-        {' '}<Link href="/sales/inquiries" style={{ color: 'var(--brass)' }}>← back to cockpit</Link>
+        {' '}<TenantLink href="/sales/inquiries" style={{ color: 'var(--brass)' }}>← back to cockpit</TenantLink>
       </div>
 
       {err && <div style={{ padding: 10, marginBottom: 10, background: 'var(--st-bad-bg)', border: '1px solid var(--st-bad-bd)', borderRadius: 6, color: 'var(--st-bad)' }}>error: {err}</div>}
