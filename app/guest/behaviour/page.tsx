@@ -70,9 +70,10 @@ function daysBetween(iso: string | null, ms: number): number | null {
 function fmtNum(n: number): string { return Math.round(n).toLocaleString('en-US'); }
 function pct(n: number, d: number): number { return d > 0 ? (n / d) * 100 : 0; }
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number }
 
-export default async function GuestBehaviourPage({ searchParams }: Props) {
+export default async function GuestBehaviourPage({ searchParams, propertyId }: Props) {
+  const pid = propertyId ?? PROPERTY_ID;
   const daysParam = Array.isArray(searchParams.days) ? searchParams.days[0] : searchParams.days;
   const windowDays = Math.max(7, Math.min(365, Number(daysParam) || 180));
   const sinceIso = new Date(Date.now() - windowDays * 86_400_000).toISOString().slice(0, 10);
@@ -84,16 +85,16 @@ export default async function GuestBehaviourPage({ searchParams }: Props) {
   const [profilesR, resR, dirR] = await Promise.all([
     sb.schema('guest').from('mv_guest_profile')
       .select('guest_id, full_name, country, email, bookings_count, stays_count, lifetime_revenue, total_nights, avg_adr, first_stay_date, last_stay_date, is_repeat, top_source')
-      .eq('property_id', PROPERTY_ID)
+      .eq('property_id', pid)
       .order('lifetime_revenue', { ascending: false })
       .limit(5000),
     sb.from('reservations')
       .select('status, check_in_date, booking_date, source_name, guest_email')
-      .eq('property_id', PROPERTY_ID)
+      .eq('property_id', pid)
       .gte('check_in_date', sinceIso),
     sb.schema('guest').from('v_directory_full')
       .select('guest_id, email, phone, arrival_bucket, last_stay_date, spent_restaurant, spent_spa, spent_activities, spent_retail, top_source, last_room_type, party_type, last_adr, last_nights')
-      .eq('property_id', PROPERTY_ID),
+      .eq('property_id', pid),
   ]);
 
   const profiles: ProfileRow[] = (profilesR.data as ProfileRow[]) ?? [];
