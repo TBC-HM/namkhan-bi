@@ -1528,6 +1528,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               key={a.id}
               item={a}
               targetHref={attnTargetHref(a.label)}
+              hodName={cfg.hodName}
               onAsk={() => askVectorAbout(a.label)}
               onDelete={() => delAttn(a.id)}
             />
@@ -1542,6 +1543,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               key={a.id}
               item={a}
               targetHref={attnTargetHref(a.label)}
+              hodName={cfg.hodName}
               onAsk={() => askVectorAbout(a.label)}
               onDelete={() => delAttn(a.id)}
             />
@@ -2509,13 +2511,17 @@ function Row({ children, onDelete }: { children: React.ReactNode; onDelete: () =
 // Click body → drilldown to the source view. ✦ button → ask Vector about it.
 // × → dismiss. The whole row reveals the inline actions on hover.
 function AttnRow({
-  item, targetHref, onAsk, onDelete,
+  item, targetHref, onAsk, onDelete, hodName,
 }: {
   item: AttentionItem;
   targetHref: string;
   onAsk: () => void;
   onDelete: () => void;
+  /** PBS 2026-07-08: HoD name for "Ask X" button — was hardcoded to "Vector",
+   *  which was wrong on every non-Revenue surface (Felix on holding, Intel on finance, etc.) */
+  hodName?: string;
 }) {
+  const askName = hodName ?? 'agent';
   return (
     <div
       style={{
@@ -2563,8 +2569,8 @@ function AttnRow({
       )}
       <button
         onClick={onAsk}
-        title="Ask Vector about this"
-        aria-label="Ask Vector"
+        title={`Ask ${askName} about this`}
+        aria-label={`Ask ${askName}`}
         style={{
           background:    'transparent',
           border:        '1px solid var(--border-2, #2a261d)',
