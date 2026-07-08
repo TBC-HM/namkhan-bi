@@ -6,7 +6,7 @@
 // `?tab=holidays` (PBS 2026-05-22 — "Density" was misleading, it was always
 // just the country-holidays overlay).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { getRoomTypes, getRatePlans, getRateInventory } from '@/lib/pricing';
 import { getPricingKpis } from '@/lib/pricingKpis';
