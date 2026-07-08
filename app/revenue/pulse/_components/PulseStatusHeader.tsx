@@ -9,7 +9,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import StatusPill from '@/components/ui/StatusPill';
 
 interface Props {
@@ -64,9 +64,9 @@ export default function PulseStatusHeader({
         <StatusPill tone={decisionTone}>{decisionCount}</StatusPill>
         <span style={metaDim}>queued for action</span>
         <span style={{ flex: 1 }} />
-        <Link href="/revenue/rateplans" style={linkBtn}>RATE PLANS</Link>
-        <Link href="/revenue/compset" style={linkBtn}>COMP SET</Link>
-        <Link href="/revenue/pace" style={linkBtn}>PACE</Link>
+        <TenantLink href="/revenue/rateplans" style={linkBtn}>RATE PLANS</TenantLink>
+        <TenantLink href="/revenue/compset" style={linkBtn}>COMP SET</TenantLink>
+        <TenantLink href="/revenue/pace" style={linkBtn}>PACE</TenantLink>
       </div>
     </div>
   );
