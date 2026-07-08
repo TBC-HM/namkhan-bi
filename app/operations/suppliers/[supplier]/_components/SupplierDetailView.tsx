@@ -11,7 +11,7 @@
 //   open bills · transactions ledger).
 // SuppliersTable client component is untouched.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, MetricRow, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtMoney, fmtIsoDate, EMPTY, FX_LAK_PER_USD } from '@/lib/format';
@@ -131,7 +131,7 @@ export default async function SupplierDetailView({ supplierName, subPages, activ
           <Container title="Supplier not found in QB" subtitle="Source: gl.v_supplier_overview" density="compact">
             <div style={{ padding: 16, fontSize: 13, color: '#5A5A5A' }}>
               No QB activity for <strong>{supplierName}</strong>.{' '}
-              <Link href={registerHref} style={{ color: '#1B1B1B' }}>← back to register</Link>
+              <TenantLink href={registerHref} style={{ color: '#1B1B1B' }}>← back to register</TenantLink>
             </div>
           </Container>
         </div>
