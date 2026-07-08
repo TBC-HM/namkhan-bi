@@ -76,6 +76,13 @@ function isoBack(days: number): string {
 export default async function ChannelDetailPage({ params, searchParams }: Props) {
   const sourceName = decodeURIComponent(params.source);
   const isBookingCom = /Booking\.com/i.test(sourceName);
+  const isExpedia = /expedia/i.test(sourceName);
+  // Promotions landing pages (per-OTA) — reachable from the source landing action bar.
+  const promoHref = isBookingCom
+    ? '/revenue/channels/booking-com/promotions'
+    : isExpedia
+      ? '/revenue/channels/expedia/promotions'
+      : null;
   const sp = (searchParams?.win) ? searchParams : { ...searchParams, win: 'l12m' };
   const period = resolvePeriod(sp);
 
@@ -173,6 +180,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         action={
           <div style={{ display: 'flex', gap: 8 }}>
             <BackButton fallback="/revenue/channels" label="← Channels" />
+            {promoHref && <Link href={promoHref} style={navBtnStyle}>🏷 Promotions</Link>}
           </div>
         }
       >
@@ -277,6 +285,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       action={
         <div style={{ display: 'flex', gap: 8 }}>
           <BackButton fallback="/revenue/channels" label="← Channels" />
+          {promoHref && <Link href={promoHref} style={navBtnStyle}>🏷 Promotions</Link>}
           {dmcContract && (
             <Link href="/sales/b2b" style={navBtnStyle}>← B2B / DMC</Link>
           )}
