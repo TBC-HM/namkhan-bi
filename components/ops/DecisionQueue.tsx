@@ -3,7 +3,7 @@
 // Each row: $ impact tag, title, meta line, View / Compose (when inquiryId present).
 // When inquiryId is absent (mockup mode) → "MOCK" eyebrow, no actions.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { ReactNode } from 'react';
 
 export type DecisionUrgency = 'urg' | 'med' | 'neu';
@@ -99,12 +99,12 @@ export default function DecisionQueue({ rows, meta, emptyOverlay, composeAction 
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {r.inquiryId ? (
                   <>
-                    <Link
+                    <TenantLink
                       href={`/sales/inquiries/${r.inquiryId}`}
                       style={{ ...btnDefault, textDecoration: 'none', display: 'inline-block' }}
                     >
                       View
-                    </Link>
+                    </TenantLink>
                     {composeAction && (
                       <form action={composeAction} style={{ display: 'inline' }}>
                         <input type="hidden" name="inquiry_id" value={r.inquiryId} />
