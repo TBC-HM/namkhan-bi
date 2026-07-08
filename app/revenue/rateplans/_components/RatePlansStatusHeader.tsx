@@ -10,7 +10,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
 
@@ -99,7 +99,7 @@ export default function RatePlansStatusHeader({
         )}
         <span style={{ flex: 1 }} />
         <span style={metaDim}>TOP 3 = {top3Pct.toFixed(0)}% of revenue</span>
-        <Link href="/revenue/compset" style={linkBtn}>COMP RATES</Link>
+        <TenantLink href="/revenue/compset" style={linkBtn}>COMP RATES</TenantLink>
       </div>
     </div>
   );
