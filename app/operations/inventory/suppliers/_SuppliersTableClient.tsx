@@ -3,7 +3,7 @@
 // app/operations/inventory/suppliers/_SuppliersTableClient.tsx
 // Client wrapper around <DataTable> for the supplier register.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
@@ -33,18 +33,18 @@ export default function SuppliersTableClient({ rows }: { rows: SupplierSummaryRo
   const cols: Column<SupplierSummaryRow>[] = [
     { key: 'code', header: 'Code', width: '110px',
       render: (r) => (
-        <Link
+        <TenantLink
           href={`/operations/inventory/suppliers/${r.supplier_id}`}
           style={{ ...mono, color: 'var(--brass)', textDecoration: 'none' }}
-        >{r.code}</Link>
+        >{r.code}</TenantLink>
       ),
       sortValue: (r) => r.code },
     { key: 'name', header: 'Name',
       render: (r) => (
-        <Link
+        <TenantLink
           href={`/operations/inventory/suppliers/${r.supplier_id}`}
           style={{ color: 'var(--ink)', textDecoration: 'none' }}
-        >{r.name}</Link>
+        >{r.name}</TenantLink>
       ),
       sortValue: (r) => r.name },
     { key: 'type', header: 'Type', width: '120px',
