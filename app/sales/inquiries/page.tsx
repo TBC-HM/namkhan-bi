@@ -8,11 +8,11 @@
 // carry "data needed" tags pointing at the email-ingest webhook + sales.* tables.
 //
 // 2026-05-09 (PBS) — BLOCK 2 mailbox-routing row activated:
-//   • dead <span> pills replaced with <Link>s driving ?scope=<addr>
+//   • dead <span> pills replaced with <TenantLink>s driving ?scope=<addr>
 //   • 5 canonical Namkhan inboxes pinned (book / reservations / plan / wm / xl)
 //   • selected pill highlighted from `cockpitScope` searchParam
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import OpsKpiTile from '@/components/ops/OpsKpiTile';
 import AgentStrip from '@/components/ops/AgentStrip';
 import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue';
@@ -315,7 +315,7 @@ export default async function InquiriesPage({
 
       {/* BLOCK 2: Mailbox routing pills — drive ?scope=<address>.
           5 canonical Namkhan inboxes pinned (book / reservations / plan / wm / xl).
-          Each <Link> sets cockpitScope which propagates to <EmailCockpit> below. */}
+          Each <TenantLink> sets cockpitScope which propagates to <EmailCockpit> below. */}
       <div
         id="mailbox-router"
         style={{
@@ -345,9 +345,9 @@ export default async function InquiriesPage({
             if (it.key !== 'all') params.set('scope', it.key);
             const href = '/sales/inquiries' + (params.toString() ? `?${params.toString()}` : '') + '#cockpit';
             return (
-              <Link key={it.key} href={href} style={active ? pillActive : pill} prefetch={false}>
+              <TenantLink key={it.key} href={href} style={active ? pillActive : pill} prefetch={false}>
                 {it.label}
-              </Link>
+              </TenantLink>
             );
           });
         })()}
