@@ -24,8 +24,6 @@ import {
   getPulseTodayPickup,
   getPulseTodayCancellations,
   getPulseUpcomingEvents,
-  getOccScoped,
-  type OccScoped,
   type PulseDailyRow,
   type PulseKpiSnapshot,
   type PulseSourceRow,
@@ -110,7 +108,7 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const stlyFrom = shiftDate(heroFrom, -365);
   const stlyTo = shiftDate(heroTo, -365);
 
-  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, cancellations, events, occScoped] =
+  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, cancellations, events] =
     await Promise.all([
       getPulseHeadlineKpis(pid, anchor),
       getPulsePerformanceSummary(pid, anchor),
@@ -121,8 +119,7 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
       getPulseTodayPickup(pid, shiftDate(anchor, pickupOffset)),
       getPulseTodayCancellations(pid, shiftDate(anchor, pickupOffset)),
       getPulseUpcomingEvents(pid, anchor, shiftDate(anchor, 30), 30),
-      getOccScoped(pid),
-    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulsePickupRow[], PulseEventRow[], OccScoped | null];
+    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulsePickupRow[], PulseEventRow[]];
 
   // ─── headline tiles ──────────────────────────────────────────────────
   const occΔ    = pctChange(headline.occupancyPct, headline.stlyOccupancyPct);
@@ -131,7 +128,9 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const adrΔ    = pctChange(headline.adr,          headline.stlyAdr);
 
   const headlineTiles: KpiTileProps[] = [
-    { label: 'Occ · yesterday', value: occScoped ? `${Math.round(occScoped.occ_yesterday)}%` : '—', size: 'sm',
+    // PBS 2026-07-08: read yesterday's OCC from the same mv_kpi_daily aggregate used by
+    // the Performance vs STLY container, so the two boxes always report the same number.
+    { label: 'Occ · yesterday', value: `${Math.round(summary.yesterday.occupancyPct ?? 0)}%`, size: 'sm',
       delta: occΔ != null ? { value: occΔ, period: 'STLY', direction: occΔ >= 0 ? 'up' : 'down' } : undefined,
       status: occΔ != null && occΔ >= 0 ? 'green' : occΔ != null ? 'red' : 'grey' },
     { label: 'RevPAR', value: Math.round(headline.revpar ?? 0), currency: moneyCurrency, size: 'sm',
