@@ -45,7 +45,13 @@ async function fetchData(propertyId: number) {
   const todayIso = new Date().toISOString().slice(0, 10);
   const in365 = new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10);
 
-  const [pace, pickup, promos] = await Promise.all([
+  // Latest Lighthouse snapshot for this property (feeds the Demand column).
+  const { data: latestSnap } = await sb.from('v_lighthouse_rateshop')
+    .select('shop_date').eq('property_id', propertyId)
+    .order('shop_date', { ascending: false }).limit(1);
+  const snapshotDate = latestSnap?.[0]?.shop_date ?? null;
+
+  const [pace, pickup, promos, demand] = await Promise.all([
     sb.schema('kpi').from('v_pace_otb_daily')
       .select('stay_date, year, month, iso_dow, rooms_available, otb_rooms_sold, otb_revenue, otb_occupancy_pct, otb_adr, otb_revpar')
       .eq('property_id', propertyId)
@@ -59,6 +65,14 @@ async function fetchData(propertyId: number) {
     sb.from('channel_promotions')
       .select('channel, promo_key, is_active, cost_pct')
       .eq('property_id', propertyId),
+    // Lighthouse market_demand per stay_date, from the own-hotel row (context values live there).
+    snapshotDate
+      ? sb.from('v_lighthouse_rateshop')
+          .select('stay_date, market_demand')
+          .eq('property_id', propertyId)
+          .eq('shop_date', snapshotDate)
+          .eq('is_self', true)
+      : Promise.resolve({ data: [] as Array<{ stay_date: string; market_demand: number | null }> }),
   ]);
 
   const promoMap = new Map<string, { active: boolean; costPct: number | null }>();
@@ -66,10 +80,17 @@ async function fetchData(propertyId: number) {
     promoMap.set(`${p.channel}::${p.promo_key}`, { active: p.is_active, costPct: p.cost_pct });
   }
 
+  const demandMap = new Map<string, number>();
+  for (const r of ((demand.data ?? []) as Array<{ stay_date: string; market_demand: number | null }>)) {
+    if (r.market_demand !== null && r.market_demand !== undefined) demandMap.set(r.stay_date, Number(r.market_demand));
+  }
+
   return {
     pace: (pace.data ?? []) as PaceRow[],
     pickupMap: new Map(((pickup.data ?? []) as PickupRow[]).map(r => [r.stay_date, r])),
     promoMap,
+    demandMap,
+    snapshotDate,
   };
 }
 
@@ -125,7 +146,7 @@ function rowCellBg(colIdx: number, otbSold: number, cxl: number, weekendZebra: s
 
 export default async function PickupDayReport({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
-  const { pace, pickupMap, promoMap } = await fetchData(pid);
+  const { pace, pickupMap, promoMap, demandMap, snapshotDate } = await fetchData(pid);
   // Currency symbol per property (Namkhan=USD, Donna=EUR).
   const sym = pid === 1000001 ? '€' : '$';
 
@@ -300,7 +321,12 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                             </td>
                             <td style={cellStyle(1)}>{fmtDate(r.stay_date)}</td>
                             <td style={cellStyle(2)}></td>
-                            <td style={mutedStyle(3)}>—</td>
+                            {(() => {
+                              const dv = demandMap.get(r.stay_date);
+                              return dv !== undefined
+                                ? <td style={cellStyle(3, { fontWeight: 600 })} title="Lighthouse market_demand (Booking.com search demand)">{fmtPct(dv * 100)}</td>
+                                : <td style={mutedStyle(3)}>—</td>;
+                            })()}
                             <td style={cellStyle(4, { fontWeight: 600 })}>{fmtPct(r.otb_occupancy_pct)}</td>
                             <td style={cellStyle(5)}>{fmtInt(r.otb_rooms_sold)}</td>
                             <td style={cellStyle(6)}>0</td>
