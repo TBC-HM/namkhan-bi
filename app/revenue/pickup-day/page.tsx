@@ -5,7 +5,7 @@
 // (visibility flags, min-stay/stop-sales per channel, rate ladder from Cloudbeds
 // availability API, city occ %, house uses).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -208,9 +208,9 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
             <a href={`/api/pickup-day/csv?property_id=${pid}`} title="Download CSV" aria-label="Download CSV" style={iconBtn}>
               <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>⬇</span>
             </a>
-            <Link href="/revenue/pickup-day/email" title="Email / schedule report" aria-label="Email report" style={iconBtn}>
+            <TenantLink href="/revenue/pickup-day/email" title="Email / schedule report" aria-label="Email report" style={iconBtn}>
               <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>✉</span>
-            </Link>
+            </TenantLink>
           </div>
         }
       >
