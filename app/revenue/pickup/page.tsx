@@ -150,21 +150,18 @@ export default async function PickupPage({ propertyId }: Props = {}) {
     ly_rn:    Number(r.ly_room_nights ?? 0),
   }));
 
-  // 4) Velocity 15d back + 30d forward · signed Δ vs SDLY (TY past only) + SDLY line (all days)
-  const velocityRows = (velocity28d as Rows).map((r) => {
-    const tyTotal  = r.pickup_total == null ? null : Number(r.pickup_total);
-    const sdlyTot  = Number(r.sdly_total ?? 0);
-    const delta    = tyTotal == null ? null : tyTotal - sdlyTot;
-    return {
-      day:           String(r.day).slice(5),
-      delta_vs_sdly: delta,
-      sdly_total:    sdlyTot,
-      pickup_total:  tyTotal,
-      sdly_ota:      Number(r.sdly_ota ?? 0),
-      sdly_direct:   Number(r.sdly_direct ?? 0),
-      ma_7d:         r.ma_7d         == null ? null : Number(r.ma_7d),
-    };
-  });
+  // 4) Velocity 15d back + 30d forward — PBS 2026-07-08:
+  //    · switched from BOOKING count to ROOM-NIGHTS (view now sum(nights))
+  //    · surface ALL series (past = stacked channel bars + MA line, forward = SDLY line only)
+  const velocityRows = (velocity28d as Rows).map((r) => ({
+    day:           String(r.day).slice(5),
+    pickup_ota:    r.pickup_ota    == null ? null : Number(r.pickup_ota),
+    pickup_direct: r.pickup_direct == null ? null : Number(r.pickup_direct),
+    pickup_other:  r.pickup_other  == null ? null : Number(r.pickup_other),
+    pickup_total:  r.pickup_total  == null ? null : Number(r.pickup_total),
+    sdly_total:    Number(r.sdly_total ?? 0),
+    ma_7d:         r.ma_7d         == null ? null : Number(r.ma_7d),
+  }));
 
   return (
     <DashboardPage
@@ -240,13 +237,16 @@ export default async function PickupPage({ propertyId }: Props = {}) {
       {/* Row 3 — Velocity: 15d back + 30d forward (full width slim) */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Pickup velocity · last 15d + next 30d"
-                   subtitle="Bar = TY pickup − SDLY (signed · up = ahead · down = behind, past only) · line = SDLY total at same lead time (all 46 days)">
+                   subtitle="Room-nights per booking day · stacked bars = TY channel mix (past 15d) · lines = SDLY total + 7d moving average">
           <Chart variant="combo" data={velocityRows} xKey="day"
             series={[
-              { key: 'delta_vs_sdly', label: 'Δ TY − SDLY',    color: 'var(--primary, #1F3A2E)', type: 'bar',  yAxisId: 'left' },
-              { key: 'sdly_total',    label: 'SDLY total',     color: '#8E8E8E',                   type: 'line', yAxisId: 'left' },
+              { key: 'pickup_ota',    label: 'OTA',        color: '#1F3A2E', type: 'bar',  yAxisId: 'left', stackId: 'ty' },
+              { key: 'pickup_direct', label: 'Direct',     color: '#4B7A5F', type: 'bar',  yAxisId: 'left', stackId: 'ty' },
+              { key: 'pickup_other',  label: 'Other',      color: '#B8A878', type: 'bar',  yAxisId: 'left', stackId: 'ty' },
+              { key: 'sdly_total',    label: 'SDLY total', color: '#8E8E8E', type: 'line', yAxisId: 'left' },
+              { key: 'ma_7d',         label: '7d MA (TY)', color: '#B8542A', type: 'line', yAxisId: 'left' },
             ]}
-            height={200}
+            height={240}
             empty={{ title: 'No velocity data' }} />
         </Container>
       </div>
