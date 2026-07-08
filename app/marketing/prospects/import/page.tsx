@@ -1,6 +1,6 @@
 // app/marketing/prospects/import/page.tsx
 // PBS 2026-07-05: CSV paste import — with automatic domain-based email enrichment.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import ImportClient from './_components/ImportClient';
@@ -22,9 +22,9 @@ export default function ProspectsImportPage() {
         tabs={tabs}
       >
         <div style={{ gridColumn:'1 / -1' }}>
-          <Link href="/marketing/prospects" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>
+          <TenantLink href="/marketing/prospects" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>
             ← Back to prospects
-          </Link>
+          </TenantLink>
         </div>
 
         <div style={{ gridColumn:'1 / -1', background:CREAM, border:'1px solid '+HAIR, borderRadius:6, padding:14, fontSize:12, lineHeight:1.6, color:INK }}>
