@@ -5,8 +5,8 @@
 // _components/SopProposalList (client).
 //
 // 2026-07-08 (later): tabs strip switched from the top-level operations
-// subPages to the QA-cluster tabs (Overview / Registry / Generate / Proposals)
-// per PBS's QA sub-menu spec.
+// subPages to the QA-cluster tabs (Overview / Registry / Generate / Proposals /
+// Agent Instructions) per PBS's QA sub-menu spec.
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -22,13 +22,14 @@ const SCOPE_FOR: Record<number, string> = {
   1000001: 'donna',
 };
 
-function qaTabs(pid: number, active: 'overview' | 'registry' | 'generate' | 'proposals'): DashboardTab[] {
+function qaTabs(pid: number, active: 'overview' | 'registry' | 'generate' | 'proposals' | 'agent'): DashboardTab[] {
   const base = pid === PROPERTY_ID ? '' : `/h/${pid}`;
   return [
-    { key: `${base}/operations/qa`,           label: 'Overview',  href: `${base}/operations/qa`,           active: active === 'overview'  },
-    { key: `${base}/operations/qa/registry`,  label: 'Registry',  href: `${base}/operations/qa/registry`,  active: active === 'registry'  },
-    { key: `${base}/operations/qa/generate`,  label: 'Generate',  href: `${base}/operations/qa/generate`,  active: active === 'generate'  },
-    { key: `${base}/operations/qa/proposals`, label: 'Proposals', href: `${base}/operations/qa/proposals`, active: active === 'proposals' },
+    { key: `${base}/operations/qa`,                   label: 'Overview',            href: `${base}/operations/qa`,                   active: active === 'overview'  },
+    { key: `${base}/operations/qa/registry`,          label: 'Registry',            href: `${base}/operations/qa/registry`,          active: active === 'registry'  },
+    { key: `${base}/operations/qa/generate`,          label: 'Generate',            href: `${base}/operations/qa/generate`,          active: active === 'generate'  },
+    { key: `${base}/operations/qa/proposals`,         label: 'Proposals',           href: `${base}/operations/qa/proposals`,         active: active === 'proposals' },
+    { key: `${base}/operations/qa/agent-instructions`,label: 'Agent Instructions',  href: `${base}/operations/qa/agent-instructions`,active: active === 'agent'     },
   ];
 }
 
@@ -64,7 +65,7 @@ export default async function SopProposalsPage({ propertyId }: Props = {}) {
           <SopProposalList
             proposals={proposals}
             generateBaseHref={generateBaseHref}
-            seedHref="/api/sop/proposals/seed"
+            seedBatchHref="/api/sop/proposals/seed-batch"
             propertyId={pid}
           />
         </div>
