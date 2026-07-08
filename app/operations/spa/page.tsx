@@ -22,12 +22,13 @@ import { resolvePeriod } from '@/lib/period';
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number; }
 
 const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
-export default async function SpaPage({ searchParams }: Props) {
+export default async function SpaPage({ searchParams, propertyId }: Props) {
+  const pid = propertyId ?? 260955;
   const opPeriodRaw = typeof searchParams.op === 'string' ? searchParams.op : '30d';
   const opPeriod = (['yesterday','7d','30d','ytd'].includes(opPeriodRaw) ? opPeriodRaw : '30d') as 'yesterday'|'7d'|'30d'|'ytd';
   const opToday = new Date(); opToday.setUTCHours(0,0,0,0);
@@ -58,17 +59,17 @@ export default async function SpaPage({ searchParams }: Props) {
     getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, opFromIso, 50).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
     supabase.from('v_spa_capture_monthly')
       .select('period_yyyymm, capture_pct, res_in_house, res_with_purchase')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
     supabase.from('v_spa_avg_ticket_monthly')
       .select('period_yyyymm, avg_check, revenue, reservations')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
     supabase.from('v_spa_top_treatments_monthly')
       .select('period_yyyymm, category, revenue')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
   ]);
