@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import TenantLink from '@/components/nav/TenantLink';
 import { usePathname, useParams } from 'next/navigation'
 import { 
   LayoutDashboard, 
@@ -100,7 +100,7 @@ export default function FinanceShell({ children }: { children: React.ReactNode }
               const showBadge = item.badge && unreadCount > 0
 
               return (
-                <Link
+                <TenantLink
                   key={item.label}
                   href={href}
                   className={`
@@ -119,7 +119,7 @@ export default function FinanceShell({ children }: { children: React.ReactNode }
                       {unreadCount}
                     </span>
                   )}
-                </Link>
+                </TenantLink>
               )
             })}
           </div>
