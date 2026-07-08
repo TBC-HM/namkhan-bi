@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { useState, useRef, useEffect } from 'react';
 import type { CurrentUser } from '@/lib/currentUser';
 import { roleLabel } from '@/lib/currentUser';
@@ -53,12 +53,12 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
             </div>
           </div>
           <div className="user-dropdown-divider" />
-          <Link href="/settings" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
+          <TenantLink href="/settings" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
             <span className="user-dropdown-icon">⚙</span>Settings
-          </Link>
-          <Link href="/settings/notifications" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
+          </TenantLink>
+          <TenantLink href="/settings/notifications" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
             <span className="user-dropdown-icon">🔔</span>Notifications
-          </Link>
+          </TenantLink>
           <button type="button" className="user-dropdown-item disabled" role="menuitem" disabled>
             <span className="user-dropdown-icon">⇄</span>Switch property
             <span className="user-dropdown-coming">single property</span>
