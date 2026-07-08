@@ -4,7 +4,7 @@
 // cross-property bridges (v_rate_plans_all + v_reservations_unified) so Donna
 // gets her own dead-plan list when accessed via /h/1000001/revenue/rateplans/dead.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile, Chart,
   type DashboardTab, type ChartSeries, type KpiTileProps,
@@ -133,7 +133,7 @@ export default async function DeadRatePlansPage({ propertyId }: Props = {}) {
       subtitle={`Plans with 0 bookings in 90d · ${active.length} active${deadPlans.length > 0 ? ` · ${deadPlans.length} dead` : ''}`}
       tabs={tabs}
       action={
-        <Link href={basePath} style={primaryBtnStyle}>{`← Back to Rate plans`}</Link>
+        <TenantLink href={basePath} style={primaryBtnStyle}>{`← Back to Rate plans`}</TenantLink>
       }
     >
       <div style={fullRow}>
@@ -160,7 +160,7 @@ export default async function DeadRatePlansPage({ propertyId }: Props = {}) {
               <div style={ctaHintStyle}>
                 Plans listed above are <strong>active but unused</strong>. Decision points: deactivate in the PMS
                 or re-promote via a channel push. To discuss any single plan with Vector,{' '}
-                <Link href={chatHref} style={chatLinkStyle}>open the chat</Link> and paste the plan name.
+                <TenantLink href={chatHref} style={chatLinkStyle}>open the chat</TenantLink> and paste the plan name.
               </div>
             </>
           )}
