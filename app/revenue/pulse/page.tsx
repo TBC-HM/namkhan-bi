@@ -284,7 +284,8 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
       {/* Row 1 · Headline KPI strip */}
       <div style={fullRow}>
         <Container title="Headline · yesterday" subtitle="vs same time last year" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          {/* PBS 2026-07-08: tile grid mirrors the HoD page (Vector) — 160px min / 8px gap — so the two pages read as one. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
             {headlineTiles.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
         </Container>
