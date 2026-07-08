@@ -1,7 +1,7 @@
 // app/marketing/compiler/[run_id]/deploy/page.tsx
 // Deploy summary page — shows recent deploys for this run.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../../../_subpages';
@@ -58,9 +58,9 @@ export default async function DeployPage({ params }: { params: { run_id: string 
                 <td className="data-table-td align-left"><StatusPill tone={STATUS_TONE[d.status] ?? 'info'}>{d.status}</StatusPill></td>
                 <td className="data-table-td align-left tabular">{fmtIsoDate(d.deployed_at)}</td>
                 <td className="data-table-td align-left">
-                  <Link href={`/r/${d.subdomain}`} target="_blank" style={{ color: 'var(--brass)', fontSize: 'var(--t-sm)' }}>
+                  <TenantLink href={`/r/${d.subdomain}`} target="_blank" style={{ color: 'var(--brass)', fontSize: 'var(--t-sm)' }}>
                     /r/{d.subdomain} ↗
-                  </Link>
+                  </TenantLink>
                 </td>
               </tr>
             ))
@@ -69,9 +69,9 @@ export default async function DeployPage({ params }: { params: { run_id: string 
       </table>
 
       <div style={{ marginTop: 24, fontSize: 'var(--t-sm)' }}>
-        <Link href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)' }}>
+        <TenantLink href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)' }}>
           ← Back to variants
-        </Link>
+        </TenantLink>
       </div>
     </Page>
   );
