@@ -8,8 +8,7 @@
 //   • /finance/messy-data   ↔ /finance/mapping
 //                           ↔ /finance/supplier-mapping  (Messy-data hub)
 
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 export interface TabSpec { label: string; href: string; key: string }
 
 export default function TabStrip({
@@ -20,7 +19,7 @@ export default function TabStrip({
       {tabs.map((t) => {
         const active = t.key === activeKey;
         return (
-          <Link
+          <TenantLink
             key={t.key}
             href={t.href}
             style={{
@@ -37,7 +36,7 @@ export default function TabStrip({
             }}
           >
             {t.label}
-          </Link>
+          </TenantLink>
         );
       })}
     </div>
