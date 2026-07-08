@@ -9,8 +9,7 @@
 
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 export interface CampaignRow {
   id: number;
   query: string;
@@ -147,7 +146,7 @@ export default function LeadsCockpitV2({ tab, drawerCampaignId, campaigns, icps,
 
 function TabLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
-    <Link
+    <TenantLink
       href={href}
       style={{
         padding: '10px 20px',
@@ -163,7 +162,7 @@ function TabLink({ href, active, children }: { href: string; active: boolean; ch
       }}
     >
       {children}
-    </Link>
+    </TenantLink>
   );
 }
 
@@ -283,7 +282,7 @@ function CampaignCard({ campaign, funnel }: { campaign: CampaignRow; funnel: Fun
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <Link href={`/sales/leads?tab=campaigns&drawer=${campaign.id}`} style={btnPrimary}>✦ Details</Link>
+        <TenantLink href={`/sales/leads?tab=campaigns&drawer=${campaign.id}`} style={btnPrimary}>✦ Details</TenantLink>
         <button style={btnSecondary} title="Edit campaign (coming soon)">Edit</button>
         {campaign.status === 'running' && <button style={btnSecondary}>Pause</button>}
         {campaign.status === 'paused' && <button style={btnSecondary}>Resume</button>}
@@ -305,7 +304,7 @@ function CampaignDrawer({ campaign, funnel, leads }: { campaign: CampaignRow; fu
     <Panel
       title={`Drawer · ${campaign.query}`}
       eyebrow={`campaign #${campaign.id} · ${campaign.status} · ${total} leads`}
-      actions={<Link href="/sales/leads?tab=campaigns" style={btnSecondary}>✕ Close</Link>}
+      actions={<TenantLink href="/sales/leads?tab=campaigns" style={btnSecondary}>✕ Close</TenantLink>}
     >
       <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
         <DrawerKpi label="Total leads" value={String(total)} />
