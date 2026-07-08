@@ -1,7 +1,7 @@
 // app/marketing/compiler/[run_id]/edit/page.tsx
 // Itinerary editor — read-only matrix in v1; edit JSON-via-textarea fallback.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../../../_subpages';
@@ -43,9 +43,9 @@ export default async function EditPage({
     return (
       <Page eyebrow="Marketing · Compiler · Edit" title="No variants" subPages={MARKETING_SUBPAGES}>
         <div style={{ marginTop: 16 }}>
-          <Link href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)' }}>
+          <TenantLink href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)' }}>
             ← Back to variants
-          </Link>
+          </TenantLink>
         </div>
       </Page>
     );
@@ -58,7 +58,7 @@ export default async function EditPage({
 
       <div style={{ marginTop: 16, display: 'flex', gap: 8, fontSize: 'var(--t-sm)' }}>
         {list.map(v => (
-          <Link
+          <TenantLink
             key={v.id}
             href={`/marketing/compiler/${params.run_id}/edit?variant=${v.id}`}
             style={{
@@ -71,7 +71,7 @@ export default async function EditPage({
             }}
           >
             Variant {v.label}
-          </Link>
+          </TenantLink>
         ))}
       </div>
 
@@ -111,9 +111,9 @@ export default async function EditPage({
       </div>
 
       <div style={{ marginTop: 24, display: 'flex', gap: 12, fontSize: 'var(--t-sm)' }}>
-        <Link href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)' }}>
+        <TenantLink href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)' }}>
           ← Back to variants
-        </Link>
+        </TenantLink>
       </div>
     </Page>
   );
