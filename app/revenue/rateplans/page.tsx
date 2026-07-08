@@ -14,6 +14,7 @@ import RoTooltipChart from '@/app/_components/registry/RoTooltipChart';
 import { supabase } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
+import LiveRateMatrix, { type RateMatrixRow } from './_components/LiveRateMatrix';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -54,6 +55,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   // Parallel data fetch
   const [
     nrrMonthly, leadTime, mealCompare, promoImpact, restrictions, sleeping, orphans, classifiedCount, cashTiming, cashByStay,
+    rateMatrixRows,
   ] = await Promise.all([
     supabase.from('v_rate_plan_nrr_kpis_monthly')
       .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, revenue_bb, room_nights_ro, room_nights_flex_bucket, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
@@ -100,6 +102,11 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       .eq('property_id', pid)
       .gte('stay_month', ytdStart)
       .order('stay_month').then((r) => r.data ?? []),
+    // PBS 2026-07-08: live rate matrix for today — (room-type × rate-plan) grid
+    supabase.from('v_rate_matrix_today')
+      .select('room_type_id, room_type_name, rate_id, rate_name, rate_type, rate, minimum_stay, available_rooms')
+      .eq('property_id', pid)
+      .then((r) => (r.data ?? []) as RateMatrixRow[]),
   ]);
 
   // Aggregate Section 1 KPIs across YTD — explicit accumulator type so tsc doesn't widen acc to unknown
@@ -276,6 +283,18 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       subtitle={`Active catalogue · ${classifiedCount} rate plans · NRR / Flex / Promo / Package mix · YTD-${today.getUTCFullYear()}${mewsCashHidden ? ' · Cash collection: Mews sync pending' : ''}`}
       tabs={tabs}
     >
+      {/* PBS 2026-07-08: Live rate matrix — every rate plan × room type published for today.
+          Green highlight = overall cheapest cell. BAR / DIRECT / PROMO chip = rate_type.
+          Source: public.v_rate_matrix_today (rate_inventory joined to rate_plans + room_types). */}
+      <div style={{ gridColumn: '1 / -1', marginBottom: 12 }}>
+        <Container
+          title="Live rate matrix · today"
+          subtitle={`${rateMatrixRows.length} cells published for ${today.toISOString().slice(0, 10)} · sorted cheapest → dearest`}
+        >
+          <LiveRateMatrix rows={rateMatrixRows} currencySym={sym} />
+        </Container>
+      </div>
+
       {/* Section 1 — NRR cash-discipline strip */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: `repeat(${strip.length}, minmax(0, 1fr))`, gap: 8, marginBottom: 12 }}>
         {strip.map((t, i) => <KpiTile key={i} {...t} />)}
