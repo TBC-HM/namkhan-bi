@@ -366,3 +366,28 @@ export async function getOccScoped(propertyId: number): Promise<OccScoped | null
     sellable_capacity: Number(d.sellable_capacity ?? 0),
   };
 }
+
+// ─── Last-30d RN sold series (PBS 2026-07-08) ─────────────────────────
+// Gold: public.v_pulse_rn_sold_30d — one row per (property_id, night_date)
+// for the 30 nights ending yesterday. Powers the new TrendTile on Pulse.
+
+export interface PulseRnSoldDay {
+  night_date: string;
+  rooms_sold: number;
+}
+
+export async function getPulseRnSold30d(propertyId: number): Promise<PulseRnSoldDay[]> {
+  const { data, error } = await supabase
+    .from('v_pulse_rn_sold_30d')
+    .select('night_date, rooms_sold')
+    .eq('property_id', propertyId)
+    .order('night_date');
+  if (error) {
+    console.error('[pulse/getPulseRnSold30d] error', error);
+    return [];
+  }
+  return ((data ?? []) as Array<{ night_date: string; rooms_sold: number | null }>).map((r) => ({
+    night_date: String(r.night_date).slice(0, 10),
+    rooms_sold: Number(r.rooms_sold ?? 0),
+  }));
+}
