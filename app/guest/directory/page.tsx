@@ -7,7 +7,7 @@
 //   guest.v_directory_full_consolidated (new view that LATERALs to guest.v_guest_reservations).
 // - KPI tiles compute from the loaded Namkhan-only rows so filter counts match.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -139,11 +139,11 @@ export default async function GuestDirectoryPage() {
             <strong>{unreachable.toLocaleString()}</strong>{' '}
             guest profile{unreachable === 1 ? ' is' : 's are'} <em>unreachable</em> — no email + no phone.
           </div>
-          <Link href="/guest/messy-data" style={{
+          <TenantLink href="/guest/messy-data" style={{
             padding: '5px 12px', fontSize: 11, fontWeight: 600,
             background: '#B03826', color: '#FFFFFF',
             border: 'none', borderRadius: 4, textDecoration: 'none',
-          }}>Open messy data →</Link>
+          }}>Open messy data →</TenantLink>
         </div>
       )}
 
