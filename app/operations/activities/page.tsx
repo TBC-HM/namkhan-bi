@@ -21,12 +21,13 @@ import { resolvePeriod } from '@/lib/period';
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number; }
 
 const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
-export default async function ActivitiesPage({ searchParams }: Props) {
+export default async function ActivitiesPage({ searchParams, propertyId }: Props) {
+  const pid = propertyId ?? 260955;
   const opPeriodRaw = typeof searchParams.op === 'string' ? searchParams.op : '30d';
   const opPeriod = (['yesterday','7d','30d','ytd'].includes(opPeriodRaw) ? opPeriodRaw : '30d') as 'yesterday'|'7d'|'30d'|'ytd';
   const opToday = new Date(); opToday.setUTCHours(0,0,0,0);
@@ -55,17 +56,17 @@ export default async function ActivitiesPage({ searchParams }: Props) {
     getDeptRevenueByCategoryForPeriod('Other Operated', opFromIso, opEndIso, 'Activities').catch(() => []),
     supabase.from('v_activity_capture_monthly')
       .select('period_yyyymm, capture_pct, res_in_house, res_with_purchase')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
     supabase.from('v_activity_avg_ticket_monthly')
       .select('period_yyyymm, avg_check, revenue, reservations')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
     supabase.from('v_activity_category_monthly')
       .select('period_yyyymm, category, revenue')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
   ]);
