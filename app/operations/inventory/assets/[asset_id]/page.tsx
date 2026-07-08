@@ -1,7 +1,7 @@
 // app/operations/inventory/assets/[asset_id]/page.tsx
 // Asset detail — header, depreciation, maintenance log, documents.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Card from '@/components/sections/Card';
 import { getAssetDetail } from '@/lib/inv-data';
 import { fmtMoney } from '@/lib/format';
@@ -15,7 +15,7 @@ export default async function AssetDetailPage({ params }: Props) {
   const { asset, dep, mlog, docs } = await getAssetDetail(params.asset_id);
 
   if (!asset) {
-    return <Card title="Asset" emphasis="not found"><p><Link href="/operations/inventory/assets">← Back</Link></p></Card>;
+    return <Card title="Asset" emphasis="not found"><p><TenantLink href="/operations/inventory/assets">← Back</TenantLink></p></Card>;
   }
 
   const accumDepreciation = dep?.book_value_usd != null && asset.purchase_cost_usd != null
@@ -25,7 +25,7 @@ export default async function AssetDetailPage({ params }: Props) {
   return (
     <>
       <div className="breadcrumb">
-        <Link href="/operations/inventory/assets">Assets</Link>{' · '}
+        <TenantLink href="/operations/inventory/assets">Assets</TenantLink>{' · '}
         <strong>{asset.asset_tag}</strong>
       </div>
 
