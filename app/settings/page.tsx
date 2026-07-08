@@ -1,5 +1,5 @@
 // app/settings/page.tsx — REDESIGN 2026-05-05 (recovery)
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
@@ -73,12 +73,12 @@ export default async function SettingsSnapshotPage() {
             <span style={metaDim}>open · {dqCritical} crit/high</span>
           </StatusCell>
           <span style={{ flex: 1 }} />
-          <Link href="/settings/property" style={{
+          <TenantLink href="/settings/property" style={{
             padding: '4px 12px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
             letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', fontWeight: 600,
             background: 'var(--moss)', color: 'var(--paper-warm)', border: '1px solid var(--moss)',
             borderRadius: 4, textDecoration: 'none',
-          }}>EDIT PROPERTY →</Link>
+          }}>EDIT PROPERTY →</TenantLink>
         </>}
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
@@ -92,7 +92,7 @@ export default async function SettingsSnapshotPage() {
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Reference" emphasis="& architecture" sub="Owner-maintained platform map + live architecture diagram" source="content/settings/platform-map.md" />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
-          <Link href="/settings/platform-map"
+          <TenantLink href="/settings/platform-map"
             style={{
               background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)',
               borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit',
@@ -106,7 +106,7 @@ export default async function SettingsSnapshotPage() {
             <div style={{ marginTop: 'auto', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', letterSpacing: 'var(--ls-loose)' }}>
               /settings/platform-map
             </div>
-          </Link>
+          </TenantLink>
           <a href="/platform-map-v5.html" target="_blank" rel="noopener noreferrer"
             style={{
               background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)',
@@ -137,7 +137,7 @@ export default async function SettingsSnapshotPage() {
               const ph = Number(s.placeholder_count ?? 0);
               const tone = ph === 0 ? 'active' : ph >= 5 ? 'expired' : 'pending';
               return (
-                <Link key={s.section_code} href={`/settings/property/${s.section_code}`}
+                <TenantLink key={s.section_code} href={`/settings/property/${s.section_code}`}
                   style={{
                     background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)',
                     borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit',
@@ -152,7 +152,7 @@ export default async function SettingsSnapshotPage() {
                     {s.row_count ?? 0} {s.row_count === 1 ? 'row' : 'rows'}
                     {ph > 0 && <span style={{ color: 'var(--brass)' }}> · {ph} placeholder{ph === 1 ? '' : 's'}</span>}
                   </div>
-                </Link>
+                </TenantLink>
               );
             })}
           </div>
