@@ -119,16 +119,25 @@ async function occToday(date: string, propertyId: number): Promise<{ roomsSold: 
 }
 
 async function sellableCount(fromIso: string, toIso: string, propertyId: number): Promise<number | null> {
-  const { count, error } = await supabase
+  // PBS 2026-07-08: was `count: 'exact'` on raw rate_inventory rows — inflated
+  // ~9× because rate_inventory has one row per (date × room_type × rate_plan).
+  // The useful metric is distinct (date, room_type) combos with ≥ 1 sellable
+  // rate. For Namkhan (10 room types × 14 days) the ceiling is 140 room-days.
+  const { data, error } = await supabase
     .from('rate_inventory')
-    .select('*', { count: 'exact', head: true })
+    .select('inventory_date, room_type_id')
     .eq('property_id', propertyId)
     .gte('inventory_date', fromIso)
     .lt('inventory_date', toIso)
     .gte('rate', RATE_MIN)
-    .or('stop_sell.is.null,stop_sell.eq.false');
-  if (error) return null;
-  return count ?? 0;
+    .or('stop_sell.is.null,stop_sell.eq.false')
+    .limit(50000);
+  if (error || !data) return null;
+  const uniq = new Set<string>();
+  for (const r of data as Array<{ inventory_date: string; room_type_id: unknown }>) {
+    uniq.add(`${r.inventory_date}|${String(r.room_type_id)}`);
+  }
+  return uniq.size;
 }
 
 export async function getPricingKpis(propertyId: number = PROPERTY_ID): Promise<PricingKpis> {
