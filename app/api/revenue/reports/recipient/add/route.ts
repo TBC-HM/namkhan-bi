@@ -1,38 +1,28 @@
+// app/api/revenue/reports/recipient/add/route.ts
+// PBS 2026-07-08: add a revenue-report recipient via fn_revenue_report_add_recipient RPC.
+
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-interface Body {
-  property_id?: number;
-  template_key?: 'daily' | 'weekly' | 'monthly';
-  email?: string;
-  name?: string | null;
-}
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as Body;
-    const propertyId  = Number(body.property_id);
-    const templateKey = String(body.template_key ?? '');
-    const email       = String(body.email ?? '').trim();
-    const name        = body.name ? String(body.name).trim() : null;
-
-    if (!Number.isFinite(propertyId)) return NextResponse.json({ error: 'invalid property_id' }, { status: 400 });
-    if (!['daily','weekly','monthly'].includes(templateKey)) return NextResponse.json({ error: 'invalid template_key' }, { status: 400 });
-    if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email))       return NextResponse.json({ error: 'invalid email' }, { status: 400 });
-
-    const admin = getSupabaseAdmin();
-    const { data, error } = await admin.rpc('fn_report_recipient_add', {
-      p_property_id: propertyId,
-      p_template_key: templateKey,
-      p_email: email,
-      p_name: name,
+    const body = await req.json();
+    const property_id  = Number(body.property_id);
+    const template_key = String(body.template_key ?? '').toLowerCase();
+    const email        = String(body.email ?? '').trim().toLowerCase();
+    const name         = body.name ? String(body.name).trim() : null;
+    if (!Number.isFinite(property_id) || property_id <= 0)  return NextResponse.json({ error: 'property_id required' }, { status: 400 });
+    if (!['daily','weekly','monthly'].includes(template_key)) return NextResponse.json({ error: 'template_key must be daily/weekly/monthly' }, { status: 400 });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))          return NextResponse.json({ error: 'valid email required' }, { status: 400 });
+    const sb = getSupabaseAdmin();
+    const { data, error } = await sb.rpc('fn_revenue_report_add_recipient', {
+      p_property_id: property_id, p_template_key: template_key, p_email: email, p_name: name,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ id: data, email, template_key: templateKey, property_id: propertyId });
+    return NextResponse.json({ ok: true, id: Number(data) });
   } catch (e) {
-    return NextResponse.json({ error: String((e as Error).message ?? e) }, { status: 500 });
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 }
