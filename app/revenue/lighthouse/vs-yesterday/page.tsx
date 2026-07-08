@@ -14,6 +14,7 @@ export default async function LighthouseVsYesterdayPage({ propertyId }: { proper
     : { rows: [], hotels: [], earlierSnapshot: null };
   return (
     <LighthouseShell
+      propertyId={pid}
       view="yesterday"
       title="Lighthouse · vs Yesterday"
       subtitle="Same grid + 1-day delta — spot same-day movements across the compset"
