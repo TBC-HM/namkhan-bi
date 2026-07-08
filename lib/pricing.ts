@@ -77,3 +77,31 @@ export async function getRateInventory(
   }
   return (data ?? []) as RateInventoryRow[];
 }
+
+// PBS 2026-07-08 — bridge view join to rate_plans so the Restrictions tab can
+// split BAR (rate_plan_type='base') from packages (derived/standalone).
+// Without this split, MAX(mls) across ALL plans surfaces "Long Stay 12+" as a
+// 12-night MLS on every night — a false read for revenue managers.
+export interface RateInventoryTypedRow extends RateInventoryRow {
+  rate_plan_type: 'base' | 'derived' | 'standalone' | null;
+  rate_name: string | null;
+}
+
+export async function getRateInventoryTyped(
+  fromDate: string,
+  toDate: string,
+  opts: { propertyId?: number } = {},
+): Promise<RateInventoryTypedRow[]> {
+  const pid = opts.propertyId ?? PROPERTY_ID;
+  const { data, error } = await supabase
+    .from('v_rate_inventory_typed')
+    .select('inventory_date, room_type_id, rate_id, rate, available_rooms, stop_sell, closed_to_arrival, closed_to_departure, minimum_stay, rate_plan_type, rate_name')
+    .eq('property_id', pid)
+    .gte('inventory_date', fromDate)
+    .lte('inventory_date', toDate);
+  if (error) {
+    console.error('[pricing] getRateInventoryTyped', error);
+    return [];
+  }
+  return (data ?? []) as RateInventoryTypedRow[];
+}
