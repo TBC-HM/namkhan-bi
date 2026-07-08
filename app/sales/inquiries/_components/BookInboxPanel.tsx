@@ -8,7 +8,7 @@
 // pb@'s mailbox where book@ appears in TO/CC. The header makes that
 // clear and links to /admin/gmail-connect to authorise book@ properly.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { listEmailThreads, type ThreadSummary } from '@/lib/sales';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
 
@@ -59,7 +59,7 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
     const active = dir === target;
     const href = target === 'all' ? '/sales/inquiries#book' : `/sales/inquiries?bookDir=${target}#book`;
     return (
-      <Link
+      <TenantLink
         key={target}
         href={href}
         scroll={false}
@@ -77,7 +77,7 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
         }}
       >
         {label}
-      </Link>
+      </TenantLink>
     );
   };
 
@@ -152,7 +152,7 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
           {chip('All', 'all')}
           {chip('↘ In', 'in')}
           {chip('↗ Out', 'out')}
-          <Link
+          <TenantLink
             href={`/inbox?box=${encodeURIComponent(MAILBOX)}`}
             style={{
               marginLeft: 8,
@@ -168,7 +168,7 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
             }}
           >
             Open full inbox →
-          </Link>
+          </TenantLink>
         </div>
       </div>
 
@@ -202,9 +202,9 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
             via pb@
           </span>
           <span style={statSub}>
-            <Link href="/admin/gmail-connect" style={{ color: 'var(--brass)' }}>
+            <TenantLink href="/admin/gmail-connect" style={{ color: 'var(--brass)' }}>
               Connect book@ directly →
-            </Link>
+            </TenantLink>
           </span>
         </div>
       </div>
@@ -213,9 +213,9 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
       {threads.length === 0 ? (
         <div style={{ padding: 18, color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>
           No messages on book@thenamkhan.com under this filter. The poller may be stalled — check{' '}
-          <Link href="/admin/gmail-connect" style={{ color: 'var(--brass)' }}>
+          <TenantLink href="/admin/gmail-connect" style={{ color: 'var(--brass)' }}>
             /admin/gmail-connect
-          </Link>
+          </TenantLink>
           .
         </div>
       ) : (
@@ -227,7 +227,7 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
                 key={t.thread_id}
                 style={{ borderTop: '1px solid var(--line-soft)' }}
               >
-                <Link
+                <TenantLink
                   href={`/inbox?box=${encodeURIComponent(MAILBOX)}&thread=${encodeURIComponent(t.thread_id)}`}
                   style={{
                     display: 'grid',
@@ -294,7 +294,7 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
                   >
                     {relativeTime(t.last_received_at)}
                   </span>
-                </Link>
+                </TenantLink>
               </li>
             );
           })}
