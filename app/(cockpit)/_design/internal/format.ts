@@ -8,7 +8,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 };
 
 export function formatNumber(n: number, opts?: { signed?: boolean; decimals?: number }): string {
-  const decimals = opts?.decimals ?? 1;
+  const decimals = opts?.decimals ?? 0;
   const signed = opts?.signed ?? false;
   if (!Number.isFinite(n)) return '—';
   const abs = Math.abs(n);
@@ -30,14 +30,14 @@ export function formatCurrency(n: number, currency: string): string {
 export function formatComparison(value: number, label: string, format: KpiCompareFormat, currency?: string): string {
   switch (format) {
     case 'percent':
-      return `${formatNumber(value, { signed: true, decimals: 1 })}%`;
+      return `${formatNumber(value, { signed: true, decimals: 0 })}%`;
     case 'currency':
       if (!currency) return formatNumber(value, { signed: true });
       return `${value < 0 ? '−' : '+'}${formatCurrency(Math.abs(value), currency)}`;
     case 'absolute':
     default: {
       const suffix = /pct|rate/i.test(label) ? ' pp' : '';
-      return `${formatNumber(value, { signed: true, decimals: 1 })}${suffix}`;
+      return `${formatNumber(value, { signed: true, decimals: 0 })}${suffix}`;
     }
   }
 }
