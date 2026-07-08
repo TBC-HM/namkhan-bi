@@ -3,7 +3,7 @@
 // Compact 2-row header (prompt + spec + status) → inline offer config →
 // variants DataTable with expandable price stack.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../../_subpages';
@@ -53,7 +53,7 @@ export default async function VariantsPage({ params }: { params: { run_id: strin
           <span className="t-eyebrow" style={{ marginRight: 6 }}>PROMPT</span>
           <span style={meta}>{run.prompt}</span>
           <span style={{ flex: 1 }} />
-          <Link href="/marketing/compiler" style={linkBtn}>← Back</Link>
+          <TenantLink href="/marketing/compiler" style={linkBtn}>← Back</TenantLink>
         </div>
         <div style={headerRow2}>
           <span className="t-eyebrow" style={{ marginRight: 6 }}>PARSED</span>
@@ -68,9 +68,9 @@ export default async function VariantsPage({ params }: { params: { run_id: strin
           {latestDeploy ? (
             <>
               <span className="t-eyebrow" style={{ marginRight: 4 }}>LIVE</span>
-              <Link href={`/r/${latestDeploy.subdomain}`} target="_blank" style={{ ...meta, color: 'var(--brass)', textDecoration: 'none' }}>
+              <TenantLink href={`/r/${latestDeploy.subdomain}`} target="_blank" style={{ ...meta, color: 'var(--brass)', textDecoration: 'none' }}>
                 /r/{latestDeploy.subdomain} ↗
-              </Link>
+              </TenantLink>
               <span style={dim}>· {fmtIsoDate(latestDeploy.deployed_at)}</span>
             </>
           ) : (
@@ -88,11 +88,11 @@ export default async function VariantsPage({ params }: { params: { run_id: strin
       <VariantsTable runId={run.id} rows={list} partySize={Number(spec.pax) || 1} />
 
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
-        Sub-pages: <Link href={`/marketing/compiler/${run.id}/edit`} style={{ color: 'var(--brass)' }}>EDIT ITINERARY</Link>
+        Sub-pages: <TenantLink href={`/marketing/compiler/${run.id}/edit`} style={{ color: 'var(--brass)' }}>EDIT ITINERARY</TenantLink>
         {' · '}
-        <Link href={`/marketing/compiler/${run.id}/preview`} style={{ color: 'var(--brass)' }}>PREVIEW</Link>
+        <TenantLink href={`/marketing/compiler/${run.id}/preview`} style={{ color: 'var(--brass)' }}>PREVIEW</TenantLink>
         {' · '}
-        <Link href={`/marketing/compiler/${run.id}/deploy`} style={{ color: 'var(--brass)' }}>DEPLOY HISTORY</Link>
+        <TenantLink href={`/marketing/compiler/${run.id}/deploy`} style={{ color: 'var(--brass)' }}>DEPLOY HISTORY</TenantLink>
       </div>
     </Page>
   );
