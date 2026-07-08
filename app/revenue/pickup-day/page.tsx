@@ -216,8 +216,8 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
       >
         <div style={{ gridColumn: '1 / -1' }}>
           <Container
-            title={`Day report · ${new Date(todayIso).toLocaleDateString('en-GB')} · ${pidLabel} (property ${pid})`}
-            subtitle={`${pace.length} forward nights · monthly TOTAL rows inline (bold) · placeholders (—) for columns still to be wired`}
+            title="Forward outlook by night"
+            subtitle={`${pace.length} nights from today · monthly totals inline · Demand · Lighthouse (snapshot ${snapshotDate ?? 'pending'})`}
           >
             <div style={{ overflowX: 'auto', border: '1px solid #E6DFCC', borderRadius: 6 }}>
               <table style={{ borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap', width: '100%' }}>
