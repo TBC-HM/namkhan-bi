@@ -8,6 +8,36 @@ import { useState, useTransition, type CSSProperties } from 'react';
 
 export interface Shortcut { id: number; label: string; href: string }
 
+// PBS 2026-07-08: curated Revenue subpage catalog for the pin dropdown.
+const REVENUE_SUBPAGES: Array<{ href: string; label: string }> = [
+  { href: '/revenue',                         label: 'Revenue HoD (Vector)' },
+  { href: '/revenue/pulse',                   label: 'Pulse' },
+  { href: '/revenue/pricing',                 label: 'Calendar · Pricing' },
+  { href: '/revenue/pricing?tab=holidays',    label: 'Calendar · Holidays' },
+  { href: '/revenue/pricing?tab=otb_density', label: 'Calendar · OTB Density' },
+  { href: '/revenue/pricing?tab=restrictions',label: 'Calendar · Restrictions' },
+  { href: '/revenue/rateplans',               label: 'Rate Plans' },
+  { href: '/revenue/demand',                  label: 'Demand' },
+  { href: '/revenue/pace',                    label: 'Pace' },
+  { href: '/revenue/pickup',                  label: 'Pickup · Monthly' },
+  { href: '/revenue/pickup-day',              label: 'Pickup · Daily' },
+  { href: '/revenue/cancellations',           label: 'Cancellations' },
+  { href: '/revenue/compset',                 label: 'Comp Set' },
+  { href: '/revenue/leakage',                 label: 'Leakage' },
+  { href: '/revenue/parity',                  label: 'Parity' },
+  { href: '/revenue/lighthouse/overview',     label: 'Lighthouse · Overview' },
+  { href: '/revenue/lighthouse/rates',        label: 'Lighthouse · Rates' },
+  { href: '/revenue/lighthouse/vs-yesterday', label: 'Lighthouse · vs Yesterday' },
+  { href: '/revenue/lighthouse/vs-3d',        label: 'Lighthouse · vs 3d ago' },
+  { href: '/revenue/lighthouse/vs-7d',        label: 'Lighthouse · vs 7d ago' },
+  { href: '/revenue/channels',                label: 'Channels' },
+  { href: '/revenue/rooms',                   label: 'Rooms' },
+  { href: '/revenue/markets',                 label: 'Markets' },
+  { href: '/revenue/reports/scheduled/daily/preview',   label: 'Daily report preview' },
+  { href: '/revenue/reports/scheduled/weekly/preview',  label: 'Weekly report preview' },
+  { href: '/revenue/reports/scheduled/monthly/preview', label: 'Monthly report preview' },
+];
+
 export default function ShortcutsPanel({ initial, propertyId, deptSlug = 'revenue', userEmail = 'pbsbase@gmail.com' }: {
   initial: Shortcut[];
   propertyId: number;
@@ -15,24 +45,26 @@ export default function ShortcutsPanel({ initial, propertyId, deptSlug = 'revenu
   userEmail?: string;
 }) {
   const [items, setItems] = useState<Shortcut[]>(initial);
-  const [label, setLabel] = useState('');
-  const [href, setHref] = useState('');
+  const [picked, setPicked] = useState<string>(REVENUE_SUBPAGES[0]?.href ?? '');
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
   const submit = () => {
-    if (!label.trim() || !href.trim()) return;
+    const opt = REVENUE_SUBPAGES.find((o) => o.href === picked);
+    if (!opt) return;
+    const label = opt.label;
+    const href = opt.href;
+    if (items.some((s) => s.href === href)) { setMsg('already pinned'); setTimeout(() => setMsg(null), 2000); return; }
     startTransition(async () => {
       try {
         const r = await fetch('/api/shortcuts/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ property_id: propertyId, dept_slug: deptSlug, user_email: userEmail, label: label.trim(), href: href.trim() }),
+          body: JSON.stringify({ property_id: propertyId, dept_slug: deptSlug, user_email: userEmail, label, href }),
         });
         if (!r.ok) throw new Error(`add failed (${r.status})`);
         const { id } = await r.json();
-        setItems((arr) => [...arr, { id, label: label.trim(), href: href.trim() }]);
-        setLabel(''); setHref('');
+        setItems((arr) => [...arr, { id, label, href }]);
       } catch (e) { setMsg(`✗ ${(e as Error).message}`); }
     });
   };
