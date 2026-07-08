@@ -12,7 +12,7 @@
 // All four drive query params (?win=, ?cmp=, ?seg=, ?cap=) on the same path.
 // Server pages MUST read them via resolvePeriod(searchParams) — see lib/period.ts.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 import type { WindowKey, CompareKey, SegmentKey, CapacityMode } from '@/lib/period';
@@ -103,23 +103,23 @@ export default function FilterStrip({
       <span className="filter-label">Window</span>
       <div className="filter-group">
         {BACK_TABS.map((t) => (
-          <Link
+          <TenantLink
             key={t.win}
             href={hrefWith('win', t.win)}
             className={`filter-btn ${currentWin === t.win ? 'active' : ''}`}
           >
             {t.label}
-          </Link>
+          </TenantLink>
         ))}
         {showForward && <span className="filter-divider" aria-hidden />}
         {showForward && FWD_TABS.map((t) => (
-          <Link
+          <TenantLink
             key={t.win}
             href={hrefWith('win', t.win)}
             className={`filter-btn fwd ${currentWin === t.win ? 'active' : ''}`}
           >
             {t.label}
-          </Link>
+          </TenantLink>
         ))}
       </div>
 
