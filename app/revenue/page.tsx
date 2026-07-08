@@ -15,7 +15,6 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import ReportBuilder from './_components/ReportBuilder';
 import { ScheduledReportsTable, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
 import BugsList from './_components/BugsList';
 import HodTasksList from './_components/HodTasksList';
@@ -264,6 +263,14 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     : `${attn.length} item${attn.length === 1 ? '' : 's'} · live · dismiss with ×`;
   const docs = cfg.defaultDocs ?? [];
   const reportTypes = cfg.reportTypes ?? [];
+  // PBS 2026-07-08: unified report catalog for the Scheduled reports picker.
+  // Includes the 3 built-in scheduled reports + every dept-cfg report type.
+  const reportOptions = [
+    { value: 'daily',   label: 'Daily revenue report' },
+    { value: 'weekly',  label: 'Weekly revenue report' },
+    { value: 'monthly', label: 'Monthly revenue report' },
+    ...reportTypes.map((rt) => ({ value: rt.value, label: rt.label })),
+  ];
 
   const DONNA_PROPERTY_ID = 1000001;
   const chatHref = pid === DONNA_PROPERTY_ID
@@ -323,12 +330,18 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </Container>
       </div>
 
-      {/* PBS 2026-07-08 (final): the two sortable + bulk-delete tables live full-width. */}
+      {/* PBS 2026-07-08 (final): scheduled reports table.
+          Report options now include the 3 built-in scheduled reports (Daily/Weekly/Monthly)
+          + every report type from the department config. Build a report container removed. */}
       <div style={fullRow}>
         <Container title="Scheduled reports"
-                   subtitle="Daily · Weekly · Monthly · fires at 08:00 UTC · sort any column · check rows and dismiss to cancel"
+                   subtitle="Pick any report · pick a cadence · fires at 08:00 UTC · sort any column · check rows and dismiss to cancel"
                    density="compact">
-          <ScheduledReportsTable rows={scheduledRows} propertyId={pid} />
+          <ScheduledReportsTable
+            rows={scheduledRows}
+            propertyId={pid}
+            reportOptions={reportOptions}
+          />
         </Container>
       </div>
 
@@ -358,13 +371,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </Container>
       </div>
 
-      {reportTypes.length > 0 && (
-        <div style={fullRow}>
-          <Container title="Build a report" subtitle="pick a type · narrow with chips · open print-ready render" density="compact">
-            <ReportBuilder reportTypes={reportTypes} hrefPrefix={pid === PROPERTY_ID ? '' : `/h/${pid}`} />
-          </Container>
-        </div>
-      )}
+      {/* PBS 2026-07-08: "Build a report" container removed. Every report can be
+          scheduled from the Scheduled reports box above. */}
 
       <div style={fullRow}>
         <BookingActivity propertyId={pid} searchParams={searchParams} />
