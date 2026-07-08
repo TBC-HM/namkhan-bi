@@ -2,7 +2,7 @@
 // Source: public.competitor_set + public.competitor_property + public.competitor_rates
 // Lets owner manage manual peer set + log weekly rate observations.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { supabase } from '@/lib/supabase';
 import { ManualRateEntry } from '../_components/ManualRateEntry';
 
@@ -73,9 +73,9 @@ export default async function ManualCompsetPage() {
   return (
     <div className="space-y-8 px-8 py-6">
       <nav className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
-        <Link href="/revenue/compset" className="hover:text-stone-900">
+        <TenantLink href="/revenue/compset" className="hover:text-stone-900">
           ← Comp set overview
-        </Link>
+        </TenantLink>
       </nav>
 
       <header>
