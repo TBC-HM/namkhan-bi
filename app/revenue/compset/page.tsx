@@ -3,7 +3,7 @@
 // (Namkhan default) and /h/[id]/revenue/compset (delegates with propertyId).
 // Legacy preserved at /revenue/compset/legacy.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile, Chart,
   type ChartSeries, type DashboardTab, type KpiTileProps,
@@ -321,9 +321,9 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
                 {props.map((p) => (
                   <tr key={p.comp_id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
                     <td style={ctdLabelStyle}>
-                      <Link href={`?comp=${encodeURIComponent(p.comp_id)}`} style={cSourceLinkStyle}>
+                      <TenantLink href={`?comp=${encodeURIComponent(p.comp_id)}`} style={cSourceLinkStyle}>
                         {p.property_name}{p.is_self ? ' ⭐' : ''}
-                      </Link>
+                      </TenantLink>
                     </td>
                     <td style={ctdLabelStyle}>{p.star_rating ? '★'.repeat(p.star_rating) : '—'}</td>
                     <td style={ctdNumStyle}>{p.latest_usd != null ? fmtUSD(p.latest_usd) : '—'}</td>
