@@ -975,9 +975,11 @@ const HOLDING_LEGAL_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. summarize this contract for finance — focus on payments and renewals',
   storageKeyPrefix: 'hold-legal',
   // PBS 2026-07-07: Contracts sub-tab surfaces the Beyond Circle revenue-contract flow.
+  // PBS 2026-07-08: Legal · Lao moved out of the top holding strip and into this sub-nav.
   subPages: [
-    { label: 'HoD',       href: '/holding/legal'           },
-    { label: 'Contracts', href: '/holding/legal/contracts' },
+    { label: 'HoD',         href: '/holding/legal'           },
+    { label: 'Contracts',   href: '/holding/legal/contracts' },
+    { label: 'Legal · Lao', href: '/holding/legal/lao'       },
   ],
   quickChips: [],
   defaultAttn: [
@@ -1117,6 +1119,82 @@ const HOLDING_JOHN_CFG: DeptCfg = {
   hideWeather: true,
 };
 
+// ─── Holding · CEO — Felix (top-level cross-property command) ────────────
+// PBS 2026-07-08: CEO surface promoted from being conceptually part of the
+// holding root landing to a first-class dept. Same DeptEntry pattern.
+const HOLDING_CEO_CFG: DeptCfg = {
+  slug: 'architect',
+  pillTitle: 'CEO · Holding',
+  hodName: 'Felix',
+  hodEmoji: '🌐',
+  ownerRole: 'lead',
+  hodTagline: 'CEO / owner scope · cross-property command · portfolio + strategy + capital.',
+  chatPlaceholder: 'e.g. how is the portfolio trending? what needs my approval this week?',
+  storageKeyPrefix: 'hold-ceo',
+  subPages: [],
+  quickChips: [],
+  defaultAttn: [
+    { id: 'ceo1', label: 'Approve Donna DCO 1/2025 settlement window (€150-200k target)', severity: 'high',   kind: 'leakage'     },
+    { id: 'ceo2', label: 'Namkhan portfolio pace ahead of LY · consider price ladder',    severity: 'low',    kind: 'opportunity' },
+    { id: 'ceo3', label: 'Q2 board pack due in 14 days',                                   severity: 'medium', kind: 'opportunity' },
+  ],
+  defaultDocs: [
+    { id: 'ceod1', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'ceod2', label: 'Knowledge base',               href: '/knowledge'  },
+    { id: 'ceod3', label: 'Holding overview',             href: '/holding'    },
+  ],
+  defaultTasks: [],
+  attentionRoutes: [
+    { matcher: 'dco',     href: '/h/1000001/finance' },
+    { matcher: 'pace',    href: '/h/260955/revenue/pace' },
+    { matcher: 'board',   href: '/holding/finance' },
+  ],
+  defaultDrilldown: '/cockpit-v2',
+  kpiTiles: [
+    { k: 'PROPERTIES', v: '2',     d: '1 live · 1 prospect'      },
+    { k: 'PORTFOLIO',  v: '—',     d: 'consolidated revenue YTD' },
+    { k: 'EXPOSURE',   v: '€440k', d: 'Donna DCO tramitación'    },
+    { k: 'APPROVALS',  v: '3',     d: 'high-severity items'      },
+  ],
+  hideWeather: true,
+};
+
+// ─── Holding · Finance — invoice + settlement command ────────────────────
+// PBS 2026-07-08: Holding-level finance. Distinct from per-property /finance
+// which is Namkhan / Donna P&L. Here lives cross-entity invoicing (Beyond
+// Circle bills DMCs, agents, partners) + running invoice numbers.
+const HOLDING_FINANCE_CFG: DeptCfg = {
+  slug: 'architect',
+  pillTitle: 'Finance · Holding',
+  hodName: 'Felix',
+  hodEmoji: '💶',
+  ownerRole: 'lead',
+  hodTagline: 'Holding finance · issue invoices to DMCs / partners / third parties · running invoice numbers.',
+  chatPlaceholder: 'e.g. generate an invoice for X for Y amount.',
+  storageKeyPrefix: 'hold-finance',
+  // PBS 2026-07-08: Invoices sub-tab surfaces the invoice generator.
+  subPages: [
+    { label: 'HoD',      href: '/holding/finance'         },
+    { label: 'Invoices', href: '/holding/finance/invoices' },
+  ],
+  quickChips: [],
+  defaultAttn: [],
+  defaultDocs: [
+    { id: 'hfd1', label: 'Invoice generator', href: '/holding/finance/invoices' },
+    { id: 'hfd2', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+  ],
+  defaultTasks: [],
+  attentionRoutes: [],
+  defaultDrilldown: '/holding/finance/invoices',
+  kpiTiles: [
+    { k: 'INVOICES', v: '—', d: 'issued YTD' },
+    { k: 'OUTSTAND', v: '—', d: 'unpaid'      },
+    { k: 'THIS MO',  v: '—', d: 'net billed'  },
+    { k: 'NEXT NO',  v: '—', d: 'running seq' },
+  ],
+  hideWeather: true,
+};
+
 export const DEPT_CFG = {
   revenue:    REVENUE_CFG,
   sales:      SALES_CFG,
@@ -1127,10 +1205,12 @@ export const DEPT_CFG = {
   it:         IT_CFG,
   architect:  ARCHITECT_CFG,
   holding:           HOLDING_CFG,
+  holding_ceo:       HOLDING_CEO_CFG,
   holding_legal:     HOLDING_LEGAL_CFG,
   holding_it:        HOLDING_IT_CFG,
   holding_strategy:  HOLDING_STRATEGY_CFG,
   holding_john:      HOLDING_JOHN_CFG,
+  holding_finance:   HOLDING_FINANCE_CFG,
 } as const;
 
 export type { DeptCfg } from './types';
