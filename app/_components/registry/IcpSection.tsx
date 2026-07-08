@@ -9,8 +9,7 @@
 // the matching ones manually.
 
 import { supabase } from '@/lib/supabase';
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 interface IcpRow {
   id: string;
   key: string;
@@ -46,12 +45,12 @@ export default async function IcpSection({ category: _category }: Props) {
     <section style={S.wrap}>
       <header style={S.header}>
         <h3 style={S.heading}>Matching ICPs</h3>
-        <Link href="/marketing/audiences" style={S.manageLink}>
+        <TenantLink href="/marketing/audiences" style={S.manageLink}>
           Manage ICPs →
-        </Link>
+        </TenantLink>
       </header>
       {icps.length === 0 ? (
-        <p style={S.empty}>No active ICPs yet. <Link href="/marketing/audiences" style={S.inlineLink}>Add one →</Link></p>
+        <p style={S.empty}>No active ICPs yet. <TenantLink href="/marketing/audiences" style={S.inlineLink}>Add one →</TenantLink></p>
       ) : (
         <ul style={S.list}>
           {icps.map((i) => (
