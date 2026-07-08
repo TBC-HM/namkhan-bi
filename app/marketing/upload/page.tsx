@@ -1,6 +1,6 @@
 // app/marketing/upload/page.tsx
 // PBS 2026-07-05: migrated from Page shell to DashboardPage. Preserves UploadDropzone.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import UploadDropzone from '@/components/marketing/UploadDropzone';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
@@ -18,7 +18,7 @@ export default function UploadPage() {
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title="Marketing · Upload" subtitle="Drag-drop ingestion · auto-tagged · QC-checked · ICP-routed" tabs={tabs}>
         <div style={{ gridColumn:'1 / -1', padding:'10px 14px', background:CREAM, border:'1px solid '+HAIR, borderLeft:'3px solid '+GREEN, borderRadius:6, fontSize:12, color:INK, lineHeight:1.6 }}>
-          Photos/videos land in <code>media-raw</code> bucket → registered in <code>media.media_assets</code> → routed to /marketing/gallery. If you want the polished media library, jump to <Link href="/marketing/gallery" style={{ color:GREEN }}>Media library →</Link>
+          Photos/videos land in <code>media-raw</code> bucket → registered in <code>media.media_assets</code> → routed to /marketing/gallery. If you want the polished media library, jump to <TenantLink href="/marketing/gallery" style={{ color:GREEN }}>Media library →</TenantLink>
         </div>
         <div style={{ gridColumn:'1 / -1', border:'1px solid '+HAIR, borderRadius:6, background:'#FFFFFF', padding:20 }}>
           <UploadDropzone />
