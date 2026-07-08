@@ -1,7 +1,7 @@
 // app/marketing/agents/page.tsx
 // PBS 2026-07-05: migrated from AgentsHub shell to new paper-white DashboardPage.
 // All 7 agents + spend caps + brand rules preserved verbatim.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 
