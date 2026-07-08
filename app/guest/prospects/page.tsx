@@ -36,7 +36,10 @@ type ProspectRow = {
   mx_checked_at: string | null;
 };
 
-export default async function ContactsProspectsPage() {
+interface PageProps { propertyId?: number }
+
+export default async function ContactsProspectsPage({ propertyId }: PageProps = {}) {
+  const pid = propertyId ?? PROPERTY_ID;
   const sb = getSupabaseAdmin();
   const CHUNK = 1000;
   const projection = 'subscriber_id, full_name, email, country, company, website, enrichment, interest_series, tags, enrolled_funnels, funnel_sends, funnel_pending, lifecycle_stage, booking_count, last_email_open_at, last_email_click_at, is_pinned, created_at, mx_valid, mx_checked_at';
@@ -45,7 +48,7 @@ export default async function ContactsProspectsPage() {
     const { data } = await sb
       .from('v_marketing_prospects_directory')
       .select(projection)
-      .eq('property_id', PROPERTY_ID)
+      .eq('property_id', pid)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false, nullsFirst: false })
       .range(offset, offset + CHUNK - 1);
