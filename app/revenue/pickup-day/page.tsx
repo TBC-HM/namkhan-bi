@@ -103,16 +103,23 @@ function fmtPct(n: number | null | undefined) {
 // Row has 37 leaf columns (see thead row 2); midpoint chosen at column 18 (Genius) to fall in the visibility block.
 const SPLIT_PIVOT = 18;
 
-// GREEN / RED / ZEBRA cell backgrounds. Row-level signals (newBk/cxl > 0) win over
-// per-cell visCell backgrounds so the row reads as a coloured band end-to-end.
+// GREEN / RED / ZEBRA cell backgrounds. Row-level signals win over per-cell visCell
+// backgrounds so the row reads as a coloured band end-to-end.
+// PBS 2026-07-08: broader rule — any night with OTB bookings = green (was: last-2-day
+// activity only, which was too rare to see day-to-day).
 const ROW_GREEN = '#DFF0DE';
 const ROW_RED   = '#F5D5CE';
 
-/** Returns the cell background for the given column index given the row state. */
-function rowCellBg(colIdx: number, newBk: number, cxl: number, weekendZebra: string): string | undefined {
-  if (newBk > 0 && cxl > 0) return colIdx < SPLIT_PIVOT ? ROW_GREEN : ROW_RED;
-  if (newBk > 0)            return ROW_GREEN;
-  if (cxl   > 0)            return ROW_RED;
+/**
+ * Returns the cell background for the given column index given the row state.
+ *   - cxl > 0    → red (recent-cancellation signal keeps priority)
+ *   - otbSold > 0 → green (nights with bookings light up)
+ *   - else       → weekend zebra
+ * newBk still drives the DoW `+N` counter but no longer split-paints the row.
+ */
+function rowCellBg(colIdx: number, otbSold: number, cxl: number, weekendZebra: string): string | undefined {
+  if (cxl > 0)     return ROW_RED;
+  if (otbSold > 0) return ROW_GREEN;
   return weekendZebra;
 }
 
@@ -214,7 +221,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                     <th style={th}>DoW</th>
                     <th style={th}>Date</th>
                     <th style={th}></th>
-                    <th style={th}>City %</th>
+                    <th style={th}>Demand</th>
                     <th style={th}>OTB %</th>
                     <th style={th}>OCC</th>
                     <th style={th}>OOO</th>
@@ -277,7 +284,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                         const hasSignal = newBk > 0 || cxl > 0;
                         // Per-cell bg helper — bakes row colour into every td so it wins over
                         // per-cell defaults (visCells, tdMuted). Split case = green LEFT, red RIGHT.
-                        const cellBg = (i: number) => rowCellBg(i, newBk, cxl, weekendZebra);
+                        const cellBg = (i: number) => rowCellBg(i, Number(r.otb_rooms_sold), cxl, weekendZebra);
                         const cellStyle = (i: number, extra?: React.CSSProperties): React.CSSProperties => ({
                           ...td, background: cellBg(i), ...(extra ?? {}),
                         });
@@ -381,7 +388,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
               </ul>
               <p style={{ margin: '0 0 8px', fontWeight: 600 }}>Placeholder (—) until data lands:</p>
               <ul style={{ margin: '0 0 12px 20px' }}>
-                <li><strong>City %</strong> · external comp-set benchmark — need STR / Amadeus / manual entry</li>
+                <li><strong>Demand</strong> · external comp-set benchmark — need STR / Amadeus / Lighthouse market_demand feed</li>
                 <li><strong>House uses · OOO</strong> — Cloudbeds getReservations with is_house_use / status=OOO filter (not currently in sync)</li>
                 <li><strong>Min stay (WEB · OTA)</strong> and <strong>Stop sales (WEB · OTA · B2B · FIT)</strong> — Cloudbeds <code>getRateAvailability</code> endpoint</li>
                 <li><strong>Visibility flags (Mob B&E · EXP Accel · Genius · Mobile · P+ BAR)</strong> — awaiting Booking.com / Expedia activation landing pages</li>
