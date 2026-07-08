@@ -5,7 +5,7 @@
 // partner_short_name → redirects.
 
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { getDmcContract } from '@/lib/dmc';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +17,7 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
   if (!c) {
     return (
       <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--ink-mute)' }}>
-        Contract not found. <Link href="/sales/b2b" style={{ color: 'var(--brass)' }}>← Back to B2B/DMC</Link>
+        Contract not found. <TenantLink href="/sales/b2b" style={{ color: 'var(--brass)' }}>← Back to B2B/DMC</TenantLink>
       </div>
     );
   }
