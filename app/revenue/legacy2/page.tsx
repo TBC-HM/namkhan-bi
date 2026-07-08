@@ -4,7 +4,7 @@
 // if a later iteration of /revenue HoD regresses, this route stays usable.
 // DO NOT EDIT in lock-step with /revenue — it's a deliberate snapshot.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile,
   type KpiTileProps,
@@ -63,7 +63,7 @@ export default function RevenueHoDLegacy2Page({ propertyId }: Props = {}) {
       title={`Revenue · ${cfg.hodName} · LEGACY 2 (snapshot)`}
       subtitle={`Frozen snapshot of the HoD landing — safety net. Live HoD: ${liveHref}`}
       action={
-        <Link href={liveHref} style={primaryBtnStyle}>{`← Back to live HoD`}</Link>
+        <TenantLink href={liveHref} style={primaryBtnStyle}>{`← Back to live HoD`}</TenantLink>
       }
     >
       {tiles.length > 0 && (
@@ -123,10 +123,10 @@ export default function RevenueHoDLegacy2Page({ propertyId }: Props = {}) {
         <Container title="Sections" subtitle="drill into a sub-area" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
             {sections.map((s) => (
-              <Link key={s.href} href={s.href} style={sectionCardStyle}>
+              <TenantLink key={s.href} href={s.href} style={sectionCardStyle}>
                 <div style={sectionLabelStyle}>{s.label}</div>
                 <div style={sectionHintStyle}>{SECTION_HINT[s.label] ?? ''}</div>
-              </Link>
+              </TenantLink>
             ))}
           </div>
         </Container>
@@ -146,7 +146,7 @@ export default function RevenueHoDLegacy2Page({ propertyId }: Props = {}) {
 
       <div style={fullRow}>
         <Container title="Chat" subtitle={`open the full ${cfg.hodName} surface`} density="compact">
-          <Link href={chatHref} style={secondaryBtnStyle}>{`Open ${cfg.hodName} chat →`}</Link>
+          <TenantLink href={chatHref} style={secondaryBtnStyle}>{`Open ${cfg.hodName} chat →`}</TenantLink>
         </Container>
       </div>
     </DashboardPage>
