@@ -8,7 +8,7 @@
 // PBS 2026-07-07: currency prop threaded so Donna renders € not $. Default
 // stays USD for backward-compat with the existing Namkhan call-site.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { fmtMoney, type Currency } from '@/lib/format';
 
 export interface OtbSdlyRow {
@@ -89,7 +89,7 @@ export default function TopSourcesOtbTable({ rows, currency = 'USD' }: Props) {
           {rows.map((r) => (
             <tr key={r.source_name}>
               <td style={tdLabel}>
-                <Link
+                <TenantLink
                   href={`/revenue/channels/${encodeURIComponent(r.source_name)}`}
                   style={{
                     color: '#1F3A2E', fontWeight: 600,
@@ -101,7 +101,7 @@ export default function TopSourcesOtbTable({ rows, currency = 'USD' }: Props) {
                 >
                   {r.source_name}
                   <span style={{ color: '#C79A6B', fontSize: 11 }}>→</span>
-                </Link>
+                </TenantLink>
               </td>
               <td style={td}>{r.bkg_otb.toLocaleString('en-US')}</td>
               <td style={td}>{fmtMoney(r.rev_otb, currency)}</td>
