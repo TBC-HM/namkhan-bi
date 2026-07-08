@@ -13,7 +13,7 @@
 //
 // State via URL: ?period=YYYY-MM, ?expand=<code>, ?reservations=<room>.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { Container, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
 import SideDrawer from '@/app/(cockpit)/_design/overlay/SideDrawer';
 import { supabase } from '@/lib/supabase';
@@ -516,18 +516,18 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                 fontSize: 11, paddingTop: 6, marginTop: 2,
                 borderTop: '1px solid #E0E0E0',
               }}>
-                <Link href={hrefReservations(code)} style={{
+                <TenantLink href={hrefReservations(code)} style={{
                   textDecoration: 'none', fontWeight: 600,
                   color: isShowingRes ? 'var(--primary, #1F3A2E)' : 'var(--brass, #B8A878)',
                 }}>
                   {isShowingRes ? '✕ Hide reservations' : 'Show reservations →'}
-                </Link>
-                <Link href={hrefExpand(code)} style={{
+                </TenantLink>
+                <TenantLink href={hrefExpand(code)} style={{
                   textDecoration: 'none', fontWeight: 500,
                   color: 'var(--ink-soft, #5A5A5A)',
                 }}>
                   {isExpanded ? '↑ collapse' : 'expand ↓'}
-                </Link>
+                </TenantLink>
               </div>
             </div>
           );
@@ -589,7 +589,7 @@ async function ReservationsPanel({ propertyId, roomTypeName, activePeriod, curre
       <div style={{ marginTop: 12, ...panelStyle }}>
         <div style={panelHeader}>
           Reservations · {roomTypeName} <span style={panelHeaderSub}>· unsupported period: {activePeriod}</span>
-          <Link href={closeHref} style={closeLinkStyle}>✕ close</Link>
+          <TenantLink href={closeHref} style={closeLinkStyle}>✕ close</TenantLink>
         </div>
       </div>
     );
@@ -612,7 +612,7 @@ async function ReservationsPanel({ propertyId, roomTypeName, activePeriod, curre
         <div>
           Reservations · <strong>{roomTypeName}</strong> <span style={panelHeaderSub}>· {activePeriod} · {reservations.length} booking{reservations.length === 1 ? '' : 's'}</span>
         </div>
-        <Link href={closeHref} style={closeLinkStyle}>✕ close</Link>
+        <TenantLink href={closeHref} style={closeLinkStyle}>✕ close</TenantLink>
       </div>
       {error ? (
         <div style={{ padding: 14, fontSize: 12, color: '#C0584C' }}>RPC error: {error.message}</div>
@@ -761,13 +761,13 @@ async function DrillPanel({
           {yearPills.map((y) => {
             const isActive = (y.k === '' && !yrFilter) || (y.k !== '' && yrFilter === y.k);
             return (
-              <Link key={y.k || 'all'} href={hrefDrillToggle({ yr: y.k || null })} style={{
+              <TenantLink key={y.k || 'all'} href={hrefDrillToggle({ yr: y.k || null })} style={{
                 fontSize: 12, padding: '4px 10px', borderRadius: 4,
                 border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
                 background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
                 color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
                 textDecoration: 'none', fontWeight: isActive ? 600 : 400,
-              }}>{y.label}</Link>
+              }}>{y.label}</TenantLink>
             );
           })}
           <form method="get" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
@@ -780,7 +780,7 @@ async function DrillPanel({
               fontSize: 12, padding: '4px 8px', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
               background: 'var(--paper, #FFFFFF)', color: 'var(--ink, #1B1B1B)', minWidth: 140,
             }} />
-            {q && (<Link href={hrefDrillToggle({ q: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline' }}>clear</Link>)}
+            {q && (<TenantLink href={hrefDrillToggle({ q: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline' }}>clear</TenantLink>)}
           </form>
         </div>
         {granularTypes.length > 0 && (
@@ -790,16 +790,16 @@ async function DrillPanel({
               const isSelected = rtList.includes(rt);
               const nextList = isSelected ? rtList.filter((x) => x !== rt) : [...rtList, rt];
               return (
-                <Link key={rt} href={hrefDrillToggle({ rt: nextList.length === 0 ? null : nextList.join(',') })} style={{
+                <TenantLink key={rt} href={hrefDrillToggle({ rt: nextList.length === 0 ? null : nextList.join(',') })} style={{
                   fontSize: 12, padding: '3px 8px', borderRadius: 4,
                   border: `1px solid ${isSelected ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
                   background: isSelected ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
                   color: isSelected ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
                   textDecoration: 'none', fontWeight: isSelected ? 600 : 400,
-                }}>{rt}</Link>
+                }}>{rt}</TenantLink>
               );
             })}
-            {rtList.length > 0 && (<Link href={hrefDrillToggle({ rt: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline', alignSelf: 'center', marginLeft: 6 }}>clear</Link>)}
+            {rtList.length > 0 && (<TenantLink href={hrefDrillToggle({ rt: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline', alignSelf: 'center', marginLeft: 6 }}>clear</TenantLink>)}
           </div>
         )}
       </div>
