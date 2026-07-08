@@ -340,8 +340,12 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       {/* Daily Briefing — rev-manager forward brief.
           PBS 2026-07-08 (final): renamed from "Conclusions" and made expandable
           via <details>. Default open. ConclusionBlock stays in `bare` mode. */}
-      <div style={fullRow}>
-        <details open style={{ background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6 }}>
+      {/* PBS 2026-07-08 final: `alignSelf:start` on the wrapper prevents the
+          auto-fit grid from stretching neighbour cells; internal max-height
+          + overflowY:auto keeps the box compact even with 20+ insights so nothing
+          overflows the parent grid track ("half-content-lost" bug). */}
+      <div style={{ ...fullRow, alignSelf: 'start' }}>
+        <details open style={{ background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6, width: '100%' }}>
           <summary style={{
             cursor: 'pointer', padding: '10px 14px', borderBottom: '1px solid #E6DFCC',
             display: 'flex', flexDirection: 'column', gap: 2, background: '#FAFAF7',
@@ -351,13 +355,13 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
               14/30/60/90d windows · countries · rate plans · LOS · {paceNext90.length} nights forward · {totalPickupL14} bookings L14 · {topCountriesL14.length} source markets · targets: {activeTargets}
             </span>
           </summary>
-          <div style={{ padding: 12 }}>
+          <div style={{ padding: 12, maxHeight: '70vh', overflowY: 'auto' }}>
             <ConclusionBlock
               bare
               insights={revenueInsights}
               emptyText="Everything nominal. No forward-window alarms firing."
               storageKey={`revenue_hod_signals:${pid}`}
-              maxRender={12}
+              maxRender={30}
             />
           </div>
         </details>
