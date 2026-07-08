@@ -3,6 +3,7 @@
 // Importing from `@/app/(cockpit)/_design/...` deep paths is forbidden.
 
 export { default as KpiTile } from './tile/KpiTile';
+export { default as TrendTile, type TrendTileProps } from './tile/TrendTile';
 export { default as Chart } from './chart/Chart';
 export { default as Container } from './layout/Container';
 export { default as ListContainer } from './layout/ListContainer';
