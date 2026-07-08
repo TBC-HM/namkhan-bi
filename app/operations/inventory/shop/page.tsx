@@ -1,7 +1,7 @@
 // app/operations/inventory/shop/page.tsx
 // Page 3 — Shop / HOD Request UI. Fully wired with cart + propose-new-item.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Card from '@/components/sections/Card';
 import {
   getShopCatalog, getInvCategories, getInvLocations, getSuppliers,
@@ -59,7 +59,7 @@ export default async function ShopPage({ searchParams }: Props) {
         </form>
 
         {items.length === 0 ? (
-          <p className="empty-state">No items match. Try another search or <Link href="?">clear filters</Link>.</p>
+          <p className="empty-state">No items match. Try another search or <TenantLink href="?">clear filters</TenantLink>.</p>
         ) : (
           <div className="inv-product-grid">
             {(items as any[]).map((it) => (
@@ -69,7 +69,7 @@ export default async function ShopPage({ searchParams }: Props) {
                 <div className="inv-product-cost">{fmtMoney(Number(it.last_unit_cost_usd ?? 0))} / {it.units?.code ?? 'unit'}</div>
                 <div className="inv-product-cat">{it.categories?.name ?? '—'}</div>
                 <div className="inv-product-actions">
-                  <Link href={`/operations/inventory/items/${it.item_id}`} className="btn-ghost">Detail</Link>
+                  <TenantLink href={`/operations/inventory/items/${it.item_id}`} className="btn-ghost">Detail</TenantLink>
                   <AddToCartButton
                     itemId={it.item_id}
                     sku={it.sku}
