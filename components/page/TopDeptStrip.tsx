@@ -38,14 +38,14 @@ const CANONICAL_DEPTS: DeptLink[] = [
 const SLUG_SET = new Set(CANONICAL_DEPTS.map((d) => d.slug));
 
 // Holding-mode strip (PBS 2026-05-14): when the user is on /holding the
-// dept menu collapses to the holding-scoped depts. For now two links —
-// Legal (Carla) and IT (Kit). More holding depts will be added later.
-// PBS 2026-05-28: + Strategy (Fox) and Legal · Lao (John), both opening their
-// chat in a new window (target=_blank) and lit in the holding brass colour.
+// dept menu collapses to the holding-scoped depts.
+// PBS 2026-07-08: + CEO (top-level) + Finance (invoices). Legal · Lao moved
+// out of this strip and into /holding/legal's own subPages (Legal HoD scope).
 const HOLDING_DEPTS: DeptLink[] = [
+  { label: 'CEO',          slug: 'ceo',       href: '/holding/ceo'       },
   { label: 'Legal',        slug: 'legal',     href: '/holding/legal'     },
-  { label: 'Legal · Lao',  slug: 'legal-lao', href: '/holding/legal-lao', openInNewWindow: true, color: '#8B4513' },
   { label: 'Strategy',     slug: 'strategy',  href: '/holding/strategy', openInNewWindow: true, color: '#8B4513' },
+  { label: 'Finance',      slug: 'finance',   href: '/holding/finance'   },
   { label: 'IT',           slug: 'it',        href: '/holding/it'        },
 ];
 const HOLDING_SLUG_SET = new Set(HOLDING_DEPTS.map((d) => d.slug));
