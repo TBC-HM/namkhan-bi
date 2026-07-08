@@ -10,7 +10,7 @@
 // the doc automatically moves to the matching Gold container on next page load.
 // Nothing is deleted — only re-classified.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { DEPT_CFG } from '@/lib/dept-cfg';
@@ -187,14 +187,14 @@ export default async function MarketingDocsPage({ searchParams }: SP) {
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <div style={{ fontSize:11, color:INK_M }}>Drop new docs directly into Supabase Storage OR use the guided upload.</div>
           <div style={{ display:'flex', gap:8 }}>
-            <Link href="/marketing/docs/upload" style={{ padding:'6px 14px', fontSize:12, fontWeight:600, background:GREEN, color:'#FFFFFF', border:'1px solid '+GREEN, borderRadius:4, textDecoration:'none' }}>+ Upload doc</Link>
+            <TenantLink href="/marketing/docs/upload" style={{ padding:'6px 14px', fontSize:12, fontWeight:600, background:GREEN, color:'#FFFFFF', border:'1px solid '+GREEN, borderRadius:4, textDecoration:'none' }}>+ Upload doc</TenantLink>
             <a href={SUPABASE_STORAGE_URL} target="_blank" rel="noreferrer" style={{ padding:'6px 14px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:GREEN, border:'1px solid '+HAIR, borderRadius:4, textDecoration:'none' }}>Open Supabase Storage ↗</a>
           </div>
         </div>
 
         {/* Dynamic behaviour banner */}
         <div style={{ gridColumn:'1 / -1', padding:'10px 14px', background:'#FFF4D6', border:'1px solid '+AMBER, borderRadius:4, fontSize:12, color:INK, lineHeight:1.6 }}>
-          <strong>Dynamic.</strong> Every doc is classified at page-load time from its <code>doc_type</code> + <code>doc_subtype</code> in <code>dms.documents</code>. Change those in the doc registry and it moves to the matching Gold container automatically — nothing is deleted. Hidden here (not marketing): {hiddenNonMkt.length} tech/land/HR/vendor docs. Hidden as media: {hiddenMedia.length} images/logos (see <Link href="/marketing/gallery" style={{ color:GREEN }}>Media library</Link>).
+          <strong>Dynamic.</strong> Every doc is classified at page-load time from its <code>doc_type</code> + <code>doc_subtype</code> in <code>dms.documents</code>. Change those in the doc registry and it moves to the matching Gold container automatically — nothing is deleted. Hidden here (not marketing): {hiddenNonMkt.length} tech/land/HR/vendor docs. Hidden as media: {hiddenMedia.length} images/logos (see <TenantLink href="/marketing/gallery" style={{ color:GREEN }}>Media library</TenantLink>).
         </div>
 
         {/* Media redirect callout */}
@@ -202,7 +202,7 @@ export default async function MarketingDocsPage({ searchParams }: SP) {
           <div>
             <strong>Photos · logos · videos?</strong> They live in the media library, not here.
           </div>
-          <Link href="/marketing/gallery" style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:'#FFFFFF', textDecoration:'none', borderRadius:4 }}>Media library →</Link>
+          <TenantLink href="/marketing/gallery" style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:'#FFFFFF', textDecoration:'none', borderRadius:4 }}>Media library →</TenantLink>
         </div>
 
         {/* KPI strip */}
@@ -212,11 +212,11 @@ export default async function MarketingDocsPage({ searchParams }: SP) {
 
         {/* Filter chips */}
         <div style={{ gridColumn:'1 / -1', display:'flex', flexWrap:'wrap', gap:6, marginTop:4 }}>
-          <Link href="/marketing/docs" style={chipStyle(!activeContainer)}>All ({totalVisible})</Link>
+          <TenantLink href="/marketing/docs" style={chipStyle(!activeContainer)}>All ({totalVisible})</TenantLink>
           {GOLD.map(g => (
-            <Link key={g.key} href={`/marketing/docs?gold=${g.key}`} style={chipStyle(activeContainer === g.key)}>
+            <TenantLink key={g.key} href={`/marketing/docs?gold=${g.key}`} style={chipStyle(activeContainer === g.key)}>
               {g.label} ({goldMap.get(g.key)?.length ?? 0})
-            </Link>
+            </TenantLink>
           ))}
         </div>
 
