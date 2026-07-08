@@ -15,7 +15,7 @@
 // AI search, drop zone, curator carousel, OTA pack, room buckets, main grid).
 
 import type { CSSProperties } from 'react';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, KpiTile,
   type DashboardTab, type KpiTileProps,
@@ -134,12 +134,12 @@ export default async function LibraryPage({ searchParams }: SP) {
           {INFO_TABS.map(t => {
             const active = t.key === 'library';
             return (
-              <Link key={t.key} href={t.href} style={{
+              <TenantLink key={t.key} href={t.href} style={{
                 ...infoTab,
                 color: active ? FOREST : INK_M,
                 borderBottom: active ? `2px solid ${FOREST}` : '2px solid transparent',
                 fontWeight: active ? 700 : 500,
-              }}>{t.label}</Link>
+              }}>{t.label}</TenantLink>
             );
           })}
         </div>
@@ -212,13 +212,13 @@ export default async function LibraryPage({ searchParams }: SP) {
                   <div key={b.slug}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
                       <h4 style={roomLabel}>{b.label}</h4>
-                      <Link href={`/marketing/library?tag=${encodeURIComponent(b.slug)}`}
+                      <TenantLink href={`/marketing/library?tag=${encodeURIComponent(b.slug)}`}
                         style={{ fontSize: 11, textDecoration: 'none',
                           color: b.under_target ? RED : FOREST,
                           fontFamily: 'ui-monospace, SFMono-Regular, monospace',
                         }}>
                         {b.count} photo{b.count === 1 ? '' : 's'}{b.under_target ? ` · need ${5 - b.count} more` : ' · ok'} →
-                      </Link>
+                      </TenantLink>
                     </div>
                     {b.samples.length > 0 ? (
                       <AssetGrid assets={b.samples} minColPx={150} />
@@ -256,10 +256,10 @@ export default async function LibraryPage({ searchParams }: SP) {
                 aria-label="Search media library" style={inputSearch} />
               <button type="submit" style={btnPrimary}>Search</button>
               {(tier || q || tag) && (
-                <Link href="/marketing/library" style={btnGhost}>Clear</Link>
+                <TenantLink href="/marketing/library" style={btnGhost}>Clear</TenantLink>
               )}
-              <Link href="/marketing/upload" style={btnPrimary}>Upload ↗</Link>
-              <Link href="/marketing/campaigns/new" style={btnPrimary}>+ Campaign</Link>
+              <TenantLink href="/marketing/upload" style={btnPrimary}>Upload ↗</TenantLink>
+              <TenantLink href="/marketing/campaigns/new" style={btnPrimary}>+ Campaign</TenantLink>
             </form>
           </div>
 
@@ -275,7 +275,7 @@ export default async function LibraryPage({ searchParams }: SP) {
                 t.key === 'tier_archive'        ? archiveCount : 0;
               const active = tier === t.key;
               return (
-                <Link key={t.key || 'all'}
+                <TenantLink key={t.key || 'all'}
                   href={t.key ? `/marketing/library?tier=${t.key}` : '/marketing/library'}
                   style={{ ...pill,
                     background: active ? FOREST : WHITE,
@@ -283,7 +283,7 @@ export default async function LibraryPage({ searchParams }: SP) {
                     borderColor: active ? FOREST : HAIR,
                   }}>
                   {t.label} <span style={{ opacity: 0.7, marginLeft: 4, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{count}</span>
-                </Link>
+                </TenantLink>
               );
             })}
           </div>
@@ -291,7 +291,7 @@ export default async function LibraryPage({ searchParams }: SP) {
           {tag && (
             <div style={{ marginBottom: 12, fontSize: 12, color: INK_S }}>
               tag filter: <strong>{tag}</strong>
-              <Link href={`/marketing/library${tier ? `?tier=${tier}` : ''}`} style={{ marginLeft: 6, color: FOREST, textDecoration: 'none' }}>×</Link>
+              <TenantLink href={`/marketing/library${tier ? `?tier=${tier}` : ''}`} style={{ marginLeft: 6, color: FOREST, textDecoration: 'none' }}>×</TenantLink>
             </div>
           )}
 
@@ -309,14 +309,14 @@ export default async function LibraryPage({ searchParams }: SP) {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         {items.slice(0, 8).map(t => (
-                          <Link key={t.label}
+                          <TenantLink key={t.label}
                             href={`/marketing/library?tag=${encodeURIComponent(t.label)}${tier ? `&tier=${tier}` : ''}`}
                             style={{
                               fontSize: 12,
                               color: tag === t.label ? FOREST : INK_S,
                               textDecoration: 'none',
                               fontWeight: tag === t.label ? 600 : 400,
-                            }}>{tag === t.label ? '☑' : '☐'} {t.label}</Link>
+                            }}>{tag === t.label ? '☑' : '☐'} {t.label}</TenantLink>
                         ))}
                         {items.length > 8 && <span style={{ fontSize: 10, color: INK_M }}>+{items.length - 8} more</span>}
                       </div>
@@ -351,8 +351,8 @@ export default async function LibraryPage({ searchParams }: SP) {
                 emptyText={totalReady === 0 ? 'Library empty' : 'No assets match these filters'}
                 emptyAction={
                   totalReady === 0
-                    ? <p>Drop your first photos at <Link href="/marketing/upload" style={{ color: FOREST }}>upload</Link>, or sync via Google Drive.</p>
-                    : <p style={{ fontSize: 12, color: INK_M }}>Try removing a filter or <Link href="/marketing/library" style={{ color: FOREST }}>clear all</Link>.</p>
+                    ? <p>Drop your first photos at <TenantLink href="/marketing/upload" style={{ color: FOREST }}>upload</TenantLink>, or sync via Google Drive.</p>
+                    : <p style={{ fontSize: 12, color: INK_M }}>Try removing a filter or <TenantLink href="/marketing/library" style={{ color: FOREST }}>clear all</TenantLink>.</p>
                 }
               />
             </div>
