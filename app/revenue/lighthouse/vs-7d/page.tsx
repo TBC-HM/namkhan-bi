@@ -14,6 +14,7 @@ export default async function LighthouseVs7dPage({ propertyId }: { propertyId?: 
     : { rows: [], hotels: [], earlierSnapshot: null };
   return (
     <LighthouseShell
+      propertyId={pid}
       view="seven_days"
       title="Lighthouse · vs 7 days ago"
       subtitle="Same grid + 7-day delta — spot week-over-week pricing trends"
