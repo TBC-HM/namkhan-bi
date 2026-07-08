@@ -14,6 +14,7 @@ export default async function LighthouseRatesPage({ propertyId }: { propertyId?:
     : { rows: [], hotels: [] };
   return (
     <LighthouseShell
+      propertyId={pid}
       view="rates"
       title="Lighthouse · Rates"
       subtitle="Grid: per date × per competitor · current published rate or restriction (LOS2/LOS3/Sold out/No flex)"
