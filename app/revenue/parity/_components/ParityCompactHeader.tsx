@@ -5,7 +5,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtTableUsd, EMPTY } from '@/lib/format';
 import ParityRunButton from './ParityRunButton';
@@ -142,7 +142,7 @@ export default function ParityCompactHeader({
         <span style={metaDim}>· non-refund &gt; refund + DoD jumps</span>
         <span style={{ flex: 1 }} />
         {settingsLinks.map((l) => (
-          <Link key={l.href} href={l.href} style={linkBtn}>{l.label}</Link>
+          <TenantLink key={l.href} href={l.href} style={linkBtn}>{l.label}</TenantLink>
         ))}
       </div>
     </div>
