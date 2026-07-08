@@ -8,7 +8,7 @@
 // Note: Sales glyph is '$' to avoid collision with Settings 'S'.
 // Front Office glyph is 'A' (Arrivals) — distinct from Operations 'O' and Marketing 'M'.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { usePathname } from 'next/navigation';
 
 interface RailItem {
@@ -80,7 +80,7 @@ export default function LeftRail() {
   const renderItem = (it: RailItem) => {
     const active = it.matches.some((m) => pathname === m || pathname.startsWith(m + '/'));
     return (
-      <Link
+      <TenantLink
         key={it.href}
         href={it.href}
         className={`rail-icon ${active ? 'active' : ''}`}
@@ -88,7 +88,7 @@ export default function LeftRail() {
       >
         <span className="rail-glyph">{it.glyph}</span>
         <span>{it.label}</span>
-      </Link>
+      </TenantLink>
     );
   };
 
@@ -97,13 +97,13 @@ export default function LeftRail() {
 
   return (
     <aside className="rail">
-      <Link
+      <TenantLink
         href="/overview"
         className={`rail-mark ${overviewActive ? 'active' : ''}`}
         title="The Namkhan · Home"
       >
         N
-      </Link>
+      </TenantLink>
       {PILLARS.map(renderItem)}
       <div className="rail-divider" />
       {UTILITY.map(renderItem)}
