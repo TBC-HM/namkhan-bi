@@ -2,7 +2,7 @@
 // PBS 2026-07-07 evening: dedicated Marketing Overview landing. The HoD chat
 // cockpit stays at /marketing; Overview is the dept-wide summary with
 // Info + Reports sub-tabs rendered by DashboardPage.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 
@@ -22,7 +22,7 @@ export default function MarketingOverviewPage() {
           <div style={desc}>
             Everything you need to interpret the numbers below — definitions, source rules, dates.
             <div style={{ marginTop: 8 }}>
-              <Link href="/marketing/library" style={btn}>Open Info →</Link>
+              <TenantLink href="/marketing/library" style={btn}>Open Info →</TenantLink>
             </div>
           </div>
         </Container>
@@ -31,7 +31,7 @@ export default function MarketingOverviewPage() {
           <div style={desc}>
             Pre-built report renderers: monthly · campaign · channel mix · retreats · newsletters.
             <div style={{ marginTop: 8 }}>
-              <Link href="/h/260955/reports?dept=marketing" style={btn}>Open Reports →</Link>
+              <TenantLink href="/h/260955/reports?dept=marketing" style={btn}>Open Reports →</TenantLink>
             </div>
           </div>
         </Container>
@@ -40,7 +40,7 @@ export default function MarketingOverviewPage() {
           <div style={desc}>
             Campaigns · funnels · prospects — the demand-generation engine.
             <div style={{ marginTop: 8 }}>
-              <Link href="/marketing/acquisition" style={btn}>Open Acquisition →</Link>
+              <TenantLink href="/marketing/acquisition" style={btn}>Open Acquisition →</TenantLink>
             </div>
           </div>
         </Container>
@@ -49,7 +49,7 @@ export default function MarketingOverviewPage() {
           <div style={desc}>
             Packages · retreats · seasonal deals — build them in Compiler.
             <div style={{ marginTop: 8 }}>
-              <Link href="/marketing/offers" style={btn}>Open Products & Offers →</Link>
+              <TenantLink href="/marketing/offers" style={btn}>Open Products & Offers →</TenantLink>
             </div>
           </div>
         </Container>
@@ -58,7 +58,7 @@ export default function MarketingOverviewPage() {
           <div style={desc}>
             Media library + social calendars — one shelf for everything that ships.
             <div style={{ marginTop: 8 }}>
-              <Link href="/marketing/content" style={btn}>Open Content →</Link>
+              <TenantLink href="/marketing/content" style={btn}>Open Content →</TenantLink>
             </div>
           </div>
         </Container>
@@ -67,7 +67,7 @@ export default function MarketingOverviewPage() {
           <div style={desc}>
             Web traffic · conversion · GBP · integrations.
             <div style={{ marginTop: 8 }}>
-              <Link href="/marketing/digital" style={btn}>Open Digital →</Link>
+              <TenantLink href="/marketing/digital" style={btn}>Open Digital →</TenantLink>
             </div>
           </div>
         </Container>
@@ -76,7 +76,7 @@ export default function MarketingOverviewPage() {
           <div style={desc}>
             Guidelines · historical decks · SOPs.
             <div style={{ marginTop: 8 }}>
-              <Link href="/marketing/library" style={btn}>Open Library →</Link>
+              <TenantLink href="/marketing/library" style={btn}>Open Library →</TenantLink>
             </div>
           </div>
         </Container>
