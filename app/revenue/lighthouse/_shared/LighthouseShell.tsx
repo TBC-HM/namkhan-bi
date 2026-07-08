@@ -1,11 +1,13 @@
 // app/revenue/lighthouse/_shared/LighthouseShell.tsx
 // PBS 2026-07-07: 5-view Lighthouse compset dashboard shell.
 // Canonical data source: revenue.lighthouse_rateshop (via public bridge views).
-// Currently: Donna Portals sample seed (snapshot_date=2026-07-06); Namkhan empty
-// until email→xlsx ingestion is wired.
+// PBS 2026-07-08: pass Revenue sub-strip tabs to DashboardPage so the top nav
+// (Overview | Demand & Pace | Performance | Market & Control | Reports) renders.
 
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { LighthouseNav, type LighthouseView, LIGHTHOUSE_VIEWS } from './LighthouseNav';
+import { REVENUE_SUBPAGES } from '../../_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
 export type { LighthouseView };
 export { LIGHTHOUSE_VIEWS };
@@ -47,15 +49,25 @@ export const DELTA_COLUMNS = [
 ];
 
 export function LighthouseShell({
-  view, title, subtitle, children,
+  view, title, subtitle, propertyId, children,
 }: {
   view: LighthouseView;
   title: string;
   subtitle: string;
+  propertyId?: number;
   children?: React.ReactNode;
 }) {
+  const pid = propertyId ?? 260955;
+  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
+  const tabs: DashboardTab[] = subPages.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    // Any /revenue/lighthouse/* URL sits inside the Market & Control group.
+    active: s.href.endsWith('/compset') || s.href.endsWith('/lighthouse'),
+  }));
   return (
-    <DashboardPage title={title} subtitle={subtitle}>
+    <DashboardPage title={title} subtitle={subtitle} tabs={tabs}>
       <div style={{ gridColumn: '1 / -1' }}>
         <LighthouseNav active={view} />
       </div>
@@ -67,4 +79,3 @@ export function LighthouseShell({
     </DashboardPage>
   );
 }
-
