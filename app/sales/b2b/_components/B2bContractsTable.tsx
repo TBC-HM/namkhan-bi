@@ -9,7 +9,7 @@
 // landing (/revenue/channels/[source]) instead of /sales/b2b/partner/[id],
 // which redirects there anyway.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, fmtCountry, fmtBool, EMPTY } from '@/lib/format';
@@ -47,7 +47,7 @@ export default function B2bContractsTable({ rows }: { rows: DisplayRow[] }) {
       header: 'Partner',
       sortValue: (r) => r.partner_short_name.toLowerCase(),
       render: (r) => (
-        <Link
+        <TenantLink
           href={`/revenue/channels/${encodeURIComponent(r.partner_short_name)}`}
           style={{
             color: r.contract_id ? 'var(--ink, #1B1B1B)' : 'var(--st-bad, #B03826)',
@@ -56,7 +56,7 @@ export default function B2bContractsTable({ rows }: { rows: DisplayRow[] }) {
           }}
         >
           {r.partner_short_name}
-        </Link>
+        </TenantLink>
       ),
     },
     {
