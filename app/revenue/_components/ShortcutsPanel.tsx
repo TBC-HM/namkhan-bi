@@ -1,6 +1,6 @@
 // app/revenue/_components/ShortcutsPanel.tsx
 // PBS 2026-07-08: replaces the Attention container on Revenue HoD.
-// User pins their own quick links to any URL in the app.
+// Curated dropdown of Revenue subpages · pin any of them to the HoD landing.
 
 'use client';
 
@@ -8,7 +8,6 @@ import { useState, useTransition, type CSSProperties } from 'react';
 
 export interface Shortcut { id: number; label: string; href: string }
 
-// PBS 2026-07-08: curated Revenue subpage catalog for the pin dropdown.
 const REVENUE_SUBPAGES: Array<{ href: string; label: string }> = [
   { href: '/revenue',                         label: 'Revenue HoD (Vector)' },
   { href: '/revenue/pulse',                   label: 'Pulse' },
@@ -53,14 +52,14 @@ export default function ShortcutsPanel({ initial, propertyId, deptSlug = 'revenu
     const opt = REVENUE_SUBPAGES.find((o) => o.href === picked);
     if (!opt) return;
     const label = opt.label;
-    const href = opt.href;
+    const href  = opt.href;
     if (items.some((s) => s.href === href)) { setMsg('already pinned'); setTimeout(() => setMsg(null), 2000); return; }
     startTransition(async () => {
       try {
         const r = await fetch('/api/shortcuts/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ property_id: propertyId, dept_slug: deptSlug, user_email: userEmail, label, href }),
+          body: JSON.stringify({ property_id: propertyId, dept_slug: deptSlug, user_email: userEmail, label, href, kind: 'internal' }),
         });
         if (!r.ok) throw new Error(`add failed (${r.status})`);
         const { id } = await r.json();
@@ -84,7 +83,7 @@ export default function ShortcutsPanel({ initial, propertyId, deptSlug = 'revenu
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {items.length === 0 && (
         <div style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic', padding: '4px 0' }}>
-          No shortcuts yet. Pin any page below for one-click access.
+          No shortcuts yet. Pick any Revenue subpage below and Pin.
         </div>
       )}
       {items.length > 0 && (
@@ -100,12 +99,14 @@ export default function ShortcutsPanel({ initial, propertyId, deptSlug = 'revenu
         </div>
       )}
       <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="label" style={{ ...inputStyle, minWidth: 90 }} />
-        <input value={href} onChange={(e) => setHref(e.target.value)} placeholder="/some/path"
-               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }}
-               style={{ ...inputStyle, flex: 1, minWidth: 120 }} />
-        <button type="button" onClick={submit} disabled={pending || !label.trim() || !href.trim()}
-                style={btnStyle}>{pending ? '…' : '+ Pin'}</button>
+        <select value={picked} onChange={(e) => setPicked(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+          {REVENUE_SUBPAGES.map((o) => (
+            <option key={o.href} value={o.href}>{o.label}</option>
+          ))}
+        </select>
+        <button type="button" onClick={submit} disabled={pending || !picked} style={btnStyle}>
+          {pending ? '…' : '+ Pin'}
+        </button>
       </div>
       {msg && <div style={{ fontSize: 11, color: '#B04A2F' }}>{msg}</div>}
     </div>
