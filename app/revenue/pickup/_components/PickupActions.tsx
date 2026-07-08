@@ -2,14 +2,27 @@
 
 // app/revenue/pickup/_components/PickupActions.tsx
 // Send + Print + Download CSV for the Pickup matrix page header.
-// PBS 2026-06-01 #94 — added Download CSV (matrix flattened: one row per month×metric × column).
+// PBS 2026-07-08 fixes:
+//  - CSV numbers ROUNDED (was raw floats like 122.04301075268818)
+//  - UTF-8 BOM prepended (Excel parses columns correctly)
+//  - Title + property + date metadata rows at top
+//  - Send button no longer opens mailto with empty body — calls /api/pickup/email
+//    which posts via the shared send-report-email edge fn with a proper HTML table
 
+import { useState } from 'react';
 import type { PickupMatrixData, PickupMatrixRow, PickupMetric } from '@/app/(cockpit)/_design/PickupMatrix';
 
 interface Props {
   property: string;
   asOfDate: string;
   data?: PickupMatrixData;
+  propertyId?: number;
+}
+
+// Metric-aware precision: integer for counts / revenue / RevPAR, one decimal for OCC%, integer for ADR.
+function roundValue(metric: PickupMetric, v: number): number {
+  if (metric === 'OCC') return Math.round(v * 10) / 10; // 1 dp
+  return Math.round(v); // RN/REV/ADR/RevPAR
 }
 
 const CSV_COLUMNS: Array<[string, (r: PickupMatrixRow) => number | null]> = [
@@ -44,8 +57,9 @@ function csvEscape(s: string): string {
 
 function buildCsv(data: PickupMatrixData): string {
   const lines: string[] = [];
-  lines.push(`# Pickup matrix · ${data.property} · as of ${data.asOfDate}`);
-  lines.push(`# capacity ${data.capacity} rooms`);
+  const today = new Date().toISOString().slice(0, 10);
+  lines.push(csvEscape(`Pickup matrix · ${data.property} · Generated ${today}`));
+  lines.push(csvEscape(`As of ${data.asOfDate} · Capacity ${data.capacity} rooms`));
   lines.push('');
   const header = ['Month', 'Metric', ...CSV_COLUMNS.map(([h]) => h)].map(csvEscape).join(',');
   lines.push(header);
@@ -57,24 +71,84 @@ function buildCsv(data: PickupMatrixData): string {
       if (!r) continue;
       const cells = CSV_COLUMNS.map(([, getter]) => {
         const v = getter(r);
-        return v == null || !Number.isFinite(v) ? '' : String(v);
+        if (v == null || !Number.isFinite(v)) return '';
+        return String(roundValue(metric, v));
       });
       lines.push([csvEscape(m.monthLabel), csvEscape(metric), ...cells].join(','));
     }
   }
-  return lines.join('\n');
+  // UTF-8 BOM so Excel parses columns correctly.
+  return '﻿' + lines.join('\r\n');
 }
 
-export default function PickupActions({ property, asOfDate, data }: Props) {
+/** HTML table for the email body — first 3 columns + last 4 pickup/comparison columns to keep it readable. */
+function buildEmailHtml(data: PickupMatrixData, today: string): string {
+  const SHORT_COLS: Array<[string, (r: PickupMatrixRow) => number | null]> = [
+    ['OTB ALL 2026',      (r) => r.otbAll],
+    ['OTB Monthly',       (r) => r.otbMonthly],
+    ['Pickup Monthly',    (r) => r.pickupMonthly?.abs ?? null],
+    ['Pickup Weekly',     (r) => r.pickupWeekly?.abs ?? null],
+    ['vs Budget (%)',     (r) => r.vsBudget?.pct ?? null],
+    ['vs LY (%)',         (r) => r.vsLy?.pct ?? null],
+  ];
+  const rows: string[] = [];
+  for (const m of data.months) {
+    const rn = m.rows.find((r) => r.metric === 'RN');
+    if (!rn) continue;
+    const cells = SHORT_COLS.map(([, g]) => {
+      const v = g(rn);
+      if (v == null || !Number.isFinite(v)) return `<td style="text-align:right">—</td>`;
+      return `<td style="text-align:right">${roundValue('RN', v)}</td>`;
+    }).join('');
+    rows.push(`<tr><td>${m.monthLabel}</td>${cells}</tr>`);
+  }
+  const th = SHORT_COLS.map(([h]) => `<th>${h}</th>`).join('');
+  return `<div style="font-family:Georgia,serif;color:#1B1B1B">
+    <h2 style="margin:0 0 4px">${data.property} · Pickup matrix</h2>
+    <p style="margin:0 0 12px;color:#5A5A5A">Generated ${today} · As of ${data.asOfDate} · Room-nights (RN) view</p>
+    <table style="border-collapse:collapse;font-size:12px" cellpadding="4" cellspacing="0">
+      <thead style="background:#0B3B2E;color:#fff"><tr><th>Month</th>${th}</tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table>
+    <p style="font-size:11px;color:#8A8A8A;margin-top:16px">RN totals only — full metric grid (RN/OCC/REV/ADR/RevPAR × 18 columns) available in the on-page dashboard and the CSV attachment.</p>
+  </div>`;
+}
+
+export default function PickupActions({ property, asOfDate, data, propertyId }: Props) {
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
   function doPrint() { window.print(); }
-  function doSend() {
-    const subject = encodeURIComponent(`Pickup matrix · ${property} · ${asOfDate}`);
-    const body = encodeURIComponent(
-      `Pickup matrix for ${property} as of ${asOfDate}.\n\n` +
-      `Live link: ${typeof window !== 'undefined' ? window.location.href : ''}\n\n` +
-      `Sent from namkhan-bi cockpit.`
-    );
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  async function doSend() {
+    const to = window.prompt('Send Pickup matrix to (email address):');
+    if (!to || !data) return;
+    setSending(true); setMsg(null);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const html = buildEmailHtml(data, today);
+      const csv = buildCsv(data);
+      const base64 = typeof btoa !== 'undefined'
+        ? btoa(unescape(encodeURIComponent(csv)))
+        : Buffer.from(csv, 'utf8').toString('base64');
+      const r = await fetch('/api/pickup/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          subject: `${data.property} · Pickup matrix · ${today}`,
+          html,
+          attachment_name: `pickup-${data.property.replace(/\s+/g, '_')}-${data.asOfDate}.csv`,
+          attachment_base64: base64,
+          property_id: propertyId,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      setMsg(r.ok ? `✓ Sent to ${to}` : `✗ ${j.error ?? 'send failed'}`);
+    } catch (e) {
+      setMsg(`✗ ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSending(false);
+    }
   }
   function doDownload() {
     if (!data) return;
@@ -91,10 +165,13 @@ export default function PickupActions({ property, asOfDate, data }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 6 }} className="no-print">
-      <button type="button" onClick={doDownload} disabled={!data} style={btnStyle} title="Download matrix as CSV">⬇ Download</button>
-      <button type="button" onClick={doSend} style={btnStyle}>✉ Send</button>
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} className="no-print">
+      <button type="button" onClick={doDownload} disabled={!data} style={btnStyle} title="Download matrix as CSV (Excel-friendly, rounded)">⬇ Download</button>
+      <button type="button" onClick={doSend} disabled={!data || sending} style={btnStyle} title="Email this matrix with a summary table + CSV attachment">
+        {sending ? '…sending' : '✉ Send'}
+      </button>
       <button type="button" onClick={doPrint} style={btnStylePrimary}>🖨 Print</button>
+      {msg && <span style={{ fontSize: 11, color: msg.startsWith('✓') ? '#1F5C2C' : '#B04A2F', marginLeft: 8 }}>{msg}</span>}
     </div>
   );
 }
