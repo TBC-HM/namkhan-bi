@@ -4,7 +4,7 @@
 // Beyond Circle sub-nav strip — mono uppercase, active = moss bottom border.
 // Items can be marked `coming` to dim them and append "· soon".
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { usePathname } from 'next/navigation';
 import type { SubNavTab } from './subnavConfig';
 
@@ -38,7 +38,7 @@ export default function SubNav({ items }: { items: SubNavTab[] }) {
         }
 
         return (
-          <Link
+          <TenantLink
             key={it.href}
             href={it.href}
             className={`subnav-btn ${active ? 'active' : ''}`}
@@ -64,7 +64,7 @@ export default function SubNav({ items }: { items: SubNavTab[] }) {
               </span>
             ) : null}
             {it.badge && it.badge > 0 ? <span className="badge">{it.badge}</span> : null}
-          </Link>
+          </TenantLink>
         );
       })}
     </div>
