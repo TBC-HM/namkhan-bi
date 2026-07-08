@@ -1,6 +1,6 @@
 // app/marketing/prospects/sequences/page.tsx
 // PBS 2026-07-05: newsletter-style sequences list (Draft / Live / Halted) — nested under Prospects.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -53,12 +53,12 @@ export default async function SequencesPage() {
         )}
 
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-          <Link href="/marketing/prospects" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>
+          <TenantLink href="/marketing/prospects" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>
             ← Back to prospects
-          </Link>
+          </TenantLink>
           <div style={{ display:'flex', gap:8 }}>
-            <Link href="/marketing/prospects/sequences/ai-propose" style={btnLight}>AI propose sequence</Link>
-            <Link href="/marketing/prospects/sequences/new"        style={btnGreen}>+ New sequence</Link>
+            <TenantLink href="/marketing/prospects/sequences/ai-propose" style={btnLight}>AI propose sequence</TenantLink>
+            <TenantLink href="/marketing/prospects/sequences/new"        style={btnGreen}>+ New sequence</TenantLink>
           </div>
         </div>
 
@@ -112,12 +112,12 @@ function Section({ title, rows, kind }: { title: string; rows: Row[]; kind: 'dra
                   <td style={tdR}>{r.send_count.toLocaleString()}</td>
                   <td style={tdL}>{fmtDate(r.updated_at)}</td>
                   <td style={{ ...tdL, textAlign:'right' }}>
-                    <Link href={`/marketing/prospects/sequences/${r.funnel_id}/preview`} style={btnA}>Preview</Link>
-                    <Link href={`/marketing/prospects/sequences/${r.funnel_id}`} style={btnA}>Edit</Link>
-                    {kind === 'draft' && <Link href={`/marketing/prospects/sequences/${r.funnel_id}/schedule`} style={btnGreen2}>Schedule</Link>}
-                    {kind === 'live'  && <Link href={`/marketing/prospects/sequences/${r.funnel_id}/halt`}   style={btnA}>Halt</Link>}
-                    {kind === 'halted'&& <Link href={`/marketing/prospects/sequences/${r.funnel_id}/resume`} style={btnGreen2}>Resume</Link>}
-                    <Link href={`/marketing/prospects/sequences/${r.funnel_id}/delete`} style={btnR}>Delete</Link>
+                    <TenantLink href={`/marketing/prospects/sequences/${r.funnel_id}/preview`} style={btnA}>Preview</TenantLink>
+                    <TenantLink href={`/marketing/prospects/sequences/${r.funnel_id}`} style={btnA}>Edit</TenantLink>
+                    {kind === 'draft' && <TenantLink href={`/marketing/prospects/sequences/${r.funnel_id}/schedule`} style={btnGreen2}>Schedule</TenantLink>}
+                    {kind === 'live'  && <TenantLink href={`/marketing/prospects/sequences/${r.funnel_id}/halt`}   style={btnA}>Halt</TenantLink>}
+                    {kind === 'halted'&& <TenantLink href={`/marketing/prospects/sequences/${r.funnel_id}/resume`} style={btnGreen2}>Resume</TenantLink>}
+                    <TenantLink href={`/marketing/prospects/sequences/${r.funnel_id}/delete`} style={btnR}>Delete</TenantLink>
                   </td>
                 </tr>
               ))}
