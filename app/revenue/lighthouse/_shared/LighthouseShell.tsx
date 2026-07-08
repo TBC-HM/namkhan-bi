@@ -25,14 +25,8 @@ export function LighthouseEmpty({ view }: { view: string }) {
 
 export function SampleBanner({ snapshotDate }: { snapshotDate: string | null }) {
   return (
-    <div style={{
-      padding: '6px 12px', background: '#FDF6D8', border: '1px solid #E9D66C',
-      borderRadius: 4, fontSize: 11, color: '#5A4A00', marginBottom: 10,
-      display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
-    }}>
-      <span style={{ fontWeight: 700 }}>Sample data</span>
-      <span>Snapshot loaded: <code>{snapshotDate ?? '—'}</code></span>
-      <span>· Daily Lighthouse xlsx ingestion is not yet wired</span>
+    <div style={{ fontSize: 11, color: '#5A5A5A', marginBottom: 10 }}>
+      Last upload: <code>{snapshotDate ?? '—'}</code>
     </div>
   );
 }
