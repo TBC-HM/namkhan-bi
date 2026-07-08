@@ -5,7 +5,7 @@
 
 import HodLanding from '@/app/_components/HodLanding';
 import { Container } from '@/app/(cockpit)/_design';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { evaluateFinanceRules, type FinanceContext, type FinanceTargets } from '@/lib/rules/finance';
@@ -77,7 +77,7 @@ export default async function FinancePage() {
         <Container title="Create report" subtitle="Pre-configured finance reports · click to open with the matching dataset loaded">
           <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
             {REPORT_PRESETS.map((r) => (
-              <Link key={r.code} href={r.href} style={{
+              <TenantLink key={r.code} href={r.href} style={{
                 textDecoration: 'none', color: 'inherit',
                 border: '1px solid var(--hairline, #E6DFCC)',
                 borderRadius: 6, padding: '12px 14px',
@@ -86,7 +86,7 @@ export default async function FinancePage() {
               }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink, #1B1B1B)' }}>{r.label}</div>
                 <div style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)' }}>{r.desc}</div>
-              </Link>
+              </TenantLink>
             ))}
           </div>
         </Container>
