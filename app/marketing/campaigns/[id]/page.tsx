@@ -1,7 +1,7 @@
 // app/marketing/campaigns/[id]/page.tsx
 // Brand & Marketing · Campaign detail.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
@@ -114,7 +114,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       </Card>
 
       <div style={{ marginTop: 22, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Link href="/marketing/campaigns" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>← all campaigns</Link>
+        <TenantLink href="/marketing/campaigns" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>← all campaigns</TenantLink>
         <button className="btn" style={{ fontSize: "var(--t-sm)" }}>edit</button>
         <button className="btn" style={{ fontSize: "var(--t-sm)" }}>duplicate</button>
         <button className="btn" style={{ fontSize: "var(--t-sm)", marginLeft: 'auto', color: 'var(--oxblood)' }}>archive</button>
