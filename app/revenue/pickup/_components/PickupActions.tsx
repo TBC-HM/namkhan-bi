@@ -118,7 +118,7 @@ export default function PickupActions({ property, asOfDate, data, propertyId }: 
   const [sending, setSending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  function doPrint() { window.print(); }
+  // PBS 2026-07-08: doPrint removed with the button.
   async function doSend() {
     const to = window.prompt('Send Pickup matrix to (email address):');
     if (!to || !data) return;
@@ -166,32 +166,29 @@ export default function PickupActions({ property, asOfDate, data, propertyId }: 
 
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} className="no-print">
-      <button type="button" onClick={doDownload} disabled={!data} style={btnStyle} title="Download matrix as CSV (Excel-friendly, rounded)">⬇ Download</button>
-      <button type="button" onClick={doSend} disabled={!data || sending} style={btnStyle} title="Email this matrix with a summary table + CSV attachment">
-        {sending ? '…sending' : '✉ Send'}
+      {/* PBS 2026-07-08: icon-only + Print button deleted. */}
+      <button type="button" onClick={doDownload} disabled={!data} style={iconBtn} title="Download matrix as CSV (Excel-friendly, rounded)" aria-label="Download CSV">
+        <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>⬇</span>
       </button>
-      <button type="button" onClick={doPrint} style={btnStylePrimary}>🖨 Print</button>
+      <button type="button" onClick={doSend} disabled={!data || sending} style={iconBtn} title="Email this matrix with a summary table + CSV attachment" aria-label="Email report">
+        <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>{sending ? '…' : '✉'}</span>
+      </button>
       {msg && <span style={{ fontSize: 11, color: msg.startsWith('✓') ? '#1F5C2C' : '#B04A2F', marginLeft: 8 }}>{msg}</span>}
     </div>
   );
 }
 
-const btnStyle: React.CSSProperties = {
-  padding: '6px 14px',
+// PBS 2026-07-08: icon-only 34×30 button (matches pickup-day/lighthouse pattern).
+const iconBtn: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 34,
+  height: 30,
   borderRadius: 4,
-  border: '1px solid var(--hairline, #E6DFCC)',
-  background: 'var(--paper, #FFFFFF)',
-  color: 'var(--ink, #1B1B1B)',
-  fontSize: 12,
-  fontWeight: 500,
-  letterSpacing: '0.04em',
+  background: '#084838',
+  color: '#FFFFFF',
+  border: '1px solid #084838',
   cursor: 'pointer',
   fontFamily: 'inherit',
-};
-
-const btnStylePrimary: React.CSSProperties = {
-  ...btnStyle,
-  background: 'var(--primary, #1F3A2E)',
-  color: '#FFFFFF',
-  border: '1px solid var(--primary, #1F3A2E)',
 };
