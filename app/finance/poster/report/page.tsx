@@ -3,7 +3,7 @@
 // actions. One row per problem the reconciliation matcher surfaced. Sorted
 // by dollar impact (highest first).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import SlimHero from '@/components/sections/SlimHero';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import {
@@ -154,14 +154,14 @@ export default async function PosterReportPage() {
       />
 
       <div style={{ marginBottom: 12 }}>
-        <Link href="/finance/poster" style={{
+        <TenantLink href="/finance/poster" style={{
           fontFamily: 'var(--mono)',
           fontSize: 'var(--t-xs)',
           letterSpacing: 'var(--ls-extra)',
           textTransform: 'uppercase',
           color: 'var(--brass)',
           textDecoration: 'none',
-        }}>← Back to Poster ledger</Link>
+        }}>← Back to Poster ledger</TenantLink>
       </div>
 
       {/* Headline strip */}
