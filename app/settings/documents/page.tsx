@@ -2,7 +2,7 @@
 // PBS 2026-07-06: full document registry — every dms.documents row with an
 // inline reassignment dropdown so you can move a doc to the right Gold container
 // (which drives what shows up on /marketing/docs, /operations/sustainability, etc.).
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
