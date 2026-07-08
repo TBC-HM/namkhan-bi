@@ -2,7 +2,7 @@
 // PBS 2026-07-05 v2: Media Library — new-design shell (DashboardPage + KPI + gallery).
 // Force-rebuild marker: MEDIA_V2_20260705_1200
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -64,10 +64,10 @@ export default async function MarketingMediaPage() {
         </div>
 
         <div style={{ gridColumn: '1 / -1', display:'flex', justifyContent:'flex-end', gap: 8 }}>
-          <Link href="/marketing/upload" style={{
+          <TenantLink href="/marketing/upload" style={{
             padding:'6px 14px', fontSize:12, fontWeight:600, background:'#084838', color:'#FFFFFF',
             border:'none', borderRadius:4, textDecoration:'none',
-          }}>+ Upload new</Link>
+          }}>+ Upload new</TenantLink>
         </div>
 
         <div style={{ gridColumn: '1 / -1' }}>
