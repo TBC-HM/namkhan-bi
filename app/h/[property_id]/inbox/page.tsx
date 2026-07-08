@@ -10,7 +10,7 @@
 // Tenant scoping is enforced server-side via the `property_id` filter
 // the helpers attach to every query.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
@@ -266,7 +266,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
   const backHref  = searchParams.thread ? listHref : '/sales/inquiries';
   const backLabel = searchParams.thread ? '← Back to inbox' : '← Back to cockpit';
   const topRight = (
-    <Link
+    <TenantLink
       href={backHref}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -280,7 +280,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
       }}
     >
       {backLabel}
-    </Link>
+    </TenantLink>
   );
 
   return (
@@ -338,22 +338,22 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
         background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)',
         borderRadius: 8,
       }}>
-        <Link href={tabHref('all')} style={chipStyle(activeBox === 'all')}>
+        <TenantLink href={tabHref('all')} style={chipStyle(activeBox === 'all')}>
           All <span style={chipCount}>{tabsTotal}</span>
-        </Link>
+        </TenantLink>
         {tabs.map((t) => {
           const short = t.intended_mailbox.replace('@thenamkhan.com', '@nk').replace('@thedonnaportals.com', '@dp');
           return (
-            <Link key={t.intended_mailbox} href={tabHref(t.intended_mailbox)} style={chipStyle(activeBox === t.intended_mailbox)}>
+            <TenantLink key={t.intended_mailbox} href={tabHref(t.intended_mailbox)} style={chipStyle(activeBox === t.intended_mailbox)}>
               {short} <span style={chipCount}>{t.total}</span>
               {t.unread > 0 && <span style={chipUnread}>{t.unread}</span>}
-            </Link>
+            </TenantLink>
           );
         })}
         <span style={{ width: 1, height: 18, background: 'var(--paper-deep)', margin: '0 6px' }} />
-        <Link href={dirHref('all')} style={chipStyle(activeDir === 'all')}>All</Link>
-        <Link href={dirHref('in')}  style={chipStyle(activeDir === 'in')}>↘ Received</Link>
-        <Link href={dirHref('out')} style={chipStyle(activeDir === 'out')}>↗ Sent</Link>
+        <TenantLink href={dirHref('all')} style={chipStyle(activeDir === 'all')}>All</TenantLink>
+        <TenantLink href={dirHref('in')}  style={chipStyle(activeDir === 'in')}>↘ Received</TenantLink>
+        <TenantLink href={dirHref('out')} style={chipStyle(activeDir === 'out')}>↗ Sent</TenantLink>
       </div>
 
       {/* CHARTS ROW — 3 panels matching the /revenue/compset pattern */}
@@ -434,7 +434,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
               const sender = senderLabel(t.last_from_name, t.last_from_email);
               return (
                 <li key={t.thread_id} style={{ borderBottom: '1px solid var(--line-soft)' }}>
-                  <Link
+                  <TenantLink
                     href={`${basePath}?thread=${encodeURIComponent(t.thread_id)}`}
                     style={{
                       display: 'block',
@@ -517,7 +517,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
                         → {t.last_mailbox.replace('@thenamkhan.com', '@nk').replace('@thedonnaportals.com', '@dp')}
                       </span>
                     </div>
-                  </Link>
+                  </TenantLink>
                 </li>
               );
             })}
@@ -581,9 +581,9 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
                   {messages[0].inquiry_id && (
                     <>
                       {' · '}
-                      <Link href={`/sales/inquiries/${messages[0].inquiry_id}`} style={{ color: 'var(--brass)' }}>
+                      <TenantLink href={`/sales/inquiries/${messages[0].inquiry_id}`} style={{ color: 'var(--brass)' }}>
                         Open as inquiry →
-                      </Link>
+                      </TenantLink>
                     </>
                   )}
                 </div>
