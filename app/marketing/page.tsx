@@ -13,7 +13,7 @@
 // Preserves all functional logic from the previous HodLanding wrapper.
 
 import type { CSSProperties } from 'react';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile,
   type DashboardTab, type KpiTileProps,
@@ -122,7 +122,7 @@ export default async function MarketingHodPage() {
         title={`Marketing · ${cfg.hodName}`}
         subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         tabs={tabs}
-        action={<Link href={chatHref} style={primaryBtn}>{`Ask ${cfg.hodName} →`}</Link>}
+        action={<TenantLink href={chatHref} style={primaryBtn}>{`Ask ${cfg.hodName} →`}</TenantLink>}
       >
         {/* HARDCODED honesty banner — see PBS design contract. */}
         <div style={{ ...fullRow, ...banner }}>
