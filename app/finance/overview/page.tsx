@@ -3,7 +3,7 @@
 // stays at /finance; Overview is the dept-wide summary with entry cards
 // linking to the major finance groups (Finance / Transactions / HR / Budget
 // / Working capital / Reports).
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 
@@ -24,7 +24,7 @@ export default function FinanceOverviewPage() {
             USALI P&L snapshot, general ledger by account, and the mapping table that
             keeps every GL account tied to the right USALI line.
             <div style={{ marginTop: 8 }}>
-              <Link href="/finance/pnl" style={btn}>Open Finance →</Link>
+              <TenantLink href="/finance/pnl" style={btn}>Open Finance →</TenantLink>
             </div>
           </div>
         </Container>
@@ -34,7 +34,7 @@ export default function FinanceOverviewPage() {
             Folio-level transactions, POS · PMS reconciliation, and POS · Poster feed.
             Everything that flows before it lands in the ledger.
             <div style={{ marginTop: 8 }}>
-              <Link href="/finance/transactions" style={btn}>Open Transactions →</Link>
+              <TenantLink href="/finance/transactions" style={btn}>Open Transactions →</TenantLink>
             </div>
           </div>
         </Container>
@@ -44,7 +44,7 @@ export default function FinanceOverviewPage() {
             Staff roster, headcount, payroll cost centres. Moved from Operations so
             people-cost sits where it belongs — with the books.
             <div style={{ marginTop: 8 }}>
-              <Link href="/finance/hr" style={btn}>Open HR →</Link>
+              <TenantLink href="/finance/hr" style={btn}>Open HR →</TenantLink>
             </div>
           </div>
         </Container>
@@ -54,7 +54,7 @@ export default function FinanceOverviewPage() {
             Current budget lines with month-by-month tracking against actuals from
             the ledger.
             <div style={{ marginTop: 8 }}>
-              <Link href="/finance/budget" style={btn}>Open Budget →</Link>
+              <TenantLink href="/finance/budget" style={btn}>Open Budget →</TenantLink>
             </div>
           </div>
         </Container>
@@ -64,7 +64,7 @@ export default function FinanceOverviewPage() {
             Cash on hand, variance vs budget, and open AP / AR positions — the
             three tabs that keep short-term liquidity honest.
             <div style={{ marginTop: 8 }}>
-              <Link href="/finance/cashflow" style={btn}>Open Working capital →</Link>
+              <TenantLink href="/finance/cashflow" style={btn}>Open Working capital →</TenantLink>
             </div>
           </div>
         </Container>
@@ -74,7 +74,7 @@ export default function FinanceOverviewPage() {
             Saved report templates and the report builder — printable P&L, ledger
             exports, cash summaries.
             <div style={{ marginTop: 8 }}>
-              <Link href="/h/260955/reports?dept=finance" style={btn}>Open Reports →</Link>
+              <TenantLink href="/h/260955/reports?dept=finance" style={btn}>Open Reports →</TenantLink>
             </div>
           </div>
         </Container>
