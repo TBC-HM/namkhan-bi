@@ -2,7 +2,7 @@
 // PBS 2026-07-03: newsletter templates management.
 // Lists all templates for the property. Edit / Duplicate / Create new.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -71,14 +71,14 @@ export default async function TemplatesListPage() {
         {/* Actions row */}
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
           <div>
-            <Link href="/guest/newsletters" style={{ fontSize:11, color:INK_M, textDecoration:'none' }}>
+            <TenantLink href="/guest/newsletters" style={{ fontSize:11, color:INK_M, textDecoration:'none' }}>
               ← Back to newsletters overview
-            </Link>
+            </TenantLink>
           </div>
-          <Link href="/guest/newsletters/templates/new" style={{
+          <TenantLink href="/guest/newsletters/templates/new" style={{
             padding:'6px 14px', fontSize:12, fontWeight:600,
             background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none',
-          }}>+ New template</Link>
+          }}>+ New template</TenantLink>
         </div>
 
         {/* Templates grid */}
@@ -124,14 +124,14 @@ export default async function TemplatesListPage() {
                       </div>
                     </div>
                     <div style={{ marginTop:'auto', display:'flex', gap:8, paddingTop:6 }}>
-                      <Link href={`/guest/newsletters/templates/${t.template_key}`} style={{
+                      <TenantLink href={`/guest/newsletters/templates/${t.template_key}`} style={{
                         padding:'5px 12px', fontSize:11, fontWeight:600,
                         background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none',
-                      }}>Edit</Link>
-                      <Link href={`/guest/newsletters/templates/new?copy=${t.template_key}`} style={{
+                      }}>Edit</TenantLink>
+                      <TenantLink href={`/guest/newsletters/templates/new?copy=${t.template_key}`} style={{
                         padding:'5px 12px', fontSize:11, fontWeight:600,
                         background:'#F5F0E1', color:INK_S, border:'1px solid '+HAIR, borderRadius:4, textDecoration:'none',
-                      }}>Duplicate</Link>
+                      }}>Duplicate</TenantLink>
                       <span style={{ marginLeft:'auto', fontSize:10, color:INK_M, alignSelf:'center' }}>
                         {t.is_active ? 'active' : 'inactive'} · {fmtDate(t.updated_at)}
                       </span>
