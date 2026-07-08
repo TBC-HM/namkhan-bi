@@ -10,7 +10,7 @@
 //   - DMC panel: ink-black labels, Edit + Preview Contract buttons inline
 //   - When DMC contract matches: Channel-contact container suppressed (no dup)
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile,
   type DashboardTab, type KpiTileProps, type KpiComparison,
@@ -180,7 +180,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         action={
           <div style={{ display: 'flex', gap: 8 }}>
             <BackButton fallback="/revenue/channels" label="← Channels" />
-            {promoHref && <Link href={promoHref} style={navBtnStyle}>🏷 Promotions</Link>}
+            {promoHref && <TenantLink href={promoHref} style={navBtnStyle}>🏷 Promotions</TenantLink>}
           </div>
         }
       >
@@ -192,7 +192,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           ].map((t) => {
             const active = bdcTab === t.key;
             return (
-              <Link
+              <TenantLink
                 key={t.key}
                 href={`${tabBaseHref}?bdc_tab=${t.key}`}
                 style={{
@@ -209,7 +209,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
               >
                 <div>{t.label}</div>
                 <div style={{ fontSize: 10, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-soft, #5A5A5A)', marginTop: 2, fontWeight: 400 }}>{t.sub}</div>
-              </Link>
+              </TenantLink>
             );
           })}
         </div>
@@ -285,9 +285,9 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       action={
         <div style={{ display: 'flex', gap: 8 }}>
           <BackButton fallback="/revenue/channels" label="← Channels" />
-          {promoHref && <Link href={promoHref} style={navBtnStyle}>🏷 Promotions</Link>}
+          {promoHref && <TenantLink href={promoHref} style={navBtnStyle}>🏷 Promotions</TenantLink>}
           {dmcContract && (
-            <Link href="/sales/b2b" style={navBtnStyle}>← B2B / DMC</Link>
+            <TenantLink href="/sales/b2b" style={navBtnStyle}>← B2B / DMC</TenantLink>
           )}
         </div>
       }
