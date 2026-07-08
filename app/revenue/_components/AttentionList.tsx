@@ -41,7 +41,6 @@ const SEV_DOT: Record<string, string> = { high: '#C0584C', medium: '#C4A06B', lo
 export default function AttentionList({ items, storageKey = 'attn:revenue', userEmail }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
-  const [failed, setFailed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
@@ -60,23 +59,14 @@ export default function AttentionList({ items, storageKey = 'attn:revenue', user
     setDismissed(next);
     persistLocal(next);
 
-    // DB-backed rows: fire-and-forget POST. We swallow failures into `failed`
-    // so on next refresh (if DB write silently lost), we can add a UX hint.
     if (item.source === 'db' && userEmail) {
       try {
-        const res = await fetch('/api/attention/dismiss', {
+        await fetch('/api/attention/dismiss', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ flag_id: Number(item.id), user_email: userEmail }),
         });
-        if (!res.ok) {
-          const nextFailed = new Set(failed); nextFailed.add(item.id);
-          setFailed(nextFailed);
-        }
-      } catch {
-        const nextFailed = new Set(failed); nextFailed.add(item.id);
-        setFailed(nextFailed);
-      }
+      } catch { /* keep it hidden; server retry next reload */ }
     }
   };
 
