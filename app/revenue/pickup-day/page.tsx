@@ -223,7 +223,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
               <table style={{ borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap', width: '100%' }}>
                 <thead>
                   {/* Header row 1: group labels */}
-                  <tr style={{ background: '#0B3B2E', color: '#FFFFFF' }}>
+                  <tr style={{ background: '#F8F5EA' }}>
                     <th style={th} colSpan={2}>Date</th>
                     <th style={th}>Events</th>
                     <th style={th} colSpan={6}>Availability</th>
@@ -238,7 +238,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                     <th style={th} colSpan={3}>Pickup −7d</th>
                   </tr>
                   {/* Header row 2: leaf labels */}
-                  <tr style={{ background: '#0F5B4B', color: '#FFFFFF' }}>
+                  <tr style={{ background: '#FFFFFF' }}>
                     <th style={th}>DoW</th>
                     <th style={th}>Date</th>
                     <th style={th}></th>
@@ -374,7 +374,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                       //   col29 OTB ADR · col30 Room rev · col31 P1 RN · col32 P1 Rev · col33 P1 ADR
                       //   col34 P7 RN · col35 P7 Rev · col36 P7 ADR
                       //   Totals: 2+1+1+1+1+1+1+1+1 + 20 + 2 + 3 + 3 = 37 ✓
-                      <tr key={`total-${monthKey}`} style={{ background: '#D4CDA6' }}>
+                      <tr key={`total-${monthKey}`} style={{ background: '#F8F5EA' }}>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E', textAlign: 'left' }} colSpan={2}>{monthLabel} TOTAL</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}></td>
                         <td style={{ ...totalTd, ...tdMuted, borderTop: '2px solid #0B3B2E' }}>—</td>
@@ -430,9 +430,27 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
   );
 }
 
-const th: React.CSSProperties = { padding: '6px 6px', textAlign: 'center', fontSize: 10, fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.2)' };
-const td: React.CSSProperties = { padding: '4px 6px', textAlign: 'right', fontSize: 10, color: '#1B1B1B', borderRight: '1px solid #F5F0E1', borderBottom: '1px solid #F5F0E1' };
-const totalTd: React.CSSProperties = { padding: '5px 6px', textAlign: 'right', fontSize: 11, fontWeight: 900, color: '#1B1B1B', borderRight: '1px solid #B8A878', borderBottom: '2px solid #0B3B2E' };
+// Canonical design_system typography (matches Container / DataTable / Lighthouse tables):
+// paper-white background · muted grey ink · hairline dividers · uppercase 10px with letter-spacing.
+const th: React.CSSProperties = {
+  padding: '8px 8px', textAlign: 'center',
+  fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4,
+  color: '#5A5A5A', background: '#FFFFFF',
+  borderRight: '1px solid #E6DFCC', borderBottom: '1px solid #E6DFCC', whiteSpace: 'nowrap',
+};
+const td: React.CSSProperties = {
+  padding: '5px 8px', textAlign: 'right',
+  fontSize: 11, color: '#1B1B1B',
+  borderRight: '1px solid #F0EBD8', borderBottom: '1px solid #F0EBD8',
+  fontVariantNumeric: 'tabular-nums',
+};
+const totalTd: React.CSSProperties = {
+  padding: '6px 8px', textAlign: 'right',
+  fontSize: 11, fontWeight: 800, color: '#0B3B2E',
+  borderRight: '1px solid #E6DFCC', borderTop: '2px solid #0B3B2E', borderBottom: '2px solid #0B3B2E',
+  background: '#F8F5EA',
+  fontVariantNumeric: 'tabular-nums',
+};
 const tdMuted: React.CSSProperties = { color: '#B5AF9A', textAlign: 'center' };
 const iconBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
