@@ -1,7 +1,7 @@
 // app/guest/directory/_components/DirectoryShell.tsx
 "use client";
 
-import Link from "next/link";
+import TenantLink from '@/components/nav/TenantLink';
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { CountryFacets } from "./CountryFacets";
 import { GuestTable } from "./GuestTable";
@@ -360,13 +360,13 @@ export function DirectoryShell({
             {/* Send-to-marketing CTA — PBS 2026-05-09 JOB 4. Hands the live
                 filter spec off to the audience builder via base64-encoded
                 JSON. ml-auto only when no Clear-all button is present. */}
-            <Link
+            <TenantLink
               href={sendToMarketingHref}
               className={`${filtersActive ? "" : "ml-auto"} rounded-sm border border-emerald-700 bg-emerald-700 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-emerald-800`}
               title="Send the current filter set to /marketing/audiences/new — pre-populates a new audience"
             >
               → Send to marketing
-            </Link>
+            </TenantLink>
           </div>
 
           <GuestTable
