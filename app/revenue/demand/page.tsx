@@ -322,18 +322,29 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         })}
       </div>
 
+      {/* PBS 2026-07-08: one container, two stacked tile rows.
+          Row 1 = OTB headline (RN / Rev / ADR / Months on books / Cancelled YTD)
+          Row 2 = Pace signals (Months ahead / Months behind / Strongest / Softest month)
+          Hairline divider + section label between the rows so the story stays scannable. */}
       <div style={fullRow}>
-        <Container title="OTB headline" subtitle={`forward window · ${period.label}`} density="compact">
+        <Container
+          title="Headline · pace"
+          subtitle={`OTB vs STLY · ${period.label} · ${monthsAhead} months ahead · ${monthsBehind} behind`}
+          density="compact"
+        >
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+            {tiles.map((t, i) => <KpiTile key={`t-${i}`} {...t} />)}
           </div>
-        </Container>
-      </div>
-
-      <div style={fullRow}>
-        <Container title="Pace signals" subtitle="where the year is ahead vs behind STLY" density="compact">
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            margin: '12px 0 8px', color: '#5A5A5A',
+            fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600,
+          }}>
+            <span>Pace signals · where the year is ahead vs behind STLY</span>
+            <span style={{ flex: 1, height: 1, background: '#E6DFCC' }} />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-            {signals.map((t, i) => <KpiTile key={i} {...t} />)}
+            {signals.map((t, i) => <KpiTile key={`s-${i}`} {...t} />)}
           </div>
         </Container>
       </div>
