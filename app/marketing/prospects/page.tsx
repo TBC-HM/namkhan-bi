@@ -1,6 +1,6 @@
 // app/marketing/prospects/page.tsx
 // PBS 2026-07-05 v2: newsletter-style prospects list with company, pin, per-row tag/delete, mass ops.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -99,9 +99,9 @@ export default async function ProspectsPage() {
 
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <div style={{ display:'flex', gap:8 }}>
-            <Link href="/marketing/prospects/sequences" style={btnGreen}>Sequences →</Link>
-            <Link href="/marketing/prospects/scrape"    style={btnLight}>+ Scrape (Apify)</Link>
-            <Link href="/marketing/prospects/import"    style={btnLight}>+ Import CSV</Link>
+            <TenantLink href="/marketing/prospects/sequences" style={btnGreen}>Sequences →</TenantLink>
+            <TenantLink href="/marketing/prospects/scrape"    style={btnLight}>+ Scrape (Apify)</TenantLink>
+            <TenantLink href="/marketing/prospects/import"    style={btnLight}>+ Import CSV</TenantLink>
           </div>
           <div style={{ fontSize:11, color:'#5A5A5A' }}>
             Tags in use: {tagFacets.map(([t, n]) => `${t} (${n})`).join(' · ') || 'none'}
