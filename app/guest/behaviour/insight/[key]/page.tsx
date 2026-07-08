@@ -2,7 +2,7 @@
 // PBS 2026-07-06: Drilldown from ConclusionBlock → the guests behind a signal.
 // Server component. All filtering happens in Postgres/JS with no client state.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../../../_subpages';
@@ -189,7 +189,7 @@ export default async function InsightDrilldown({ params }: Props) {
       >
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'baseline' }}>
-            <Link href="/guest/behaviour" style={backLink}>← Back to Behaviour</Link>
+            <TenantLink href="/guest/behaviour" style={backLink}>← Back to Behaviour</TenantLink>
             <span style={{ fontSize: 11, color: '#5A5A5A' }}>· {rows.length} guest{rows.length === 1 ? '' : 's'} match this signal</span>
           </div>
 
@@ -259,7 +259,7 @@ function renderNonProfileTable(
       <DashboardPage title={`Behaviour · ${def.title}`} subtitle={def.subtitle} tabs={tabs}>
         <div style={{ gridColumn: '1 / -1' }}>
           <div style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'baseline' }}>
-            <Link href="/guest/behaviour" style={backLink}>← Back to Behaviour</Link>
+            <TenantLink href="/guest/behaviour" style={backLink}>← Back to Behaviour</TenantLink>
             <span style={{ fontSize: 11, color: '#5A5A5A' }}>· {rows.length} reservation{rows.length === 1 ? '' : 's'} match{rows.length === 1 ? 'es' : ''} this signal · key {activeKey}</span>
           </div>
           {rows.length === 0 ? (
