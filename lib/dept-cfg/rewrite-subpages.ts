@@ -38,6 +38,12 @@ export function rewriteSubPagesForProperty(
   subPages: readonly SubPage[],
   propertyId: number
 ): SubPage[] {
+  // PBS 2026-07-09: propertyId=0 is the holding sentinel. /holding/* is NOT a
+  // tenant-scoped tree — it lives above properties. Its subPages already carry
+  // absolute /holding/... hrefs and must not be filtered by PROPERTY_SCOPED_HREFS
+  // (which is the property-scoped allowlist) or wrapped in /h/0/... which doesn't
+  // exist. Return them unchanged.
+  if (propertyId === 0) return [...subPages];
   // Namkhan is the default — no rewrite needed.
   if (propertyId === NAMKHAN_PROPERTY_ID) return [...subPages];
 
