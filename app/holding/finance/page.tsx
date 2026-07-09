@@ -74,6 +74,7 @@ export default async function HoldingFinancePage() {
       <HodLanding
         slug="holding_finance"
         propertyId={HOLDING_PID}
+        settingsHref="/holding/settings"
         liveTiles={[
           { label: 'Next invoice #',    value: summary.nextNumber,                                                          size: 'sm' },
           { label: 'Invoices YTD',      value: String(summary.ytdCount),                                                    size: 'sm', footnote: `${summary.totalInvoices} total on file` },
