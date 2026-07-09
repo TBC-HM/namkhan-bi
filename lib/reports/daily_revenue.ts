@@ -42,6 +42,13 @@ export const render: RenderFn = async (params, supabase) => {
     .lte('metric_date', date)
     .order('metric_date', { ascending: false });
 
+  // PBS 2026-07-09 pm: rate-plan hygiene snapshot for the Daily Briefing.
+  const { data: hyg } = await supabase
+    .from('v_rate_plan_hygiene')
+    .select('active_plans_total, sleeping_total, sleeping_over_2y, never_booked, never_booked_pct, orphan_count, nrr_locked_share_pct, flex_share_pct, early_bird_share_pct')
+    .eq('property_id', theme.property_id)
+    .maybeSingle();
+
   // USALI breakdown for the day
   const { data: usali } = await supabase
     .from('v_revenue_usali')
@@ -145,6 +152,28 @@ export const render: RenderFn = async (params, supabase) => {
           { key: 'total', label: 'Total rev', align: 'right' },
         ],
         sevenRows,
+        theme,
+      ),
+    ) +
+    // PBS 2026-07-09 pm — rate-plan hygiene block. YTD revenue mix + sleeping / never-booked / orphan counts.
+    section(
+      'Rate plan hygiene',
+      theme,
+      kpiGrid(
+        [
+          { label: 'NRR-locked',   value: hyg?.nrr_locked_share_pct == null ? '—' : `${Number(hyg.nrr_locked_share_pct).toFixed(1)}%`, sub: 'YTD revenue · NRR + AP' },
+          { label: 'Flex',         value: hyg?.flex_share_pct       == null ? '—' : `${Number(hyg.flex_share_pct).toFixed(1)}%`,      sub: 'YTD revenue · Flex + Semi-Flex' },
+          { label: 'Early bird',   value: hyg?.early_bird_share_pct == null ? '—' : `${Number(hyg.early_bird_share_pct).toFixed(1)}%`, sub: 'YTD revenue · Advance Purchase' },
+          { label: 'Active plans', value: fmtNum(hyg?.active_plans_total), sub: 'in PMS catalogue' },
+        ],
+        theme,
+      ) +
+      paragraph(
+        `Catalogue hygiene: ${fmtNum(hyg?.sleeping_total)} sleeping (${fmtNum(hyg?.sleeping_over_2y)} dormant > 2y) · ` +
+        `${fmtNum(hyg?.never_booked)} never booked` +
+        (hyg?.never_booked_pct != null ? ` (${Number(hyg.never_booked_pct).toFixed(1)}%)` : '') +
+        ` · ${fmtNum(hyg?.orphan_count)} orphan rate plans (bookings without catalogue entry). ` +
+        `Retire dormant > 2y and normalise orphans to reduce PMS bloat, parity fragmentation, and OTA picker fatigue.`,
         theme,
       ),
     );
