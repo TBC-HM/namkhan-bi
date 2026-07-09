@@ -50,6 +50,13 @@ export const WIRING: Record<string, Record<string, RuleWiring>> = {
     compset_avg_delta_pct:          { status: 'live', consumedBy: 'ruleCompsetAvgDelta@parity.ts',    requiresData: ['v_parity_matrix_pb'] },
     compset_rate_change_3d_max_pct: { status: 'live', consumedBy: 'ruleCompsetRateChange3d@parity.ts', requiresData: ['v_lighthouse_rateshop'] },
     compset_rate_change_7d_max_pct: { status: 'live', consumedBy: 'ruleCompsetRateChange7d@parity.ts', requiresData: ['v_lighthouse_rateshop'] },
+    // PBS 2026-07-09 pm: rate-plan hygiene guardrails.
+    nrr_share_target:               { status: 'live', consumedBy: 'ruleNrrShareTarget@rateplans.ts',        requiresData: ['v_rate_plan_hygiene'] },
+    early_bird_share_target:        { status: 'live', consumedBy: 'ruleEarlyBirdShareTarget@rateplans.ts', requiresData: ['v_rate_plan_hygiene'] },
+    flex_share_max:                 { status: 'live', consumedBy: 'ruleFlexShareMax@rateplans.ts',         requiresData: ['v_rate_plan_hygiene'] },
+    sleeping_plan_max_days:         { status: 'live', consumedBy: 'ruleSleepingPlanMax@rateplans.ts',      requiresData: ['v_rate_plan_hygiene'] },
+    never_booked_plan_max_share:    { status: 'live', consumedBy: 'ruleNeverBookedShare@rateplans.ts',     requiresData: ['v_rate_plan_hygiene'] },
+    orphan_catalogue_gap_max:       { status: 'live', consumedBy: 'ruleOrphanCatalogueGap@rateplans.ts',   requiresData: ['v_rate_plan_hygiene'] },
   },
 
   retention: {
