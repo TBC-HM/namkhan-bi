@@ -90,7 +90,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
       .eq('property_id', pid)
       .then((r) => r.data ?? []),
     supabase.from('v_country_room_type_heatmap')
-      .select('guest_country_iso2, room_type_name, bookings, room_nights, revenue, adr')
+      .select('guest_country_iso2, room_type_name, bookings, room_nights, revenue, adr, ly_bookings, ly_room_nights, ly_revenue, ly_adr')
       .eq('property_id', pid)
       .then((r) => r.data ?? []),
     supabase.from('v_country_los_distribution')
@@ -187,13 +187,14 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
   const roomTypesSet = new Set<string>();
   (roomType as Rows).forEach((r) => roomTypesSet.add(String(r.room_type_name)));
   const roomTypesArr = Array.from(roomTypesSet).sort();
-  type RtCell = { rn: number; rev: number; adr: number };
+  type RtCell = { rn: number; rev: number; adr: number; ly_rn: number };
   const rtMap = new Map<string, RtCell>();
   (roomType as Rows).forEach((r) => {
     rtMap.set(`${r.guest_country_iso2}|${r.room_type_name}`, {
       rn:  Number(r.room_nights ?? 0),
       rev: Number(r.revenue ?? 0),
       adr: Number(r.adr ?? 0),
+      ly_rn: Number(r.ly_room_nights ?? 0),
     });
   });
   const maxRtRn = Math.max(0, ...Array.from(rtMap.values()).map((c) => c.rn));
@@ -282,10 +283,19 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
                     {monthsArr.map((m) => {
                       const c = stayMap.get(`${iso}|${m}`);
                       const rn = c?.rn ?? 0;
+                      const ly = c?.ly_rn ?? 0;
+                      // PBS 2026-07-09 pm: green when TY > LY, red when TY < LY, grey when both 0
+                      const tyColor = rn === 0 && ly === 0 ? '#5A5A5A'
+                                    : rn > ly ? '#1F5C2C' : rn < ly ? '#B04A2F' : '#1B1B1B';
                       return (
-                        <td key={m} style={{ ...tdNum, background: heatColor(rn, maxStayRn), color: heatTextColor(rn, maxStayRn) }}
-                            title={c ? `${rn} RN · ${moneyFmt(c.rev)} · ADR ${moneyFmt(c.adr)}` : 'no bookings'}>
-                          {rn > 0 ? rn : ''}
+                        <td key={m} style={{ ...tdNum, background: heatColor(rn, maxStayRn), color: heatTextColor(rn, maxStayRn), padding: '4px 6px' }}
+                            title={c ? `${rn} RN this year · ${ly} RN LY · ${moneyFmt(c.rev)} · ADR ${moneyFmt(c.adr)}` : 'no bookings'}>
+                          {(rn > 0 || ly > 0) && (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.1, gap: 1 }}>
+                              <span style={{ fontWeight: 700, color: tyColor }}>{rn > 0 ? rn : '—'}</span>
+                              <span style={{ fontSize: 9, opacity: 0.7 }}>LY {ly > 0 ? ly : '—'}</span>
+                            </div>
+                          )}
                         </td>
                       );
                     })}
@@ -297,16 +307,16 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
         </Container>
       </div>
 
-      {/* Section — Country × Room-type heatmap */}
+      {/* Section — Country × Room-type heatmap · with LY numbers + TY/LY color coding */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Country × room-type · room-night intensity (YTD)"
-                   subtitle="Which countries gravitate to which inventory · darker = more · hover for revenue + ADR">
+                   subtitle="TY vs LY per cell · green = ahead of LY · red = behind · hover for revenue + ADR">
           <div style={{ overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%' }}>
               <thead>
                 <tr>
                   <th style={{ ...thStyle, textAlign: 'left' }}>Country</th>
-                  {roomTypesArr.map((rt) => <th key={rt} style={{ ...thStyle, textAlign: 'right', minWidth: 80 }}>{rt}</th>)}
+                  {roomTypesArr.map((rt) => <th key={rt} style={{ ...thStyle, textAlign: 'right', minWidth: 90 }}>{rt}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -316,10 +326,18 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
                     {roomTypesArr.map((rt) => {
                       const c = rtMap.get(`${iso}|${rt}`);
                       const rn = c?.rn ?? 0;
+                      const ly = c?.ly_rn ?? 0;
+                      const tyColor = rn === 0 && ly === 0 ? '#5A5A5A'
+                                    : rn > ly ? '#1F5C2C' : rn < ly ? '#B04A2F' : '#1B1B1B';
                       return (
-                        <td key={rt} style={{ ...tdNum, background: heatColor(rn, maxRtRn), color: heatTextColor(rn, maxRtRn) }}
-                            title={c ? `${rn} RN · ${moneyFmt(c.rev)} · ADR ${moneyFmt(c.adr)}` : 'no bookings'}>
-                          {rn > 0 ? rn : ''}
+                        <td key={rt} style={{ ...tdNum, background: heatColor(rn, maxRtRn), color: heatTextColor(rn, maxRtRn), padding: '4px 6px' }}
+                            title={c ? `${rn} RN this year · ${ly} RN LY · ${moneyFmt(c.rev)} · ADR ${moneyFmt(c.adr)}` : 'no bookings'}>
+                          {(rn > 0 || ly > 0) && (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.1, gap: 1 }}>
+                              <span style={{ fontWeight: 700, color: tyColor }}>{rn > 0 ? rn : '—'}</span>
+                              <span style={{ fontSize: 9, opacity: 0.7 }}>LY {ly > 0 ? ly : '—'}</span>
+                            </div>
+                          )}
                         </td>
                       );
                     })}
