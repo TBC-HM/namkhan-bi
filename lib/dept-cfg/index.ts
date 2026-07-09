@@ -522,16 +522,14 @@ const MARKETING_CFG: DeptCfg = {
   //   Library           → Docs
   // Parent tab links to the first child so clicking always lands somewhere useful.
   subPages: [
-    // PBS 2026-07-07 night:
-    // - Overview lands on /marketing/library (Library becomes Overview's home).
-    // - Info removed as sub-tab; Library + Docs now sit directly under Overview.
-    // - Library top-level tab removed (merged into Overview).
-    // - Content lands on /marketing/gallery (Media page, not the empty stub).
+    // PBS 2026-07-07 night → 2026-07-09 pm:
+    // - Content removed from top strip (overlapped with Overview/Library — same DB source).
+    // - Gallery now a sub-tab under Overview (Library main · Gallery secondary).
+    // - Orphan stub /marketing/content deleted.
     { label: 'HoD',               href: '/marketing'                 },
     { label: 'Overview',          href: '/marketing/library'         },
     { label: 'Acquisition',       href: '/marketing/acquisition'     },
     { label: 'Products & Offers', href: '/marketing/offers'          },
-    { label: 'Content',           href: '/marketing/gallery'         },
     { label: 'Digital',           href: '/marketing/digital'         },
     { label: 'Reports',           href: '/h/260955/reports?dept=marketing' },
   ],
