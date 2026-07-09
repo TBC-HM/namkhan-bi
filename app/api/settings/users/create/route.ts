@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     if (sendInvite) {
       const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
         data: { full_name: name },
-        redirectTo: `${origin}/auth/callback?next=/account/password`,
+        redirectTo: `${origin}/account/password`,
       });
       if (invErr) {
         if (!/already|registered/i.test(invErr.message)) {
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
           { cookies: { getAll: () => [], setAll: () => {} } },
         );
         const { error: rErr } = await anon.auth.resetPasswordForEmail(email, {
-          redirectTo: `${origin}/auth/callback?next=/account/password`,
+          redirectTo: `${origin}/account/password`,
         });
         if (rErr) inviteInfo = `existed; reset email failed: ${rErr.message}`;
         else inviteInfo = 'existed; reset link sent';
