@@ -54,12 +54,15 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/revenue/lighthouse',
       '/revenue/lighthouse/overview', '/revenue/lighthouse/rates',
       '/revenue/lighthouse/vs-yesterday', '/revenue/lighthouse/vs-3d', '/revenue/lighthouse/vs-7d',
+      // PBS 2026-07-09 pm: Strategy pulled out of holding top strip → surfaces here too.
+      '/holding/strategy',
     ],
     tabs: [
       { label: 'Comp Set',   href: '/revenue/compset'              },
       { label: 'Leakage',    href: '/revenue/leakage'              },
       { label: 'Parity',     href: '/revenue/parity'               },
       { label: 'Lighthouse', href: '/revenue/lighthouse/overview'  },
+      { label: 'Strategy',   href: '/holding/strategy'             },
     ],
   },
 
