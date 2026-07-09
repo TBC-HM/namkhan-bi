@@ -40,8 +40,11 @@ export const WIRING: Record<string, Record<string, RuleWiring>> = {
     cancellation_rate: { status: 'not_wired', notWiredReason: 'no 30d cancel-rate calc wired to /revenue HoD context yet' },
     lead_time_min_days:{ status: 'not_wired', notWiredReason: 'requires avg lead-time calc from v_reservations_unified (not threaded)' },
     leakage_ota_share: { status: 'not_wired', notWiredReason: 'requires OTA channel share calc (not threaded)' },
-    parity_breach_usd: { status: 'not_wired', notWiredReason: 'requires parity scan data (not threaded)' },
-    compset_stale_days:{ status: 'not_wired', notWiredReason: 'requires comp-set last-scrape date (not threaded)' },
+    parity_breach_usd: { status: 'live', consumedBy: 'ruleIntegrityBreachUsd@parity.ts', requiresData: ['v_rate_integrity_matrix'] },
+    compset_stale_days:{ status: 'live', consumedBy: 'ruleLighthouseStale@parity.ts',    requiresData: ['v_lighthouse_rateshop'] },
+    integrity_max_spread_pct:   { status: 'live', consumedBy: 'ruleIntegrityMaxSpread@parity.ts',   requiresData: ['v_rate_integrity_matrix'] },
+    integrity_soldout_days_max: { status: 'live', consumedBy: 'ruleIntegritySoldOutDays@parity.ts', requiresData: ['v_rate_integrity_matrix'] },
+    lighthouse_stale_days:      { status: 'live', consumedBy: 'ruleLighthouseStale@parity.ts',     requiresData: ['v_lighthouse_rateshop'] },
   },
 
   retention: {
