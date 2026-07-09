@@ -1,7 +1,8 @@
 // app/settings/users/_components/UsersMatrix.tsx
-// PBS 2026-07-09: matrix UI for property/holding access. Each row is a user.
-// Columns: Namkhan (260955) · Donna (1000001) · Holding.
-// Send invitation button per row triggers a password-reset email.
+// PBS 2026-07-09 v2: Name column + Holding split into Holding (member) + Admin (owner).
+// The Send invitation button on each row triggers a password-reset email
+// (resetPasswordForEmail — that actually sends via Supabase Auth email delivery,
+// unlike admin.generateLink which only returns the link).
 'use client';
 
 import { useState, useTransition, type CSSProperties } from 'react';
@@ -12,9 +13,10 @@ const DONNA_PID   = 1000001;
 export interface UserRow {
   id: string;
   email: string;
+  full_name: string | null;
   last_sign_in_at: string | null;
   created_at: string;
-  holding_role: string | null;
+  holding_role: string | null;   // owner | admin | member | viewer | service | null
   property_grants: Array<{ property_id: number; role: string; status: string }>;
 }
 
@@ -23,9 +25,9 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
-  function hasProp(row: UserRow, pid: number): boolean {
-    return row.property_grants.some((g) => g.property_id === pid && g.status !== 'inactive');
-  }
+  const hasProp = (u: UserRow, pid: number) => u.property_grants.some((g) => g.property_id === pid && g.status === 'active');
+  const isHoldingMember = (u: UserRow) => u.holding_role !== null && ['member','viewer','admin','owner'].includes(u.holding_role);
+  const isAdmin = (u: UserRow) => u.holding_role === 'admin' || u.holding_role === 'owner';
 
   async function togglePropertyGrant(user: UserRow, propertyId: number, on: boolean) {
     startTransition(async () => {
@@ -35,34 +37,40 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: user.id, email: user.email, property_id: propertyId, active: on }),
       });
-      if (!r.ok) { setMsg(`✗ ${(await r.json()).error ?? 'failed'}`); return; }
-      // Update local state
+      if (!r.ok) { setMsg(`✗ ${(await r.json().catch(() => ({}))).error ?? 'failed'}`); return; }
       setRows((prev) => prev.map((x) => {
         if (x.id !== user.id) return x;
         const others = x.property_grants.filter((g) => g.property_id !== propertyId);
-        if (on) {
-          return { ...x, property_grants: [...others, { property_id: propertyId, role: 'staff', status: 'active' }] };
-        }
+        if (on) return { ...x, property_grants: [...others, { property_id: propertyId, role: 'staff', status: 'active' }] };
         return { ...x, property_grants: others };
       }));
-      setMsg('✓ saved');
-      setTimeout(() => setMsg(null), 1500);
+      flash('✓ saved');
     });
   }
 
-  async function toggleHolding(user: UserRow, on: boolean) {
+  async function toggleHoldingRole(user: UserRow, role: 'member' | 'admin' | null) {
     startTransition(async () => {
       setMsg(null);
       const r = await fetch('/api/settings/users/grant-holding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, email: user.email, active: on }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id, email: user.email, active: role !== null, role }),
       });
-      if (!r.ok) { setMsg(`✗ ${(await r.json()).error ?? 'failed'}`); return; }
-      setRows((prev) => prev.map((x) => x.id === user.id ? { ...x, holding_role: on ? 'holding_admin' : null } : x));
-      setMsg('✓ saved');
-      setTimeout(() => setMsg(null), 1500);
+      if (!r.ok) { setMsg(`✗ ${(await r.json().catch(() => ({}))).error ?? 'failed'}`); return; }
+      setRows((prev) => prev.map((x) => x.id === user.id ? { ...x, holding_role: role } : x));
+      flash('✓ saved');
     });
+  }
+
+  function onHoldingCheck(user: UserRow, on: boolean) {
+    // Ticking "Holding" adds member (or preserves admin if already admin).
+    // Un-ticking removes ALL holding access.
+    if (on) return toggleHoldingRole(user, isAdmin(user) ? 'admin' : 'member');
+    return toggleHoldingRole(user, null);
+  }
+  function onAdminCheck(user: UserRow, on: boolean) {
+    // Ticking "Admin" upgrades to admin (also implies holding).
+    // Un-ticking downgrades to plain member (keeps holding access).
+    return toggleHoldingRole(user, on ? 'admin' : 'member');
   }
 
   async function sendInvite(user: UserRow) {
@@ -72,21 +80,25 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: user.email }),
       });
-      if (!r.ok) { setMsg(`✗ ${(await r.json()).error ?? 'invite failed'}`); return; }
+      if (!r.ok) { setMsg(`✗ ${(await r.json().catch(() => ({}))).error ?? 'invite failed'}`); return; }
       setMsg(`✓ invitation sent to ${user.email}`);
       setTimeout(() => setMsg(null), 3000);
     });
   }
+
+  function flash(text: string) { setMsg(text); setTimeout(() => setMsg(null), 1500); }
 
   return (
     <div style={{ padding: 4 }}>
       <table style={tableStyle}>
         <thead>
           <tr>
+            <th style={thStyle}>Name</th>
             <th style={thStyle}>Email</th>
             <th style={thStyleCenter}>Namkhan</th>
             <th style={thStyleCenter}>Donna</th>
             <th style={thStyleCenter}>Holding</th>
+            <th style={thStyleCenter}>Admin</th>
             <th style={thStyleCenter}>Last sign in</th>
             <th style={thStyleCenter}>Actions</th>
           </tr>
@@ -94,6 +106,9 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
         <tbody>
           {rows.map((u) => (
             <tr key={u.id}>
+              <td style={tdStyle}>
+                <div style={{ fontSize: 12, color: '#1B1B1B', fontWeight: 600 }}>{u.full_name ?? '—'}</div>
+              </td>
               <td style={tdStyle}>
                 <div style={{ fontSize: 12, color: '#1B1B1B' }}>{u.email}</div>
                 <div style={{ fontSize: 9, color: '#5A5A5A' }}>{u.id.slice(0, 8)}…</div>
@@ -109,9 +124,15 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
                        disabled={pending} />
               </td>
               <td style={tdCenterStyle}>
-                <input type="checkbox" checked={!!u.holding_role}
-                       onChange={(e) => toggleHolding(u, e.target.checked)}
+                <input type="checkbox" checked={isHoldingMember(u)}
+                       onChange={(e) => onHoldingCheck(u, e.target.checked)}
                        disabled={pending} />
+              </td>
+              <td style={tdCenterStyle}>
+                <input type="checkbox" checked={isAdmin(u)}
+                       onChange={(e) => onAdminCheck(u, e.target.checked)}
+                       disabled={pending || !isHoldingMember(u)}
+                       title={!isHoldingMember(u) ? 'Grant Holding first, then Admin' : 'Toggle admin (can manage users)'} />
               </td>
               <td style={{ ...tdCenterStyle, fontSize: 10, color: '#5A5A5A' }}>
                 {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('en-GB') : '—'}
@@ -126,20 +147,23 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
         </tbody>
       </table>
       {msg && <div style={{ fontSize: 11, color: msg.startsWith('✓') ? '#0B5B3A' : '#B04A2F', marginTop: 8 }}>{msg}</div>}
+      <div style={{ fontSize: 10, color: '#5A5A5A', marginTop: 8 }}>
+        <strong>Holding</strong> = read-only cross-property access. <strong>Admin</strong> = holding + can manage users on this page. Ticking Admin requires Holding first.
+      </div>
     </div>
   );
 }
 
-const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 12 };
+const tableStyle: CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 12, color: '#1B1B1B' };
 const thStyle: CSSProperties = {
   textAlign: 'left', padding: '8px 6px', borderBottom: '1px solid #E6DFCC',
-  fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A', fontWeight: 600,
+  fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#3A3A3A', fontWeight: 700,
 };
 const thStyleCenter: CSSProperties = { ...thStyle, textAlign: 'center' };
-const tdStyle: CSSProperties = { padding: '6px', borderBottom: '1px solid #F5F0E1' };
+const tdStyle: CSSProperties = { padding: '6px', borderBottom: '1px solid #F5F0E1', color: '#1B1B1B' };
 const tdCenterStyle: CSSProperties = { ...tdStyle, textAlign: 'center' };
 const btnStyle: CSSProperties = {
-  padding: '4px 10px', borderRadius: 4, border: '1px solid #E6DFCC',
+  padding: '4px 10px', borderRadius: 4, border: '1px solid #C8C0A6',
   background: '#FFFFFF', color: '#084838', fontSize: 10,
-  letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, cursor: 'pointer',
+  letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700, cursor: 'pointer',
 };
