@@ -48,18 +48,18 @@ async function loadHoldingFinanceSummary(sb: ReturnType<typeof getSupabaseAdmin>
 function buildInsights(s: Awaited<ReturnType<typeof loadHoldingFinanceSummary>>): Insight[] {
   const out: Insight[] = [];
   if (s.openCount === 0 && s.totalInvoices > 0) {
-    out.push({ id: 'no-open', kind: 'ok', title: 'No open invoices', body: 'Every issued invoice is marked paid or cancelled.' });
+    out.push({ key: 'no-open', priority: 'positive', title: 'No open invoices', body: 'Every issued invoice is marked paid or cancelled.' });
   }
   if (s.openCount > 0) {
-    out.push({ id: 'open-inv', kind: 'watch', title: `${s.openCount} open invoice${s.openCount === 1 ? '' : 's'}`, body: 'Not yet marked paid or cancelled — chase or reconcile.' });
+    out.push({ key: 'open-inv', priority: 'warning', title: `${s.openCount} open invoice${s.openCount === 1 ? '' : 's'}`, body: 'Not yet marked paid or cancelled — chase or reconcile.' });
   }
   if (s.activeClients === 0) {
-    out.push({ id: 'no-clients', kind: 'watch', title: 'No clients on file', body: 'Add clients in the Clients tab before issuing invoices.' });
+    out.push({ key: 'no-clients', priority: 'warning', title: 'No clients on file', body: 'Add clients in the Clients tab before issuing invoices.' });
   } else {
-    out.push({ id: 'clients-ready', kind: 'ok', title: `${s.activeClients} active client${s.activeClients === 1 ? '' : 's'}`, body: 'CRM populated — use the Pick-a-client dropdown on Create.' });
+    out.push({ key: 'clients-ready', priority: 'positive', title: `${s.activeClients} active client${s.activeClients === 1 ? '' : 's'}`, body: 'CRM populated — use the Pick-a-client dropdown on Create.' });
   }
   if (s.ytdCount === 0) {
-    out.push({ id: 'no-ytd', kind: 'watch', title: 'No invoices issued YTD', body: 'Beyond Circle has not billed this calendar year yet.' });
+    out.push({ key: 'no-ytd', priority: 'warning', title: 'No invoices issued YTD', body: 'Beyond Circle has not billed this calendar year yet.' });
   }
   return out;
 }
