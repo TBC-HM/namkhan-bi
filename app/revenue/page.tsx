@@ -29,6 +29,7 @@ import {
   type PaceNight, type CountryPickup,
 } from '@/lib/rules/revenue';
 import { evaluateParityRules, type ParityContext, type ParityTargets } from '@/lib/rules/parity';
+import { runRatePlanRules, type RatePlanContext, type RatePlanTargets } from '@/lib/rules/rateplans';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -80,6 +81,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     lighthouseLatestRes,
     parityMatrixRes,
     compsetHistoryRes,
+    ratePlanHygieneRes,
   ] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
@@ -107,6 +109,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     supabase.from('v_parity_matrix_pb').select('stay_date, pct_vs_cheapest_comp, num_comps_undercutting, comps_with_price').eq('property_id', pid).order('stay_date', { ascending: true }),
     // Lighthouse compset historical shops for 3d/7d rate-change signals.
     supabase.from('v_lighthouse_rateshop').select('shop_date, stay_date, hotel_name, is_self, bar_rate').eq('property_id', pid).eq('feed_source', 'compset').gte('shop_date', new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10)),
+    // PBS 2026-07-09 pm: rate-plan hygiene aggregate (per property).
+    sbAdmin.from('v_rate_plan_hygiene').select('active_plans_total, sleeping_total, sleeping_over_2y, sleeping_1_2y, sleeping_180d_1y, never_booked, never_booked_pct, orphan_count, ytd_revenue_total, nrr_locked_share_pct, flex_share_pct, early_bird_share_pct').eq('property_id', pid).maybeSingle(),
   ]);
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
   const sendLogRows   = (sendsRes.data ?? []) as SendLogRow[];
@@ -128,6 +132,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // Targets
   const targets: RevenueTargets = {};
   const parityTargets: ParityTargets = {};
+  const ratePlanTargets: RatePlanTargets = {};
   for (const g of (guardrailsRes.data ?? []) as Array<{ rule_key: string; threshold_val: number | string }>) {
     const n = typeof g.threshold_val === 'string' ? Number(g.threshold_val) : g.threshold_val;
     if (!Number.isFinite(n)) continue;
@@ -145,6 +150,13 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     else if (g.rule_key === 'compset_avg_delta_pct') parityTargets.compset_avg_delta_pct = n;
     else if (g.rule_key === 'compset_rate_change_3d_max_pct') parityTargets.compset_rate_change_3d_max_pct = n;
     else if (g.rule_key === 'compset_rate_change_7d_max_pct') parityTargets.compset_rate_change_7d_max_pct = n;
+    // PBS 2026-07-09 pm: rate-plan hygiene targets.
+    else if (g.rule_key === 'nrr_share_target')            ratePlanTargets.nrr_share_target = n;
+    else if (g.rule_key === 'early_bird_share_target')     ratePlanTargets.early_bird_share_target = n;
+    else if (g.rule_key === 'flex_share_max')              ratePlanTargets.flex_share_max = n;
+    else if (g.rule_key === 'sleeping_plan_max_days')      ratePlanTargets.sleeping_plan_max_days = n;
+    else if (g.rule_key === 'never_booked_plan_max_share') ratePlanTargets.never_booked_plan_max_share = n;
+    else if (g.rule_key === 'orphan_catalogue_gap_max')    ratePlanTargets.orphan_catalogue_gap_max = n;
   }
 
   // Build paceNext90 with STLY join
@@ -328,7 +340,41 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     targets: parityTargets,
   };
   const parityInsights = evaluateParityRules(parityCtx);
-  const revenueInsights = [...parityInsights, ...evaluateRevenueRules(revenueCtx)];
+
+  // PBS 2026-07-09 pm: Rate-plan hygiene context — one row per property, aggregated in v_rate_plan_hygiene.
+  type HygieneRow = {
+    active_plans_total: number | null;
+    sleeping_total: number | null;
+    sleeping_over_2y: number | null;
+    sleeping_1_2y: number | null;
+    sleeping_180d_1y: number | null;
+    never_booked: number | null;
+    never_booked_pct: number | string | null;
+    orphan_count: number | null;
+    ytd_revenue_total: number | string | null;
+    nrr_locked_share_pct: number | string | null;
+    flex_share_pct: number | string | null;
+    early_bird_share_pct: number | string | null;
+  };
+  const hyg = (ratePlanHygieneRes.data ?? null) as HygieneRow | null;
+  const ratePlanCtx: RatePlanContext = {
+    activePlansTotal:  Number(hyg?.active_plans_total ?? 0),
+    sleepingTotal:     Number(hyg?.sleeping_total ?? 0),
+    sleepingOver2y:    Number(hyg?.sleeping_over_2y ?? 0),
+    sleeping1To2y:     Number(hyg?.sleeping_1_2y ?? 0),
+    sleeping180dTo1y:  Number(hyg?.sleeping_180d_1y ?? 0),
+    neverBooked:       Number(hyg?.never_booked ?? 0),
+    neverBookedPct:    hyg?.never_booked_pct == null ? null : Number(hyg.never_booked_pct),
+    orphanCount:       Number(hyg?.orphan_count ?? 0),
+    ytdRevenueTotal:   Number(hyg?.ytd_revenue_total ?? 0),
+    nrrLockedSharePct: hyg?.nrr_locked_share_pct == null ? null : Number(hyg.nrr_locked_share_pct),
+    flexSharePct:      hyg?.flex_share_pct == null      ? null : Number(hyg.flex_share_pct),
+    earlyBirdSharePct: hyg?.early_bird_share_pct == null? null : Number(hyg.early_bird_share_pct),
+    targets: ratePlanTargets,
+  };
+  const ratePlanInsights = runRatePlanRules(ratePlanCtx);
+
+  const revenueInsights = [...parityInsights, ...ratePlanInsights, ...evaluateRevenueRules(revenueCtx)];
 
   const activeTargets = Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults';
   // Next 30 nights = tomorrow through 30 days out (excludes today so it's a clean 30-night window).
