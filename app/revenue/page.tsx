@@ -497,25 +497,37 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       </div>
 
       {/* PBS 2026-07-08: Scheduled reports + Send log moved to the BOTTOM of the
-          HoD landing so they don't push the daily brief below the fold. */}
+          HoD landing so they don't push the daily brief below the fold.
+          2026-07-09 pm: both wrapped in <details> so PBS can collapse them to a
+          single-line header when he wants more brief real estate. */}
       <div style={fullRow}>
-        <Container title="Scheduled reports"
-                   subtitle="Pick any report · pick a cadence · fires at 08:00 UTC · sort any column · Preview to open · check rows and dismiss to cancel"
-                   density="compact">
-          <ScheduledReportsTable
-            rows={scheduledRows}
-            propertyId={pid}
-            reportOptions={reportOptions}
-          />
-        </Container>
+        <details open style={{ border: '1px solid #E6DFCC', borderRadius: 4, background: '#FFFFFF' }}>
+          <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1B1B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1EBD9' }}>
+            <span>Scheduled reports <span style={{ fontSize: 11, color: '#5A5A5A', fontWeight: 500 }}>· {scheduledRows.length}</span></span>
+            <span style={{ fontSize: 11, color: '#5A5A5A', fontWeight: 500 }}>click to collapse</span>
+          </summary>
+          <div style={{ padding: 12 }}>
+            <div style={{ fontSize: 11, color: '#5A5A5A', marginBottom: 8 }}>
+              Pick any report · pick a cadence · fires at 08:00 UTC · sort any column · Preview to open · × to dismiss a single row · check rows for bulk delete
+            </div>
+            <ScheduledReportsTable rows={scheduledRows} propertyId={pid} reportOptions={reportOptions} />
+          </div>
+        </details>
       </div>
 
       <div style={fullRow}>
-        <Container title="Reports · send log"
-                   subtitle="Every report ever sent · sort any column · bulk-delete with checkboxes"
-                   density="compact">
-          <SendLogTable rows={sendLogRows} />
-        </Container>
+        <details open style={{ border: '1px solid #E6DFCC', borderRadius: 4, background: '#FFFFFF' }}>
+          <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1B1B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1EBD9' }}>
+            <span>Reports · send log <span style={{ fontSize: 11, color: '#5A5A5A', fontWeight: 500 }}>· {sendLogRows.length}</span></span>
+            <span style={{ fontSize: 11, color: '#5A5A5A', fontWeight: 500 }}>click to collapse</span>
+          </summary>
+          <div style={{ padding: 12 }}>
+            <div style={{ fontSize: 11, color: '#5A5A5A', marginBottom: 8 }}>
+              Every report ever sent · sort any column · bulk-delete with checkboxes
+            </div>
+            <SendLogTable rows={sendLogRows} />
+          </div>
+        </details>
       </div>
 
     </DashboardPage>
