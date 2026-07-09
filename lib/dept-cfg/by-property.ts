@@ -21,7 +21,10 @@ export const DONNA_PROPERTY_ID = 1000001;
 // Each entry maps a dept slug to the property-specific HoD AI agent that
 // chat should route to AND the display name that appears on the page.
 // `role` is the cap_prompts role slug (drives ownerRole override below).
-const DONNA_HOD: Record<DeptSlug, { name: string; emoji?: string; role: string }> = {
+// PBS 2026-07-09: DeptSlug now includes holding_* variants — Donna doesn't
+// have per-holding-dept HoDs (holding is cross-property by definition), so
+// this is a Partial. getDeptCfg passes through unchanged for any unmapped slug.
+const DONNA_HOD: Partial<Record<DeptSlug, { name: string; emoji?: string; role: string }>> = {
   revenue:    { name: 'Mira',    emoji: '📈', role: 'revenue_hod_donna'    },
   sales:      { name: 'Vela',    emoji: '📞', role: 'sales_hod_donna'      },
   marketing:  { name: 'Faro',    emoji: '✦',  role: 'marketing_hod_donna'  },
