@@ -206,13 +206,29 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
   const [inbox, setInbox] = useState<InboxSummary>(INBOX_EMPTY);
   // PBS 2026-07-09: signed-in email for the dropdown header.
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  // PBS 2026-07-09: gate admin-only dropdown items on holding_role IN (owner, admin).
+  // Read from the JWT payload the custom_access_token_hook stamps.
+  const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
-    _supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setUserEmail(data.user?.email ?? null);
-    });
+    (async () => {
+      const { data } = await _supabase.auth.getUser();
+      if (cancelled) return;
+      setUserEmail(data.user?.email ?? null);
+      const sess = await _supabase.auth.getSession();
+      const token = sess.data.session?.access_token;
+      if (!token) return;
+      try {
+        const parts = token.split('.');
+        const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const pad = b64.length % 4 === 0 ? b64 : b64 + '='.repeat(4 - (b64.length % 4));
+        const claims = JSON.parse(atob(pad));
+        const role = String(claims.holding_role ?? '');
+        if (!cancelled) setIsAdmin(role === 'owner' || role === 'admin');
+      } catch { /* keep default false */ }
+    })();
     return () => { cancelled = true; };
   }, []);
 
@@ -486,15 +502,22 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
                 <div style={S.emailSubline}>signed in</div>
               </div>
             )}
-            <a href="/cockpit/users"             onClick={() => setUserOpen(false)} style={S.link}>Account</a>
+            {/* PBS 2026-07-09: dropdown trimmed.
+                - Tasks moved to /holding sub-strip (belongs to holding scope).
+                - Front office removed (not needed at the top level).
+                - Email categories + Users & roles gated to isAdmin (holding_role owner/admin).
+                */}
+            <a href="/settings/users"            onClick={() => setUserOpen(false)} style={S.link}>Account</a>
             <a href="/account/password"          onClick={() => setUserOpen(false)} style={S.link}>Change password</a>
             <div style={S.menuDivider}>
               <div style={S.menuSection}>Tools</div>
-              <a href="/cockpit/tasks"             onClick={() => setUserOpen(false)} style={S.link}>Tasks</a>
-              <a href="/front-office/arrivals"     onClick={() => setUserOpen(false)} style={S.link}>Front office</a>
-              <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email categories</a>
-              <a href="/settings/users"            onClick={() => setUserOpen(false)} style={S.link}>Users &amp; roles</a>
               <a href="/messy-data"                onClick={() => setUserOpen(false)} style={S.link}>Messy data</a>
+              {isAdmin && (
+                <>
+                  <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email categories</a>
+                  <a href="/settings/users"            onClick={() => setUserOpen(false)} style={S.link}>Users &amp; roles</a>
+                </>
+              )}
             </div>
             <div style={S.langRow}>
               <button onClick={() => setLang('en')} title="English" style={langFlag(lang === 'en')}>🇬🇧</button>
