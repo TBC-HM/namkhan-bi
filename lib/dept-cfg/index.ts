@@ -1131,7 +1131,11 @@ const HOLDING_CEO_CFG: DeptCfg = {
   hodTagline: 'CEO / owner scope · cross-property command · portfolio + strategy + capital.',
   chatPlaceholder: 'e.g. how is the portfolio trending? what needs my approval this week?',
   storageKeyPrefix: 'hold-ceo',
-  subPages: [],
+  // PBS 2026-07-09 pm: Strategy moved out of holding top strip → surfaces here.
+  subPages: [
+    { label: 'HoD',      href: '/holding/ceo'      },
+    { label: 'Strategy', href: '/holding/strategy' },
+  ],
   quickChips: [],
   defaultAttn: [
     { id: 'ceo1', label: 'Approve Donna DCO 1/2025 settlement window (€150-200k target)', severity: 'high',   kind: 'leakage'     },
