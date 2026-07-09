@@ -52,7 +52,7 @@ export default function LoginPage() {
   async function forgot() {
     if (!email.trim() || busy) return;
     setBusy(true); setErr(''); setOk('');
-    const redirectTo = `${location.origin}/auth/callback?next=${encodeURIComponent('/account/password')}`;
+    const redirectTo = `${location.origin}/account/password`;
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
     setBusy(false);
     if (error) { setErr(error.message); return; }
