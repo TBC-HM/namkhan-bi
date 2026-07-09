@@ -55,16 +55,14 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/revenue/lighthouse',
       '/revenue/lighthouse/overview', '/revenue/lighthouse/rates',
       '/revenue/lighthouse/vs-yesterday', '/revenue/lighthouse/vs-3d', '/revenue/lighthouse/vs-7d',
-      // PBS 2026-07-09 pm: Strategy pulled out of holding top strip → surfaces here too.
-      '/holding/strategy',
     ],
-    // PBS 2026-07-09 pm: order = Comp Set · Comp Rates (was Lighthouse) · Parity · Leakage · Strategy.
+    // PBS 2026-07-09 pm (reverted): Strategy pulled BACK OUT of Market & Control.
+    // Belongs only under /holding/ceo subPages.
     tabs: [
       { label: 'Comp Set',   href: '/revenue/compset'              },
       { label: 'Comp Rates', href: '/revenue/lighthouse/overview'  },
       { label: 'Parity',     href: '/revenue/parity'               },
       { label: 'Leakage',    href: '/revenue/leakage'              },
-      { label: 'Strategy',   href: '/holding/strategy'             },
     ],
   },
 
