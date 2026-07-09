@@ -146,10 +146,13 @@ export async function POST(req: Request) {
 
     const sb = getSupabaseAdmin();
 
-    // 1. Save recipient profile if requested
+    // 1. Save as client (in holding.clients CRM) if requested.
+    // PBS 2026-07-09: was writing to holding.invoice_recipients (legacy). Now
+    // consolidates into the proper Clients CRM so the picker + Clients tab agree.
     let recipient_id: number | null = null;
     if (body.save_profile) {
-      const { data: rid } = await sb.rpc('fn_holding_recipient_upsert', {
+      const { data: rid } = await sb.rpc('fn_holding_client_upsert', {
+        p_id: null,
         p_name: body.recipient_name.trim(),
         p_email: body.recipient_email,
         p_address: body.recipient_address,
