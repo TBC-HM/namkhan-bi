@@ -103,8 +103,9 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       .gte('stay_month', ytdStart)
       .order('stay_month').then((r) => r.data ?? []),
     // PBS 2026-07-08: live rate matrix for today — (room-type × rate-plan) grid
+    // PBS 2026-07-09 pm: added last_booking + total_rn + total_room_revenue.
     supabase.from('v_rate_matrix_today')
-      .select('room_type_id, room_type_name, rate_id, rate_name, rate_type, rate, minimum_stay, available_rooms')
+      .select('room_type_id, room_type_name, rate_id, rate_name, rate_type, rate, minimum_stay, available_rooms, last_booking, total_rn, total_room_revenue')
       .eq('property_id', pid)
       .then((r) => (r.data ?? []) as RateMatrixRow[]),
   ]);
@@ -283,18 +284,6 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       subtitle={`Active catalogue · ${classifiedCount} rate plans · NRR / Flex / Promo / Package mix · YTD-${today.getUTCFullYear()}${mewsCashHidden ? ' · Cash collection: Mews sync pending' : ''}`}
       tabs={tabs}
     >
-      {/* PBS 2026-07-08: Live rate matrix — every rate plan × room type published for today.
-          Green highlight = overall cheapest cell. BAR / DIRECT / PROMO chip = rate_type.
-          Source: public.v_rate_matrix_today (rate_inventory joined to rate_plans + room_types). */}
-      <div style={{ gridColumn: '1 / -1', marginBottom: 12 }}>
-        <Container
-          title="Live rate matrix · today"
-          subtitle={`${rateMatrixRows.length} cells published for ${today.toISOString().slice(0, 10)} · sorted cheapest → dearest`}
-        >
-          <LiveRateMatrix rows={rateMatrixRows} currencySym={sym} />
-        </Container>
-      </div>
-
       {/* Section 1 — NRR cash-discipline strip */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: `repeat(${strip.length}, minmax(0, 1fr))`, gap: 8, marginBottom: 12 }}>
         {strip.map((t, i) => <KpiTile key={i} {...t} />)}
@@ -576,6 +565,19 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
               </table>
             </div>
           )}
+        </Container>
+      </div>
+
+      {/* PBS 2026-07-09 pm: Live rate matrix moved to BOTTOM so KPI tiles + trend charts stay on top.
+          Cells colourised per-column: dark green = cheapest in that room type, dark red = dearest.
+          Extra columns: last booking · total RN · total room revenue (lifetime, via v_rate_plan_perf join).
+          Source: public.v_rate_matrix_today. */}
+      <div style={{ gridColumn: '1 / -1', marginTop: 12 }}>
+        <Container
+          title="Live rate matrix · today"
+          subtitle={`${rateMatrixRows.length} cells published for ${today.toISOString().slice(0, 10)} · sorted cheapest → dearest · cell colour = position within room-type column`}
+        >
+          <LiveRateMatrix rows={rateMatrixRows} currencySym={sym} />
         </Container>
       </div>
     </DashboardPage>
