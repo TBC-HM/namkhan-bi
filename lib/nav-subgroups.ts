@@ -118,12 +118,15 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // PBS 2026-07-07 night: Overview lands on /marketing/library. Info sub-tab
   // removed; Library + Docs sit directly under Overview alongside Reports.
   // PBS 2026-07-09 pm: Gallery folded under Overview (was Content top-strip · same DB source as Library).
+  // PBS 2026-07-09 pm (later): Social restored — was hidden because the standalone
+  // /marketing/gallery subgroup below never triggered (Overview matched first).
   {
     parentHref: '/marketing/library',
-    members: ['/marketing/library', '/marketing/gallery', '/marketing/docs'],
+    members: ['/marketing/library', '/marketing/gallery', '/marketing/social', '/marketing/docs'],
     tabs: [
       { label: 'Library', href: '/marketing/library' },
       { label: 'Gallery', href: '/marketing/gallery' },
+      { label: 'Social',  href: '/marketing/social'  },
       { label: 'Docs',    href: '/marketing/docs'    },
       { label: 'Reports', href: '/h/260955/reports?dept=marketing' },
     ],
@@ -144,16 +147,8 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Compiler', href: '/marketing/compiler' },
     ],
   },
-  // PBS 2026-07-07 night: Content lands on /marketing/gallery (Media) directly,
-  // not the empty stub. Sub-strip shows Social (Media hidden by sibling filter).
-  {
-    parentHref: '/marketing/gallery',
-    members: ['/marketing/gallery', '/marketing/social'],
-    tabs: [
-      { label: 'Media',  href: '/marketing/gallery' },
-      { label: 'Social', href: '/marketing/social'  },
-    ],
-  },
+  // PBS 2026-07-09 pm: dead standalone gallery subgroup removed — never triggered
+  // because Overview above claims /marketing/gallery first. Social now lives in Overview.
   {
     parentHref: '/marketing/digital',
     members: ['/marketing/digital', '/marketing/web'],
