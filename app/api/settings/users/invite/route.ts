@@ -1,6 +1,8 @@
 // app/api/settings/users/invite/route.ts
-// PBS 2026-07-09 v2: use resetPasswordForEmail which ACTUALLY sends the email
-// via Supabase Auth. admin.generateLink only returns the URL — no email fired.
+// PBS 2026-07-09 v3: send invite/reset via Supabase Auth (fires email when
+// SMTP is configured) AND return admin.generateLink action_link as the
+// SMTP-independent fallback the UI can copy/paste when Supabase Auth email
+// delivery isn't set up yet.
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -37,28 +39,50 @@ export async function POST(req: Request) {
     const email = String(body.email ?? '').trim().toLowerCase();
     if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 });
     const origin = new URL(req.url).origin;
+    const redirectTo = `${origin}/account/password`;
 
-    // Try inviteUserByEmail first (works for never-signed-in users, sends invite email).
     const admin = getSupabaseAdmin();
-    const { error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${origin}/account/password`,
-    });
-    if (!invErr) return NextResponse.json({ ok: true, mode: 'invite_sent' });
 
-    // If user already exists, fall back to resetPasswordForEmail via anon client.
-    if (!/already|registered/i.test(invErr.message)) {
+    let mode: 'invite_sent' | 'reset_sent' | 'error' = 'error';
+    let emailFired = false;
+
+    // Try inviteUserByEmail first (new users → create + fire invite email).
+    const { error: invErr } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
+    if (!invErr) {
+      mode = 'invite_sent';
+      emailFired = true;
+    } else if (/already|registered/i.test(invErr.message)) {
+      // Existing user → resetPasswordForEmail fires the reset mail.
+      const anon = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { cookies: { getAll: () => [], setAll: () => {} } },
+      );
+      const { error: rErr } = await anon.auth.resetPasswordForEmail(email, { redirectTo });
+      if (rErr) return NextResponse.json({ error: `reset failed: ${rErr.message}` }, { status: 500 });
+      mode = 'reset_sent';
+      emailFired = true;
+    } else {
       return NextResponse.json({ error: invErr.message }, { status: 500 });
     }
-    const anon = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => [], setAll: () => {} } },
-    );
-    const { error: rErr } = await anon.auth.resetPasswordForEmail(email, {
-      redirectTo: `${origin}/account/password`,
+
+    // SMTP-independent fallback link — always returns a URL, even when SMTP is broken.
+    let actionLink: string | null = null;
+    try {
+      const { data: link } = await admin.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: { redirectTo },
+      });
+      actionLink = link?.properties?.action_link ?? null;
+    } catch { actionLink = null; }
+
+    return NextResponse.json({
+      ok: true,
+      mode,
+      email_fired: emailFired,
+      action_link: actionLink,
     });
-    if (rErr) return NextResponse.json({ error: `reset failed: ${rErr.message}` }, { status: 500 });
-    return NextResponse.json({ ok: true, mode: 'reset_sent' });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
