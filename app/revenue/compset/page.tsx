@@ -8,7 +8,7 @@ import {
   DashboardPage, Container, KpiTile, Chart,
   type ChartSeries, type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
-import CompsetPropertyDrawer from '@/app/_components/registry/CompsetPropertyDrawer';
+// PBS 2026-07-09 pm: drawer removed — property name links straight to /revenue/compset/[comp_id] full landing.
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
@@ -292,7 +292,7 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
 
       {/* Full-width properties table */}
       <div style={{ gridColumn: '1 / -1' }}>
-      <Container title={`Properties · ${props.length}`} subtitle="ranked by latest rate · click a property to open the drawer">
+      <Container title={`Properties · ${props.length}`} subtitle="ranked by latest rate · click a property to open its full profile page">
         {props.length === 0 ? (
           <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No competitors registered</div>
         ) : (
@@ -313,12 +313,10 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
                 {props.map((p) => (
                   <tr key={p.comp_id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
                     <td style={ctdLabelStyle}>
-                      {/* PBS 2026-07-09 pm: name goes to deep-landing; drawer still opens via the info arrow */}
+                      {/* PBS 2026-07-09 pm: drawer killed — property name always → deep landing */}
                       <TenantLink href={`/revenue/compset/${encodeURIComponent(p.comp_id)}`} style={cSourceLinkStyle}>
                         {p.property_name}{p.is_self ? ' ⭐' : ''}
                       </TenantLink>
-                      {' '}
-                      <TenantLink href={`?comp=${encodeURIComponent(p.comp_id)}`} style={{ fontSize: 11, color: '#5A5A5A', textDecoration: 'none', marginLeft: 6 }} title="Quick drawer">↩</TenantLink>
                     </td>
                     <td style={ctdLabelStyle}>{p.star_rating ? '★'.repeat(p.star_rating) : '—'}</td>
                     <td style={ctdNumStyle}>{p.latest_usd != null ? fmtUSD(p.latest_usd) : '—'}</td>
@@ -353,8 +351,7 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
             empty={{ title: 'No rate-plan landscape data' }} />
         </Container>
       </div>
-      {/* PBS #193: drawer mount — opens on ?comp=<comp_id> */}
-      <CompsetPropertyDrawer rows={props as unknown as Array<Record<string, unknown>> as unknown as never} />
+      {/* PBS 2026-07-09 pm: drawer removed — deep landing at /revenue/compset/[comp_id] replaces it */}
     </DashboardPage>
   );
 }
