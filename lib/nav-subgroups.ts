@@ -57,11 +57,12 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       // PBS 2026-07-09 pm: Strategy pulled out of holding top strip → surfaces here too.
       '/holding/strategy',
     ],
+    // PBS 2026-07-09 pm: order = Comp Set · Comp Rates (was Lighthouse) · Parity · Leakage · Strategy.
     tabs: [
       { label: 'Comp Set',   href: '/revenue/compset'              },
-      { label: 'Leakage',    href: '/revenue/leakage'              },
+      { label: 'Comp Rates', href: '/revenue/lighthouse/overview'  },
       { label: 'Parity',     href: '/revenue/parity'               },
-      { label: 'Lighthouse', href: '/revenue/lighthouse/overview'  },
+      { label: 'Leakage',    href: '/revenue/leakage'              },
       { label: 'Strategy',   href: '/holding/strategy'             },
     ],
   },
