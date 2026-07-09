@@ -6,12 +6,16 @@
 // nav-subgroups.ts based on pathname) + Container body explaining the
 // wiring-pending state and pointing at the Namkhan reference.
 //
-// Structure not data — HodLanding-parity layout without importing Namkhan
-// rule engines / property-hardcoded views. When Donna-scoped data lands,
-// each subpage can graduate from this stub to a real implementation.
+// PBS 2026-07-09: pass DEPT_CFG.<slug>.subPages as `tabs` so the main
+// dept strip stays visible when the operator clicks INTO a child page
+// (was disappearing on /h/1000001/marketing/campaigns etc — no tabs prop
+// meant DashboardPage skipped rendering the TabStrip).
 
 import { redirect } from 'next/navigation';
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
+import { DEPT_CFG } from '@/lib/dept-cfg';
+import type { DeptSlug } from '@/lib/dept-cfg/types';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 
 interface Props {
@@ -22,15 +26,38 @@ interface Props {
   hint?: string;         // optional 1-liner about what will land here
 }
 
+// Derive DEPT_CFG slug from the Namkhan reference path. Falls back to null
+// if the first segment doesn't map to a known slug — in that case we render
+// without a tab strip rather than crash.
+function slugFromNamkhanPath(p: string): DeptSlug | null {
+  const first = p.split('/').filter(Boolean)[0] ?? '';
+  return (first in DEPT_CFG) ? (first as DeptSlug) : null;
+}
+
 export default function DeptSubpageStub({
   propertyId, deptLabel, routeLabel, namkhanPath, hint,
 }: Props) {
   if (propertyId === NAMKHAN_PROPERTY_ID) redirect(namkhanPath);
 
+  const slug = slugFromNamkhanPath(namkhanPath);
+  const cfg = slug ? DEPT_CFG[slug] : null;
+  const subPages = cfg ? rewriteSubPagesForProperty(cfg.subPages ?? [], propertyId) : [];
+
+  // PBS 2026-07-09: mark the current page's tab active so the underline
+  // shows PBS which surface he's on. Compare on the tenant-prefixed href.
+  const currentHref = `/h/${propertyId}${namkhanPath}`;
+  const tabs: DashboardTab[] = subPages.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href === currentHref,
+  }));
+
   return (
     <DashboardPage
       title={`${deptLabel} · ${routeLabel}`}
       subtitle={`Donna · property_id=${propertyId} · per-Donna wiring pending`}
+      tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <Container
