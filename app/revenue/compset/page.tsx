@@ -278,33 +278,18 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
         }}>↗ Legacy archive</a>
       }
     >
-      {/* PBS #193: KPI groupings as flat strips (no Container chrome), matching the channels v3 pattern. */}
+      {/* PBS 2026-07-09 pm: single consolidated headline strip — rates + realized + signals */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Compset headline · latest observed rates · last 30 days</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {headlineTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
+          Compset headline · rates · yesterday's realized · signals
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+          {[...headlineTiles, ...contextTiles, ...signalTiles].map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
       </div>
 
-      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Performance context · yesterday's realized</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {contextTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </div>
-
-      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Compset signals · spread · cadence · freshness</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {signalTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </div>
-
-      <Container title="Daily rate trend · top 6" subtitle="self + 5 nearest competitors · v_compset_competitor_rate_matrix">
-        <Chart variant="line" data={trendData} xKey="stay_date" series={trendSeries} height={260}
-          empty={{ title: 'No rate observations', hint: 'compset has not been shopped yet' }} />
-      </Container>
-
+      {/* Full-width properties table */}
+      <div style={{ gridColumn: '1 / -1' }}>
       <Container title={`Properties · ${props.length}`} subtitle="ranked by latest rate · click a property to open the drawer">
         {props.length === 0 ? (
           <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No competitors registered</div>
@@ -344,15 +329,25 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
         )}
       </Container>
 
-      <Container title="Promo behaviour" subtitle="discount cadence · v_compset_promo_tiles">
-        <Chart variant="table" data={promoRows} xKey="property" series={promoCols}
-          empty={{ title: 'No promo data' }} />
-      </Container>
+      </div>
 
-      <Container title="Rate-plan landscape" subtitle="who offers what · v_compset_rate_plan_landscape">
-        <Chart variant="table" data={planRows} xKey="plan" series={planCols}
-          empty={{ title: 'No rate-plan landscape data' }} />
-      </Container>
+      {/* 3 containers in one row · PBS 2026-07-09 pm */}
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+        <Container title="Daily rate trend · top 6" subtitle="self + 5 nearest competitors">
+          <Chart variant="line" data={trendData} xKey="stay_date" series={trendSeries} height={240}
+            empty={{ title: 'No rate observations', hint: 'compset has not been shopped yet' }} />
+        </Container>
+
+        <Container title="Promo behaviour" subtitle="discount cadence">
+          <Chart variant="table" data={promoRows} xKey="property" series={promoCols}
+            empty={{ title: 'No promo data' }} />
+        </Container>
+
+        <Container title="Rate-plan landscape" subtitle="who offers what">
+          <Chart variant="table" data={planRows} xKey="plan" series={planCols}
+            empty={{ title: 'No rate-plan landscape data' }} />
+        </Container>
+      </div>
       {/* PBS #193: drawer mount — opens on ?comp=<comp_id> */}
       <CompsetPropertyDrawer rows={props as unknown as Array<Record<string, unknown>> as unknown as never} />
     </DashboardPage>
