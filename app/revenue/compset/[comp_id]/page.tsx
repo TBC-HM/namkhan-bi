@@ -69,18 +69,61 @@ export default async function CompetitorLandingPage({ params }: Props) {
   const { comp_id } = await params;
   const sb = getSupabaseAdmin();
 
-  const [deepRes, summaryRes] = await Promise.all([
+  const [deepRes, summaryRes, rateMatrixRes, promoRes, plansRes, reviewsRes] = await Promise.all([
     sb.from('v_competitor_property_deep').select('*').eq('comp_id', comp_id).maybeSingle(),
-    sb.from('v_compset_property_summary').select('set_name, latest_usd, avg_30d_usd, pct_vs_median, last_shop_human').eq('comp_id', comp_id).maybeSingle(),
+    sb.from('v_compset_property_summary').select('set_name, latest_usd, avg_30d_usd, pct_vs_median, last_shop_human, property_name').eq('comp_id', comp_id).maybeSingle(),
+    // PBS 2026-07-09 pm: Rate positioning history (shop_date × stay_date grid for this comp)
+    sb.from('v_compset_competitor_rate_matrix').select('shop_date, stay_date, channel, rate_usd, is_available').eq('comp_id', comp_id).order('shop_date', { ascending: true }).order('stay_date', { ascending: true }).limit(500),
+    // Promo behavior stats
+    sb.from('v_compset_promo_behavior_signals').select('days_with_data, days_with_promo, promo_frequency_pct, avg_discount_pct, max_discount_seen, pattern_label').eq('comp_id', comp_id).maybeSingle(),
+    // Rate plans landscape for this comp
+    sb.from('v_compset_rate_plans_latest').select('channel, stay_date, taxonomy_code, refundability, meal_plan, raw_label, discount_pct, strikethrough_rate_usd, rate_usd').eq('comp_id', comp_id).order('stay_date', { ascending: true }).limit(200),
+    // Reviews history
+    sb.from('competitor_reviews').select('channel, review_score, review_count, shop_date').eq('comp_id', comp_id).order('shop_date', { ascending: false }).limit(20),
   ]);
 
   const deep = (deepRes.data ?? null) as DeepRow | null;
-  const summary = (summaryRes.data ?? null) as SummaryRow | null;
+  const summary = (summaryRes.data ?? null) as (SummaryRow & { property_name: string | null }) | null;
 
   if (!deep && !summary) notFound();
 
-  // Fetch property_name from base table if only summary present
-  const propertyName = deep?.property_name ?? (await sb.from('v_compset_property_summary').select('property_name').eq('comp_id', comp_id).maybeSingle()).data?.property_name ?? 'Unknown';
+  const propertyName = deep?.property_name ?? summary?.property_name ?? 'Unknown';
+
+  // PBS 2026-07-09 pm: shape rate history — latest shop_date only, one point per stay_date per channel
+  type RateRow = { shop_date: string; stay_date: string; channel: string | null; rate_usd: number | string | null; is_available: boolean | null };
+  const rateHistory = (rateMatrixRes.data ?? []) as RateRow[];
+  const latestShop = rateHistory.reduce<string | null>((acc, r) => (!acc || r.shop_date > acc) ? r.shop_date : acc, null);
+  const latestRates = rateHistory
+    .filter((r) => r.shop_date === latestShop && r.rate_usd != null)
+    .sort((a, b) => (a.stay_date > b.stay_date ? 1 : -1));
+
+  // Promo behavior single row
+  type PromoBeh = { days_with_data: number | null; days_with_promo: number | null; promo_frequency_pct: number | string | null; avg_discount_pct: number | string | null; max_discount_seen: number | string | null; pattern_label: string | null };
+  const promo = (promoRes.data ?? null) as PromoBeh | null;
+
+  // Rate plans grouped by taxonomy_code
+  type PlanRow = { channel: string | null; stay_date: string; taxonomy_code: string | null; refundability: string | null; meal_plan: string | null; raw_label: string | null; discount_pct: number | string | null; rate_usd: number | string | null };
+  const plans = (plansRes.data ?? []) as PlanRow[];
+  const planMix = new Map<string, { count: number; avgDisc: number; sample: string }>();
+  for (const p of plans) {
+    const k = p.taxonomy_code ?? 'unknown';
+    const prev = planMix.get(k) ?? { count: 0, avgDisc: 0, sample: p.raw_label ?? '' };
+    const disc = p.discount_pct != null ? Number(p.discount_pct) : 0;
+    planMix.set(k, { count: prev.count + 1, avgDisc: prev.avgDisc + disc, sample: prev.sample || (p.raw_label ?? '') });
+  }
+  const planMixRows = Array.from(planMix.entries()).map(([k, v]) => ({
+    taxonomy: k, count: v.count, avgDisc: v.count > 0 ? v.avgDisc / v.count : 0, sample: v.sample,
+  })).sort((a, b) => b.count - a.count);
+
+  // Reviews history — pick latest per channel
+  type ReviewRow = { channel: string | null; review_score: number | string | null; review_count: number | null; shop_date: string };
+  const reviews = (reviewsRes.data ?? []) as ReviewRow[];
+  const latestReviewByChannel = new Map<string, ReviewRow>();
+  for (const r of reviews) {
+    const ch = r.channel ?? '';
+    const prev = latestReviewByChannel.get(ch);
+    if (!prev || r.shop_date > prev.shop_date) latestReviewByChannel.set(ch, r);
+  }
 
   const scrapeStale = !deep?.last_scraped_at
     || (Date.now() - new Date(deep.last_scraped_at).getTime()) / 86400_000 > 60;
@@ -153,6 +196,110 @@ export default async function CompetitorLandingPage({ params }: Props) {
             </div>
           </Container>
         </div>
+
+        {/* PBS 2026-07-09 pm: sales/rev-mgmt sections */}
+
+        {/* Rate positioning · latest shop, per stay_date */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Container title="Rate positioning · next 90 days" subtitle={latestShop ? `snapshot ${latestShop}` : 'no rate history yet'}>
+            {latestRates.length === 0 ? (
+              <div style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic', fontSize: 12 }}>No rate history in v_compset_competitor_rate_matrix.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead style={{ background: '#FAFAF7' }}>
+                    <tr>
+                      <th style={cth}>Stay date</th>
+                      <th style={cth}>Channel</th>
+                      <th style={{ ...cth, textAlign: 'right' }}>Rate</th>
+                      <th style={{ ...cth, textAlign: 'center' }}>Available</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {latestRates.slice(0, 60).map((r, i) => (
+                      <tr key={i} style={{ borderTop: '1px solid #F1EBD9' }}>
+                        <td style={ctd}>{r.stay_date}</td>
+                        <td style={ctd}>{r.channel ?? '—'}</td>
+                        <td style={{ ...ctd, textAlign: 'right' }}>{r.rate_usd != null ? `$${Math.round(Number(r.rate_usd))}` : '—'}</td>
+                        <td style={{ ...ctd, textAlign: 'center' }}>{r.is_available ? '✓' : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {latestRates.length > 60 && (
+                  <div style={{ padding: 8, fontSize: 11, color: '#5A5A5A', textAlign: 'center' }}>
+                    showing 60 of {latestRates.length} · full history in v_compset_competitor_rate_matrix
+                  </div>
+                )}
+              </div>
+            )}
+          </Container>
+        </div>
+
+        {/* Promo behavior */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Container title="Promo cadence · discipline vs discounting"
+            subtitle={promo?.pattern_label ?? 'pattern classification from v_compset_promo_behavior_signals'}>
+            {promo ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+                <SignalCell label="Promo frequency" value={promo.promo_frequency_pct != null ? `${Math.round(Number(promo.promo_frequency_pct) * 100) / 100}%` : '—'} />
+                <SignalCell label="Avg discount"    value={promo.avg_discount_pct != null ? `${Math.round(Number(promo.avg_discount_pct))}%` : '—'} />
+                <SignalCell label="Max discount"    value={promo.max_discount_seen != null ? `${Math.round(Number(promo.max_discount_seen))}%` : '—'} />
+                <SignalCell label="Days promoted"   value={promo.days_with_data && promo.days_with_data > 0 ? `${promo.days_with_promo ?? 0}/${promo.days_with_data}` : '—'} />
+              </div>
+            ) : (
+              <div style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic', fontSize: 12 }}>No promo behavior data.</div>
+            )}
+          </Container>
+        </div>
+
+        {/* Rate plan mix */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Container title={`Rate plan mix · ${plans.length} recent observations`}
+            subtitle="taxonomies offered · from v_compset_rate_plans_latest">
+            {planMixRows.length === 0 ? (
+              <div style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic', fontSize: 12 }}>No rate plan data for this comp.</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead style={{ background: '#FAFAF7' }}>
+                  <tr>
+                    <th style={cth}>Taxonomy</th>
+                    <th style={{ ...cth, textAlign: 'right' }}>Observations</th>
+                    <th style={{ ...cth, textAlign: 'right' }}>Avg discount</th>
+                    <th style={cth}>Sample label</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {planMixRows.map((r, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid #F1EBD9' }}>
+                      <td style={{ ...ctd, fontWeight: 600 }}>{r.taxonomy}</td>
+                      <td style={{ ...ctd, textAlign: 'right' }}>{r.count}</td>
+                      <td style={{ ...ctd, textAlign: 'right' }}>{r.avgDisc > 0 ? `${r.avgDisc.toFixed(1)}%` : '—'}</td>
+                      <td style={ctd}>{r.sample || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Container>
+        </div>
+
+        {/* Reviews by channel */}
+        {latestReviewByChannel.size > 0 && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Container title="Reviews · latest per channel" subtitle="from competitor_reviews snapshots">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                {Array.from(latestReviewByChannel.entries()).map(([ch, r]) => (
+                  <div key={ch} style={{ padding: 10, border: '1px solid #E6DFCC', borderRadius: 4 }}>
+                    <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A' }}>{ch || 'unknown'}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#1B1B1B' }}>{r.review_score != null ? Number(r.review_score).toFixed(1) : '—'}</div>
+                    <div style={{ fontSize: 11, color: '#5A5A5A' }}>{r.review_count != null ? `${r.review_count} reviews` : 'no count'} · {r.shop_date}</div>
+                  </div>
+                ))}
+              </div>
+            </Container>
+          </div>
+        )}
 
         {/* Rooms table */}
         <div style={{ gridColumn: '1 / -1' }}>
