@@ -1173,10 +1173,12 @@ const HOLDING_FINANCE_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. generate an invoice for X for Y amount.',
   storageKeyPrefix: 'hold-finance',
   // PBS 2026-07-08: Invoices + editable Template sub-tabs.
+  // PBS 2026-07-09: + Clients (simple CRM).
   subPages: [
     { label: 'HoD',      href: '/holding/finance'                  },
     { label: 'Invoices', href: '/holding/finance/invoices'          },
     { label: 'Template', href: '/holding/finance/invoices/template' },
+    { label: 'Clients',  href: '/holding/finance/clients'           },
   ],
   quickChips: [],
   defaultAttn: [],
