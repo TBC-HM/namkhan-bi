@@ -1,9 +1,9 @@
 // app/api/settings/users/invite/route.ts
-// Sends a password-reset link to the user. First-time users click → land on
-// /account/password → set their password → done.
+// PBS 2026-07-09 v2: use resetPasswordForEmail which ACTUALLY sends the email
+// via Supabase Auth. admin.generateLink only returns the URL — no email fired.
 import { NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { createServerClient } from '@supabase/ssr';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +23,9 @@ async function requireAdmin(req: Request): Promise<{ ok: true } | { ok: false; r
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return { ok: false, res: NextResponse.json({ error: 'auth required' }, { status: 401 }) };
   const admin = getSupabaseAdmin();
-  const { data } = await admin.from('v_holding_users_flat').select('status').eq('auth_user_id', user.id).maybeSingle();
-  if (!data || data.status !== 'active') return { ok: false, res: NextResponse.json({ error: 'holding admin required' }, { status: 403 }) };
+  const { data } = await admin.from('v_holding_users_flat').select('role, status').eq('auth_user_id', user.id).maybeSingle();
+  if (!data || data.status !== 'active' || !['owner', 'admin'].includes(data.role))
+    return { ok: false, res: NextResponse.json({ error: 'holding admin required' }, { status: 403 }) };
   return { ok: true };
 }
 
@@ -35,15 +36,29 @@ export async function POST(req: Request) {
     const body = await req.json();
     const email = String(body.email ?? '').trim().toLowerCase();
     if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 });
-    const admin = getSupabaseAdmin();
     const origin = new URL(req.url).origin;
-    const { error } = await admin.auth.admin.generateLink({
-      type: 'recovery',
-      email,
-      options: { redirectTo: `${origin}/auth/callback?next=/account/password` },
+
+    // Try inviteUserByEmail first (works for never-signed-in users, sends invite email).
+    const admin = getSupabaseAdmin();
+    const { error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${origin}/auth/callback?next=/account/password`,
     });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true });
+    if (!invErr) return NextResponse.json({ ok: true, mode: 'invite_sent' });
+
+    // If user already exists, fall back to resetPasswordForEmail via anon client.
+    if (!/already|registered/i.test(invErr.message)) {
+      return NextResponse.json({ error: invErr.message }, { status: 500 });
+    }
+    const anon = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => [], setAll: () => {} } },
+    );
+    const { error: rErr } = await anon.auth.resetPasswordForEmail(email, {
+      redirectTo: `${origin}/auth/callback?next=/account/password`,
+    });
+    if (rErr) return NextResponse.json({ error: `reset failed: ${rErr.message}` }, { status: 500 });
+    return NextResponse.json({ ok: true, mode: 'reset_sent' });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
