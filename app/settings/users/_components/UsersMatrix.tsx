@@ -1,12 +1,11 @@
 // app/settings/users/_components/UsersMatrix.tsx
-// PBS 2026-07-09 v2: Name column + Holding split into Holding (member) + Admin (owner).
-// The Send invitation button on each row triggers a password-reset email
-// (resetPasswordForEmail — that actually sends via Supabase Auth email delivery,
-// unlike admin.generateLink which only returns the link).
+// PBS 2026-07-09 v3: per-row Invite button now surfaces action_link fallback via
+// InviteResultCard so PBS is never blocked by unconfigured Supabase SMTP.
 'use client';
 
 import { useState, useTransition, type CSSProperties } from 'react';
 import EditUserModal from './EditUserModal';
+import InviteResultCard from './InviteResultCard';
 
 const NAMKHAN_PID = 260955;
 const DONNA_PID   = 1000001;
@@ -17,7 +16,7 @@ export interface UserRow {
   full_name: string | null;
   last_sign_in_at: string | null;
   created_at: string;
-  holding_role: string | null;   // owner | admin | member | viewer | service | null
+  holding_role: string | null;
   property_grants: Array<{ property_id: number; role: string; status: string }>;
 }
 
@@ -26,6 +25,7 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState<UserRow | null>(null);
+  const [inviteResult, setInviteResult] = useState<{ email: string; action_link: string | null; email_fired: boolean } | null>(null);
 
   const hasProp = (u: UserRow, pid: number) => u.property_grants.some((g) => g.property_id === pid && g.status === 'active');
   const isHoldingMember = (u: UserRow) => u.holding_role !== null && ['member','viewer','admin','owner'].includes(u.holding_role);
@@ -64,27 +64,28 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
   }
 
   function onHoldingCheck(user: UserRow, on: boolean) {
-    // Ticking "Holding" adds member (or preserves admin if already admin).
-    // Un-ticking removes ALL holding access.
     if (on) return toggleHoldingRole(user, isAdmin(user) ? 'admin' : 'member');
     return toggleHoldingRole(user, null);
   }
   function onAdminCheck(user: UserRow, on: boolean) {
-    // Ticking "Admin" upgrades to admin (also implies holding).
-    // Un-ticking downgrades to plain member (keeps holding access).
     return toggleHoldingRole(user, on ? 'admin' : 'member');
   }
 
   async function sendInvite(user: UserRow) {
     startTransition(async () => {
       setMsg(null);
+      setInviteResult(null);
       const r = await fetch('/api/settings/users/invite', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: user.email }),
       });
-      if (!r.ok) { setMsg(`✗ ${(await r.json().catch(() => ({}))).error ?? 'invite failed'}`); return; }
-      setMsg(`✓ invitation sent to ${user.email}`);
-      setTimeout(() => setMsg(null), 3000);
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { setMsg(`✗ ${body.error ?? 'invite failed'}`); return; }
+      setInviteResult({
+        email: user.email,
+        action_link: body.action_link ?? null,
+        email_fired: !!body.email_fired,
+      });
     });
   }
 
@@ -154,6 +155,14 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
         </tbody>
       </table>
       {msg && <div style={{ fontSize: 11, color: msg.startsWith('✓') ? '#0B5B3A' : '#B04A2F', marginTop: 8 }}>{msg}</div>}
+      {inviteResult && (
+        <InviteResultCard
+          email={inviteResult.email}
+          actionLink={inviteResult.action_link}
+          emailFired={inviteResult.email_fired}
+          onDismiss={() => setInviteResult(null)}
+        />
+      )}
       <div style={{ fontSize: 10, color: '#5A5A5A', marginTop: 8 }}>
         <strong>Holding</strong> = cross-property access · view + create invoices, contracts, memos. <strong>Admin</strong> = holding + manage users on this page. Ticking Admin requires Holding first.
       </div>
