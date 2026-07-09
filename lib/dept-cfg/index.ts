@@ -1027,7 +1027,14 @@ const HOLDING_IT_CFG: DeptCfg = {
   hodTagline: 'Holding IT lead. Owns infrastructure, agent fleet, deploys, integrations.',
   chatPlaceholder: 'e.g. why did the last deploy fail? what does the cron schedule look like?',
   storageKeyPrefix: 'hold-it',
-  subPages: [],
+  // PBS 2026-07-09 pm: IT gets a proper sub-strip — Tasks + Cockpit + Agent Fleet + Docs.
+  subPages: [
+    { label: 'HoD',         href: '/holding/it'               },
+    { label: 'Tasks',       href: '/cockpit/tasks'            },
+    { label: 'Cockpit',     href: '/cockpit-v2'               },
+    { label: 'Agent Fleet', href: '/cockpit-v2?tab=team'      },
+    { label: 'Documentation', href: '/cockpit-v2?tab=docs'    },
+  ],
   quickChips: [],
   defaultAttn: [
     { id: 'i1', label: 'Mews tokens dead in prod AND demo — blocked on reissue', severity: 'high',   kind: 'leakage'     },
