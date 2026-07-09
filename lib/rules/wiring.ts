@@ -45,6 +45,11 @@ export const WIRING: Record<string, Record<string, RuleWiring>> = {
     integrity_max_spread_pct:   { status: 'live', consumedBy: 'ruleIntegrityMaxSpread@parity.ts',   requiresData: ['v_rate_integrity_matrix'] },
     integrity_soldout_days_max: { status: 'live', consumedBy: 'ruleIntegritySoldOutDays@parity.ts', requiresData: ['v_rate_integrity_matrix'] },
     lighthouse_stale_days:      { status: 'live', consumedBy: 'ruleLighthouseStale@parity.ts',     requiresData: ['v_lighthouse_rateshop'] },
+    // PBS 2026-07-09 pm: compset conclusions.
+    compset_undercut_days_pct:      { status: 'live', consumedBy: 'ruleCompsetUndercutDays@parity.ts', requiresData: ['v_parity_matrix_pb'] },
+    compset_avg_delta_pct:          { status: 'live', consumedBy: 'ruleCompsetAvgDelta@parity.ts',    requiresData: ['v_parity_matrix_pb'] },
+    compset_rate_change_3d_max_pct: { status: 'live', consumedBy: 'ruleCompsetRateChange3d@parity.ts', requiresData: ['v_lighthouse_rateshop'] },
+    compset_rate_change_7d_max_pct: { status: 'live', consumedBy: 'ruleCompsetRateChange7d@parity.ts', requiresData: ['v_lighthouse_rateshop'] },
   },
 
   retention: {
