@@ -15,7 +15,7 @@ import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
-import StaffTabStrip from './StaffTabStrip';
+// PBS 2026-07-09 pm: StaffTabStrip removed — nav-subgroups.ts renders the HR strip at DashboardPage level now.
 
 // =============================================================================
 // Types
@@ -353,7 +353,7 @@ export default async function ScheduleTabContent({
       tabs={(subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)).map(s => ({ key: s.href, label: s.label, href: s.href, active: s.label === 'HR' || s.href.endsWith('/finance/hr') || s.href.endsWith('/operations/staff') }))}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <StaffTabStrip propertyId={propertyId} />
+      {/* PBS 2026-07-09 pm: StaffTabStrip removed — top nav-subgroup strip already renders these tabs. */}
 
       <KpiStrip items={[
         { label: 'Today',         value: kpi?.today ?? 0,                 kind: 'count', tone: (kpi?.today ?? 0) > 0 ? 'pos' : 'neutral', hint: `${tz}` },
