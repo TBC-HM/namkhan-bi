@@ -34,10 +34,12 @@ export default async function HoldingInvoiceTemplatePage() {
   const row = data as TemplateRow | null;
 
   const cfg = DEPT_CFG.holding_finance;
-  const tabs: DashboardTab[] = [
-    ...cfg.subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: false })),
-    { key: '/holding/finance/invoices/template', label: 'Template', href: '/holding/finance/invoices/template', active: true },
-  ];
+  // PBS 2026-07-09: subPages already includes Template — just mark it active. Was
+  // appending a manual "Template" entry which created a duplicate tab.
+  const tabs: DashboardTab[] = cfg.subPages.map((s) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/holding/finance/invoices/template',
+  }));
 
   return (
     <DashboardPage
