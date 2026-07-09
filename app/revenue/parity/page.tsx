@@ -219,8 +219,8 @@ export default async function ParityPage({ propertyId }: Props) {
   ];
 
   const integritySubtitle = integrityShopDate && integrityFirstStay && integrityLastStay
-    ? `scrape ${fmtIsoDate(integrityShopDate)} · data covers ${fmtIsoDate(integrityFirstStay)} → ${fmtIsoDate(integrityLastStay)} (${integrity.length} stay-dates)`
-    : 'own rate observed across each OTA · spread flags parity leaks';
+    ? `scrape ${fmtIsoDate(integrityShopDate)} · data covers ${fmtIsoDate(integrityFirstStay)} → ${fmtIsoDate(integrityLastStay)} (${integrity.length} stay-dates) · lowest available rate without fees & VAT · net · 15% added later`
+    : 'own rate observed across each OTA · spread flags parity leaks · lowest available rate without fees & VAT · net · 15% added later';
 
   // ── Existing compset KPIs & tables (unchanged) ─────────────────────────
   const matrixWithPct  = matrix.filter((r) => r.pct_vs_cheapest_comp != null);
