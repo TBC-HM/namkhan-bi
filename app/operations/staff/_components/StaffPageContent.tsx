@@ -16,7 +16,7 @@ import StaffMiniCharts, { type StaffTrendPoint } from './StaffMiniCharts';
 import MonthPicker from './MonthPicker';
 import DeptPicker from './DeptPicker';
 import { fmtPeriodLabel } from './period-utils';
-import StaffTabStrip from './StaffTabStrip';
+// PBS 2026-07-10: StaffTabStrip removed — nav-subgroups.ts renders the HR strip at DashboardPage level now.
 import UploadPayslipsButton from './UploadPayslipsButton';
 // PBS 2026-06-08 #133: legacy KpiStrip swapped for canonical KpiTile grid (B&W primitives)
 import { DashboardPage, Container, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -453,7 +453,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
       action={<UploadPayslipsButton />}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <StaffTabStrip propertyId={propertyId} />
+      {/* PBS 2026-07-10: StaffTabStrip removed — was rendering a duplicate HR sub-strip below the nav-subgroup strip. */}
       {/* PBS #133: KPI strip → B&W KpiTile grid in a Container */}
       <Container title="Workforce headline" subtitle={`${fmtPeriodLabel(selectedMonth)} · live from public.v_staff_register_extended`} density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
