@@ -241,14 +241,19 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     { label: 'OTB ADR (fwd)', value: total.otb > 0 ? Math.round(total.rev / total.otb) : 0, currency: moneyCurrency, size: 'sm',
       footnote: 'forward avg rate on the books',
       status: 'grey' },
+    // PBS 2026-07-10: 'Months on books' footnote no longer duplicates the Signals
+    // block (which has explicit 'Months ahead' + 'Months behind' tiles just below).
     { label: 'Months on books', value: rows.length, size: 'sm',
-      footnote: `forward · ${monthsAhead} ahead · ${monthsBehind} behind STLY`,
+      footnote: `forward window · ${period.label}`,
       status: monthsAhead >= monthsBehind ? 'green' : 'amber' },
-    { label: 'Cancelled (YTD)', value: fmtInt(cxlYtd), size: 'sm',
-      delta: cxlYoyPct != null ? { value: cxlYoyPct, period: 'vs LY same window',
+    // PBS 2026-07-10: period had 'vs LY...' which the KpiTile primitive prepends
+    // 'vs' to → 'vs vs LY same window'. Drop the leading 'vs' so it reads clean.
+    // Also: RN is the big number (impact metric), bookings + revenue live in footnote.
+    { label: 'Cancelled (YTD)', value: fmtInt(lostRnYtd), size: 'sm',
+      delta: cxlYoyPct != null ? { value: cxlYoyPct, period: 'LY same window',
         direction: cxlYtd < cxlLy ? 'down' : cxlYtd > cxlLy ? 'up' : 'flat',
         isGoodWhenUp: false } : undefined,
-      footnote: `${fmtInt(lostRnYtd)} lost RN · ${sym}${fmtInt(lostRevYtd)} lost rev · YTD ${nowYr}`,
+      footnote: `${fmtInt(cxlYtd)} bookings · ${sym}${fmtInt(lostRevYtd)} lost rev · YTD ${nowYr}`,
       status: cxlYoyPct == null ? 'grey' : cxlYoyPct <= 0 ? 'green' : 'amber' },
   ];
   // PBS 2026-06-08 #132: Strongest/Softest are meaningful only when there are
