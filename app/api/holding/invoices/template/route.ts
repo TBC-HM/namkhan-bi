@@ -21,6 +21,8 @@ export async function POST(req: Request) {
     const body = await req.json() as {
       brand_name: string; brand_color: string; header_line: string; footer_line: string;
       default_notes: string; default_currency: string; default_tax_pct: number;
+      sender_name?: string; sender_address?: string; sender_email?: string;
+      sender_phone?: string; sender_tax_id?: string; sender_iban?: string;
     };
     if (!body.brand_name?.trim()) return NextResponse.json({ error: 'brand_name required' }, { status: 400 });
 
@@ -33,6 +35,12 @@ export async function POST(req: Request) {
       p_default_notes: body.default_notes || null,
       p_default_currency: body.default_currency || 'EUR',
       p_default_tax_pct: Number(body.default_tax_pct) || 0,
+      p_sender_name:    body.sender_name    ?? null,
+      p_sender_address: body.sender_address ?? null,
+      p_sender_email:   body.sender_email   ?? null,
+      p_sender_phone:   body.sender_phone   ?? null,
+      p_sender_tax_id:  body.sender_tax_id  ?? null,
+      p_sender_iban:    body.sender_iban    ?? null,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ id: Number(data) });
