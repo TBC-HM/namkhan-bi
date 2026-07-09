@@ -92,11 +92,23 @@ export default async function PickupPage({ propertyId }: Props = {}) {
   const pickup7dRooms  = (pickup30d as Rows).reduce((s, r) => s + (Number(r.otb_rooms ?? 0) - Number(r.otb_rooms_7d_ago ?? 0)), 0);
   const pickup30dRooms = (pickup30d as Rows).reduce((s, r) => s + (Number(r.otb_rooms ?? 0) - Number(r.otb_rooms_30d_ago ?? 0)), 0);
 
-  // YoY rooms % — average for next 60 days from the pace_comparison view
-  const next60Days     = (paceComparison as Rows).slice(0, 60);
-  const yoyRoomsPct    = next60Days.length > 0
-    ? next60Days.reduce((s, r) => s + (Number.isFinite(Number(r.yoy_rooms_pct)) ? Number(r.yoy_rooms_pct) : 0), 0) / next60Days.length
-    : 0;
+  // YoY rooms % — for stays over the next 60 days.
+  // PBS 2026-07-10 fix: paceComparison is MONTH-level, but the previous code did
+  // .slice(0, 60) treating rows as days AND averaged yoy_rooms_pct unweighted →
+  // noisy low-volume months blew up the average (was showing 90%+ vs true 36%).
+  // Correct calc: sum rooms across all months intersecting today→today+60d, then ratio.
+  const in60Iso = new Date(Date.now() + 60 * 86400_000).toISOString().slice(0, 10);
+  const in60YearMonth = in60Iso.slice(0, 7); // 'YYYY-MM'
+  const nowYearMonth  = todayIso.slice(0, 7);
+  const next60Rows = (paceComparison as Rows).filter((r) => {
+    const ym = String(r.stay_year_month);
+    return ym >= nowYearMonth && ym <= in60YearMonth;
+  });
+  const sumTodayRooms = next60Rows.reduce((s, r) => s + Number(r.otb_today_rooms ?? 0), 0);
+  const sumStlyRooms  = next60Rows.reduce((s, r) => s + Number(r.otb_stly_rooms ?? 0), 0);
+  const yoyRoomsPct = sumStlyRooms > 0
+    ? ((sumTodayRooms - sumStlyRooms) / sumStlyRooms) * 100
+    : (sumTodayRooms > 0 ? 100 : 0);
 
   // Velocity — today's row (day_pos = 0) for the 7d MA tile
   const todayVel       = (velocity28d as Rows).find((r) => Number(r.day_pos) === 0);
@@ -109,14 +121,37 @@ export default async function PickupPage({ propertyId }: Props = {}) {
   const curMonthRow = (pickupMonthly as Rows).find((r) => Number(r.year) === curY && Number(r.month) === curM);
   const curMonthRev = Number(curMonthRow?.rev ?? 0);
 
+  // PBS 2026-07-10: KPI footnotes now explicitly state the time frame each number covers.
+  // Format: <window> · <extra context>. Booking window = when the reservation was made.
+  //         Stay window = when the guest arrives / stays.
+  const monthLabelShort = today.toLocaleString('en-US', { month: 'short' });
   const strip: KpiTileProps[] = [
-    { label: 'Rooms OTB · forward',  value: intFmt(otbRoomsFwd),   size: 'sm', footnote: `${otbPace.length} nights on the books` },
-    { label: 'Revenue OTB · forward', value: moneyFmt(otbRevenueFwd), size: 'sm', footnote: `${sym} all confirmed future stays` },
-    { label: 'Pickup · last 7d',     value: intFmt(pickup7dRooms),  size: 'sm', footnote: 'new rooms booked across future stays · last 7 days', status: pickup7dRooms > 0 ? 'green' : 'grey' },
-    { label: 'Pickup · last 30d',    value: intFmt(pickup30dRooms), size: 'sm', footnote: 'new rooms booked across future stays · last 30 days', status: pickup30dRooms > 0 ? 'green' : 'grey' },
-    { label: 'YoY rooms (next 60d)', value: `${yoyRoomsPct.toFixed(1)}%`, size: 'sm', footnote: 'OTB today vs STLY · weighted by stay date', status: yoyRoomsPct >= 0 ? 'green' : 'amber' },
-    { label: 'Velocity · 7d MA',     value: intFmt(velMA7d),         size: 'sm', footnote: `bookings/day · ${velBucket || '—'}` },
-    { label: `${today.toLocaleString('en-US', { month: 'short' })} ${curY} · OTB`, value: moneyFmt(curMonthRev), size: 'sm', footnote: `${curMonthRow ? `${Number(curMonthRow.rn ?? 0)} RN · ${Number(curMonthRow.reservations ?? 0)} bk` : 'no rows yet'}` },
+    { label: 'Rooms OTB · forward',
+      value: intFmt(otbRoomsFwd),   size: 'sm',
+      footnote: `stays today → ${otbPace.length}d out · confirmed on the books` },
+    { label: 'Revenue OTB · forward',
+      value: moneyFmt(otbRevenueFwd), size: 'sm',
+      footnote: `stays today → ${otbPace.length}d out · all confirmed future revenue` },
+    { label: 'Pickup · last 7d',
+      value: intFmt(pickup7dRooms),  size: 'sm',
+      footnote: 'booked in the last 7 days · for any future stay',
+      status: pickup7dRooms > 0 ? 'green' : 'grey' },
+    { label: 'Pickup · last 30d',
+      value: intFmt(pickup30dRooms), size: 'sm',
+      footnote: 'booked in the last 30 days · for any future stay',
+      status: pickup30dRooms > 0 ? 'green' : 'grey' },
+    { label: 'YoY rooms (next 60d)',
+      value: `${yoyRoomsPct.toFixed(1)}%`, size: 'sm',
+      footnote: `stays next 60 days · OTB today ${intFmt(sumTodayRooms)} vs STLY ${intFmt(sumStlyRooms)}`,
+      status: yoyRoomsPct >= 0 ? 'green' : 'amber' },
+    { label: 'Velocity · 7d MA',
+      value: intFmt(velMA7d), size: 'sm',
+      footnote: `booked in the last 7 days · bookings/day (${velBucket || '—'})` },
+    { label: `${monthLabelShort} ${curY} · OTB`,
+      value: moneyFmt(curMonthRev), size: 'sm',
+      footnote: curMonthRow
+        ? `stays in ${monthLabelShort} ${curY} · ${Number(curMonthRow.rn ?? 0)} RN · ${Number(curMonthRow.reservations ?? 0)} bk`
+        : `stays in ${monthLabelShort} ${curY} · no rows yet` },
   ];
 
   // ---- Chart data prep ----
