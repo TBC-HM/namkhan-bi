@@ -46,7 +46,20 @@ function addToDate(iso: string, cadence: 'monthly' | 'quarterly' | 'yearly'): st
   return d.toISOString().slice(0, 10);
 }
 
-function renderInvoiceHtml(b: Body, invoiceNumber: string, subtotal: number, taxAmount: number, total: number): string {
+interface Template {
+  brand_name: string;
+  brand_color: string;
+  header_line: string | null;
+  footer_line: string;
+  sender_name: string | null;
+  sender_address: string | null;
+  sender_email: string | null;
+  sender_phone: string | null;
+  sender_tax_id: string | null;
+  sender_iban: string | null;
+}
+
+function renderInvoiceHtml(b: Body, invoiceNumber: string, subtotal: number, taxAmount: number, total: number, t: Template): string {
   const rows = b.line_items.map((l) => `
     <tr>
       <td style="padding:8px 10px;border-bottom:1px solid ${HAIRLINE};font-size:12px;color:${INK}">${escapeHtml(l.description)}</td>
@@ -54,13 +67,31 @@ function renderInvoiceHtml(b: Body, invoiceNumber: string, subtotal: number, tax
       <td style="padding:8px 10px;border-bottom:1px solid ${HAIRLINE};font-size:12px;text-align:right;font-variant-numeric:tabular-nums">${money(Number(l.unit_price), b.currency)}</td>
       <td style="padding:8px 10px;border-bottom:1px solid ${HAIRLINE};font-size:12px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">${money(Number(l.qty) * Number(l.unit_price), b.currency)}</td>
     </tr>`).join('');
-  const rec = b.recurring_cadence ? ` · <strong style="color:${PRIMARY}">Recurring: ${b.recurring_cadence}</strong>` : '';
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:720px;margin:0 auto;background:${PAPER}">
+  const rec = b.recurring_cadence ? ` · <strong style="color:${t.brand_color}">Recurring: ${b.recurring_cadence}</strong>` : '';
+  const brandColor = t.brand_color || PRIMARY;
+  const brandName  = t.brand_name  || 'The Beyond Circle';
+  const eyebrow    = t.header_line || 'Invoice';
+
+  // Sender block (right-aligned in header)
+  const senderHtml = (t.sender_name || t.sender_address) ? `
+    ${t.sender_name    ? `<div style="font-weight:700;color:${INK};font-size:12px">${escapeHtml(t.sender_name)}</div>` : ''}
+    ${t.sender_address ? `<div style="white-space:pre-wrap">${escapeHtml(t.sender_address)}</div>` : ''}
+    ${t.sender_email   ? `<div>${escapeHtml(t.sender_email)}</div>` : ''}
+    ${t.sender_phone   ? `<div>${escapeHtml(t.sender_phone)}</div>` : ''}
+    ${t.sender_tax_id  ? `<div>Tax ID: ${escapeHtml(t.sender_tax_id)}</div>` : ''}` : '';
+
+  // A4: max-width 210mm; @page rule for print/PDF.
+  return `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4;margin:15mm;}body{background:#f4f4ee}</style></head><body style="margin:0;padding:0;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:210mm;margin:12px auto;background:${PAPER};box-shadow:0 2px 8px rgba(0,0,0,0.06)">
       <tr><td style="padding:28px 32px 14px 32px;border-bottom:1px solid ${HAIRLINE}">
-        <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">Invoice</div>
-        <div style="font-size:22px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em">The Beyond Circle</div>
-        <div style="font-size:12px;color:${INK_SOFT};margin-top:2px">Invoice no.: <strong style="color:${INK}">${invoiceNumber}</strong> · Issued: <strong style="color:${INK}">${new Date().toISOString().slice(0,10)}</strong>${b.due_at ? ` · Due: <strong style="color:${INK}">${b.due_at}</strong>` : ''}${rec}</div>
+        <table role="presentation" width="100%"><tr>
+          <td style="vertical-align:top">
+            <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">${escapeHtml(eyebrow)}</div>
+            <div style="font-size:22px;font-weight:700;color:${brandColor};letter-spacing:-0.01em">${escapeHtml(brandName)}</div>
+            <div style="font-size:12px;color:${INK_SOFT};margin-top:2px">Invoice no.: <strong style="color:${INK}">${invoiceNumber}</strong> · Issued: <strong style="color:${INK}">${new Date().toISOString().slice(0,10)}</strong>${b.due_at ? ` · Due: <strong style="color:${INK}">${b.due_at}</strong>` : ''}${rec}</div>
+          </td>
+          <td style="vertical-align:top;text-align:right;font-size:11px;color:${INK_SOFT};line-height:1.55;min-width:200px">${senderHtml}</td>
+        </tr></table>
       </td></tr>
       <tr><td style="padding:22px 32px 6px 32px">
         <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:6px">Billed to</div>
@@ -81,13 +112,30 @@ function renderInvoiceHtml(b: Body, invoiceNumber: string, subtotal: number, tax
           <table role="presentation" width="100%">
             <tr><td style="padding:4px 10px;font-size:12px;color:${INK_SOFT}">Subtotal</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-variant-numeric:tabular-nums">${money(subtotal, b.currency)}</td></tr>
             ${b.tax_pct > 0 ? `<tr><td style="padding:4px 10px;font-size:12px;color:${INK_SOFT}">Tax (${b.tax_pct}%)</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-variant-numeric:tabular-nums">${money(taxAmount, b.currency)}</td></tr>` : ''}
-            <tr><td style="padding:8px 10px;font-size:14px;font-weight:700;color:${INK};border-top:1px solid ${HAIRLINE}">Total</td><td style="padding:8px 10px;font-size:14px;text-align:right;font-weight:700;color:${PRIMARY};border-top:1px solid ${HAIRLINE};font-variant-numeric:tabular-nums">${money(total, b.currency)}</td></tr>
+            <tr><td style="padding:8px 10px;font-size:14px;font-weight:700;color:${INK};border-top:1px solid ${HAIRLINE}">Total</td><td style="padding:8px 10px;font-size:14px;text-align:right;font-weight:700;color:${brandColor};border-top:1px solid ${HAIRLINE};font-variant-numeric:tabular-nums">${money(total, b.currency)}</td></tr>
           </table>
         </td></tr></table>
       </td></tr>
-      ${b.notes ? `<tr><td style="padding:14px 32px;font-size:11px;color:${INK_SOFT};white-space:pre-wrap;border-top:1px solid ${HAIRLINE}"><strong style="color:${INK}">Notes:</strong> ${escapeHtml(b.notes)}</td></tr>` : ''}
-      <tr><td style="padding:20px 32px 24px 32px;border-top:1px solid ${HAIRLINE};font-size:11px;color:${INK_SOFT}">The Beyond Circle · Holding · issued via Namkhan BI cockpit.</td></tr>
+      ${(b.notes || t.sender_iban) ? `<tr><td style="padding:14px 32px;font-size:11px;color:${INK_SOFT};white-space:pre-wrap;border-top:1px solid ${HAIRLINE}">${b.notes ? `<div><strong style="color:${INK}">Notes:</strong> ${escapeHtml(b.notes)}</div>` : ''}${t.sender_iban ? `<div style="margin-top:6px"><strong style="color:${INK}">IBAN:</strong> ${escapeHtml(t.sender_iban)}</div>` : ''}</td></tr>` : ''}
+      <tr><td style="padding:20px 32px 24px 32px;border-top:1px solid ${HAIRLINE};font-size:11px;color:${INK_SOFT}">${escapeHtml(t.footer_line || 'The Beyond Circle · Holding · issued via Namkhan BI cockpit.')}</td></tr>
     </table></body></html>`;
+}
+
+async function loadTemplate(sb: ReturnType<typeof getSupabaseAdmin>): Promise<Template> {
+  const { data } = await sb.from('v_holding_invoice_template').select('*').maybeSingle();
+  const row = data as Partial<Template> | null;
+  return {
+    brand_name:     row?.brand_name     ?? 'The Beyond Circle',
+    brand_color:    row?.brand_color    ?? '#084838',
+    header_line:    row?.header_line    ?? 'Invoice',
+    footer_line:    row?.footer_line    ?? 'The Beyond Circle · Holding · issued via Namkhan BI cockpit.',
+    sender_name:    row?.sender_name    ?? null,
+    sender_address: row?.sender_address ?? null,
+    sender_email:   row?.sender_email   ?? null,
+    sender_phone:   row?.sender_phone   ?? null,
+    sender_tax_id:  row?.sender_tax_id  ?? null,
+    sender_iban:    row?.sender_iban    ?? null,
+  };
 }
 
 export async function POST(req: Request) {
@@ -139,7 +187,10 @@ export async function POST(req: Request) {
       });
     }
 
-    const html = renderInvoiceHtml(body, r.invoice_number, Number(r.subtotal), Number(r.tax_amount), Number(r.total));
+    // PBS 2026-07-09: fetch the active template so the invoice picks up brand +
+    // sender identity (Beyond Circle Dubai) + IBAN. Falls back to defaults if row missing.
+    const template = await loadTemplate(sb);
+    const html = renderInvoiceHtml(body, r.invoice_number, Number(r.subtotal), Number(r.tax_amount), Number(r.total), template);
 
     // 4. Send email (if requested + email present)
     if (body.send && body.recipient_email) {
