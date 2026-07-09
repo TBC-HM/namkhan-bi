@@ -1,98 +1,100 @@
 // app/login/page.tsx
-// Magic-link login page. Email input → POST /api/auth/login → neutral toast.
-"use client";
+// ADR-112 · Supabase Auth email/password login.
+// PBS 2026-07-09: replaces the legacy workspace_session magic-link login.
+// Google SSO wiring is deferred until the OAuth client is configured — for
+// now email/password is the only path in.
+'use client';
 
-import { useState } from "react";
+import { useState, type CSSProperties } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [errorParam, setErrorParam] = useState<string | null>(null);
+  const router = useRouter();
+  const params = useSearchParams();
+  const next = params.get('next') || '/';
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  if (typeof window !== "undefined" && errorParam === null) {
-    const e = new URLSearchParams(window.location.search).get("error");
-    if (e) setErrorParam(e);
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || sending) return;
-    setSending(true);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-      const json = await res.json();
-      setMessage(json.message ?? "If this email is allowed, a sign-in link has been sent.");
-    } catch {
-      setMessage("Sign-in temporarily unavailable. Try again in a minute.");
-    } finally {
-      setSending(false);
-    }
+  async function signIn() {
+    if (!email.trim() || !pw || busy) return;
+    setBusy(true); setErr('');
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    // Middleware re-checks claims on the next request; refresh to make sure
+    // server components see the fresh cookie.
+    router.push(next);
+    router.refresh();
   }
 
   return (
-    <div style={{
-      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "var(--bg-0, #0d0d0d)", color: "var(--text-0, #f0f0f0)",
-      fontFamily: "system-ui, sans-serif",
-    }}>
-      <form onSubmit={submit} style={{
-        background: "var(--bg-1, #1a1a1a)", padding: "32px 36px", borderRadius: 12,
-        width: "100%", maxWidth: 400, border: "1px solid var(--border, #2a2a2a)",
-      }}>
-        <div style={{
-          fontSize: 11, letterSpacing: "0.15em", color: "var(--brass, #c4a36a)",
-          textTransform: "uppercase", marginBottom: 6,
-        }}>The Namkhan · Workspace</div>
-        <h1 style={{ fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic", margin: "0 0 24px", fontSize: 28 }}>
-          Sign in
-        </h1>
-        <p style={{ color: "var(--text-2, #aaa)", fontSize: 13, marginBottom: 16 }}>
-          Enter your email. If your address is allowed, we&apos;ll send you a magic-link.
-        </p>
+    <div style={pageStyle}>
+      <div style={cardStyle}>
+        <div style={eyebrowStyle}>The Beyond Circle · Workspace</div>
+        <h1 style={titleStyle}>Sign in</h1>
+        <p style={hintStyle}>Enter your email and password.</p>
+
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@thenamkhan.com"
-          autoFocus
-          required
-          style={{
-            width: "100%", padding: "10px 12px", borderRadius: 6,
-            background: "var(--bg-2, #222)", color: "var(--text-0, #f0f0f0)",
-            border: "1px solid var(--border-2, #333)", fontSize: 14,
-            boxSizing: "border-box",
-          }}
+          placeholder="email"
+          autoComplete="email"
+          style={inputStyle}
+          onKeyDown={(e) => { if (e.key === 'Enter') signIn(); }}
         />
-        <button
-          type="submit"
-          disabled={sending || !email.trim()}
-          style={{
-            width: "100%", marginTop: 12, padding: "10px 12px",
-            background: "var(--brass, #c4a36a)", color: "#000", fontWeight: 600,
-            border: "none", borderRadius: 6, cursor: sending ? "wait" : "pointer",
-            opacity: sending || !email.trim() ? 0.5 : 1, fontSize: 13,
-          }}
-        >{sending ? "Sending..." : "Send sign-in link"}</button>
-        {message && (
-          <div style={{ marginTop: 16, padding: 10, background: "var(--bg-2, #222)", borderRadius: 6, fontSize: 12 }}>
-            {message}
-          </div>
-        )}
-        {errorParam && (
-          <div style={{ marginTop: 16, padding: 10, background: "rgba(179,38,30,0.15)", borderRadius: 6, fontSize: 12, color: "#ff8c84" }}>
-            {errorParam === "access_revoked" && "Access revoked. Contact the workspace owner."}
-            {errorParam === "invalid_token" && "Sign-in link expired or invalid. Request a new one."}
-            {errorParam === "missing_token" && "Sign-in link is missing the verification token."}
-            {!["access_revoked", "invalid_token", "missing_token"].includes(errorParam) && `Error: ${errorParam}`}
-          </div>
-        )}
-      </form>
+        <input
+          type="password"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          placeholder="password"
+          autoComplete="current-password"
+          style={{ ...inputStyle, marginTop: 8 }}
+          onKeyDown={(e) => { if (e.key === 'Enter') signIn(); }}
+        />
+
+        {err && <div style={errStyle}>{err}</div>}
+
+        <button type="button" onClick={signIn} disabled={busy} style={btnStyle}>
+          {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+      </div>
     </div>
   );
 }
+
+const pageStyle: CSSProperties = {
+  minHeight: '100vh', display: 'grid', placeItems: 'center',
+  background: '#F4EFE2', color: '#1B1B1B',
+  fontFamily: 'system-ui, sans-serif',
+};
+const cardStyle: CSSProperties = {
+  width: 360, padding: 32, borderRadius: 12,
+  background: '#FFFFFF', border: '1px solid #E6DFCC',
+  boxShadow: '0 8px 30px rgba(0,0,0,.05)',
+};
+const eyebrowStyle: CSSProperties = {
+  fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase',
+  color: '#5A5A5A', marginBottom: 8, fontWeight: 600,
+};
+const titleStyle: CSSProperties = { margin: '0 0 6px', fontSize: 22, color: '#084838', fontWeight: 700 };
+const hintStyle: CSSProperties = { color: '#5A5A5A', fontSize: 12, marginBottom: 18 };
+const inputStyle: CSSProperties = {
+  width: '100%', padding: '10px 12px', fontSize: 13,
+  border: '1px solid #E6DFCC', borderRadius: 6, background: '#FFFFFF',
+  boxSizing: 'border-box',
+};
+const errStyle: CSSProperties = { color: '#B04A2F', fontSize: 12, marginTop: 8 };
+const btnStyle: CSSProperties = {
+  width: '100%', marginTop: 14, padding: '10px', borderRadius: 6, border: 'none',
+  background: '#084838', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer',
+  fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase',
+};
