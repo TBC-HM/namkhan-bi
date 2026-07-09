@@ -46,21 +46,43 @@ const TEMPLATES = [
   '4 day retreat life — 6 pax — lux',
 ];
 
+interface TemplateRow {
+  id: string;
+  template_name: string;
+  slug: string;
+  theme: string;
+  tier: string;
+  duration_nights: number;
+  season: string[] | null;
+  lunar_required: boolean;
+}
+
 async function loadAll() {
   const admin = getSupabaseAdmin();
-  const [recent, pricelist, retreats] = await Promise.all([
+  const [recent, pricelist, retreats, templates] = await Promise.all([
     admin.from('v_compiler_runs')
       .select('id, prompt, status, cost_eur, created_at')
       .order('created_at', { ascending: false })
       .limit(20),
     admin.schema('pricing').from('pricelist').select('*', { head: true, count: 'exact' }).eq('is_active', true),
     admin.from('v_retreats').select('*', { head: true, count: 'exact' }).eq('status', 'published'),
+    // PBS 2026-07-09 pm: seed templates now populated (5 rows) — surface as one-click starters.
+    admin.schema('compiler').from('itinerary_templates')
+      .select('id, template_name, slug, theme, tier, duration_nights, season, lunar_required')
+      .eq('is_active', true).order('duration_nights'),
   ]);
   return {
     recent: (recent.data ?? []) as RunRow[],
     pricelistCount: pricelist.count ?? 0,
     retreatsCount: retreats.count ?? 0,
+    templates: (templates.data ?? []) as TemplateRow[],
   };
+}
+
+function templateToPrompt(t: TemplateRow): string {
+  const seasonStr = (t.season && t.season.length > 0) ? ` — ${t.season.join('/')} season` : '';
+  const lunar = t.lunar_required ? ' — full moon' : '';
+  return `${t.duration_nights} day ${t.theme.replace('-',' ')} retreat — ${t.tier} tier${seasonStr}${lunar} — 4 pax`;
 }
 
 interface Props { searchParams?: { view?: string; offer?: string } }
@@ -86,12 +108,16 @@ export default async function CompilerHomePage({ searchParams }: Props) {
     active: s.href === '/marketing/compiler',
   }));
 
+  const templates = data?.templates ?? [];
+  const templatePrompts = templates.map(templateToPrompt);
+
   const tiles: KpiTileProps[] = [
     { label: 'Recent runs',     value: recent.length,         size: 'sm', footnote: 'last 20 shown' },
     { label: 'Deployed',        value: okRuns,                size: 'sm', footnote: 'ready / deployed' },
     { label: 'In progress',     value: inProgress,            size: 'sm', footnote: 'draft / compiling' },
     { label: 'Halted',          value: failRuns,              size: 'sm', footnote: 'error / halted' },
     { label: 'Cost · recent',   value: `€${totalCost.toFixed(2)}`, size: 'sm', footnote: 'sum · last 20' },
+    { label: 'Templates',       value: templates.length,      size: 'sm', footnote: 'seed itineraries' },
     { label: 'Pricelist SKUs',  value: data?.pricelistCount ?? 0, size: 'sm', footnote: 'active' },
     { label: 'Live retreats',   value: data?.retreatsCount ?? 0,  size: 'sm', footnote: 'published' },
   ];
@@ -113,10 +139,36 @@ export default async function CompilerHomePage({ searchParams }: Props) {
           <CompilerCockpit view={view} selectedOfferId={selectedOfferId} />
         </div>
 
-        {/* Prompt bar */}
+        {/* Prompt bar — presets now come from compiler.itinerary_templates + hardcoded fallbacks */}
         <div style={fullRow}>
-          <InlinePromptBar presets={TEMPLATES} />
+          <InlinePromptBar presets={templatePrompts.length > 0 ? templatePrompts : TEMPLATES} />
         </div>
+
+        {/* PBS 2026-07-09 pm: Seed templates surface — one-click starters */}
+        {templates.length > 0 && (
+          <div style={fullRow}>
+            <div style={{ padding: 14, background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4 }}>
+              <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: INK_M, marginBottom: 8 }}>
+                Seed templates · click one to prefill the prompt
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+                {templates.map((t) => (
+                  <div key={t.id} style={{ padding: 12, border: '1px solid ' + HAIR, borderRadius: 4, background: CREAM }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginBottom: 4 }}>{t.template_name}</div>
+                    <div style={{ fontSize: 11, color: INK_M, marginBottom: 8 }}>
+                      {t.duration_nights} nights · {t.theme.replace('-', ' ')} · {t.tier} tier
+                      {t.lunar_required ? ' · lunar' : ''}
+                      {t.season && t.season.length > 0 ? ' · ' + t.season.join('/') : ''}
+                    </div>
+                    <div style={{ fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: INK_M, background: WHITE, padding: 8, borderRadius: 3, border: '1px solid ' + HAIR }}>
+                      {templateToPrompt(t)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {dbErr && (
           <div style={{ ...fullRow, ...errBox }}>
