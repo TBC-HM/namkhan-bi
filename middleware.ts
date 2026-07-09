@@ -8,7 +8,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // Signed public links + auth entry points stay open.
 // /api/cron uses CRON_SECRET header; /api/cockpit/webhooks uses per-vendor signature.
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/p/']
+// PBS 2026-07-09: /account/password is public so first-time invitees can
+// reach the activation page with their token before they have a session cookie.
+// The page itself validates the token and refuses if it's missing/expired.
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/account/password', '/p/']
 
 // base64url → JSON. Edge-safe (no Buffer / no Node crypto).
 function decodeJwtPayload(token: string): Record<string, unknown> {
