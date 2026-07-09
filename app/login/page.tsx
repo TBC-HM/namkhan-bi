@@ -1,32 +1,43 @@
 // app/login/page.tsx
 // ADR-112 · Supabase Auth email/password login.
-// PBS 2026-07-09: replaces the legacy workspace_session magic-link login.
-// PBS 2026-07-09 (v2): "Forgot password?" flow. Toggle switches the form to
-// email-only; on submit we call supabase.auth.resetPasswordForEmail() which
-// mails a link that lands the user at /auth/callback?next=/account/password.
+// PBS 2026-07-09: Sign in · Forgot password · Request access.
+// v3: swapped useSearchParams (which requires a Suspense boundary and was
+// leaking Next.js's "404: This page could not be found" fallback into the SSR
+// output) for a client-only window.location.search read in useEffect.
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
-type Mode = 'signin' | 'forgot';
+type Mode = 'signin' | 'forgot' | 'request';
 
 export default function LoginPage() {
   const router = useRouter();
-  const params = useSearchParams();
-  const next = params.get('next') || '/';
+  const [next, setNext] = useState('/');
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  const [name, setName] = useState('');
+  const [reason, setReason] = useState('');
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // Client-only: read ?next=… without pulling in useSearchParams (which
+    // requires a Suspense boundary and would otherwise leak the 404 fallback).
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const n = p.get('next');
+      if (n && n.startsWith('/')) setNext(n);
+    } catch { /* ignore */ }
+  }, []);
 
   async function signIn() {
     if (!email.trim() || !pw || busy) return;
@@ -48,19 +59,54 @@ export default function LoginPage() {
     setOk(`Reset link sent to ${email.trim()}. Check your inbox.`);
   }
 
-  const submit = mode === 'signin' ? signIn : forgot;
+  async function requestAccess() {
+    if (!email.trim() || !name.trim() || busy) return;
+    setBusy(true); setErr(''); setOk('');
+    try {
+      const r = await fetch('/api/auth/request-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), name: name.trim(), reason: reason.trim() }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error ?? `request failed (${r.status})`);
+      setOk(`Request sent. PBS will review and email you when it's approved.`);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const submit = mode === 'signin' ? signIn : mode === 'forgot' ? forgot : requestAccess;
+  const titleText = mode === 'signin' ? 'Sign in' : mode === 'forgot' ? 'Reset password' : 'Request access';
+  const hintText = mode === 'signin'
+    ? 'Enter your email and password.'
+    : mode === 'forgot'
+    ? 'Enter your email — we\'ll send you a reset link.'
+    : 'Not on the platform yet? Ask PBS for access.';
+  const primaryLabel = busy
+    ? (mode === 'signin' ? 'Signing in…' : mode === 'forgot' ? 'Sending…' : 'Requesting…')
+    : (mode === 'signin' ? 'Sign in' : mode === 'forgot' ? 'Send reset link' : 'Send request');
 
   return (
     <div style={pageStyle}>
       <div style={cardStyle}>
         <div style={eyebrowStyle}>The Beyond Circle · Workspace</div>
-        <h1 style={titleStyle}>{mode === 'signin' ? 'Sign in' : 'Reset password'}</h1>
-        <p style={hintStyle}>
-          {mode === 'signin'
-            ? 'Enter your email and password.'
-            : 'Enter your email — we\'ll send you a reset link.'}
-        </p>
+        <h1 style={titleStyle}>{titleText}</h1>
+        <p style={hintStyle}>{hintText}</p>
 
+        {mode === 'request' && (
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="your name"
+            autoComplete="name"
+            style={{ ...inputStyle, marginBottom: 8 }}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          />
+        )}
         <input
           type="email"
           value={email}
@@ -81,23 +127,40 @@ export default function LoginPage() {
             onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
           />
         )}
+        {mode === 'request' && (
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="why you need access (optional)"
+            rows={3}
+            style={{ ...inputStyle, marginTop: 8, resize: 'vertical', fontFamily: 'inherit' }}
+          />
+        )}
 
         {err && <div style={errStyle}>{err}</div>}
         {ok && <div style={okStyle}>{ok}</div>}
 
         <button type="button" onClick={submit} disabled={busy} style={btnStyle}>
-          {busy
-            ? (mode === 'signin' ? 'Signing in…' : 'Sending…')
-            : (mode === 'signin' ? 'Sign in' : 'Send reset link')}
+          {primaryLabel}
         </button>
 
-        <button
-          type="button"
-          onClick={() => { setMode(mode === 'signin' ? 'forgot' : 'signin'); setErr(''); setOk(''); }}
-          style={linkBtnStyle}
-        >
-          {mode === 'signin' ? 'Forgot password?' : '← Back to sign in'}
-        </button>
+        {/* Secondary navigation between the 3 modes. */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+          {mode === 'signin' ? (
+            <>
+              <button type="button" onClick={() => { setMode('forgot'); setErr(''); setOk(''); }} style={linkBtnStyle}>
+                Forgot password?
+              </button>
+              <button type="button" onClick={() => { setMode('request'); setErr(''); setOk(''); }} style={linkBtnStyle}>
+                Request access
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={() => { setMode('signin'); setErr(''); setOk(''); }} style={{ ...linkBtnStyle, width: '100%', textAlign: 'center' }}>
+              ← Back to sign in
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -132,7 +195,6 @@ const btnStyle: CSSProperties = {
   fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase',
 };
 const linkBtnStyle: CSSProperties = {
-  display: 'block', width: '100%', marginTop: 8, padding: '6px',
   background: 'transparent', border: 'none', color: '#5A5A5A',
-  fontSize: 11, letterSpacing: '0.04em', cursor: 'pointer', textAlign: 'center',
+  fontSize: 11, letterSpacing: '0.04em', cursor: 'pointer', padding: '6px 4px',
 };
