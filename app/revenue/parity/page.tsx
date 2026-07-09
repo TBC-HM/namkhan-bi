@@ -11,6 +11,7 @@
 //   revenue.lighthouse_rateshop WHERE feed_source='integrity').
 //   xlsx-fed daily: Brand.com / Booking.com / Expedia / Agoda / Tiket
 //   LOS 1 · 2 guests. Donna renders empty until data arrives.
+// 2026-07-09b — surface scrape + data-range in subtitle; full-width container.
 
 import {
   DashboardPage, Container, KpiTile, Chart,
@@ -169,6 +170,8 @@ export default async function ParityPage({ propertyId }: Props) {
 
   // ── Integrity KPIs (own-OTA parity) ────────────────────────────────────
   const integrityShopDate = integrity[0]?.shop_date ?? null;
+  const integrityFirstStay = integrity[0]?.stay_date ?? null;
+  const integrityLastStay  = integrity[integrity.length - 1]?.stay_date ?? null;
   const spreadsPct = integrity.map((r) => Number(r.spread_pct ?? 0)).filter((v) => Number.isFinite(v) && v > 0);
   const maxSpreadPct = spreadsPct.length === 0 ? null : Math.max(...spreadsPct);
   const avgSpreadPct = spreadsPct.length === 0 ? null : spreadsPct.reduce((a, b) => a + b, 0) / spreadsPct.length;
@@ -185,7 +188,9 @@ export default async function ParityPage({ propertyId }: Props) {
       footnote: 'OTAs marking rooms unavailable',
       status: totalSoldOutCells === 0 ? 'green' : 'grey' },
     { label: 'Latest scrape', value: integrityShopDate ? fmtIsoDate(integrityShopDate) : EMPTY, size: 'sm',
-      footnote: integrity.length > 0 ? `${integrity.length} stay-dates covered` : 'awaiting first scrape',
+      footnote: integrityFirstStay && integrityLastStay
+        ? `covers ${fmtIsoDate(integrityFirstStay)} → ${fmtIsoDate(integrityLastStay)}`
+        : 'awaiting first scrape',
       status: integrityShopDate ? 'grey' : 'grey' },
   ];
 
@@ -212,6 +217,10 @@ export default async function ParityPage({ propertyId }: Props) {
     { key: 'spread',    label: 'Spread' },
     { key: 'spreadPct', label: 'Spread %' },
   ];
+
+  const integritySubtitle = integrityShopDate && integrityFirstStay && integrityLastStay
+    ? `scrape ${fmtIsoDate(integrityShopDate)} · data covers ${fmtIsoDate(integrityFirstStay)} → ${fmtIsoDate(integrityLastStay)} (${integrity.length} stay-dates)`
+    : 'own rate observed across each OTA · spread flags parity leaks';
 
   // ── Existing compset KPIs & tables (unchanged) ─────────────────────────
   const matrixWithPct  = matrix.filter((r) => r.pct_vs_cheapest_comp != null);
@@ -349,21 +358,24 @@ export default async function ParityPage({ propertyId }: Props) {
       {/* 2026-07-09 — Own-OTA Rate Integrity strip (LOS 1 · 2 guests) */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 0 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
         <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
-          Own-OTA rate integrity · LOS 1 · 2 guests{integrityShopDate ? ` · scrape ${fmtIsoDate(integrityShopDate)}` : ''}
+          Own-OTA rate integrity · LOS 1 · 2 guests{integrityShopDate ? ` · scrape ${fmtIsoDate(integrityShopDate)}` : ''}{integrityFirstStay && integrityLastStay ? ` · data ${fmtIsoDate(integrityFirstStay)} → ${fmtIsoDate(integrityLastStay)}` : ''}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6 }}>
           {integrityTiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
       </div>
 
-      <Container title={`Own-OTA rate integrity matrix · ${integrity.length} stay-dates`}
-        subtitle="own rate observed across each OTA · spread flags parity leaks">
-        <Chart variant="table" data={integrityTable} xKey="stay"
-          series={integrityCols}
-          empty={{ title: pid === NAMKHAN_PROPERTY_ID ? 'no integrity scrape yet' : 'integrity feed pending for this property',
-                   hint: pid === NAMKHAN_PROPERTY_ID ? 'upload integrity.xlsx via /imports/parity/' : 'data will appear once the daily feed is wired' }}
-        />
-      </Container>
+      {/* Full-width integrity matrix — spans whole page grid */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title={`Own-OTA rate integrity matrix · ${integrity.length} stay-dates`}
+          subtitle={integritySubtitle}>
+          <Chart variant="table" data={integrityTable} xKey="stay"
+            series={integrityCols}
+            empty={{ title: pid === NAMKHAN_PROPERTY_ID ? 'no integrity scrape yet' : 'integrity feed pending for this property',
+                     hint: pid === NAMKHAN_PROPERTY_ID ? 'upload integrity.xlsx via /imports/parity/' : 'data will appear once the daily feed is wired' }}
+          />
+        </Container>
+      </div>
 
       {/* PBS 2026-06-08 #128 — single-row 6-up head strip, mirrors LeakageYtdTiles pattern */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 0 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
