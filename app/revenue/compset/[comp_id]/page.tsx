@@ -3,10 +3,12 @@
 // Sources: v_competitor_property_deep (LLM scrape) + v_compset_property_summary (rates + reviews).
 // Refresh button calls the scrape-competitor-profile edge fn.
 
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { notFound } from 'next/navigation';
 import RescrapeButton from './_components/RescrapeButton';
+import { REVENUE_SUBPAGES } from '../../_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -132,12 +134,39 @@ export default async function CompetitorLandingPage({ params }: Props) {
   const scrapeStale = !deep?.last_scraped_at
     || (Date.now() - new Date(deep.last_scraped_at).getTime()) / 86400_000 > 60;
 
+  // PBS 2026-07-09 pm: propagate Revenue sub-nav so top menu strip appears on the landing.
+  const pid = deep?.property_id ?? 260955;
+  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
+  const tabs: DashboardTab[] = subPages.map((s) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href.endsWith('/compset'),
+  }));
+
+  const primaryContact = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {deep?.website_url && (
+        <a href={deep.website_url} target="_blank" rel="noopener noreferrer"
+          style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, background: '#FFFFFF', color: '#084838', border: '1px solid #084838', borderRadius: 4, textDecoration: 'none' }}>
+          Website ↗
+        </a>
+      )}
+      {deep?.phone && (
+        <a href={`tel:${deep.phone.replace(/[^\d+]/g, '')}`}
+          style={{ padding: '6px 12px', fontSize: 12, fontWeight: 600, background: '#FFFFFF', color: '#084838', border: '1px solid #084838', borderRadius: 4, textDecoration: 'none' }}>
+          Call · {deep.phone}
+        </a>
+      )}
+      <RescrapeButton compId={comp_id} propertyName={propertyName} />
+    </div>
+  );
+
   return (
     <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
       <DashboardPage
         title={`Compset · ${propertyName}${deep?.is_self ? ' · self' : ''}`}
         subtitle={`${summary?.set_name ?? 'Unassigned'} · last scraped ${fmtDate(deep?.last_scraped_at ?? null)}${scrapeStale ? ' (stale)' : ''}`}
-        action={<RescrapeButton compId={comp_id} propertyName={propertyName} />}
+        tabs={tabs}
+        action={primaryContact}
       >
         {/* Hero + Facts row */}
         <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
@@ -201,44 +230,8 @@ export default async function CompetitorLandingPage({ params }: Props) {
           </Container>
         </div>
 
-        {/* PBS 2026-07-09 pm: sales/rev-mgmt sections */}
-
-        {/* Rate positioning · latest shop, per stay_date */}
-        <div style={{ gridColumn: '1 / -1' }}>
-          <Container title="Rate positioning · next 90 days" subtitle={latestShop ? `snapshot ${latestShop}` : 'no rate history yet'}>
-            {latestRates.length === 0 ? (
-              <div style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic', fontSize: 12 }}>No rate history in v_compset_competitor_rate_matrix.</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead style={{ background: '#FAFAF7' }}>
-                    <tr>
-                      <th style={cth}>Stay date</th>
-                      <th style={cth}>Channel</th>
-                      <th style={{ ...cth, textAlign: 'right' }}>Rate</th>
-                      <th style={{ ...cth, textAlign: 'center' }}>Available</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {latestRates.slice(0, 60).map((r, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid #F1EBD9' }}>
-                        <td style={ctd}>{r.stay_date}</td>
-                        <td style={ctd}>{r.channel ?? '—'}</td>
-                        <td style={{ ...ctd, textAlign: 'right' }}>{r.rate_usd != null ? `$${Math.round(Number(r.rate_usd))}` : '—'}</td>
-                        <td style={{ ...ctd, textAlign: 'center' }}>{r.is_available ? '✓' : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {latestRates.length > 60 && (
-                  <div style={{ padding: 8, fontSize: 11, color: '#5A5A5A', textAlign: 'center' }}>
-                    showing 60 of {latestRates.length} · full history in v_compset_competitor_rate_matrix
-                  </div>
-                )}
-              </div>
-            )}
-          </Container>
-        </div>
+        {/* PBS 2026-07-09 pm: sales/rev-mgmt sections. Rate positioning moved to the bottom
+            (PBS already has same on overview — redundant up top). */}
 
         {/* Promo behavior */}
         <div style={{ gridColumn: '1 / -1' }}>
@@ -451,6 +444,48 @@ export default async function CompetitorLandingPage({ params }: Props) {
               <ReviewCell channel="Google"      score={deep?.review_score_google ?? null} count={deep?.review_count_google ?? null} />
               <ReviewCell channel="TripAdvisor" score={deep?.review_score_ta ?? null} count={deep?.review_count_ta ?? null} />
             </div>
+          </Container>
+        </div>
+
+        {/* Rate positioning · demoted to the bottom per PBS 2026-07-09 pm (same view exists on overview) */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Container title="Rate positioning · next 90 days" subtitle={latestShop ? `snapshot ${latestShop} · reference — full picture lives on the overview` : 'no rate history yet'}>
+            {latestRates.length === 0 ? (
+              <div style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic', fontSize: 12 }}>No rate history in v_compset_competitor_rate_matrix.</div>
+            ) : (
+              <details>
+                <summary style={{ cursor: 'pointer', fontSize: 12, color: '#084838', fontWeight: 600, padding: '6px 0' }}>
+                  Show {latestRates.length} stay-date rate rows
+                </summary>
+                <div style={{ overflowX: 'auto', marginTop: 8 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead style={{ background: '#FAFAF7' }}>
+                      <tr>
+                        <th style={cth}>Stay date</th>
+                        <th style={cth}>Channel</th>
+                        <th style={{ ...cth, textAlign: 'right' }}>Rate</th>
+                        <th style={{ ...cth, textAlign: 'center' }}>Available</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {latestRates.slice(0, 60).map((r, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid #F1EBD9' }}>
+                          <td style={ctd}>{r.stay_date}</td>
+                          <td style={ctd}>{r.channel ?? '—'}</td>
+                          <td style={{ ...ctd, textAlign: 'right' }}>{r.rate_usd != null ? `$${Math.round(Number(r.rate_usd))}` : '—'}</td>
+                          <td style={{ ...ctd, textAlign: 'center' }}>{r.is_available ? '✓' : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {latestRates.length > 60 && (
+                    <div style={{ padding: 8, fontSize: 11, color: '#5A5A5A', textAlign: 'center' }}>
+                      showing 60 of {latestRates.length} · full history in v_compset_competitor_rate_matrix
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
           </Container>
         </div>
 
