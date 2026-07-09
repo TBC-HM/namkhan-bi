@@ -17,6 +17,7 @@ interface SopRow {
   title: string;
   dept_code: string;
   short_summary: string | null;
+  author: string | null;
   status: string;
   version: string | null;
   updated_at: string | null;
@@ -70,7 +71,7 @@ export default async function QaRegistryPage({ propertyId }: Props = {}) {
 
   const { data } = await supabase
     .from('v_sop_catalog')
-    .select('sop_code,title,dept_code,short_summary,status,version,updated_at,property_id')
+    .select('sop_code,title,dept_code,short_summary,author,status,version,updated_at,property_id')
     .or(`property_id.is.null,property_id.eq.${pid}`)
     .order('dept_code', { ascending: true })
     .order('title',     { ascending: true });
@@ -132,6 +133,7 @@ export default async function QaRegistryPage({ propertyId }: Props = {}) {
                     <th style={th}>Dept</th>
                     <th style={th}>Title</th>
                     <th style={th}>Purpose</th>
+                    <th style={th}>Author</th>
                     <th style={th}>Status</th>
                     <th style={th}>Version</th>
                     <th style={{ ...th, textAlign: 'right' }}>Updated</th>
@@ -165,6 +167,7 @@ export default async function QaRegistryPage({ propertyId }: Props = {}) {
                       <td style={{ ...td, color: INK_S }}>
                         {r.short_summary ?? '—'}
                       </td>
+                      <td style={td}>{r.author ?? '—'}</td>
                       <td style={td}>{r.status}</td>
                       <td style={td}>{r.version ?? '—'}</td>
                       <td style={{ ...td, textAlign: 'right', color: INK_S, whiteSpace: 'nowrap' }}>
