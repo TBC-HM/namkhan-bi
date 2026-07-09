@@ -1,5 +1,6 @@
 // app/_components/HodLanding.tsx
-// Shared HoD landing primitive — powers /finance, /sales, /marketing, /operations.
+// Shared HoD landing primitive — powers /finance, /sales, /marketing, /operations
+// AND /holding/{ceo,finance,legal,strategy}.
 //
 // PBS 2026-07-08 v2 mirror: matches the new /revenue HoD layout.
 //   Top row of 4: Shortcuts · My Reports · My Tasks · External Links
@@ -8,8 +9,8 @@
 //   Scheduled reports (bottom)
 //   Reports · send log (bottom)
 //
-// Attention + Bugs were replaced (per Revenue HoD refactor). External + Shortcut
-// state lives in public.v_hod_shortcuts (dept-scoped, kind='internal'|'external').
+// PBS 2026-07-09: optional `settingsHref` renders a gear icon next to the Ask
+// button. Used on /holding/* HoD landings to jump into /holding/settings.
 
 import TenantLink from '@/components/nav/TenantLink';
 import {
@@ -44,9 +45,11 @@ interface Props {
     subtitle?: string;
     emptyText?: string;
   };
+  /** PBS 2026-07-09: adds a gear button next to Ask that jumps into a settings page. */
+  settingsHref?: string;
 }
 
-export default async function HodLanding({ slug, propertyId, liveTiles, extraContainers, conclusions }: Props) {
+export default async function HodLanding({ slug, propertyId, liveTiles, extraContainers, conclusions, settingsHref }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg = pid === PROPERTY_ID ? DEPT_CFG[slug] : getDeptCfg(slug, pid);
 
@@ -102,12 +105,21 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
 
   const chatHref = `/cockpit/chat?dept=${slug}`;
 
+  const actionBar = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {settingsHref && (
+        <a href={settingsHref} title="Settings" aria-label="Settings" style={gearBtnStyle}>⚙</a>
+      )}
+      <TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</TenantLink>
+    </div>
+  );
+
   return (
     <DashboardPage
       title={`${cfg.pillTitle ?? slug} · ${cfg.hodName}`}
       subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
       tabs={hodTabs}
-      action={<TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</TenantLink>}
+      action={actionBar}
     >
       {tiles.length > 0 && (
         <div style={fullRow}>
@@ -200,4 +212,9 @@ const primaryBtnStyle: React.CSSProperties = {
   fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
   padding: '6px 14px', borderRadius: 4,
   background: 'var(--primary, #1F3A2E)', color: '#FFFFFF', textDecoration: 'none',
+};
+const gearBtnStyle: React.CSSProperties = {
+  fontSize: 16, lineHeight: 1, padding: '4px 8px', borderRadius: 4,
+  background: '#FFFFFF', color: '#1B1B1B', border: '1px solid #E6DFCC',
+  textDecoration: 'none', cursor: 'pointer',
 };
