@@ -206,6 +206,8 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
   const [inbox, setInbox] = useState<InboxSummary>(INBOX_EMPTY);
   // PBS 2026-07-09: signed-in email for the dropdown header.
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  // PBS 2026-07-09: display name for the top-right button. Falls back to USER_NAME.
+  const [userName, setUserName] = useState<string>(USER_NAME);
   // PBS 2026-07-09: gate admin-only dropdown items on holding_role IN (owner, admin).
   // Read from the JWT payload the custom_access_token_hook stamps.
   const [isAdmin, setIsAdmin] = useState(false);
@@ -217,6 +219,10 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
       const { data } = await _supabase.auth.getUser();
       if (cancelled) return;
       setUserEmail(data.user?.email ?? null);
+      const meta = (data.user?.user_metadata ?? {}) as Record<string, unknown>;
+      const rawName = String(meta.preferred_name ?? meta.full_name ?? '').trim();
+      const emailPrefix = (data.user?.email ?? '').split('@')[0];
+      setUserName(rawName || emailPrefix || USER_NAME);
       const sess = await _supabase.auth.getSession();
       const token = sess.data.session?.access_token;
       if (!token) return;
@@ -484,8 +490,8 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
           dropdown is positioned via top: 100% (consistent with siblings). */}
       <div style={S.pillWrap}>
         <button onClick={() => setUserOpen(o => !o)} style={S.userBtn}>
-          <span style={S.avatar}>{(USER_NAME[0] ?? '?').toUpperCase()}</span>
-          {USER_NAME} ▾
+          <span style={S.avatar}>{(userName[0] ?? '?').toUpperCase()}</span>
+          {userName} ▾
         </button>
         {userOpen && (
           <div style={S.userMenu}>
