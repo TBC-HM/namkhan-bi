@@ -47,8 +47,8 @@ const HOLDING_DEPTS: DeptLink[] = [
   { label: 'Strategy',     slug: 'strategy',  href: '/holding/strategy', openInNewWindow: true, color: '#8B4513' },
   { label: 'Finance',      slug: 'finance',   href: '/holding/finance'   },
   { label: 'IT',           slug: 'it',        href: '/holding/it'        },
-  // PBS 2026-07-09: Tasks moved out of the top user dropdown into holding scope.
-  { label: 'Tasks',        slug: 'tasks',     href: '/cockpit/tasks'     },
+  // PBS 2026-07-09 pm: Tasks OUT of top strip. Still reachable via the DeptEntry
+  // landing on /holding (Tasks box in Attention · Reports · Tasks · Bugs row).
 ];
 const HOLDING_SLUG_SET = new Set(HOLDING_DEPTS.map((d) => d.slug));
 
