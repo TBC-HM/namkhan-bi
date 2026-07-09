@@ -117,11 +117,13 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // ─── Marketing ────────────────────────────────────────────
   // PBS 2026-07-07 night: Overview lands on /marketing/library. Info sub-tab
   // removed; Library + Docs sit directly under Overview alongside Reports.
+  // PBS 2026-07-09 pm: Gallery folded under Overview (was Content top-strip · same DB source as Library).
   {
     parentHref: '/marketing/library',
-    members: ['/marketing/library', '/marketing/docs'],
+    members: ['/marketing/library', '/marketing/gallery', '/marketing/docs'],
     tabs: [
       { label: 'Library', href: '/marketing/library' },
+      { label: 'Gallery', href: '/marketing/gallery' },
       { label: 'Docs',    href: '/marketing/docs'    },
       { label: 'Reports', href: '/h/260955/reports?dept=marketing' },
     ],
