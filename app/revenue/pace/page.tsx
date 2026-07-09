@@ -29,6 +29,7 @@ import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { capacityFor, capacityRnRange } from '@/lib/capacity';
 import { getPaceCurve } from '@/lib/pulseData';
 import { getPaceOtb } from '@/lib/data';
+import WindowSelect from '../_components/WindowSelect';
 import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
@@ -334,12 +335,14 @@ export default async function PacePage({
     >
       {/* PBS #188 (2026-05-24): KPI stripe at the top is a raw row — NOT a Container box.
           Controls (Forward window · Granularity) sit on row 1, KPI tiles on row 2. */}
-      <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8 }}>
-        <ControlGroup label="Forward window">
-          {winOptions.map((o) => (
-            <PillLink key={o.k} active={o.k === win} href={hrefFor({ win: o.k })}>{o.label}</PillLink>
-          ))}
-        </ControlGroup>
+      {/* PBS 2026-07-09 pm: Forward-window row → dropdown in headline strip. Granularity stays as pills. */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', marginBottom: 8 }}>
+        <WindowSelect
+          basePath={`${basePath}/pace`}
+          currentWin={win}
+          currentCmp={period.cmp ?? null}
+          options={winOptions.map((o) => ({ value: o.k, label: '+' + o.label }))}
+        />
         <ControlGroup label="Granularity">
           {granOptions.map((o) => (
             <PillLink key={o.k} active={o.k === gran} href={hrefFor({ gran: o.k })}>{o.label}</PillLink>
