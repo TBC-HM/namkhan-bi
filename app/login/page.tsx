@@ -166,6 +166,9 @@ export default function LoginPage() {
   );
 }
 
+// PBS 2026-07-09: every color is hardcoded because the layout injects
+// site-paper-scope tokens that would otherwise bleed light values into
+// input/button color inheritance and produce white-on-white text.
 const pageStyle: CSSProperties = {
   minHeight: '100vh', display: 'grid', placeItems: 'center',
   background: '#F4EFE2', color: '#1B1B1B',
@@ -173,28 +176,31 @@ const pageStyle: CSSProperties = {
 };
 const cardStyle: CSSProperties = {
   width: 360, padding: 32, borderRadius: 12,
-  background: '#FFFFFF', border: '1px solid #E6DFCC',
-  boxShadow: '0 8px 30px rgba(0,0,0,.05)',
+  background: '#FFFFFF', border: '1px solid #C8C0A6',
+  boxShadow: '0 10px 32px rgba(0,0,0,.10)',
+  color: '#1B1B1B',
 };
 const eyebrowStyle: CSSProperties = {
   fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase',
-  color: '#5A5A5A', marginBottom: 8, fontWeight: 600,
+  color: '#084838', marginBottom: 8, fontWeight: 700,
 };
 const titleStyle: CSSProperties = { margin: '0 0 6px', fontSize: 22, color: '#084838', fontWeight: 700 };
-const hintStyle: CSSProperties = { color: '#5A5A5A', fontSize: 12, marginBottom: 18 };
+const hintStyle: CSSProperties = { color: '#3A3A3A', fontSize: 12, marginBottom: 18, fontWeight: 500 };
 const inputStyle: CSSProperties = {
   width: '100%', padding: '10px 12px', fontSize: 13,
-  border: '1px solid #E6DFCC', borderRadius: 6, background: '#FFFFFF',
+  border: '1px solid #C8C0A6', borderRadius: 6,
+  background: '#FFFFFF', color: '#1B1B1B',
   boxSizing: 'border-box',
 };
-const errStyle: CSSProperties = { color: '#B04A2F', fontSize: 12, marginTop: 8 };
-const okStyle: CSSProperties = { color: '#0B5B3A', fontSize: 12, marginTop: 8 };
+const errStyle: CSSProperties = { color: '#B04A2F', fontSize: 12, marginTop: 8, fontWeight: 600 };
+const okStyle: CSSProperties = { color: '#0B5B3A', fontSize: 12, marginTop: 8, fontWeight: 600 };
 const btnStyle: CSSProperties = {
   width: '100%', marginTop: 14, padding: '10px', borderRadius: 6, border: 'none',
-  background: '#084838', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer',
+  background: '#084838', color: '#FFFFFF', fontWeight: 700, cursor: 'pointer',
   fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase',
 };
 const linkBtnStyle: CSSProperties = {
-  background: 'transparent', border: 'none', color: '#5A5A5A',
+  background: 'transparent', border: 'none', color: '#084838',
   fontSize: 11, letterSpacing: '0.04em', cursor: 'pointer', padding: '6px 4px',
+  fontWeight: 600,
 };
