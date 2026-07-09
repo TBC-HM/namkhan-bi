@@ -40,11 +40,12 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   {
     parentHref: '/revenue/rooms',
     members: ['/revenue/rooms', '/revenue/channels', '/revenue/rateplans', '/revenue/markets'],
+    // PBS 2026-07-09 pm: Performance order — Channels · Rate Plans · Markets · Rooms.
     tabs: [
-      { label: 'Rooms',      href: '/revenue/rooms'     },
       { label: 'Channels',   href: '/revenue/channels'  },
       { label: 'Rate Plans', href: '/revenue/rateplans' },
       { label: 'Markets',    href: '/revenue/markets'   },
+      { label: 'Rooms',      href: '/revenue/rooms'     },
     ],
   },
   {
