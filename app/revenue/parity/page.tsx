@@ -6,10 +6,11 @@
 //   • v_parity_grid           — OTA-by-day rate breakdown (wide format)
 //   • v_parity_open_breaches  — actionable breach list (when populated)
 //
-// Prior code expected v_parity_grid in LONG format
-// (.channel / .our_rate_usd / .their_rate_usd / .gap_pct / .severity)
-// but the view is WIDE (one row per stay_date with booking_usd / agoda_usd /
-// expedia_usd / direct_usd / etc. columns). Heatmap silently rendered empty.
+// 2026-07-09 — added Own-OTA Rate Integrity block (top of page).
+//   Source: v_rate_integrity_matrix (public bridge over
+//   revenue.lighthouse_rateshop WHERE feed_source='integrity').
+//   xlsx-fed daily: Brand.com / Booking.com / Expedia / Agoda / Tiket
+//   LOS 1 · 2 guests. Donna renders empty until data arrives.
 
 import {
   DashboardPage, Container, KpiTile, Chart,
@@ -63,20 +64,42 @@ interface BreachRow {
   delta_usd: number | null; delta_pct: number | null;
   raw_room_type: string | null;
 }
+interface IntegrityRow {
+  property_id: number;
+  shop_date: string;
+  stay_date: string;
+  direct_usd: number | null;   direct_status: string | null;
+  booking_usd: number | null;  booking_status: string | null;
+  expedia_usd: number | null;  expedia_status: string | null;
+  agoda_usd: number | null;    agoda_status: string | null;
+  tiket_usd: number | null;    tiket_status: string | null;
+  lowest_usd: number | null;
+  highest_usd: number | null;
+  spread_usd: number | null;
+  spread_pct: number | null;
+  otas_with_rate: number | null;
+  otas_sold_out: number | null;
+}
 
-// PBS 2026-07-07: property-scoped loader.
-// v_parity_summary_pb + v_parity_matrix_pb carry a property_id column added
-// by the parallel Mews-ingest helper. Both are filterable per tenant.
-// The original v_parity_summary was ALSO widened at the same time (dropped
-// its `is_self = true` filter), so reading it un-filtered now returns Donna
-// row-0 for Namkhan too — that's why we point every property, Namkhan
-// included, at the _pb variants.
-// v_parity_grid + v_parity_open_breaches are still Namkhan-only shapes so we
-// gate them behind pid === NAMKHAN_PROPERTY_ID → other properties see empty
-// tables (no cross-tenant leakage of Namkhan comp-shop data). Namkhan keeps
-// its rich last-shop tile via `namkhan_shop_date` on the matrix path — but
-// matrix_pb doesn't carry that column, so we compute lastShop from grid on
-// Namkhan and skip it on other properties.
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function dayName(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  return DOW[d.getUTCDay()] || '';
+}
+
+async function loadIntegrity(pid: number): Promise<IntegrityRow[]> {
+  const { data } = await supabase
+    .from('v_rate_integrity_matrix')
+    .select('property_id, shop_date, stay_date, direct_usd, direct_status, booking_usd, booking_status, expedia_usd, expedia_status, agoda_usd, agoda_status, tiket_usd, tiket_status, lowest_usd, highest_usd, spread_usd, spread_pct, otas_with_rate, otas_sold_out')
+    .eq('property_id', pid)
+    .order('shop_date', { ascending: false })
+    .order('stay_date', { ascending: true });
+  const rows = (data ?? []) as IntegrityRow[];
+  if (rows.length === 0) return [];
+  const latestShop = rows[0].shop_date;
+  return rows.filter((r) => r.shop_date === latestShop);
+}
+
 async function loadAll(pid: number): Promise<{
   summary: SummaryRow | null;
   matrix: MatrixRow[];
@@ -109,6 +132,12 @@ function fmtPct(v: number | null | undefined, signed = false): string {
   return `${sign}${Math.abs(n).toFixed(1)}%`;
 }
 
+function fmtIntegrityCell(usd: number | null, status: string | null): string {
+  if (status === 'sold_out') return 'Sold out';
+  if (usd == null) return EMPTY;
+  return fmtTableUsd(usd);
+}
+
 function fmtRelative(iso: string | null | undefined): string {
   if (!iso) return EMPTY;
   const t = new Date(iso);
@@ -122,13 +151,14 @@ function fmtRelative(iso: string | null | undefined): string {
 }
 
 const SEVERITY_ORDER: Record<string, number> = { critical: 1, high: 2, medium: 3, low: 4, info: 5 };
+const INTEGRITY_ALERT_PCT = 0.05; // >5% spread = amber, >15% = red
 
 export default async function ParityPage({ propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/parity') }));
 
-  const data = await loadAll(pid);
+  const [data, integrity] = await Promise.all([loadAll(pid), loadIntegrity(pid)]);
   const summary = data.summary;
   const matrix = data.matrix;
   const grid = data.grid;
@@ -137,7 +167,53 @@ export default async function ParityPage({ propertyId }: Props) {
   const lastShopGrid   = grid.map((r) => r.last_shop_date).filter((d): d is string => !!d).sort().pop() ?? null;
   const lastShopIso    = [lastShopMatrix, lastShopGrid].filter((x): x is string => !!x).sort().pop() ?? null;
 
-  // ── Metrics computed from v_parity_matrix ──────────────────────────────
+  // ── Integrity KPIs (own-OTA parity) ────────────────────────────────────
+  const integrityShopDate = integrity[0]?.shop_date ?? null;
+  const spreadsPct = integrity.map((r) => Number(r.spread_pct ?? 0)).filter((v) => Number.isFinite(v) && v > 0);
+  const maxSpreadPct = spreadsPct.length === 0 ? null : Math.max(...spreadsPct);
+  const avgSpreadPct = spreadsPct.length === 0 ? null : spreadsPct.reduce((a, b) => a + b, 0) / spreadsPct.length;
+  const daysWithBreach = integrity.filter((r) => Number(r.spread_pct ?? 0) >= INTEGRITY_ALERT_PCT).length;
+  const totalSoldOutCells = integrity.reduce((a, r) => a + Number(r.otas_sold_out ?? 0), 0);
+  const integrityTiles: KpiTileProps[] = [
+    { label: 'Max OTA spread', value: maxSpreadPct != null ? fmtPct(maxSpreadPct * 100) : EMPTY, size: 'sm',
+      footnote: `avg ${avgSpreadPct != null ? fmtPct(avgSpreadPct * 100) : EMPTY}`,
+      status: maxSpreadPct == null ? 'grey' : maxSpreadPct >= 0.15 ? 'red' : maxSpreadPct >= 0.05 ? 'amber' : 'green' },
+    { label: 'Days ≥ 5% spread', value: daysWithBreach, size: 'sm',
+      footnote: `of ${integrity.length} stay-dates`,
+      status: integrity.length === 0 ? 'grey' : daysWithBreach === 0 ? 'green' : daysWithBreach >= integrity.length / 2 ? 'red' : 'amber' },
+    { label: 'Sold-out cells', value: totalSoldOutCells, size: 'sm',
+      footnote: 'OTAs marking rooms unavailable',
+      status: totalSoldOutCells === 0 ? 'green' : 'grey' },
+    { label: 'Latest scrape', value: integrityShopDate ? fmtIsoDate(integrityShopDate) : EMPTY, size: 'sm',
+      footnote: integrity.length > 0 ? `${integrity.length} stay-dates covered` : 'awaiting first scrape',
+      status: integrityShopDate ? 'grey' : 'grey' },
+  ];
+
+  // ── Integrity table matching xlsx layout ───────────────────────────────
+  const integrityTable = integrity.map((r) => ({
+    day:      dayName(r.stay_date),
+    stay:     fmtIsoDate(r.stay_date),
+    direct:   fmtIntegrityCell(r.direct_usd,  r.direct_status),
+    booking:  fmtIntegrityCell(r.booking_usd, r.booking_status),
+    expedia:  fmtIntegrityCell(r.expedia_usd, r.expedia_status),
+    agoda:    fmtIntegrityCell(r.agoda_usd,   r.agoda_status),
+    tiket:    fmtIntegrityCell(r.tiket_usd,   r.tiket_status),
+    spread:   r.spread_usd != null ? fmtTableUsd(r.spread_usd) : EMPTY,
+    spreadPct: fmtPct(r.spread_pct != null ? Number(r.spread_pct) * 100 : null),
+  }));
+  const integrityCols: ChartSeries[] = [
+    { key: 'day',       label: 'Day' },
+    { key: 'stay',      label: 'Date' },
+    { key: 'direct',    label: 'Brand.com' },
+    { key: 'booking',   label: 'Booking.com' },
+    { key: 'expedia',   label: 'Expedia' },
+    { key: 'agoda',     label: 'Agoda' },
+    { key: 'tiket',     label: 'Tiket' },
+    { key: 'spread',    label: 'Spread' },
+    { key: 'spreadPct', label: 'Spread %' },
+  ];
+
+  // ── Existing compset KPIs & tables (unchanged) ─────────────────────────
   const matrixWithPct  = matrix.filter((r) => r.pct_vs_cheapest_comp != null);
   const daysShopped    = matrix.filter((r) => r.namkhan_usd != null && (r.comps_with_price ?? 0) > 0).length;
   const avgPctVsCheap  = matrixWithPct.length === 0 ? null
@@ -146,7 +222,6 @@ export default async function ParityPage({ propertyId }: Props) {
   const avgNumUndercut = matrix.length === 0 ? 0
     : matrix.reduce((acc, r) => acc + Number(r.num_comps_undercutting ?? 0), 0) / matrix.length;
 
-  // ── KPI tiles ──────────────────────────────────────────────────────────
   const tiles: KpiTileProps[] = [
     { label: 'Days shopped', value: daysShopped, size: 'sm',
       footnote: lastShopIso ? `last shop ${fmtIsoDate(lastShopIso)}` : 'no shop yet',
@@ -168,7 +243,6 @@ export default async function ParityPage({ propertyId }: Props) {
       status: 'grey' },
   ];
 
-  // ── Chart 1: Our rate vs comp range (line) ─────────────────────────────
   const rangeData = matrix.map((r) => ({
     stay_date: r.stay_date,
     namkhan: r.namkhan_usd != null ? Number(r.namkhan_usd) : null,
@@ -183,7 +257,6 @@ export default async function ParityPage({ propertyId }: Props) {
     { key: 'highest', label: 'Highest comp' },
   ];
 
-  // ── Chart 2: Δ vs cheapest comp (signed bar) ───────────────────────────
   const deltaData = matrix
     .filter((r) => r.pct_vs_cheapest_comp != null)
     .map((r) => ({
@@ -194,7 +267,6 @@ export default async function ParityPage({ propertyId }: Props) {
     { key: 'delta_pct', label: 'Δ vs cheapest %' },
   ];
 
-  // ── Data table 1: Daily parity grid (from v_parity_matrix) ─────────────
   const matrixTable = matrix.map((r) => ({
     stay_date:  fmtIsoDate(r.stay_date),
     namkhan:    fmtTableUsd(r.namkhan_usd),
@@ -216,7 +288,6 @@ export default async function ParityPage({ propertyId }: Props) {
     { key: 'delta_pct', label: 'Δ vs cheapest' },
   ];
 
-  // ── Data table 2: OTA channel breakdown (from v_parity_grid wide) ──────
   const otaTable = grid.map((r) => ({
     stay_date:   fmtIsoDate(r.stay_date),
     direct:      r.direct_usd  != null ? fmtTableUsd(r.direct_usd)  : EMPTY,
@@ -240,7 +311,6 @@ export default async function ParityPage({ propertyId }: Props) {
     { key: 'last_shop',   label: 'Last shop' },
   ];
 
-  // ── Open breaches table ────────────────────────────────────────────────
   const breachRows = data.breaches
     .slice()
     .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9))
@@ -276,6 +346,25 @@ export default async function ParityPage({ propertyId }: Props) {
       subtitle={lastShopIso ? `competitive pricing position · last shop ${fmtIsoDate(lastShopIso)}` : 'awaiting first shop'}
       tabs={tabs}
     >
+      {/* 2026-07-09 — Own-OTA Rate Integrity strip (LOS 1 · 2 guests) */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 0 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
+          Own-OTA rate integrity · LOS 1 · 2 guests{integrityShopDate ? ` · scrape ${fmtIsoDate(integrityShopDate)}` : ''}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6 }}>
+          {integrityTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
+      </div>
+
+      <Container title={`Own-OTA rate integrity matrix · ${integrity.length} stay-dates`}
+        subtitle="own rate observed across each OTA · spread flags parity leaks">
+        <Chart variant="table" data={integrityTable} xKey="stay"
+          series={integrityCols}
+          empty={{ title: pid === NAMKHAN_PROPERTY_ID ? 'no integrity scrape yet' : 'integrity feed pending for this property',
+                   hint: pid === NAMKHAN_PROPERTY_ID ? 'upload integrity.xlsx via /imports/parity/' : 'data will appear once the daily feed is wired' }}
+        />
+      </Container>
+
       {/* PBS 2026-06-08 #128 — single-row 6-up head strip, mirrors LeakageYtdTiles pattern */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 0 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
         <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
