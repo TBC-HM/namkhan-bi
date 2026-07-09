@@ -30,7 +30,11 @@ type DeepRow = {
   year_opened: number | null;
   year_renovated: number | null;
   facilities: Record<string, boolean> | null;
-  room_types: Array<{ name: string; size_m2: number | null; max_guests: number | null; bed_type: string | null; notes: string | null }> | null;
+  room_types: Array<{ name: string; size_m2: number | null; max_guests: number | null; bed_type: string | null; description: string | null; view: string | null; notes: string | null }> | null;
+  restaurant_menu: Array<{ outlet: string; description: string | null; cuisine: string | null; hours: string | null; signature_dishes: string[] | null; price_range: string | null }> | null;
+  spa_menu: Array<{ service: string; description: string | null; duration_min: number | null; price: string | null; category: string | null }> | null;
+  unique_selling_points: string[] | null;
+  meta_description: string | null;
   review_score_google: number | null;
   review_count_google: number | null;
   review_score_ta: number | null;
@@ -301,28 +305,52 @@ export default async function CompetitorLandingPage({ params }: Props) {
           </div>
         )}
 
-        {/* Rooms table */}
+        {/* Positioning summary + USPs */}
+        {(deep?.meta_description || (deep?.unique_selling_points && deep.unique_selling_points.length > 0)) && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Container title="Positioning" subtitle="what they stand for · from BdC scrape">
+              {deep?.meta_description && (
+                <div style={{ padding: 12, background: '#FAFAF7', borderRadius: 4, fontSize: 13, color: '#1B1B1B', lineHeight: 1.5, marginBottom: 12 }}>
+                  {deep.meta_description}
+                </div>
+              )}
+              {deep?.unique_selling_points && deep.unique_selling_points.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {deep.unique_selling_points.map((usp, i) => (
+                    <span key={i} style={{ padding: '4px 10px', border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#084838', fontSize: 12, fontWeight: 500, borderRadius: 999 }}>
+                      {usp}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Container>
+          </div>
+        )}
+
+        {/* Rooms table — extended with view + description */}
         <div style={{ gridColumn: '1 / -1' }}>
-          <Container title="Rooms" subtitle="types, sizes, guests · from BdC scrape">
+          <Container title={`Rooms · ${deep?.room_types?.length ?? 0} categories`} subtitle="size · beds · view · description · from BdC scrape">
             {deep?.room_types && deep.room_types.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead style={{ background: '#FAFAF7' }}>
                   <tr>
-                    <th style={cth}>Name</th>
+                    <th style={cth}>Category</th>
                     <th style={{ ...cth, textAlign: 'right' }}>Size</th>
-                    <th style={{ ...cth, textAlign: 'right' }}>Max guests</th>
+                    <th style={{ ...cth, textAlign: 'right' }}>Guests</th>
                     <th style={cth}>Bed</th>
-                    <th style={cth}>Notes</th>
+                    <th style={cth}>View</th>
+                    <th style={cth}>Description</th>
                   </tr>
                 </thead>
                 <tbody>
                   {deep.room_types.map((r, i) => (
                     <tr key={i} style={{ borderTop: '1px solid #E6DFCC' }}>
-                      <td style={ctd}>{r.name}</td>
+                      <td style={{ ...ctd, fontWeight: 600 }}>{r.name}</td>
                       <td style={{ ...ctd, textAlign: 'right' }}>{r.size_m2 != null ? `${r.size_m2} m²` : '—'}</td>
                       <td style={{ ...ctd, textAlign: 'right' }}>{r.max_guests ?? '—'}</td>
                       <td style={ctd}>{r.bed_type ?? '—'}</td>
-                      <td style={ctd}>{r.notes ?? '—'}</td>
+                      <td style={ctd}>{r.view ?? '—'}</td>
+                      <td style={{ ...ctd, color: '#3A3A3A', lineHeight: 1.45 }}>{r.description ?? r.notes ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -334,6 +362,64 @@ export default async function CompetitorLandingPage({ params }: Props) {
             )}
           </Container>
         </div>
+
+        {/* Restaurant / F&B */}
+        {deep?.restaurant_menu && deep.restaurant_menu.length > 0 && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Container title={`Dining · ${deep.restaurant_menu.length} outlet${deep.restaurant_menu.length === 1 ? '' : 's'}`} subtitle="cuisine · hours · signature dishes · price band">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                {deep.restaurant_menu.map((r, i) => (
+                  <div key={i} style={{ padding: 12, border: '1px solid #E6DFCC', borderRadius: 4, background: '#FFFFFF' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1B1B1B', marginBottom: 4 }}>{r.outlet}</div>
+                    {r.cuisine && <div style={{ fontSize: 11, color: '#084838', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{r.cuisine}{r.price_range ? ` · ${r.price_range}` : ''}</div>}
+                    {r.description && <div style={{ fontSize: 12, color: '#3A3A3A', lineHeight: 1.5, marginBottom: 8 }}>{r.description}</div>}
+                    {r.hours && <div style={{ fontSize: 11, color: '#5A5A5A' }}>Hours: {r.hours}</div>}
+                    {r.signature_dishes && r.signature_dishes.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#5A5A5A', marginBottom: 4 }}>Signature</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {r.signature_dishes.map((d, j) => (
+                            <span key={j} style={{ padding: '2px 8px', background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 4, fontSize: 11, color: '#1B1B1B' }}>{d}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Container>
+          </div>
+        )}
+
+        {/* Spa / wellness */}
+        {deep?.spa_menu && deep.spa_menu.length > 0 && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Container title={`Spa · ${deep.spa_menu.length} treatment${deep.spa_menu.length === 1 ? '' : 's'}`} subtitle="category · duration · price">
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead style={{ background: '#FAFAF7' }}>
+                  <tr>
+                    <th style={cth}>Service</th>
+                    <th style={cth}>Category</th>
+                    <th style={{ ...cth, textAlign: 'right' }}>Duration</th>
+                    <th style={{ ...cth, textAlign: 'right' }}>Price</th>
+                    <th style={cth}>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deep.spa_menu.map((s, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid #E6DFCC' }}>
+                      <td style={{ ...ctd, fontWeight: 600 }}>{s.service}</td>
+                      <td style={ctd}>{s.category ?? '—'}</td>
+                      <td style={{ ...ctd, textAlign: 'right' }}>{s.duration_min != null ? `${s.duration_min}′` : '—'}</td>
+                      <td style={{ ...ctd, textAlign: 'right' }}>{s.price ?? '—'}</td>
+                      <td style={{ ...ctd, color: '#3A3A3A', lineHeight: 1.45 }}>{s.description ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Container>
+          </div>
+        )}
 
         {/* Facilities grid */}
         <div style={{ gridColumn: '1 / -1' }}>
@@ -373,7 +459,7 @@ export default async function CompetitorLandingPage({ params }: Props) {
           <div style={{ gridColumn: '1 / -1' }}>
             <Container title="Photos" subtitle={`${deep.photo_urls.length} images pulled from BdC`}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-                {deep.photo_urls.slice(0, 8).map((url, i) => (
+                {deep.photo_urls.slice(0, 12).map((url, i) => (
                   <div key={i} style={{ position: 'relative', width: '100%', aspectRatio: '4/3', overflow: 'hidden', borderRadius: 4, background: '#F4F4EE' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={url} alt={`${propertyName} ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
