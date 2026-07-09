@@ -1,5 +1,8 @@
 // app/api/shortcuts/add/route.ts
 // PBS 2026-07-08: pin a shortcut to the HoD panel.
+// PBS 2026-07-09: property_id=0 is the holding sentinel (Beyond Circle scope,
+// NOT a real property). Guard changed from `<= 0` to `< 0` so ShortcutsPanel
+// + ExternalLinksPanel work on /holding/finance and friends.
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -15,7 +18,7 @@ export async function POST(req: Request) {
     const href        = String(body.href ?? '').trim();
     const kind        = ['internal','external'].includes(String(body.kind ?? '').toLowerCase())
                           ? String(body.kind).toLowerCase() : 'internal';
-    if (!Number.isFinite(property_id) || property_id <= 0) return NextResponse.json({ error: 'property_id required' }, { status: 400 });
+    if (!Number.isFinite(property_id) || property_id < 0) return NextResponse.json({ error: 'property_id required' }, { status: 400 });
     if (!label || !href) return NextResponse.json({ error: 'label + href required' }, { status: 400 });
     const sb = getSupabaseAdmin();
     const { data, error } = await sb.rpc('fn_shortcut_add', {
