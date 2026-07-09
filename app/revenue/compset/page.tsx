@@ -313,9 +313,12 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
                 {props.map((p) => (
                   <tr key={p.comp_id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
                     <td style={ctdLabelStyle}>
-                      <TenantLink href={`?comp=${encodeURIComponent(p.comp_id)}`} style={cSourceLinkStyle}>
+                      {/* PBS 2026-07-09 pm: name goes to deep-landing; drawer still opens via the info arrow */}
+                      <TenantLink href={`/revenue/compset/${encodeURIComponent(p.comp_id)}`} style={cSourceLinkStyle}>
                         {p.property_name}{p.is_self ? ' ⭐' : ''}
                       </TenantLink>
+                      {' '}
+                      <TenantLink href={`?comp=${encodeURIComponent(p.comp_id)}`} style={{ fontSize: 11, color: '#5A5A5A', textDecoration: 'none', marginLeft: 6 }} title="Quick drawer">↩</TenantLink>
                     </td>
                     <td style={ctdLabelStyle}>{p.star_rating ? '★'.repeat(p.star_rating) : '—'}</td>
                     <td style={ctdNumStyle}>{p.latest_usd != null ? fmtUSD(p.latest_usd) : '—'}</td>
