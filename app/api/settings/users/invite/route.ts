@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     // Try inviteUserByEmail first (works for never-signed-in users, sends invite email).
     const admin = getSupabaseAdmin();
     const { error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${origin}/auth/callback?next=/account/password`,
+      redirectTo: `${origin}/account/password`,
     });
     if (!invErr) return NextResponse.json({ ok: true, mode: 'invite_sent' });
 
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       { cookies: { getAll: () => [], setAll: () => {} } },
     );
     const { error: rErr } = await anon.auth.resetPasswordForEmail(email, {
-      redirectTo: `${origin}/auth/callback?next=/account/password`,
+      redirectTo: `${origin}/account/password`,
     });
     if (rErr) return NextResponse.json({ error: `reset failed: ${rErr.message}` }, { status: 500 });
     return NextResponse.json({ ok: true, mode: 'reset_sent' });
