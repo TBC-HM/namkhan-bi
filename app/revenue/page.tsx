@@ -78,6 +78,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     shortcutsRes,
     integrityRes,
     lighthouseLatestRes,
+    parityMatrixRes,
+    compsetHistoryRes,
   ] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
@@ -101,6 +103,10 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     supabase.from('v_rate_integrity_matrix').select('shop_date, stay_date, direct_usd, booking_usd, expedia_usd, agoda_usd, tiket_usd, spread_pct, spread_usd, otas_sold_out').eq('property_id', pid).order('shop_date', { ascending: false }).order('stay_date', { ascending: true }),
     // PBS 2026-07-09: Lighthouse latest shop_date — staleness signal.
     supabase.from('v_lighthouse_rateshop').select('shop_date').eq('property_id', pid).order('shop_date', { ascending: false }).limit(1),
+    // PBS 2026-07-09 pm: compset delta signals for HoD conclusions.
+    supabase.from('v_parity_matrix_pb').select('stay_date, pct_vs_cheapest_comp, num_comps_undercutting, comps_with_price').eq('property_id', pid).order('stay_date', { ascending: true }),
+    // Lighthouse compset historical shops for 3d/7d rate-change signals.
+    supabase.from('v_lighthouse_rateshop').select('shop_date, stay_date, hotel_name, is_self, bar_rate').eq('property_id', pid).eq('feed_source', 'compset').gte('shop_date', new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10)),
   ]);
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
   const sendLogRows   = (sendsRes.data ?? []) as SendLogRow[];
@@ -135,6 +141,10 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     else if (g.rule_key === 'integrity_soldout_days_max') parityTargets.integrity_soldout_days_max = n;
     else if (g.rule_key === 'compset_stale_days') parityTargets.compset_stale_days = n;
     else if (g.rule_key === 'lighthouse_stale_days') parityTargets.lighthouse_stale_days = n;
+    else if (g.rule_key === 'compset_undercut_days_pct') parityTargets.compset_undercut_days_pct = n;
+    else if (g.rule_key === 'compset_avg_delta_pct') parityTargets.compset_avg_delta_pct = n;
+    else if (g.rule_key === 'compset_rate_change_3d_max_pct') parityTargets.compset_rate_change_3d_max_pct = n;
+    else if (g.rule_key === 'compset_rate_change_7d_max_pct') parityTargets.compset_rate_change_7d_max_pct = n;
   }
 
   // Build paceNext90 with STLY join
@@ -249,6 +259,55 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
 
   const lighthouseSnap = (((lighthouseLatestRes.data ?? []) as Array<{ shop_date: string }>)[0]?.shop_date) ?? null;
 
+  // Compset delta signals — from v_parity_matrix_pb
+  type CompsetMatrixRow = { stay_date: string; pct_vs_cheapest_comp: number | string | null; num_comps_undercutting: number | null; comps_with_price: number | null };
+  const compsetMatrix = (parityMatrixRes.data ?? []) as CompsetMatrixRow[];
+  const shoppedRows = compsetMatrix.filter((r) => (r.comps_with_price ?? 0) > 0);
+  const compsetStayDatesShopped = shoppedRows.length;
+  const compsetUndercutDays = compsetMatrix.filter((r) => (r.num_comps_undercutting ?? 0) > 0).length;
+  const pctRows = compsetMatrix.filter((r) => r.pct_vs_cheapest_comp != null).map((r) => Number(r.pct_vs_cheapest_comp));
+  const compsetAvgPctVsCheapest = pctRows.length === 0 ? null : pctRows.reduce((a, b) => a + b, 0) / pctRows.length;
+
+  // Rate-change signals — compute max abs pct change per hotel between shop_dates over 3d / 7d.
+  type LhHistRow = { shop_date: string; stay_date: string; hotel_name: string; is_self: boolean | null; bar_rate: number | string | null };
+  const lhHistory = (compsetHistoryRes.data ?? []) as LhHistRow[];
+  const nowIso = new Date().toISOString().slice(0, 10);
+  const target3d = new Date(Date.now() - 3 * 86400_000).toISOString().slice(0, 10);
+  const target7d = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+  function nearestShop(dates: string[], target: string): string | null {
+    let best: string | null = null;
+    let bestDiff = Infinity;
+    for (const d of dates) {
+      const diff = Math.abs(new Date(d).getTime() - new Date(target).getTime());
+      if (diff < bestDiff) { bestDiff = diff; best = d; }
+    }
+    return best;
+  }
+  const compShops = Array.from(new Set(lhHistory.map((r) => r.shop_date))).sort();
+  const latestShop = compShops[compShops.length - 1] ?? null;
+  const shop3d = latestShop ? nearestShop(compShops, target3d) : null;
+  const shop7d = latestShop ? nearestShop(compShops, target7d) : null;
+  function maxRateChange(fromShop: string | null, toShop: string | null): number | null {
+    if (!fromShop || !toShop || fromShop === toShop) return null;
+    const byPair = new Map<string, { from?: number; to?: number }>();
+    for (const r of lhHistory) {
+      const k = `${r.hotel_name}::${r.stay_date}`;
+      const rate = r.bar_rate == null ? null : Number(r.bar_rate);
+      if (rate == null || !Number.isFinite(rate) || rate === 0) continue;
+      if (r.shop_date === fromShop) byPair.set(k, { ...(byPair.get(k) ?? {}), from: rate });
+      if (r.shop_date === toShop)   byPair.set(k, { ...(byPair.get(k) ?? {}), to: rate });
+    }
+    let maxAbs = 0;
+    for (const v of byPair.values()) {
+      if (v.from == null || v.to == null || v.from === 0) continue;
+      const pct = Math.abs((v.to - v.from) / v.from) * 100;
+      if (pct > maxAbs) maxAbs = pct;
+    }
+    return maxAbs > 0 ? maxAbs : null;
+  }
+  const compsetMaxRateChange3dPct = maxRateChange(shop3d, latestShop);
+  const compsetMaxRateChange7dPct = maxRateChange(shop7d, latestShop);
+
   const parityCtx: ParityContext = {
     integritySnapshotDate: latestIntegShop,
     integrityStayDatesCount: integrityLatest.length,
@@ -261,6 +320,11 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     integrityWorstMaxOtaName: worstMaxOta?.ota ?? null,
     integrityWorstMaxOtaUsd: worstMaxOta?.usd ?? null,
     lighthouseSnapshotDate: lighthouseSnap,
+    compsetStayDatesShopped,
+    compsetUndercutDays,
+    compsetAvgPctVsCheapest,
+    compsetMaxRateChange3dPct,
+    compsetMaxRateChange7dPct,
     targets: parityTargets,
   };
   const parityInsights = evaluateParityRules(parityCtx);
