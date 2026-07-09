@@ -40,6 +40,36 @@ function dayName(iso: string): string {
   return DOW[d.getUTCDay()] || '';
 }
 
+// PBS 2026-07-09: capacity per property — used to compute my_otb_pct from v_otb_pace.
+const CAPACITY_BY_PID: Record<number, number> = {
+  260955:  30, // Namkhan
+  1000001: 12, // Donna (placeholder — adjust when confirmed)
+};
+
+/** Fetch confirmed_rooms per stay_date from v_otb_pace and divide by capacity. */
+async function getOtbPctByDate(
+  propertyId: number,
+  dates: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (dates.length === 0) return out;
+  const capacity = CAPACITY_BY_PID[propertyId] ?? 30;
+  const sb = getSupabaseAdmin();
+  const from = dates[0];
+  const to = dates[dates.length - 1];
+  const { data } = await sb
+    .from('v_otb_pace')
+    .select('night_date, confirmed_rooms')
+    .eq('property_id', propertyId)
+    .gte('night_date', from)
+    .lte('night_date', to);
+  for (const r of (data ?? []) as Array<{ night_date: string; confirmed_rooms: number | null }>) {
+    const pct = capacity > 0 ? (Number(r.confirmed_rooms ?? 0) / capacity) * 100 : 0;
+    out.set(String(r.night_date), pct);
+  }
+  return out;
+}
+
 export async function getLatestSnapshotDate(propertyId: number): Promise<string | null> {
   const sb = getSupabaseAdmin();
   const { data } = await sb
@@ -85,13 +115,15 @@ export async function getOverviewRows(
     .eq('is_self', true)  // own row carries all context values
     .order('stay_date', { ascending: true });
   if (!data) return [];
+  const dates = (data as Array<{ stay_date: string }>).map((r) => r.stay_date);
+  const otbMap = await getOtbPctByDate(propertyId, dates);
   return data.map((r: any) => ({
     stay_date: r.stay_date,
     day_name: dayName(r.stay_date),
     flex_own: ownStatus(r.bar_rate === null ? null : Number(r.bar_rate), r.rate_status_raw),
     median_compset: r.median_compset === null ? null : Number(r.median_compset),
     compset_rank: r.compset_rank,
-    my_otb_pct: null,  // sample xlsx doesn't carry my_otb — future ingestion may add
+    my_otb_pct: otbMap.get(r.stay_date) ?? null,
     market_demand_pct: r.market_demand === null ? null : Number(r.market_demand),
     bookingcom_ranking: r.ota_ranking,
     holidays: r.holidays,
@@ -129,6 +161,7 @@ export async function getRatesRows(
   });
 
   const dates = Array.from(cellsByDate.keys()).sort();
+  const otbMap = await getOtbPctByDate(propertyId, dates);
   const rows: RatesRow[] = dates.map((d) => {
     const cellsMap = new Map<string, HotelCell>();
     (cellsByDate.get(d) ?? []).forEach((c) => cellsMap.set(c.hotel_name, c));
@@ -138,7 +171,7 @@ export async function getRatesRows(
     return {
       stay_date: d,
       day_name: dayName(d),
-      my_otb_pct: null,
+      my_otb_pct: otbMap.get(d) ?? null,
       market_demand_pct: demandByDate.get(d) ?? null,
       cells: orderedCells,
     };
