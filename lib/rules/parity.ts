@@ -1,24 +1,30 @@
 // lib/rules/parity.ts
 // PBS 2026-07-09: Lighthouse / OTA rate parity rules feeding the Revenue HoD.
 // Consumes v_rate_integrity_matrix (own OTA parity) + v_lighthouse_rateshop
-// (compset scrape). Fires insights on: max own-OTA spread%, spread$,
-// sold-out day count, lighthouse scrape staleness.
+// (compset scrape) + v_parity_matrix_pb (compset delta).
+// Fires insights on: max own-OTA spread%, spread$, sold-out day count,
+// lighthouse scrape staleness, compset undercut share, avg delta vs comp,
+// 3d/7d compset rate move.
 
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export interface ParityTargets {
-  parity_breach_usd?: number;          // lte $
-  integrity_max_spread_pct?: number;   // lte %
-  integrity_soldout_days_max?: number; // lte count
-  compset_stale_days?: number;         // lte days
-  lighthouse_stale_days?: number;      // lte days
+  parity_breach_usd?: number;              // lte $
+  integrity_max_spread_pct?: number;       // lte %
+  integrity_soldout_days_max?: number;     // lte count
+  compset_stale_days?: number;             // lte days
+  lighthouse_stale_days?: number;          // lte days
+  compset_undercut_days_pct?: number;      // lte %
+  compset_avg_delta_pct?: number;          // lte %
+  compset_rate_change_3d_max_pct?: number; // lte %
+  compset_rate_change_7d_max_pct?: number; // lte %
 }
 
 export interface ParityContext {
-  // Integrity (from v_rate_integrity_matrix)
+  // Own-OTA integrity
   integritySnapshotDate: string | null;
   integrityStayDatesCount: number;
-  integrityMaxSpreadPct: number | null; // 0..1
+  integrityMaxSpreadPct: number | null;
   integrityMaxSpreadUsd: number | null;
   integrityAvgSpreadPct: number | null;
   integritySoldOutDays: number;
@@ -27,8 +33,13 @@ export interface ParityContext {
   integrityWorstMaxOtaName: string | null;
   integrityWorstMaxOtaUsd: number | null;
 
-  // Lighthouse compset
+  // Compset (v_parity_matrix_pb)
   lighthouseSnapshotDate: string | null;
+  compsetStayDatesShopped: number;
+  compsetUndercutDays: number;           // # stay-dates with >=1 comp under us
+  compsetAvgPctVsCheapest: number | null; // % (signed)
+  compsetMaxRateChange3dPct: number | null; // max % move in any comp rate over 3d
+  compsetMaxRateChange7dPct: number | null;
 
   targets: ParityTargets;
 }
@@ -39,6 +50,10 @@ const FB: Required<ParityTargets> = {
   integrity_soldout_days_max: 5,
   compset_stale_days: 3,
   lighthouse_stale_days: 2,
+  compset_undercut_days_pct: 30,
+  compset_avg_delta_pct: 15,
+  compset_rate_change_3d_max_pct: 20,
+  compset_rate_change_7d_max_pct: 30,
 };
 const T = (ctx: ParityContext, k: keyof ParityTargets) => ctx.targets[k] ?? FB[k];
 
@@ -111,7 +126,7 @@ const ruleLighthouseStale: Rule = (ctx) => {
       priority: 'warning',
       title: 'No lighthouse compset scrape on file',
       body: 'Upload a fresh lighthouse xlsx to imports/parity/ to seed the comp-set rateshop.',
-      action: 'Open lighthouse',
+      action: 'Open comp rates',
       href: '/revenue/lighthouse/overview',
       guardrail: 'fixed',
     };
@@ -120,10 +135,74 @@ const ruleLighthouseStale: Rule = (ctx) => {
   return {
     key: 'parity_lighthouse_stale',
     priority: days >= threshold * 3 ? 'critical' : 'warning',
-    title: `Lighthouse scrape ${days}d stale (threshold ${threshold}d)`,
+    title: `Comp-rates scrape ${days}d stale (threshold ${threshold}d)`,
     body: `Last shop: ${ctx.lighthouseSnapshotDate}. Refresh the daily lighthouse feed.`,
-    action: 'Open lighthouse',
+    action: 'Open comp rates',
     href: '/revenue/lighthouse/overview',
+    guardrail: 'fixed',
+  };
+};
+
+const ruleCompsetUndercutDays: Rule = (ctx) => {
+  if (ctx.compsetStayDatesShopped === 0) return null;
+  const observedPct = (ctx.compsetUndercutDays / ctx.compsetStayDatesShopped) * 100;
+  const threshold = T(ctx, 'compset_undercut_days_pct');
+  if (observedPct <= threshold) return null;
+  return {
+    key: 'compset_undercut_days',
+    priority: observedPct >= threshold * 1.6 ? 'critical' : 'warning',
+    title: `${Math.round(observedPct)}% of stay-dates undercut by competitors (threshold ${threshold}%)`,
+    body: `${ctx.compsetUndercutDays} of ${ctx.compsetStayDatesShopped} shopped stay-dates have >=1 competitor sitting below our rate.`,
+    action: 'Open compset',
+    href: '/revenue/compset',
+    guardrail: 'fixed',
+  };
+};
+
+const ruleCompsetAvgDelta: Rule = (ctx) => {
+  const observed = ctx.compsetAvgPctVsCheapest;
+  if (observed == null) return null;
+  const threshold = T(ctx, 'compset_avg_delta_pct');
+  if (observed <= threshold) return null;
+  return {
+    key: 'compset_avg_delta',
+    priority: observed >= threshold * 2 ? 'critical' : 'warning',
+    title: `Sitting ${observed.toFixed(1)}% above cheapest comp on avg (threshold ${threshold}%)`,
+    body: 'Persistent premium vs the compset floor. Review rate positioning by stay-date.',
+    action: 'Open compset',
+    href: '/revenue/compset',
+    guardrail: 'fixed',
+  };
+};
+
+const ruleCompsetRateChange3d: Rule = (ctx) => {
+  const observed = ctx.compsetMaxRateChange3dPct;
+  if (observed == null) return null;
+  const threshold = T(ctx, 'compset_rate_change_3d_max_pct');
+  if (observed <= threshold) return null;
+  return {
+    key: 'compset_rate_change_3d',
+    priority: observed >= threshold * 2 ? 'critical' : 'warning',
+    title: `Compset rates moved up to ${observed.toFixed(1)}% in the last 3 days`,
+    body: 'Comps are actively repricing. Check whether we should follow / hold / step back.',
+    action: 'Open comp rates · vs 3 days',
+    href: '/revenue/lighthouse/vs-3d',
+    guardrail: 'fixed',
+  };
+};
+
+const ruleCompsetRateChange7d: Rule = (ctx) => {
+  const observed = ctx.compsetMaxRateChange7dPct;
+  if (observed == null) return null;
+  const threshold = T(ctx, 'compset_rate_change_7d_max_pct');
+  if (observed <= threshold) return null;
+  return {
+    key: 'compset_rate_change_7d',
+    priority: observed >= threshold * 2 ? 'critical' : 'warning',
+    title: `Compset rates moved up to ${observed.toFixed(1)}% in the last 7 days`,
+    body: 'Sustained shift in the compset — worth a strategic look at ladder + calendar.',
+    action: 'Open comp rates · vs 7 days',
+    href: '/revenue/lighthouse/vs-7d',
     guardrail: 'fixed',
   };
 };
@@ -133,6 +212,10 @@ const ALL: Rule[] = [
   ruleIntegrityBreachUsd,
   ruleIntegritySoldOutDays,
   ruleLighthouseStale,
+  ruleCompsetUndercutDays,
+  ruleCompsetAvgDelta,
+  ruleCompsetRateChange3d,
+  ruleCompsetRateChange7d,
 ];
 
 export function evaluateParityRules(ctx: ParityContext): Insight[] {
