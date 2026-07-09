@@ -28,6 +28,7 @@ import {
   type RevenueContext, type RevenueTargets,
   type PaceNight, type CountryPickup,
 } from '@/lib/rules/revenue';
+import { evaluateParityRules, type ParityContext, type ParityTargets } from '@/lib/rules/parity';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -75,6 +76,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     sendsRes,
     myReportsRes,
     shortcutsRes,
+    integrityRes,
+    lighthouseLatestRes,
   ] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
@@ -94,6 +97,10 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     supabase.from('v_revenue_report_sends').select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status').eq('property_id', pid).limit(200),
     supabase.from('v_revenue_report_sends').select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status').eq('property_id', pid).eq('recipient_email', 'pbsbase@gmail.com').order('sent_at', { ascending: false }).limit(20),
     supabase.from('v_hod_shortcuts').select('id, label, href, kind').eq('property_id', pid).eq('dept_slug', 'revenue').eq('user_email', 'pbsbase@gmail.com').order('sort_order').limit(100),
+    // PBS 2026-07-09: Own-OTA rate integrity — for parity guardrail conclusions.
+    supabase.from('v_rate_integrity_matrix').select('shop_date, stay_date, direct_usd, booking_usd, expedia_usd, agoda_usd, tiket_usd, spread_pct, spread_usd, otas_sold_out').eq('property_id', pid).order('shop_date', { ascending: false }).order('stay_date', { ascending: true }),
+    // PBS 2026-07-09: Lighthouse latest shop_date — staleness signal.
+    supabase.from('v_lighthouse_rateshop').select('shop_date').eq('property_id', pid).order('shop_date', { ascending: false }).limit(1),
   ]);
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
   const sendLogRows   = (sendsRes.data ?? []) as SendLogRow[];
@@ -114,6 +121,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
 
   // Targets
   const targets: RevenueTargets = {};
+  const parityTargets: ParityTargets = {};
   for (const g of (guardrailsRes.data ?? []) as Array<{ rule_key: string; threshold_val: number | string }>) {
     const n = typeof g.threshold_val === 'string' ? Number(g.threshold_val) : g.threshold_val;
     if (!Number.isFinite(n)) continue;
@@ -122,6 +130,11 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     else if (g.rule_key === 'revpar_target') targets.revpar_target = n;
     else if (g.rule_key === 'pickup_min_daily') targets.pickup_min_daily = n;
     else if (g.rule_key === 'pace_gap_pp') targets.pace_gap_pp = n;
+    else if (g.rule_key === 'parity_breach_usd') parityTargets.parity_breach_usd = n;
+    else if (g.rule_key === 'integrity_max_spread_pct') parityTargets.integrity_max_spread_pct = n;
+    else if (g.rule_key === 'integrity_soldout_days_max') parityTargets.integrity_soldout_days_max = n;
+    else if (g.rule_key === 'compset_stale_days') parityTargets.compset_stale_days = n;
+    else if (g.rule_key === 'lighthouse_stale_days') parityTargets.lighthouse_stale_days = n;
   }
 
   // Build paceNext90 with STLY join
@@ -205,7 +218,53 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     avgLosBaseline: null,
     targets,
   };
-  const revenueInsights = evaluateRevenueRules(revenueCtx);
+  // PBS 2026-07-09: build ParityContext from lighthouse feeds and evaluate.
+  type IntegrityRow = {
+    shop_date: string; stay_date: string;
+    direct_usd: number | null; booking_usd: number | null;
+    expedia_usd: number | null; agoda_usd: number | null; tiket_usd: number | null;
+    spread_pct: number | string | null; spread_usd: number | string | null;
+    otas_sold_out: number | null;
+  };
+  const allIntegrity = (integrityRes.data ?? []) as IntegrityRow[];
+  const latestIntegShop = allIntegrity[0]?.shop_date ?? null;
+  const integrityLatest = allIntegrity.filter((r) => r.shop_date === latestIntegShop);
+  const spreadPcts = integrityLatest.map((r) => Number(r.spread_pct ?? 0)).filter((v) => Number.isFinite(v) && v > 0);
+  const maxSpreadPct = spreadPcts.length === 0 ? null : Math.max(...spreadPcts);
+  const avgSpreadPct = spreadPcts.length === 0 ? null : spreadPcts.reduce((a, b) => a + b, 0) / spreadPcts.length;
+  const worstRow = integrityLatest.reduce<IntegrityRow | null>((acc, r) => {
+    const s = Number(r.spread_pct ?? 0);
+    if (!Number.isFinite(s)) return acc;
+    if (!acc || s > Number(acc.spread_pct ?? 0)) return r;
+    return acc;
+  }, null);
+  const worstMaxOta = worstRow ? [
+    { ota: 'Booking.com', usd: Number(worstRow.booking_usd ?? 0) },
+    { ota: 'Expedia',     usd: Number(worstRow.expedia_usd ?? 0) },
+    { ota: 'Agoda',       usd: Number(worstRow.agoda_usd ?? 0) },
+    { ota: 'Tiket',       usd: Number(worstRow.tiket_usd ?? 0) },
+  ].filter((x) => x.usd > 0).sort((a, b) => b.usd - a.usd)[0] ?? null : null;
+  const maxSpreadUsd = worstRow != null ? Number(worstRow.spread_usd ?? 0) : null;
+  const soldOutDays = integrityLatest.filter((r) => Number(r.otas_sold_out ?? 0) > 0).length;
+
+  const lighthouseSnap = (((lighthouseLatestRes.data ?? []) as Array<{ shop_date: string }>)[0]?.shop_date) ?? null;
+
+  const parityCtx: ParityContext = {
+    integritySnapshotDate: latestIntegShop,
+    integrityStayDatesCount: integrityLatest.length,
+    integrityMaxSpreadPct: maxSpreadPct,
+    integrityMaxSpreadUsd: maxSpreadUsd,
+    integrityAvgSpreadPct: avgSpreadPct,
+    integritySoldOutDays: soldOutDays,
+    integrityWorstStayDate: worstRow?.stay_date ?? null,
+    integrityWorstDirectUsd: worstRow != null ? Number(worstRow.direct_usd ?? 0) : null,
+    integrityWorstMaxOtaName: worstMaxOta?.ota ?? null,
+    integrityWorstMaxOtaUsd: worstMaxOta?.usd ?? null,
+    lighthouseSnapshotDate: lighthouseSnap,
+    targets: parityTargets,
+  };
+  const parityInsights = evaluateParityRules(parityCtx);
+  const revenueInsights = [...parityInsights, ...evaluateRevenueRules(revenueCtx)];
 
   const activeTargets = Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults';
   // Next 30 nights = tomorrow through 30 days out (excludes today so it's a clean 30-night window).
