@@ -155,22 +155,21 @@ export default function InvoiceGenerator({ initialNextNumber }: { initialNextNum
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {profiles.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', background: PAPER_SOFT, border: `1px dashed ${HAIRLINE}`, borderRadius: 6 }}>
-          <label style={{ ...labelStyle, whiteSpace: 'nowrap' }}>Load saved recipient</label>
-          <select value={pickedProfileId} onChange={(e) => applyProfile(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
-            <option value="">— pick a recipient —</option>
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.email ? ` · ${p.email}` : ''}{p.last_used_at ? ` · used ${new Date(p.last_used_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` : ''}
-              </option>
-            ))}
-          </select>
-          {pickedProfileId && (
-            <button type="button" onClick={() => { setPickedProfileId(''); }} style={secondaryBtn}>Clear</button>
-          )}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', background: PAPER_SOFT, border: `1px dashed ${HAIRLINE}`, borderRadius: 6 }}>
+        <label style={{ ...labelStyle, whiteSpace: 'nowrap' }}>Pick a client</label>
+        <select value={pickedProfileId} onChange={(e) => applyProfile(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+          <option value="">— choose from {profiles.length} client{profiles.length === 1 ? '' : 's'} —</option>
+          {profiles.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}{p.email ? ` · ${p.email}` : ''}
+            </option>
+          ))}
+        </select>
+        {pickedProfileId && (
+          <button type="button" onClick={() => { setPickedProfileId(''); }} style={secondaryBtn}>Clear</button>
+        )}
+        <a href="/holding/finance/clients" style={{ fontSize: 10, color: PRIMARY, textDecoration: 'underline', whiteSpace: 'nowrap' }}>Manage clients →</a>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -184,7 +183,7 @@ export default function InvoiceGenerator({ initialNextNumber }: { initialNextNum
           <input value={taxId} onChange={(e) => setTaxId(e.target.value)} style={inputStyle} placeholder="ESB12345678" />
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: INK_SOFT, marginTop: 4 }}>
             <input type="checkbox" checked={saveProfile} onChange={(e) => setSaveProfile(e.target.checked)} />
-            Save this recipient to profiles (re-usable for future invoices)
+            Also save this recipient as a new client (appears in Clients tab)
           </label>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
