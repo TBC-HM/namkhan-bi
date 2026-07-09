@@ -114,10 +114,12 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
     .order('night_date', { ascending: false });
   const yestRow = (kpiRows ?? []).find((r) => r.night_date === yest) ?? null;
   const stlyRow = (kpiRows ?? []).find((r) => r.night_date === stly) ?? null;
-  const adrYest = Number(yestRow?.adr ?? 0);
-  const revparYest = Number(yestRow?.revpar ?? 0);
-  const trevparYest = Number(yestRow?.trevpar ?? 0);
-  const adrStly = Number(stlyRow?.adr ?? 0);
+  // PBS 2026-07-09 pm: KPI consistency with HoD — strip VAT + service (÷1.21) to show NET.
+  const TAX_SERVICE = 1.21;
+  const adrYest = Number(yestRow?.adr ?? 0) / TAX_SERVICE;
+  const revparYest = Number(yestRow?.revpar ?? 0) / TAX_SERVICE;
+  const trevparYest = Number(yestRow?.trevpar ?? 0) / TAX_SERVICE;
+  const adrStly = Number(stlyRow?.adr ?? 0) / TAX_SERVICE;
   const revparStly = Number(stlyRow?.revpar ?? 0);
   const adrDelta = adrStly > 0 ? ((adrYest - adrStly) / adrStly) * 100 : null;
   const revparDelta = revparStly > 0 ? ((revparYest - revparStly) / revparStly) * 100 : null;
@@ -160,12 +162,12 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
   const contextTiles: KpiTileProps[] = [
     { label: 'RevPAR · yesterday', value: Math.round(revparYest), currency: 'USD', size: 'sm',
       delta: revparDelta != null ? { value: revparDelta, period: 'STLY', direction: revparDelta >= 0 ? 'up' : 'down' } : undefined,
-      footnote: 'v_kpi_daily', status: revparYest > 0 ? 'green' : 'grey' },
+      footnote: 'v_kpi_daily · net', status: revparYest > 0 ? 'green' : 'grey' },
     { label: 'ADR · yesterday', value: Math.round(adrYest), currency: 'USD', size: 'sm',
       delta: adrDelta != null ? { value: adrDelta, period: 'STLY', direction: adrDelta >= 0 ? 'up' : 'down' } : undefined,
-      footnote: 'v_kpi_daily', status: adrYest > 0 ? 'green' : 'grey' },
+      footnote: 'v_kpi_daily · net', status: adrYest > 0 ? 'green' : 'grey' },
     { label: 'TRevPAR · yesterday', value: Math.round(trevparYest), currency: 'USD', size: 'sm',
-      footnote: 'rooms + F&B + ancillary', status: trevparYest > 0 ? 'green' : 'grey' },
+      footnote: 'rooms + F&B + ancillary · net', status: trevparYest > 0 ? 'green' : 'grey' },
     { label: 'Pickup · 24h', value: pickupToday, size: 'sm',
       footnote: `vs ${pickupYest} yesterday · v_otb_pace`, status: pickupToday > 0 ? 'green' : 'grey' },
   ];
