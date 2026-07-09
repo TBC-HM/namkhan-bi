@@ -1,8 +1,10 @@
 // app/settings/users/_components/AddUserForm.tsx
-// PBS 2026-07-09: create a new auth user + grants + send invitation email.
+// PBS 2026-07-09 v3: create new user + surface action_link fallback so PBS
+// can copy/paste the invitation URL manually when Supabase SMTP isn't configured.
 'use client';
 
 import { useState, useTransition, type CSSProperties } from 'react';
+import InviteResultCard from './InviteResultCard';
 
 export default function AddUserForm() {
   const [email, setEmail] = useState('');
@@ -12,18 +14,19 @@ export default function AddUserForm() {
   const [holding, setHolding] = useState(false);
   const [sendInvite, setSendInvite] = useState(true);
   const [pending, startTransition] = useTransition();
-  const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [result, setResult] = useState<{ email: string; action_link: string | null; email_fired: boolean } | null>(null);
 
   const create = () => {
     if (!email.trim() || !name.trim()) { setErr('Email + name required'); return; }
+    const capturedEmail = email.trim();
     startTransition(async () => {
-      setErr(null); setMsg(null);
+      setErr(null); setResult(null);
       const r = await fetch('/api/settings/users/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim(),
+          email: capturedEmail,
           name: name.trim(),
           namkhan, donna, holding,
           send_invite: sendInvite,
@@ -31,7 +34,7 @@ export default function AddUserForm() {
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(body.error ?? `create failed (${r.status})`); return; }
-      setMsg(`✓ user created${sendInvite ? ' · invitation sent' : ''}. Reload to see them in the matrix below.`);
+      setResult({ email: capturedEmail, action_link: body.action_link ?? null, email_fired: !!body.email_fired });
       setEmail(''); setName(''); setNamkhan(false); setDonna(false); setHolding(false);
     });
   };
@@ -67,8 +70,15 @@ export default function AddUserForm() {
           {pending ? 'Creating…' : '+ Add user'}
         </button>
         {err && <span style={{ fontSize: 11, color: '#B04A2F' }}>{err}</span>}
-        {msg && <span style={{ fontSize: 11, color: '#0B5B3A' }}>{msg}</span>}
       </div>
+      {result && (
+        <InviteResultCard
+          email={result.email}
+          actionLink={result.action_link}
+          emailFired={result.email_fired}
+          onDismiss={() => setResult(null)}
+        />
+      )}
     </div>
   );
 }
