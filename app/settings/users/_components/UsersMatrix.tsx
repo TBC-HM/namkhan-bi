@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useTransition, type CSSProperties } from 'react';
+import EditUserModal from './EditUserModal';
 
 const NAMKHAN_PID = 260955;
 const DONNA_PID   = 1000001;
@@ -24,6 +25,7 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
   const [rows, setRows] = useState<UserRow[]>(initial);
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [editing, setEditing] = useState<UserRow | null>(null);
 
   const hasProp = (u: UserRow, pid: number) => u.property_grants.some((g) => g.property_id === pid && g.status === 'active');
   const isHoldingMember = (u: UserRow) => u.holding_role !== null && ['member','viewer','admin','owner'].includes(u.holding_role);
@@ -138,9 +140,14 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
                 {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('en-GB') : '—'}
               </td>
               <td style={tdCenterStyle}>
-                <button type="button" onClick={() => sendInvite(u)} disabled={pending} style={btnStyle}>
-                  Send invitation
-                </button>
+                <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                  <button type="button" onClick={() => setEditing(u)} disabled={pending} style={btnStyleSecondary}>
+                    Edit
+                  </button>
+                  <button type="button" onClick={() => sendInvite(u)} disabled={pending} style={btnStyle}>
+                    Invite
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
@@ -148,8 +155,26 @@ export default function UsersMatrix({ initial }: { initial: UserRow[] }) {
       </table>
       {msg && <div style={{ fontSize: 11, color: msg.startsWith('✓') ? '#0B5B3A' : '#B04A2F', marginTop: 8 }}>{msg}</div>}
       <div style={{ fontSize: 10, color: '#5A5A5A', marginTop: 8 }}>
-        <strong>Holding</strong> = read-only cross-property access. <strong>Admin</strong> = holding + can manage users on this page. Ticking Admin requires Holding first.
+        <strong>Holding</strong> = cross-property access · view + create invoices, contracts, memos. <strong>Admin</strong> = holding + manage users on this page. Ticking Admin requires Holding first.
       </div>
+      {editing && (
+        <EditUserModal
+          user={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(patch) => {
+            setRows((prev) => prev.map((x) => x.id === editing.id ? { ...x, ...patch } : x));
+            setMsg('✓ user updated');
+            setTimeout(() => setMsg(null), 2000);
+          }}
+          onArchived={(userId) => {
+            setRows((prev) => prev.map((x) => x.id === userId
+              ? { ...x, property_grants: [], holding_role: null }
+              : x));
+            setMsg('✓ user archived (grants revoked)');
+            setTimeout(() => setMsg(null), 2500);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -163,6 +188,11 @@ const thStyleCenter: CSSProperties = { ...thStyle, textAlign: 'center' };
 const tdStyle: CSSProperties = { padding: '6px', borderBottom: '1px solid #F5F0E1', color: '#1B1B1B' };
 const tdCenterStyle: CSSProperties = { ...tdStyle, textAlign: 'center' };
 const btnStyle: CSSProperties = {
+  padding: '4px 10px', borderRadius: 4, border: '1px solid #084838',
+  background: '#084838', color: '#FFFFFF', fontSize: 10,
+  letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700, cursor: 'pointer',
+};
+const btnStyleSecondary: CSSProperties = {
   padding: '4px 10px', borderRadius: 4, border: '1px solid #C8C0A6',
   background: '#FFFFFF', color: '#084838', fontSize: 10,
   letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700, cursor: 'pointer',
