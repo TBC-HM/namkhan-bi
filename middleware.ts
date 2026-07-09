@@ -26,6 +26,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/cron') ||
     pathname.startsWith('/api/cockpit/webhooks') ||
+    pathname.startsWith('/api/auth/') || // login / request-access / callback exchange
     PUBLIC_PATHS.some(p => pathname.startsWith(p))
   ) return NextResponse.next()
 
