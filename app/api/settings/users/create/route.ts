@@ -1,7 +1,9 @@
 // app/api/settings/users/create/route.ts
-// PBS 2026-07-09 v2:
-//   - inviteUserByEmail (creates user + sends invite email in one call)
-//   - admin gate requires holding_role IN (owner, admin) — plain member can't manage
+// PBS 2026-07-09 v3:
+//   - inviteUserByEmail (creates user + fires invite email via Supabase Auth SMTP)
+//   - ALSO generates action_link via admin.generateLink so UI can display a
+//     "copy link" fallback for when Supabase SMTP isn't configured yet.
+//   - admin gate requires holding_role IN (owner, admin)
 //   - propagates role param to grant RPCs
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
@@ -48,22 +50,24 @@ export async function POST(req: Request) {
 
     const admin = getSupabaseAdmin();
     const origin = new URL(req.url).origin;
+    const redirectTo = `${origin}/account/password`;
 
-    // Path A: invite (creates user + sends invite email via Supabase Auth)
-    // Path B: if user already exists, we just add grants + send reset link
     let userId: string;
     let inviteInfo: string | null = null;
+    let actionLink: string | null = null;
+    let emailFired = false;
 
     if (sendInvite) {
+      // inviteUserByEmail creates user + fires invite email via Supabase SMTP.
       const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
         data: { full_name: name },
-        redirectTo: `${origin}/account/password`,
+        redirectTo,
       });
       if (invErr) {
         if (!/already|registered/i.test(invErr.message)) {
           return NextResponse.json({ error: `invite failed: ${invErr.message}` }, { status: 500 });
         }
-        // User exists — fall through to lookup + resetPasswordForEmail
+        // User exists — fall back to reset email + reuse existing user id.
         const { data: list } = await admin.auth.admin.listUsers({ perPage: 300 });
         const found = (list?.users ?? []).find((u) => u.email === email);
         if (!found) return NextResponse.json({ error: 'user exists but not findable' }, { status: 500 });
@@ -73,17 +77,27 @@ export async function POST(req: Request) {
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
           { cookies: { getAll: () => [], setAll: () => {} } },
         );
-        const { error: rErr } = await anon.auth.resetPasswordForEmail(email, {
-          redirectTo: `${origin}/account/password`,
-        });
+        const { error: rErr } = await anon.auth.resetPasswordForEmail(email, { redirectTo });
         if (rErr) inviteInfo = `existed; reset email failed: ${rErr.message}`;
-        else inviteInfo = 'existed; reset link sent';
+        else { inviteInfo = 'existed; reset link sent'; emailFired = true; }
       } else {
         userId = inv!.user!.id;
         inviteInfo = 'invite sent';
+        emailFired = true;
       }
+
+      // SMTP-independent fallback link — always returns a URL, even when SMTP is unconfigured.
+      // type='recovery' works on any existing user (new or old) since post-invite the user exists.
+      try {
+        const { data: link } = await admin.auth.admin.generateLink({
+          type: 'recovery',
+          email,
+          options: { redirectTo },
+        });
+        actionLink = link?.properties?.action_link ?? null;
+      } catch { actionLink = null; }
     } else {
-      // No invite requested → still need a user row. createUser only, no email.
+      // No invite requested — silent createUser, no email.
       const { data: created, error: cErr } = await admin.auth.admin.createUser({
         email, email_confirm: true, user_metadata: { full_name: name },
       });
@@ -98,12 +112,17 @@ export async function POST(req: Request) {
       }
     }
 
-    // Grants (sequential to keep TypeScript simple).
     if (namkhan) await admin.rpc('fn_user_grant_property', { p_user_id: userId, p_email: email, p_property_id: NAMKHAN_PID, p_active: true, p_role: 'staff' });
     if (donna)   await admin.rpc('fn_user_grant_property', { p_user_id: userId, p_email: email, p_property_id: DONNA_PID,   p_active: true, p_role: 'staff' });
     if (holding) await admin.rpc('fn_user_grant_holding',  { p_auth_user_id: userId, p_email: email, p_active: true, p_role: 'member' });
 
-    return NextResponse.json({ ok: true, user_id: userId, invite: inviteInfo });
+    return NextResponse.json({
+      ok: true,
+      user_id: userId,
+      invite: inviteInfo,
+      email_fired: emailFired,
+      action_link: actionLink,
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
