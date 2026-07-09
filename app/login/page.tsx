@@ -1,8 +1,9 @@
 // app/login/page.tsx
 // ADR-112 · Supabase Auth email/password login.
 // PBS 2026-07-09: replaces the legacy workspace_session magic-link login.
-// Google SSO wiring is deferred until the OAuth client is configured — for
-// now email/password is the only path in.
+// PBS 2026-07-09 (v2): "Forgot password?" flow. Toggle switches the form to
+// email-only; on submit we call supabase.auth.resetPasswordForEmail() which
+// mails a link that lands the user at /auth/callback?next=/account/password.
 'use client';
 
 import { useState, type CSSProperties } from 'react';
@@ -14,33 +15,51 @@ const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
+type Mode = 'signin' | 'forgot';
+
 export default function LoginPage() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get('next') || '/';
+  const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function signIn() {
     if (!email.trim() || !pw || busy) return;
-    setBusy(true); setErr('');
+    setBusy(true); setErr(''); setOk('');
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
     setBusy(false);
     if (error) { setErr(error.message); return; }
-    // Middleware re-checks claims on the next request; refresh to make sure
-    // server components see the fresh cookie.
     router.push(next);
     router.refresh();
   }
+
+  async function forgot() {
+    if (!email.trim() || busy) return;
+    setBusy(true); setErr(''); setOk('');
+    const redirectTo = `${location.origin}/auth/callback?next=${encodeURIComponent('/account/password')}`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    setBusy(false);
+    if (error) { setErr(error.message); return; }
+    setOk(`Reset link sent to ${email.trim()}. Check your inbox.`);
+  }
+
+  const submit = mode === 'signin' ? signIn : forgot;
 
   return (
     <div style={pageStyle}>
       <div style={cardStyle}>
         <div style={eyebrowStyle}>The Beyond Circle · Workspace</div>
-        <h1 style={titleStyle}>Sign in</h1>
-        <p style={hintStyle}>Enter your email and password.</p>
+        <h1 style={titleStyle}>{mode === 'signin' ? 'Sign in' : 'Reset password'}</h1>
+        <p style={hintStyle}>
+          {mode === 'signin'
+            ? 'Enter your email and password.'
+            : 'Enter your email — we\'ll send you a reset link.'}
+        </p>
 
         <input
           type="email"
@@ -49,22 +68,35 @@ export default function LoginPage() {
           placeholder="email"
           autoComplete="email"
           style={inputStyle}
-          onKeyDown={(e) => { if (e.key === 'Enter') signIn(); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
         />
-        <input
-          type="password"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          placeholder="password"
-          autoComplete="current-password"
-          style={{ ...inputStyle, marginTop: 8 }}
-          onKeyDown={(e) => { if (e.key === 'Enter') signIn(); }}
-        />
+        {mode === 'signin' && (
+          <input
+            type="password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            placeholder="password"
+            autoComplete="current-password"
+            style={{ ...inputStyle, marginTop: 8 }}
+            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          />
+        )}
 
         {err && <div style={errStyle}>{err}</div>}
+        {ok && <div style={okStyle}>{ok}</div>}
 
-        <button type="button" onClick={signIn} disabled={busy} style={btnStyle}>
-          {busy ? 'Signing in…' : 'Sign in'}
+        <button type="button" onClick={submit} disabled={busy} style={btnStyle}>
+          {busy
+            ? (mode === 'signin' ? 'Signing in…' : 'Sending…')
+            : (mode === 'signin' ? 'Sign in' : 'Send reset link')}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setMode(mode === 'signin' ? 'forgot' : 'signin'); setErr(''); setOk(''); }}
+          style={linkBtnStyle}
+        >
+          {mode === 'signin' ? 'Forgot password?' : '← Back to sign in'}
         </button>
       </div>
     </div>
@@ -93,8 +125,14 @@ const inputStyle: CSSProperties = {
   boxSizing: 'border-box',
 };
 const errStyle: CSSProperties = { color: '#B04A2F', fontSize: 12, marginTop: 8 };
+const okStyle: CSSProperties = { color: '#0B5B3A', fontSize: 12, marginTop: 8 };
 const btnStyle: CSSProperties = {
   width: '100%', marginTop: 14, padding: '10px', borderRadius: 6, border: 'none',
   background: '#084838', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer',
   fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase',
+};
+const linkBtnStyle: CSSProperties = {
+  display: 'block', width: '100%', marginTop: 8, padding: '6px',
+  background: 'transparent', border: 'none', color: '#5A5A5A',
+  fontSize: 11, letterSpacing: '0.04em', cursor: 'pointer', textAlign: 'center',
 };
