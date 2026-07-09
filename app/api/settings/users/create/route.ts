@@ -36,7 +36,7 @@ async function requireAdmin(req: Request): Promise<{ ok: true } | { ok: false; r
 
 export async function POST(req: Request) {
   const gate = await requireAdmin(req);
-  if (!gate.ok) return gate.res;
+  if (gate.ok === false) return gate.res;
   try {
     const body = await req.json();
     const email = String(body.email ?? '').trim().toLowerCase();
@@ -65,12 +65,10 @@ export async function POST(req: Request) {
       userId = created!.user!.id;
     }
 
-    // Grant scopes
-    const grants: Promise<unknown>[] = [];
-    if (namkhan) grants.push(admin.rpc('fn_user_grant_property', { p_user_id: userId, p_email: email, p_property_id: NAMKHAN_PID, p_active: true }));
-    if (donna)   grants.push(admin.rpc('fn_user_grant_property', { p_user_id: userId, p_email: email, p_property_id: DONNA_PID,   p_active: true }));
-    if (holding) grants.push(admin.rpc('fn_user_grant_holding',  { p_auth_user_id: userId, p_email: email, p_active: true }));
-    await Promise.all(grants);
+    // Grant scopes (sequential — RPC failures are rare and we want simple types).
+    if (namkhan) await admin.rpc('fn_user_grant_property', { p_user_id: userId, p_email: email, p_property_id: NAMKHAN_PID, p_active: true });
+    if (donna)   await admin.rpc('fn_user_grant_property', { p_user_id: userId, p_email: email, p_property_id: DONNA_PID,   p_active: true });
+    if (holding) await admin.rpc('fn_user_grant_holding',  { p_auth_user_id: userId, p_email: email, p_active: true });
 
     // Optional: send invite (password-reset flow, no password set yet).
     if (sendInvite) {
