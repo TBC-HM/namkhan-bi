@@ -1,6 +1,5 @@
 // app/holding/finance/invoices/template/page.tsx
-// PBS 2026-07-08: Editable invoice template — brand, colour, header, footer, defaults.
-// Live preview panel next to the form so PBS sees changes before saving.
+// PBS 2026-07-09 v3: sender block (Beyond Circle Dubai) added to template.
 
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -19,6 +18,12 @@ interface TemplateRow {
   default_notes: string | null;
   default_currency: string;
   default_tax_pct: string;
+  sender_name: string | null;
+  sender_address: string | null;
+  sender_email: string | null;
+  sender_phone: string | null;
+  sender_tax_id: string | null;
+  sender_iban: string | null;
   updated_at: string;
   updated_by: string;
 }
@@ -37,11 +42,11 @@ export default async function HoldingInvoiceTemplatePage() {
   return (
     <DashboardPage
       title="Finance · Holding · Invoice template"
-      subtitle={`Editable brand + defaults · applies to every new invoice · last updated ${row?.updated_at ? new Date(row.updated_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'} by ${row?.updated_by ?? '—'}`}
+      subtitle={`Editable brand + Sender + defaults · applies to every new invoice · last updated ${row?.updated_at ? new Date(row.updated_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'} by ${row?.updated_by ?? '—'}`}
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Invoice template" subtitle="Edit brand + defaults · live preview on the right · Save applies to every new invoice generator." density="compact">
+        <Container title="Invoice template" subtitle="Edit brand + Sender (Beyond Circle Dubai) + defaults · live preview on the right · Save applies to every new invoice generator." density="compact">
           <TemplateEditor
             initial={row ? {
               brand_name: row.brand_name,
@@ -51,6 +56,12 @@ export default async function HoldingInvoiceTemplatePage() {
               default_notes: row.default_notes ?? '',
               default_currency: row.default_currency,
               default_tax_pct: Number(row.default_tax_pct),
+              sender_name:    row.sender_name    ?? '',
+              sender_address: row.sender_address ?? '',
+              sender_email:   row.sender_email   ?? '',
+              sender_phone:   row.sender_phone   ?? '',
+              sender_tax_id:  row.sender_tax_id  ?? '',
+              sender_iban:    row.sender_iban    ?? '',
             } : null}
           />
         </Container>
