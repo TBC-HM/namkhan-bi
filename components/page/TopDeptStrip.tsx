@@ -44,11 +44,12 @@ const SLUG_SET = new Set(CANONICAL_DEPTS.map((d) => d.slug));
 const HOLDING_DEPTS: DeptLink[] = [
   { label: 'CEO',          slug: 'ceo',       href: '/holding/ceo'       },
   { label: 'Legal',        slug: 'legal',     href: '/holding/legal'     },
-  { label: 'Strategy',     slug: 'strategy',  href: '/holding/strategy', openInNewWindow: true, color: '#8B4513' },
   { label: 'Finance',      slug: 'finance',   href: '/holding/finance'   },
   { label: 'IT',           slug: 'it',        href: '/holding/it'        },
   // PBS 2026-07-09 pm: Tasks OUT of top strip. Still reachable via the DeptEntry
   // landing on /holding (Tasks box in Attention · Reports · Tasks · Bugs row).
+  // PBS 2026-07-09 pm: Strategy OUT of top strip. Now surfaces as a sub-item
+  // under CEO (holding_ceo subPages) and inside Revenue's Market & Control strip.
 ];
 const HOLDING_SLUG_SET = new Set(HOLDING_DEPTS.map((d) => d.slug));
 
