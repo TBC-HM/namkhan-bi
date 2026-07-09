@@ -5,7 +5,10 @@
 // values swapped per dept.
 
 export type DeptSlug =
-  | 'revenue' | 'sales' | 'marketing' | 'operations' | 'guest' | 'finance' | 'it' | 'architect';
+  | 'revenue' | 'sales' | 'marketing' | 'operations' | 'guest' | 'finance' | 'it' | 'architect'
+  // PBS 2026-07-09: holding-scoped configs surface as HoD landings too — so
+  // HodLanding can be reused for /holding/ceo /holding/finance etc.
+  | 'holding' | 'holding_ceo' | 'holding_finance' | 'holding_legal' | 'holding_strategy' | 'holding_it' | 'holding_john';
 
 export interface DeptAttentionItem {
   id: string;
