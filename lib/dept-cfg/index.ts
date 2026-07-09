@@ -11,6 +11,9 @@ import type { DeptCfg } from './types';
 // source/source-page URL. Pressing a saved report opens a print-ready doc,
 // not the live dashboard. Source pages remain reachable via the dept strip.
 const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
+  // PBS 2026-07-09 pm: daily briefing = morning conclusion block emailed to HoD.
+  // Template row in documentation.revenue_report_templates (key='daily_briefing').
+  { value: 'daily_briefing', label: 'Daily Briefing', hrefBase: '/revenue/reports/render?type=daily_briefing', dimGroups: [] },
   // PBS 2026-07-03: keys aligned to lib/period.ts resolvePeriod contract —
   // `win` (not `window`), values `7d`/`30d` (not `last_7d`), `cmp` (not `compare`).
   // Bug 2026-07-03: builder emitted `?window=last_30d`, resolvePeriod fell
