@@ -30,7 +30,7 @@ async function requireAdmin(req: Request): Promise<{ ok: true } | { ok: false; r
 
 export async function POST(req: Request) {
   const gate = await requireAdmin(req);
-  if (!gate.ok) return gate.res;
+  if (gate.ok === false) return gate.res;
   try {
     const body = await req.json();
     const email = String(body.email ?? '').trim().toLowerCase();
