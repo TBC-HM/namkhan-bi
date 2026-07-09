@@ -110,7 +110,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     // Lighthouse compset historical shops for 3d/7d rate-change signals.
     supabase.from('v_lighthouse_rateshop').select('shop_date, stay_date, hotel_name, is_self, bar_rate').eq('property_id', pid).eq('feed_source', 'compset').gte('shop_date', new Date(Date.now() - 8 * 86400_000).toISOString().slice(0, 10)),
     // PBS 2026-07-09 pm: rate-plan hygiene aggregate (per property).
-    sbAdmin.from('v_rate_plan_hygiene').select('active_plans_total, sleeping_total, sleeping_over_2y, sleeping_1_2y, sleeping_180d_1y, never_booked, never_booked_pct, orphan_count, ytd_revenue_total, nrr_locked_share_pct, flex_share_pct, early_bird_share_pct').eq('property_id', pid).maybeSingle(),
+    // Fail-open: any error here must NOT nuke the whole /revenue HoD render.
+    sbAdmin.from('v_rate_plan_hygiene').select('active_plans_total, sleeping_total, sleeping_over_2y, sleeping_1_2y, sleeping_180d_1y, never_booked, never_booked_pct, orphan_count, ytd_revenue_total, nrr_locked_share_pct, flex_share_pct, early_bird_share_pct').eq('property_id', pid).maybeSingle().then((r) => r, () => ({ data: null, error: null })),
   ]);
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
   const sendLogRows   = (sendsRes.data ?? []) as SendLogRow[];
@@ -356,7 +357,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     flex_share_pct: number | string | null;
     early_bird_share_pct: number | string | null;
   };
-  const hyg = (ratePlanHygieneRes.data ?? null) as HygieneRow | null;
+  const hyg = ((ratePlanHygieneRes as { data?: unknown } | null | undefined)?.data ?? null) as HygieneRow | null;
   const ratePlanCtx: RatePlanContext = {
     activePlansTotal:  Number(hyg?.active_plans_total ?? 0),
     sleepingTotal:     Number(hyg?.sleeping_total ?? 0),
