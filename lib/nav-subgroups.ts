@@ -177,6 +177,36 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Budget',       href: '/finance/budget'       },
     ],
   },
+
+  // ─── Finance · HR sub-strip ─────────────────────────────────
+  // PBS 2026-07-09 pm: HR area sub-menu — was missing entirely for both
+  // properties. Donna Finance HR is Factorial-fed and much richer than
+  // Namkhan, but neither could see the child pages without this strip.
+  {
+    parentHref: '/finance/hr',
+    members: [
+      '/finance/hr',
+      '/finance/hr/attendance',
+      '/finance/hr/data',
+      '/finance/hr/holidays',
+      '/finance/hr/lifecycle',
+      '/finance/hr/onboarding',
+      '/finance/hr/offboarding',
+      '/finance/hr/schedule',
+      '/finance/hr/recruitment',
+    ],
+    tabs: [
+      { label: 'HoD',          href: '/finance/hr'              },
+      { label: 'Schedule',     href: '/finance/hr/schedule'     },
+      { label: 'Attendance',   href: '/finance/hr/attendance'   },
+      { label: 'Holidays',     href: '/finance/hr/holidays'     },
+      { label: 'Lifecycle',    href: '/finance/hr/lifecycle'    },
+      { label: 'Onboarding',   href: '/finance/hr/onboarding'   },
+      { label: 'Offboarding',  href: '/finance/hr/offboarding'  },
+      { label: 'Recruitment',  href: '/finance/hr/recruitment'  },
+      { label: 'Data',         href: '/finance/hr/data'         },
+    ],
+  },
 ];
 
 // PBS 2026-07-07 pm: sub-strip matching must survive the tenant `/h/{id}` prefix.
