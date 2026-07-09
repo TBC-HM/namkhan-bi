@@ -5,6 +5,7 @@ import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_de
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import TemplateEditor from './_components/TemplateEditor';
+import InvoiceSubNav from '../_components/InvoiceSubNav';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -34,19 +35,21 @@ export default async function HoldingInvoiceTemplatePage() {
   const row = data as TemplateRow | null;
 
   const cfg = DEPT_CFG.holding_finance;
-  // PBS 2026-07-09: subPages already includes Template — just mark it active. Was
-  // appending a manual "Template" entry which created a duplicate tab.
+  // PBS 2026-07-09: Template lives UNDER Invoices sub-menu now. Top-level tab
+  // is "Invoices" — sub-nav strip inside the page shows Create · Send log · Template.
   const tabs: DashboardTab[] = cfg.subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href,
-    active: s.href === '/holding/finance/invoices/template',
+    active: s.href === '/holding/finance/invoices',
   }));
 
   return (
     <DashboardPage
-      title="Finance · Holding · Invoice template"
+      title="Finance · Holding · Invoices · Template"
       subtitle={`Editable brand + Sender + defaults · applies to every new invoice · last updated ${row?.updated_at ? new Date(row.updated_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'} by ${row?.updated_by ?? '—'}`}
       tabs={tabs}
     >
+      <InvoiceSubNav active="template" />
+
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Invoice template" subtitle="Edit brand + Sender (Beyond Circle Dubai) + defaults · live preview on the right · Save applies to every new invoice generator." density="compact">
           <TemplateEditor
