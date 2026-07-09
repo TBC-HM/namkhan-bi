@@ -97,7 +97,7 @@ export default async function HoldingFinanceInvoicesPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: '#FAFAF7' }}>
-                    {['#', 'Issued', 'To', 'Subject', 'Subtotal', 'Tax', 'Total', 'Due', 'Status', 'Sent'].map((h) => (
+                    {['#', 'Issued', 'To', 'Subject', 'Subtotal', 'Tax', 'Total', 'Due', 'Status', 'Sent', 'Preview'].map((h) => (
                       <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A', fontWeight: 700, borderBottom: '1px solid #E6DFCC' }}>{h}</th>
                     ))}
                   </tr>
@@ -115,6 +115,12 @@ export default async function HoldingFinanceInvoicesPage() {
                       <td style={cell}>{i.due_at ?? '—'}</td>
                       <td style={cell}><StatusPill status={i.status} /></td>
                       <td style={cell}>{i.sent_at ? new Date(i.sent_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                      <td style={cell}>
+                        <a href={`/holding/finance/invoices/${i.id}/preview`} target="_blank" rel="noopener noreferrer"
+                           style={{ padding: '3px 10px', border: '1px solid #084838', color: '#084838', borderRadius: 4, fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
+                          Preview
+                        </a>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
