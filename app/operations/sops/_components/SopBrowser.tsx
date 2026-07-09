@@ -29,6 +29,14 @@ const INK   = '#1B1B1B';
 const INK_S = '#3A3A3A';
 const INK_M = '#5A5A5A';
 const CREAM = '#F5F0E1';
+const PRIMARY = '#084838';
+
+// PBS 2026-07-09 pm: compact row action button style shared by Preview / Send / Edit.
+const rowBtn: React.CSSProperties = {
+  display: 'inline-block', padding: '3px 10px', fontSize: 11, fontWeight: 600,
+  color: PRIMARY, background: WHITE, border: '1px solid ' + PRIMARY,
+  borderRadius: 4, textDecoration: 'none', whiteSpace: 'nowrap',
+};
 
 const th: React.CSSProperties = {
   padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600,
@@ -181,6 +189,7 @@ export default function SopBrowser({ sops, generateHref, proposalsHref }: { sops
                   <th style={th}>Summary</th>
                   <th style={{ ...th, textAlign: 'right', width: 70 }}>Ver.</th>
                   <th style={{ ...th, textAlign: 'right', width: 80 }}>Links</th>
+                  <th style={{ ...th, textAlign: 'center', width: 180 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -202,6 +211,15 @@ export default function SopBrowser({ sops, generateHref, proposalsHref }: { sops
                       {(s.kb_links_count ?? 0) > 0 && <span title="Knowledge base links">KB·{s.kb_links_count}</span>}
                       {(s.legal_links_count ?? 0) > 0 && <span title="Legal links" style={{ marginLeft: 6 }}>Legal·{s.legal_links_count}</span>}
                       {(s.susty_links_count ?? 0) > 0 && <span title="Sustainability links" style={{ marginLeft: 6 }}>Susty·{s.susty_links_count}</span>}
+                    </td>
+                    {/* PBS 2026-07-09 pm: Preview · Send · Edit per SOP row */}
+                    <td style={{ padding: '6px 8px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <a href={`/operations/sops/${encodeURIComponent(s.sop_code)}/preview`} target="_blank" rel="noopener noreferrer"
+                        style={rowBtn}>Preview</a>
+                      <a href={`/operations/sops/${encodeURIComponent(s.sop_code)}/send`}
+                        style={{ ...rowBtn, marginLeft: 6 }}>Send</a>
+                      <a href={`/operations/sops/${encodeURIComponent(s.sop_code)}/edit`}
+                        style={{ ...rowBtn, marginLeft: 6, background: PRIMARY, color: WHITE, border: '1px solid ' + PRIMARY }}>Edit</a>
                     </td>
                   </tr>
                 ))}
