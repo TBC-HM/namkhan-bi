@@ -28,6 +28,7 @@ import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
+import WindowSelect from '../_components/WindowSelect';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -302,24 +303,14 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
           Row A = forward-window pill row (hardcoded #FFF/#E6DFCC/#1F3A2E per token-ladder rule).
           Row B = OTB headline strip (Container, density='compact', 160px min / 8px gap).
           Row C = Pace-signals strip (same tile geometry, same Container density). */}
-      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A', marginRight: 4 }}>Forward window:</span>
-        {winOptions.map((o) => {
-          const active = o.k === period.win;
-          return (
-            <a key={o.k} href={hrefFor(o.k)} style={{
-              fontFamily: 'inherit',
-              fontSize: 11,
-              padding: '4px 10px',
-              borderRadius: 99,
-              border: `1px solid ${active ? '#1F3A2E' : '#E6DFCC'}`,
-              background: active ? '#1F3A2E' : '#FFFFFF',
-              color: active ? '#FFFFFF' : '#5A5A5A',
-              fontWeight: active ? 600 : 500,
-              textDecoration: 'none',
-            }}>{o.label}</a>
-          );
-        })}
+      {/* PBS 2026-07-09 pm: pill row replaced with a compact dropdown inside the headline strip. */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <WindowSelect
+          basePath={basePath}
+          currentWin={period.win}
+          currentCmp={period.cmp ?? null}
+          options={winOptions.map((o) => ({ value: o.k, label: o.label }))}
+        />
       </div>
 
       {/* PBS 2026-07-08: one container, two stacked tile rows.
