@@ -512,7 +512,7 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
               }}
               style={S.signOutBtn}
             >
-              Sign out
+              Logout
             </button>
           </div>
         )}
