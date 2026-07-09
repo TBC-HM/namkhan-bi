@@ -32,20 +32,57 @@ interface Props {
   assetPool: MediaAssetReady[];
 }
 
+// PBS 2026-07-10: proper campaign planner brief.
+// Adds objective/type/audience/markets/timing/budget/metric alongside brief text.
+// Maps 1:1 onto new marketing.campaigns columns (v2 schema).
+export type Objective       = 'new_bookings' | 'retention' | 'winback' | 'brand_awareness' | 'seasonal_push' | 'rate_promo' | 'event_promo' | 'product_launch' | 'pr_editorial' | 'loyalty';
+export type CampaignType    = 'email_newsletter' | 'email_sequence' | 'social_organic' | 'social_paid_ad' | 'google_ads' | 'booking_com_promo' | 'expedia_promo' | 'agoda_promo' | 'direct_booking_banner' | 'landing_page' | 'pr_outreach' | 'content_asset' | 'multi_channel';
+export type AudienceSegment = 'all_subscribers' | 'past_guests' | 'high_value_repeaters' | 'prospects' | 'dormant_winback' | 'country_segment' | 'seasonal_segment' | 'ota_no_email' | 'geo_targeted_paid' | 'lookalike' | 'custom_filter';
+export type SuccessMetric   = 'bookings' | 'revenue' | 'room_nights' | 'email_opens' | 'email_clicks' | 'email_click_to_book' | 'impressions' | 'reach' | 'website_sessions' | 'website_conversions' | 'follower_growth' | 'engagement_rate' | 'earned_media_mentions';
+export type BudgetType      = 'organic' | 'daily' | 'lifetime' | 'per_click' | 'per_impression';
+export type Recurrence      = 'one_off' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'seasonal';
+
 interface Brief {
-  templateId: number | null;
-  briefText: string;
-  whenLive: string; // 'today', 'tomorrow', 'this_friday', or ISO date
-  vibes: string[];
+  // Planner v2 fields (PBS 2026-07-10)
+  objective:         Objective;
+  campaignType:      CampaignType;
+  audience:          AudienceSegment;
+  targetMarkets:     string[];        // ISO-2 country codes
+  startDate:         string;          // YYYY-MM-DD
+  endDate:           string;          // YYYY-MM-DD (blank for one-off)
+  recurrence:        Recurrence;
+  budgetType:        BudgetType;
+  budgetAmount:      string;          // string in UI, cast to numeric on save
+  budgetCurrency:    string;
+  successMetric:     SuccessMetric;
+  successTarget:     string;
+  // Legacy fields (still consumed by Curate/Compose/Approve steps)
+  templateId:        number | null;
+  briefText:         string;
+  whenLive:          string;          // kept for existing Step 4/5 subtitle
+  vibes:             string[];
 }
 
 export default function CampaignWizard({ templates, assetPool }: Props) {
   const [step, setStep] = useState<Step>(1);
+  const today = new Date().toISOString().slice(0, 10);
   const [brief, setBrief] = useState<Brief>({
-    templateId: templates.find(t => t.channel === 'instagram_post')?.template_id ?? templates[0]?.template_id ?? null,
-    briefText: '',
-    whenLive: 'this_friday',
-    vibes: [],
+    objective:      'new_bookings',
+    campaignType:   'social_organic',
+    audience:       'all_subscribers',
+    targetMarkets:  [],
+    startDate:      today,
+    endDate:        '',
+    recurrence:     'one_off',
+    budgetType:     'organic',
+    budgetAmount:   '',
+    budgetCurrency: 'USD',
+    successMetric:  'bookings',
+    successTarget:  '',
+    templateId:     templates.find(t => t.channel === 'instagram_post')?.template_id ?? templates[0]?.template_id ?? null,
+    briefText:      '',
+    whenLive:       'this_friday',
+    vibes:          [],
   });
   const [picked, setPicked]     = useState<string[]>([]); // asset ids
   const [caption, setCaption]   = useState<string>('');
@@ -74,7 +111,17 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
 
   // Step navigation guards
   const canContinue = useMemo(() => {
-    if (step === 1) return !!brief.templateId && brief.briefText.trim().length > 5;
+    if (step === 1) {
+      // PBS 2026-07-10 v2: proper planner requires objective + type + audience + startDate + template + brief text.
+      // Markets required only when audience is country_segment / geo_targeted_paid / lookalike.
+      if (!brief.objective || !brief.campaignType || !brief.audience) return false;
+      if (!brief.startDate) return false;
+      if (!brief.templateId) return false;
+      if (brief.briefText.trim().length < 20) return false;
+      if ((brief.audience === 'country_segment' || brief.audience === 'geo_targeted_paid' || brief.audience === 'lookalike') && brief.targetMarkets.length === 0) return false;
+      if (brief.budgetType !== 'organic' && !brief.budgetAmount) return false;
+      return true;
+    }
     if (step === 2) return template ? picked.length >= template.min_assets && picked.length <= template.max_assets : false;
     if (step === 3) return caption.trim().length >= 10;
     if (step === 4) return true;
@@ -175,7 +222,7 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
       }}>
         {step > 1 && step < 5 && <button onClick={back} className="btn" style={{ fontSize: "var(--t-sm)" }}>← back</button>}
         <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
-          {step === 1 && (canContinue ? 'looks good' : 'pick a template + write a brief sentence')}
+          {step === 1 && (canContinue ? 'brief complete' : 'fill in objective · type · audience · dates · template · brief (20+ chars)')}
           {step === 2 && template && `picked ${picked.length} of ${template.min_assets === template.max_assets ? template.max_assets : `${template.min_assets}–${template.max_assets}`}`}
           {step === 3 && `caption ${caption.length} / ${template?.caption_max_chars || 2200} chars`}
         </span>
@@ -209,124 +256,302 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
 }
 
 // ============================================================================
-// STEP 1 · BRIEF
+// STEP 1 · BRIEF — proper campaign planner (PBS 2026-07-10)
 // ============================================================================
+// Structured 8-block brief: Objective → Type → Channel/Template → Audience →
+// Markets → Timing → Budget → Success metric → Brief freetext + vibes.
+// Every field feeds the AI proposal in Step 2/3 and lands as a column on
+// marketing.campaigns.
+
+const OBJECTIVES: Array<{ k: Objective; label: string; hint: string }> = [
+  { k: 'new_bookings',    label: 'New bookings',         hint: 'Fill unsold nights · direct conversion goal' },
+  { k: 'retention',       label: 'Retention',            hint: 'Re-engage past guests · repeat stays' },
+  { k: 'winback',         label: 'Winback',              hint: 'Recover dormant guests (>18mo since stay)' },
+  { k: 'brand_awareness', label: 'Brand awareness',      hint: 'Broad reach · no direct conversion goal' },
+  { k: 'seasonal_push',   label: 'Seasonal push',        hint: 'Window-specific (winter · Green Season)' },
+  { k: 'rate_promo',      label: 'Rate promo',           hint: 'Push a specific rate plan or discount' },
+  { k: 'event_promo',     label: 'Event promo',          hint: 'Retreat · wedding · workshop' },
+  { k: 'product_launch',  label: 'Product launch',       hint: 'New room type · spa treatment · activity' },
+  { k: 'pr_editorial',    label: 'PR / editorial',       hint: 'Journalist · influencer outreach' },
+  { k: 'loyalty',         label: 'Loyalty',              hint: 'Member-exclusive comms' },
+];
+
+const CAMPAIGN_TYPES: Array<{ k: CampaignType; label: string }> = [
+  { k: 'email_newsletter',      label: 'Email · newsletter (one-off)' },
+  { k: 'email_sequence',        label: 'Email · nurture sequence' },
+  { k: 'social_organic',        label: 'Social · organic post' },
+  { k: 'social_paid_ad',        label: 'Social · paid ad (Meta / TikTok)' },
+  { k: 'google_ads',            label: 'Google Ads (Search / Display / PMax)' },
+  { k: 'booking_com_promo',     label: 'Booking.com promotion' },
+  { k: 'expedia_promo',         label: 'Expedia promotion' },
+  { k: 'agoda_promo',           label: 'Agoda promotion' },
+  { k: 'direct_booking_banner', label: 'Direct-booking-engine banner' },
+  { k: 'landing_page',          label: 'Landing page' },
+  { k: 'pr_outreach',           label: 'PR outreach' },
+  { k: 'content_asset',         label: 'Content asset (blog / video)' },
+  { k: 'multi_channel',         label: 'Multi-channel push' },
+];
+
+const AUDIENCES: Array<{ k: AudienceSegment; label: string; hint: string }> = [
+  { k: 'all_subscribers',      label: 'All subscribers',        hint: 'Full newsletter list' },
+  { k: 'past_guests',          label: 'Past guests',            hint: '≥1 completed stay' },
+  { k: 'high_value_repeaters', label: 'High-value repeaters',   hint: '2+ stays or top-quartile LTV' },
+  { k: 'prospects',            label: 'Prospects',              hint: 'Opted-in, never stayed' },
+  { k: 'dormant_winback',      label: 'Dormant winback',        hint: 'No stay in > 18 months' },
+  { k: 'country_segment',      label: 'Country segment',        hint: 'Pick target markets below' },
+  { k: 'seasonal_segment',     label: 'Seasonal segment',       hint: 'Guests who stayed in this season before' },
+  { k: 'ota_no_email',         label: 'OTA · no email',         hint: 'OTA arrivals with no email captured' },
+  { k: 'geo_targeted_paid',    label: 'Geo-targeted paid',      hint: 'Paid ad geo targeting' },
+  { k: 'lookalike',            label: 'Lookalike',              hint: 'Meta / Google lookalike audience' },
+  { k: 'custom_filter',        label: 'Custom filter',          hint: 'Ad-hoc — spec in brief freetext' },
+];
+
+const METRICS: Array<{ k: SuccessMetric; label: string; unit: string }> = [
+  { k: 'bookings',              label: 'Bookings',              unit: 'bookings' },
+  { k: 'revenue',               label: 'Revenue',               unit: 'currency' },
+  { k: 'room_nights',           label: 'Room nights',           unit: 'nights' },
+  { k: 'email_opens',           label: 'Email opens',           unit: '%' },
+  { k: 'email_clicks',          label: 'Email clicks',          unit: '%' },
+  { k: 'email_click_to_book',   label: 'Email click-to-book',   unit: '%' },
+  { k: 'impressions',           label: 'Impressions',           unit: 'count' },
+  { k: 'reach',                 label: 'Reach',                 unit: 'people' },
+  { k: 'website_sessions',      label: 'Website sessions',      unit: 'sessions' },
+  { k: 'website_conversions',   label: 'Website conversions',   unit: 'count' },
+  { k: 'follower_growth',       label: 'Follower growth',       unit: 'followers' },
+  { k: 'engagement_rate',       label: 'Engagement rate',       unit: '%' },
+  { k: 'earned_media_mentions', label: 'Earned media mentions', unit: 'mentions' },
+];
+
+// Top hospitality target markets — ISO-2 codes + names.
+const MARKETS: Array<{ iso: string; name: string }> = [
+  { iso: 'LA', name: 'Laos' },        { iso: 'TH', name: 'Thailand' },  { iso: 'VN', name: 'Vietnam' },
+  { iso: 'CN', name: 'China' },       { iso: 'SG', name: 'Singapore' }, { iso: 'MY', name: 'Malaysia' },
+  { iso: 'KH', name: 'Cambodia' },    { iso: 'ID', name: 'Indonesia' }, { iso: 'JP', name: 'Japan' },
+  { iso: 'KR', name: 'South Korea' }, { iso: 'AU', name: 'Australia' }, { iso: 'FR', name: 'France' },
+  { iso: 'DE', name: 'Germany' },     { iso: 'GB', name: 'United Kingdom' }, { iso: 'ES', name: 'Spain' },
+  { iso: 'IT', name: 'Italy' },       { iso: 'NL', name: 'Netherlands' }, { iso: 'CH', name: 'Switzerland' },
+  { iso: 'US', name: 'United States' }, { iso: 'CA', name: 'Canada' },  { iso: 'AE', name: 'UAE' },
+];
+
+const RECURRENCES: Array<{ k: Recurrence; label: string }> = [
+  { k: 'one_off',   label: 'One-off' },
+  { k: 'daily',     label: 'Daily' },
+  { k: 'weekly',    label: 'Weekly' },
+  { k: 'monthly',   label: 'Monthly' },
+  { k: 'quarterly', label: 'Quarterly' },
+  { k: 'seasonal',  label: 'Seasonal' },
+];
+
+const BUDGET_TYPES: Array<{ k: BudgetType; label: string }> = [
+  { k: 'organic',         label: 'Organic (no spend)' },
+  { k: 'daily',           label: 'Daily budget' },
+  { k: 'lifetime',        label: 'Lifetime budget' },
+  { k: 'per_click',       label: 'Per-click (CPC)' },
+  { k: 'per_impression',  label: 'Per-impression (CPM)' },
+];
+
+// Paper-white hardcoded tokens (avoids var(--paper-warm) dark-render on Namkhan).
+const P_WHITE = '#FFFFFF';
+const P_HAIR  = '#E6DFCC';
+const P_INK   = '#1B1B1B';
+const P_INK_M = '#5A5A5A';
+const P_INK_L = '#8A8A8A';
+const P_ACC   = '#0F5B4A';
+const P_CREAM = '#F5F0E1';
+
+const p_control: React.CSSProperties = {
+  width: '100%', padding: '8px 12px',
+  border: '1px solid ' + P_HAIR, borderRadius: 4,
+  fontSize: 13, fontFamily: 'inherit', color: P_INK, background: P_WHITE,
+};
+const p_label: React.CSSProperties = {
+  display: 'block', fontSize: 10, fontWeight: 600,
+  letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: P_INK_M, marginBottom: 6,
+};
+
 function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b: Brief) => void; templates: CampaignTemplate[] }) {
   const template = templates.find(t => t.template_id === brief.templateId);
+  const showMarkets = brief.audience === 'country_segment' || brief.audience === 'geo_targeted_paid' || brief.audience === 'lookalike';
+  const showBudgetAmount = brief.budgetType !== 'organic';
+  const objectiveMeta = OBJECTIVES.find(o => o.k === brief.objective);
+  const audienceMeta = AUDIENCES.find(a => a.k === brief.audience);
+  const metricMeta = METRICS.find(m => m.k === brief.successMetric);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <Section title="What are we making?">
+      {/* Row 1 — Objective + Type */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div>
+          <label style={p_label}>Objective</label>
+          <select style={p_control} value={brief.objective} onChange={e => setBrief({ ...brief, objective: e.target.value as Objective })}>
+            {OBJECTIVES.map(o => <option key={o.k} value={o.k}>{o.label}</option>)}
+          </select>
+          <div style={{ marginTop: 4, fontSize: 11, color: P_INK_L, fontStyle: 'italic' }}>{objectiveMeta?.hint}</div>
+        </div>
+        <div>
+          <label style={p_label}>Campaign type</label>
+          <select style={p_control} value={brief.campaignType} onChange={e => setBrief({ ...brief, campaignType: e.target.value as CampaignType })}>
+            {CAMPAIGN_TYPES.map(t => <option key={t.k} value={t.k}>{t.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Row 2 — Audience + (Markets when applicable) */}
+      <div style={{ display: 'grid', gridTemplateColumns: showMarkets ? '1fr 2fr' : '1fr', gap: 16 }}>
+        <div>
+          <label style={p_label}>Audience</label>
+          <select style={p_control} value={brief.audience} onChange={e => setBrief({ ...brief, audience: e.target.value as AudienceSegment })}>
+            {AUDIENCES.map(a => <option key={a.k} value={a.k}>{a.label}</option>)}
+          </select>
+          <div style={{ marginTop: 4, fontSize: 11, color: P_INK_L, fontStyle: 'italic' }}>{audienceMeta?.hint}</div>
+        </div>
+        {showMarkets && (
+          <div>
+            <label style={p_label}>Target markets · pick 1+</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {MARKETS.map(m => {
+                const active = brief.targetMarkets.includes(m.iso);
+                return (
+                  <button key={m.iso}
+                    onClick={() => setBrief({ ...brief, targetMarkets: active ? brief.targetMarkets.filter(x => x !== m.iso) : [...brief.targetMarkets, m.iso] })}
+                    style={{
+                      padding: '4px 10px', fontSize: 11, fontWeight: 500,
+                      background: active ? P_ACC : P_WHITE, color: active ? P_WHITE : P_INK,
+                      border: '1px solid ' + (active ? P_ACC : P_HAIR), borderRadius: 3,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >{m.iso} · {m.name}</button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Row 3 — Timing */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+        <div>
+          <label style={p_label}>Start date</label>
+          <input type="date" style={p_control} value={brief.startDate} onChange={e => setBrief({ ...brief, startDate: e.target.value })} />
+        </div>
+        <div>
+          <label style={p_label}>End date (optional)</label>
+          <input type="date" style={p_control} value={brief.endDate} onChange={e => setBrief({ ...brief, endDate: e.target.value })} />
+        </div>
+        <div>
+          <label style={p_label}>Recurrence</label>
+          <select style={p_control} value={brief.recurrence} onChange={e => setBrief({ ...brief, recurrence: e.target.value as Recurrence })}>
+            {RECURRENCES.map(r => <option key={r.k} value={r.k}>{r.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Row 4 — Budget */}
+      <div style={{ display: 'grid', gridTemplateColumns: showBudgetAmount ? '1fr 1fr 1fr' : '1fr', gap: 16 }}>
+        <div>
+          <label style={p_label}>Budget type</label>
+          <select style={p_control} value={brief.budgetType} onChange={e => setBrief({ ...brief, budgetType: e.target.value as BudgetType })}>
+            {BUDGET_TYPES.map(b => <option key={b.k} value={b.k}>{b.label}</option>)}
+          </select>
+        </div>
+        {showBudgetAmount && (
+          <>
+            <div>
+              <label style={p_label}>Amount</label>
+              <input type="number" min="0" step="1" style={p_control} value={brief.budgetAmount}
+                     onChange={e => setBrief({ ...brief, budgetAmount: e.target.value })} placeholder="e.g. 500" />
+            </div>
+            <div>
+              <label style={p_label}>Currency</label>
+              <select style={p_control} value={brief.budgetCurrency} onChange={e => setBrief({ ...brief, budgetCurrency: e.target.value })}>
+                {['USD','EUR','LAK','THB','GBP','SGD','AUD'].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Row 5 — Success metric + target */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div>
+          <label style={p_label}>Success metric</label>
+          <select style={p_control} value={brief.successMetric} onChange={e => setBrief({ ...brief, successMetric: e.target.value as SuccessMetric })}>
+            {METRICS.map(m => <option key={m.k} value={m.k}>{m.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={p_label}>Target · {metricMeta?.unit ?? ''}</label>
+          <input type="number" step="0.01" style={p_control} value={brief.successTarget}
+                 onChange={e => setBrief({ ...brief, successTarget: e.target.value })}
+                 placeholder={brief.successMetric === 'bookings' ? 'e.g. 20' : brief.successMetric === 'email_opens' ? 'e.g. 25' : ''} />
+        </div>
+      </div>
+
+      {/* Row 6 — Brief freetext */}
+      <div>
+        <label style={p_label}>Brief · what is this campaign about? (1-3 sentences)</label>
+        <textarea
+          value={brief.briefText}
+          onChange={e => setBrief({ ...brief, briefText: e.target.value })}
+          placeholder='e.g. "Pi Mai (Lao New Year) April 13-16 — invite Bangkok subscribers to a 4-night stay with private Baci ceremony. Emphasize river-swim tradition and merit-making."'
+          style={{ ...p_control, minHeight: 90, resize: 'vertical', fontFamily: 'inherit', fontStyle: 'italic', lineHeight: 1.5 }}
+        />
+      </div>
+
+      {/* Row 7 — Vibes (optional) */}
+      <div>
+        <label style={p_label}>Vibe · optional, guides asset picker</label>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {VIBES.map(v => {
+            const active = brief.vibes.includes(v);
+            return (
+              <button key={v}
+                onClick={() => setBrief({ ...brief, vibes: active ? brief.vibes.filter(x => x !== v) : [...brief.vibes, v] })}
+                style={{
+                  padding: '4px 10px', fontSize: 11, fontWeight: 500, textTransform: 'capitalize',
+                  background: active ? P_CREAM : P_WHITE, color: P_INK,
+                  border: '1px solid ' + (active ? '#B08834' : P_HAIR), borderRadius: 3,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >{v}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Row 8 — Template picker (drives visual constraints in later steps) */}
+      <div>
+        <label style={p_label}>Creative template · asset dimensions + caption limits</label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
           {templates.map(t => {
             const active = brief.templateId === t.template_id;
             return (
-              <button
-                key={t.template_id}
+              <button key={t.template_id}
                 onClick={() => setBrief({ ...brief, templateId: t.template_id })}
                 style={{
-                  textAlign: 'left',
-                  padding: '12px 14px',
-                  border: active ? '2px solid var(--moss)' : '1px solid var(--line)',
-                  background: active ? 'rgba(31,53,40,0.05)' : 'var(--paper-warm)',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontFamily: 'var(--sans)',
+                  textAlign: 'left', padding: '10px 12px',
+                  border: '1px solid ' + (active ? P_ACC : P_HAIR),
+                  background: active ? '#EAF3EE' : P_WHITE,
+                  borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                <div style={{ fontSize: "var(--t-base)", fontWeight: 600, color: 'var(--ink)' }}>{t.name}</div>
-                <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', color: 'var(--ink-mute)', marginTop: 3 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: P_INK }}>{t.name}</div>
+                <div style={{ fontSize: 10, color: P_INK_L, marginTop: 3, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
                   {t.aspect_ratio} · {t.output_width}×{t.output_height} · {t.min_assets === t.max_assets ? t.max_assets : `${t.min_assets}–${t.max_assets}`} asset{t.max_assets > 1 ? 's' : ''}
                 </div>
               </button>
             );
           })}
         </div>
-      </Section>
-
-      <Section title="What's it about?">
-        <input
-          value={brief.briefText}
-          onChange={e => setBrief({ ...brief, briefText: e.target.value })}
-          placeholder='e.g. "Pi Mai festival in April — invite Bangkok guests"'
-          style={{
-            width: '100%',
-            fontSize: "var(--t-lg)",
-            padding: '12px 14px',
-            border: '1px solid var(--line)',
-            borderRadius: 4,
-            background: 'var(--paper-warm)',
-            fontFamily: 'var(--serif)',
-            fontStyle: 'italic',
-          }}
-        />
-      </Section>
-
-      <Section title="When does it go live?">
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[
-            { k: 'today',       label: 'Today' },
-            { k: 'tomorrow',    label: 'Tomorrow' },
-            { k: 'this_friday', label: 'This Friday' },
-            { k: 'next_week',   label: 'Next week' },
-            { k: 'pick',        label: 'Pick a date…' },
-          ].map(opt => {
-            const active = brief.whenLive === opt.k;
-            return (
-              <button
-                key={opt.k}
-                onClick={() => setBrief({ ...brief, whenLive: opt.k })}
-                className="btn"
-                style={{
-                  fontSize: "var(--t-sm)",
-                  background: active ? 'var(--moss)' : 'var(--paper-warm)',
-                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
-                  borderColor: active ? 'var(--moss)' : 'var(--line)',
-                }}
-              >{opt.label}</button>
-            );
-          })}
-        </div>
-      </Section>
-
-      <Section title="Vibe (optional, helps the AI pick)">
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {VIBES.map(v => {
-            const active = brief.vibes.includes(v);
-            return (
-              <button
-                key={v}
-                onClick={() => setBrief({
-                  ...brief,
-                  vibes: active ? brief.vibes.filter(x => x !== v) : [...brief.vibes, v],
-                })}
-                className="btn"
-                style={{
-                  fontSize: "var(--t-sm)",
-                  textTransform: 'capitalize',
-                  background: active ? 'var(--brass)' : 'var(--paper-warm)',
-                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
-                  borderColor: active ? 'var(--brass)' : 'var(--line)',
-                }}
-              >{v}</button>
-            );
-          })}
-        </div>
-      </Section>
+      </div>
 
       {template && (
         <div style={{
-          padding: '12px 14px',
-          background: 'rgba(168,133,74,0.10)',
-          borderLeft: '3px solid var(--brass)',
-          fontSize: "var(--t-base)",
-          color: 'var(--ink-soft)',
-          lineHeight: 1.6,
+          padding: '10px 14px', background: P_CREAM,
+          borderLeft: '3px solid #B08834', fontSize: 11, color: P_INK_M, lineHeight: 1.6,
         }}>
-          <div style={{ fontWeight: 600, color: 'var(--ink)' }}>Restrictions auto-set by template:</div>
-          License must allow: {(template.license_filter ?? []).join(', ') || '—'}<br />
-          Aspect ratio: {template.aspect_ratio} · {template.output_width}×{template.output_height}px<br />
-          Asset count: {template.min_assets === template.max_assets ? template.max_assets : `${template.min_assets}–${template.max_assets}`}<br />
-          Caption limit: {template.caption_max_chars ?? '—'} chars · Hashtag max: {template.hashtag_max ?? '—'}
+          <div style={{ fontWeight: 600, color: P_INK }}>Template constraints (auto-applied later):</div>
+          License must allow: {(template.license_filter ?? []).join(', ') || '—'} · Aspect ratio: {template.aspect_ratio} · {template.output_width}×{template.output_height}px · Asset count: {template.min_assets === template.max_assets ? template.max_assets : `${template.min_assets}–${template.max_assets}`} · Caption limit: {template.caption_max_chars ?? '—'} chars · Hashtag max: {template.hashtag_max ?? '—'}
         </div>
       )}
     </div>
@@ -612,10 +837,24 @@ function Step4Approve({ template, picked, assetPool, caption, hashtags, brief }:
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)' }}>review · {template?.name} · {slides.length} asset{slides.length === 1 ? '' : 's'}</div>
 
-      <div>
-        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>brief</div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-lg)", color: 'var(--ink)' }}>{brief.briefText}</div>
-        <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 4 }}>schedule: {brief.whenLive.replace('_', ' ')}</div>
+      {/* PBS 2026-07-10: Planner v2 summary — objective/type/audience/markets/timing/budget/metric */}
+      <div style={{ border: '1px solid #E6DFCC', borderRadius: 6, padding: '14px 16px', background: '#FAFAF7' }}>
+        <div style={{ fontSize: 10, fontFamily: 'ui-monospace, SFMono-Regular, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#5A5A5A', marginBottom: 10 }}>Campaign brief</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px 20px', fontSize: 12, color: '#1B1B1B' }}>
+          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Objective</div>{brief.objective.replace(/_/g, ' ')}</div>
+          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Type</div>{brief.campaignType.replace(/_/g, ' ')}</div>
+          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Audience</div>{brief.audience.replace(/_/g, ' ')}</div>
+          {brief.targetMarkets.length > 0 && (
+            <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Markets</div>{brief.targetMarkets.join(' · ')}</div>
+          )}
+          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Timing</div>{brief.startDate}{brief.endDate ? ` → ${brief.endDate}` : ''}{brief.recurrence !== 'one_off' ? ` · ${brief.recurrence}` : ''}</div>
+          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Budget</div>{brief.budgetType === 'organic' ? 'Organic' : `${brief.budgetCurrency} ${brief.budgetAmount || '—'} · ${brief.budgetType.replace(/_/g, ' ')}`}</div>
+          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Success metric</div>{brief.successMetric.replace(/_/g, ' ')}{brief.successTarget ? ` · target ${brief.successTarget}` : ''}</div>
+        </div>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #E6DFCC' }}>
+          <div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Freetext brief</div>
+          <div style={{ fontFamily: 'var(--serif, Georgia, serif)', fontStyle: 'italic', fontSize: 14, color: '#1B1B1B', lineHeight: 1.5 }}>{brief.briefText}</div>
+        </div>
       </div>
 
       <div>
@@ -666,7 +905,7 @@ function Step5Distribute({ template, picked, brief }: { template: CampaignTempla
       }}>
         <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--moss)', fontWeight: 600 }}>✓ approved</div>
         <div style={{ marginTop: 4, fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-xl)" }}>your campaign is queued</div>
-        <div style={{ marginTop: 4, fontSize: "var(--t-base)", color: 'var(--ink-soft)' }}>{template?.name} · {picked.length} asset{picked.length === 1 ? '' : 's'} · scheduled {brief.whenLive.replace('_', ' ')}</div>
+        <div style={{ marginTop: 4, fontSize: "var(--t-base)", color: 'var(--ink-soft)' }}>{brief.objective.replace(/_/g, ' ')} · {brief.campaignType.replace(/_/g, ' ')} · {brief.audience.replace(/_/g, ' ')}{brief.targetMarkets.length > 0 ? ` (${brief.targetMarkets.join(', ')})` : ''} · {brief.startDate}{brief.endDate ? ` → ${brief.endDate}` : ''}</div>
       </div>
 
       <div className="card" style={{ background: 'var(--paper)', padding: 16 }}>
