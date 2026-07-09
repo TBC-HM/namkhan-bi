@@ -28,6 +28,7 @@ import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
+import TenantLink from '@/components/nav/TenantLink';
 import WindowSelect from '../_components/WindowSelect';
 
 export const dynamic = 'force-dynamic';
@@ -119,8 +120,9 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   const stlyTo   = (() => { const d = new Date(period.to   + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() - 1); return d.toISOString().slice(0,10); })();
   const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly, cxl, countryLosBucket, countryWindowBucket, clipFwdResp, clipStlyResp] = await Promise.all([
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
-    supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
-    supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
+    // PBS 2026-07-10: LOS + booking-window distributions now filter to check-ins from 2025-01-01 (was all-time).
+    supabase.from('v_chart_los_distribution_2025').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
+    supabase.from('v_chart_booking_window_distribution_2025').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_los_window_correlation').select('los_bucket, los_order, window_bucket, window_order, reservations, avg_los, total_revenue').eq('property_id', pid).order('window_order').order('los_order'),
     supabase.rpc('fn_chart_country_los_window', { p_property_id: pid, p_year: String(searchParams?.yr ?? '') || null }).then((res) => ({ data: (res.data ?? []).slice(0, 20) })),
     supabase.from('v_chart_demand_monthly_sdly').select('ci_month, ty_adr, ly_adr, ty_avg_los, ly_avg_los, ty_revpar, ly_revpar, ty_bookings, ly_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
@@ -328,8 +330,18 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
           subtitle={`OTB vs STLY · ${period.label} · ${monthsAhead} months ahead · ${monthsBehind} behind`}
           density="compact"
         >
+          {/* PBS 2026-07-10: KPI tiles now clickable — each drills to its detail page.
+              Tile-to-page map (headline row): OTB RN → pace · OTB Rev → pickup · OTB ADR → rateplans ·
+              Months on books → pace · Cancelled → cancellations. Signals row all drill to /revenue/pace. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-            {tiles.map((t, i) => <KpiTile key={`t-${i}`} {...t} />)}
+            {tiles.map((t, i) => {
+              const href = ['/revenue/pace', '/revenue/pickup', '/revenue/rateplans', '/revenue/pace', '/revenue/cancellations'][i];
+              return (
+                <TenantLink key={`t-${i}`} href={href} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+                  <KpiTile {...t} />
+                </TenantLink>
+              );
+            })}
           </div>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
@@ -340,7 +352,11 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
             <span style={{ flex: 1, height: 1, background: '#E6DFCC' }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-            {signals.map((t, i) => <KpiTile key={`s-${i}`} {...t} />)}
+            {signals.map((t, i) => (
+              <TenantLink key={`s-${i}`} href="/revenue/pace" style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+                <KpiTile {...t} />
+              </TenantLink>
+            ))}
           </div>
         </Container>
       </div>
@@ -393,7 +409,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       </div>
 
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
-        <Container title="LOS bucket distribution" subtitle="all-time · reservations by length-of-stay bucket">
+        <Container title="LOS bucket distribution" subtitle="check-ins since 1 Jan 2025 · reservations by length-of-stay bucket">
           <Chart variant="bar" data={(losDist.data ?? []).map((r) => ({
             bucket: String((r as Record<string, unknown>).los_bucket ?? ''),
             reservations: Number((r as Record<string, unknown>).total_reservations ?? 0),
@@ -402,7 +418,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
             series={[{ key: 'reservations', label: 'Reservations', color: '#1F3A2E' }]}
             height={220} empty={{ title: 'No LOS distribution data' }} />
         </Container>
-        <Container title="Booking window distribution" subtitle="all-time · reservations by booking-window bucket">
+        <Container title="Booking window distribution" subtitle="check-ins since 1 Jan 2025 · reservations by booking-window bucket">
           <Chart variant="bar" data={(bwDist.data ?? []).map((r) => ({
             bucket: String((r as Record<string, unknown>).booking_window_bucket ?? ''),
             reservations: Number((r as Record<string, unknown>).total_reservations ?? 0),
