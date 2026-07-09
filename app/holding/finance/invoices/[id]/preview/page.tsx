@@ -1,6 +1,8 @@
 // app/holding/finance/invoices/[id]/preview/page.tsx
 // PBS 2026-07-09: Preview a stored invoice by id — renders the html_snapshot in an iframe.
 // Sent invoices ledger opens this in a new tab via the Preview link.
+// 2026-07-09 fix: read from public.v_holding_invoices bridge (not sb.schema('holding'))
+// — PostgREST exposes only public, so the schema-scoped read returned null → notFound() 404.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { notFound } from 'next/navigation';
@@ -28,7 +30,7 @@ export default async function InvoicePreviewPage({ params }: { params: Params })
   if (!Number.isFinite(id)) notFound();
 
   const sb = getSupabaseAdmin();
-  const { data } = await sb.schema('holding').from('invoices')
+  const { data } = await sb.from('v_holding_invoices')
     .select('id, invoice_number, recipient_name, subject, total, currency, status, sent_at, html_snapshot')
     .eq('id', id).maybeSingle();
   const row = data as InvoiceRow | null;
