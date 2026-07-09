@@ -84,15 +84,16 @@ export default async function CampaignsPage({ searchParams }: SP) {
         subtitle={`${counts.all} campaign${counts.all === 1 ? '' : 's'} — drafts, scheduled, published.`}
         tabs={tabs}
       >
-        {/* HARDCODED / EMPTY-STATE honesty banner */}
+        {/* HARDCODED / EMPTY-STATE honesty banner
+            PBS 2026-07-10: dropped inline "+ new" link — the primary CTA already sits
+            in the actions row below, so the duplicate confused users. */}
         <div style={{ ...fullRow, ...banner }}>
           <span style={bannerTag}>HARDCODED DATA</span>
           <span style={{ marginLeft: 8 }}>
             Sources <code style={code}>mkt_v_campaign_calendar</code> — the marketing
             campaigns table is not yet seeded with a live send/schedule feed on Namkhan.
-            KPIs and rows shown are literal DB counts (likely 0). The AI-campaign builder
-            at <TenantLink href="/marketing/campaigns/new" style={{ color: FOREST, textDecoration: 'none', fontWeight: 600 }}>+ new</TenantLink> writes into
-            this same table, so seeded rows will appear here once shipped.
+            KPIs and rows shown are literal DB counts (likely 0). New campaigns from the
+            AI builder write into this same table, so seeded rows will appear here once shipped.
           </span>
         </div>
 
