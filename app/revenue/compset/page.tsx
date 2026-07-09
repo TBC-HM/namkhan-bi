@@ -73,21 +73,26 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
     key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/compset'),
   }));
 
+  // PBS 2026-07-09: property-scoped now that all 4 views expose property_id.
   const [{ data: properties }, { data: matrix }, { data: promoTiles }, { data: ratePlans }] = await Promise.all([
     supabase.from('v_compset_property_summary')
       .select('comp_id, set_name, property_name, is_self, star_rating, rooms, latest_usd, latest_channel, last_shop_date, last_shop_human, avg_30d_usd, obs_count_30d, min_30d_usd, max_30d_usd, pct_vs_median, review_score, review_count, channels_with_reviews, has_bdc, has_agoda, has_expedia, has_trip, has_direct')
+      .eq('property_id', pid)
       .order('latest_usd', { ascending: false, nullsFirst: false })
       .limit(50),
     supabase.from('v_compset_competitor_rate_matrix')
       .select('comp_id, stay_date, rate_usd, channel')
+      .eq('property_id', pid)
       .order('stay_date', { ascending: true })
       .limit(2000),
     supabase.from('v_compset_promo_tiles')
       .select('comp_id, property_name, is_self, latest_rate_usd, promo_frequency_pct, avg_discount_pct, max_discount_seen, pattern_label, days_with_promo, days_with_data')
+      .eq('property_id', pid)
       .order('promo_frequency_pct', { ascending: false, nullsFirst: false })
       .limit(20),
     supabase.from('v_compset_rate_plan_landscape')
       .select('category, plan_name, competitors_offering, comps_offering_excl_self, channels_seen, avg_rate_usd, avg_discount_when_promoted, namkhan_offers')
+      .eq('property_id', pid)
       .order('competitors_offering', { ascending: false, nullsFirst: false })
       .limit(30),
   ]);
