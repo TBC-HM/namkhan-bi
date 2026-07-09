@@ -240,6 +240,24 @@ export function ScheduledReportsTable({ rows, propertyId, reportOptions }: {
               </a>
             );
           }},
+          // PBS 2026-07-09 pm: per-row dismiss X (single-row unschedule).
+          { key: 'id', label: '', align: 'center', render: (r) => (
+            <button
+              type="button"
+              title="Dismiss this schedule"
+              aria-label="Dismiss schedule"
+              onClick={async () => {
+                if (!confirm(`Dismiss ${labelFor(r.template_key)} to ${r.email}?`)) return;
+                const res = await fetch('/api/revenue/reports/recipient/dismiss', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ids: [r.id] }),
+                });
+                if (res.ok) window.location.reload();
+                else alert(`dismiss failed (${res.status})`);
+              }}
+              style={{ padding: '3px 8px', border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#B04A2F', borderRadius: 4, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+            >×</button>
+          )},
         ]}
         onBulkDelete={async (ids) => {
           const r = await fetch('/api/revenue/reports/recipient/dismiss', {
