@@ -398,10 +398,10 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       {/* PBS 2026-05-29 #43: Groups tab wired via CategoryBlock — byCat.group now populated by classify() match on Biig Holiday / Retreat Reseller / Vigeosport / Email Groups */}
       {activeTab === 'group' && <CategoryBlock category="group" rows={byCat.group as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'group')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'group')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
 
-      {/* PBS 2026-07-01 rev2: top-8 performance row (DMC · OTA · Direct) now sits
-          UNDER the CategoryBlock (which owns the category KPI tile header row).
-          Order: main mix tiles → CategoryBlock (its own tile header) → perf strip. */}
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+      {/* PBS 2026-07-10: 4 performance containers unified into one 2x2 grid so
+          DMC / OTA / Direct / Top Sources OTB all render at identical size.
+          Previously DMC/OTA/Direct were 1/3-width and Top Sources OTB was full-width. */}
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
         <Container
           title="DMC Performance"
           subtitle="12 months · top 8 by gross · date basis: booking_date"
@@ -460,11 +460,6 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
             currency={moneyCurrency}
           />
         </Container>
-      </div>
-
-      {/* PBS 2026-07-01: forward-looking Top 10 sources · OTB (next 90 arrivals)
-          vs same-day-last-year snapshot. Wired to public.v_source_top10_otb_vs_sdly. */}
-      <div style={{ gridColumn: '1 / -1' }}>
         <Container
           title="Top 10 sources · on the books (next 90d) vs SDLY"
           subtitle="forward-looking · date basis: check_in_date · SDLY = same booking-cutoff last year"
