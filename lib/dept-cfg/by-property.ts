@@ -92,6 +92,13 @@ function scopeHrefs(base: DeptCfg, propertyId: number): DeptCfg {
 export function getDeptCfg(slug: DeptSlug, propertyId: number): DeptCfg {
   const base = DEPT_CFG[slug];
 
+  // PBS 2026-07-09: propertyId=0 is the holding sentinel. /holding/* pages
+  // live above properties and are NOT tenant-scoped. Return base unchanged so
+  // scopeHrefs doesn't rewrite /holding/finance → /h/0/holding/finance
+  // (nonexistent route — every subPages tab 404s). rewriteSubPagesForProperty
+  // has the same guard; the two work together across the two scoping layers.
+  if (propertyId === 0) return base;
+
   if (propertyId === NAMKHAN_PROPERTY_ID) {
     return base;
   }
