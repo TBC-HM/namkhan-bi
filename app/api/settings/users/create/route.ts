@@ -1,8 +1,10 @@
 // app/api/settings/users/create/route.ts
-// PBS 2026-07-09 v3:
-//   - inviteUserByEmail (creates user + fires invite email via Supabase Auth SMTP)
-//   - ALSO generates action_link via admin.generateLink so UI can display a
-//     "copy link" fallback for when Supabase SMTP isn't configured yet.
+// PBS 2026-07-09 v4:
+//   - inviteUserByEmail (creates user + attempts Supabase Auth SMTP delivery)
+//   - Generates action_link via admin.generateLink
+//   - ALSO fires our own Resend email via the send-report-email edge fn
+//     (verify_jwt=false, uses RESEND_API_KEY + NEWSLETTER_FROM_EMAIL). This is
+//     the authoritative delivery path — Supabase built-in SMTP is unconfigured.
 //   - admin gate requires holding_role IN (owner, admin)
 //   - propagates role param to grant RPCs
 import { NextResponse } from 'next/server';
@@ -34,6 +36,40 @@ async function requireAdmin(req: Request): Promise<{ ok: true } | { ok: false; r
   return { ok: true };
 }
 
+async function sendInviteMail(to: string, name: string, actionLink: string, origin: string): Promise<{ ok: boolean; detail?: string }> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const html = `
+    <p>Hi ${escapeHtml(name || to)},</p>
+    <p>You have been invited to <strong>namkhan-bi</strong>. Click below to set your password and log in:</p>
+    <p><a href="${escapeAttr(actionLink)}" style="display:inline-block;padding:10px 18px;background:#084838;color:#FFFFFF;text-decoration:none;border-radius:4px;font-weight:600;">Set my password</a></p>
+    <p style="font-size:12px;color:#5A5A5A;">Or paste this link: ${escapeHtml(actionLink)}</p>
+    <p style="font-size:12px;color:#5A5A5A;">This link expires in ~1 hour. If it does, an admin can send a new one.</p>
+    <p style="font-size:12px;color:#5A5A5A;">Home: <a href="${escapeAttr(origin)}">${escapeHtml(origin)}</a></p>
+  `;
+  try {
+    const res = await fetch(`${url}/functions/v1/send-report-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to,
+        subject: 'Welcome to Namkhan BI — set your password',
+        html,
+        from_label: 'Namkhan BI',
+      }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, detail: `resend_${res.status}: ${JSON.stringify(j)}` };
+    return { ok: true, detail: j?.id ? `resend_id=${j.id}` : 'sent' };
+  } catch (e) {
+    return { ok: false, detail: (e as Error).message };
+  }
+}
+
+function escapeHtml(s: string): string {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+function escapeAttr(s: string): string { return escapeHtml(s); }
+
 export async function POST(req: Request) {
   const gate = await requireAdmin(req);
   if (gate.ok === false) return gate.res;
@@ -56,9 +92,9 @@ export async function POST(req: Request) {
     let inviteInfo: string | null = null;
     let actionLink: string | null = null;
     let emailFired = false;
+    let mailerNote: string | null = null;
 
     if (sendInvite) {
-      // inviteUserByEmail creates user + fires invite email via Supabase SMTP.
       const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
         data: { full_name: name },
         redirectTo,
@@ -67,27 +103,18 @@ export async function POST(req: Request) {
         if (!/already|registered/i.test(invErr.message)) {
           return NextResponse.json({ error: `invite failed: ${invErr.message}` }, { status: 500 });
         }
-        // User exists — fall back to reset email + reuse existing user id.
+        // Existing user — look up + fall through to resend flow.
         const { data: list } = await admin.auth.admin.listUsers({ perPage: 300 });
         const found = (list?.users ?? []).find((u) => u.email === email);
         if (!found) return NextResponse.json({ error: 'user exists but not findable' }, { status: 500 });
         userId = found.id;
-        const anon = createServerClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          { cookies: { getAll: () => [], setAll: () => {} } },
-        );
-        const { error: rErr } = await anon.auth.resetPasswordForEmail(email, { redirectTo });
-        if (rErr) inviteInfo = `existed; reset email failed: ${rErr.message}`;
-        else { inviteInfo = 'existed; reset link sent'; emailFired = true; }
+        inviteInfo = 'existed; sending recovery link via Resend';
       } else {
         userId = inv!.user!.id;
-        inviteInfo = 'invite sent';
-        emailFired = true;
+        inviteInfo = 'user created';
       }
 
-      // SMTP-independent fallback link — always returns a URL, even when SMTP is unconfigured.
-      // type='recovery' works on any existing user (new or old) since post-invite the user exists.
+      // Generate the action_link (SMTP-independent — always works).
       try {
         const { data: link } = await admin.auth.admin.generateLink({
           type: 'recovery',
@@ -96,8 +123,14 @@ export async function POST(req: Request) {
         });
         actionLink = link?.properties?.action_link ?? null;
       } catch { actionLink = null; }
+
+      // Send the mail ourselves via send-report-email (Resend).
+      if (actionLink) {
+        const mail = await sendInviteMail(email, name, actionLink, origin);
+        emailFired = mail.ok;
+        mailerNote = mail.detail ?? null;
+      }
     } else {
-      // No invite requested — silent createUser, no email.
       const { data: created, error: cErr } = await admin.auth.admin.createUser({
         email, email_confirm: true, user_metadata: { full_name: name },
       });
@@ -121,6 +154,7 @@ export async function POST(req: Request) {
       user_id: userId,
       invite: inviteInfo,
       email_fired: emailFired,
+      mailer_note: mailerNote,
       action_link: actionLink,
     });
   } catch (e) {
