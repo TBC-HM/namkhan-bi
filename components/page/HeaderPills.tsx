@@ -26,7 +26,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import FxRatePills from './FxRatePills';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr';
+
+// PBS 2026-07-09: signed-in user identity for the header dropdown. Anon key
+// is public by design (NEXT_PUBLIC_*) — client-side reads/updates go through
+// RLS + auth cookies.
+const _supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
 // PBS 2026-05-14 — PropertySwitcher import removed; the global switcher lives
 // in the top-left BC brass mark (components/nav/NDropdown.tsx). The
 // session-scope filter + property catalogue also moved there.
@@ -195,6 +204,17 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
   const [userOpen, setUserOpen] = useState(false);
   const [lang, setLang] = useState<'en' | 'th'>('en');
   const [inbox, setInbox] = useState<InboxSummary>(INBOX_EMPTY);
+  // PBS 2026-07-09: signed-in email for the dropdown header.
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+    _supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setUserEmail(data.user?.email ?? null);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // 2026-05-12: live weather + AQI fetched per active property
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
@@ -457,7 +477,17 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
                 from this dropdown. Property settings now live on the gear
                 icon at the right of the top dept menu (per-property). The
                 Cockpit lives under Felix on /holding. */}
+            {/* PBS 2026-07-09: signed-in identity row. Reads current email
+                from the Supabase session; falls back to USER_NAME while
+                loading. Non-clickable header — this is who you ARE. */}
+            {userEmail && (
+              <div style={S.emailHeader}>
+                <div style={S.emailLine}>{userEmail}</div>
+                <div style={S.emailSubline}>signed in</div>
+              </div>
+            )}
             <a href="/cockpit/users"             onClick={() => setUserOpen(false)} style={S.link}>Account</a>
+            <a href="/account/password"          onClick={() => setUserOpen(false)} style={S.link}>Change password</a>
             <div style={S.menuDivider}>
               <div style={S.menuSection}>Tools</div>
               <a href="/cockpit/tasks"             onClick={() => setUserOpen(false)} style={S.link}>Tasks</a>
@@ -470,6 +500,20 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
               <button onClick={() => setLang('en')} title="English" style={langFlag(lang === 'en')}>🇬🇧</button>
               <button onClick={() => setLang('th')} title="ไทย"     style={langFlag(lang === 'th')}>🇹🇭</button>
             </div>
+            {/* PBS 2026-07-09: sign out. Clears the Supabase cookie + bounces
+                to /login. Middleware then re-gates every route. */}
+            <button
+              type="button"
+              onClick={async () => {
+                setUserOpen(false);
+                await _supabase.auth.signOut();
+                router.push('/login');
+                router.refresh();
+              }}
+              style={S.signOutBtn}
+            >
+              Sign out
+            </button>
           </div>
         )}
       </div>
@@ -761,6 +805,16 @@ const S: Record<string, React.CSSProperties> = {
     fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)',
   },
   langRow: { borderTop: '1px solid var(--border-2, #2a261d)', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 },
+  // PBS 2026-07-09: dropdown identity + sign-out styling.
+  emailHeader: { padding: '8px 12px 6px', borderBottom: '1px solid var(--border-2, #2a261d)', marginBottom: 4 },
+  emailLine: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, color: 'var(--text-1, #f0e5cb)', wordBreak: 'break-all', lineHeight: 1.3 },
+  emailSubline: { fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)', marginTop: 2 },
+  signOutBtn: {
+    display: 'block', width: '100%', marginTop: 6, padding: '8px 12px',
+    background: 'transparent', border: 'none', borderTop: '1px solid var(--border-2, #2a261d)',
+    color: 'var(--terracotta, #B04A2F)', fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'left', cursor: 'pointer',
+  },
   // PBS 2026-05-14: switched popover from modern --surf-*/--text-* tokens
   // to legacy --paper-warm/--ink/--brass tokens. Reason: the modern tokens
   // have dark hex fallbacks that bleed through if the SSR'd light overrides
