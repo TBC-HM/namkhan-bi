@@ -21,8 +21,9 @@ async function requireAdmin(req: Request): Promise<{ ok: true } | { ok: false; r
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return { ok: false, res: NextResponse.json({ error: 'auth required' }, { status: 401 }) };
   const admin = getSupabaseAdmin();
-  const { data } = await admin.from('v_holding_users_flat').select('status').eq('auth_user_id', user.id).maybeSingle();
-  if (!data || data.status !== 'active') return { ok: false, res: NextResponse.json({ error: 'holding admin required' }, { status: 403 }) };
+  const { data } = await admin.from('v_holding_users_flat').select('role, status').eq('auth_user_id', user.id).maybeSingle();
+  if (!data || data.status !== 'active' || !['owner', 'admin'].includes(data.role))
+    return { ok: false, res: NextResponse.json({ error: 'holding admin required' }, { status: 403 }) };
   return { ok: true };
 }
 
@@ -32,10 +33,14 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const admin = getSupabaseAdmin();
+    const role = typeof body.role === 'string' && ['owner','admin','member','viewer','service'].includes(body.role)
+      ? body.role
+      : 'member';
     const { error } = await admin.rpc('fn_user_grant_holding', {
       p_auth_user_id: String(body.user_id),
       p_email: String(body.email).toLowerCase(),
       p_active: !!body.active,
+      p_role: role,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
