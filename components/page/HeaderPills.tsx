@@ -507,7 +507,7 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
                 - Front office removed (not needed at the top level).
                 - Email categories + Users & roles gated to isAdmin (holding_role owner/admin).
                 */}
-            <a href="/settings/users"            onClick={() => setUserOpen(false)} style={S.link}>Account</a>
+            <a href="/account"                   onClick={() => setUserOpen(false)} style={S.link}>Account</a>
             <a href="/account/password"          onClick={() => setUserOpen(false)} style={S.link}>Change password</a>
             <div style={S.menuDivider}>
               <div style={S.menuSection}>Tools</div>
