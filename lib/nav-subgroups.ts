@@ -76,6 +76,22 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Docs', href: '/operations/docs' },
     ],
   },
+  // PBS 2026-07-09 pm: QA sub-strip — SOPs + Registry + Proposals + Generate.
+  {
+    parentHref: '/operations/sops',
+    members: [
+      '/operations/sops', '/operations/qa',
+      '/operations/qa/registry', '/operations/qa/proposals',
+      '/operations/qa/generate', '/operations/qa/agent-instructions',
+    ],
+    tabs: [
+      { label: 'SOPs',               href: '/operations/sops'                  },
+      { label: 'QA registry',        href: '/operations/qa/registry'           },
+      { label: 'Proposals',          href: '/operations/qa/proposals'          },
+      { label: 'Generate',           href: '/operations/qa/generate'           },
+      { label: 'Agent instructions', href: '/operations/qa/agent-instructions' },
+    ],
+  },
   {
     parentHref: '/operations/rooms',
     members: [
