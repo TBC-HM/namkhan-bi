@@ -4,6 +4,8 @@
 // Sub-tabs: Library · AI Studio · Video · Clarify · Settings.
 // 2026-07-11 pm: added categories fetch (v_ai_prompt_categories) for AI Studio dropdown + Settings tab.
 // 2026-07-12: derives distinct property_area values for the Edit drawer datalist.
+// 2026-07-12 pm: added rooms + facilities grounding — pipes v_room_grounding + v_facility_grounding
+//   into AiStudioTab (category-driven dropdowns) and SettingsTab (Reality profile companion panels).
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -16,7 +18,10 @@ const NAMKHAN_PROPERTY_ID = 260955;
 
 async function loadAll(pid: number) {
   const sb = getSupabaseAdmin();
-  const [byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories] = await Promise.all([
+  const [
+    byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories,
+    rooms, facilities,
+  ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(500),
     sb.from('v_media_channel_specs').select('*'),
@@ -27,12 +32,11 @@ async function loadAll(pid: number) {
     sb.from('v_ai_prompt_categories').select('*')
       .or(`property_id.is.null,property_id.eq.${pid}`)
       .order('sort_order', { ascending: true }),
+    sb.from('v_room_grounding').select('*').eq('property_id', pid).order('room_type_id', { ascending: true }),
+    sb.from('v_facility_grounding').select('*').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
   ]);
 
   // Distinct property_area values seed the datalist in the Edit drawer.
-  // PostgREST exposes only the public schema (per claude_md v3.1 §0.5), so
-  // we derive from the already-fetched v_marketing_media_page rows instead
-  // of reaching into media.media_assets directly.
   const areaSet = new Set<string>();
   for (const row of (mediaPage.data ?? [])) {
     const v = (row as any).property_area;
@@ -49,8 +53,14 @@ async function loadAll(pid: number) {
     videoEdits: videoEdits.data ?? [],
     reality: reality.data ?? null,
     categories: categories.data ?? [],
+    rooms: rooms.data ?? [],
+    facilities: facilities.data ?? [],
     areaOptions,
-    errors: [byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error, aiGens.error, videoEdits.error, reality.error, categories.error].filter(Boolean),
+    errors: [
+      byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
+      aiGens.error, videoEdits.error, reality.error, categories.error,
+      rooms.error, facilities.error,
+    ].filter(Boolean),
   };
 }
 
@@ -85,6 +95,8 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             videoEdits={data.videoEdits as any}
             reality={data.reality as any}
             categories={data.categories as any}
+            rooms={data.rooms as any}
+            facilities={data.facilities as any}
             areaOptions={data.areaOptions}
           />
         </div>
