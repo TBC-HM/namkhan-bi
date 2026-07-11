@@ -40,7 +40,7 @@ async function loadAccountsBundle(propertyId: number) {
 export default async function AccountsPage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? NAMKHAN;
   const bundle = await loadAccountsBundle(pid);
-  const tabs = SALES_SUBPAGES.map((s) => ({ label: s.label, href: s.href }));
+  const tabs = SALES_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
 
   return (
     <DashboardPage
