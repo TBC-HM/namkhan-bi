@@ -151,9 +151,12 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // because Overview above claims /marketing/gallery first. Social now lives in Overview.
   {
     parentHref: '/marketing/digital',
-    members: ['/marketing/digital', '/marketing/web'],
+    // PBS 2026-07-11 pm: YouTube added as second Digital sub-tab.
+    // Landing at /marketing/youtube reads marketing.yt_* via public.v_yt_* bridges.
+    members: ['/marketing/digital', '/marketing/web', '/marketing/youtube'],
     tabs: [
-      { label: 'Web', href: '/marketing/web' },
+      { label: 'Web',     href: '/marketing/web'     },
+      { label: 'YouTube', href: '/marketing/youtube' },
     ],
   },
   // (The old /marketing/library standalone subgroup is now merged into Overview
