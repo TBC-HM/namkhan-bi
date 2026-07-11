@@ -1,5 +1,7 @@
 // app/marketing/media/_client/MediaHub.tsx
 // PBS 2026-07-12 — Client tab strip for Media hub.
+// PBS 2026-07-11 pm: added Library→AI Studio jump. Clicking "Send to AI" on
+// any Library row switches to AI Studio and preselects that asset.
 'use client';
 
 import { useState } from 'react';
@@ -35,6 +37,12 @@ const FOREST = '#084838';
 
 export default function MediaHub(props: Props) {
   const [tab, setTab] = useState<TabKey>('library');
+  const [aiInitialAssetId, setAiInitialAssetId] = useState<string | null>(null);
+
+  function handleSendToAi(assetId: string) {
+    setAiInitialAssetId(assetId);
+    setTab('ai');
+  }
 
   return (
     <div>
@@ -53,8 +61,8 @@ export default function MediaHub(props: Props) {
         })}
       </div>
 
-      {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} />}
-      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} />}
+      {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} />}
+      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} />}
       {tab === 'video'    && <VideoTab    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} />}
       {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} />}
     </div>
