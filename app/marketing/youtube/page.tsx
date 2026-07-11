@@ -172,7 +172,7 @@ export default async function MarketingYouTubePage({ searchParams }: PageProps) 
   const scheduledCount = pubsScheduled.length;
   const publishedCount = pubsRecent.length;
 
-  const tabs = MARKETING_SUBPAGES.map((s) => ({ label: s.label, href: s.href }));
+  const tabs = MARKETING_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
 
   const connected = sp.connected === '1';
   const oauthErr  = sp.connected === '0' ? (sp.err ?? 'unknown') : null;
