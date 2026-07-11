@@ -1,18 +1,10 @@
 // app/marketing/library/page.tsx
-// PBS 2026-07-05: Info hub · Library tab — new paper-white design.
-// Migrated from legacy <Page>+<KpiBox>+<Card> shell to DashboardPage+KpiTile.
-// 4-tab Info strip (Library · Events · Audiences · Taxonomy) rendered above KPIs.
-//
-// Data sources (all LIVE, from marketing.v_media_ready + siblings):
-//   • getMediaReady       → mkt_v_media_ready
-//   • getMediaTierCounts  → tier totals for the 5 tiers + logos
-//   • getTaxonomy         → mkt_taxonomy tags for filter rail
-//   • getCuratorPicks     → top qc + brand-fit picks
-//   • getRoomTypeBuckets  → room-type coverage buckets
-//   • getOtaPack          → 50-photo OTA carousel template
-//
-// Preserves all functional logic (URL-driven filters, tier + tag filter rail,
-// AI search, drop zone, curator carousel, OTA pack, room buckets, main grid).
+// PBS 2026-07-12 — Cleaned per brief media-ai-video-ui.
+// REMOVED: LibraryCockpit (AI Creation Studio, Recent Generations, Generation Budget,
+// Engine Selector Cheat Sheet, 8 mock KPI tiles: AI Generating, Awaiting Approval,
+// Coverage Gaps, Shot Briefs, Reality Flags, AI Spend MTD, OTA Pack tile, Rooms Short tile).
+// AI Studio + Reality profile + Video moved to /marketing/media.
+// KEPT: wired KPIs from mkt_v_media_by_tier · OTA pack · room buckets · browse grid · upload flow.
 
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
@@ -23,18 +15,11 @@ import {
 import AssetGrid from '@/components/marketing/AssetGrid';
 import LibraryAiSearch from '@/components/marketing/LibraryAiSearch';
 import LibraryDropZone from '@/components/marketing/LibraryDropZone';
-import LibraryCockpit from './_components/LibraryCockpit';
 import {
   getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks,
   getRoomTypeBuckets, getOtaPack, TIER_LABEL,
 } from '@/lib/marketing';
 import { MARKETING_SUBPAGES } from '../_subpages';
-
-type CockpitView = 'studio' | 'coverage' | 'briefs' | 'pipeline';
-function parseCockpitView(v: string | string[] | undefined): CockpitView {
-  const s = typeof v === 'string' ? v : 'studio';
-  return (['studio', 'coverage', 'briefs', 'pipeline'] as string[]).includes(s) ? (s as CockpitView) : 'studio';
-}
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -112,21 +97,20 @@ export default async function LibraryPage({ searchParams }: SP) {
     active: s.href === '/marketing/library',
   }));
 
+  // Only the 5 WIRED tiles from mkt_v_media_by_tier per brief.
   const tiles: KpiTileProps[] = [
     { label: 'Total ready',   value: totalReady,     size: 'sm', footnote: 'ex. logos' },
     { label: 'OTA',           value: otaCount,       size: 'sm', footnote: 'tier_ota_profile' },
     { label: 'Website',       value: heroCount,      size: 'sm', footnote: 'tier_website_hero' },
     { label: 'Social',        value: socialCount,    size: 'sm', footnote: 'tier_social_pool' },
     { label: 'Internal',      value: internalCount,  size: 'sm', footnote: 'tier_internal' },
-    { label: 'OTA pack',      value: `${otaTotalFound}/${otaTotalTarget}`, size: 'sm', footnote: otaTotalGap > 0 ? `${otaTotalGap} short` : 'ready' },
-    { label: 'Rooms short',   value: roomsUnderTarget, size: 'sm', footnote: `of ${roomBuckets.length}` },
   ];
 
   return (
     <div style={{ background: WHITE, minHeight: '100vh' }}>
       <DashboardPage
         title="Marketing · Library"
-        subtitle={`${totalReady} ready assets · ${curatorPicks.length} curator picks · ${otaTotalGap > 0 ? otaTotalGap + ' OTA slots still short' : 'OTA pack complete'}`}
+        subtitle={`${totalReady} ready assets · ${curatorPicks.length} curator picks · ${otaTotalGap > 0 ? otaTotalGap + ' OTA slots still short' : 'OTA pack complete'} · AI Studio → /marketing/media`}
         tabs={tabs}
       >
         {/* 4-tab Info hub strip */}
@@ -144,19 +128,15 @@ export default async function LibraryPage({ searchParams }: SP) {
           })}
         </div>
 
-        {/* KPI strip */}
+        {/* KPI strip — wired only */}
         <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
 
-        {/* Existing AI-creation cockpit + drop zone + search */}
-        <div style={fullRow}>
-          <LibraryCockpit
-            view={parseCockpitView(searchParams?.view)}
-            liveCounts={{
-              totalReady, ota: otaCount, hero: heroCount, social: socialCount, archive: archiveCount,
-            }}
-          />
+        {/* AI Studio hint banner */}
+        <div style={{ ...fullRow, padding:'10px 14px', background:CREAM, border:'1px solid '+HAIR, borderRadius:4, fontSize:12, color:INK_S }}>
+          AI generation, Reality profile and Video edits moved to{' '}
+          <TenantLink href="/marketing/media" style={{ color:FOREST, fontWeight:600, textDecoration:'none' }}>Marketing → Media →</TenantLink>
         </div>
 
         <div style={fullRow}>
