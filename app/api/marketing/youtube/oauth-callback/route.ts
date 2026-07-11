@@ -1,7 +1,7 @@
 // app/api/marketing/youtube/oauth-callback/route.ts
 // PBS 2026-07-11 pm — Google returns here after user grants consent.
-// Exchange code for tokens, fetch channel meta, store both in vault via
-// fn_vault_upsert_youtube_tokens, then delete the pending state row.
+// Uses public.fn_yt_* RPCs (SECURITY DEFINER) for all writes, per PostgREST
+// public-only exposure rule.
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -30,6 +30,12 @@ interface ChannelResponse {
   error?: { message?: string };
 }
 
+interface PendingRow {
+  id: string;
+  property_id: number;
+  pkce_verifier: string;
+}
+
 function fail(msg: string, detail?: string) {
   const u = new URL(`${APP_ROOT}/marketing/youtube`);
   u.searchParams.set('connected', '0');
@@ -49,16 +55,13 @@ export async function GET(req: Request) {
 
   const sb = getSupabaseAdmin();
 
-  // 1. Look up pending row
-  const { data: pending, error: pendErr } = await sb
-    .schema('marketing')
-    .from('yt_channel_connections')
-    .select('id, property_id, pkce_verifier')
-    .eq('oauth_state', state)
-    .eq('active', false)
-    .maybeSingle();
-
+  // 1. Look up pending row via SECURITY DEFINER RPC
+  const { data: pendingRows, error: pendErr } = await sb.rpc('fn_yt_lookup_pending', { p_state: state });
   if (pendErr) return fail('lookup_failed', pendErr.message);
+
+  const pending: PendingRow | null = Array.isArray(pendingRows) && pendingRows.length > 0
+    ? pendingRows[0] as PendingRow
+    : null;
   if (!pending || !pending.pkce_verifier) return fail('unknown_state');
 
   // 2. Fetch OAuth client credentials from vault
@@ -108,7 +111,7 @@ export async function GET(req: Request) {
     ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
     : null;
 
-  // 5. Persist via vault-upsert RPC
+  // 5. Persist via vault-upsert RPC (already SECURITY DEFINER)
   const { data: rpcData, error: rpcErr } = await sb.rpc('fn_vault_upsert_youtube_tokens', {
     p_property_id:      pending.property_id,
     p_access_token:     tokens.access_token,
@@ -125,12 +128,8 @@ export async function GET(req: Request) {
   }
 
   // 6. Delete the pending row (RPC already deactivated all previous active rows
-  //    for this property, and inserted a new active one — the pending row is orphan)
-  await sb
-    .schema('marketing')
-    .from('yt_channel_connections')
-    .delete()
-    .eq('id', pending.id);
+  //    for this property and inserted a fresh active one; the pending row is orphan)
+  await sb.rpc('fn_yt_delete_pending', { p_id: pending.id });
 
   const done = new URL(`${APP_ROOT}/marketing/youtube`);
   done.searchParams.set('connected', '1');
