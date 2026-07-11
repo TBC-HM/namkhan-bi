@@ -165,11 +165,11 @@ function statusPill(s: string) {
 // ------- component ----------------------------------------------------------
 
 interface PageProps {
-  searchParams?: Promise<{ connected?: string; err?: string; requested?: string; scanned?: string; ticket?: string; brief?: string }>;
+  searchParams?: { connected?: string; err?: string; requested?: string; scanned?: string; ticket?: string; brief?: string };
 }
 
 export default async function MarketingYouTubePage({ searchParams }: PageProps) {
-  const sp = (await (searchParams ?? Promise.resolve({}))) ?? {};
+  const sp = searchParams ?? {};
   const {
     connection, pubsScheduled, pubsRecent, jobs, briefs, requests, rates, vocab, black, people,
   } = await load();
