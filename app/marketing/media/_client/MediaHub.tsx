@@ -2,6 +2,8 @@
 // PBS 2026-07-12 — Client tab strip for Media hub.
 // PBS 2026-07-11 pm: added Library→AI Studio jump. Clicking "Send to AI" on
 // any Library row switches to AI Studio and preselects that asset.
+// 2026-07-11 pm (later): pipes `categories` (v_ai_prompt_categories) into
+// both AiStudioTab (dropdown source) and SettingsTab (Prompt Categories sub-tab).
 'use client';
 
 import { useState } from 'react';
@@ -12,6 +14,20 @@ import SettingsTab from './SettingsTab';
 
 type TabKey = 'library' | 'ai' | 'video' | 'settings';
 
+export interface PromptCategory {
+  key: string;
+  display_name: string;
+  property_id: number | null;
+  base_prompt: string;
+  default_target_tier: string;
+  example_hint: string | null;
+  active: boolean;
+  sort_order: number;
+  updated_by: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
 interface Props {
   propertyId: number;
   byTier: any[];
@@ -21,6 +37,7 @@ interface Props {
   aiGens: any[];
   videoEdits: any[];
   reality: any | null;
+  categories: PromptCategory[];
 }
 
 const TABS: Array<{ key: TabKey; label: string }> = [
@@ -31,7 +48,6 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 ];
 
 const HAIR   = '#E6DFCC';
-const INK    = '#1B1B1B';
 const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
 
@@ -62,9 +78,9 @@ export default function MediaHub(props: Props) {
       </div>
 
       {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} />}
-      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} />}
+      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} categories={props.categories} />}
       {tab === 'video'    && <VideoTab    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} />}
-      {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} />}
+      {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} categories={props.categories} />}
     </div>
   );
 }
