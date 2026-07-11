@@ -1,6 +1,7 @@
 // app/api/marketing/media/ai-generate/route.ts
 // POST — invokes edge fn generate-media. Propagates edge-fn `{ok:false, error, reason}` as non-2xx.
 // GET  ?id=… — returns a single v_ai_generations row for polling.
+// 2026-07-12: forwards optional room_type_id / facility_id (per category.requires_context).
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -18,7 +19,10 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
 
-  const { property_id, mode, prompt, target_tier, source_asset_id, category_key } = body || {};
+  const {
+    property_id, mode, prompt, target_tier, source_asset_id, category_key,
+    room_type_id, facility_id,
+  } = body || {};
   if (!property_id || !prompt || !mode) return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
   if (!['prompt', 'from_asset'].includes(mode)) return NextResponse.json({ error: 'bad_mode' }, { status: 400 });
   if (!ALLOWED_TIERS.has(target_tier)) return NextResponse.json({ error: 'tier_not_allowed_for_ai' }, { status: 400 });
@@ -33,11 +37,11 @@ export async function POST(req: NextRequest) {
         property_id, mode, prompt, target_tier,
         source_asset_id: source_asset_id ?? null,
         category_key: String(category_key).trim(),
+        room_type_id: room_type_id ? Number(room_type_id) : null,
+        facility_id:  facility_id  ? Number(facility_id)  : null,
       },
     });
 
-    // Supabase-js sets `error` on non-2xx responses OR on network failures.
-    // Try to surface the edge fn body (which contains reason + generation_id) either way.
     if (error) {
       let bodyText = '';
       const anyErr = error as any;
@@ -55,7 +59,6 @@ export async function POST(req: NextRequest) {
       }, { status: 502 });
     }
 
-    // 2xx from the edge fn — but the fn may still have set ok:false in the body.
     if (data && typeof data === 'object' && (data as any).ok === false) {
       const err = String((data as any).error ?? 'edge_fn_returned_ok_false');
       return NextResponse.json({
