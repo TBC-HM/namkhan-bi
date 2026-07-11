@@ -61,7 +61,7 @@ function originBadge(origin: string | null | undefined) {
 export default function PipelineCockpit({ leads: leadsInit, stages }: {
   leads: LeadRow[]; stages: StageRow[]; propertyId: number;
 }) {
-  const [view, setView] = useState<ViewMode>('list');
+  const [view, setView] = useState<ViewMode>('board');
   const [filter, setFilter] = useState<Filter>('all');
   const [leads, setLeads] = useState<LeadRow[]>(leadsInit);
   const [banner, setBanner] = useState<string | null>(null);
