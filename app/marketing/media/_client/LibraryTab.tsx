@@ -165,7 +165,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                     <button onClick={() => onSendToAi(r.asset_id)} style={{
                       padding:'4px 10px', fontSize:11, fontWeight:600, background:'transparent', color:FOREST,
                       border:'1px solid ' + FOREST, borderRadius:2, cursor:'pointer', marginRight:6, whiteSpace:'nowrap',
-                    }}>Send to AI ✎</button>
+                    }}>Use for AI ✎</button>
                   ) : null}
                   <button onClick={() => setUseForMenu(useForMenu === r.asset_id ? null : r.asset_id)} disabled={busyRow === r.asset_id} style={{
                     fontSize:10, padding:'4px 8px', background:WHITE, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', color:INK,
