@@ -452,13 +452,15 @@ const SALES_CFG: DeptCfg = {
   storageKeyPrefix: 'sal',
   subPages: [
     // PBS 2026-05-16: 4-page collapse — Pipeline absorbs Inquiries/Leads/BTB/Groups/FIT
-    // as filter chips. Accounts is the new mini-CRM. Old pages parked (still
-    // accessible at their URLs with a deprecation banner) until PBS confirms deletion.
-    { label: 'HoD',       href: '/sales'           },
-    { label: 'Pipeline',  href: '/sales/leads'     },
-    { label: 'Accounts',  href: '/sales/accounts'  },
-    { label: 'Packages',  href: '/sales/packages'  },
-    { label: 'Reports',   href: '/h/260955/reports?dept=sales' },
+    // as filter chips. Accounts is the new mini-CRM.
+    // PBS 2026-07-11 pm (ADR-147 sales CRM): in-page label rename "Pipeline"→"Leads",
+    // ICP Segments added as read-only sub-tab. TOP MENU UNCHANGED.
+    { label: 'HoD',           href: '/sales'           },
+    { label: 'Leads',         href: '/sales/leads'     },
+    { label: 'Accounts',      href: '/sales/accounts'  },
+    { label: 'ICP Segments',  href: '/sales/icp'       },
+    { label: 'Packages',      href: '/sales/packages'  },
+    { label: 'Reports',       href: '/h/260955/reports?dept=sales' },
   ],
   quickChips: [
     { label: 'Inquiries', href: '/sales/inquiries' },
