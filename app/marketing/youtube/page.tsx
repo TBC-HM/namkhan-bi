@@ -1,26 +1,20 @@
 // app/marketing/youtube/page.tsx
-// PBS 2026-07-11 pm — Rebuild. PBS said "no functions, cant click on anything, flow is missing".
-// So this is now a *functional* cockpit, not a status page. Order:
-//   A · Channel state strip (connect button OR channel meta)
-//   B · Flow diagram (7 chevrons, current in-flight counts)
-//   C · Request a video (Lumen queue)
-//   D · Research (recent briefs + seeds + blacklist)
-//   E · Approval queue (renders awaiting review)
-//   F · Schedule + Published
-//   G · Guardrails (collapsible accordion)
+// PBS 2026-07-11 pm — YT cockpit. Section A (channel state) now delegates to
+// <ChannelDashboard/> which pulls live from YouTube Data API v3. Everything else
+// (flow diagram, request form, research, approval queue, schedule, guardrails) untouched.
 
 import Link from 'next/link';
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import RequestVideoForm from './_client/RequestVideoForm';
+import ChannelDashboard from './_server/ChannelDashboard';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const NAMKHAN = 260955;
 
-// Paper-white token ladder (hardcoded per feedback_namkhan_token_ladder_paper_warm_dark).
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
 const INK    = '#1B1B1B';
@@ -110,8 +104,6 @@ async function load(): Promise<LoadResult> {
   };
 }
 
-// ------- shared styles ------------------------------------------------------
-
 const CARD: React.CSSProperties = {
   background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 20,
 };
@@ -134,10 +126,6 @@ function fmtDate(d: string | null | undefined) {
 function fmtDateTime(d: string | null | undefined) {
   if (!d) return '—';
   try { return new Date(d).toISOString().slice(0, 16).replace('T', ' '); } catch { return String(d); }
-}
-function fmtInt(n: number | null | undefined) {
-  if (n == null) return '—';
-  return new Intl.NumberFormat('en-US').format(Math.trunc(n));
 }
 function money(x: number | null | undefined, ccy: string) {
   if (x == null) return '—';
@@ -162,8 +150,6 @@ function statusPill(s: string) {
   return <span style={{ ...base, background: c.bg, color: c.fg }}>{s}</span>;
 }
 
-// ------- component ----------------------------------------------------------
-
 interface PageProps {
   searchParams?: { connected?: string; err?: string; requested?: string; scanned?: string; ticket?: string; brief?: string };
 }
@@ -174,7 +160,6 @@ export default async function MarketingYouTubePage({ searchParams }: PageProps) 
     connection, pubsScheduled, pubsRecent, jobs, briefs, requests, rates, vocab, black, people,
   } = await load();
 
-  // Flow-stage counters
   const stage_research  = briefs.length;
   const stage_request   = requests.filter((r) => r.status === 'queued').length;
   const stage_script    = requests.filter((r) => r.status === 'scripting').length + jobs.filter((j) => j.status === 'draft').length;
@@ -196,7 +181,6 @@ export default async function MarketingYouTubePage({ searchParams }: PageProps) 
     <DashboardPage title="YouTube · autonomous channel" tabs={tabs}>
       <div style={{ display: 'grid', gap: 16 }}>
 
-        {/* Banner: OAuth result */}
         {connected && (
           <div style={{ ...CARD, background: '#E8F0EC', borderColor: FOREST, gridColumn: '1 / -1' }}>
             <div style={{ fontSize: 13, color: FOREST, fontWeight: 500 }}>
@@ -226,79 +210,52 @@ export default async function MarketingYouTubePage({ searchParams }: PageProps) 
           </div>
         )}
 
-        {/* ===== A · Channel state strip ==================================== */}
-        <div style={{ ...CARD, gridColumn: '1 / -1' }}>
-          <div style={SECTION_H}>Channel state</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-            {/* Left: channel connection */}
-            <div>
-              {connection ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ fontSize: 18, color: INK, fontWeight: 500 }}>
-                    {connection.channel_title ?? '(unnamed channel)'}
+        {/* ===== A · Channel dashboard (live from Data API v3) OR connect button ===== */}
+        {connection ? (
+          <ChannelDashboard propertyId={NAMKHAN} />
+        ) : (
+          <div style={{ ...CARD, gridColumn: '1 / -1' }}>
+            <div style={SECTION_H}>Channel state</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+              <div>
+                <div style={{ fontSize: 15, color: INK, marginBottom: 8 }}>
+                  YouTube channel not connected.
+                </div>
+                <div style={{ fontSize: 13, color: INK_M, marginBottom: 14, lineHeight: 1.5 }}>
+                  Grants Lumen read + upload + publish scope so approved videos ship straight to the channel.
+                  Tokens land in Supabase vault, never touch the browser.
+                </div>
+                <Link href={`/api/marketing/youtube/oauth-start?property_id=${NAMKHAN}`}
+                  style={{
+                    display: 'inline-block', padding: '10px 18px', border: `1px solid ${FOREST}`,
+                    borderRadius: 3, background: FOREST, color: WHITE, fontSize: 13,
+                    letterSpacing: '.04em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500,
+                  }}>
+                  Connect YouTube channel
+                </Link>
+              </div>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_S, marginBottom: 4 }}>
+                    House voice
                   </div>
-                  <div style={{ fontSize: 13, color: INK_M, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                    {connection.channel_handle ?? connection.channel_id ?? '—'}
+                  <div style={{ fontSize: 13, color: INK_M }}>
+                    Namkhan house voice: not cloned yet. Phase B wires ElevenLabs voice-clone for narration.
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_S, marginBottom: 4 }}>
+                    Talking-head roster
                   </div>
                   <div style={{ fontSize: 13, color: INK }}>
-                    <strong>{fmtInt(connection.subscriber_count)}</strong> subscribers
+                    {people.length} approved {people.length === 1 ? 'person' : 'people'} on file
+                    {people.length > 0 ? `: ${people.map((p) => p.full_name).join(', ')}` : ''}.
                   </div>
-                  <div style={{ fontSize: 12, color: INK_M }}>
-                    Connected {fmtDate(connection.connected_at)} · token expires {fmtDateTime(connection.token_expires_at)}
-                  </div>
-                  <div style={{ marginTop: 8 }}>
-                    <Link href={`/api/marketing/youtube/oauth-start?property_id=${NAMKHAN}`}
-                      style={{ fontSize: 12, color: INK_M, textDecoration: 'underline' }}>
-                      Reconnect
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ fontSize: 15, color: INK, marginBottom: 8 }}>
-                    YouTube channel not connected.
-                  </div>
-                  <div style={{ fontSize: 13, color: INK_M, marginBottom: 14, lineHeight: 1.5 }}>
-                    Grants Lumen read + upload + publish scope so approved videos ship straight to the channel.
-                    Tokens land in Supabase vault, never touch the browser.
-                  </div>
-                  <Link href={`/api/marketing/youtube/oauth-start?property_id=${NAMKHAN}`}
-                    style={{
-                      display: 'inline-block', padding: '10px 18px', border: `1px solid ${FOREST}`,
-                      borderRadius: 3, background: FOREST, color: WHITE, fontSize: 13,
-                      letterSpacing: '.04em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500,
-                    }}>
-                    Connect YouTube channel
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Right: voice state */}
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_S, marginBottom: 4 }}>
-                  House voice
-                </div>
-                <div style={{ fontSize: 13, color: INK_M }}>
-                  Namkhan house voice: not cloned yet. Phase B wires ElevenLabs voice-clone for narration on reels + long-form.
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_S, marginBottom: 4 }}>
-                  Talking-head roster
-                </div>
-                <div style={{ fontSize: 13, color: INK }}>
-                  {people.length} approved {people.length === 1 ? 'person' : 'people'} on file
-                  {people.length > 0 ? `: ${people.map((p) => p.full_name).join(', ')}` : ''}.
-                </div>
-                <div style={{ fontSize: 12, color: INK_M, marginTop: 4 }}>
-                  Add releases under Guardrails &rarr; Approved people.
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ===== B · Flow diagram =========================================== */}
         <div style={{ ...CARD, gridColumn: '1 / -1' }}>
@@ -366,7 +323,6 @@ export default async function MarketingYouTubePage({ searchParams }: PageProps) 
             </form>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-            {/* Left: recent briefs */}
             <div>
               <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_S, marginBottom: 8 }}>
                 Recent briefs
@@ -401,7 +357,6 @@ export default async function MarketingYouTubePage({ searchParams }: PageProps) 
               )}
             </div>
 
-            {/* Right: seeds + blacklist */}
             <div style={{ display: 'grid', gap: 16 }}>
               <div>
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_S, marginBottom: 8 }}>
@@ -639,8 +594,6 @@ export default async function MarketingYouTubePage({ searchParams }: PageProps) 
     </DashboardPage>
   );
 }
-
-// ------- flow chevron -------------------------------------------------------
 
 function FlowChevron({ n, title, agent, count, phaseB }: { n: number; title: string; agent: string; count: number; phaseB: boolean }) {
   const accent = phaseB ? AMBER : FOREST;
