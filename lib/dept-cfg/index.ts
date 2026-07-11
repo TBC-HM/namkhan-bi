@@ -534,6 +534,7 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Acquisition',       href: '/marketing/acquisition'     },
     { label: 'Products & Offers', href: '/marketing/offers'          },
     { label: 'Digital',           href: '/marketing/digital'         },
+    { label: 'Media',             href: '/marketing/media'           },
     { label: 'Reports',           href: '/h/260955/reports?dept=marketing' },
   ],
   quickChips: [
