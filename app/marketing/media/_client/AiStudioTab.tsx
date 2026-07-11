@@ -1,6 +1,8 @@
 // app/marketing/media/_client/AiStudioTab.tsx
-// PBS 2026-07-12 — AI Studio: prompt / from-existing-photo. Real library picker grid
-// (fix for broken placeholder dropdown that filtered on a non-existent asset_type column).
+// PBS 2026-07-12 — AI Studio.
+// 2026-07-11 pm: added required Category dropdown (media.ai_prompt_categories) — user picks a category first,
+// its base_prompt is auto-prepended server-side. Placeholder + collapsed style-guidance preview from the row.
+// Also: banner now shows failure `reason` from the server so PBS sees the real error (billing / bucket / etc.).
 'use client';
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -12,9 +14,9 @@ interface AiGen {
   reality_check: string | null; reality_reason: string | null;
   cost_eur: number | null; cost_cap_eur: number | null;
   status: string; created_by: string | null; created_at: string;
+  finished_at?: string | null; category_key?: string | null;
 }
 
-// v_marketing_media_page: no asset_type column — use mime_type LIKE 'image/%' to include images.
 interface MediaRow {
   asset_id: string;
   original_filename: string;
@@ -26,10 +28,23 @@ interface MediaRow {
   height_px: number | null;
 }
 
+export interface PromptCategory {
+  key: string;
+  display_name: string;
+  property_id: number | null;
+  base_prompt: string;
+  default_target_tier: string;
+  example_hint: string | null;
+  active: boolean;
+  sort_order: number;
+}
+
 interface Props {
   propertyId: number;
   mediaPage: MediaRow[];
   aiGens: AiGen[];
+  initialSourceAssetId?: string | null;
+  categories: PromptCategory[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -44,11 +59,11 @@ const TIERS = [
   { key: 'tier_internal',    label: 'Internal only' },
 ];
 
-export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
-  const [mode, setMode] = useState<'prompt' | 'from_asset'>('prompt');
+export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSourceAssetId, categories }: Props) {
+  const [mode, setMode] = useState<'prompt' | 'from_asset'>(initialSourceAssetId ? 'from_asset' : 'prompt');
   const [prompt, setPrompt] = useState('');
   const [tier, setTier] = useState('tier_social_pool');
-  const [sourceAssetId, setSourceAssetId] = useState<string | null>(null);
+  const [sourceAssetId, setSourceAssetId] = useState<string | null>(initialSourceAssetId ?? null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ tone: 'ok'|'err'|'warn'; text: string } | null>(null);
   const [rows, setRows] = useState<AiGen[]>(aiGens);
@@ -58,13 +73,36 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
   const [search, setSearch] = useState('');
   const [tierFilter, setTierFilter] = useState<string | null>(null);
 
+  // Category state
+  const activeCategories = useMemo(
+    () => (categories ?? [])
+      .filter(c => c.active !== false)
+      .sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100) || a.display_name.localeCompare(b.display_name)),
+    [categories]
+  );
+  const [categoryKey, setCategoryKey] = useState<string>('');
+  const [styleExpanded, setStyleExpanded] = useState(false);
+  const selectedCategory = activeCategories.find(c => c.key === categoryKey) ?? null;
+
   useEffect(() => { setRows(aiGens); }, [aiGens]);
 
-  // Photos only. mediaPage may have videos too; keep only images.
+  useEffect(() => {
+    if (initialSourceAssetId) {
+      setSourceAssetId(initialSourceAssetId);
+      setMode('from_asset');
+    }
+  }, [initialSourceAssetId]);
+
+  // When category changes, snap tier to that category's default (if allowed).
+  useEffect(() => {
+    if (selectedCategory && (selectedCategory.default_target_tier === 'tier_social_pool' || selectedCategory.default_target_tier === 'tier_internal')) {
+      setTier(selectedCategory.default_target_tier);
+    }
+  }, [selectedCategory]);
+
   const photos = useMemo(() => {
     return (mediaPage ?? []).filter(m => {
       const mt = (m.mime_type ?? '').toLowerCase();
-      // If mime_type is missing, keep it (v_marketing_media_page is master-only anyway).
       return mt === '' || mt.startsWith('image/');
     });
   }, [mediaPage]);
@@ -91,8 +129,16 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
       const res = await fetch(`/api/marketing/media/ai-generate?id=${encodeURIComponent(id)}`);
       const j = await res.json();
       if (res.ok && j.row) {
-        setRows(prev => prev.map(r => r.id === id ? j.row : r));
-        if (j.row.status === 'completed' || j.row.status === 'failed') setPolling(null);
+        setRows(prev => {
+          const exists = prev.some(r => r.id === id);
+          return exists ? prev.map(r => r.id === id ? j.row : r) : [j.row, ...prev];
+        });
+        if (j.row.status === 'review' || j.row.status === 'completed' || j.row.status === 'failed' || j.row.status === 'rejected') {
+          setPolling(null);
+          if (j.row.status === 'failed' || j.row.status === 'rejected') {
+            setBanner({ tone:'err', text:`Generation ${j.row.status}: ${j.row.reality_reason ?? '(no reason recorded)'}` });
+          }
+        }
       }
     } catch { /* ignore */ }
   }
@@ -103,10 +149,14 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
     return () => clearInterval(t);
   }, [polling]);
 
-  const canSubmit = mode === 'prompt' ? prompt.trim().length > 0 : (prompt.trim().length > 0 && !!sourceAssetId);
+  const canSubmit =
+    !!categoryKey &&
+    prompt.trim().length > 0 &&
+    (mode === 'prompt' || !!sourceAssetId);
 
   async function submit() {
     setBanner(null);
+    if (!categoryKey) { setBanner({ tone:'warn', text:'Pick a category first.' }); return; }
     if (!prompt.trim()) { setBanner({ tone:'warn', text:'Add a prompt describing what you want.' }); return; }
     if (mode === 'from_asset' && !sourceAssetId) { setBanner({ tone:'warn', text:'Pick a photo first.' }); return; }
     setBusy(true);
@@ -119,19 +169,24 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
           prompt,
           target_tier: tier,
           source_asset_id: mode === 'from_asset' ? sourceAssetId : null,
+          category_key: categoryKey,
         }),
       });
       const j = await res.json();
       if (!res.ok) {
-        if (j.error === 'openai_key_missing_in_vault' || /openai/i.test(j.error ?? '')) {
+        const errKey = String(j.error ?? '');
+        const reason = j.reason ?? '';
+        if (errKey === 'openai_key_missing_in_vault' || /openai.*missing/i.test(errKey)) {
           setBanner({ tone:'err', text:'OpenAI key not configured — ask PBS to add OPENAI_IMAGE_KEY to Supabase vault.' });
         } else {
-          setBanner({ tone:'err', text:`Failed: ${j.error ?? res.statusText}` });
+          setBanner({ tone:'err', text:`Failed (${errKey || res.statusText})${reason ? `: ${reason}` : ''}` });
         }
+        if (j.generation_id) { setPolling(null); refreshRow(j.generation_id); }
         return;
       }
-      setBanner({ tone:'ok', text:`Queued generation ${j.id ?? ''}.` });
-      if (j.id) { setPolling(j.id); refreshRow(j.id); }
+      setBanner({ tone:'ok', text:`Queued generation ${j.generation_id ?? j.id ?? ''}. Polling…` });
+      const newId = j.generation_id ?? j.id;
+      if (newId) { setPolling(newId); refreshRow(newId); }
       setPrompt('');
     } catch (e: any) {
       setBanner({ tone:'err', text:`Failed: ${e.message}` });
@@ -146,7 +201,7 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
       });
       const j = await res.json();
       if (!res.ok) { setBanner({ tone:'err', text:`Accept failed: ${j.error ?? res.statusText}` }); return; }
-      setBanner({ tone:'ok', text:`Accepted -> media library asset ${j.asset_id}.` });
+      setBanner({ tone:'ok', text:`Accepted → media library asset ${j.asset_id}.` });
       refreshRow(genId);
     } catch (e: any) { setBanner({ tone:'err', text:`Accept failed: ${e.message}` }); }
   }
@@ -154,15 +209,64 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
   const bannerBg = banner?.tone === 'ok' ? '#EAF3EA' : banner?.tone === 'err' ? '#FBE9E7' : '#F7F0E1';
   const bannerFg = banner?.tone === 'ok' ? FOREST : banner?.tone === 'err' ? RED : INK;
 
+  const placeholder = selectedCategory?.example_hint
+    ? selectedCategory.example_hint
+    : (mode === 'from_asset'
+        ? 'e.g. Keep the villa architecture; recompose at golden hour with mist rising off the river'
+        : 'e.g. Namkhan river bend at golden hour, teak villa in the foreground, misty jungle canopy behind');
+
   return (
     <div>
       {banner && (
-        <div style={{ padding:'10px 14px', background:bannerBg, color:bannerFg, border:'1px solid '+HAIR, borderRadius:4, marginBottom:12, fontSize:12 }}>
-          {banner.text} <button onClick={() => setBanner(null)} style={{ marginLeft:8, background:'none', border:'none', cursor:'pointer', color:INK_M }}>x</button>
+        <div style={{ padding:'10px 14px', background:bannerBg, color:bannerFg, border:'1px solid '+HAIR, borderRadius:4, marginBottom:12, fontSize:12, whiteSpace:'pre-wrap' }}>
+          {banner.text} <button onClick={() => setBanner(null)} style={{ marginLeft:8, background:'none', border:'none', cursor:'pointer', color:INK_M }}>×</button>
         </div>
       )}
 
       <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:16, marginBottom:16 }}>
+
+        {/* Category dropdown — REQUIRED, at the top */}
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:'block', fontSize:11, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>
+            Category <span style={{ color:RED }}>*</span>
+          </label>
+          {activeCategories.length === 0 ? (
+            <div style={{ padding:10, fontSize:12, background:'#FBE9E7', color:RED, border:'1px solid '+HAIR, borderRadius:4 }}>
+              No categories defined yet. Ask PBS to add one via Settings ⚙ → Prompt Categories.
+            </div>
+          ) : (
+            <>
+              <select
+                value={categoryKey}
+                onChange={e => setCategoryKey(e.target.value)}
+                style={{ width:'100%', padding:'8px 10px', fontSize:13, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK }}
+              >
+                <option value="">— pick a category —</option>
+                {activeCategories.map(c => (
+                  <option key={c.key} value={c.key}>
+                    {c.display_name}{c.property_id === null ? ' (global)' : ''}
+                  </option>
+                ))}
+              </select>
+              {selectedCategory && (
+                <div style={{ marginTop:8, border:'1px dashed '+HAIR, borderRadius:4, padding:'8px 10px', background:'#FAF6EC' }}>
+                  <button
+                    onClick={() => setStyleExpanded(v => !v)}
+                    style={{ background:'none', border:'none', padding:0, cursor:'pointer', color:INK_M, fontSize:11, textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600 }}
+                  >
+                    {styleExpanded ? '▾' : '▸'} Style guidance (auto-prepended)
+                  </button>
+                  {styleExpanded && (
+                    <div style={{ marginTop:6, fontSize:12, color:INK, fontStyle:'italic', lineHeight:1.5, whiteSpace:'pre-wrap' }}>
+                      {selectedCategory.base_prompt}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         {/* Mode toggle */}
         <div style={{ display:'flex', gap:12, marginBottom:12 }}>
           <button onClick={() => setMode('prompt')} style={{
@@ -177,7 +281,6 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
           }}>from existing photo</button>
         </div>
 
-        {/* Library picker (from_asset only) */}
         {mode === 'from_asset' && (
           <div style={{ marginBottom:14, border:'1px solid '+HAIR, borderRadius:6, padding:12, background:'#FAF6EC' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, flexWrap:'wrap', gap:8 }}>
@@ -187,12 +290,11 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search filename..."
+                placeholder="Search filename…"
                 style={{ padding:'6px 10px', fontSize:12, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK, minWidth:200 }}
               />
             </div>
 
-            {/* Tier chips */}
             {distinctTiers.length > 0 && (
               <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:10 }}>
                 <TierChip label="all" active={tierFilter === null} onClick={() => setTierFilter(null)} />
@@ -202,7 +304,6 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
               </div>
             )}
 
-            {/* Grid */}
             {filteredPhotos.length === 0 ? (
               <div style={{ padding:20, textAlign:'center', color:INK_M, fontSize:12 }}>
                 No photos match. Clear search / tier filter.
@@ -248,7 +349,7 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
                 Selected: <strong>{selectedRow.original_filename}</strong>
                 {selectedRow.primary_tier && <span style={{ color:INK_M }}> · {selectedRow.primary_tier}</span>}
                 {selectedRow.width_px && selectedRow.height_px && (
-                  <span style={{ color:INK_M }}> · {selectedRow.width_px}x{selectedRow.height_px}</span>
+                  <span style={{ color:INK_M }}> · {selectedRow.width_px}×{selectedRow.height_px}</span>
                 )}
                 <button
                   onClick={() => setSourceAssetId(null)}
@@ -259,13 +360,10 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
           </div>
         )}
 
-        {/* Prompt */}
         <label style={{ display:'block', fontSize:11, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>Prompt</label>
         <textarea
           value={prompt} onChange={e => setPrompt(e.target.value)} rows={4}
-          placeholder={mode === 'from_asset'
-            ? 'e.g. Keep the villa architecture; recompose at golden hour with mist rising off the river'
-            : 'e.g. Namkhan river bend at golden hour, teak villa in the foreground, misty jungle canopy behind'}
+          placeholder={placeholder}
           style={{ width:'100%', padding:10, fontSize:13, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK, resize:'vertical', marginBottom:12 }}
         />
 
@@ -285,7 +383,7 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
           <button
             onClick={submit}
             disabled={busy || !canSubmit}
-            title={mode === 'from_asset' && !sourceAssetId ? 'Pick a photo first' : ''}
+            title={!categoryKey ? 'Pick a category first' : (mode === 'from_asset' && !sourceAssetId ? 'Pick a photo first' : '')}
             style={{
               padding:'8px 16px', fontSize:12, fontWeight:600,
               background: canSubmit ? FOREST : '#B7C7BE',
@@ -293,8 +391,9 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
               cursor: (busy || !canSubmit) ? 'not-allowed' : 'pointer',
               opacity: busy ? 0.6 : 1,
             }}
-          >{busy ? 'Generating...' : 'Generate > auto'}</button>
-          {mode === 'from_asset' && !sourceAssetId && (
+          >{busy ? 'Generating…' : 'Generate → auto'}</button>
+          {!categoryKey && <span style={{ fontSize:11, color:RED }}>Pick a category first</span>}
+          {categoryKey && mode === 'from_asset' && !sourceAssetId && (
             <span style={{ fontSize:11, color:RED }}>Pick a photo first</span>
           )}
         </div>
@@ -310,27 +409,33 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens }: Props) {
           {rows.slice(0, 20).map(g => (
             <div key={g.id} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, padding:12, fontSize:12, color:INK }}>
               <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'baseline', flexWrap:'wrap' }}>
-                <span style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis' }}>{g.prompt.slice(0, 80)}{g.prompt.length > 80 ? '...' : ''}</span>
+                <span style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis' }}>{g.prompt.slice(0, 80)}{g.prompt.length > 80 ? '…' : ''}</span>
                 <span style={{ fontSize:10, color:INK_M }}>{new Date(g.created_at).toLocaleString()}</span>
               </div>
               <div style={{ display:'flex', gap:8, marginTop:4, fontSize:10, color:INK_M, flexWrap:'wrap' }}>
                 <span>mode: {g.mode}</span>
                 <span>tier: {g.target_tier}</span>
+                {g.category_key && <span>category: <strong>{g.category_key}</strong></span>}
                 <span>engine: {g.engine}</span>
-                <span>status: <strong style={{ color: g.status === 'completed' ? FOREST : g.status === 'failed' ? RED : INK }}>{g.status}</strong></span>
+                <span>status: <strong style={{ color: (g.status === 'completed' || g.status === 'review') ? FOREST : g.status === 'failed' ? RED : INK }}>{g.status}</strong></span>
                 {g.reality_check && <span>reality: {g.reality_check}</span>}
                 {g.cost_eur != null && <span>cost: EUR {Number(g.cost_eur).toFixed(2)}</span>}
               </div>
+              {(g.status === 'failed' || g.status === 'rejected') && g.reality_reason && (
+                <div style={{ marginTop:6, padding:'6px 8px', background:'#FBE9E7', color:RED, fontSize:11, borderRadius:3, whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                  <strong>reason:</strong> {g.reality_reason}
+                </div>
+              )}
               {g.candidate_paths && g.candidate_paths.length > 0 && !g.chosen_asset_id && (
                 <div style={{ display:'flex', gap:8, marginTop:8, flexWrap:'wrap' }}>
                   {g.candidate_paths.map((p, i) => (
-                    <button key={i} onClick={() => accept(g.id, p)} style={{
+                    <button key={g.id + '_' + i} onClick={() => accept(g.id, p)} style={{
                       padding:'4px 10px', fontSize:10, background:FOREST, color:WHITE, border:'none', borderRadius:3, cursor:'pointer',
                     }}>Accept candidate {i + 1}</button>
                   ))}
                 </div>
               )}
-              {g.chosen_asset_id && <div style={{ fontSize:10, color:FOREST, marginTop:4 }}>OK accepted as asset {g.chosen_asset_id.slice(0, 8)}</div>}
+              {g.chosen_asset_id && <div style={{ fontSize:10, color:FOREST, marginTop:4 }}>✓ accepted as asset {g.chosen_asset_id.slice(0, 8)}</div>}
             </div>
           ))}
         </div>
