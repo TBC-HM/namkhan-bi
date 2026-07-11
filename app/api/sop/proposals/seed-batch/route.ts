@@ -1,21 +1,19 @@
 // app/api/sop/proposals/seed-batch/route.ts
-// PBS 2026-07-08: Batched seed. Client loops 6× with batch_index 0..5 asking
-// for 50 proposals each (300 total). Each call is a single Anthropic request
-// with a bounded target so max_tokens (was truncating the original single-shot
-// 300-item generation and silently returning garbage) is comfortable.
+// PBS 2026-07-08 (batched seed) + 2026-07-11 pm (dir 2) Donna prompt rewrite:
+// swapped the thin 3-line Donna context for a Panama-specific brief so proposals
+// stop being generic hotel-anywhere text (spain is not laos, panama is not laos).
 //
-// POST { property_id, batch_index (0..5), batch_size (default 50) }
+// POST { property_id, batch_index (0..5), batch_size (default 25) }
 //   → { ok, inserted, skipped, generated, batch, batch_index }
 //
-// Uses the same fn_sop_proposal_bulk_insert (dedupe on dept+lower(title)) so
-// running the client loop end-to-end is idempotent — duplicates are counted as
-// skipped, not errors.
+// Uses fn_sop_proposal_bulk_insert (dedupe on dept+lower(title)) so the client
+// loop end-to-end is idempotent — duplicates are counted as skipped, not errors.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-// PBS 2026-07-11: helper — fetch a vault secret via fn_get_secret RPC (SECURITY DEFINER).
-// Cached across invocations on the same warm Lambda so we don't hit the RPC on every batch.
+// PBS 2026-07-11: fetch Anthropic key via fn_get_secret RPC (SECURITY DEFINER),
+// cached across warm invocations.
 let CACHED_ANTHROPIC_KEY: string | null = null;
 async function getAnthropicKey(): Promise<string> {
   if (CACHED_ANTHROPIC_KEY) return CACHED_ANTHROPIC_KEY;
@@ -37,12 +35,12 @@ async function getAnthropicKey(): Promise<string> {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;  // PBS 2026-07-11: bumped 60→300 after batch 1 (F&B, 50 items) hit FUNCTION_INVOCATION_TIMEOUT. Batch 0 lands in ~15s; F&B/wellness/spa prompts occasionally exceed 60s due to nuance. Vercel Pro allows up to 800s.
+export const maxDuration = 300;
 
 interface Body {
   property_id:  number;
-  batch_index?: number;    // 0..5
-  batch_size?:  number;    // default 50
+  batch_index?: number;
+  batch_size?:  number;
 }
 
 interface ProposalItem {
@@ -54,10 +52,6 @@ interface ProposalItem {
   property_scope?: 'all' | 'namkhan' | 'donna';
 }
 
-// Dept focus per batch — a rough spread so the 6 batches cover every dept once
-// without asking Claude for 300 items in one shot (that was the "nothing
-// happens" root cause: model was truncating the JSON at 16k tokens and the
-// response body was invalid JSON, so callAnthropicSeed threw silently).
 const BATCH_FOCUS_NAMKHAN: Record<number, string> = {
   0: 'Housekeeping, Laundry, Public areas',
   1: 'F&B (kitchen + service + bar), Restaurant',
@@ -67,13 +61,15 @@ const BATCH_FOCUS_NAMKHAN: Record<number, string> = {
   5: 'HR, Finance, Procurement, IT, Marketing, Revenue, Retail, Transport',
 };
 
-const BATCH_FOCUS_DONNA: Record<number, string> = {
-  0: 'Reception, Front desk, Guest calls',
-  1: 'Housekeeping, Laundry, Public areas',
-  2: 'F&B, Kitchen, Service, Bar',
-  3: 'Maintenance, Engineering, Safety',
-  4: 'HR, Finance, Procurement, IT',
-  5: 'Marketing, Revenue, Sales, Retail',
+// PBS 2026-07-11 pm (dir 2) — V2 Donna focus, Panama apart-hotel appropriate.
+// V1 was generic "hotel" focus which produced Namkhan-shaped SOPs.
+const BATCH_FOCUS_DONNA_V2: Record<number, string> = {
+  0: 'Reception, Guest calls, Front desk, Long-stay check-in',
+  1: 'Housekeeping (apartments), Laundry (in-unit + guest laundry), Public areas',
+  2: 'F&B (partner-restaurant coordination, in-unit deliveries), Kitchen, Service, Bar',
+  3: 'Maintenance (apartment systems, HVAC, plumbing), Safety, Building compliance',
+  4: 'HR (Código de Trabajo, décimo, CSS), Finance (USD accounting, Panama tax), Procurement, IT',
+  5: 'Guest services (Panama City concierge), Marketing, Revenue, Retail, Sustainability',
 };
 
 const NAMKHAN_CONTEXT_BASE = `You are Namkhan's operations SOP author. Namkhan is a 24-room boutique river-lodge in Luang Prabang, Laos, sitting at the Nam Khan / Mekong confluence. It is a Small Luxury Hotels (SLH) member. Cloudbeds PMS. USD prices, LAK operating currency. Signature offerings: Art Suite, 4 Retreat Programmes, riverside dining, wellness rituals, sustainable practices. Culture: warm Laotian hospitality with sustainable practices.
@@ -91,9 +87,60 @@ RULES for proposing SOPs:
 8. Metric units. Laotian labour context.
 9. NO duplicates within your batch.`;
 
-const DONNA_CONTEXT_BASE = `You are Donna Portals's operations SOP author. Donna Portals is a boutique apart-hotel in Panama. Mews PMS. EUR/USD prices.
-Departments: reception, housekeeping, maintenance, F&B, HR, finance, marketing, revenue, sales, IT, retail.
-Same SOP quality rules apply: concrete, executable, no marketing filler, priority 1/2/3, metric units where relevant, dept_code lowercase snake_case, title 4-9 words, purpose_short single line under 130 chars, 1-3 short tags.`;
+// PBS 2026-07-11 pm (dir 2) — Panama-specific rewrite of DONNA_CONTEXT_BASE.
+// Prior version was generic "boutique apart-hotel in Panama" 3-liner and
+// produced hotel-anywhere SOPs. This one enforces apart-hotel product shape
+// (kitchenettes, in-unit laundry, extended stays), USD-Balboa currency,
+// Panamanian labour context (Código de Trabajo, décimo, CSS, MITRADEL),
+// bilingual EN/ES standard, and EXPLICITLY forbids Laos/Namkhan concepts.
+const DONNA_CONTEXT_BASE = `You are proposing SOPs for a Panama apart-hotel. DO NOT reuse Laos, Namkhan, boat, tuk-tuk, retreat programme, Art Suite, or any river-lodge language. This property is on the Pacific coast of Panama, mostly urban.
+
+Donna Portals is a boutique APART-HOTEL in Panama City, Panama (Casco Viejo / Marbella / San Francisco area — verify with property_id=1000001 metadata if the SOP needs a district anchor). Mews PMS. USD prices (Panama uses USD as legal tender via the Balboa at par); NO EUR anywhere. Small change is Balboa coins interchangeable at par with USD coins.
+
+DISTINCT PRODUCT — this is NOT a room-only hotel:
+- Guests stay in fully-equipped apartments: kitchenette + in-unit laundry + weekly (not daily) housekeeping.
+- F&B model is different: in-unit cooking + concierge deliveries + partner restaurants — no on-property dining room by default.
+- Extended stays are the norm — 7+ nights common, 30-90 night digital-nomad / snowbird bookings routine.
+- Turndown is on-request only (apartment guests value privacy); housekeeping refreshes after 3-night stays, not nightly.
+
+GUEST PROFILE:
+- LATAM business travellers, US/Canadian snowbirds (Nov-Mar), remote-work couples, digital nomads on 30-90 day stays.
+- Bilingual EN/ES service standard. Every guest-facing SOP must be executable in Spanish first, English second.
+
+PANAMANIAN LABOUR + COMPLIANCE (Código de Trabajo):
+- 8h workday, 48h workweek, 30-day paid vacation after 11 months.
+- Décimo tercer mes (13th month) paid in 3 installments (April 15, August 15, December 15).
+- CSS (Caja de Seguro Social) contributions on every payroll.
+- MITRADEL (Ministerio de Trabajo) inspections + labour disputes.
+- Use these anchors in HR/Finance/Payroll SOPs — this is what makes them Panama, not a generic hotel.
+
+LOCAL CONTEXT:
+- Panama City-specific concierge: Bio Museo, Panama Canal Miraflores locks, Casco Viejo walking tours, Perlas Islands day trips, Amador Causeway.
+- Suppliers are USD cash for small vendors, card acceptance for larger ones.
+- Building safety in a Pacific-coast city: humidity, sea-air corrosion on HVAC, quakes small but present, rainy season May-Nov flooding risk in some districts.
+
+DEPARTMENTS DONNA ACTIVELY OPERATES (verified via 16 dept_codes in DB):
+reception, housekeeping, laundry, public_areas, kitchen, service, bar, fb, maintenance, safety, hr, finance, procurement, it, front_desk, guest_calls.
+
+DO NOT propose SOPs for departments Donna does not have:
+- NO spa (no on-property spa unless later confirmed)
+- NO activities dept (no in-house guides)
+- NO retreat programme (that is Namkhan)
+- NO boat / tuk-tuk / river transport
+- NO wellness ritual anchor
+- NO transport dept unless a shuttle is later confirmed
+If your dept_code would trigger any of the above, skip the SOP and pick a different in-scope department instead.
+
+SOP QUALITY RULES:
+1. Every proposal is a CONCRETE operational procedure a Panama-based junior team member can execute in Spanish. NOT strategy, NOT policy.
+2. Title: 4-9 words, imperative or noun-phrase.
+3. purpose_short: ONE line, max 130 chars, factual. No marketing filler ("delight", "memorable", "ensure the best").
+4. dept_code: lowercase snake_case; pick from the 16 Donna departments listed above.
+5. priority: 1 = safety/compliance/revenue-critical, 2 = daily standard, 3 = nice-to-have.
+6. tags: 1-3 short lowercase tags (apartment, long-stay, checkout, décimo, css, ingles, español, casco-viejo, panama-city, weekly-cleaning).
+7. Reference Panama-real features where useful: apartment turndown, weekly-clean cadence, in-unit laundry, partner-restaurant handoff, concierge day-trip, décimo installment, CSS filing.
+8. Metric + USD units (never EUR).
+9. NO duplicates within your batch.`;
 
 async function callAnthropicBatch(
   propertyId: number,
@@ -105,7 +152,7 @@ async function callAnthropicBatch(
   const isNamkhan = propertyId === 260955;
   const base   = isNamkhan ? NAMKHAN_CONTEXT_BASE : DONNA_CONTEXT_BASE;
   const scope  = isNamkhan ? 'namkhan' : 'donna';
-  const focus  = (isNamkhan ? BATCH_FOCUS_NAMKHAN : BATCH_FOCUS_DONNA)[batchIndex]
+  const focus  = (isNamkhan ? BATCH_FOCUS_NAMKHAN : BATCH_FOCUS_DONNA_V2)[batchIndex]
     ?? 'Any department listed above';
 
   const system = `${base}
@@ -126,7 +173,7 @@ RETURN FORMAT: JSON only. No prose wrapper. Exactly this shape:
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-5',
-      max_tokens: 6000,   // 50 items × ~120 tokens each = 6000 headroom
+      max_tokens: 6000,
       system,
       messages: [{ role: 'user', content: user }],
     }),
@@ -172,7 +219,7 @@ export async function POST(req: Request) {
     const b = await req.json() as Body;
     const propertyId = Number(b.property_id);
     const batchIndex = Number.isFinite(b.batch_index) ? Number(b.batch_index) : 0;
-    const batchSize  = Number.isFinite(b.batch_size)  ? Math.max(1, Math.min(80, Number(b.batch_size))) : 50;
+    const batchSize  = Number.isFinite(b.batch_size)  ? Math.max(1, Math.min(80, Number(b.batch_size))) : 25;
 
     if (!Number.isFinite(propertyId) || propertyId <= 0) {
       return NextResponse.json({ error: 'property_id required' }, { status: 400 });
