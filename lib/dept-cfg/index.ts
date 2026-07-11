@@ -530,7 +530,7 @@ const MARKETING_CFG: DeptCfg = {
     // - Gallery now a sub-tab under Overview (Library main · Gallery secondary).
     // - Orphan stub /marketing/content deleted.
     { label: 'HoD',               href: '/marketing'                 },
-    { label: 'Overview',          href: '/marketing/library'         },
+    { label: 'Overview',          href: '/marketing/overview'        },
     { label: 'Acquisition',       href: '/marketing/acquisition'     },
     { label: 'Products & Offers', href: '/marketing/offers'          },
     { label: 'Digital',           href: '/marketing/digital'         },
