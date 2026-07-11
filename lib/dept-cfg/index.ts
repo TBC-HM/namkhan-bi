@@ -456,7 +456,8 @@ const SALES_CFG: DeptCfg = {
     // PBS 2026-07-11 pm (ADR-147 sales CRM): in-page label rename "Pipeline"→"Leads",
     // ICP Segments added as read-only sub-tab. TOP MENU UNCHANGED.
     { label: 'HoD',           href: '/sales'           },
-    { label: 'Leads',         href: '/sales/leads'     },
+    { label: 'Create New',    href: '/sales/new'       },
+    { label: 'Pipeline',      href: '/sales/pipeline'  },
     { label: 'Accounts',      href: '/sales/accounts'  },
     { label: 'ICP Segments',  href: '/sales/icp'       },
     { label: 'Packages',      href: '/sales/packages'  },
