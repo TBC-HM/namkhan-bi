@@ -160,16 +160,17 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                   {r.primary_tier && <span>{r.primary_tier}</span>}
                   {r.property_area && <span>· {r.property_area}</span>}
                 </div>
-                <div style={{ marginTop:'auto', display:'flex', gap:4, alignItems:'center' }}>
+                <div style={{ marginTop:'auto', display:'grid', gap:6 }}>
                   {onSendToAi ? (
                     <button onClick={() => onSendToAi(r.asset_id)} style={{
-                      padding:'4px 10px', fontSize:11, fontWeight:600, background:'transparent', color:FOREST,
-                      border:'1px solid ' + FOREST, borderRadius:2, cursor:'pointer', marginRight:6, whiteSpace:'nowrap',
-                    }}>Use for AI ✎</button>
+                      padding:'6px 10px', fontSize:12, fontWeight:700, background:FOREST, color:WHITE,
+                      border:'none', borderRadius:3, cursor:'pointer', width:'100%', whiteSpace:'nowrap',
+                      letterSpacing:'0.04em', textTransform:'uppercase',
+                    }}>🎨 Use for AI</button>
                   ) : null}
                   <button onClick={() => setUseForMenu(useForMenu === r.asset_id ? null : r.asset_id)} disabled={busyRow === r.asset_id} style={{
-                    fontSize:10, padding:'4px 8px', background:WHITE, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', color:INK,
-                  }}>Use for…</button>
+                    fontSize:10, padding:'4px 8px', background:WHITE, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', color:INK, width:'100%',
+                  }}>Use for channel…</button>
                   {busyRow === r.asset_id && <span style={{ fontSize:10, color:INK_M }}>…</span>}
                 </div>
                 {useForMenu === r.asset_id && (
