@@ -14,7 +14,7 @@
 // happens" — max_tokens was truncating the JSON and the catch swallowed a
 // parse error). Progress is shown inline as "Seeding batch N/6 (X / 300)".
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 // Design tokens (hardcoded per feedback_namkhan_token_ladder_paper_warm_dark)
@@ -499,8 +499,8 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                 const isExpanded = expandedRow === p.id;
                 const isEditing = editingRow === p.id;
                 return (
-                  <>
-                  <tr key={p.id}>
+                  <Fragment key={p.id}>
+                  <tr>
                     <td style={{ ...td, verticalAlign: 'middle' }}>
                       <span style={priorityBadge(p.priority)}>P{p.priority}</span>
                     </td>
@@ -581,7 +581,7 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                     </td>
                   </tr>
                   {isExpanded && (
-                    <tr key={p.id + '-preview'}>
+                    <tr>
                       <td colSpan={4} style={{ padding: '10px 14px', background: '#FAFAF7', borderBottom: '1px solid ' + HAIR }}>
                         {isEditing ? (
                           <EditForm proposal={p} onCancel={() => { setEditingRow(null); setExpandedRow(null); }} onSaved={onEdited} />
@@ -606,7 +606,7 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                       </td>
                     </tr>
                   )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
