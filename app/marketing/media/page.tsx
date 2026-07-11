@@ -1,8 +1,9 @@
 // app/marketing/media/page.tsx
 // PBS 2026-07-12 — Media Hub (brief media-ai-video-ui).
 // Server component. Loads server-side, renders <MediaHub/> client.
-// Sub-tabs: Library · AI Studio · Video · Settings.
+// Sub-tabs: Library · AI Studio · Video · Clarify · Settings.
 // 2026-07-11 pm: added categories fetch (v_ai_prompt_categories) for AI Studio dropdown + Settings tab.
+// 2026-07-12: derives distinct property_area values for the Edit drawer datalist.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -27,6 +28,18 @@ async function loadAll(pid: number) {
       .or(`property_id.is.null,property_id.eq.${pid}`)
       .order('sort_order', { ascending: true }),
   ]);
+
+  // Distinct property_area values seed the datalist in the Edit drawer.
+  // PostgREST exposes only the public schema (per claude_md v3.1 §0.5), so
+  // we derive from the already-fetched v_marketing_media_page rows instead
+  // of reaching into media.media_assets directly.
+  const areaSet = new Set<string>();
+  for (const row of (mediaPage.data ?? [])) {
+    const v = (row as any).property_area;
+    if (v && typeof v === 'string') areaSet.add(v);
+  }
+  const areaOptions = Array.from(areaSet).sort((a, b) => a.localeCompare(b));
+
   return {
     byTier: byTier.data ?? [],
     mediaPage: mediaPage.data ?? [],
@@ -36,6 +49,7 @@ async function loadAll(pid: number) {
     videoEdits: videoEdits.data ?? [],
     reality: reality.data ?? null,
     categories: categories.data ?? [],
+    areaOptions,
     errors: [byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error, aiGens.error, videoEdits.error, reality.error, categories.error].filter(Boolean),
   };
 }
@@ -57,7 +71,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage
         title="Marketing · Media"
-        subtitle={errorMsg ?? `Library · AI Studio · Video · Settings — property ${pid}`}
+        subtitle={errorMsg ?? `Library · AI Studio · Video · Clarify · Settings — property ${pid}`}
         tabs={tabs}
       >
         <div style={{ gridColumn: '1 / -1' }}>
@@ -71,6 +85,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             videoEdits={data.videoEdits as any}
             reality={data.reality as any}
             categories={data.categories as any}
+            areaOptions={data.areaOptions}
           />
         </div>
       </DashboardPage>
