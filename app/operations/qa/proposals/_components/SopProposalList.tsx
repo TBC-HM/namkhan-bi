@@ -217,9 +217,15 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
             batch_size:  BATCH_SIZE,
           }),
         });
-        const j = await res.json();
+        // PBS 2026-07-11: read raw text FIRST — if server returns HTML (Vercel
+        // runtime error page), .json() throws with "Unexpected token 'A'…" and
+        // we lose the real error. Text-first + defensive parse surfaces the actual message.
+        const raw = await res.text();
+        let j: { error?: string; inserted?: number; skipped?: number; generated?: number };
+        try { j = JSON.parse(raw); }
+        catch { j = { error: `Non-JSON ${res.status} response: ${raw.slice(0, 240)}` }; }
         if (!res.ok) {
-          const errMsg = j.error ?? `HTTP ${res.status}`;
+          const errMsg = j.error ?? `HTTP ${res.status}: ${raw.slice(0, 200)}`;
           const failed: BatchResult = {
             batch_index: i, inserted: 0, skipped: 0, generated: 0, error: errMsg,
           };
@@ -340,11 +346,10 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
       {/* KPI strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 12 }}>
         {[
-          { label: 'Proposals',  value: counts.total,     color: INK },
-          { label: 'To review',  value: counts.proposed,  color: SLATE },
-          { label: 'Generated',  value: counts.generated, color: AMBER },
-          { label: 'Accepted',   value: counts.accepted,  color: ACCENT },
-          { label: 'Skipped',    value: counts.skipped,   color: INK_L },
+          { label: 'Total',                    value: counts.total,     color: INK },
+          { label: 'Open · to review',         value: counts.proposed,  color: SLATE },
+          { label: 'Generated · body drafted', value: counts.generated, color: AMBER },
+          { label: 'Accepted · in registry',   value: counts.accepted,  color: ACCENT },
         ].map((k) => (
           <div key={k.label} style={{
             background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, padding: 12,
