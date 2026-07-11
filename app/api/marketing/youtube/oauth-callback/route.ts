@@ -92,16 +92,37 @@ export async function GET(req: Request) {
     return fail('token_exchange_failed', tokens.error_description ?? tokens.error ?? String(tokenRes.status));
   }
 
-  // 4. Fetch channel meta
-  const chRes = await fetch(
-    'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true',
-    { headers: { Authorization: `Bearer ${tokens.access_token}` } },
-  );
-  const ch = (await chRes.json()) as ChannelResponse;
-  if (!chRes.ok || !ch.items?.length) {
-    return fail('channel_meta_failed', ch.error?.message ?? String(chRes.status));
+  // 4. Fetch channel meta. PBS 2026-07-11 pm: prefer the Namkhan brand channel by ID,
+  // falling back to mine=true. Google's mine=true returns the primary personal channel
+  // (Paul Bauer) even when the user has brand-account manager access to Namkhan.
+  const NAMKHAN_CHANNEL_ID = 'UCnOK4wDxsEs5VKXGH3EkOmw';
+  const property_id_num = Number(state_row?.property_id ?? propertyId);
+  const preferredId = property_id_num === 260955 ? NAMKHAN_CHANNEL_ID : null;
+
+  let chItem: ChannelResponse['items'][number] | undefined = undefined;
+
+  if (preferredId) {
+    const preferRes = await fetch(
+      'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=' + preferredId,
+      { headers: { Authorization: `Bearer ${tokens.access_token}` } },
+    );
+    const preferData = (await preferRes.json()) as ChannelResponse;
+    if (preferRes.ok && preferData.items?.length) {
+      chItem = preferData.items[0];
+    }
   }
-  const chItem = ch.items[0];
+
+  if (!chItem) {
+    const chRes = await fetch(
+      'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true',
+      { headers: { Authorization: `Bearer ${tokens.access_token}` } },
+    );
+    const ch = (await chRes.json()) as ChannelResponse;
+    if (!chRes.ok || !ch.items?.length) {
+      return fail('channel_meta_failed', ch.error?.message ?? String(chRes.status));
+    }
+    chItem = ch.items[0];
+  }
   const chId    = chItem.id;
   const chTitle = chItem.snippet?.title ?? null;
   const chHandle = chItem.snippet?.customUrl ?? null;
