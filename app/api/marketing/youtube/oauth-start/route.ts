@@ -1,6 +1,6 @@
 // app/api/marketing/youtube/oauth-start/route.ts
 // PBS 2026-07-11 pm — Kick off Google OAuth for YouTube channel connection.
-// PKCE + state persist to marketing.yt_channel_connections (active=false pending row).
+// PKCE + state persist to marketing.yt_channel_connections via fn_yt_start_oauth.
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import crypto from 'node:crypto';
@@ -38,16 +38,12 @@ export async function GET(req: Request) {
   const codeChallenge = b64url(crypto.createHash('sha256').update(codeVerifier).digest());
   const state = b64url(crypto.randomBytes(24)).slice(0, 32);
 
-  // Persist pending connection row (never active — activated on callback)
-  const { error: insErr } = await sb
-    .schema('marketing')
-    .from('yt_channel_connections')
-    .insert({
-      property_id:  propertyId,
-      active:       false,
-      oauth_state:  state,
-      pkce_verifier: codeVerifier,
-    });
+  // Persist pending connection row via SECURITY DEFINER RPC (public schema)
+  const { error: insErr } = await sb.rpc('fn_yt_start_oauth', {
+    p_property_id: propertyId,
+    p_state:       state,
+    p_verifier:    codeVerifier,
+  });
   if (insErr) {
     return NextResponse.json({ ok: false, error: 'persist_state_failed', detail: insErr.message }, { status: 500 });
   }
