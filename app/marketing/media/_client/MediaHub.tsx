@@ -6,6 +6,8 @@
 // both AiStudioTab (dropdown source) and SettingsTab (Prompt Categories sub-tab).
 // 2026-07-12: added `clarify` tab (4th, before Settings) — grid of assets
 // missing property_area or primary_tier; click a thumb → AssetEditDrawer.
+// 2026-07-12 pm: added `rooms` + `facilities` grounding — piped into
+// AiStudioTab (category-driven dropdowns) and SettingsTab (Reality profile panels).
 'use client';
 
 import { useState } from 'react';
@@ -29,6 +31,37 @@ export interface PromptCategory {
   updated_by: string | null;
   updated_at: string;
   created_at: string;
+  requires_context?: 'room' | 'facility' | 'none' | null;
+}
+
+export interface RoomOption {
+  room_type_id: number;
+  property_id: number;
+  room_type_name: string;
+  room_type_name_short: string | null;
+  max_guests: number | null;
+  units: number | null;
+  description_clean: string | null;
+  amenities: string[] | null;
+  amenities_count: number | null;
+}
+
+export interface FacilityOption {
+  facility_id: number;
+  property_id: number;
+  category: string | null;
+  facility_name: string;
+  facility_description: string | null;
+  facility_key: string | null;
+  ai_description: string | null;
+  materials: string[] | null;
+  view_direction: string | null;
+  signature_elements: string[] | null;
+  time_of_day_hint: string | null;
+  active: boolean;
+  sort_order: number;
+  updated_by: string | null;
+  updated_at: string | null;
 }
 
 interface Props {
@@ -41,6 +74,8 @@ interface Props {
   videoEdits: any[];
   reality: any | null;
   categories: PromptCategory[];
+  rooms: RoomOption[];
+  facilities: FacilityOption[];
   areaOptions: string[];
 }
 
@@ -96,10 +131,10 @@ export default function MediaHub(props: Props) {
       </div>
 
       {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} areaOptions={props.areaOptions} />}
-      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} categories={props.categories} />}
+      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} categories={props.categories} rooms={props.rooms} facilities={props.facilities} />}
       {tab === 'video'    && <VideoTab    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} />}
       {tab === 'clarify'  && <ClarifyTab  mediaPage={props.mediaPage} areaOptions={props.areaOptions} />}
-      {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} categories={props.categories} />}
+      {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} categories={props.categories} rooms={props.rooms} facilities={props.facilities} />}
     </div>
   );
 }
