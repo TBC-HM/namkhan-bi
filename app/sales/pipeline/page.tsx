@@ -37,7 +37,7 @@ async function loadData(propertyId: number) {
 export default async function PipelinePage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? NAMKHAN;
   const { leads, stages } = await loadData(pid);
-  const tabs = SALES_SUBPAGES.map((s) => ({ label: s.label, href: s.href }));
+  const tabs = SALES_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
   return (
     <DashboardPage
       title="Pipeline"
