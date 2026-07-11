@@ -30,8 +30,11 @@ const AMBER = '#B8860B';
 const SLATE = '#3A5568';
 const RED   = '#B00020';
 
+// PBS 2026-07-11: batch_size 50→25 after batch 1 F&B was hitting FUNCTION_INVOCATION_TIMEOUT
+// (Vercel 60s) AND browser "Failed to fetch" (browser fetch ~90s). 25-item Anthropic calls
+// return in ~10-15s reliably. 6 batches × 25 = 150 items total (was 300).
 const TOTAL_BATCHES = 6;
-const BATCH_SIZE    = 50;
+const BATCH_SIZE    = 25;
 
 export interface ProposalRow {
   id: number;
