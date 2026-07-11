@@ -59,7 +59,7 @@ function money(x: number | null | undefined) {
 export default async function IcpSegmentsPage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? NAMKHAN;
   const { weights, segs, scrapers, fws } = await loadData(pid);
-  const tabs = SALES_SUBPAGES.map((s) => ({ label: s.label, href: s.href }));
+  const tabs = SALES_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
 
   const totalWeight = weights.reduce((n, w) => n + (Number(w.weight) || 0), 0) || 100;
   const activeScrapers = scrapers.filter((s) => s.status === 'active').length;
