@@ -1,7 +1,11 @@
 // app/marketing/youtube/_server/ChannelDashboard.tsx
 // PBS 2026-07-11 pm — Real YouTube dashboard block, server-rendered.
-// Loads channel + recent uploads + recent comments via Data API v3 through a fresh access token.
-// If the refresh fails (revoked / expired), renders a "Session expired" reconnect card.
+// v2: failure isolation. Channel + videos + comments each render independently.
+//   - token fetch fail          → full-width red "Session expired · Reconnect" card
+//   - channel fetch fail (any)  → full-width red "Channel fetch failed · Reconnect" card
+//   - videos fetch fail         → inline red note above the videos grid, channel + comments still render
+//   - comments fetch 403        → tiny amber banner "requires youtube.force-ssl · Reconnect"
+//   - comments fetch other fail → tiny amber banner with the error text
 
 import Link from 'next/link';
 import { getFreshAccessToken } from '@/lib/youtube/token';
@@ -19,6 +23,7 @@ const INK_M  = '#5A5A5A';
 const INK_S  = '#3A3A3A';
 const FOREST = '#084838';
 const RED    = '#B03826';
+const AMBER  = '#B48A3A';
 const CREAM  = '#F5F0E1';
 
 const CARD: React.CSSProperties = {
@@ -72,15 +77,11 @@ function bestThumb(t: VideoItem['thumbnails'] | undefined): string | null {
   return t?.maxres?.url ?? t?.standard?.url ?? t?.high?.url ?? t?.medium?.url ?? t?.default?.url ?? null;
 }
 
-function ReconnectCard({ propertyId, reason }: { propertyId: number; reason: string }) {
+function ReconnectCard({ propertyId, title, reason }: { propertyId: number; title: string; reason: string }) {
   return (
     <div style={{ ...CARD, gridColumn: '1 / -1', background: '#FBE7E4', borderColor: RED }}>
-      <div style={{ fontSize: 13, color: RED, fontWeight: 600, marginBottom: 6 }}>
-        YouTube session expired
-      </div>
-      <div style={{ fontSize: 12, color: INK_S, marginBottom: 12 }}>
-        Google refused the refresh token ({reason}). Reconnect to restore the dashboard.
-      </div>
+      <div style={{ fontSize: 13, color: RED, fontWeight: 600, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 12, color: INK_S, marginBottom: 12 }}>{reason}</div>
       <Link
         href={`/api/marketing/youtube/oauth-start?property_id=${propertyId}`}
         style={{
@@ -94,50 +95,75 @@ function ReconnectCard({ propertyId, reason }: { propertyId: number; reason: str
   );
 }
 
+function CommentsAmberBanner({ propertyId, kind, detail }: { propertyId: number; kind: 'scope' | 'other'; detail?: string }) {
+  return (
+    <div style={{
+      marginTop: 10, padding: '8px 12px', background: '#FDF7E6',
+      border: `1px solid ${AMBER}`, borderRadius: 3, fontSize: 11, color: INK_S,
+      display: 'flex', gap: 12, alignItems: 'center',
+    }}>
+      <span style={{ color: AMBER, fontWeight: 600 }}>Comments unavailable</span>
+      <span style={{ flex: 1 }}>
+        {kind === 'scope'
+          ? 'Reading + replying to comments requires the youtube.force-ssl scope. Disconnect & Reconnect to grant it.'
+          : (detail ?? 'Could not load comments.')}
+      </span>
+      <Link href={`/api/marketing/youtube/oauth-start?property_id=${propertyId}`}
+        style={{ color: FOREST, textDecoration: 'none', fontWeight: 500 }}>
+        Reconnect →
+      </Link>
+    </div>
+  );
+}
+
 export default async function ChannelDashboard({ propertyId }: { propertyId: number }) {
+  // 1) Token: if we can't even get an access token, we cannot render anything useful.
   const tok = await getFreshAccessToken(propertyId);
   if (!tok.ok || !tok.access_token || !tok.channel_id) {
-    return <ReconnectCard propertyId={propertyId} reason={tok.error ?? 'unknown'} />;
+    return (
+      <ReconnectCard
+        propertyId={propertyId}
+        title="YouTube session expired"
+        reason={`Google refused the refresh token (${tok.error ?? 'unknown'}). Reconnect to restore the dashboard.`}
+      />
+    );
   }
 
+  // 2) Fetch all three in parallel — each is handled independently below.
   const [chRes, vidRes, comRes] = await Promise.all([
     fetchChannel(tok.access_token),
     fetchRecentVideos(tok.access_token, tok.channel_id, 24),
     fetchRecentComments(tok.access_token, tok.channel_id, 20),
   ]);
 
-  if (!chRes.ok && chRes.error === 'youtube_api_403') {
-    return (
-      <div style={{ ...CARD, gridColumn: '1 / -1', background: '#FBE7E4', borderColor: RED }}>
-        <div style={{ fontSize: 13, color: RED, fontWeight: 600 }}>
-          YouTube API quota exceeded — retry in 24h
-        </div>
-        <div style={{ fontSize: 12, color: INK_S, marginTop: 6 }}>{chRes.detail}</div>
-      </div>
-    );
-  }
+  // 3) Channel identity is the anchor. If channel fetch failed, we still surface a
+  //    clear reconnect card — but distinct from the token-level failure above.
   if (!chRes.ok) {
+    const detail = chRes.detail ? ` · ${chRes.detail.slice(0, 200)}` : '';
     return (
-      <div style={{ ...CARD, gridColumn: '1 / -1', background: '#FBE7E4', borderColor: RED }}>
-        <div style={{ fontSize: 13, color: RED, fontWeight: 600 }}>Channel fetch failed</div>
-        <div style={{ fontSize: 12, color: INK_S, marginTop: 6 }}>
-          {chRes.error}{chRes.detail ? ` · ${chRes.detail}` : ''}
-        </div>
-      </div>
+      <ReconnectCard
+        propertyId={propertyId}
+        title="Channel fetch failed"
+        reason={`Google Data API returned ${chRes.error}${detail}. If this persists, reconnect YouTube to refresh scopes.`}
+      />
     );
   }
 
   const ch = chRes.data;
   const videos: VideoItem[] = vidRes.ok ? vidRes.data : [];
   const comments: CommentItem[] = comRes.ok ? comRes.data : [];
-  const vidError = !vidRes.ok ? `${vidRes.error}${vidRes.detail ? ` · ${vidRes.detail}` : ''}` : null;
-  const comError = !comRes.ok ? `${comRes.error}${comRes.detail ? ` · ${comRes.detail}` : ''}` : null;
+  const vidError = !vidRes.ok ? `${vidRes.error}${vidRes.detail ? ` · ${vidRes.detail.slice(0, 160)}` : ''}` : null;
+  const commentsScopeMissing = !comRes.ok && (comRes.error === 'youtube_api_403' || comRes.error === 'youtube_api_401');
+  const commentsOtherError = !comRes.ok && !commentsScopeMissing
+    ? `${comRes.error}${comRes.detail ? ` · ${comRes.detail.slice(0, 160)}` : ''}`
+    : null;
 
   const avatar = ch.thumbnails.high?.url ?? ch.thumbnails.medium?.url ?? ch.thumbnails.default?.url ?? null;
   const vidTitle = new Map(videos.map((v) => [v.id, v.title]));
 
   return (
     <>
+      {/* ── A · CHANNEL IDENTITY STRIP (always renders when we have channel data) */}
       <div style={{ ...CARD, gridColumn: '1 / -1' }}>
         <div style={SECTION_H}>My YouTube channel · live from Data API v3</div>
         <div style={{
@@ -183,15 +209,24 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
         )}
       </div>
 
+      {/* ── B · RECENT UPLOADS (renders independently) */}
       <div style={{ ...CARD, gridColumn: '1 / -1' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <div style={{ ...SECTION_H, marginBottom: 0 }}>Recent uploads ({videos.length})</div>
-          {vidError && <div style={{ fontSize: 11, color: RED }}>Video fetch: {vidError}</div>}
+          {vidError && (
+            <div style={{ fontSize: 11, color: RED }}>
+              Couldn&apos;t load videos: {vidError}
+            </div>
+          )}
         </div>
 
-        {videos.length === 0 ? (
+        {videos.length === 0 && !vidError ? (
           <div style={{ fontSize: 13, color: INK_M }}>
             No videos on this channel yet.
+          </div>
+        ) : videos.length === 0 && vidError ? (
+          <div style={{ fontSize: 12, color: INK_M }}>
+            Videos section will render once the fetch succeeds. Channel + comments below still work.
           </div>
         ) : (
           <div style={{
@@ -248,15 +283,15 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
         )}
       </div>
 
+      {/* ── C · RECENT COMMENTS (renders independently, 403 = tiny amber banner) */}
       <div style={{ ...CARD, gridColumn: '1 / -1' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <div style={{ ...SECTION_H, marginBottom: 0 }}>Recent comments ({comments.length})</div>
-          {comError && <div style={{ fontSize: 11, color: RED }}>Comment fetch: {comError}</div>}
         </div>
 
-        {comments.length === 0 ? (
+        {comments.length === 0 && !commentsScopeMissing && !commentsOtherError ? (
           <div style={{ fontSize: 13, color: INK_M }}>No comments yet.</div>
-        ) : (
+        ) : comments.length > 0 ? (
           <div style={{ display: 'grid', gap: 12 }}>
             {comments.map((c) => (
               <div key={c.id} style={{
@@ -302,6 +337,13 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
               </div>
             ))}
           </div>
+        ) : null}
+
+        {commentsScopeMissing && (
+          <CommentsAmberBanner propertyId={propertyId} kind="scope" />
+        )}
+        {commentsOtherError && (
+          <CommentsAmberBanner propertyId={propertyId} kind="other" detail={commentsOtherError} />
         )}
       </div>
     </>
