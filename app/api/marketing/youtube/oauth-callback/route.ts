@@ -96,7 +96,7 @@ export async function GET(req: Request) {
   // falling back to mine=true. Google's mine=true returns the primary personal channel
   // (Paul Bauer) even when the user has brand-account manager access to Namkhan.
   const NAMKHAN_CHANNEL_ID = 'UCnOK4wDxsEs5VKXGH3EkOmw';
-  const property_id_num = Number(state_row?.property_id ?? propertyId);
+  const property_id_num = Number(pending?.property_id ?? 260955);
   const preferredId = property_id_num === 260955 ? NAMKHAN_CHANNEL_ID : null;
 
   let chItem: ChannelResponse['items'][number] | undefined = undefined;
