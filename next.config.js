@@ -42,9 +42,8 @@ const nextConfig = {
       { source: '/operations/frontoffice',      destination: '/front-office/arrivals',   permanent: false },
       { source: '/operations/frontoffice/:path*', destination: '/front-office/arrivals', permanent: false },
       // Phase 2 marketing restructure 2026-05-01 PM: /media* → /library, /upload, /taxonomy.
-      { source: '/marketing/media',             destination: '/marketing/library',  permanent: false },
-      { source: '/marketing/media/upload',      destination: '/marketing/upload',   permanent: false },
-      { source: '/marketing/media/taxonomy',    destination: '/marketing/taxonomy', permanent: false },
+      // PBS 2026-07-11 pm: killed the legacy /marketing/media redirects — the new Media Hub owns /marketing/media.
+      // /marketing/library now 307 → /marketing/media (in app/marketing/library/page.tsx).
     ];
   },
 };
