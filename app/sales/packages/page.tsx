@@ -8,7 +8,7 @@
 // Server component. Accepts optional propertyId for Donna delegate.
 
 import Link from 'next/link';
-import { DashboardPage, MetricRow, KpiTile, Container } from '@/app/(cockpit)/_design';
+import { DashboardPage, MetricRow, Container } from '@/app/(cockpit)/_design';
 import { SALES_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -75,7 +75,7 @@ export default async function SalesPackagesPage({ propertyId }: PageProps = {}) 
   const topSeller = packages.slice().sort((a, b) => num(b.bookings_mtd) - num(a.bookings_mtd))[0];
   const topSellerShort = topSeller?.name.split(' · ')[0] ?? '—';
 
-  const tabs = SALES_SUBPAGES.map((s) => ({ label: s.label, href: s.href }));
+  const tabs = SALES_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
 
   return (
     <DashboardPage
@@ -84,13 +84,15 @@ export default async function SalesPackagesPage({ propertyId }: PageProps = {}) 
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1' }}>
-        <MetricRow>
-          <KpiTile label="Active packages" value={active.length} unit="count" />
-          <KpiTile label="Bookings MTD"    value={totalBookings} unit="count" />
-          <KpiTile label="Revenue MTD"     value={totalRevenue}  unit="USD" currency="USD" />
-          <KpiTile label="Avg price / pax" value={avgPrice}      unit="USD" currency="USD" />
-          <KpiTile label="Top seller"      value={topSellerShort} footnote={`${num(topSeller?.bookings_mtd)} bookings MTD`} />
-        </MetricRow>
+        <MetricRow
+          tiles={[
+            { label: 'Active packages', value: active.length,   unit: 'count' },
+            { label: 'Bookings MTD',    value: totalBookings,   unit: 'count' },
+            { label: 'Revenue MTD',     value: totalRevenue,    unit: 'USD', currency: 'USD' },
+            { label: 'Avg price / pax', value: avgPrice,        unit: 'USD', currency: 'USD' },
+            { label: 'Top seller',      value: topSellerShort,  footnote: `${num(topSeller?.bookings_mtd)} bookings MTD` },
+          ]}
+        />
       </div>
 
       <div style={{ gridColumn: '1 / -1' }}>
@@ -277,4 +279,4 @@ const steps: React.CSSProperties = {
 };
 
 const inlineLink: React.CSSProperties = { color: '#B8542A', textDecoration: 'none' };
-const code: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, background: '#F5F0E1', padding: '1px 6px', borderRadius: 4 };
+const code: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, background: '#F5F0E1', padding: '1px 6px', borderRadius: 4 }
