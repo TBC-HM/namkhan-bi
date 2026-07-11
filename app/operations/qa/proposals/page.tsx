@@ -41,12 +41,15 @@ export default async function SopProposalsPage({ propertyId }: Props = {}) {
   const { data } = await supabase
     .from('v_sop_proposals')
     .select('*')
-    .or(`property_scope.eq.all,property_scope.eq.${scope}`)
+    .in('property_scope', ['all', scope])
     .order('priority', { ascending: true })
     .order('dept_code', { ascending: true })
     .order('title', { ascending: true });
 
   const proposals: ProposalRow[] = (data as ProposalRow[]) ?? [];
+
+  // PBS 2026-07-11 pm (dir 2) — server debug line so future "0 rows" bugs surface in Vercel logs.
+  console.log('SopProposalsPage', { pid, scope, rows: proposals.length });
 
   const tabs = qaTabs(pid, 'proposals');
 
