@@ -3,6 +3,10 @@
 // Every function accepts an access token and returns a discriminated union
 // { ok:true, ... } | { ok:false, error, detail } — never throws.
 //
+// PBS 2026-07-11 evening — added `isErr<T>` user-defined type predicate so
+// callers narrow reliably (TS was failing to narrow the `Ok<T> | ErrShape`
+// union at return sites when Ok was a bare type alias, breaking CI).
+//
 // Auth: Authorization: Bearer <accessToken>
 // Quota per dashboard load: channels=1 + search=100 + videos=1 + commentThreads=1 = 103 units
 // (YouTube gives ~10 000/day, so ~90 loads/day.)
@@ -50,10 +54,16 @@ export interface CommentItem {
   canReply: boolean;
 }
 
-interface ErrShape { ok: false; error: string; detail?: string }
-type Ok<T> = { ok: true; data: T };
+export interface ErrShape { ok: false; error: string; detail?: string }
+export interface Ok<T> { ok: true; data: T }
+export type YtResult<T> = Ok<T> | ErrShape;
 
-async function ytFetch<T>(url: string, accessToken: string): Promise<Ok<T> | ErrShape> {
+/** User-defined type predicate — narrows a YtResult<T> to ErrShape reliably. */
+export function isErr<T>(r: YtResult<T>): r is ErrShape {
+  return r.ok === false;
+}
+
+async function ytFetch<T>(url: string, accessToken: string): Promise<YtResult<T>> {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: 'no-store',
@@ -85,12 +95,12 @@ interface RawChannelResp {
   }>;
 }
 
-export async function fetchChannel(accessToken: string): Promise<Ok<ChannelInfo> | ErrShape> {
+export async function fetchChannel(accessToken: string): Promise<YtResult<ChannelInfo>> {
   const r = await ytFetch<RawChannelResp>(
     `${API}/channels?part=snippet,statistics,brandingSettings&mine=true`,
     accessToken,
   );
-  if (!r.ok) return r;
+  if (isErr(r)) return { ok: false, error: r.error, detail: r.detail };
   const it = r.data.items?.[0];
   if (!it) return { ok: false, error: 'no_channel_items' };
   const info: ChannelInfo = {
@@ -133,10 +143,10 @@ export async function fetchRecentVideos(
   accessToken: string,
   channelId: string,
   max = 24,
-): Promise<Ok<VideoItem[]> | ErrShape> {
+): Promise<YtResult<VideoItem[]>> {
   const searchUrl = `${API}/search?part=id&channelId=${encodeURIComponent(channelId)}&order=date&type=video&maxResults=${max}`;
   const s = await ytFetch<SearchListResp>(searchUrl, accessToken);
-  if (!s.ok) return s;
+  if (isErr(s)) return { ok: false, error: s.error, detail: s.detail };
 
   const ids = (s.data.items ?? [])
     .map((x) => x.id?.videoId)
@@ -145,7 +155,7 @@ export async function fetchRecentVideos(
 
   const vidUrl = `${API}/videos?part=snippet,statistics,contentDetails&id=${ids.join(',')}`;
   const v = await ytFetch<VideosListResp>(vidUrl, accessToken);
-  if (!v.ok) return v;
+  if (isErr(v)) return { ok: false, error: v.error, detail: v.detail };
 
   const mapped: VideoItem[] = (v.data.items ?? []).map((it) => ({
     id:          it.id,
@@ -193,10 +203,10 @@ export async function fetchRecentComments(
   accessToken: string,
   channelId: string,
   max = 20,
-): Promise<Ok<CommentItem[]> | ErrShape> {
+): Promise<YtResult<CommentItem[]>> {
   const url = `${API}/commentThreads?part=snippet&allThreadsRelatedToChannelId=${encodeURIComponent(channelId)}&maxResults=${max}&order=time`;
   const r = await ytFetch<CommentThreadsResp>(url, accessToken);
-  if (!r.ok) return r;
+  if (isErr(r)) return { ok: false, error: r.error, detail: r.detail };
 
   const mapped: CommentItem[] = (r.data.items ?? []).map((th) => {
     const top = th.snippet?.topLevelComment;
@@ -231,7 +241,7 @@ export async function replyToComment(
   accessToken: string,
   parentCommentId: string,
   text: string,
-): Promise<Ok<CreatedCommentResp> | ErrShape> {
+): Promise<YtResult<CreatedCommentResp>> {
   const url = `${API}/comments?part=snippet`;
   const res = await fetch(url, {
     method: 'POST',
