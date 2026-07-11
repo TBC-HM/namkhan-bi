@@ -15,7 +15,10 @@ import { useRouter } from 'next/navigation';
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
 import { EMPTY } from '@/lib/format';
-import type { LeadRow, ScrapingJob } from '../page';
+// PBS 2026-07-11 pm: /sales/leads is now a redirect to /sales/pipeline;
+// LeadsPipelineWorkspace is legacy. Locally-typed to keep the file compiling.
+export interface LeadRow { [k: string]: unknown }
+export interface ScrapingJob { [k: string]: unknown }
 
 type LeadStatus = LeadRow['status'];
 
