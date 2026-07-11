@@ -6,7 +6,7 @@
 import Link from 'next/link';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -152,7 +152,7 @@ async function loadReviewsTotal(pid: number): Promise<number> {
   return count ?? 0;
 }
 
-// ─── page ──────────────────────────────────────────────────────────────────
+// ─── page ─────────────────────────────────────────────────────────────
 export default async function MarketingOverviewPage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? NAMKHAN_PROPERTY_ID;
   const cfg = DEPT_CFG.marketing;
@@ -389,5 +389,5 @@ function Kpi({
 }
 
 function EmptyLine({ text }: { text: string }) {
-  return <div style={{ fontSize: 12, color: INK_M, padding: '4px 0' }}>{text}</div>;
+  return <div style={{ fontSize:12, color: INK_M, padding: '4px 0' }}>{text}</div>;
 }
