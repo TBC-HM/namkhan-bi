@@ -121,14 +121,15 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // PBS 2026-07-09 pm (later): Social restored — was hidden because the standalone
   // /marketing/gallery subgroup below never triggered (Overview matched first).
   {
-    parentHref: '/marketing/library',
-    members: ['/marketing/library', '/marketing/gallery', '/marketing/social', '/marketing/docs'],
+    // PBS 2026-07-11 pm: /marketing/library now 307-redirects to /marketing/media.
+    // Library UI lives inside the Media Hub as a sub-tab. Kept Gallery/Social/Docs
+    // accessible from a slim strip, but they no longer share a parent with Library.
+    parentHref: '/marketing/gallery',
+    members: ['/marketing/gallery', '/marketing/social', '/marketing/docs'],
     tabs: [
-      { label: 'Library', href: '/marketing/library' },
       { label: 'Gallery', href: '/marketing/gallery' },
       { label: 'Social',  href: '/marketing/social'  },
       { label: 'Docs',    href: '/marketing/docs'    },
-      { label: 'Reports', href: '/h/260955/reports?dept=marketing' },
     ],
   },
   {
