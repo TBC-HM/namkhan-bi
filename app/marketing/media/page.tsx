@@ -2,6 +2,7 @@
 // PBS 2026-07-12 — Media Hub (brief media-ai-video-ui).
 // Server component. Loads server-side, renders <MediaHub/> client.
 // Sub-tabs: Library · AI Studio · Video · Settings.
+// 2026-07-11 pm: added categories fetch (v_ai_prompt_categories) for AI Studio dropdown + Settings tab.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -14,7 +15,7 @@ const NAMKHAN_PROPERTY_ID = 260955;
 
 async function loadAll(pid: number) {
   const sb = getSupabaseAdmin();
-  const [byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality] = await Promise.all([
+  const [byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(500),
     sb.from('v_media_channel_specs').select('*'),
@@ -22,6 +23,9 @@ async function loadAll(pid: number) {
     sb.from('v_ai_generations').select('*').order('created_at', { ascending: false }).limit(50),
     sb.from('v_video_edits').select('*').order('created_at', { ascending: false }).limit(50),
     sb.from('v_reality_profile').select('*').eq('property_id', pid).maybeSingle(),
+    sb.from('v_ai_prompt_categories').select('*')
+      .or(`property_id.is.null,property_id.eq.${pid}`)
+      .order('sort_order', { ascending: true }),
   ]);
   return {
     byTier: byTier.data ?? [],
@@ -31,7 +35,8 @@ async function loadAll(pid: number) {
     aiGens: aiGens.data ?? [],
     videoEdits: videoEdits.data ?? [],
     reality: reality.data ?? null,
-    errors: [byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error, aiGens.error, videoEdits.error, reality.error].filter(Boolean),
+    categories: categories.data ?? [],
+    errors: [byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error, aiGens.error, videoEdits.error, reality.error, categories.error].filter(Boolean),
   };
 }
 
@@ -65,6 +70,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             aiGens={data.aiGens as any}
             videoEdits={data.videoEdits as any}
             reality={data.reality as any}
+            categories={data.categories as any}
           />
         </div>
       </DashboardPage>
