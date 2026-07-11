@@ -7,12 +7,16 @@
 //
 // Paper-white + hairlines. No var(--paper-warm). No function props from server.
 //
-// 2026-07-08 (bug-1): seed operation now loops 6× client-side hitting
-// /api/sop/proposals/seed-batch with { batch_index, batch_size: 50 } so the
-// user gets 300 proposals total in visible increments and the LLM never has
-// to squeeze 300 items into one JSON response (previous root cause of "nothing
-// happens" — max_tokens was truncating the JSON and the catch swallowed a
-// parse error). Progress is shown inline as "Seeding batch N/6 (X / 300)".
+// 2026-07-08 (bug-1): seed operation loops 6× client-side hitting
+// /api/sop/proposals/seed-batch with { batch_index, batch_size } so max_tokens
+// stays comfortable. Progress inline.
+//
+// 2026-07-11 pm (dir 3): bulk-select + Generate-all + Accept-all + Delete-all.
+//   - Row checkbox + header checkbox (indeterminate on partial).
+//   - Sticky action bar when selectedIds.size > 0.
+//   - Per-status eligibility gating so we don't call generate on a row that's
+//     already accepted, etc. Buttons show "N of M eligible" when the mix
+//     doesn't line up.
 
 import { Fragment, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -30,9 +34,6 @@ const AMBER = '#B8860B';
 const SLATE = '#3A5568';
 const RED   = '#B00020';
 
-// PBS 2026-07-11: batch_size 50→25 after batch 1 F&B was hitting FUNCTION_INVOCATION_TIMEOUT
-// (Vercel 60s) AND browser "Failed to fetch" (browser fetch ~90s). 25-item Anthropic calls
-// return in ~10-15s reliably. 6 batches × 25 = 150 items total (was 300).
 const TOTAL_BATCHES = 6;
 const BATCH_SIZE    = 25;
 
@@ -51,35 +52,19 @@ export interface ProposalRow {
 
 interface Props {
   proposals: ProposalRow[];
-  generateBaseHref: string;   // '/operations/qa/generate' or '/h/1000001/operations/qa/generate'
-  seedBatchHref: string;      // '/api/sop/proposals/seed-batch'
+  generateBaseHref: string;
+  seedBatchHref: string;
   propertyId: number;
 }
 
 const DEPT_LABEL: Record<string, string> = {
-  housekeeping: 'Housekeeping',
-  kitchen: 'F&B',
-  front_office: 'Front Office',
-  maintenance: 'Engineering',
-  governance: 'Governance',
-  procurement: 'Procurement',
-  hr: 'HR',
-  spa: 'Spa',
-  marketing: 'Marketing',
-  revenue: 'Revenue',
-  sales: 'Sales',
-  finance: 'Finance',
-  it: 'IT',
-  activities: 'Activities',
-  retail: 'Retail',
-  transport: 'Transport',
-  reception: 'Reception',
-  security: 'Security',
-  wellness: 'Wellness',
-  sustainability: 'Sustainability',
-  safety: 'Safety',
-  laundry: 'Laundry',
-  purchasing: 'Purchasing',
+  housekeeping: 'Housekeeping', kitchen: 'F&B', front_office: 'Front Office',
+  maintenance: 'Engineering', governance: 'Governance', procurement: 'Procurement',
+  hr: 'HR', spa: 'Spa', marketing: 'Marketing', revenue: 'Revenue',
+  sales: 'Sales', finance: 'Finance', it: 'IT', activities: 'Activities',
+  retail: 'Retail', transport: 'Transport', reception: 'Reception',
+  security: 'Security', wellness: 'Wellness', sustainability: 'Sustainability',
+  safety: 'Safety', laundry: 'Laundry', purchasing: 'Purchasing',
   guest_relations: 'Guest Relations',
 };
 
@@ -96,7 +81,7 @@ function statusPill(status: ProposalRow['status']): React.CSSProperties {
   if (status === 'accepted')  return { ...base, background: '#EAF3EE', color: ACCENT, borderColor: ACCENT };
   if (status === 'generated') return { ...base, background: '#FFF7E5', color: AMBER,  borderColor: AMBER };
   if (status === 'skipped')   return { ...base, background: CREAM,    color: INK_L,  borderColor: HAIR };
-  return { ...base, background: WHITE, color: SLATE, borderColor: HAIR }; // proposed
+  return { ...base, background: WHITE, color: SLATE, borderColor: HAIR };
 }
 
 function priorityBadge(p: number): React.CSSProperties {
@@ -139,26 +124,34 @@ interface BatchResult {
   error?:      string;
 }
 
+// PBS 2026-07-11 pm (dir 3) — per-item bulk result surfacing.
+interface BulkFailure { id: number; title: string; error: string }
+
 export default function SopProposalList({ proposals, generateBaseHref, seedBatchHref, propertyId }: Props) {
-  const [query, setQuery]         = useState('');
-  const [deptFilter, setDeptFilter]   = useState('all');
+  const [query, setQuery]           = useState('');
+  const [deptFilter, setDeptFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ProposalRow['status']>('all');
-  const [seeding, setSeeding]     = useState(false);
-  const [seedMsg, setSeedMsg]     = useState<string | null>(null);
-  const [seedErr, setSeedErr]     = useState<string | null>(null);
+  const [seeding, setSeeding]       = useState(false);
+  const [seedMsg, setSeedMsg]       = useState<string | null>(null);
+  const [seedErr, setSeedErr]       = useState<string | null>(null);
   const [seedBatches, setSeedBatches] = useState<BatchResult[]>([]);
-  const [busyRow, setBusyRow]     = useState<number | null>(null);
-  // PBS 2026-07-11: expandable Preview + Edit
+  const [busyRow, setBusyRow]       = useState<number | null>(null);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [editingRow, setEditingRow]   = useState<number | null>(null);
+
+  // PBS 2026-07-11 pm (dir 3) — bulk state.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy]       = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<string | null>(null);
+  const [bulkFailures, setBulkFailures] = useState<BulkFailure[]>([]);
+  const [bulkOkMsg, setBulkOkMsg]     = useState<string | null>(null);
+
   const router = useRouter();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return proposals.filter((p) => {
       if (deptFilter !== 'all' && p.dept_code !== deptFilter) return false;
-      // PBS 2026-07-11: hide accepted rows from every filter EXCEPT the "Accepted" tab.
-      // Accepted proposals now live in the QA registry — no reason to clutter this page.
       if (statusFilter === 'all' && p.status === 'accepted') return false;
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (!q) return true;
@@ -177,7 +170,6 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
       if (!m.has(p.dept_code)) m.set(p.dept_code, []);
       m.get(p.dept_code)!.push(p);
     }
-    // priority asc within a dept
     for (const list of m.values()) list.sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
     return Array.from(m.entries()).sort((a, b) => b[1].length - a[1].length);
   }, [filtered]);
@@ -199,17 +191,131 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
   const seededTotalInserted = seedBatches.reduce((s, b) => s + b.inserted, 0);
   const seededTotalSkipped  = seedBatches.reduce((s, b) => s + b.skipped, 0);
 
+  // -- Bulk selection helpers ------------------------------------------------
+
+  const filteredIds = useMemo(() => new Set(filtered.map((p) => p.id)), [filtered]);
+  const selectedInFilter = useMemo(() => {
+    let n = 0;
+    for (const id of selectedIds) if (filteredIds.has(id)) n++;
+    return n;
+  }, [selectedIds, filteredIds]);
+  const allFilteredChecked = filtered.length > 0 && selectedInFilter === filtered.length;
+  const someFilteredChecked = selectedInFilter > 0 && !allFilteredChecked;
+
+  function toggleRow(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleAllFiltered() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredChecked) {
+        for (const id of filteredIds) next.delete(id);
+      } else {
+        for (const id of filteredIds) next.add(id);
+      }
+      return next;
+    });
+  }
+  function clearSelection() { setSelectedIds(new Set()); }
+
+  // Eligibility rules per bulk action:
+  //   Generate → only status='proposed' rows have a generate step (the existing
+  //     per-row link goes to /operations/qa/generate?…&proposal_id=X). For bulk
+  //     we call the same URL server-side. Rows already 'generated' or 'accepted'
+  //     are skipped from eligibility count.
+  //   Accept   → status in ('proposed','generated') — Accept API tolerates both
+  //     (it stubs the SOP + flips status='accepted'). Accepted rows skipped.
+  //   Delete   → any non-accepted row (accepted rows can't be deleted from here).
+  const selectedProposals = useMemo(
+    () => proposals.filter((p) => selectedIds.has(p.id)),
+    [proposals, selectedIds]
+  );
+  const genEligible    = selectedProposals.filter((p) => p.status === 'proposed');
+  const acceptEligible = selectedProposals.filter((p) => p.status === 'proposed' || p.status === 'generated');
+  const deleteEligible = selectedProposals.filter((p) => p.status !== 'accepted');
+
+  // -- Bulk action runners ---------------------------------------------------
+
+  async function runBulk(
+    items: ProposalRow[],
+    verb: 'generate' | 'accept' | 'delete',
+    call: (p: ProposalRow) => Promise<Response>,
+  ) {
+    if (bulkBusy || items.length === 0) return;
+    setBulkBusy(true);
+    setBulkFailures([]);
+    setBulkOkMsg(null);
+    const failures: BulkFailure[] = [];
+    let ok = 0;
+    for (let i = 0; i < items.length; i++) {
+      const p = items[i];
+      setBulkProgress(verb.charAt(0).toUpperCase() + verb.slice(1) + 'ing ' + (i + 1) + ' / ' + items.length + '…');
+      try {
+        const res = await call(p);
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || j.ok === false) {
+          failures.push({ id: p.id, title: p.title, error: j.error ?? ('HTTP ' + res.status) });
+        } else {
+          ok++;
+        }
+      } catch (err) {
+        failures.push({ id: p.id, title: p.title, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    setBulkProgress(null);
+    setBulkFailures(failures);
+    setBulkOkMsg(ok + ' ' + verb + 'd · ' + failures.length + ' failed');
+    setBulkBusy(false);
+    // clear selection + refresh so status pills / KPIs reflect reality
+    setSelectedIds(new Set());
+    router.refresh();
+    // window.location.reload() is heavier; refresh() is enough because parent is a Server Component.
+  }
+
+  async function onBulkGenerate() {
+    if (genEligible.length === 0) return;
+    if (!confirm('Kick off Generate on ' + genEligible.length + ' proposal(s)? Each item calls the generator sequentially.')) return;
+    await runBulk(genEligible, 'generate', (p) => fetch('/api/sop/proposals/generate-one', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.id, dept: p.dept_code, purpose: p.purpose_short || p.title }),
+    }));
+  }
+
+  async function onBulkAccept() {
+    if (acceptEligible.length === 0) return;
+    if (!confirm('Accept ' + acceptEligible.length + ' proposal(s) into the SOP registry as stubs?')) return;
+    await runBulk(acceptEligible, 'accept', (p) => fetch('/api/sop/proposals/accept', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.id }),
+    }));
+  }
+
+  async function onBulkDelete() {
+    if (deleteEligible.length === 0) return;
+    if (!confirm('Delete ' + deleteEligible.length + ' proposal(s) permanently? This cannot be undone.')) return;
+    await runBulk(deleteEligible, 'delete', (p) => fetch('/api/sop/proposals/delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: p.id }),
+    }));
+  }
+
+  // -- Seed batch loop (unchanged) ------------------------------------------
+
   async function onSeed() {
     if (seeding) return;
-    if (!confirm(`Ask Claude to propose ${TOTAL_BATCHES * BATCH_SIZE} SOPs for this property in ${TOTAL_BATCHES} batches of ${BATCH_SIZE}? Duplicates by (dept, title) are skipped.`)) return;
+    if (!confirm('Ask Claude to propose ' + (TOTAL_BATCHES * BATCH_SIZE) + ' SOPs for this property in ' + TOTAL_BATCHES + ' batches of ' + BATCH_SIZE + '? Duplicates by (dept, title) are skipped.')) return;
 
     setSeeding(true);
     setSeedErr(null);
     setSeedBatches([]);
-    setSeedMsg(`Seeding batch 1 / ${TOTAL_BATCHES} (0 / ${TOTAL_BATCHES * BATCH_SIZE})…`);
+    setSeedMsg('Seeding batch 1 / ' + TOTAL_BATCHES + ' (0 / ' + (TOTAL_BATCHES * BATCH_SIZE) + ')…');
 
     for (let i = 0; i < TOTAL_BATCHES; i++) {
-      setSeedMsg(`Seeding batch ${i + 1} / ${TOTAL_BATCHES} (${seedBatches.reduce((s, b) => s + b.inserted, 0)} inserted so far)…`);
+      setSeedMsg('Seeding batch ' + (i + 1) + ' / ' + TOTAL_BATCHES + ' (' + seedBatches.reduce((s, b) => s + b.inserted, 0) + ' inserted so far)…');
       try {
         const res = await fetch(seedBatchHref, {
           method: 'POST',
@@ -220,21 +326,18 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
             batch_size:  BATCH_SIZE,
           }),
         });
-        // PBS 2026-07-11: read raw text FIRST — if server returns HTML (Vercel
-        // runtime error page), .json() throws with "Unexpected token 'A'…" and
-        // we lose the real error. Text-first + defensive parse surfaces the actual message.
         const raw = await res.text();
         let j: { error?: string; inserted?: number; skipped?: number; generated?: number };
         try { j = JSON.parse(raw); }
-        catch { j = { error: `Non-JSON ${res.status} response: ${raw.slice(0, 240)}` }; }
+        catch { j = { error: 'Non-JSON ' + res.status + ' response: ' + raw.slice(0, 240) }; }
         if (!res.ok) {
-          const errMsg = j.error ?? `HTTP ${res.status}: ${raw.slice(0, 200)}`;
+          const errMsg = j.error ?? ('HTTP ' + res.status + ': ' + raw.slice(0, 200));
           const failed: BatchResult = {
             batch_index: i, inserted: 0, skipped: 0, generated: 0, error: errMsg,
           };
           setSeedBatches((prev) => [...prev, failed]);
-          setSeedErr(`Failed at batch ${i + 1} / ${TOTAL_BATCHES}: ${errMsg}`);
-          setSeedMsg(`Stopped after batch ${i + 1} of ${TOTAL_BATCHES}. See error above.`);
+          setSeedErr('Failed at batch ' + (i + 1) + ' / ' + TOTAL_BATCHES + ': ' + errMsg);
+          setSeedMsg('Stopped after batch ' + (i + 1) + ' of ' + TOTAL_BATCHES + '. See error above.');
           setSeeding(false);
           return;
         }
@@ -251,44 +354,20 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
           batch_index: i, inserted: 0, skipped: 0, generated: 0, error: errMsg,
         };
         setSeedBatches((prev) => [...prev, failed]);
-        setSeedErr(`Failed at batch ${i + 1} / ${TOTAL_BATCHES}: ${errMsg}`);
-        setSeedMsg(`Stopped after batch ${i + 1} of ${TOTAL_BATCHES}. See error above.`);
+        setSeedErr('Failed at batch ' + (i + 1) + ' / ' + TOTAL_BATCHES + ': ' + errMsg);
+        setSeedMsg('Stopped after batch ' + (i + 1) + ' of ' + TOTAL_BATCHES + '. See error above.');
         setSeeding(false);
         return;
       }
     }
 
-    // Compute final totals from state (setState is async, so read from a
-    // fresh sum after the loop).
-    setSeedMsg(`Done · ${TOTAL_BATCHES} batches complete. Reloading…`);
+    setSeedMsg('Done · ' + TOTAL_BATCHES + ' batches complete. Reloading…');
     setTimeout(() => { window.location.reload(); }, 900);
   }
 
-  async function onMark(id: number, status: ProposalRow['status']) {
-    if (busyRow) return;
-    setBusyRow(id);
-    try {
-      const res = await fetch('/api/sop/proposals/mark', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? `HTTP ${res.status}`);
-      }
-      window.location.reload();
-    } catch (err) {
-      alert(`Mark failed: ${err instanceof Error ? err.message : String(err)}`);
-      setBusyRow(null);
-    }
-  }
-
-  // PBS 2026-07-11: Accept-to-Registry — creates a stub SOP in knowledge.sop_meta
-  // + flips proposal status='accepted' + navigates to /operations/qa/registry.
   async function onAccept(p: ProposalRow) {
     if (busyRow) return;
-    if (!confirm(`Accept "${p.title}" into the SOP registry as a stub? You can add the full body later.`)) return;
+    if (!confirm('Accept "' + p.title + '" into the SOP registry as a stub? You can add the full body later.')) return;
     setBusyRow(p.id);
     try {
       const res = await fetch('/api/sop/proposals/accept', {
@@ -297,21 +376,18 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
         body: JSON.stringify({ id: p.id }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-      const registryHref = propertyId === 260955 ? '/operations/qa/registry' : `/h/${propertyId}/operations/qa/registry`;
+      if (!res.ok || !j.ok) throw new Error(j.error ?? ('HTTP ' + res.status));
+      const registryHref = propertyId === 260955 ? '/operations/qa/registry' : '/h/' + propertyId + '/operations/qa/registry';
       router.push(registryHref);
     } catch (err) {
-      alert(`Accept failed: ${err instanceof Error ? err.message : String(err)}`);
+      alert('Accept failed: ' + (err instanceof Error ? err.message : String(err)));
       setBusyRow(null);
     }
   }
 
-  // PBS 2026-07-11: hard delete a proposal from knowledge.sop_proposals.
-  // Renamed from "Skip" because Skip was soft-delete (just flagged status='skipped') and PBS wants
-  // one-click permanent removal instead.
   async function onDelete(p: ProposalRow) {
     if (busyRow) return;
-    if (!confirm(`Delete "${p.title}" permanently? This cannot be undone.`)) return;
+    if (!confirm('Delete "' + p.title + '" permanently? This cannot be undone.')) return;
     setBusyRow(p.id);
     try {
       const res = await fetch('/api/sop/proposals/delete', {
@@ -320,15 +396,14 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
         body: JSON.stringify({ id: p.id }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      if (!res.ok || !j.ok) throw new Error(j.error ?? ('HTTP ' + res.status));
       window.location.reload();
     } catch (err) {
-      alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
+      alert('Delete failed: ' + (err instanceof Error ? err.message : String(err)));
       setBusyRow(null);
     }
   }
 
-  // PBS 2026-07-11: called by EditForm on successful save so the row re-renders with new values.
   function onEdited() {
     setEditingRow(null);
     setExpandedRow(null);
@@ -341,7 +416,7 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
       purpose: p.purpose_short || p.title,
       proposal_id: String(p.id),
     });
-    return `${generateBaseHref}?${qs.toString()}`;
+    return generateBaseHref + '?' + qs.toString();
   }
 
   return (
@@ -362,6 +437,103 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
           </div>
         ))}
       </div>
+
+      {/* PBS 2026-07-11 pm (dir 3): sticky bulk action bar. Renders only when at least one selected. */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 5, background: '#FFF8E1',
+          border: '1px solid ' + AMBER, borderRadius: 6, padding: '10px 14px', marginBottom: 12,
+          display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: INK }}>
+            {selectedIds.size} selected
+          </div>
+          <button
+            onClick={onBulkGenerate}
+            disabled={bulkBusy || genEligible.length === 0}
+            style={{
+              padding: '6px 12px', background: ACCENT, color: WHITE, border: '1px solid ' + ACCENT,
+              borderRadius: 4, fontSize: 11, fontWeight: 600,
+              cursor: bulkBusy || genEligible.length === 0 ? 'not-allowed' : 'pointer',
+              opacity: bulkBusy || genEligible.length === 0 ? 0.55 : 1,
+            }}
+          >
+            Generate all
+          </button>
+          {genEligible.length < selectedIds.size && (
+            <span style={{ fontSize: 10, color: INK_M }}>
+              {genEligible.length} of {selectedIds.size} eligible (proposed only)
+            </span>
+          )}
+
+          <button
+            onClick={onBulkAccept}
+            disabled={bulkBusy || acceptEligible.length === 0}
+            style={{
+              padding: '6px 12px', background: AMBER, color: WHITE, border: '1px solid ' + AMBER,
+              borderRadius: 4, fontSize: 11, fontWeight: 600,
+              cursor: bulkBusy || acceptEligible.length === 0 ? 'not-allowed' : 'pointer',
+              opacity: bulkBusy || acceptEligible.length === 0 ? 0.55 : 1,
+            }}
+          >
+            Accept all
+          </button>
+          {acceptEligible.length < selectedIds.size && (
+            <span style={{ fontSize: 10, color: INK_M }}>
+              {acceptEligible.length} of {selectedIds.size} eligible
+            </span>
+          )}
+
+          <button
+            onClick={onBulkDelete}
+            disabled={bulkBusy || deleteEligible.length === 0}
+            style={{
+              padding: '6px 12px', background: WHITE, color: RED, border: '1px solid ' + RED,
+              borderRadius: 4, fontSize: 11, fontWeight: 600,
+              cursor: bulkBusy || deleteEligible.length === 0 ? 'not-allowed' : 'pointer',
+              opacity: bulkBusy || deleteEligible.length === 0 ? 0.55 : 1,
+            }}
+          >
+            Delete all
+          </button>
+
+          <button
+            onClick={clearSelection}
+            disabled={bulkBusy}
+            style={{
+              background: 'transparent', border: 'none', color: INK_M, cursor: bulkBusy ? 'not-allowed' : 'pointer',
+              fontSize: 11, textDecoration: 'underline', marginLeft: 'auto',
+            }}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      {/* Bulk in-flight / result banner */}
+      {(bulkBusy || bulkOkMsg || bulkFailures.length > 0) && (
+        <div style={{
+          background: WHITE, border: '1px solid ' + (bulkFailures.length > 0 ? RED : HAIR),
+          borderLeft: '3px solid ' + (bulkFailures.length > 0 ? RED : (bulkBusy ? AMBER : ACCENT)),
+          borderRadius: 6, padding: 12, marginBottom: 12,
+        }}>
+          {bulkProgress && (
+            <div style={{ fontSize: 12, color: INK, marginBottom: 6 }}>{bulkProgress}</div>
+          )}
+          {bulkOkMsg && !bulkBusy && (
+            <div style={{ fontSize: 12, color: bulkFailures.length > 0 ? RED : ACCENT, fontWeight: 600, marginBottom: 6 }}>
+              {bulkOkMsg}
+            </div>
+          )}
+          {bulkFailures.length > 0 && (
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: RED }}>
+              {bulkFailures.map((f) => (
+                <li key={f.id}>#{f.id} · {f.title} · {f.error}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
@@ -418,41 +590,33 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
           }}
         >
           {seeding
-            ? `Seeding ${seedBatches.length} / ${TOTAL_BATCHES}…`
+            ? 'Seeding ' + seedBatches.length + ' / ' + TOTAL_BATCHES + '…'
             : (proposals.length === 0
-                ? `+ Seed ${TOTAL_BATCHES * BATCH_SIZE} proposals (${TOTAL_BATCHES}×${BATCH_SIZE})`
-                : `+ Seed more (${TOTAL_BATCHES}×${BATCH_SIZE})`)}
+                ? '+ Seed ' + (TOTAL_BATCHES * BATCH_SIZE) + ' proposals (' + TOTAL_BATCHES + '×' + BATCH_SIZE + ')'
+                : '+ Seed more (' + TOTAL_BATCHES + '×' + BATCH_SIZE + ')')}
         </button>
       </div>
 
-      {/* Live progress panel */}
       {(seeding || seedBatches.length > 0 || seedErr || seedMsg) && (
         <div style={{
           background: WHITE,
           border: '1px solid ' + (seedErr ? RED : HAIR),
           borderLeft: '3px solid ' + (seedErr ? RED : (seeding ? AMBER : ACCENT)),
-          borderRadius: 6,
-          padding: 12,
-          marginBottom: 12,
+          borderRadius: 6, padding: 12, marginBottom: 12,
         }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: INK_S, marginBottom: 6 }}>
             Seed status
           </div>
           {seedMsg && (
-            <div style={{ fontSize: 12, color: INK, marginBottom: 6 }}>
-              {seedMsg}
-            </div>
+            <div style={{ fontSize: 12, color: INK, marginBottom: 6 }}>{seedMsg}</div>
           )}
           {seedErr && (
-            <div style={{ fontSize: 12, color: RED, marginBottom: 6, fontWeight: 600 }}>
-              {seedErr}
-            </div>
+            <div style={{ fontSize: 12, color: RED, marginBottom: 6, fontWeight: 600 }}>{seedErr}</div>
           )}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${TOTAL_BATCHES}, 1fr)`,
-            gap: 6,
-            marginTop: 6,
+            gridTemplateColumns: 'repeat(' + TOTAL_BATCHES + ', 1fr)',
+            gap: 6, marginTop: 6,
           }}>
             {Array.from({ length: TOTAL_BATCHES }, (_, i) => {
               const b = seedBatches.find((x) => x.batch_index === i);
@@ -468,11 +632,11 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                 }}>
                   <div style={{ fontWeight: 700, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Batch {i + 1}</div>
                   <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
-                    {b?.error ? '×' : b ? `+${b.inserted}` : isCurrent ? '…' : '·'}
+                    {b?.error ? '×' : b ? '+' + b.inserted : isCurrent ? '…' : '·'}
                   </div>
                   {b && !b.error && (
                     <div style={{ fontSize: 9, color: INK_L, marginTop: 2 }}>
-                      {b.skipped > 0 ? `${b.skipped} dup` : ''}
+                      {b.skipped > 0 ? b.skipped + ' dup' : ''}
                     </div>
                   )}
                 </div>
@@ -487,7 +651,6 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
         </div>
       )}
 
-      {/* Empty state */}
       {proposals.length === 0 && !seeding && (
         <div style={{
           background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, padding: 32,
@@ -520,6 +683,16 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
+                {/* PBS 2026-07-11 pm (dir 3) — master checkbox controls "select all currently-filtered". */}
+                <th style={{ ...th, width: 32 }}>
+                  <input
+                    type="checkbox"
+                    checked={allFilteredChecked}
+                    ref={(el) => { if (el) el.indeterminate = someFilteredChecked; }}
+                    onChange={toggleAllFiltered}
+                    aria-label="Select all filtered"
+                  />
+                </th>
                 <th style={{ ...th, width: 40 }}>P</th>
                 <th style={th}>Title &amp; purpose</th>
                 <th style={{ ...th, width: 100 }}>Status</th>
@@ -528,12 +701,21 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
             </thead>
             <tbody>
               {list.map((p) => {
-                const isBusy = busyRow === p.id;
+                const isBusy = busyRow === p.id || bulkBusy;
                 const isExpanded = expandedRow === p.id;
                 const isEditing = editingRow === p.id;
+                const isSelected = selectedIds.has(p.id);
                 return (
                   <Fragment key={p.id}>
-                  <tr>
+                  <tr style={ isSelected ? { background: '#FFFCF0' } : undefined }>
+                    <td style={{ ...td, verticalAlign: 'middle' }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleRow(p.id)}
+                        aria-label={'select ' + p.title}
+                      />
+                    </td>
                     <td style={{ ...td, verticalAlign: 'middle' }}>
                       <span style={priorityBadge(p.priority)}>P{p.priority}</span>
                     </td>
@@ -563,7 +745,6 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                     </td>
                     <td style={{ ...td, textAlign: 'right', verticalAlign: 'middle' }}>
                       <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        {/* PBS 2026-07-11: 3 new row buttons — Preview / Edit / Accept-to-Registry */}
                         <button
                           style={btn(false, false)}
                           onClick={() => setExpandedRow(isExpanded ? null : p.id)}
@@ -606,7 +787,7 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                   </tr>
                   {isExpanded && (
                     <tr>
-                      <td colSpan={4} style={{ padding: '10px 14px', background: '#FAFAF7', borderBottom: '1px solid ' + HAIR }}>
+                      <td colSpan={5} style={{ padding: '10px 14px', background: '#FAFAF7', borderBottom: '1px solid ' + HAIR }}>
                         {isEditing ? (
                           <EditForm proposal={p} onCancel={() => { setEditingRow(null); setExpandedRow(null); }} onSaved={onEdited} />
                         ) : (
@@ -641,7 +822,6 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
   );
 }
 
-// PBS 2026-07-11: inline Edit form for a single proposal row.
 function EditForm({ proposal, onCancel, onSaved }: { proposal: ProposalRow; onCancel: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(proposal.title);
   const [purpose, setPurpose] = useState(proposal.purpose_short);
@@ -666,7 +846,7 @@ function EditForm({ proposal, onCancel, onSaved }: { proposal: ProposalRow; onCa
         }),
       });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      if (!res.ok || !j.ok) throw new Error(j.error ?? ('HTTP ' + res.status));
       onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
