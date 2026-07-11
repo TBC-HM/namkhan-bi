@@ -154,6 +154,9 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
     const q = query.trim().toLowerCase();
     return proposals.filter((p) => {
       if (deptFilter !== 'all' && p.dept_code !== deptFilter) return false;
+      // PBS 2026-07-11: hide accepted rows from every filter EXCEPT the "Accepted" tab.
+      // Accepted proposals now live in the QA registry — no reason to clutter this page.
+      if (statusFilter === 'all' && p.status === 'accepted') return false;
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (!q) return true;
       return (
@@ -290,6 +293,28 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
       router.push(registryHref);
     } catch (err) {
       alert(`Accept failed: ${err instanceof Error ? err.message : String(err)}`);
+      setBusyRow(null);
+    }
+  }
+
+  // PBS 2026-07-11: hard delete a proposal from knowledge.sop_proposals.
+  // Renamed from "Skip" because Skip was soft-delete (just flagged status='skipped') and PBS wants
+  // one-click permanent removal instead.
+  async function onDelete(p: ProposalRow) {
+    if (busyRow) return;
+    if (!confirm(`Delete "${p.title}" permanently? This cannot be undone.`)) return;
+    setBusyRow(p.id);
+    try {
+      const res = await fetch('/api/sop/proposals/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      window.location.reload();
+    } catch (err) {
+      alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
       setBusyRow(null);
     }
   }
@@ -559,22 +584,13 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                             {p.status === 'generated' ? 'Re-open' : 'Generate'}
                           </a>
                         )}
-                        {p.status === 'proposed' && (
+                        {p.status !== 'accepted' && (
                           <button
-                            style={btn(false, isBusy)}
+                            style={{ ...btn(false, isBusy), color: RED, borderColor: RED }}
                             disabled={isBusy}
-                            onClick={() => onMark(p.id, 'skipped')}
+                            onClick={() => onDelete(p)}
                           >
-                            Skip
-                          </button>
-                        )}
-                        {p.status === 'skipped' && (
-                          <button
-                            style={btn(false, isBusy)}
-                            disabled={isBusy}
-                            onClick={() => onMark(p.id, 'proposed')}
-                          >
-                            Restore
+                            Delete
                           </button>
                         )}
                       </div>
