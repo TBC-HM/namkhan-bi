@@ -1,6 +1,7 @@
 // app/marketing/media/_client/SettingsTab.tsx
-// PBS 2026-07-12 — Settings: 3 sub-tab strip (Guardrails / Channels / Reality). All three editable.
+// PBS 2026-07-12 — Settings: 4 sub-tab strip (Guardrails / Channels / Reality / Prompt Categories).
 // Guardrails + Channels writes go through public.fn_media_rule_upsert / fn_media_rule_delete / fn_media_channel_spec_upsert (SECURITY DEFINER).
+// 2026-07-11 pm: added Prompt Categories sub-tab (media.ai_prompt_categories).
 'use client';
 
 import { Fragment, useState } from 'react';
@@ -44,11 +45,22 @@ interface Reality {
   forbidden: string[] | null;
   season_calendar: any;
 }
+export interface PromptCategory {
+  key: string;
+  display_name: string;
+  property_id: number | null;
+  base_prompt: string;
+  default_target_tier: string;
+  example_hint: string | null;
+  active: boolean;
+  sort_order: number;
+}
 interface Props {
   propertyId: number;
   channelSpecs: ChannelSpec[];
   rulesActive: Rule[];
   reality: Reality | null;
+  categories: PromptCategory[];
 }
 
 // --- tokens ----------------------------------------------------------
@@ -62,14 +74,15 @@ const WHITE  = '#FFFFFF';
 const SCOPES  = ['tier','license','channel','people','consent','duration','aspect_ratio','tag'];
 const EFFECTS = ['allow','deny','require_approval','warn'];
 const TIERS   = ['tier_website_hero','tier_ota_profile','tier_social_pool','tier_internal','tier_logos','tier_archive'];
+const AI_TIERS = ['tier_social_pool','tier_internal'];
 
-type TabKey = 'rules' | 'channels' | 'reality';
+type TabKey = 'rules' | 'channels' | 'reality' | 'categories';
 
 function csvIn(v: string[] | null | undefined): string { return (v ?? []).join(', '); }
 function csvOut(s: string): string[] { return s.split(',').map(x => x.trim()).filter(Boolean); }
 
 // --- root ------------------------------------------------------------
-export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality }: Props) {
+export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality, categories }: Props) {
   const [tab, setTab] = useState<TabKey>('rules');
   const [banner, setBanner] = useState<{ tone: 'ok'|'err'; text: string } | null>(null);
 
@@ -77,9 +90,10 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
   const bannerFg = banner?.tone === 'ok' ? FOREST : RED;
 
   const tabs: Array<{ key: TabKey; label: string; count: number }> = [
-    { key: 'rules',    label: 'Guardrails',       count: rulesActive.length },
-    { key: 'channels', label: 'Output channels',  count: channelSpecs.length },
-    { key: 'reality',  label: 'Reality profile',  count: reality ? 1 : 0 },
+    { key: 'rules',      label: 'Guardrails',        count: rulesActive.length },
+    { key: 'channels',   label: 'Output channels',   count: channelSpecs.length },
+    { key: 'reality',    label: 'Reality profile',   count: reality ? 1 : 0 },
+    { key: 'categories', label: 'Prompt categories', count: (categories ?? []).length },
   ];
 
   return (
@@ -113,9 +127,10 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
         })}
       </div>
 
-      {tab === 'rules'    && <GuardrailsPanel rows={rulesActive} setBanner={setBanner} />}
-      {tab === 'channels' && <ChannelsPanel   rows={channelSpecs} setBanner={setBanner} />}
-      {tab === 'reality'  && <RealityPanel    propertyId={propertyId} reality={reality} setBanner={setBanner} />}
+      {tab === 'rules'      && <GuardrailsPanel        rows={rulesActive} setBanner={setBanner} />}
+      {tab === 'channels'   && <ChannelsPanel          rows={channelSpecs} setBanner={setBanner} />}
+      {tab === 'reality'    && <RealityPanel           propertyId={propertyId} reality={reality} setBanner={setBanner} />}
+      {tab === 'categories' && <PromptCategoriesPanel  propertyId={propertyId} rows={categories ?? []} setBanner={setBanner} />}
     </div>
   );
 }
@@ -508,6 +523,195 @@ function RealityPanel({ propertyId, reality, setBanner }: { propertyId: number; 
           >{saving ? 'Saving...' : 'Save reality profile'}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// --- Prompt Categories panel (NEW) -----------------------------------
+function PromptCategoriesPanel({ propertyId, rows, setBanner }: { propertyId: number; rows: PromptCategory[]; setBanner: BannerFn }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState<null | (Partial<PromptCategory> & { _mode: 'add' | 'edit' })>(null);
+  const [saving, setSaving] = useState(false);
+
+  function openAdd() {
+    setEditing({
+      _mode:'add',
+      key:'', display_name:'', base_prompt:'',
+      default_target_tier:'tier_social_pool',
+      example_hint:'', active:true, sort_order:100,
+      property_id: propertyId,
+    });
+  }
+  function openEdit(r: PromptCategory) {
+    setEditing({ _mode:'edit', ...r });
+  }
+  async function save() {
+    if (!editing) return;
+    setBanner(null);
+    if (!editing.key || !editing.display_name || !editing.base_prompt) {
+      setBanner({ tone:'err', text:'key, display_name and base_prompt are required.' }); return;
+    }
+    if (!/^[a-z][a-z0-9_]{1,63}$/.test(String(editing.key))) {
+      setBanner({ tone:'err', text:'key must be lowercase snake_case (e.g. in_room_wide).' }); return;
+    }
+    setSaving(true);
+    try {
+      const payload: any = { ...editing };
+      delete payload._mode;
+      const res = await fetch('/api/marketing/media/prompt-category-upsert', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json();
+      if (!res.ok) { setBanner({ tone:'err', text:`Save failed: ${j.error ?? res.statusText}` }); return; }
+      setBanner({ tone:'ok', text:`Category "${j.key}" saved.` });
+      setEditing(null);
+      router.refresh();
+    } catch (e:any) {
+      setBanner({ tone:'err', text:`Save failed: ${e.message}` });
+    } finally { setSaving(false); }
+  }
+  async function del(key: string) {
+    if (!confirm(`Delete category "${key}"? This cannot be undone.`)) return;
+    setBanner(null);
+    try {
+      const res = await fetch('/api/marketing/media/prompt-category-delete', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setBanner({ tone:'err', text:`Delete failed: ${j.error ?? res.statusText}` }); return; }
+      setBanner({ tone:'ok', text:`Category "${key}" deleted.` });
+      router.refresh();
+    } catch (e:any) {
+      setBanner({ tone:'err', text:`Delete failed: ${e.message}` });
+    }
+  }
+
+  const btn = (label: string, onClick: () => void, tone: 'primary'|'danger'|'ghost' = 'ghost') => (
+    <button
+      onClick={onClick}
+      style={{
+        padding:'4px 10px', fontSize:11, borderRadius:3, cursor:'pointer',
+        border: '1px solid ' + (tone==='primary'?FOREST:tone==='danger'?RED:HAIR),
+        background: tone==='primary'?FOREST:tone==='danger'?WHITE:WHITE,
+        color:      tone==='primary'?WHITE:tone==='danger'?RED:INK,
+      }}
+    >{label}</button>
+  );
+
+  const sorted = [...rows].sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100) || a.key.localeCompare(b.key));
+
+  return (
+    <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <span style={{ fontSize:11, color:INK_M }}>
+          {rows.length} categories · source: public.v_ai_prompt_categories · writes: media.ai_prompt_categories
+        </span>
+        {btn('+ Add category', openAdd, 'primary')}
+      </div>
+
+      <div style={{ overflowX:'auto' }}>
+        <table style={{ width:'100%', fontSize:11, borderCollapse:'collapse' }}>
+          <thead>
+            <tr style={{ textAlign:'left', color:INK_M }}>
+              <th style={th}>Sort</th>
+              <th style={th}>Key</th>
+              <th style={th}>Display name</th>
+              <th style={th}>Scope</th>
+              <th style={th}>Target tier</th>
+              <th style={th}>Active</th>
+              <th style={{ ...th, width:110 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(r => (
+              <tr key={r.key}>
+                <td style={td}>{r.sort_order}</td>
+                <td style={{ ...td, fontFamily:'ui-monospace, SFMono-Regular, monospace' }}>{r.key}</td>
+                <td style={td}>{r.display_name}</td>
+                <td style={{ ...td, color:INK_M }}>{r.property_id === null ? 'global' : `property ${r.property_id}`}</td>
+                <td style={{ ...td, color:INK_M }}>{r.default_target_tier}</td>
+                <td style={{ ...td, color: r.active ? FOREST : RED }}>{r.active ? 'yes' : 'no'}</td>
+                <td style={{ ...td, whiteSpace:'nowrap', display:'flex', gap:4 }}>
+                  {btn('Edit', () => openEdit(r), 'ghost')}
+                  {btn('Delete', () => del(r.key), 'danger')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {editing && (
+        <div style={{ marginTop:16, padding:14, border:'1px solid '+HAIR, borderRadius:6, background:'#FAF6EC' }}>
+          <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:10 }}>
+            {editing._mode === 'add' ? 'Add category' : `Edit category ${editing.key}`}
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <Field label="key (lowercase snake_case, immutable after create)">
+              <input
+                value={editing.key ?? ''}
+                onChange={e => setEditing({ ...editing, key: e.target.value })}
+                disabled={editing._mode === 'edit'}
+                style={inp}
+              />
+            </Field>
+            <Field label="display_name">
+              <input value={editing.display_name ?? ''} onChange={e => setEditing({ ...editing, display_name: e.target.value })} style={inp} />
+            </Field>
+            <Field label="default_target_tier">
+              <select value={editing.default_target_tier ?? 'tier_social_pool'} onChange={e => setEditing({ ...editing, default_target_tier: e.target.value })} style={inp}>
+                {AI_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="scope">
+              <select
+                value={editing.property_id == null ? 'global' : 'property'}
+                onChange={e => setEditing({ ...editing, property_id: e.target.value === 'global' ? null : propertyId })}
+                style={inp}
+              >
+                <option value="global">global (all properties)</option>
+                <option value="property">property {propertyId} only</option>
+              </select>
+            </Field>
+            <Field label="sort_order">
+              <input type="number" value={editing.sort_order ?? 100} onChange={e => setEditing({ ...editing, sort_order: Number(e.target.value) })} style={inp} />
+            </Field>
+            <Field label="active">
+              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:INK }}>
+                <input type="checkbox" checked={editing.active ?? true} onChange={e => setEditing({ ...editing, active: e.target.checked })} />
+                {editing.active ? 'active' : 'inactive'}
+              </label>
+            </Field>
+            <div style={{ gridColumn:'1 / -1' }}>
+              <Field label="example_hint (shown as prompt placeholder)">
+                <input value={editing.example_hint ?? ''} onChange={e => setEditing({ ...editing, example_hint: e.target.value })} style={inp} />
+              </Field>
+            </div>
+            <div style={{ gridColumn:'1 / -1' }}>
+              <Field label="base_prompt (auto-prepended to every user prompt in this category)">
+                <textarea
+                  value={editing.base_prompt ?? ''}
+                  onChange={e => setEditing({ ...editing, base_prompt: e.target.value })}
+                  rows={6}
+                  style={{ ...inp, resize:'vertical', fontFamily:'ui-monospace, SFMono-Regular, monospace', fontSize:11 }}
+                />
+              </Field>
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:8, marginTop:12 }}>
+            <button
+              onClick={save} disabled={saving}
+              style={{ padding:'8px 16px', fontSize:12, fontWeight:600, background:FOREST, color:WHITE, border:'none', borderRadius:4, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1 }}
+            >{saving ? 'Saving...' : (editing._mode === 'add' ? 'Create category' : 'Save changes')}</button>
+            <button
+              onClick={() => setEditing(null)}
+              style={{ padding:'8px 16px', fontSize:12, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:4, cursor:'pointer' }}
+            >Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
