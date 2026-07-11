@@ -1,0 +1,251 @@
+// lib/youtube/data.ts
+// PBS 2026-07-11 pm — Thin fetch wrappers around YouTube Data API v3.
+// Every function accepts an access token and returns a discriminated union
+// { ok:true, ... } | { ok:false, error, detail } — never throws.
+//
+// Auth: Authorization: Bearer <accessToken>
+// Quota per dashboard load: channels=1 + search=100 + videos=1 + commentThreads=1 = 103 units
+// (YouTube gives ~10 000/day, so ~90 loads/day.)
+
+const API = 'https://www.googleapis.com/youtube/v3';
+
+export interface Thumbnail { url: string; width?: number; height?: number }
+export interface Thumbnails { default?: Thumbnail; medium?: Thumbnail; high?: Thumbnail; standard?: Thumbnail; maxres?: Thumbnail }
+
+export interface ChannelInfo {
+  id: string;
+  title: string;
+  description: string;
+  customUrl: string | null;
+  country: string | null;
+  publishedAt: string | null;
+  thumbnails: Thumbnails;
+  subscriberCount: number;
+  viewCount: number;
+  videoCount: number;
+  keywords: string | null;
+  defaultLanguage: string | null;
+}
+
+export interface VideoItem {
+  id: string;
+  title: string;
+  description: string;
+  publishedAt: string;
+  thumbnails: Thumbnails;
+  duration: string; // ISO 8601, eg PT1M30S
+  views: number;
+  likes: number;
+  comments: number;
+}
+
+export interface CommentItem {
+  id: string;
+  videoId: string;
+  textOriginal: string;
+  authorDisplayName: string;
+  authorProfileImageUrl: string | null;
+  publishedAt: string;
+  likeCount: number;
+  canReply: boolean;
+}
+
+interface ErrShape { ok: false; error: string; detail?: string }
+type Ok<T> = { ok: true; data: T };
+
+async function ytFetch<T>(url: string, accessToken: string): Promise<Ok<T> | ErrShape> {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 240);
+    return { ok: false, error: `youtube_api_${res.status}`, detail };
+  }
+  const json = (await res.json().catch(() => null)) as T | null;
+  if (!json) return { ok: false, error: 'youtube_api_bad_json' };
+  return { ok: true, data: json };
+}
+
+// ---- channel ---------------------------------------------------------------
+
+interface RawChannelResp {
+  items?: Array<{
+    id: string;
+    snippet?: {
+      title?: string;
+      description?: string;
+      customUrl?: string;
+      publishedAt?: string;
+      country?: string;
+      thumbnails?: Thumbnails;
+    };
+    statistics?: { subscriberCount?: string; viewCount?: string; videoCount?: string };
+    brandingSettings?: { channel?: { keywords?: string; defaultLanguage?: string } };
+  }>;
+}
+
+export async function fetchChannel(accessToken: string): Promise<Ok<ChannelInfo> | ErrShape> {
+  const r = await ytFetch<RawChannelResp>(
+    `${API}/channels?part=snippet,statistics,brandingSettings&mine=true`,
+    accessToken,
+  );
+  if (!r.ok) return r;
+  const it = r.data.items?.[0];
+  if (!it) return { ok: false, error: 'no_channel_items' };
+  const info: ChannelInfo = {
+    id:              it.id,
+    title:           it.snippet?.title ?? '(untitled)',
+    description:     it.snippet?.description ?? '',
+    customUrl:       it.snippet?.customUrl ?? null,
+    country:         it.snippet?.country ?? null,
+    publishedAt:     it.snippet?.publishedAt ?? null,
+    thumbnails:      it.snippet?.thumbnails ?? {},
+    subscriberCount: Number(it.statistics?.subscriberCount ?? 0),
+    viewCount:       Number(it.statistics?.viewCount ?? 0),
+    videoCount:      Number(it.statistics?.videoCount ?? 0),
+    keywords:        it.brandingSettings?.channel?.keywords ?? null,
+    defaultLanguage: it.brandingSettings?.channel?.defaultLanguage ?? null,
+  };
+  return { ok: true, data: info };
+}
+
+// ---- recent videos ---------------------------------------------------------
+
+interface SearchListResp {
+  items?: Array<{ id?: { videoId?: string } }>;
+}
+interface VideosListResp {
+  items?: Array<{
+    id: string;
+    snippet?: {
+      title?: string;
+      description?: string;
+      publishedAt?: string;
+      thumbnails?: Thumbnails;
+    };
+    contentDetails?: { duration?: string };
+    statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
+  }>;
+}
+
+export async function fetchRecentVideos(
+  accessToken: string,
+  channelId: string,
+  max = 24,
+): Promise<Ok<VideoItem[]> | ErrShape> {
+  const searchUrl = `${API}/search?part=id&channelId=${encodeURIComponent(channelId)}&order=date&type=video&maxResults=${max}`;
+  const s = await ytFetch<SearchListResp>(searchUrl, accessToken);
+  if (!s.ok) return s;
+
+  const ids = (s.data.items ?? [])
+    .map((x) => x.id?.videoId)
+    .filter((x): x is string => Boolean(x));
+  if (ids.length === 0) return { ok: true, data: [] };
+
+  const vidUrl = `${API}/videos?part=snippet,statistics,contentDetails&id=${ids.join(',')}`;
+  const v = await ytFetch<VideosListResp>(vidUrl, accessToken);
+  if (!v.ok) return v;
+
+  const mapped: VideoItem[] = (v.data.items ?? []).map((it) => ({
+    id:          it.id,
+    title:       it.snippet?.title ?? '(untitled)',
+    description: it.snippet?.description ?? '',
+    publishedAt: it.snippet?.publishedAt ?? '',
+    thumbnails:  it.snippet?.thumbnails ?? {},
+    duration:    it.contentDetails?.duration ?? 'PT0S',
+    views:       Number(it.statistics?.viewCount ?? 0),
+    likes:       Number(it.statistics?.likeCount ?? 0),
+    comments:    Number(it.statistics?.commentCount ?? 0),
+  }));
+
+  // preserve search order (most recent first)
+  const idx = new Map(ids.map((x, i) => [x, i]));
+  mapped.sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
+
+  return { ok: true, data: mapped };
+}
+
+// ---- recent comments -------------------------------------------------------
+
+interface CommentThreadsResp {
+  items?: Array<{
+    id: string;
+    snippet?: {
+      videoId?: string;
+      canReply?: boolean;
+      topLevelComment?: {
+        id: string;
+        snippet?: {
+          textOriginal?: string;
+          textDisplay?: string;
+          authorDisplayName?: string;
+          authorProfileImageUrl?: string;
+          publishedAt?: string;
+          likeCount?: number;
+        };
+      };
+    };
+  }>;
+}
+
+export async function fetchRecentComments(
+  accessToken: string,
+  channelId: string,
+  max = 20,
+): Promise<Ok<CommentItem[]> | ErrShape> {
+  const url = `${API}/commentThreads?part=snippet&allThreadsRelatedToChannelId=${encodeURIComponent(channelId)}&maxResults=${max}&order=time`;
+  const r = await ytFetch<CommentThreadsResp>(url, accessToken);
+  if (!r.ok) return r;
+
+  const mapped: CommentItem[] = (r.data.items ?? []).map((th) => {
+    const top = th.snippet?.topLevelComment;
+    return {
+      id:                    top?.id ?? th.id,
+      videoId:               th.snippet?.videoId ?? '',
+      textOriginal:          top?.snippet?.textOriginal ?? top?.snippet?.textDisplay ?? '',
+      authorDisplayName:     top?.snippet?.authorDisplayName ?? '',
+      authorProfileImageUrl: top?.snippet?.authorProfileImageUrl ?? null,
+      publishedAt:           top?.snippet?.publishedAt ?? '',
+      likeCount:             Number(top?.snippet?.likeCount ?? 0),
+      canReply:              Boolean(th.snippet?.canReply),
+    };
+  });
+
+  return { ok: true, data: mapped };
+}
+
+// ---- reply to comment ------------------------------------------------------
+
+interface CreatedCommentResp {
+  id?: string;
+  snippet?: {
+    textOriginal?: string;
+    parentId?: string;
+    authorDisplayName?: string;
+    publishedAt?: string;
+  };
+}
+
+export async function replyToComment(
+  accessToken: string,
+  parentCommentId: string,
+  text: string,
+): Promise<Ok<CreatedCommentResp> | ErrShape> {
+  const url = `${API}/comments?part=snippet`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization:  `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ snippet: { parentId: parentCommentId, textOriginal: text } }),
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 240);
+    return { ok: false, error: `youtube_api_${res.status}`, detail };
+  }
+  const json = (await res.json().catch(() => null)) as CreatedCommentResp | null;
+  if (!json) return { ok: false, error: 'youtube_api_bad_json' };
+  return { ok: true, data: json };
+}
