@@ -1,77 +1,71 @@
 // app/marketing/media/page.tsx
-// PBS 2026-07-05 v2: Media Library — new-design shell (DashboardPage + KPI + gallery).
-// Force-rebuild marker: MEDIA_V2_20260705_1200
-
-import TenantLink from '@/components/nav/TenantLink';
-import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
+// PBS 2026-07-12 — Media Hub (brief media-ai-video-ui).
+// Server component. Loads server-side, renders <MediaHub/> client.
+// Sub-tabs: Library · AI Studio · Video · Settings.
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import MediaGallery from './_components/MediaGallery';
+import MediaHub from './_client/MediaHub';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-interface MediaRow {
-  asset_id: string;
-  asset_type: string;
-  original_filename: string;
-  caption: string | null;
-  primary_tier: string | null;
-  property_area: string | null;
-  captured_at: string | null;
-  qc_score: number | null;
-  public_url: string | null;
-  width_px: number | null;
-  height_px: number | null;
+const NAMKHAN_PROPERTY_ID = 260955;
+
+async function loadAll(pid: number) {
+  const sb = getSupabaseAdmin();
+  const [byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality] = await Promise.all([
+    sb.from('mkt_v_media_by_tier').select('*'),
+    sb.from('v_marketing_media_page').select('*').limit(500),
+    sb.from('v_media_channel_specs').select('*'),
+    sb.from('v_media_rules_active').select('*'),
+    sb.from('v_ai_generations').select('*').order('created_at', { ascending: false }).limit(50),
+    sb.from('v_video_edits').select('*').order('created_at', { ascending: false }).limit(50),
+    sb.from('v_reality_profile').select('*').eq('property_id', pid).maybeSingle(),
+  ]);
+  return {
+    byTier: byTier.data ?? [],
+    mediaPage: mediaPage.data ?? [],
+    channelSpecs: channelSpecs.data ?? [],
+    rulesActive: rulesActive.data ?? [],
+    aiGens: aiGens.data ?? [],
+    videoEdits: videoEdits.data ?? [],
+    reality: reality.data ?? null,
+    errors: [byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error, aiGens.error, videoEdits.error, reality.error].filter(Boolean),
+  };
 }
 
-export default async function MarketingMediaPage() {
-  const sb = getSupabaseAdmin();
-  const { data, error } = await sb.from('v_marketing_media_page').select('*').limit(500);
-  const rows: MediaRow[] = (data as MediaRow[]) ?? [];
+interface Props { propertyId?: number }
 
-  const photos = rows.filter(r => r.asset_type === 'photo');
-  const videos = rows.filter(r => r.asset_type === 'video');
-  const tiers = new Set(rows.map(r => r.primary_tier).filter((v): v is string => !!v));
-  const areas = new Set(rows.map(r => r.property_area).filter((v): v is string => !!v));
-  const withUrl = rows.filter(r => r.public_url).length;
-  const avgQc = rows.length ? (rows.reduce((s,r) => s + (r.qc_score ?? 0), 0) / rows.length).toFixed(1) : '—';
-
-  const tiles: KpiTileProps[] = [
-    { label: 'Total assets',    value: rows.length,   size: 'sm', footnote: 'in media library' },
-    { label: 'Photos',          value: photos.length, size: 'sm' },
-    { label: 'Videos',          value: videos.length, size: 'sm' },
-    { label: 'With public URL', value: withUrl,       size: 'sm', footnote: 'usable in newsletters' },
-    { label: 'Tiers',           value: tiers.size,    size: 'sm', footnote: 'quality bands' },
-    { label: 'Areas',           value: areas.size,    size: 'sm', footnote: 'property zones' },
-    { label: 'Avg QC score',    value: avgQc,         size: 'sm', footnote: '/100' },
-  ];
+export default async function MarketingMediaPage({ propertyId }: Props = {}) {
+  const pid = propertyId ?? NAMKHAN_PROPERTY_ID;
+  const data = await loadAll(pid);
 
   const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href,
     active: s.href === '/marketing/media',
   }));
 
+  const errorMsg = data.errors.length ? `${data.errors.length} bridge error${data.errors.length===1?'':'s'} — check server logs` : null;
+
   return (
-    <div style={{ background:'#FFFFFF', minHeight:'100vh' }} data-page="MEDIA_V2_20260705">
+    <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage
-        title="Marketing · Media Library (new)"
-        subtitle={`${rows.length.toLocaleString()} asset${rows.length===1?'':'s'} · ${error ? 'ERROR: ' + error.message : 'click any photo to copy its URL for a newsletter'}`}
+        title="Marketing · Media"
+        subtitle={errorMsg ?? `Library · AI Studio · Video · Settings — property ${pid}`}
         tabs={tabs}
       >
-        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-
-        <div style={{ gridColumn: '1 / -1', display:'flex', justifyContent:'flex-end', gap: 8 }}>
-          <TenantLink href="/marketing/upload" style={{
-            padding:'6px 14px', fontSize:12, fontWeight:600, background:'#084838', color:'#FFFFFF',
-            border:'none', borderRadius:4, textDecoration:'none',
-          }}>+ Upload new</TenantLink>
-        </div>
-
         <div style={{ gridColumn: '1 / -1' }}>
-          <MediaGallery rows={rows} />
+          <MediaHub
+            propertyId={pid}
+            byTier={data.byTier as any}
+            mediaPage={data.mediaPage as any}
+            channelSpecs={data.channelSpecs as any}
+            rulesActive={data.rulesActive as any}
+            aiGens={data.aiGens as any}
+            videoEdits={data.videoEdits as any}
+            reality={data.reality as any}
+          />
         </div>
       </DashboardPage>
     </div>
