@@ -6,11 +6,14 @@
 //   - videos fetch fail         → inline red note above the videos grid, channel + comments still render
 //   - comments fetch 403        → tiny amber banner "requires youtube.force-ssl · Reconnect"
 //   - comments fetch other fail → tiny amber banner with the error text
+//
+// PBS 2026-07-11 evening — switched from `!x.ok` narrowing to `isErr(x)` type
+//   predicate so TS reliably narrows YtResult<T> to ErrShape. Fixes CI TS2339.
 
 import Link from 'next/link';
 import { getFreshAccessToken } from '@/lib/youtube/token';
 import {
-  fetchChannel, fetchRecentVideos, fetchRecentComments,
+  fetchChannel, fetchRecentVideos, fetchRecentComments, isErr,
   type VideoItem, type CommentItem,
 } from '@/lib/youtube/data';
 import CommentReplyForm from '../_client/CommentReplyForm';
@@ -138,7 +141,7 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
 
   // 3) Channel identity is the anchor. If channel fetch failed, we still surface a
   //    clear reconnect card — but distinct from the token-level failure above.
-  if (!chRes.ok) {
+  if (isErr(chRes)) {
     const detail = chRes.detail ? ` · ${chRes.detail.slice(0, 200)}` : '';
     return (
       <ReconnectCard
@@ -150,11 +153,11 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
   }
 
   const ch = chRes.data;
-  const videos: VideoItem[] = vidRes.ok ? vidRes.data : [];
-  const comments: CommentItem[] = comRes.ok ? comRes.data : [];
-  const vidError = !vidRes.ok ? `${vidRes.error}${vidRes.detail ? ` · ${vidRes.detail.slice(0, 160)}` : ''}` : null;
-  const commentsScopeMissing = !comRes.ok && (comRes.error === 'youtube_api_403' || comRes.error === 'youtube_api_401');
-  const commentsOtherError = !comRes.ok && !commentsScopeMissing
+  const videos: VideoItem[] = isErr(vidRes) ? [] : vidRes.data;
+  const comments: CommentItem[] = isErr(comRes) ? [] : comRes.data;
+  const vidError = isErr(vidRes) ? `${vidRes.error}${vidRes.detail ? ` · ${vidRes.detail.slice(0, 160)}` : ''}` : null;
+  const commentsScopeMissing = isErr(comRes) && (comRes.error === 'youtube_api_403' || comRes.error === 'youtube_api_401');
+  const commentsOtherError = isErr(comRes) && !commentsScopeMissing
     ? `${comRes.error}${comRes.detail ? ` · ${comRes.detail.slice(0, 160)}` : ''}`
     : null;
 
