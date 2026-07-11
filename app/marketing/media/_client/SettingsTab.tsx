@@ -2,6 +2,11 @@
 // PBS 2026-07-12 — Settings: 4 sub-tab strip (Guardrails / Channels / Reality / Prompt Categories).
 // Guardrails + Channels writes go through public.fn_media_rule_upsert / fn_media_rule_delete / fn_media_channel_spec_upsert (SECURITY DEFINER).
 // 2026-07-11 pm: added Prompt Categories sub-tab (media.ai_prompt_categories).
+// 2026-07-12 pm: Reality tab now bundles THREE panels stacked:
+//   1) Reality profile   — Laos-wide grounding (unchanged)
+//   2) Room profiles     — READ-ONLY from PMS (v_room_grounding). "Edit in PMS →" link out.
+//   3) Facility profiles — editable AI enrichment via /api/marketing/media/facility-ai-context-upsert.
+//   Explainer: Reality is Laos-wide. Rooms come from PMS. Facilities are editable here.
 'use client';
 
 import { Fragment, useState } from 'react';
@@ -54,6 +59,33 @@ export interface PromptCategory {
   example_hint: string | null;
   active: boolean;
   sort_order: number;
+  requires_context?: 'room' | 'facility' | 'none' | null;
+}
+export interface RoomOption {
+  room_type_id: number;
+  property_id: number;
+  room_type_name: string;
+  room_type_name_short: string | null;
+  max_guests: number | null;
+  units: number | null;
+  description_clean: string | null;
+  amenities: string[] | null;
+  amenities_count: number | null;
+}
+export interface FacilityOption {
+  facility_id: number;
+  property_id: number;
+  category: string | null;
+  facility_name: string;
+  facility_description: string | null;
+  facility_key: string | null;
+  ai_description: string | null;
+  materials: string[] | null;
+  view_direction: string | null;
+  signature_elements: string[] | null;
+  time_of_day_hint: string | null;
+  active: boolean;
+  sort_order: number;
 }
 interface Props {
   propertyId: number;
@@ -61,6 +93,8 @@ interface Props {
   rulesActive: Rule[];
   reality: Reality | null;
   categories: PromptCategory[];
+  rooms: RoomOption[];
+  facilities: FacilityOption[];
 }
 
 // --- tokens ----------------------------------------------------------
@@ -82,7 +116,7 @@ function csvIn(v: string[] | null | undefined): string { return (v ?? []).join('
 function csvOut(s: string): string[] { return s.split(',').map(x => x.trim()).filter(Boolean); }
 
 // --- root ------------------------------------------------------------
-export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality, categories }: Props) {
+export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality, categories, rooms, facilities }: Props) {
   const [tab, setTab] = useState<TabKey>('rules');
   const [banner, setBanner] = useState<{ tone: 'ok'|'err'; text: string } | null>(null);
 
@@ -92,7 +126,7 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
   const tabs: Array<{ key: TabKey; label: string; count: number }> = [
     { key: 'rules',      label: 'Guardrails',        count: rulesActive.length },
     { key: 'channels',   label: 'Output channels',   count: channelSpecs.length },
-    { key: 'reality',    label: 'Reality profile',   count: reality ? 1 : 0 },
+    { key: 'reality',    label: 'Reality profile',   count: (reality ? 1 : 0) + rooms.length + facilities.length },
     { key: 'categories', label: 'Prompt categories', count: (categories ?? []).length },
   ];
 
@@ -105,7 +139,6 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
         </div>
       )}
 
-      {/* Inner tab strip */}
       <div style={{ display:'flex', gap:4, borderBottom:'1px solid '+HAIR, marginBottom:16 }}>
         {tabs.map(t => {
           const active = tab === t.key;
@@ -129,14 +162,38 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
 
       {tab === 'rules'      && <GuardrailsPanel        rows={rulesActive} setBanner={setBanner} />}
       {tab === 'channels'   && <ChannelsPanel          rows={channelSpecs} setBanner={setBanner} />}
-      {tab === 'reality'    && <RealityPanel           propertyId={propertyId} reality={reality} setBanner={setBanner} />}
+      {tab === 'reality'    && (
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <RealityExplainer />
+          <RealityPanel        propertyId={propertyId} reality={reality} setBanner={setBanner} />
+          <RoomProfilesPanel   propertyId={propertyId} rooms={rooms} />
+          <FacilityProfilesPanel propertyId={propertyId} facilities={facilities} setBanner={setBanner} />
+        </div>
+      )}
       {tab === 'categories' && <PromptCategoriesPanel  propertyId={propertyId} rows={categories ?? []} setBanner={setBanner} />}
     </div>
   );
 }
 
-// --- Guardrails panel -----------------------------------------------
+// --- shared banner type ---------------------------------------------
 type BannerFn = React.Dispatch<React.SetStateAction<{ tone: 'ok'|'err'; text: string } | null>>;
+
+// --- explainer -------------------------------------------------------
+function RealityExplainer() {
+  return (
+    <div style={{ background:'#FAF6EC', border:'1px dashed '+HAIR, borderRadius:6, padding:'10px 14px', fontSize:12, color:INK, lineHeight:1.55 }}>
+      <strong>How the AI engine grounds every image:</strong> the effective prompt is layered as
+      <em> Reality (Laos-wide) → Category style → Specific room / facility → your prompt</em>.
+      <div style={{ marginTop:6, color:INK_M }}>
+        • <strong>Reality profile</strong> is the resort-wide grounding block (location, architecture, palette, forbidden).<br/>
+        • <strong>Room profiles</strong> come straight from your PMS — edit them there, they flow through automatically.<br/>
+        • <strong>Facility profiles</strong> layer AI-only enrichment (materials, view direction, signature elements) on top of the property.facilities row — editable here.
+      </div>
+    </div>
+  );
+}
+
+// --- Guardrails panel -----------------------------------------------
 
 function GuardrailsPanel({ rows, setBanner }: { rows: Rule[]; setBanner: BannerFn }) {
   const router = useRouter();
@@ -496,8 +553,11 @@ function RealityPanel({ propertyId, reality, setBanner }: { propertyId: number; 
 
   return (
     <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:16 }}>
-      <div style={{ marginBottom:10, fontSize:11, color:INK_M }}>
-        Property {propertyId} · source: public.v_reality_profile · writes: media.reality_profile
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
+        <span style={{ fontSize:12, fontWeight:700, color:INK }}>1 · Reality profile <span style={{ color:INK_M, fontWeight:400 }}>· Laos-wide</span></span>
+        <span style={{ fontSize:11, color:INK_M }}>
+          Property {propertyId} · source: public.v_reality_profile · writes: media.reality_profile
+        </span>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
         <Field label="Location"><input value={loc}    onChange={e => setLoc(e.target.value)}    style={inp} /></Field>
@@ -527,7 +587,233 @@ function RealityPanel({ propertyId, reality, setBanner }: { propertyId: number; 
   );
 }
 
-// --- Prompt Categories panel (NEW) -----------------------------------
+// --- Room profiles (READ-ONLY, from PMS) -----------------------------
+function RoomProfilesPanel({ propertyId, rooms }: { propertyId: number; rooms: RoomOption[] }) {
+  return (
+    <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
+        <span style={{ fontSize:12, fontWeight:700, color:INK }}>2 · Room profiles <span style={{ color:INK_M, fontWeight:400 }}>· from PMS (read-only)</span></span>
+        <span style={{ fontSize:11, color:INK_M }}>
+          source: public.v_room_grounding · writes: none (PMS)
+        </span>
+      </div>
+      {rooms.length === 0 ? (
+        <div style={{ padding:20, textAlign:'center', color:INK_M, fontSize:12 }}>
+          No room types found for this property.
+        </div>
+      ) : (
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', fontSize:11, borderCollapse:'collapse' }}>
+            <thead>
+              <tr style={{ textAlign:'left', color:INK_M }}>
+                <th style={th}>Room</th>
+                <th style={th}>Short</th>
+                <th style={th}>Guests</th>
+                <th style={th}>Units</th>
+                <th style={th}>Amenities</th>
+                <th style={th}>Description (clean)</th>
+                <th style={{ ...th, width:120 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rooms.map(r => (
+                <tr key={r.room_type_id}>
+                  <td style={{ ...td, fontWeight:600 }}>{r.room_type_name}</td>
+                  <td style={{ ...td, color:INK_M, fontFamily:'ui-monospace, SFMono-Regular, monospace' }}>{r.room_type_name_short ?? '—'}</td>
+                  <td style={td}>{r.max_guests ?? '—'}</td>
+                  <td style={td}>{r.units ?? '—'}</td>
+                  <td style={{ ...td, color:INK_M }}>{r.amenities_count ?? 0}</td>
+                  <td style={{ ...td, color:INK_M, maxWidth:400, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {r.description_clean ? r.description_clean.slice(0, 140) : '—'}
+                  </td>
+                  <td style={td}>
+                    <a
+                      href={`/h/${propertyId}/operations/rooms`}
+                      style={{ padding:'4px 10px', fontSize:11, background:WHITE, color:FOREST, border:'1px solid '+HAIR, borderRadius:3, textDecoration:'none', display:'inline-block' }}
+                    >Edit in PMS →</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Facility profiles (EDITABLE AI enrichment) ----------------------
+function FacilityProfilesPanel({ propertyId, facilities, setBanner }: { propertyId: number; facilities: FacilityOption[]; setBanner: BannerFn }) {
+  const router = useRouter();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draft, setDraft] = useState<Partial<FacilityOption>>({});
+  const [saving, setSaving] = useState(false);
+
+  function openEdit(f: FacilityOption) {
+    setEditingId(f.facility_id);
+    setDraft({ ...f });
+  }
+  async function save() {
+    if (!editingId) return;
+    setBanner(null);
+    setSaving(true);
+    try {
+      const res = await fetch('/api/marketing/media/facility-ai-context-upsert', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          facility_id: editingId,
+          facility_key: draft.facility_key ?? null,
+          ai_description: draft.ai_description ?? null,
+          materials: draft.materials ?? [],
+          view_direction: draft.view_direction ?? null,
+          signature_elements: draft.signature_elements ?? [],
+          time_of_day_hint: draft.time_of_day_hint ?? null,
+          active: draft.active !== false,
+          sort_order: draft.sort_order ?? 100,
+          updated_by: 'settings-ui',
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setBanner({ tone:'err', text:`Save failed: ${j.error ?? res.statusText}` }); return; }
+      setBanner({ tone:'ok', text:`Facility saved.` });
+      setEditingId(null);
+      router.refresh();
+    } catch (e:any) {
+      setBanner({ tone:'err', text:`Save failed: ${e.message}` });
+    } finally { setSaving(false); }
+  }
+
+  const grouped: Record<string, FacilityOption[]> = {};
+  for (const f of facilities) { const cat = f.category || 'other'; (grouped[cat] ??= []).push(f); }
+  const catOrder = Object.keys(grouped).sort();
+
+  return (
+    <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:10 }}>
+        <span style={{ fontSize:12, fontWeight:700, color:INK }}>3 · Facility profiles <span style={{ color:INK_M, fontWeight:400 }}>· AI enrichment editable here</span></span>
+        <span style={{ fontSize:11, color:INK_M }}>
+          source: public.v_facility_grounding · writes: media.facility_ai_context (via SECURITY DEFINER RPC)
+        </span>
+      </div>
+
+      {facilities.length === 0 ? (
+        <div style={{ padding:20, textAlign:'center', color:INK_M, fontSize:12 }}>
+          No facilities found for property {propertyId}. Add them in the PMS first.
+        </div>
+      ) : (
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', fontSize:11, borderCollapse:'collapse' }}>
+            <thead>
+              <tr style={{ textAlign:'left', color:INK_M }}>
+                <th style={th}>Facility</th>
+                <th style={th}>Category</th>
+                <th style={th}>Key</th>
+                <th style={th}>Materials</th>
+                <th style={th}>View</th>
+                <th style={th}>Time hint</th>
+                <th style={th}>AI enriched?</th>
+                <th style={{ ...th, width:70 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {catOrder.map(cat => (
+                <Fragment key={cat}>
+                  <tr>
+                    <td colSpan={8} style={{ padding:'8px 6px', background:'#FAF6EC', fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:INK_M }}>
+                      {cat} ({grouped[cat].length})
+                    </td>
+                  </tr>
+                  {grouped[cat].map(f => {
+                    const isEdit = editingId === f.facility_id;
+                    const enriched = f.ai_description != null;
+                    return (
+                      <Fragment key={f.facility_id}>
+                        <tr>
+                          <td style={{ ...td, fontWeight:600 }}>{f.facility_name}</td>
+                          <td style={{ ...td, color:INK_M }}>{f.category ?? '—'}</td>
+                          <td style={{ ...td, color:INK_M, fontFamily:'ui-monospace, SFMono-Regular, monospace' }}>{f.facility_key ?? '—'}</td>
+                          <td style={{ ...td, color:INK_M, maxWidth:240, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{(f.materials ?? []).join(', ') || '—'}</td>
+                          <td style={{ ...td, color:INK_M, maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{f.view_direction ?? '—'}</td>
+                          <td style={{ ...td, color:INK_M }}>{f.time_of_day_hint ?? '—'}</td>
+                          <td style={{ ...td, color: enriched ? FOREST : RED, fontWeight:600 }}>{enriched ? 'yes' : 'NO'}</td>
+                          <td style={td}>
+                            <button
+                              onClick={() => (isEdit ? setEditingId(null) : openEdit(f))}
+                              style={{ padding:'4px 10px', fontSize:11, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer' }}
+                            >{isEdit ? 'Close' : 'Edit'}</button>
+                          </td>
+                        </tr>
+                        {isEdit && (
+                          <tr>
+                            <td colSpan={8} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
+                              <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10 }}>
+                                <Field label="facility_key (stable slug)">
+                                  <input value={draft.facility_key ?? ''} onChange={e => setDraft({ ...draft, facility_key: e.target.value })} placeholder="roots_restaurant" style={inp} />
+                                </Field>
+                                <Field label="view_direction">
+                                  <input value={draft.view_direction ?? ''} onChange={e => setDraft({ ...draft, view_direction: e.target.value })} placeholder="east over the Nam Khan River" style={inp} />
+                                </Field>
+                                <Field label="time_of_day_hint">
+                                  <input value={draft.time_of_day_hint ?? ''} onChange={e => setDraft({ ...draft, time_of_day_hint: e.target.value })} placeholder="golden hour" style={inp} />
+                                </Field>
+                                <div style={{ gridColumn:'1 / -1' }}>
+                                  <Field label="ai_description (rich narrative used by the AI engine)">
+                                    <textarea value={draft.ai_description ?? ''} onChange={e => setDraft({ ...draft, ai_description: e.target.value })} rows={4} style={{ ...inp, resize:'vertical' }} />
+                                  </Field>
+                                </div>
+                                <Field label="materials (comma-separated)">
+                                  <textarea
+                                    value={(draft.materials ?? []).join(', ')}
+                                    onChange={e => setDraft({ ...draft, materials: csvOut(e.target.value) })}
+                                    rows={2} style={{ ...inp, resize:'vertical' }}
+                                    placeholder="teak, terracotta tile, rattan"
+                                  />
+                                </Field>
+                                <Field label="signature_elements (comma-separated)">
+                                  <textarea
+                                    value={(draft.signature_elements ?? []).join(', ')}
+                                    onChange={e => setDraft({ ...draft, signature_elements: csvOut(e.target.value) })}
+                                    rows={2} style={{ ...inp, resize:'vertical' }}
+                                    placeholder="banana-leaf underlay, open kitchen"
+                                  />
+                                </Field>
+                                <Field label="sort_order">
+                                  <input type="number" value={draft.sort_order ?? 100} onChange={e => setDraft({ ...draft, sort_order: Number(e.target.value) })} style={inp} />
+                                </Field>
+                                <Field label="active">
+                                  <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:INK }}>
+                                    <input type="checkbox" checked={draft.active !== false} onChange={e => setDraft({ ...draft, active: e.target.checked })} />
+                                    {draft.active !== false ? 'active' : 'inactive'}
+                                  </label>
+                                </Field>
+                              </div>
+                              <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                                <button
+                                  onClick={save} disabled={saving}
+                                  style={{ padding:'8px 16px', fontSize:12, fontWeight:600, background:FOREST, color:WHITE, border:'none', borderRadius:4, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1 }}
+                                >{saving ? 'Saving...' : 'Save facility'}</button>
+                                <button
+                                  onClick={() => setEditingId(null)}
+                                  style={{ padding:'8px 16px', fontSize:12, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:4, cursor:'pointer' }}
+                                >Cancel</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Prompt Categories panel ----------------------------------------
 function PromptCategoriesPanel({ propertyId, rows, setBanner }: { propertyId: number; rows: PromptCategory[]; setBanner: BannerFn }) {
   const router = useRouter();
   const [editing, setEditing] = useState<null | (Partial<PromptCategory> & { _mode: 'add' | 'edit' })>(null);
@@ -540,6 +826,7 @@ function PromptCategoriesPanel({ propertyId, rows, setBanner }: { propertyId: nu
       default_target_tier:'tier_social_pool',
       example_hint:'', active:true, sort_order:100,
       property_id: propertyId,
+      requires_context: 'none',
     });
   }
   function openEdit(r: PromptCategory) {
@@ -620,6 +907,7 @@ function PromptCategoriesPanel({ propertyId, rows, setBanner }: { propertyId: nu
               <th style={th}>Display name</th>
               <th style={th}>Scope</th>
               <th style={th}>Target tier</th>
+              <th style={th}>Requires</th>
               <th style={th}>Active</th>
               <th style={{ ...th, width:110 }}></th>
             </tr>
@@ -632,6 +920,7 @@ function PromptCategoriesPanel({ propertyId, rows, setBanner }: { propertyId: nu
                 <td style={td}>{r.display_name}</td>
                 <td style={{ ...td, color:INK_M }}>{r.property_id === null ? 'global' : `property ${r.property_id}`}</td>
                 <td style={{ ...td, color:INK_M }}>{r.default_target_tier}</td>
+                <td style={{ ...td, color: r.requires_context === 'none' || !r.requires_context ? INK_M : FOREST, fontWeight: r.requires_context && r.requires_context !== 'none' ? 600 : 400 }}>{r.requires_context ?? 'none'}</td>
                 <td style={{ ...td, color: r.active ? FOREST : RED }}>{r.active ? 'yes' : 'no'}</td>
                 <td style={{ ...td, whiteSpace:'nowrap', display:'flex', gap:4 }}>
                   {btn('Edit', () => openEdit(r), 'ghost')}
@@ -663,6 +952,13 @@ function PromptCategoriesPanel({ propertyId, rows, setBanner }: { propertyId: nu
             <Field label="default_target_tier">
               <select value={editing.default_target_tier ?? 'tier_social_pool'} onChange={e => setEditing({ ...editing, default_target_tier: e.target.value })} style={inp}>
                 {AI_TIERS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="requires_context">
+              <select value={editing.requires_context ?? 'none'} onChange={e => setEditing({ ...editing, requires_context: e.target.value as any })} style={inp}>
+                <option value="none">none</option>
+                <option value="room">room</option>
+                <option value="facility">facility</option>
               </select>
             </Field>
             <Field label="scope">
