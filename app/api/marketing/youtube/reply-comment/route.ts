@@ -1,8 +1,9 @@
 // app/api/marketing/youtube/reply-comment/route.ts
 // PBS 2026-07-11 pm — Post a reply on a YouTube comment thread.
+// 2026-07-11 evening — use isErr() type predicate for reliable narrowing.
 import { NextResponse } from 'next/server';
 import { getFreshAccessToken } from '@/lib/youtube/token';
-import { replyToComment } from '@/lib/youtube/data';
+import { replyToComment, isErr } from '@/lib/youtube/data';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
   }
 
   const r = await replyToComment(tok.access_token, parentId, text);
-  if (!r.ok) {
+  if (isErr(r)) {
     return NextResponse.json({ ok: false, error: r.error, detail: r.detail ?? null }, { status: 400 });
   }
   return NextResponse.json({ ok: true, comment: r.data });
