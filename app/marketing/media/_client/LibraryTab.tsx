@@ -1,16 +1,22 @@
 // app/marketing/media/_client/LibraryTab.tsx
 // PBS 2026-07-12 — Library tab. KPIs, tier filter, grid, upload.
+// 2026-07-12 (later) — Edit ✎ button opens AssetEditDrawer for 6 mutable columns.
 'use client';
 
 import { useMemo, useState, Fragment } from 'react';
 import UploadDropzone from './UploadDropzone';
+import AssetEditDrawer, { type AssetEditRow } from './AssetEditDrawer';
 
 interface TierRow { primary_tier: string | null; total: number | string; photos: number | string; videos: number | string; }
 interface MediaRow {
-  asset_id: string; asset_type: string; original_filename: string;
+  asset_id: string; asset_type?: string; original_filename: string;
   caption: string | null; primary_tier: string | null; property_area: string | null;
-  captured_at: string | null; qc_score: number | null; public_url: string | null;
+  captured_at?: string | null; qc_score: number | null; public_url: string | null;
   width_px: number | null; height_px: number | null;
+  master_path?: string | null; mime_type?: string | null; status?: string | null;
+  file_size_bytes?: number | string | null; file_size_human?: string | null;
+  alt_text?: string | null; is_ai_generated?: boolean | null;
+  created_at?: string | null;
 }
 interface ChannelSpec { channel: string; display_name: string; }
 
@@ -19,6 +25,8 @@ interface Props {
   byTier: TierRow[];
   mediaPage: MediaRow[];
   channelSpecs: ChannelSpec[];
+  onSendToAi?: (assetId: string) => void;
+  areaOptions?: string[];
 }
 
 const WHITE  = '#FFFFFF';
@@ -40,13 +48,14 @@ const TIER_CHIPS: Array<{ key: string; label: string }> = [
 
 function n(v: any): number { return Number(v ?? 0); }
 
-export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi }: Props) {
+export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [] }: Props) {
   const [tier, setTier] = useState<string>('');
   const [page, setPage] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
   const [useForMenu, setUseForMenu] = useState<string | null>(null);
   const [busyRow, setBusyRow] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [editing, setEditing] = useState<MediaRow | null>(null);
 
   const totals = useMemo(() => {
     const tot = byTier.reduce((s, r) => s + n(r.total), 0);
@@ -160,17 +169,20 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                   {r.primary_tier && <span>{r.primary_tier}</span>}
                   {r.property_area && <span>· {r.property_area}</span>}
                 </div>
-                <div style={{ marginTop:'auto', display:'grid', gap:6 }}>
+                <div style={{ marginTop:'auto', display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
+                  <button onClick={() => setEditing(r)} style={{
+                    padding:'4px 10px', fontSize:11, fontWeight:600, background:'transparent', color:INK,
+                    border:'1px solid '+INK, borderRadius:2, cursor:'pointer', whiteSpace:'nowrap',
+                  }}>Edit ✎</button>
                   {onSendToAi ? (
                     <button onClick={() => onSendToAi(r.asset_id)} style={{
-                      padding:'6px 10px', fontSize:12, fontWeight:700, background:FOREST, color:WHITE,
-                      border:'none', borderRadius:3, cursor:'pointer', width:'100%', whiteSpace:'nowrap',
-                      letterSpacing:'0.04em', textTransform:'uppercase',
-                    }}>🎨 Use for AI</button>
+                      padding:'4px 10px', fontSize:11, fontWeight:600, background:'transparent', color:FOREST,
+                      border:'1px solid ' + FOREST, borderRadius:2, cursor:'pointer', whiteSpace:'nowrap',
+                    }}>Use for AI ✎</button>
                   ) : null}
                   <button onClick={() => setUseForMenu(useForMenu === r.asset_id ? null : r.asset_id)} disabled={busyRow === r.asset_id} style={{
-                    fontSize:10, padding:'4px 8px', background:WHITE, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', color:INK, width:'100%',
-                  }}>Use for channel…</button>
+                    fontSize:10, padding:'4px 8px', background:WHITE, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', color:INK,
+                  }}>Use for…</button>
                   {busyRow === r.asset_id && <span style={{ fontSize:10, color:INK_M }}>…</span>}
                 </div>
                 {useForMenu === r.asset_id && (
@@ -202,6 +214,13 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           }}>Next →</button>
         </div>
       )}
+
+      <AssetEditDrawer
+        open={editing != null}
+        onClose={() => setEditing(null)}
+        asset={editing as AssetEditRow | null}
+        areaOptions={areaOptions}
+      />
     </div>
   );
 }
