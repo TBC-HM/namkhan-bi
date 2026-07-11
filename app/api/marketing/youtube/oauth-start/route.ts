@@ -13,6 +13,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/youtube',
   'https://www.googleapis.com/auth/youtube.upload',
   'https://www.googleapis.com/auth/youtube.readonly',
+  'https://www.googleapis.com/auth/youtube.force-ssl', // PBS 2026-07-11 pm: required for commentThreads.list + comments.insert (fixes 403 insufficientPermissions)
   'https://www.googleapis.com/auth/youtubepartner',
 ].join(' ');
 
