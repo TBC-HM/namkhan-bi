@@ -3,6 +3,11 @@
 // 2026-07-11 pm: added required Category dropdown (media.ai_prompt_categories) — user picks a category first,
 // its base_prompt is auto-prepended server-side. Placeholder + collapsed style-guidance preview from the row.
 // Also: banner now shows failure `reason` from the server so PBS sees the real error (billing / bucket / etc.).
+// 2026-07-12 pm: added Room / Facility grounding dropdown driven by category.requires_context.
+//   When category requires 'room' → Room picker (from v_room_grounding). When 'facility' → Facility picker
+//   (from v_facility_grounding, grouped by category). Both required to submit. The chosen id is sent to the
+//   edge fn which injects the SPECIFIC ROOM / SPECIFIC FACILITY block into the effective_prompt so the
+//   engine never has to guess resort-specific details.
 'use client';
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
@@ -15,6 +20,7 @@ interface AiGen {
   cost_eur: number | null; cost_cap_eur: number | null;
   status: string; created_by: string | null; created_at: string;
   finished_at?: string | null; category_key?: string | null;
+  room_type_id?: number | null; facility_id?: number | null;
 }
 
 interface MediaRow {
@@ -37,6 +43,35 @@ export interface PromptCategory {
   example_hint: string | null;
   active: boolean;
   sort_order: number;
+  requires_context?: 'room' | 'facility' | 'none' | null;
+}
+
+export interface RoomOption {
+  room_type_id: number;
+  property_id: number;
+  room_type_name: string;
+  room_type_name_short: string | null;
+  max_guests: number | null;
+  units: number | null;
+  description_clean: string | null;
+  amenities: string[] | null;
+  amenities_count: number | null;
+}
+
+export interface FacilityOption {
+  facility_id: number;
+  property_id: number;
+  category: string | null;
+  facility_name: string;
+  facility_description: string | null;
+  facility_key: string | null;
+  ai_description: string | null;
+  materials: string[] | null;
+  view_direction: string | null;
+  signature_elements: string[] | null;
+  time_of_day_hint: string | null;
+  active: boolean;
+  sort_order: number;
 }
 
 interface Props {
@@ -45,6 +80,8 @@ interface Props {
   aiGens: AiGen[];
   initialSourceAssetId?: string | null;
   categories: PromptCategory[];
+  rooms: RoomOption[];
+  facilities: FacilityOption[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -59,7 +96,7 @@ const TIERS = [
   { key: 'tier_internal',    label: 'Internal only' },
 ];
 
-export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSourceAssetId, categories }: Props) {
+export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSourceAssetId, categories, rooms, facilities }: Props) {
   const [mode, setMode] = useState<'prompt' | 'from_asset'>(initialSourceAssetId ? 'from_asset' : 'prompt');
   const [prompt, setPrompt] = useState('');
   const [tier, setTier] = useState('tier_social_pool');
@@ -83,6 +120,25 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
   const [categoryKey, setCategoryKey] = useState<string>('');
   const [styleExpanded, setStyleExpanded] = useState(false);
   const selectedCategory = activeCategories.find(c => c.key === categoryKey) ?? null;
+  const needsRoom     = selectedCategory?.requires_context === 'room';
+  const needsFacility = selectedCategory?.requires_context === 'facility';
+
+  // Grounding state
+  const [roomTypeId, setRoomTypeId] = useState<number | ''>('');
+  const [facilityId, setFacilityId] = useState<number | ''>('');
+
+  const selectedRoom     = useMemo(() => (rooms ?? []).find(r => r.room_type_id === Number(roomTypeId)) ?? null, [rooms, roomTypeId]);
+  const selectedFacility = useMemo(() => (facilities ?? []).find(f => f.facility_id === Number(facilityId)) ?? null, [facilities, facilityId]);
+
+  // Group facilities by their content-category for the <optgroup>.
+  const facilitiesByCategory = useMemo(() => {
+    const grouped: Record<string, FacilityOption[]> = {};
+    for (const f of (facilities ?? [])) {
+      const cat = f.category || 'other';
+      (grouped[cat] ??= []).push(f);
+    }
+    return grouped;
+  }, [facilities]);
 
   useEffect(() => { setRows(aiGens); }, [aiGens]);
 
@@ -93,12 +149,14 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
     }
   }, [initialSourceAssetId]);
 
-  // When category changes, snap tier to that category's default (if allowed).
+  // When category changes, snap tier to that category's default (if allowed) and clear stale grounding.
   useEffect(() => {
     if (selectedCategory && (selectedCategory.default_target_tier === 'tier_social_pool' || selectedCategory.default_target_tier === 'tier_internal')) {
       setTier(selectedCategory.default_target_tier);
     }
-  }, [selectedCategory]);
+    if (!needsRoom)     setRoomTypeId('');
+    if (!needsFacility) setFacilityId('');
+  }, [categoryKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const photos = useMemo(() => {
     return (mediaPage ?? []).filter(m => {
@@ -152,11 +210,15 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
   const canSubmit =
     !!categoryKey &&
     prompt.trim().length > 0 &&
-    (mode === 'prompt' || !!sourceAssetId);
+    (mode === 'prompt' || !!sourceAssetId) &&
+    (!needsRoom     || !!roomTypeId) &&
+    (!needsFacility || !!facilityId);
 
   async function submit() {
     setBanner(null);
     if (!categoryKey) { setBanner({ tone:'warn', text:'Pick a category first.' }); return; }
+    if (needsRoom     && !roomTypeId) { setBanner({ tone:'warn', text:'This category needs a room. Pick one.' }); return; }
+    if (needsFacility && !facilityId) { setBanner({ tone:'warn', text:'This category needs a facility. Pick one.' }); return; }
     if (!prompt.trim()) { setBanner({ tone:'warn', text:'Add a prompt describing what you want.' }); return; }
     if (mode === 'from_asset' && !sourceAssetId) { setBanner({ tone:'warn', text:'Pick a photo first.' }); return; }
     setBusy(true);
@@ -170,6 +232,8 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
           target_tier: tier,
           source_asset_id: mode === 'from_asset' ? sourceAssetId : null,
           category_key: categoryKey,
+          room_type_id: needsRoom     ? Number(roomTypeId) : null,
+          facility_id:  needsFacility ? Number(facilityId)  : null,
         }),
       });
       const j = await res.json();
@@ -244,7 +308,7 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
                 <option value="">— pick a category —</option>
                 {activeCategories.map(c => (
                   <option key={c.key} value={c.key}>
-                    {c.display_name}{c.property_id === null ? ' (global)' : ''}
+                    {c.display_name}{c.property_id === null ? ' (global)' : ''}{c.requires_context === 'room' ? ' · needs room' : c.requires_context === 'facility' ? ' · needs facility' : ''}
                   </option>
                 ))}
               </select>
@@ -266,6 +330,73 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
             </>
           )}
         </div>
+
+        {/* Room grounding — appears when category requires it */}
+        {needsRoom && (
+          <div style={{ marginBottom:14 }}>
+            <label style={{ display:'block', fontSize:11, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>
+              Room <span style={{ color:RED }}>*</span>
+              <span style={{ marginLeft:6, color:INK_M, fontWeight:400, textTransform:'none', letterSpacing:0 }}>
+                — from PMS ({rooms.length} types)
+              </span>
+            </label>
+            <select
+              value={roomTypeId === '' ? '' : String(roomTypeId)}
+              onChange={e => setRoomTypeId(e.target.value === '' ? '' : Number(e.target.value))}
+              style={{ width:'100%', padding:'8px 10px', fontSize:13, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK }}
+            >
+              <option value="">— pick a room type —</option>
+              {rooms.map(r => (
+                <option key={r.room_type_id} value={r.room_type_id}>
+                  {r.room_type_name}{r.max_guests ? ` · sleeps ${r.max_guests}` : ''}{r.units ? ` · ${r.units} units` : ''}
+                </option>
+              ))}
+            </select>
+            {selectedRoom && (
+              <div style={{ marginTop:6, fontSize:11, color:INK_M, padding:'6px 8px', background:'#FAF6EC', border:'1px dashed '+HAIR, borderRadius:4 }}>
+                <strong>{selectedRoom.room_type_name}</strong>
+                {selectedRoom.amenities_count ? ` · ${selectedRoom.amenities_count} amenities` : ''}
+                {selectedRoom.description_clean ? ` · ${selectedRoom.description_clean.slice(0, 140)}${selectedRoom.description_clean.length > 140 ? '…' : ''}` : ''}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Facility grounding — appears when category requires it */}
+        {needsFacility && (
+          <div style={{ marginBottom:14 }}>
+            <label style={{ display:'block', fontSize:11, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>
+              Facility <span style={{ color:RED }}>*</span>
+              <span style={{ marginLeft:6, color:INK_M, fontWeight:400, textTransform:'none', letterSpacing:0 }}>
+                — {facilities.length} on-property
+              </span>
+            </label>
+            <select
+              value={facilityId === '' ? '' : String(facilityId)}
+              onChange={e => setFacilityId(e.target.value === '' ? '' : Number(e.target.value))}
+              style={{ width:'100%', padding:'8px 10px', fontSize:13, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK }}
+            >
+              <option value="">— pick a facility —</option>
+              {Object.entries(facilitiesByCategory).sort(([a],[b]) => a.localeCompare(b)).map(([cat, list]) => (
+                <optgroup key={cat} label={cat.toUpperCase()}>
+                  {list.map(f => (
+                    <option key={f.facility_id} value={f.facility_id}>
+                      {f.facility_name}{f.ai_description == null ? ' · (no AI enrichment)' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {selectedFacility && (
+              <div style={{ marginTop:6, fontSize:11, color:INK_M, padding:'6px 8px', background:'#FAF6EC', border:'1px dashed '+HAIR, borderRadius:4 }}>
+                <strong>{selectedFacility.facility_name}</strong>
+                {selectedFacility.category ? ` · ${selectedFacility.category}` : ''}
+                {selectedFacility.time_of_day_hint ? ` · ${selectedFacility.time_of_day_hint}` : ''}
+                {selectedFacility.ai_description ? ` · ${selectedFacility.ai_description.slice(0, 140)}${selectedFacility.ai_description.length > 140 ? '…' : ''}` : ' · (enrich this facility in Settings → Reality)'}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Mode toggle */}
         <div style={{ display:'flex', gap:12, marginBottom:12 }}>
@@ -379,11 +510,16 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
           </div>
         </div>
 
-        <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+        <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
           <button
             onClick={submit}
             disabled={busy || !canSubmit}
-            title={!categoryKey ? 'Pick a category first' : (mode === 'from_asset' && !sourceAssetId ? 'Pick a photo first' : '')}
+            title={
+              !categoryKey ? 'Pick a category first'
+              : needsRoom && !roomTypeId ? 'Pick a room first'
+              : needsFacility && !facilityId ? 'Pick a facility first'
+              : (mode === 'from_asset' && !sourceAssetId ? 'Pick a photo first' : '')
+            }
             style={{
               padding:'8px 16px', fontSize:12, fontWeight:600,
               background: canSubmit ? FOREST : '#B7C7BE',
@@ -393,6 +529,8 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
             }}
           >{busy ? 'Generating…' : 'Generate → auto'}</button>
           {!categoryKey && <span style={{ fontSize:11, color:RED }}>Pick a category first</span>}
+          {categoryKey && needsRoom     && !roomTypeId && <span style={{ fontSize:11, color:RED }}>Pick a room</span>}
+          {categoryKey && needsFacility && !facilityId && <span style={{ fontSize:11, color:RED }}>Pick a facility</span>}
           {categoryKey && mode === 'from_asset' && !sourceAssetId && (
             <span style={{ fontSize:11, color:RED }}>Pick a photo first</span>
           )}
@@ -416,6 +554,8 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
                 <span>mode: {g.mode}</span>
                 <span>tier: {g.target_tier}</span>
                 {g.category_key && <span>category: <strong>{g.category_key}</strong></span>}
+                {g.room_type_id && <span>room: {g.room_type_id}</span>}
+                {g.facility_id  && <span>facility: {g.facility_id}</span>}
                 <span>engine: {g.engine}</span>
                 <span>status: <strong style={{ color: (g.status === 'completed' || g.status === 'review') ? FOREST : g.status === 'failed' ? RED : INK }}>{g.status}</strong></span>
                 {g.reality_check && <span>reality: {g.reality_check}</span>}
