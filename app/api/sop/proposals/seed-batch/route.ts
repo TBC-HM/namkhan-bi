@@ -79,8 +79,18 @@ async function callAnthropicBatch(
   batchIndex: number,
   batchSize: number
 ): Promise<ProposalItem[]> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set in Vercel env');
+  // PBS 2026-07-11: read Anthropic key from Supabase vault via fn_get_secret RPC
+  // (SECURITY DEFINER, service_role only). Falls back to process.env only if
+  // vault fetch fails — makes Vercel env optional.
+  const { getSupabaseAdmin } = await import('@/lib/supabaseAdmin');
+  const sb = getSupabaseAdmin();
+  let key: string | undefined;
+  try {
+    const { data, error } = await sb.rpc('fn_get_secret', { p_name: 'ANTHROPIC_API_KEY' });
+    if (!error && typeof data === 'string' && data.length > 20) key = data;
+  } catch { /* fall through to env */ }
+  if (!key) key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY missing from Supabase vault AND Vercel env');
 
   const isNamkhan = propertyId === 260955;
   const base   = isNamkhan ? NAMKHAN_CONTEXT_BASE : DONNA_CONTEXT_BASE;
