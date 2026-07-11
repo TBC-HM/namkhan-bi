@@ -1,58 +1,87 @@
 // app/operations/sops/[sop_code]/preview/page.tsx
-// PBS 2026-07-09 pm: SOP preview — renders v_sop_catalog + sop_content body.
+// PBS 2026-07-11 pm: SOP preview rewritten as a structured document (cover +
+// numbered sections + revision history + signature blocks). Same HTML shape as
+// the .doc download (both go through lib/sop-docx.buildSopHtml) so what PBS
+// sees on the page is exactly what lands in the emailed attachment / print PDF.
 
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { sopDocStyleSheet } from '@/lib/sop-docx-styles';
+import {
+  buildSopHtml,
+  effectiveDate,
+  propertyLabel,
+  reviewIntervalLabel,
+  renderBody,
+  versionLabel,
+  type SopDocRow,
+  type SopMetaRow,
+} from '@/lib/sop-docx';
+import PreviewToolbar from './_components/PreviewToolbar';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-interface Row {
-  sop_code: string;
-  title: string;
-  dept_code: string;
-  short_summary: string | null;
-  author: string | null;
-  status: string;
-  version: string | null;
-  body_md: string | null;
-  sop_date: string | null;
-  updated_at: string | null;
-}
-
 export default async function SopPreviewPage({ params }: { params: Promise<{ sop_code: string }> }) {
   const { sop_code } = await params;
+  const code = String(sop_code || '').trim();
   const sb = getSupabaseAdmin();
-  const { data } = await sb.from('v_sop_catalog').select('sop_code,title,dept_code,short_summary,author,status,version,body_md,sop_date,updated_at').eq('sop_code', sop_code).maybeSingle();
-  const row = data as Row | null;
+  const { data } = await sb
+    .from('v_sop_catalog')
+    .select('sop_code, title, dept_code, short_summary, body_md, version, author, sop_date, status, primary_audience, property_id, created_at, updated_at')
+    .eq('sop_code', code)
+    .maybeSingle();
+  const row = data as SopDocRow | null;
   if (!row) notFound();
 
+  // sop_meta lives in the non-PostgREST schema `knowledge`; keep this null until a
+  // bridge view lands. renderer + downloader both fall back to sensible defaults.
+  const meta: SopMetaRow | null = null;
+
+  // We render the SAME HTML the .doc download emits. This guarantees pixel-parity
+  // between preview / print / attachment. The wrapper below only supplies the
+  // Namkhan chrome + a toolbar with Print + Download-.doc actions.
+  const documentHtml = buildSopHtml(row, meta, { forDownload: false });
+  const styles = sopDocStyleSheet();
+  const ver = versionLabel(row);
+  const eff = effectiveDate(row);
+  const propLabel = propertyLabel(row.property_id ?? null);
+  const reviewInterval = reviewIntervalLabel(meta?.review_cadence_days ?? null);
+  // touch renderBody so the tsc "unused" check doesn't strip the re-export we may
+  // need later when we split the section renderers out of the html builder.
+  void renderBody;
+
+  const docxHref = `/api/sop/${encodeURIComponent(row.sop_code)}/docx`;
+  const editHref = `/operations/sops/${encodeURIComponent(row.sop_code)}/edit`;
+  const sendHref = `/operations/sops/${encodeURIComponent(row.sop_code)}/send`;
+
   return (
-    <div style={{ padding: 24, background: '#FFFFFF', color: '#1B1B1B', fontFamily: '-apple-system, Helvetica, Arial, sans-serif', minHeight: '100vh' }}>
-      <div style={{ maxWidth: 820, margin: '0 auto' }}>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5A5A5A' }}>SOP · {row.sop_code}</div>
-          <h1 style={{ margin: '4px 0 4px', fontSize: 22, fontWeight: 700, color: '#084838', letterSpacing: '-0.01em' }}>{row.title}</h1>
-          <div style={{ fontSize: 12, color: '#5A5A5A' }}>
-            {row.dept_code} · v{row.version ?? '—'} · {row.status}
-            {row.author ? ` · by ${row.author}` : ''}
-            {row.sop_date ? ` · ${row.sop_date}` : ''}
-          </div>
+    <div style={{ padding: 24, background: '#F1EEE7', color: '#1B1B1B', fontFamily: '-apple-system, Helvetica, Arial, sans-serif', minHeight: '100vh' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <PreviewToolbar sopCode={row.sop_code} docxHref={docxHref} editHref={editHref} sendHref={sendHref} />
+
+        <div style={{ marginTop: 4, marginBottom: 12, fontSize: 11, color: '#5A5A5A', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          Preview · {ver} · effective {eff} · {reviewInterval} review · {propLabel}
         </div>
-        {row.short_summary && (
-          <div style={{ marginBottom: 16, padding: 12, background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 6, fontSize: 13, lineHeight: 1.5 }}>
-            {row.short_summary}
-          </div>
-        )}
-        <div style={{ padding: 16, background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-          {row.body_md ?? '(no body content stored)'}
-        </div>
-        <div style={{ marginTop: 20, display: 'flex', gap: 10, fontSize: 12 }}>
-          <a href={`/operations/sops/${encodeURIComponent(row.sop_code)}/edit`} style={{ padding: '6px 14px', background: '#084838', color: '#FFFFFF', border: '1px solid #084838', borderRadius: 4, textDecoration: 'none', fontWeight: 600 }}>Edit</a>
-          <a href={`/operations/sops/${encodeURIComponent(row.sop_code)}/send`} style={{ padding: '6px 14px', background: '#FFFFFF', color: '#084838', border: '1px solid #084838', borderRadius: 4, textDecoration: 'none', fontWeight: 600 }}>Send by email</a>
-          <a href="/operations/sops" style={{ padding: '6px 14px', background: '#FFFFFF', color: '#5A5A5A', border: '1px solid #E6DFCC', borderRadius: 4, textDecoration: 'none', fontWeight: 500 }}>← Back</a>
+
+        <div
+          className="sop-doc-frame"
+          style={{ background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', overflow: 'hidden' }}
+        >
+          {/* Inject the same stylesheet the .doc payload uses so the preview matches. */}
+          <style dangerouslySetInnerHTML={{ __html: styles }} />
+          {/* documentHtml is a full <html>…</html> string. We slice out its <body> for
+              in-page embedding — Word / Docs / Pages get the full doc via the download. */}
+          <div dangerouslySetInnerHTML={{ __html: extractBody(documentHtml) }} />
         </div>
       </div>
     </div>
   );
+}
+
+// Extract just the <body>…</body> inner HTML from a full HTML doc, so we can render
+// inline inside the preview page without conflicting <html>/<head> tags.
+function extractBody(fullHtml: string): string {
+  const m = /<body[^>]*>([\s\S]*)<\/body>/i.exec(fullHtml);
+  return m ? m[1] : fullHtml;
 }
