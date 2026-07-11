@@ -1,18 +1,13 @@
 // app/h/[property_id]/sales/new/page.tsx
-// PBS 2026-07-11 pm (dir 1) — Donna Sales · Create New delegate.
-import DeptSubpageStub from '@/app/h/[property_id]/_shared/DeptSubpageStub';
+// PBS 2026-07-11 pm — Property-scoped delegate for Sales · Create New.
+// Async delegate: awaits params, imports flat page, forwards propertyId.
+
+import SalesNewPage from '@/app/sales/new/page';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function DonnaSalesCreateNew({ params }: { params: { property_id: string } }) {
-  return (
-    <DeptSubpageStub
-      propertyId={Number(params.property_id)}
-      deptLabel="Sales"
-      routeLabel="Create New"
-      namkhanPath="/sales/new"
-      hint="Donna Sales Create-New activates once Faro roster + inbound sources are wired."
-    />
-  );
+export default async function DelegateSalesNew({ params }: { params: Promise<{ property_id: string }> }) {
+  const { property_id } = await params;
+  return <SalesNewPage propertyId={Number(property_id)} />;
 }
