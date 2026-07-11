@@ -37,7 +37,7 @@ async function getAnthropicKey(): Promise<string> {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;   // one 50-item call is fast (10-20s typically)
+export const maxDuration = 300;  // PBS 2026-07-11: bumped 60→300 after batch 1 (F&B, 50 items) hit FUNCTION_INVOCATION_TIMEOUT. Batch 0 lands in ~15s; F&B/wellness/spa prompts occasionally exceed 60s due to nuance. Vercel Pro allows up to 800s.
 
 interface Body {
   property_id:  number;
