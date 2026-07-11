@@ -387,7 +387,6 @@ const REVENUE_CFG: DeptCfg = {
     { label: 'Demand & Pace',   href: '/revenue/demand'   },
     { label: 'Performance',     href: '/revenue/rooms'    },
     { label: 'Market & Control',href: '/revenue/compset'  },
-    { label: 'Reports',         href: '/h/260955/reports?dept=revenue' },
   ],
   quickChips: [
     { label: 'Pulse',    href: '/revenue/pulse'    },
@@ -461,7 +460,6 @@ const SALES_CFG: DeptCfg = {
     { label: 'Accounts',      href: '/sales/accounts'  },
     { label: 'ICP Segments',  href: '/sales/icp'       },
     { label: 'Packages',      href: '/sales/packages'  },
-    { label: 'Reports',       href: '/h/260955/reports?dept=sales' },
   ],
   quickChips: [
     { label: 'Inquiries', href: '/sales/inquiries' },
@@ -535,7 +533,6 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Products & Offers', href: '/marketing/offers'          },
     { label: 'Digital',           href: '/marketing/digital'         },
     { label: 'Media',             href: '/marketing/media'           },
-    { label: 'Reports',           href: '/h/260955/reports?dept=marketing' },
   ],
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
@@ -604,7 +601,6 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Departments',      href: '/operations/rooms'           },
     { label: 'Suppliers',        href: '/operations/suppliers'       },
     { label: 'QA',               href: '/operations/sops'            },
-    { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
   quickChips: [
     { label: 'HoD',        href: '/operations'             },
@@ -655,8 +651,9 @@ const OPERATIONS_CFG: DeptCfg = {
 // ─── Guest — Felix (no formal HoD; PBS uses Felix here) ──────────────────
 const GUEST_CFG: DeptCfg = {
   slug: 'guest',
-  // PBS 2026-07-06 evening: pillTitle renamed Guest → Contacts. slug stays 'guest' + URL /guest to keep every existing deep link alive.
-  pillTitle: 'Contacts',
+  // PBS 2026-07-06 evening: pillTitle Guest → Contacts. PBS 2026-07-11 pm: Contacts → Guests (top nav).
+  // slug stays 'guest' + URL /guest to keep every existing deep link alive.
+  pillTitle: 'Guests',
   hodName: 'Felix',
   hodEmoji: '★',
   ownerRole: 'lead',
@@ -672,15 +669,12 @@ const GUEST_CFG: DeptCfg = {
     // PBS 2026-07-06 late evening: Prospects URL moved from /marketing/prospects → /guest/prospects.
     { label: 'HoD',         href: '/guest'             },
     { label: 'Guests',      href: '/guest/directory'   },
-    { label: 'Prospects',   href: '/guest/prospects'   },
     { label: 'Reputation',  href: '/guest/reputation'  },
     { label: 'Behaviour',   href: '/guest/behaviour'   },
     { label: 'Newsletters', href: '/guest/newsletters' },
-    { label: 'Reports',     href: '/h/260955/reports?dept=guest' },
   ],
   quickChips: [
     { label: 'Guests',     href: '/guest/directory'  },
-    { label: 'Prospects',  href: '/guest/prospects'  },
     { label: 'Reputation', href: '/guest/reputation' },
     { label: 'Behaviour',  href: '/guest/behaviour'  },
     { label: 'Newsletters',href: '/guest/newsletters'},
@@ -743,7 +737,6 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'HR',              href: '/finance/hr'                       },
     { label: 'Finance',         href: '/finance/pnl'                      },
     { label: 'Legal',           href: '/finance/legal'                    },
-    { label: 'Reports',         href: '/h/260955/reports?dept=finance'    },
   ],
   quickChips: [
     { label: 'HoD',            href: '/finance'             },
