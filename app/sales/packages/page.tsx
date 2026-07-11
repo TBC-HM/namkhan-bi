@@ -1,129 +1,280 @@
 // app/sales/packages/page.tsx
+// PBS 2026-07-11 pm — Sales · Packages rebuilt on design_system v6.
 //
-// PBS 2026-05-16: Sales · Packages — ready-for-sale catalog. Receives
-// broadcasts from /marketing/compiler when a retreat is locked.
+// Data flow (see task brief 2026-07-11):
+//   sales.packages  ──▶  public.v_sales_packages  ──▶  this page (RSC).
+// Compiler Lock & Distribute (future) INSERTs into sales.packages.
 //
-// Phase 1: reads the COMPILER_FIXED_RETREATS list (shared with compiler).
-// Phase 2: this page reads sales.packages directly, which Compiler writes
-// to on Lock & Distribute confirm.
+// Server component. Accepts optional propertyId for Donna delegate.
 
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
-import KpiBox from '@/components/kpi/KpiBox';
+import Link from 'next/link';
+import { DashboardPage, MetricRow, KpiTile, Container } from '@/app/(cockpit)/_design';
 import { SALES_SUBPAGES } from '../_subpages';
-import { COMPILER_FIXED_RETREATS, type CompilerFixedRetreat } from '../../marketing/compiler/_components/CompilerCockpit';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-export default function SalesPackagesPage() {
-  const packages = COMPILER_FIXED_RETREATS;
-  const totalRevenue = packages.reduce((s, p) => s + p.revenueMtdUsd, 0);
-  const totalBookings = packages.reduce((s, p) => s + p.bookingsMtd, 0);
-  const topSeller = packages.slice().sort((a, b) => b.bookingsMtd - a.bookingsMtd)[0];
-  const avgPrice = packages.length > 0
-    ? Math.round(packages.reduce((s, p) => s + Number(p.pricePax.replace(/[^0-9]/g, '')), 0) / packages.length)
+const NAMKHAN = 260955;
+
+interface PageProps {
+  propertyId?: number;
+}
+
+interface PackageRow {
+  id: string;
+  property_id: number;
+  name: string;
+  slug: string | null;
+  eyebrow: string | null;
+  description: string | null;
+  duration_nights: number | null;
+  price_pax_usd: number | string | null;
+  currency: string | null;
+  status: 'active' | 'paused' | 'archived';
+  hero_image_url: string | null;
+  compiler_run_id: string | null;
+  bookings_mtd: number | null;
+  revenue_mtd_usd: number | string | null;
+  bookings_ltd: number | null;
+  revenue_ltd_usd: number | string | null;
+  locked_at: string | null;
+  locked_by: string | null;
+}
+
+async function loadPackages(propertyId: number): Promise<PackageRow[]> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb
+    .from('v_sales_packages')
+    .select('id,property_id,name,slug,eyebrow,description,duration_nights,price_pax_usd,currency,status,hero_image_url,compiler_run_id,bookings_mtd,revenue_mtd_usd,bookings_ltd,revenue_ltd_usd,locked_at,locked_by')
+    .eq('property_id', propertyId)
+    .order('name', { ascending: true });
+  return (data ?? []) as PackageRow[];
+}
+
+function num(v: number | string | null | undefined): number {
+  if (v === null || v === undefined) return 0;
+  const n = typeof v === 'string' ? Number(v) : v;
+  return Number.isFinite(n) ? n : 0;
+}
+
+function usd(v: number | string | null | undefined): string {
+  return `$${num(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+
+export default async function SalesPackagesPage({ propertyId }: PageProps = {}) {
+  const pid = propertyId ?? NAMKHAN;
+  const packages = await loadPackages(pid);
+
+  const active = packages.filter((p) => p.status === 'active');
+  const totalBookings = packages.reduce((s, p) => s + num(p.bookings_mtd), 0);
+  const totalRevenue  = packages.reduce((s, p) => s + num(p.revenue_mtd_usd), 0);
+  const avgPrice = active.length > 0
+    ? Math.round(active.reduce((s, p) => s + num(p.price_pax_usd), 0) / active.length)
     : 0;
+  const topSeller = packages.slice().sort((a, b) => num(b.bookings_mtd) - num(a.bookings_mtd))[0];
+  const topSellerShort = topSeller?.name.split(' · ')[0] ?? '—';
+
+  const tabs = SALES_SUBPAGES.map((s) => ({ label: s.label, href: s.href }));
 
   return (
-    <Page
-      eyebrow="Sales · Packages"
-      title={<>Ready for <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>sale</em></>}
-      subPages={SALES_SUBPAGES}
+    <DashboardPage
+      title="Packages"
+      subtitle="Ready-for-sale catalog · locked by Compiler · sales-team facing"
+      tabs={tabs}
     >
-      {/* KPI band */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <KpiBox value={packages.length}  unit="count" label="Active packages"  tooltip="Locked retreats live in /sales/packages" />
-        <KpiBox value={totalBookings}    unit="count" label="Bookings MTD"     tooltip="Package bookings this month" />
-        <KpiBox value={totalRevenue}     unit="usd"   label="Revenue MTD"      tooltip="Package revenue this month · USD" />
-        <KpiBox value={avgPrice}         unit="usd"   label="Avg price / pax"  tooltip="Mean package price across active retreats" />
-        <KpiBox value={null}             unit="text"  valueText={topSeller?.name.split(' · ')[0] ?? '—'} label="Top seller" tooltip={`${topSeller?.bookingsMtd ?? 0} bookings MTD`} />
+      <div style={{ gridColumn: '1 / -1' }}>
+        <MetricRow>
+          <KpiTile label="Active packages" value={active.length} unit="count" />
+          <KpiTile label="Bookings MTD"    value={totalBookings} unit="count" />
+          <KpiTile label="Revenue MTD"     value={totalRevenue}  unit="USD" currency="USD" />
+          <KpiTile label="Avg price / pax" value={avgPrice}      unit="USD" currency="USD" />
+          <KpiTile label="Top seller"      value={topSellerShort} footnote={`${num(topSeller?.bookings_mtd)} bookings MTD`} />
+        </MetricRow>
       </div>
 
-      <Panel
-        title="Ready-for-sale catalog"
-        eyebrow="locked by Compiler · sales-team facing"
-        actions={<a href="/marketing/compiler" style={S.btnPrimary}>← Open Compiler</a>}
-      >
-        <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 12 }}>
-          {packages.map((p) => <PackageCard key={p.id} pkg={p} />)}
-        </div>
-      </Panel>
-
-      <div style={{ marginTop: 14 }}>
-        <Panel title="How packages get here" eyebrow="compiler → broadcast">
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 'var(--t-sm)', color: 'var(--text-1, #d8cca8)', lineHeight: 1.6 }}>
-            <div>1. Marketing builds the retreat in <a href="/marketing/compiler" style={{ color: 'var(--brass)' }}>/marketing/compiler · Ongoing Offers</a>.</div>
-            <div>2. Once PDF is ready + margin ≥ 35%, PBS clicks <strong>🔒 Lock &amp; distribute</strong>.</div>
-            <div>3. The wizard generates the PDF and asks where to promote (Sales · Social · Influencer · Web).</div>
-            <div>4. <strong>Sales · Packages</strong> is always checked — every locked retreat lands here.</div>
-            <div>5. Sales team quotes from this catalog · Compiler emits a <code>compiler_locked</code> audit event.</div>
-          </div>
-        </Panel>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title="Ready-for-sale catalog"
+          subtitle="One card per locked retreat · updates on Compiler lock"
+          action={<Link href="/marketing/compiler" style={linkBtn}>Open Compiler</Link>}
+        >
+          {packages.length === 0 ? (
+            <div style={emptyBox}>
+              No packages yet. Open <Link href="/marketing/compiler" style={{ color: 'var(--brand, #B8542A)' }}>Compiler</Link> and lock a retreat to seed this catalog.
+            </div>
+          ) : (
+            <div style={grid}>
+              {packages.map((p) => <PackageCard key={p.id} pkg={p} />)}
+            </div>
+          )}
+        </Container>
       </div>
 
-      <div style={S.footerNote}>
-        Phase 1 · reads the in-memory <code>COMPILER_FIXED_RETREATS</code> list shared with the Compiler. Phase 2 wires <code>sales.packages</code> table written by the Lock &amp; Distribute confirm step.
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="How packages get here" subtitle="compiler → sales.packages → this page">
+          <ol style={steps}>
+            <li>Marketing builds the retreat in <Link href="/marketing/compiler" style={inlineLink}>/marketing/compiler · Ongoing Offers</Link>.</li>
+            <li>Once the PDF is ready + margin ≥ 35%, PBS clicks <strong>Lock &amp; distribute</strong>.</li>
+            <li>Lock &amp; distribute INSERTs a row into <code style={code}>sales.packages</code> with the compiler_run_id and locks_at stamp.</li>
+            <li>This page reads <code style={code}>public.v_sales_packages</code> filtered by property (Namkhan 260955 · Donna delegate ready).</li>
+            <li>Sales team quotes from the catalog above. Nightly cron will fold in bookings_mtd / revenue_mtd_usd from pms.reservations (follow-up).</li>
+          </ol>
+        </Container>
       </div>
-    </Page>
+    </DashboardPage>
   );
 }
 
-function PackageCard({ pkg }: { pkg: CompilerFixedRetreat }) {
+function PackageCard({ pkg }: { pkg: PackageRow }) {
+  const statusPill =
+    pkg.status === 'active'   ? { bg: '#E9F1EA', fg: '#1F3A2E', label: 'FOR SALE' } :
+    pkg.status === 'paused'   ? { bg: '#FBECE0', fg: '#B8542A', label: 'PAUSED' } :
+                                { bg: '#EEEEEE', fg: '#5A5A5A', label: 'ARCHIVED' };
+
   return (
-    <div style={S.card}>
-      <div style={S.head}>
+    <div style={card}>
+      <div style={cardHead}>
         <div>
-          <div style={S.meta}>Locked · {pkg.lockedAt}</div>
-          <div style={S.name}>{pkg.name}</div>
+          {pkg.eyebrow ? <div style={eyebrow}>{pkg.eyebrow}</div> : null}
+          <div style={cardName}>{pkg.name}</div>
         </div>
-        <span style={S.pillGood}>FOR SALE</span>
+        <span style={{ ...pill, background: statusPill.bg, color: statusPill.fg }}>{statusPill.label}</span>
       </div>
-      <div style={S.metaRow}>{pkg.duration} · {pkg.pax} pax · {pkg.icp}</div>
-      <div style={S.priceRow}>
-        <span style={S.priceLabel}>Price · per pax</span>
-        <span style={S.priceValue}>{pkg.pricePax}</span>
+
+      {pkg.description ? <div style={cardDesc}>{pkg.description}</div> : null}
+
+      <div style={cardFacts}>
+        <div><span style={factK}>Duration</span><span style={factV}>{pkg.duration_nights ?? '—'} nights</span></div>
+        <div><span style={factK}>Price / pax</span><span style={factV}>{usd(pkg.price_pax_usd)}</span></div>
+        <div><span style={factK}>Bookings MTD</span><span style={factV}>{num(pkg.bookings_mtd)}</span></div>
+        <div><span style={factK}>Revenue MTD</span><span style={factV}>{usd(pkg.revenue_mtd_usd)}</span></div>
       </div>
-      <div style={S.statRow}>
-        <Stat label="Bookings MTD" value={String(pkg.bookingsMtd)} />
-        <Stat label="Revenue MTD"  value={`$${pkg.revenueMtdUsd.toLocaleString('en-US')}`} />
-        <Stat label="PDF" value="✓" />
-        <Stat label="Funnel" value={pkg.funnelUrl ? '✓' : '—'} />
-      </div>
-      <div style={S.actions}>
-        <a href={pkg.pdfUrl} target="_blank" rel="noopener noreferrer" style={S.btnSecondary}>📄 PDF</a>
-        {pkg.funnelUrl && <a href={pkg.funnelUrl} style={S.btnSecondary}>🌐 Funnel</a>}
-        <a href={`/sales/inquiries?package=${pkg.id}&action=quote`} style={S.btnPrimary}>✦ Send quote</a>
-        <a href={`/marketing/compiler?view=fixed&retreat=${pkg.id}`} style={S.btnSecondary}>↻ Compiler</a>
-      </div>
+
+      {pkg.compiler_run_id ? (
+        <div style={cardFoot}>
+          <Link href={`/marketing/compiler?run=${encodeURIComponent(pkg.compiler_run_id)}`} style={linkBtnSm}>
+            Open Compiler run
+          </Link>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span style={S.statLabel}>{label}</span>
-      <span style={S.statValue}>{value}</span>
-    </div>
-  );
-}
+// ─── styles (light theme, design_system v6 tokens) ────────────────────────
 
-const S: Record<string, React.CSSProperties> = {
-  card: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderLeft: '3px solid var(--st-good, #82ad8c)', borderRadius: 6, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 },
-  head: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
-  meta: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)' },
-  name: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-md)', color: 'var(--text-0, #e9e1ce)', fontWeight: 500, marginTop: 2 },
-  metaRow: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', color: 'var(--text-mute, #9b907a)' },
-  priceRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '8px 10px', background: 'var(--surf-0, #0a0a0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 3 },
-  priceLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-mute, #9b907a)' },
-  priceValue: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-lg)', color: 'var(--brass, #a8854a)' },
-  statRow: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, borderTop: '1px solid var(--border-1, #1f1c15)', paddingTop: 8 },
-  statLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)' },
-  statValue: { fontSize: 'var(--t-sm)', fontWeight: 600, color: 'var(--text-0, #e9e1ce)', fontVariantNumeric: 'tabular-nums' },
-  actions: { display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border-1, #1f1c15)' },
-  btnPrimary: { background: 'var(--brass, #a8854a)', color: 'var(--surf-0, #0a0a0a)', border: '1px solid var(--brass, #a8854a)', padding: '4px 10px', borderRadius: 3, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600, textDecoration: 'none' },
-  btnSecondary: { background: 'transparent', color: 'var(--text-1, #d8cca8)', border: '1px solid var(--border-1, #1f1c15)', padding: '4px 10px', borderRadius: 3, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' },
-  pillGood: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--st-good, #82ad8c)', border: '1px solid var(--st-good, #82ad8c)', padding: '2px 6px', borderRadius: 3 },
-  footerNote: { marginTop: 18, padding: '10px 12px', fontSize: 'var(--t-xs)', color: 'var(--text-mute, #9b907a)', fontStyle: 'italic', borderTop: '1px solid var(--border-1, #1f1c15)' },
+const grid: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+  gap: 12,
+  padding: 14,
 };
+
+const card: React.CSSProperties = {
+  background: '#FFFFFF',
+  border: '1px solid #E6DFCC',
+  borderRadius: 8,
+  padding: 14,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+};
+
+const cardHead: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  gap: 8,
+};
+
+const eyebrow: React.CSSProperties = {
+  fontSize: 11,
+  textTransform: 'uppercase',
+  letterSpacing: 0.6,
+  color: '#8A7E5F',
+  marginBottom: 2,
+};
+
+const cardName: React.CSSProperties = {
+  fontSize: 15,
+  fontWeight: 600,
+  color: '#1B1B1B',
+  lineHeight: 1.25,
+};
+
+const cardDesc: React.CSSProperties = {
+  fontSize: 12.5,
+  color: '#5A5A5A',
+  lineHeight: 1.5,
+};
+
+const cardFacts: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: 8,
+  fontSize: 12.5,
+  marginTop: 4,
+};
+
+const factK: React.CSSProperties = { display: 'block', color: '#8A7E5F', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 };
+const factV: React.CSSProperties = { display: 'block', color: '#1B1B1B', fontWeight: 600, fontSize: 13.5 };
+
+const pill: React.CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 700,
+  letterSpacing: 0.6,
+  padding: '3px 8px',
+  borderRadius: 999,
+  whiteSpace: 'nowrap',
+};
+
+const cardFoot: React.CSSProperties = {
+  marginTop: 6,
+  paddingTop: 8,
+  borderTop: '1px solid #E6DFCC',
+};
+
+const linkBtn: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '6px 12px',
+  background: '#1B1B1B',
+  color: '#FFFFFF',
+  borderRadius: 6,
+  fontSize: 12,
+  fontWeight: 600,
+  textDecoration: 'none',
+};
+
+const linkBtnSm: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '4px 10px',
+  background: '#F5F0E1',
+  color: '#1B1B1B',
+  borderRadius: 6,
+  fontSize: 11.5,
+  fontWeight: 600,
+  textDecoration: 'none',
+  border: '1px solid #E6DFCC',
+};
+
+const emptyBox: React.CSSProperties = {
+  padding: 24,
+  textAlign: 'center',
+  color: '#5A5A5A',
+  fontSize: 13,
+};
+
+const steps: React.CSSProperties = {
+  padding: '14px 14px 14px 32px',
+  margin: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 6,
+  fontSize: 13,
+  color: '#1B1B1B',
+  lineHeight: 1.55,
+};
+
+const inlineLink: React.CSSProperties = { color: '#B8542A', textDecoration: 'none' };
+const code: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, background: '#F5F0E1', padding: '1px 6px', borderRadius: 4 };
