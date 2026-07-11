@@ -14,6 +14,27 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
+// PBS 2026-07-11: helper — fetch a vault secret via fn_get_secret RPC (SECURITY DEFINER).
+// Cached across invocations on the same warm Lambda so we don't hit the RPC on every batch.
+let CACHED_ANTHROPIC_KEY: string | null = null;
+async function getAnthropicKey(): Promise<string> {
+  if (CACHED_ANTHROPIC_KEY) return CACHED_ANTHROPIC_KEY;
+  try {
+    const sb = getSupabaseAdmin();
+    const { data, error } = await sb.rpc('fn_get_secret', { p_name: 'ANTHROPIC_API_KEY' });
+    if (!error && typeof data === 'string' && data.length > 20) {
+      CACHED_ANTHROPIC_KEY = data;
+      return data;
+    }
+  } catch { /* fall through */ }
+  const envKey = process.env.ANTHROPIC_API_KEY;
+  if (envKey) {
+    CACHED_ANTHROPIC_KEY = envKey;
+    return envKey;
+  }
+  throw new Error('ANTHROPIC_API_KEY missing from Supabase vault AND Vercel env');
+}
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;   // one 50-item call is fast (10-20s typically)
@@ -79,18 +100,7 @@ async function callAnthropicBatch(
   batchIndex: number,
   batchSize: number
 ): Promise<ProposalItem[]> {
-  // PBS 2026-07-11: read Anthropic key from Supabase vault via fn_get_secret RPC
-  // (SECURITY DEFINER, service_role only). Falls back to process.env only if
-  // vault fetch fails — makes Vercel env optional.
-  const { getSupabaseAdmin } = await import('@/lib/supabaseAdmin');
-  const sb = getSupabaseAdmin();
-  let key: string | undefined;
-  try {
-    const { data, error } = await sb.rpc('fn_get_secret', { p_name: 'ANTHROPIC_API_KEY' });
-    if (!error && typeof data === 'string' && data.length > 20) key = data;
-  } catch { /* fall through to env */ }
-  if (!key) key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('ANTHROPIC_API_KEY missing from Supabase vault AND Vercel env');
+  const key = await getAnthropicKey();
 
   const isNamkhan = propertyId === 260955;
   const base   = isNamkhan ? NAMKHAN_CONTEXT_BASE : DONNA_CONTEXT_BASE;
