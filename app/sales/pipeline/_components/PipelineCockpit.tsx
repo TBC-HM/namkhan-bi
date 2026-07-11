@@ -2,8 +2,7 @@
 // app/sales/pipeline/_components/PipelineCockpit.tsx
 // PBS 2026-07-11 pm (dir 1) — Sales · Pipeline slim client. Fork of
 // app/sales/leads/_components/LeadsCockpit.tsx with the inbound queue +
-// promoteInquiry() removed (both moved to /sales/new). Keeps: KPI strip,
-// filter chips, list/board toggle, stage dropdown per row, Advance / Convert.
+// promoteInquiry() removed (both moved to /sales/new).
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -27,7 +26,6 @@ const INK_S = '#3A3A3A';
 const FOREST = '#1F3A2E';
 const SAND  = '#B8A878';
 const TERRA = '#B8542A';
-const CREAM = '#F5F0E1';
 const BG    = '#F4EFE2';
 
 type ViewMode = 'list' | 'board';
@@ -64,7 +62,7 @@ function StageDropdown({ leadId, stage, stages, onChange }: { leadId: number; st
   );
 }
 
-export default function PipelineCockpit({ leads: leadsInit, stages, propertyId }: {
+export default function PipelineCockpit({ leads: leadsInit, stages }: {
   leads: LeadRow[]; stages: StageRow[]; propertyId: number;
 }) {
   const [view, setView] = useState<ViewMode>('list');
@@ -73,9 +71,6 @@ export default function PipelineCockpit({ leads: leadsInit, stages, propertyId }
   const [banner, setBanner] = useState<string | null>(null);
   const router = useRouter();
   const [pending, start] = useTransition();
-
-  // silence unused-var lint from the propertyId prop (kept for future scope)
-  void propertyId;
 
   const kpis = useMemo(() => {
     const open = leads.filter((l) => !(l.stage === 'won' || l.stage === 'lost' || l.status === 'converted' || l.status === 'lost')).length;
@@ -151,7 +146,6 @@ export default function PipelineCockpit({ leads: leadsInit, stages, propertyId }
         </div>
       ) : null}
 
-      {/* KPI strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         <Kpi label="Open" value={String(kpis.open)} hint="all not-terminal" />
         <Kpi label="Qualified+" value={String(kpis.qualifiedPlus)} hint="qualified/proposal/negotiation" />
@@ -159,7 +153,6 @@ export default function PipelineCockpit({ leads: leadsInit, stages, propertyId }
         <Kpi label="Contracted" value={String(kpis.contracted)} hint="reached Won" />
       </div>
 
-      {/* Controls */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', gap: 4, background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, padding: 4 }}>
           <button onClick={() => setView('list')}  style={{ ...MODE, ...(view === 'list'  ? MODE_ACTIVE : {}) }}>List</button>
@@ -273,9 +266,6 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
     </div>
   );
 }
-
-// silence CREAM unused
-void CREAM;
 
 const TH: React.CSSProperties = { textAlign: 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: INK_S, padding: '10px 8px', borderBottom: '1px solid ' + HAIR, fontWeight: 500 };
 const TD: React.CSSProperties = { padding: '10px 8px', borderBottom: '1px solid ' + HAIR, fontSize: 13, color: INK, verticalAlign: 'top' };
