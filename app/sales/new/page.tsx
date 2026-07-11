@@ -45,7 +45,7 @@ async function loadData(propertyId: number) {
 export default async function SalesNewPage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? NAMKHAN;
   const { inbound, createdToday, convertedThisWeek } = await loadData(pid);
-  const tabs = SALES_SUBPAGES.map((s) => ({ label: s.label, href: s.href }));
+  const tabs = SALES_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
   return (
     <DashboardPage
       title="Add a new lead"
