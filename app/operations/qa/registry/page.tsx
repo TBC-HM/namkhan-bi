@@ -127,6 +127,7 @@ export default async function QaRegistryPage({ propertyId }: Props = {}) {
                   <col style={{ width: 90 }} />
                   <col style={{ width: 70 }} />
                   <col style={{ width: 110 }} />
+                  <col style={{ width: 220 }} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -135,12 +136,28 @@ export default async function QaRegistryPage({ propertyId }: Props = {}) {
                     <th style={th}>Purpose</th>
                     <th style={th}>Author</th>
                     <th style={th}>Status</th>
-                    <th style={th}>Version</th>
                     <th style={{ ...th, textAlign: 'right' }}>Updated</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {rows.map((r) => {
+                    // PBS 2026-07-11: Preview / Edit / Activate row buttons.
+                    // Preview + Edit route to the existing pages I built 2026-07-09.
+                    // Activate flips status via /api/sop/activate (server-side form POST).
+                    const basePath = pid === PROPERTY_ID ? '' : `/h/${pid}`;
+                    const previewHref  = `${basePath}/operations/sops/${r.sop_code}/preview`;
+                    const editHref     = `${basePath}/operations/sops/${r.sop_code}/edit`;
+                    const sendHref     = `${basePath}/operations/sops/${r.sop_code}/send`;
+                    const btnBase: React.CSSProperties = {
+                      padding: '4px 10px', fontSize: 10, fontWeight: 600,
+                      letterSpacing: '0.04em', textTransform: 'uppercase',
+                      textDecoration: 'none', borderRadius: 3, whiteSpace: 'nowrap',
+                      display: 'inline-block', border: '1px solid ' + HAIR,
+                      background: WHITE, color: INK,
+                    };
+                    const btnPrimary: React.CSSProperties = { ...btnBase, background: PRIMARY, color: WHITE, borderColor: PRIMARY };
+                    return (
                     <tr key={r.sop_code}>
                       <td style={td}>
                         <span style={{
@@ -169,12 +186,19 @@ export default async function QaRegistryPage({ propertyId }: Props = {}) {
                       </td>
                       <td style={td}>{r.author ?? '—'}</td>
                       <td style={td}>{r.status}</td>
-                      <td style={td}>{r.version ?? '—'}</td>
                       <td style={{ ...td, textAlign: 'right', color: INK_S, whiteSpace: 'nowrap' }}>
                         {fmtDate(r.updated_at)}
                       </td>
+                      <td style={{ ...td, textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                          <a href={previewHref} style={btnBase}>Preview</a>
+                          <a href={editHref} style={btnBase}>Edit</a>
+                          <a href={sendHref} style={btnPrimary}>Activate ↗</a>
+                        </div>
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
