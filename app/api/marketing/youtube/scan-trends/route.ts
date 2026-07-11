@@ -1,6 +1,6 @@
 // app/api/marketing/youtube/scan-trends/route.ts
 // PBS 2026-07-11 pm — Phase A2 stub. Real trend scan handler ships in phase B.
-// For now: insert a placeholder marketing.yt_trend_briefs row + ticket to Lumen.
+// Uses fn_yt_insert_stub_brief RPC + direct cockpit_tickets insert (public).
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -41,20 +41,12 @@ export async function POST(req: Request) {
   const propertyId = await readPropertyId(req);
   const sb = getSupabaseAdmin();
 
-  const { data: brief, error: bErr } = await sb
-    .schema('marketing')
-    .from('yt_trend_briefs')
-    .insert({
-      property_id:      propertyId,
-      generated_at_utc: new Date().toISOString(),
-      keyword_seeds:    SEED_KEYWORDS,
-      activation_score: null,
-      candidate_angles: [],
-    })
-    .select('brief_id')
-    .single();
+  const { data: briefId, error: bErr } = await sb.rpc('fn_yt_insert_stub_brief', {
+    p_property_id: propertyId,
+    p_seeds:       SEED_KEYWORDS,
+  });
 
-  if (bErr || !brief) {
+  if (bErr || !briefId) {
     return NextResponse.json({ ok: false, error: 'brief_insert_failed', detail: bErr?.message }, { status: 500 });
   }
 
@@ -66,8 +58,8 @@ export async function POST(req: Request) {
       intent:         'scan_trends',
       status:         'open',
       parsed_summary: `Trend scan requested · seeds: ${SEED_KEYWORDS.join(', ')}`,
-      notes:          `Placeholder brief created. Real trend-scout handler pending phase B.\nBrief id: ${brief.brief_id}`,
-      metadata:       { property_id: propertyId, brief_id: brief.brief_id, requested_by_role: 'marketing_hod' },
+      notes:          `Placeholder brief created. Real trend-scout handler pending phase B.\nBrief id: ${briefId}`,
+      metadata:       { property_id: propertyId, brief_id: briefId, requested_by_role: 'marketing_hod' },
       project_id:     propertyId,
     })
     .select('id')
@@ -78,10 +70,10 @@ export async function POST(req: Request) {
   if (wantRedirect) {
     const back = new URL('https://namkhan-bi.vercel.app/marketing/youtube');
     back.searchParams.set('scanned', '1');
-    back.searchParams.set('brief', String(brief.brief_id));
+    back.searchParams.set('brief', String(briefId));
     if (ticketId) back.searchParams.set('ticket', String(ticketId));
     return NextResponse.redirect(back.toString(), 303);
   }
 
-  return NextResponse.json({ ok: true, brief_id: brief.brief_id, ticket_id: ticketId });
+  return NextResponse.json({ ok: true, brief_id: briefId, ticket_id: ticketId });
 }
