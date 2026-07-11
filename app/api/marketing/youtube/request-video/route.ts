@@ -1,7 +1,7 @@
 // app/api/marketing/youtube/request-video/route.ts
 // PBS 2026-07-11 pm — PBS "make me a video" queue.
-// Accepts POST (JSON body or form-encoded), inserts a marketing.yt_video_requests
-// row + a cockpit_tickets row addressed to Lumen (marketing_hod).
+// Inserts a marketing.yt_video_requests row via fn_yt_insert_video_request
+// + a cockpit_tickets row (public — direct insert OK).
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -30,7 +30,6 @@ async function parseBody(req: Request): Promise<Payload> {
   if (ct.includes('application/json')) {
     try { return (await req.json()) as Payload; } catch { return {}; }
   }
-  // form-encoded fallback (server-rendered form)
   const fd = await req.formData();
   const obj: Record<string, unknown> = {};
   for (const [k, v] of fd.entries()) obj[k] = typeof v === 'string' ? v : String(v);
@@ -52,7 +51,6 @@ function toIntOrNull(v: unknown): number | null {
 function isRedirectExpected(req: Request): boolean {
   const ct = req.headers.get('content-type') ?? '';
   const accept = req.headers.get('accept') ?? '';
-  // Native form submits send urlencoded/multipart + Accept text/html
   return ct.includes('application/x-www-form-urlencoded')
       || ct.includes('multipart/form-data')
       || accept.includes('text/html');
@@ -72,43 +70,43 @@ export async function POST(req: Request) {
   if (!ALLOWED_STYLES.has(style)) return NextResponse.json({ ok: false, error: 'invalid_style', got: style }, { status: 400 });
   if (!ALLOWED_VOICE.has(voice))  return NextResponse.json({ ok: false, error: 'invalid_voice', got: voice }, { status: 400 });
 
-  const insertRow = {
-    property_id:            propertyId,
-    requested_by:           'PBS',
-    angle,
-    style,
-    duration_seconds:       toIntOrNull(body.duration_seconds) ?? 45,
-    voice,
-    talking_head_person_id: toIntOrNull(body.talking_head_person_id),
-    cta:                    (body.cta ?? '').toString().trim() || null,
-    source_asset_urls:      splitUrlLines(body.source_asset_urls),
-    source_media_ids:       Array.isArray(body.source_media_ids) ? body.source_media_ids : [],
-    notes:                  (body.notes ?? '').toString().trim() || null,
-    linked_brief_id:        (body.linked_brief_id && String(body.linked_brief_id).trim()) || null,
-    status:                 'queued' as const,
-  };
+  const duration = toIntOrNull(body.duration_seconds) ?? 45;
+  const assets   = splitUrlLines(body.source_asset_urls);
+  const cta      = (body.cta ?? '').toString().trim() || null;
+  const notes    = (body.notes ?? '').toString().trim() || null;
+  const briefId  = (body.linked_brief_id && String(body.linked_brief_id).trim()) || null;
+  const personId = toIntOrNull(body.talking_head_person_id);
 
-  const { data: reqRow, error: reqErr } = await sb
-    .schema('marketing')
-    .from('yt_video_requests')
-    .insert(insertRow)
-    .select('id')
-    .single();
+  // Insert request via SECURITY DEFINER RPC
+  const { data: reqId, error: reqErr } = await sb.rpc('fn_yt_insert_video_request', {
+    p_property_id:            propertyId,
+    p_requested_by:           'PBS',
+    p_angle:                  angle,
+    p_style:                  style,
+    p_duration_seconds:       duration,
+    p_voice:                  voice,
+    p_talking_head_person_id: personId,
+    p_cta:                    cta,
+    p_source_asset_urls:      assets,
+    p_notes:                  notes,
+    p_linked_brief_id:        briefId,
+  });
 
-  if (reqErr || !reqRow) {
+  if (reqErr || !reqId) {
     return NextResponse.json({ ok: false, error: 'insert_request_failed', detail: reqErr?.message }, { status: 500 });
   }
 
   const ticketNotes = [
-    `PBS requested a ${style} video (${insertRow.duration_seconds}s, voice=${voice}).`,
+    `PBS requested a ${style} video (${duration}s, voice=${voice}).`,
     `Angle: ${angle}`,
-    insertRow.cta ? `CTA: ${insertRow.cta}` : null,
-    insertRow.source_asset_urls.length ? `Assets: ${insertRow.source_asset_urls.length} url(s)` : null,
-    insertRow.linked_brief_id ? `Linked brief: ${insertRow.linked_brief_id}` : null,
-    insertRow.notes ? `Notes: ${insertRow.notes}` : null,
-    `Request id: ${reqRow.id}`,
+    cta ? `CTA: ${cta}` : null,
+    assets.length ? `Assets: ${assets.length} url(s)` : null,
+    briefId ? `Linked brief: ${briefId}` : null,
+    notes ? `Notes: ${notes}` : null,
+    `Request id: ${reqId}`,
   ].filter(Boolean).join('\n');
 
+  // cockpit_tickets is in public schema — direct insert works
   const { data: ticketRow, error: tkErr } = await sb
     .from('cockpit_tickets')
     .insert({
@@ -118,7 +116,7 @@ export async function POST(req: Request) {
       status:         'open',
       parsed_summary: angle.slice(0, 240),
       notes:          ticketNotes,
-      metadata:       { property_id: propertyId, video_request_id: reqRow.id, style, voice, requested_by_role: 'marketing_hod' },
+      metadata:       { property_id: propertyId, video_request_id: reqId, style, voice, requested_by_role: 'marketing_hod' },
       project_id:     propertyId,
     })
     .select('id')
@@ -130,9 +128,9 @@ export async function POST(req: Request) {
     const back = new URL('https://namkhan-bi.vercel.app/marketing/youtube');
     back.searchParams.set('requested', '1');
     if (ticketId) back.searchParams.set('ticket', String(ticketId));
-    back.searchParams.set('req', String(reqRow.id));
+    back.searchParams.set('req', String(reqId));
     return NextResponse.redirect(back.toString(), 303);
   }
 
-  return NextResponse.json({ ok: true, request_id: reqRow.id, ticket_id: ticketId, ticket_warning: tkErr?.message ?? null });
+  return NextResponse.json({ ok: true, request_id: reqId, ticket_id: ticketId, ticket_warning: tkErr?.message ?? null });
 }
