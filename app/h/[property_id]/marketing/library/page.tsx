@@ -1,19 +1,12 @@
 // app/h/[property_id]/marketing/library/page.tsx
-// PBS 2026-07-08 — Donna marketing/library delegate. Renders same DashboardPage
-// chrome as Namkhan (structure not data) via shared DeptSubpageStub.
-import DeptSubpageStub from '@/app/h/[property_id]/_shared/DeptSubpageStub';
+// PBS 2026-07-11 pm — property-scoped library redirect.
+// Both /marketing/library and /h/<pid>/marketing/library forward to the Media Hub
+// preserving the property scope.
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-export default function DonnaMarketingLibrary({ params }: { params: { property_id: string } }) {
-  return (
-    <DeptSubpageStub
-      propertyId={Number(params.property_id)}
-      deptLabel="Marketing"
-      routeLabel="Library"
-      namkhanPath="/marketing/library"
-      hint="Will surface Donna asset library, docs, brand kits per property_id once /marketing/gallery + docs feeds are Donna-scoped."
-    />
-  );
+export default async function PropertyLibraryRedirect({ params }: { params: Promise<{ property_id: string }> }) {
+  const { property_id } = await params;
+  redirect(`/h/${property_id}/marketing/media`);
 }
