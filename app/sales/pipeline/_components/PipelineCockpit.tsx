@@ -1,11 +1,19 @@
 'use client';
 // app/sales/pipeline/_components/PipelineCockpit.tsx
-// PBS 2026-07-11 pm (dir 1) — Sales · Pipeline slim client. Fork of
-// app/sales/leads/_components/LeadsCockpit.tsx with the inbound queue +
-// promoteInquiry() removed (both moved to /sales/new).
+// PBS 2026-07-11 pm — Design System rebuild.
+// Primitives used:
+//   MetricRow (4 KpiTile)  ·  Container (filters, list, board columns)
+//   Chart variant="cards" for the list rows and the board cards.
+// Actions untouched: /api/sales/leads/advance-stage + /api/sales/leads/promote.
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  Container,
+  MetricRow,
+  Chart,
+  type KpiTileProps,
+} from '@/app/(cockpit)/_design';
 
 export interface LeadRow {
   id: number; property_id: number; company_name: string | null; type: string | null;
@@ -22,11 +30,10 @@ const WHITE = '#FFFFFF';
 const HAIR  = '#E6DFCC';
 const INK   = '#1B1B1B';
 const INK_M = '#5A5A5A';
-const INK_S = '#3A3A3A';
 const FOREST = '#1F3A2E';
 const SAND  = '#B8A878';
 const TERRA = '#B8542A';
-const BG    = '#F4EFE2';
+const BG    = '#FBF6E9';
 
 type ViewMode = 'list' | 'board';
 type Filter = 'all' | 'inbound' | 'outbound' | 'hot' | 'wholesale' | 'dmc' | 'agent' | 'corp' | 'retreat';
@@ -49,17 +56,6 @@ function originBadge(origin: string | null | undefined) {
     color: isIn ? FOREST : TERRA,
   };
   return <span style={style}>{isIn ? '↙ IN' : '↗ OUT'}</span>;
-}
-
-function StageDropdown({ leadId, stage, stages, onChange }: { leadId: number; stage: string | null; stages: StageRow[]; onChange: (id: number, s: string) => void }) {
-  return (
-    <select value={stage ?? 'new'} onChange={(e) => onChange(leadId, e.target.value)}
-            style={{ fontSize: 12, padding: '4px 6px', background: WHITE, border: '1px solid ' + HAIR, borderRadius: 2, color: INK }}>
-      {stages.map((s) => (
-        <option key={s.stage_key} value={s.stage_key}>{s.display_name}</option>
-      ))}
-    </select>
-  );
 }
 
 export default function PipelineCockpit({ leads: leadsInit, stages }: {
@@ -138,99 +134,116 @@ export default function PipelineCockpit({ leads: leadsInit, stages }: {
     return stages[idx + 1]?.stage_key ?? null;
   };
 
+  const kpiTiles: KpiTileProps[] = [
+    { label: 'Open',           value: kpis.open,          size: 'sm', footnote: 'all not-terminal' },
+    { label: 'Qualified+',     value: kpis.qualifiedPlus, size: 'sm', footnote: 'qualified/proposal/negot.' },
+    { label: 'Hot (ICP≥75)',   value: kpis.hot,           size: 'sm', footnote: 'scoring-model driven', status: kpis.hot > 0 ? 'green' : 'grey' },
+    { label: 'Contracted',     value: kpis.contracted,    size: 'sm', footnote: 'reached Won', status: 'green' },
+  ];
+
+  // Cards data for list rows
+  const listCards = filtered.map((l) => ({ id: String(l.id), _l: l }));
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       {banner ? (
-        <div style={{ background: FOREST, color: WHITE, padding: '10px 14px', borderRadius: 4, fontSize: 13 }}>
+        <div style={{ gridColumn: '1 / -1', background: FOREST, color: WHITE, padding: '10px 14px', borderRadius: 8, fontSize: 13 }}>
           {banner} <button onClick={() => setBanner(null)} style={{ marginLeft: 12, background: 'transparent', color: WHITE, border: 'none', cursor: 'pointer', fontWeight: 600 }}>×</button>
         </div>
       ) : null}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        <Kpi label="Open" value={String(kpis.open)} hint="all not-terminal" />
-        <Kpi label="Qualified+" value={String(kpis.qualifiedPlus)} hint="qualified/proposal/negotiation" />
-        <Kpi label="Hot (ICP>=75)" value={String(kpis.hot)} hint="scoring model driven" />
-        <Kpi label="Contracted" value={String(kpis.contracted)} hint="reached Won" />
+      <div style={{ gridColumn: '1 / -1' }}>
+        <MetricRow tiles={kpiTiles} size="sm" />
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: 4, background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, padding: 4 }}>
-          <button onClick={() => setView('list')}  style={{ ...MODE, ...(view === 'list'  ? MODE_ACTIVE : {}) }}>List</button>
-          <button onClick={() => setView('board')} style={{ ...MODE, ...(view === 'board' ? MODE_ACTIVE : {}) }}>Pipeline board</button>
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {(['all','inbound','outbound','hot','wholesale','dmc','agent','corp','retreat'] as Filter[]).map((f) => (
-            <button key={f} onClick={() => setFilter(f)} style={{ ...CHIP, ...(filter === f ? CHIP_ACTIVE : {}) }}>{f}</button>
-          ))}
-        </div>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Filters" density="compact" expandable={false} action={
+          <div style={{ display: 'flex', gap: 4, background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, padding: 3 }}>
+            <button onClick={() => setView('list')}  style={{ ...MODE, ...(view === 'list'  ? MODE_ACTIVE : {}) }}>List</button>
+            <button onClick={() => setView('board')} style={{ ...MODE, ...(view === 'board' ? MODE_ACTIVE : {}) }}>Pipeline board</button>
+          </div>
+        }>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {(['all','inbound','outbound','hot','wholesale','dmc','agent','corp','retreat'] as Filter[]).map((f) => (
+              <button key={f} onClick={() => setFilter(f)} style={{ ...CHIP, ...(filter === f ? CHIP_ACTIVE : {}) }}>{f}</button>
+            ))}
+          </div>
+        </Container>
       </div>
 
       {view === 'list' ? (
-        <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={TH}>Origin</th>
-                <th style={TH}>Company</th>
-                <th style={TH}>Contact</th>
-                <th style={TH}>Type</th>
-                <th style={TH}>ICP</th>
-                <th style={TH}>Intent</th>
-                <th style={TH}>Stage</th>
-                <th style={TH}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((l) => {
-                const ns = nextStage(l.stage);
-                const canConvert = l.stage === 'negotiation';
-                return (
-                  <tr key={l.id}>
-                    <td style={TD}>{originBadge(l.origin)}</td>
-                    <td style={TD}>{l.company_name ?? '—'} <div style={{ color: INK_M, fontSize: 11 }}>{l.country ?? ''}{l.city ? ' · ' + l.city : ''}</div></td>
-                    <td style={{ ...TD, color: INK_M }}>{l.decision_maker_name ?? '—'}<div style={{ fontSize: 11 }}>{l.decision_maker_role ?? ''}</div></td>
-                    <td style={{ ...TD, color: INK_M }}>{l.type ?? '—'}</td>
-                    <td style={{ ...TD, minWidth: 100 }}>{bar(l.icp_score, FOREST)}<div style={{ fontSize: 10, color: INK_M, marginTop: 2 }}>{l.icp_score ?? '—'}</div></td>
-                    <td style={{ ...TD, minWidth: 100 }}>{bar(l.intent_score, SAND)}<div style={{ fontSize: 10, color: INK_M, marginTop: 2 }}>{l.intent_score ?? '—'}</div></td>
-                    <td style={TD}><StageDropdown leadId={l.id} stage={l.stage} stages={stages} onChange={advance} /></td>
-                    <td style={{ ...TD, whiteSpace: 'nowrap' }}>
-                      {canConvert ? (
-                        <button onClick={() => convert(l.id)} style={BTN_PRIMARY}>Convert to client →</button>
-                      ) : ns ? (
-                        <button onClick={() => advance(l.id, ns)} style={BTN_SECONDARY}>Advance →</button>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 ? (
-                <tr><td colSpan={8} style={{ ...TD, textAlign: 'center', color: INK_M }}>No leads match this filter.</td></tr>
-              ) : null}
-            </tbody>
-          </table>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Container title={filter === 'all' ? 'All leads' : filter[0].toUpperCase() + filter.slice(1) + ' leads'} subtitle={filtered.length + ' rows'}>
+            {filtered.length === 0 ? (
+              <div style={{ fontSize: 12, color: INK_M, textAlign: 'center', padding: 16 }}>No leads match this filter.</div>
+            ) : (
+              <Chart
+                variant="cards"
+                data={listCards}
+                renderItem={(row) => {
+                  const l = (row as { _l: LeadRow })._l;
+                  const ns = nextStage(l.stage);
+                  const canConvert = l.stage === 'negotiation';
+                  return (
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'baseline' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>{l.company_name ?? '—'}</span>
+                        {originBadge(l.origin)}
+                      </div>
+                      <div style={{ fontSize: 11, color: INK_M }}>{l.decision_maker_name ?? '—'}{l.decision_maker_role ? ' · ' + l.decision_maker_role : ''}</div>
+                      <div style={{ fontSize: 10, color: INK_M }}>{l.type ?? '—'} · {l.country ?? ''}{l.city ? ' · ' + l.city : ''}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                        <div><div style={{ fontSize: 9, color: INK_M, marginBottom: 2 }}>ICP {l.icp_score ?? '—'}</div>{bar(l.icp_score, FOREST)}</div>
+                        <div><div style={{ fontSize: 9, color: INK_M, marginBottom: 2 }}>Intent {l.intent_score ?? '—'}</div>{bar(l.intent_score, SAND)}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                        <select
+                          value={l.stage ?? 'new'}
+                          onChange={(e) => advance(l.id, e.target.value)}
+                          style={{ fontSize: 11, padding: '3px 6px', background: WHITE, border: '1px solid ' + HAIR, borderRadius: 2, color: INK, flex: 1 }}
+                        >
+                          {stages.map((s) => <option key={s.stage_key} value={s.stage_key}>{s.display_name}</option>)}
+                        </select>
+                        {canConvert ? (
+                          <button onClick={() => convert(l.id)} style={BTN_PRIMARY}>Convert →</button>
+                        ) : ns ? (
+                          <button onClick={() => advance(l.id, ns)} style={BTN_SECONDARY}>Advance →</button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+            )}
+          </Container>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + stages.length + ', minmax(220px, 1fr))', gap: 8, overflowX: 'auto' }}>
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(' + stages.length + ', minmax(240px, 1fr))', gap: 10, overflowX: 'auto' }}>
           {stages.map((s) => {
             const list = byStage.get(s.stage_key) ?? [];
-            const stageColor = s.is_won ? FOREST : s.is_lost ? TERRA : INK_S;
+            const stageColor = s.is_won ? FOREST : s.is_lost ? TERRA : INK;
             return (
-              <div key={s.stage_key} style={{ background: BG, border: '1px solid ' + HAIR, borderRadius: 4, padding: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 600, color: stageColor }}>{s.display_name}</div>
-                  <div style={{ fontSize: 11, color: INK_M }}>{list.length}</div>
-                </div>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  {list.map((l) => {
+              <Container
+                key={s.stage_key}
+                title={s.display_name}
+                subtitle={list.length + ' leads'}
+                density="compact"
+                expandable={false}
+                status={s.is_won ? 'green' : s.is_lost ? 'red' : undefined}
+              >
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {list.length === 0 ? (
+                    <div style={{ fontSize: 10, color: INK_M, textAlign: 'center', padding: 8 }}>empty</div>
+                  ) : list.map((l) => {
                     const ns = nextStage(l.stage);
                     return (
-                      <div key={l.id} style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, padding: 10 }}>
+                      <div key={l.id} style={{ background: BG, border: '1px solid ' + HAIR, borderRadius: 4, padding: 10 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'baseline' }}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: INK }}>{l.company_name ?? '—'}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: stageColor }}>{l.company_name ?? '—'}</div>
                           {originBadge(l.origin)}
                         </div>
                         <div style={{ fontSize: 11, color: INK_M, marginTop: 3 }}>{l.decision_maker_name ?? '—'}</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
                           <div><div style={{ fontSize: 9, color: INK_M, marginBottom: 2 }}>ICP</div>{bar(l.icp_score, FOREST)}</div>
                           <div><div style={{ fontSize: 9, color: INK_M, marginBottom: 2 }}>Intent</div>{bar(l.intent_score, SAND)}</div>
                         </div>
@@ -244,33 +257,20 @@ export default function PipelineCockpit({ leads: leadsInit, stages }: {
                       </div>
                     );
                   })}
-                  {list.length === 0 ? <div style={{ fontSize: 10, color: INK_M, textAlign: 'center', padding: 8 }}>empty</div> : null}
                 </div>
-              </div>
+              </Container>
             );
           })}
         </div>
       )}
 
-      {pending ? <div style={{ fontSize: 11, color: INK_M }}>Refreshing…</div> : null}
+      {pending ? <div style={{ gridColumn: '1 / -1', fontSize: 11, color: INK_M }}>Refreshing…</div> : null}
     </div>
   );
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, padding: 16 }}>
-      <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_M, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 26, color: INK, fontWeight: 600, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      {hint ? <div style={{ marginTop: 6, fontSize: 11, color: INK_M }}>{hint}</div> : null}
-    </div>
-  );
-}
-
-const TH: React.CSSProperties = { textAlign: 'left', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: INK_S, padding: '10px 8px', borderBottom: '1px solid ' + HAIR, fontWeight: 500 };
-const TD: React.CSSProperties = { padding: '10px 8px', borderBottom: '1px solid ' + HAIR, fontSize: 13, color: INK, verticalAlign: 'top' };
-const MODE: React.CSSProperties = { padding: '6px 14px', fontSize: 12, background: 'transparent', border: 'none', color: INK_M, cursor: 'pointer', borderRadius: 2 };
-const MODE_ACTIVE: React.CSSProperties = { background: BG, color: FOREST, fontWeight: 600 };
+const MODE: React.CSSProperties = { padding: '5px 12px', fontSize: 11, background: 'transparent', border: 'none', color: INK_M, cursor: 'pointer', borderRadius: 2 };
+const MODE_ACTIVE: React.CSSProperties = { background: FOREST, color: WHITE, fontWeight: 600 };
 const CHIP: React.CSSProperties = { padding: '4px 10px', fontSize: 11, background: WHITE, border: '1px solid ' + HAIR, borderRadius: 2, cursor: 'pointer', color: INK_M, textTransform: 'capitalize' };
 const CHIP_ACTIVE: React.CSSProperties = { background: FOREST, color: WHITE, borderColor: FOREST };
 const BTN_PRIMARY: React.CSSProperties = { padding: '4px 10px', fontSize: 11, background: FOREST, color: WHITE, border: 'none', borderRadius: 2, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' };
