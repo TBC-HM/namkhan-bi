@@ -15,6 +15,7 @@
 // parse error). Progress is shown inline as "Seeding batch N/6 (X / 300)".
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 // Design tokens (hardcoded per feedback_namkhan_token_ladder_paper_warm_dark)
 const WHITE = '#FFFFFF';
@@ -144,6 +145,10 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
   const [seedErr, setSeedErr]     = useState<string | null>(null);
   const [seedBatches, setSeedBatches] = useState<BatchResult[]>([]);
   const [busyRow, setBusyRow]     = useState<number | null>(null);
+  // PBS 2026-07-11: expandable Preview + Edit
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [editingRow, setEditingRow]   = useState<number | null>(null);
+  const router = useRouter();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -265,6 +270,35 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
       alert(`Mark failed: ${err instanceof Error ? err.message : String(err)}`);
       setBusyRow(null);
     }
+  }
+
+  // PBS 2026-07-11: Accept-to-Registry — creates a stub SOP in knowledge.sop_meta
+  // + flips proposal status='accepted' + navigates to /operations/qa/registry.
+  async function onAccept(p: ProposalRow) {
+    if (busyRow) return;
+    if (!confirm(`Accept "${p.title}" into the SOP registry as a stub? You can add the full body later.`)) return;
+    setBusyRow(p.id);
+    try {
+      const res = await fetch('/api/sop/proposals/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      const registryHref = propertyId === 260955 ? '/operations/qa/registry' : `/h/${propertyId}/operations/qa/registry`;
+      router.push(registryHref);
+    } catch (err) {
+      alert(`Accept failed: ${err instanceof Error ? err.message : String(err)}`);
+      setBusyRow(null);
+    }
+  }
+
+  // PBS 2026-07-11: called by EditForm on successful save so the row re-renders with new values.
+  function onEdited() {
+    setEditingRow(null);
+    setExpandedRow(null);
+    window.location.reload();
   }
 
   function generateHref(p: ProposalRow): string {
@@ -462,7 +496,10 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
             <tbody>
               {list.map((p) => {
                 const isBusy = busyRow === p.id;
+                const isExpanded = expandedRow === p.id;
+                const isEditing = editingRow === p.id;
                 return (
+                  <>
                   <tr key={p.id}>
                     <td style={{ ...td, verticalAlign: 'middle' }}>
                       <span style={priorityBadge(p.priority)}>P{p.priority}</span>
@@ -492,12 +529,33 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                       <span style={statusPill(p.status)}>{p.status}</span>
                     </td>
                     <td style={{ ...td, textAlign: 'right', verticalAlign: 'middle' }}>
-                      <div style={{ display: 'inline-flex', gap: 4 }}>
+                      <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {/* PBS 2026-07-11: 3 new row buttons — Preview / Edit / Accept-to-Registry */}
+                        <button
+                          style={btn(false, false)}
+                          onClick={() => setExpandedRow(isExpanded ? null : p.id)}
+                        >
+                          {isExpanded ? 'Hide' : 'Preview'}
+                        </button>
                         {p.status !== 'accepted' && (
-                          <a
-                            href={generateHref(p)}
-                            style={btn(true, isBusy)}
+                          <button
+                            style={btn(false, false)}
+                            onClick={() => { setEditingRow(isEditing ? null : p.id); setExpandedRow(p.id); }}
                           >
+                            {isEditing ? 'Cancel' : 'Edit'}
+                          </button>
+                        )}
+                        {p.status !== 'accepted' && (
+                          <button
+                            style={btn(true, isBusy)}
+                            disabled={isBusy}
+                            onClick={() => onAccept(p)}
+                          >
+                            Accept →
+                          </button>
+                        )}
+                        {p.status !== 'accepted' && (
+                          <a href={generateHref(p)} style={btn(false, isBusy)}>
                             {p.status === 'generated' ? 'Re-open' : 'Generate'}
                           </a>
                         )}
@@ -522,12 +580,108 @@ export default function SopProposalList({ proposals, generateBaseHref, seedBatch
                       </div>
                     </td>
                   </tr>
+                  {isExpanded && (
+                    <tr key={p.id + '-preview'}>
+                      <td colSpan={4} style={{ padding: '10px 14px', background: '#FAFAF7', borderBottom: '1px solid ' + HAIR }}>
+                        {isEditing ? (
+                          <EditForm proposal={p} onCancel={() => { setEditingRow(null); setExpandedRow(null); }} onSaved={onEdited} />
+                        ) : (
+                          <div style={{ fontSize: 12, color: INK, lineHeight: 1.6 }}>
+                            <div style={{ marginBottom: 6 }}><strong>Dept:</strong> {deptLabel(p.dept_code)} · <strong>Priority:</strong> P{p.priority} · <strong>Status:</strong> {p.status} · <strong>Scope:</strong> {p.property_scope}</div>
+                            <div style={{ marginBottom: 6 }}><strong>Title:</strong> {p.title}</div>
+                            <div style={{ marginBottom: 6 }}><strong>Purpose:</strong> {p.purpose_short || <em style={{ color: INK_L }}>(empty)</em>}</div>
+                            {p.tags.length > 0 && (
+                              <div style={{ marginBottom: 6 }}>
+                                <strong>Tags:</strong>{' '}
+                                {p.tags.map((t) => (
+                                  <span key={t} style={{ fontSize: 10, padding: '1px 6px', background: WHITE, border: '1px solid ' + HAIR, borderRadius: 3, marginRight: 4 }}>{t}</span>
+                                ))}
+                              </div>
+                            )}
+                            {p.linked_sop_code && (
+                              <div style={{ color: ACCENT, fontWeight: 600 }}>Registered as: {p.linked_sop_code}</div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </>
                 );
               })}
             </tbody>
           </table>
         </div>
       ))}
+    </div>
+  );
+}
+
+// PBS 2026-07-11: inline Edit form for a single proposal row.
+function EditForm({ proposal, onCancel, onSaved }: { proposal: ProposalRow; onCancel: () => void; onSaved: () => void }) {
+  const [title, setTitle] = useState(proposal.title);
+  const [purpose, setPurpose] = useState(proposal.purpose_short);
+  const [priority, setPriority] = useState(proposal.priority);
+  const [tags, setTags] = useState(proposal.tags.join(', '));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onSave() {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/sop/proposals/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: proposal.id,
+          title: title.trim(),
+          purpose_short: purpose.trim(),
+          priority: Math.max(1, Math.min(3, Number(priority) || 2)),
+          tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  const input: React.CSSProperties = { width: '100%', padding: '6px 10px', border: '1px solid ' + HAIR, borderRadius: 3, fontSize: 12, fontFamily: 'inherit' };
+  const lbl: React.CSSProperties = { display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: INK_S, marginBottom: 3 };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div>
+        <label style={lbl}>Title</label>
+        <input style={input} value={title} onChange={(e) => setTitle(e.target.value)} />
+      </div>
+      <div>
+        <label style={lbl}>Purpose (one line)</label>
+        <input style={input} value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="short description of what this SOP covers" />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: 8 }}>
+        <div>
+          <label style={lbl}>Priority</label>
+          <select style={input} value={priority} onChange={(e) => setPriority(Number(e.target.value))}>
+            <option value={1}>P1</option>
+            <option value={2}>P2</option>
+            <option value={3}>P3</option>
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>Tags (comma-separated)</label>
+          <input style={input} value={tags} onChange={(e) => setTags(e.target.value)} />
+        </div>
+      </div>
+      {err && <div style={{ color: RED, fontSize: 11 }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+        <button style={btn(true, busy)} disabled={busy} onClick={onSave}>{busy ? 'Saving…' : 'Save changes'}</button>
+        <button style={btn(false, busy)} disabled={busy} onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   );
 }
