@@ -8,7 +8,10 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_TIERS = new Set(['tier_social_pool', 'tier_internal']);
+const ALLOWED_TIERS = new Set([
+  'tier_website_hero', 'tier_ota_profile', 'tier_social_pool',
+  'tier_internal', 'tier_logos', 'tier_archive',
+]);
 
 export async function POST(req: NextRequest) {
   let sb;
@@ -39,6 +42,7 @@ export async function POST(req: NextRequest) {
         category_key: String(category_key).trim(),
         room_type_id: room_type_id ? Number(room_type_id) : null,
         facility_id:  facility_id  ? Number(facility_id)  : null,
+        n:            Math.max(1, Math.min(4, Number(body?.n ?? 1))),
       },
     });
 
