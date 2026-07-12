@@ -115,7 +115,7 @@ const TIERS = [
   { key: 'tier_logos',        label: 'Logos / marks' },
 ];
 
-export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSourceAssetId, categories, rooms, facilities, taxonomy: _taxonomy }: Props) {
+export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSourceAssetId, categories, rooms, facilities, taxonomy }: Props) {
   const [mode, setMode] = useState<'prompt' | 'from_asset'>(initialSourceAssetId ? 'from_asset' : 'prompt');
   const [prompt, setPrompt] = useState('');
   const [tier, setTier] = useState('tier_social_pool');
@@ -143,12 +143,31 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
   const needsRoom     = selectedCategory?.requires_context === 'room';
   const needsFacility = selectedCategory?.requires_context === 'facility';
 
-  // Grounding state
-  const [roomTypeId, setRoomTypeId] = useState<number | ''>('');
-  const [facilityId, setFacilityId] = useState<number | ''>('');
+  // Grounding state (LEGACY: roomTypeId/facilityId retained as computed values from whatKind for
+  // backward compat with the current edge fn which reads room_type_id / facility_id).
+  // 2026-07-12 pm: canonical picker is now WHAT (5-taxonomy) + WHERE (facility).
+  type WhatKind = '' | 'room' | 'facility' | 'activity' | 'meeting_space' | 'transport';
+  const [whatKind, setWhatKind]         = useState<WhatKind>('');
+  const [whatId, setWhatId]             = useState<number | ''>('');
+  const [whereFacilityId, setWhereFacilityId] = useState<number | ''>('');
+  // Derived — the edge fn today only enriches by room_type_id + facility_id; keep the mapping.
+  const roomTypeId: number | '' = whatKind === 'room' ? (whatId || '') : '';
+  const facilityId: number | '' = (whatKind === 'facility' || whatKind === 'meeting_space') ? (whatId || '') : '';
 
   const selectedRoom     = useMemo(() => (rooms ?? []).find(r => r.room_type_id === Number(roomTypeId)) ?? null, [rooms, roomTypeId]);
   const selectedFacility = useMemo(() => (facilities ?? []).find(f => f.facility_id === Number(facilityId)) ?? null, [facilities, facilityId]);
+  const selectedWhereFacility = useMemo(() => (facilities ?? []).find(f => f.facility_id === Number(whereFacilityId)) ?? null, [facilities, whereFacilityId]);
+
+  const selectedWhatName = useMemo(() => {
+    if (!taxonomy || !whatKind || !whatId) return null;
+    const id = Number(whatId);
+    if (whatKind === 'room')          return taxonomy.rooms.find(r => r.id === id)?.name ?? null;
+    if (whatKind === 'facility')      return taxonomy.facilities.find(f => f.id === id)?.name ?? null;
+    if (whatKind === 'activity')      return taxonomy.activities.find(a => a.id === id)?.name ?? null;
+    if (whatKind === 'meeting_space') return taxonomy.meeting_spaces.find(m => m.id === id)?.name ?? null;
+    if (whatKind === 'transport')     return taxonomy.transport.find(t => t.id === id)?.name ?? null;
+    return null;
+  }, [taxonomy, whatKind, whatId]);
 
   // Group facilities by their content-category for the <optgroup>.
   const facilitiesByCategory = useMemo(() => {
@@ -169,13 +188,15 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
     }
   }, [initialSourceAssetId]);
 
-  // When category changes, snap tier to that category's default (if allowed) and clear stale grounding.
+  // When category changes, snap tier to that category's default (if allowed) and clear stale
+  // What/Where if the category's requires_context contradicts (e.g. was 'facility' picked but
+  // new category needs 'room').
   useEffect(() => {
     if (selectedCategory && (selectedCategory.default_target_tier === 'tier_social_pool' || selectedCategory.default_target_tier === 'tier_internal')) {
       setTier(selectedCategory.default_target_tier);
     }
-    if (!needsRoom)     setRoomTypeId('');
-    if (!needsFacility) setFacilityId('');
+    if (needsRoom && whatKind !== 'room') { setWhatKind(''); setWhatId(''); }
+    if (needsFacility && whatKind !== 'facility' && whatKind !== 'meeting_space') { setWhatKind(''); setWhatId(''); }
   }, [categoryKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const photos = useMemo(() => {
@@ -231,14 +252,18 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
     !!categoryKey &&
     prompt.trim().length > 0 &&
     (mode === 'prompt' || !!sourceAssetId) &&
-    (!needsRoom     || !!roomTypeId) &&
-    (!needsFacility || !!facilityId);
+    (!needsRoom     || (whatKind === 'room' && !!whatId)) &&
+    (!needsFacility || ((whatKind === 'facility' || whatKind === 'meeting_space') && !!whatId));
 
   async function submit() {
     setBanner(null);
     if (!categoryKey) { setBanner({ tone:'warn', text:'Pick a category first.' }); return; }
-    if (needsRoom     && !roomTypeId) { setBanner({ tone:'warn', text:'This category needs a room. Pick one.' }); return; }
-    if (needsFacility && !facilityId) { setBanner({ tone:'warn', text:'This category needs a facility. Pick one.' }); return; }
+    if (needsRoom     && (whatKind !== 'room' || !whatId)) {
+      setBanner({ tone:'warn', text:'This category needs a room. Pick a room in the What dropdown.' }); return;
+    }
+    if (needsFacility && !((whatKind === 'facility' || whatKind === 'meeting_space') && whatId)) {
+      setBanner({ tone:'warn', text:'This category needs a facility. Pick a facility in the What dropdown.' }); return;
+    }
     if (!prompt.trim()) { setBanner({ tone:'warn', text:'Add a prompt describing what you want.' }); return; }
     if (mode === 'from_asset' && !sourceAssetId) { setBanner({ tone:'warn', text:'Pick a photo first.' }); return; }
     setBusy(true);
@@ -252,8 +277,13 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
           target_tier: tier,
           source_asset_id: mode === 'from_asset' ? sourceAssetId : null,
           category_key: categoryKey,
-          room_type_id: needsRoom     ? Number(roomTypeId) : null,
-          facility_id:  needsFacility ? Number(facilityId)  : null,
+          // Backward compat: edge fn currently reads room_type_id + facility_id only.
+          room_type_id: whatKind === 'room' ? Number(whatId) : null,
+          facility_id:  (whatKind === 'facility' || whatKind === 'meeting_space') ? Number(whatId) : null,
+          // NEW 3-field composer — route enriches prompt from Settings for these.
+          what_kind: whatKind || null,
+          what_id:   whatId ? Number(whatId) : null,
+          where_facility_id: whereFacilityId ? Number(whereFacilityId) : null,
           n: 4,  // PBS 2026-07-12: default 4 candidates → pick + refine loop
         }),
       });
@@ -374,70 +404,105 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
           )}
         </div>
 
-        {/* Room grounding — appears when category requires it */}
-        {needsRoom && (
-          <div style={{ marginBottom:14 }}>
-            <label style={{ display:'block', fontSize:11, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>
-              Room <span style={{ color:RED }}>*</span>
-              <span style={{ marginLeft:6, color:INK_M, fontWeight:400, textTransform:'none', letterSpacing:0 }}>
-                — from PMS ({rooms.length} types)
-              </span>
-            </label>
-            <select
-              value={roomTypeId === '' ? '' : String(roomTypeId)}
-              onChange={e => setRoomTypeId(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ width:'100%', padding:'8px 10px', fontSize:13, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK }}
-            >
-              <option value="">— pick a room type —</option>
-              {rooms.map(r => (
-                <option key={r.room_type_id} value={r.room_type_id}>
-                  {r.room_type_name}{r.max_guests ? ` · sleeps ${r.max_guests}` : ''}{r.units ? ` · ${r.units} units` : ''}
-                </option>
-              ))}
-            </select>
-            {selectedRoom && (
-              <div style={{ marginTop:6, fontSize:11, color:INK_M, padding:'6px 8px', background:'#FAF6EC', border:'1px dashed '+HAIR, borderRadius:4 }}>
-                <strong>{selectedRoom.room_type_name}</strong>
-                {selectedRoom.amenities_count ? ` · ${selectedRoom.amenities_count} amenities` : ''}
-                {selectedRoom.description_clean ? ` · ${selectedRoom.description_clean.slice(0, 140)}${selectedRoom.description_clean.length > 140 ? '…' : ''}` : ''}
-              </div>
-            )}
-          </div>
-        )}
+        {/* 2026-07-12 pm: WHAT + WHERE — 5-taxonomy composer replaces the old room/facility pickers.
+            The generator route pulls Settings data for the chosen What + Where and adapts the
+            prompt to include all relevant fields (description, materials, capacity, pricing, route…). */}
+        {taxonomy && (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
+            {/* WHAT */}
+            <div>
+              <label style={{ display:'block', fontSize:11, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>
+                What {(needsRoom || needsFacility) && <span style={{ color:RED }}>*</span>}
+                <span style={{ marginLeft:6, color:INK_M, fontWeight:400, textTransform:'none', letterSpacing:0 }}>
+                  — subject (rooms · facilities · activities · meeting spaces · transport)
+                </span>
+              </label>
+              <select
+                value={whatKind && whatId ? `${whatKind}:${whatId}` : ''}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (!v) { setWhatKind(''); setWhatId(''); return; }
+                  const [k, i] = v.split(':');
+                  setWhatKind(k as WhatKind);
+                  setWhatId(Number(i));
+                }}
+                style={{ width:'100%', padding:'8px 10px', fontSize:13, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK }}
+              >
+                <option value="">— pick subject (optional) —</option>
+                {taxonomy.rooms.length > 0 && (
+                  <optgroup label="Rooms">
+                    {taxonomy.rooms.map(r => <option key={`w-room-${r.id}`} value={`room:${r.id}`}>{r.name}</option>)}
+                  </optgroup>
+                )}
+                {taxonomy.facilities.length > 0 && (
+                  <optgroup label="Facilities">
+                    {taxonomy.facilities.map(f => <option key={`w-fac-${f.id}`} value={`facility:${f.id}`}>{f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}</option>)}
+                  </optgroup>
+                )}
+                {taxonomy.activities.length > 0 && (
+                  <optgroup label="Activities">
+                    {taxonomy.activities.map(a => <option key={`w-act-${a.id}`} value={`activity:${a.id}`}>{a.facility_name ? `${a.name} · @ ${a.facility_name}` : a.name}</option>)}
+                  </optgroup>
+                )}
+                {taxonomy.meeting_spaces.length > 0 && (
+                  <optgroup label="Meeting spaces">
+                    {taxonomy.meeting_spaces.map(m => <option key={`w-mtg-${m.id}`} value={`meeting_space:${m.id}`}>{m.name}</option>)}
+                  </optgroup>
+                )}
+                {taxonomy.transport.length > 0 && (
+                  <optgroup label="Transport">
+                    {taxonomy.transport.map(t => <option key={`w-trp-${t.id}`} value={`transport:${t.id}`}>{t.name}</option>)}
+                  </optgroup>
+                )}
+              </select>
+              {selectedWhatName && (
+                <div style={{ marginTop:6, fontSize:11, color:INK_M, padding:'6px 8px', background:'#FAF6EC', border:'1px dashed '+HAIR, borderRadius:4 }}>
+                  <strong>{selectedWhatName}</strong> · {whatKind}
+                  {whatKind === 'room' && selectedRoom?.description_clean && ` · ${selectedRoom.description_clean.slice(0, 100)}${selectedRoom.description_clean.length > 100 ? '…' : ''}`}
+                  {(whatKind === 'facility' || whatKind === 'meeting_space') && selectedFacility?.ai_description && ` · ${selectedFacility.ai_description.slice(0, 100)}${selectedFacility.ai_description.length > 100 ? '…' : ''}`}
+                </div>
+              )}
+              {needsRoom && whatKind !== 'room' && (
+                <div style={{ marginTop:4, fontSize:10, color:RED }}>This category needs a room — pick one.</div>
+              )}
+              {needsFacility && whatKind !== 'facility' && whatKind !== 'meeting_space' && (
+                <div style={{ marginTop:4, fontSize:10, color:RED }}>This category needs a facility — pick one.</div>
+              )}
+            </div>
 
-        {/* Facility grounding — appears when category requires it */}
-        {needsFacility && (
-          <div style={{ marginBottom:14 }}>
-            <label style={{ display:'block', fontSize:11, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>
-              Facility <span style={{ color:RED }}>*</span>
-              <span style={{ marginLeft:6, color:INK_M, fontWeight:400, textTransform:'none', letterSpacing:0 }}>
-                — {facilities.length} on-property
-              </span>
-            </label>
-            <select
-              value={facilityId === '' ? '' : String(facilityId)}
-              onChange={e => setFacilityId(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ width:'100%', padding:'8px 10px', fontSize:13, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK }}
-            >
-              <option value="">— pick a facility —</option>
-              {Object.entries(facilitiesByCategory).sort(([a],[b]) => a.localeCompare(b)).map(([cat, list]) => (
-                <optgroup key={cat} label={cat.toUpperCase()}>
-                  {list.map(f => (
-                    <option key={f.facility_id} value={f.facility_id}>
-                      {f.facility_name}{f.ai_description == null ? ' · (no AI enrichment)' : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            {selectedFacility && (
-              <div style={{ marginTop:6, fontSize:11, color:INK_M, padding:'6px 8px', background:'#FAF6EC', border:'1px dashed '+HAIR, borderRadius:4 }}>
-                <strong>{selectedFacility.facility_name}</strong>
-                {selectedFacility.category ? ` · ${selectedFacility.category}` : ''}
-                {selectedFacility.time_of_day_hint ? ` · ${selectedFacility.time_of_day_hint}` : ''}
-                {selectedFacility.ai_description ? ` · ${selectedFacility.ai_description.slice(0, 140)}${selectedFacility.ai_description.length > 140 ? '…' : ''}` : ' · (enrich this facility in Settings → Reality)'}
-              </div>
-            )}
+            {/* WHERE */}
+            <div>
+              <label style={{ display:'block', fontSize:11, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>
+                Where
+                <span style={{ marginLeft:6, color:INK_M, fontWeight:400, textTransform:'none', letterSpacing:0 }}>
+                  — location / facility (optional)
+                </span>
+              </label>
+              <select
+                value={whereFacilityId === '' ? '' : String(whereFacilityId)}
+                onChange={e => setWhereFacilityId(e.target.value === '' ? '' : Number(e.target.value))}
+                style={{ width:'100%', padding:'8px 10px', fontSize:13, border:'1px solid '+HAIR, borderRadius:4, background:WHITE, color:INK }}
+              >
+                <option value="">— pick location (optional) —</option>
+                {taxonomy.facilities.length > 0 && (
+                  <optgroup label="Facilities">
+                    {taxonomy.facilities.map(f => <option key={`wh-fac-${f.id}`} value={f.id}>{f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}</option>)}
+                  </optgroup>
+                )}
+                {taxonomy.meeting_spaces.length > 0 && (
+                  <optgroup label="Meeting spaces">
+                    {taxonomy.meeting_spaces.map(m => <option key={`wh-mtg-${m.id}`} value={m.id}>{m.name}</option>)}
+                  </optgroup>
+                )}
+              </select>
+              {selectedWhereFacility && (
+                <div style={{ marginTop:6, fontSize:11, color:INK_M, padding:'6px 8px', background:'#FAF6EC', border:'1px dashed '+HAIR, borderRadius:4 }}>
+                  <strong>{selectedWhereFacility.facility_name}</strong>
+                  {selectedWhereFacility.time_of_day_hint ? ` · ${selectedWhereFacility.time_of_day_hint}` : ''}
+                  {selectedWhereFacility.ai_description ? ` · ${selectedWhereFacility.ai_description.slice(0, 100)}${selectedWhereFacility.ai_description.length > 100 ? '…' : ''}` : ''}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
