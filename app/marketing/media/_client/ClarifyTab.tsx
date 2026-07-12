@@ -27,6 +27,7 @@ interface MediaRow {
 interface Props {
   mediaPage: MediaRow[];
   areaOptions: string[];
+  rooms?: Array<{ room_type_id: number; room_type_name: string }>;
 }
 
 const WHITE  = '#FFFFFF';
@@ -42,7 +43,7 @@ function isVideoRow(r: MediaRow): boolean {
   return /\.(mp4|mov|webm|m4v)(\?|$)/.test(p);
 }
 
-export default function ClarifyTab({ mediaPage, areaOptions }: Props) {
+export default function ClarifyTab({ mediaPage, areaOptions, rooms = [] }: Props) {
   const [editing, setEditing] = useState<MediaRow | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
 
@@ -134,6 +135,7 @@ export default function ClarifyTab({ mediaPage, areaOptions }: Props) {
         onClose={() => setEditing(null)}
         asset={editing as AssetEditRow | null}
         areaOptions={areaOptions}
+        rooms={rooms}
         onSaved={(updated) => {
           // Optimistically drop this asset from the client-side filter — the
           // router.refresh() inside the drawer will re-fetch the source of truth.
