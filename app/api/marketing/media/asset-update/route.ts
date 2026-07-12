@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   // Build the JSONB payload — only include fields the caller sent, so
   // COALESCE in the RPC leaves untouched columns alone.
   const payload: Record<string, any> = { asset_id };
-  for (const k of ['original_filename', 'caption', 'alt_text', 'primary_tier', 'property_area']) {
+  for (const k of ['original_filename', 'caption', 'alt_text', 'primary_tier', 'property_area', 'room_type_id']) {
     if (body[k] !== undefined) payload[k] = body[k] == null ? null : String(body[k]);
   }
   if (body.is_ai_generated !== undefined) {
