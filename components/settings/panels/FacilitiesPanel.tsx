@@ -37,6 +37,14 @@ type Row = {
   meeting_setup_fee: number | null; meeting_rate_currency: string | null;
   meeting_catering_options: string[] | null;
   meeting_location_tag: string | null; meeting_notes: string | null;
+  treatment_bed_count: number | null;
+  treatment_has_double_bed: boolean | null; treatment_has_aircon: boolean | null;
+  treatment_has_shower: boolean | null; treatment_has_hot_water: boolean | null;
+  treatment_has_music_system: boolean | null; treatment_has_natural_light: boolean | null;
+  treatment_has_dimmable_light: boolean | null; treatment_has_wc: boolean | null;
+  treatment_has_couples_setup: boolean | null;
+  treatment_room_number: string | null; treatment_floor_material: string | null;
+  treatment_view: string | null; treatment_ambient_notes: string | null;
 };
 
 interface Draft {
@@ -67,6 +75,14 @@ interface Draft {
   meeting_setup_fee: string; meeting_rate_currency: string;
   meeting_catering_options: string[];
   meeting_location_tag: string; meeting_notes: string;
+  treatment_bed_count: string;
+  treatment_has_double_bed: boolean; treatment_has_aircon: boolean;
+  treatment_has_shower: boolean; treatment_has_hot_water: boolean;
+  treatment_has_music_system: boolean; treatment_has_natural_light: boolean;
+  treatment_has_dimmable_light: boolean; treatment_has_wc: boolean;
+  treatment_has_couples_setup: boolean;
+  treatment_room_number: string; treatment_floor_material: string;
+  treatment_view: string; treatment_ambient_notes: string;
 }
 
 const EMPTY: Draft = {
@@ -91,6 +107,14 @@ const EMPTY: Draft = {
   meeting_half_day_rate: '', meeting_full_day_rate: '', meeting_setup_fee: '',
   meeting_rate_currency: 'USD', meeting_catering_options: [],
   meeting_location_tag: '', meeting_notes: '',
+  treatment_bed_count: '',
+  treatment_has_double_bed: false, treatment_has_aircon: false,
+  treatment_has_shower: false, treatment_has_hot_water: false,
+  treatment_has_music_system: false, treatment_has_natural_light: false,
+  treatment_has_dimmable_light: false, treatment_has_wc: false,
+  treatment_has_couples_setup: false,
+  treatment_room_number: '', treatment_floor_material: '',
+  treatment_view: '', treatment_ambient_notes: '',
 };
 
 const toDraft = (r: Row): Draft => ({
@@ -138,6 +162,20 @@ const toDraft = (r: Row): Draft => ({
   meeting_catering_options: r.meeting_catering_options ?? [],
   meeting_location_tag: r.meeting_location_tag ?? '',
   meeting_notes: r.meeting_notes ?? '',
+  treatment_bed_count: r.treatment_bed_count?.toString() ?? '',
+  treatment_has_double_bed: !!r.treatment_has_double_bed,
+  treatment_has_aircon: !!r.treatment_has_aircon,
+  treatment_has_shower: !!r.treatment_has_shower,
+  treatment_has_hot_water: !!r.treatment_has_hot_water,
+  treatment_has_music_system: !!r.treatment_has_music_system,
+  treatment_has_natural_light: !!r.treatment_has_natural_light,
+  treatment_has_dimmable_light: !!r.treatment_has_dimmable_light,
+  treatment_has_wc: !!r.treatment_has_wc,
+  treatment_has_couples_setup: !!r.treatment_has_couples_setup,
+  treatment_room_number: r.treatment_room_number ?? '',
+  treatment_floor_material: r.treatment_floor_material ?? '',
+  treatment_view: r.treatment_view ?? '',
+  treatment_ambient_notes: r.treatment_ambient_notes ?? '',
 });
 
 const POOL_TYPE_OPTS = ['', 'rock', 'infinity', 'lap', 'plunge', 'natural'];
@@ -181,9 +219,11 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
   const hasSpaKw   = cat.includes('spa') || cat.includes('treatment') || nm.includes('spa') || Boolean(draft?.treatment_rooms_count && Number(draft.treatment_rooms_count) > 0);
   const hasPoolKw  = cat.includes('pool') || nm.includes('pool') || nm.includes('plunge') || Boolean(draft?.pool_type);
   const hasSaunaKw = cat.includes('sauna') || nm.includes('sauna') || Boolean(draft?.sauna_type);
-  const showSpa   = hasSpaKw;
+  const hasTreatmentKw = cat.includes('treatment') || nm.includes('treatment') || Boolean(draft?.treatment_room_number) || Boolean(draft?.treatment_bed_count && Number(draft.treatment_bed_count) > 0);
+  const showSpa   = hasSpaKw && !hasTreatmentKw;
   const showPool  = hasPoolKw;
   const showSauna = hasSaunaKw;
+  const showTreatment = hasTreatmentKw;
 
   function save() {
     if (!draft) return;
@@ -240,6 +280,20 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
         p_meeting_catering_options: draft.meeting_catering_options.length > 0 ? draft.meeting_catering_options : null,
         p_meeting_location_tag: draft.meeting_location_tag.trim() || null,
         p_meeting_notes: draft.meeting_notes.trim() || null,
+        p_treatment_bed_count: draft.treatment_bed_count ? Number(draft.treatment_bed_count) : null,
+        p_treatment_has_double_bed: draft.treatment_has_double_bed,
+        p_treatment_has_aircon: draft.treatment_has_aircon,
+        p_treatment_has_shower: draft.treatment_has_shower,
+        p_treatment_has_hot_water: draft.treatment_has_hot_water,
+        p_treatment_has_music_system: draft.treatment_has_music_system,
+        p_treatment_has_natural_light: draft.treatment_has_natural_light,
+        p_treatment_has_dimmable_light: draft.treatment_has_dimmable_light,
+        p_treatment_has_wc: draft.treatment_has_wc,
+        p_treatment_has_couples_setup: draft.treatment_has_couples_setup,
+        p_treatment_room_number: draft.treatment_room_number.trim() || null,
+        p_treatment_floor_material: draft.treatment_floor_material.trim() || null,
+        p_treatment_view: draft.treatment_view.trim() || null,
+        p_treatment_ambient_notes: draft.treatment_ambient_notes.trim() || null,
       });
       if (e) { setError(e.message); return; }
       setDraft(null); router.refresh();
@@ -356,6 +410,28 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
             <>
               <div style={{ gridColumn: '1 / -1', paddingTop: 6, borderTop: '1px solid #E6DFCC', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#5A5A5A' }}>Sauna specifics</div>
               <LabeledSelect label="Sauna type" value={draft.sauna_type} onChange={(v) => setDraft({ ...draft, sauna_type: v })} options={SAUNA_TYPE_OPTS} />
+            </>
+          )}
+          {/* TREATMENT ROOM SPECIFICS */}
+          {showTreatment && (
+            <>
+              <div style={{ gridColumn: '1 / -1', paddingTop: 6, borderTop: '1px solid #E6DFCC', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#5A5A5A' }}>Treatment room specifics</div>
+              <LabeledInput label="Room number" value={draft.treatment_room_number} onChange={(v) => setDraft({ ...draft, treatment_room_number: v })} placeholder="1" />
+              <LabeledInput label="Bed count" value={draft.treatment_bed_count} onChange={(v) => setDraft({ ...draft, treatment_bed_count: v })} type="number" />
+              <LabeledInput label="Floor material" value={draft.treatment_floor_material} onChange={(v) => setDraft({ ...draft, treatment_floor_material: v })} placeholder="teak / stone" />
+              <LabeledInput label="View" value={draft.treatment_view} onChange={(v) => setDraft({ ...draft, treatment_view: v })} span={3} placeholder="jungle / river" />
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                <LabeledCheckbox label="Aircon" checked={draft.treatment_has_aircon} onChange={(v) => setDraft({ ...draft, treatment_has_aircon: v })} />
+                <LabeledCheckbox label="Shower" checked={draft.treatment_has_shower} onChange={(v) => setDraft({ ...draft, treatment_has_shower: v })} />
+                <LabeledCheckbox label="Hot water" checked={draft.treatment_has_hot_water} onChange={(v) => setDraft({ ...draft, treatment_has_hot_water: v })} />
+                <LabeledCheckbox label="WC" checked={draft.treatment_has_wc} onChange={(v) => setDraft({ ...draft, treatment_has_wc: v })} />
+                <LabeledCheckbox label="Music system" checked={draft.treatment_has_music_system} onChange={(v) => setDraft({ ...draft, treatment_has_music_system: v })} />
+                <LabeledCheckbox label="Natural light" checked={draft.treatment_has_natural_light} onChange={(v) => setDraft({ ...draft, treatment_has_natural_light: v })} />
+                <LabeledCheckbox label="Dimmable light" checked={draft.treatment_has_dimmable_light} onChange={(v) => setDraft({ ...draft, treatment_has_dimmable_light: v })} />
+                <LabeledCheckbox label="Double bed" checked={draft.treatment_has_double_bed} onChange={(v) => setDraft({ ...draft, treatment_has_double_bed: v })} />
+                <LabeledCheckbox label="Couples setup" checked={draft.treatment_has_couples_setup} onChange={(v) => setDraft({ ...draft, treatment_has_couples_setup: v })} />
+              </div>
+              <LabeledTextarea label="Ambient notes" value={draft.treatment_ambient_notes} onChange={(v) => setDraft({ ...draft, treatment_ambient_notes: v })} span={3} rows={2} placeholder="candles, aromatherapy, sound bath..." />
             </>
           )}
           {/* MEETING SPACE OVERLAY */}
