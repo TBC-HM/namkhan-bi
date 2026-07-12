@@ -36,8 +36,21 @@ async function loadAll(pid: number) {
     sb.from('v_facility_grounding').select('*').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
   ]);
 
-  // Distinct property_area values seed the datalist in the Edit drawer.
   const areaSet = new Set<string>();
+  // (a) canonical always-visible options
+  areaSet.add('Logos');
+  areaSet.add('No area');
+  // (b) all room names — from v_room_grounding load
+  for (const r of (rooms.data ?? [])) {
+    const n = (r as any).room_type_name;
+    if (n && typeof n === 'string') areaSet.add(n);
+  }
+  // (c) all facility names — from v_facility_grounding load
+  for (const f of (facilities.data ?? [])) {
+    const n = (f as any).facility_name;
+    if (n && typeof n === 'string') areaSet.add(n);
+  }
+  // (d) any historical values already tagged in library
   for (const row of (mediaPage.data ?? [])) {
     const v = (row as any).property_area;
     if (v && typeof v === 'string') areaSet.add(v);
