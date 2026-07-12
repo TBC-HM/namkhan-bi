@@ -1,5 +1,9 @@
 // app/marketing/media/_client/SettingsTab.tsx
-// PBS 2026-07-12 — Settings: 4 sub-tab strip (Guardrails / Channels / Reality / Prompt Categories).
+// PBS 2026-07-12 — Settings: 4 sub-tab strip (Guardrails / Channels / AI profiles / Prompt Categories).
+// 2026-07-13: property-wide Reality profile (location · palette · vibe · forbidden) moved to
+//   Property Settings → "Brand & Reality" tab (single source of truth in property.brand_reality).
+//   This tab now only holds AI overlays that DON'T yet have a home in Property Settings:
+//   per-room AI context + per-facility AI enrichment. LinkPhotos is always visible at the top.
 // Guardrails + Channels writes go through public.fn_media_rule_upsert / fn_media_rule_delete / fn_media_channel_spec_upsert (SECURITY DEFINER).
 // 2026-07-11 pm: added Prompt Categories sub-tab (media.ai_prompt_categories).
 // 2026-07-12 pm: Reality tab now bundles THREE panels stacked:
@@ -129,7 +133,7 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
   const tabs: Array<{ key: TabKey; label: string; count: number }> = [
     { key: 'rules',      label: 'Guardrails',        count: rulesActive.length },
     { key: 'channels',   label: 'Output channels',   count: channelSpecs.length },
-    { key: 'reality',    label: 'Reality profile',   count: (reality ? 1 : 0) + rooms.length + facilities.length },
+    { key: 'reality',    label: 'AI profiles',       count: rooms.length + facilities.length },
     { key: 'categories', label: 'Prompt categories', count: (categories ?? []).length },
   ];
 
@@ -168,8 +172,9 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
       {tab === 'channels'   && <ChannelsPanel          rows={channelSpecs} setBanner={setBanner} />}
       {tab === 'reality'    && (
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-          <RealityExplainer />
-          <RealityPanel        propertyId={propertyId} reality={reality} setBanner={setBanner} />
+          <div style={{ padding:'12px 16px', background:'#FFF9EA', border:'1px solid '+HAIR, borderRadius:4, fontSize:12, color:INK }}>
+            <strong>Property-wide grounding moved:</strong> location · palette · vibe · forbidden terms now live in <a href={`/h/${propertyId}/settings/property`} style={{ color:FOREST, textDecoration:'underline' }}>Property Settings → Brand &amp; Reality</a> (single source of truth). The AI overlays below (per-room · per-facility) will migrate there next.
+          </div>
           <RoomProfilesPanel   propertyId={propertyId} rooms={rooms} />
           <FacilityProfilesPanel propertyId={propertyId} facilities={facilities} setBanner={setBanner} />
         </div>

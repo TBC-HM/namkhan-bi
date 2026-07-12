@@ -78,7 +78,10 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const filtered = useMemo(() => {
     let out = mediaPage;
     if (tier)         out = out.filter(r => r.primary_tier === tier);
-    if (areaFilter)   out = out.filter(r => (r.property_area ?? '') === areaFilter);
+    if (areaFilter) {
+      const q = areaFilter.trim().toLowerCase();
+      out = out.filter(r => (r.property_area ?? '').trim().toLowerCase() === q);
+    }
     if (aiOnly)       out = out.filter((r: any) => r.is_ai_generated === true);
     if (searchText) {
       const q = searchText.toLowerCase();

@@ -15,13 +15,15 @@ export const revalidate = 0;
 async function getPropertyData(propertyId: number) {
   const supabase = createClient();
   const [
-    identity, location, brand, policies,
+    identity, location, brand, brandReality, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
     team, owner, roomUnits, transport, boats, boatCruises, meetingSpaces,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('brand').select('*').eq('property_id', propertyId).maybeSingle(),
+    // 2026-07-13: single source of truth for AI/reality grounding — moved from media.reality_profile
+    supabase.schema('property').from('brand_reality').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('policies').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('rooms').select('*').eq('property_id', propertyId).order('room_type_id'),
     supabase.schema('property').from('facilities').select('*').eq('property_id', propertyId).order('category').order('name'),
@@ -50,6 +52,7 @@ async function getPropertyData(propertyId: number) {
     identity: identity.data,
     location: location.data,
     brand: brand.data,
+    brandReality: brandReality.data,
     policies: policies.data,
     rooms: rooms.data ?? [],
     facilities: facilities.data ?? [],

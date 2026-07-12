@@ -10,6 +10,7 @@ import { useState } from 'react';
 import IdentityPanel from './panels/IdentityPanel';
 import LocationPanel from './panels/LocationPanel';
 import BrandPanel from './panels/BrandPanel';
+import BrandRealityPanel from './panels/BrandRealityPanel';
 import PoliciesPanel from './panels/PoliciesPanel';
 import RoomsPanel from './panels/RoomsPanel';
 import FacilitiesPanel from './panels/FacilitiesPanel';
@@ -25,7 +26,7 @@ import ImekongPanel from './panels/ImekongPanel';
 import MeetingSpacesPanel from './panels/MeetingSpacesPanel';
 
 type Tab =
-  | 'identity' | 'owner' | 'location' | 'brand' | 'policies'
+  | 'identity' | 'owner' | 'location' | 'brand' | 'reality' | 'policies'
   | 'rooms' | 'facilities' | 'activities' | 'seasons'
   | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces';
 
@@ -34,6 +35,7 @@ const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => numb
   { key: 'owner',          label: 'Owner',          subtitle: 'Company · registration · bank', count: () => null },
   { key: 'location',       label: 'Location',       subtitle: 'Address · GPS · climate',      count: () => null },
   { key: 'brand',          label: 'Brand',          subtitle: 'Logo · palette · copy',        count: () => null },
+  { key: 'reality',        label: 'Brand & Reality', subtitle: 'AI grounding · vibe · palette · forbidden', count: () => null },
   { key: 'policies',       label: 'Policies',       subtitle: 'Bookings & terms',             count: () => null },
   { key: 'rooms',          label: 'Rooms',          subtitle: 'Room type catalog',            count: (d) => d.rooms.length },
   { key: 'facilities',     label: 'Facilities',     subtitle: 'Pool · spa · dining',          count: (d) => d.facilities.length },
@@ -154,6 +156,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'owner'          && <OwnerPanel          data={data.owner}          propertyId={propertyId} />}
           {active === 'location'       && <LocationPanel       data={data.location}       propertyId={propertyId} />}
           {active === 'brand'          && <BrandPanel          data={data.brand}          propertyId={propertyId} />}
+          {active === 'reality'        && <BrandRealityPanel   data={data.brandReality}   propertyId={propertyId} />}
           {active === 'policies'       && <PoliciesPanel       data={data.policies}       propertyId={propertyId} />}
           {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} propertyId={propertyId} />}
           {active === 'facilities'     && <FacilitiesPanel     data={data.facilities}     propertyId={propertyId} />}
