@@ -2,6 +2,7 @@
 // POST — mark an ai_generation as accepted and mint a media.media_assets row.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import crypto from 'node:crypto';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,13 +25,19 @@ export async function POST(req: NextRequest) {
     if (genErr || !gen) return NextResponse.json({ error: 'generation_not_found', detail: genErr?.message }, { status: 404 });
 
     // Insert into media.media_assets via schema-scoped client.
+    // PBS 2026-07-12: sha256 is NOT NULL on media.media_assets. AI-generated PNGs don't have
+    // a source-file hash we can compute (they live in storage as opaque blobs), so we synthesize
+    // a stable hex hash from generation_id + candidate_path — always unique per generation.
+    const syntheticSha256 = crypto.createHash('sha256').update(generation_id + ':' + candidate_path).digest('hex');
+
     const insertPayload = {
       property_id: gen.property_id,
+      sha256: syntheticSha256,
       original_filename: candidate_path.split('/').pop() ?? candidate_path,
       asset_type: 'photo',
       mime_type: 'image/png',
       master_path: candidate_path,
-      status: 'approved',
+      status: 'ready',
       primary_tier: gen.target_tier,
       is_ai_generated: true,
       gen_prompt: gen.effective_prompt ?? gen.prompt,
