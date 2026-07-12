@@ -268,19 +268,19 @@ export default async function AnalyticsKPIs({ accessToken, totalSubscribers, tot
               : <div style={{ fontSize: 11, color: INK_M }}>{devicesErr ? `error: ${devicesErr}` : 'no data'}</div>}
           </div>
           <div>
-            <div style={SECTION_H}>Top 5 countries · avg view duration (s)</div>
+            <div style={SECTION_H}>Top 5 countries · views (28d)</div>
             {topGeo.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {topGeo.map((g) => {
-                  const max = topGeo[0]?.avgViewDuration || 1;
-                  const pct = (g.avgViewDuration / max) * 100;
+                  const max = topGeo[0]?.views || 1;
+                  const pct = (g.views / max) * 100;
                   return (
-                    <div key={g.country} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11, color: INK }}>
-                      <span style={{ width: 30, color: INK_M }}>{g.country}</span>
+                    <div key={g.code} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11, color: INK }}>
+                      <span style={{ width: 30, color: INK_M }}>{g.code}</span>
                       <div style={{ flex: 1, height: 12, background: CREAM, borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ width: `${pct.toFixed(1)}%`, height: '100%', background: FOREST }} />
                       </div>
-                      <span style={{ width: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: INK_M }}>{fmt1(g.avgViewDuration)}s</span>
+                      <span style={{ width: 50, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: INK_M }}>{fmt(g.views)}</span>
                     </div>
                   );
                 })}
