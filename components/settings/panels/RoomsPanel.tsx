@@ -70,9 +70,7 @@ export default function RoomsPanel({ data, roomUnits, propertyId }: {
   const [error, setError] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
 
-  const unitMap = new Map<string, number>();
-  for (const u of roomUnits ?? []) unitMap.set(u.room_type_name, Number(u.units ?? 0));
-  const totalUnits = Array.from(unitMap.values()).reduce((s, n) => s + n, 0);
+  const totalUnits = data.reduce((s, r) => s + Number(r.unit_count ?? 0), 0);
 
   function save() {
     if (!draft) return;
