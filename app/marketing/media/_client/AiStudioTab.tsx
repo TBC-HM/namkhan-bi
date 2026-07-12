@@ -91,6 +91,9 @@ const FOREST = '#1F3A2E';
 const RED    = '#B03826';
 const WHITE  = '#FFFFFF';
 
+// PBS 2026-07-11 pm: bucket media-ai is public — CDN URL for candidate thumbnails.
+const MEDIA_AI_PUBLIC = 'https://kpenyneooigsyuuomgct.supabase.co/storage/v1/object/public/media-ai/';
+
 const TIERS = [
   { key: 'tier_social_pool', label: 'Social pool' },
   { key: 'tier_internal',    label: 'Internal only' },
@@ -567,11 +570,21 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
                 </div>
               )}
               {g.candidate_paths && g.candidate_paths.length > 0 && !g.chosen_asset_id && (
-                <div style={{ display:'flex', gap:8, marginTop:8, flexWrap:'wrap' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:10, marginTop:10 }}>
                   {g.candidate_paths.map((p, i) => (
-                    <button key={g.id + '_' + i} onClick={() => accept(g.id, p)} style={{
-                      padding:'4px 10px', fontSize:10, background:FOREST, color:WHITE, border:'none', borderRadius:3, cursor:'pointer',
-                    }}>Accept candidate {i + 1}</button>
+                    <div key={g.id + '_' + i} style={{ border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', background:WHITE }}>
+                      <a href={MEDIA_AI_PUBLIC + p} target="_blank" rel="noopener noreferrer" title="Open full-size in new tab" style={{ display:'block', aspectRatio:'1 / 1', background:'#F5F1E6' }}>
+                        <img src={MEDIA_AI_PUBLIC + p} alt={'candidate '+(i+1)} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+                      </a>
+                      <div style={{ display:'flex', gap:4, padding:6, borderTop:'1px solid '+HAIR }}>
+                        <button onClick={() => accept(g.id, p)} style={{
+                          flex:1, padding:'6px 8px', fontSize:10, background:FOREST, color:WHITE, border:'none', borderRadius:3, cursor:'pointer', fontWeight:600,
+                        }}>Accept #{i + 1}</button>
+                        <a href={MEDIA_AI_PUBLIC + p} target="_blank" rel="noopener noreferrer" style={{
+                          padding:'6px 10px', fontSize:10, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center',
+                        }} title="Open in new tab to download / edit externally">↗</a>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
