@@ -243,6 +243,7 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
           category_key: categoryKey,
           room_type_id: needsRoom     ? Number(roomTypeId) : null,
           facility_id:  needsFacility ? Number(facilityId)  : null,
+          n: 4,  // PBS 2026-07-12: default 4 candidates → pick + refine loop
         }),
       });
       const j = await res.json();
@@ -264,6 +265,28 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
     } catch (e: any) {
       setBanner({ tone:'err', text:`Failed: ${e.message}` });
     } finally { setBusy(false); }
+  }
+
+  async function refine(genId: string, candidatePath: string) {
+    // PBS 2026-07-12: 2nd-round iteration on a chosen candidate.
+    // Auto-accepts the candidate → mints an asset → switches Studio to from_asset mode
+    // with that asset as source, so the next Generate refines this image with a tweaked prompt.
+    setBanner({ tone:'ok', text:'Preparing refine…' });
+    try {
+      const res = await fetch('/api/marketing/media/ai-accept', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ generation_id: genId, candidate_path: candidatePath, accepted_by: 'PBS_refine' }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.asset_id) { setBanner({ tone:'err', text:`Refine setup failed: ${j.error ?? res.statusText}` }); return; }
+      setMode('from_asset');
+      setSourceAssetId(j.asset_id);
+      setBanner({ tone:'ok', text:'Ready to refine — tweak the prompt above, then Generate again.' });
+      refreshRow(genId);
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e: any) {
+      setBanner({ tone:'err', text:`Refine setup failed: ${e.message}` });
+    }
   }
 
   async function accept(genId: string, candidatePath: string) {
@@ -582,12 +605,15 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
                       <a href={MEDIA_AI_PUBLIC + p} target="_blank" rel="noopener noreferrer" title="Open full-size in new tab" style={{ display:'block', aspectRatio:'1 / 1', background:'#F5F1E6' }}>
                         <img src={MEDIA_AI_PUBLIC + p} alt={'candidate '+(i+1)} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
                       </a>
-                      <div style={{ display:'flex', gap:4, padding:6, borderTop:'1px solid '+HAIR }}>
+                      <div style={{ display:'flex', gap:3, padding:6, borderTop:'1px solid '+HAIR, flexWrap:'wrap' }}>
                         <button onClick={() => accept(g.id, p)} style={{
-                          flex:1, padding:'6px 8px', fontSize:10, background:FOREST, color:WHITE, border:'none', borderRadius:3, cursor:'pointer', fontWeight:600,
-                        }}>Accept #{i + 1}</button>
+                          flex:1, minWidth:70, padding:'6px 6px', fontSize:10, background:FOREST, color:WHITE, border:'none', borderRadius:3, cursor:'pointer', fontWeight:600,
+                        }} title="Add this candidate to the Library">Accept</button>
+                        <button onClick={() => refine(g.id, p)} style={{
+                          flex:1, minWidth:70, padding:'6px 6px', fontSize:10, background:WHITE, color:FOREST, border:'1px solid '+FOREST, borderRadius:3, cursor:'pointer', fontWeight:600,
+                        }} title="Use this image as the source for a 2nd-round generation with a refined prompt">Refine ✨</button>
                         <a href={MEDIA_AI_PUBLIC + p} target="_blank" rel="noopener noreferrer" style={{
-                          padding:'6px 10px', fontSize:10, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center',
+                          padding:'6px 8px', fontSize:10, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center',
                         }} title="Open in new tab to download / edit externally">↗</a>
                       </div>
                     </div>
