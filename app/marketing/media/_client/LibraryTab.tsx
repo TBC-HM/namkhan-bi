@@ -56,6 +56,8 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const [useForMenu, setUseForMenu] = useState<string | null>(null);
   const [busyRow, setBusyRow] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [lastDownload, setLastDownload] = useState<{ url: string; label: string } | null>(null);
+  const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<MediaRow | null>(null);
 
   const totals = useMemo(() => {
@@ -72,8 +74,26 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     return mediaPage.filter(r => r.primary_tier === tier);
   }, [mediaPage, tier]);
 
-  const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageRows = visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const visible = filtered.filter(r => !localDismiss.has(r.asset_id));
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+
+  async function deleteAsset(assetId: string, filename: string | null) {
+    // PBS 2026-07-12: soft-delete (status=removed). Optimistic client hide + server RPC.
+    if (!window.confirm(`Delete "${filename ?? assetId.slice(0,8)}" from the library? (soft-delete, can be restored via SQL)`)) return;
+    setBusyRow(assetId); setMsg(null);
+    try {
+      const res = await fetch('/api/marketing/media/asset-delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_id: assetId }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || 'delete_failed');
+      setLocalDismiss(s => { const next = new Set(s); next.add(assetId); return next; });
+      setMsg(`Deleted ${filename ?? assetId.slice(0,8)} — refresh to sync`);
+    } catch (e: any) { setMsg(`Delete failed: ${e.message}`); }
+    finally { setBusyRow(null); }
+  }
 
   async function renderForChannel(assetId: string, channel: string) {
     setBusyRow(assetId);
@@ -86,7 +106,15 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'failed');
-      setMsg(`Rendered for ${channel} — queued as ${j.render_id ?? 'render'}`);
+      const dl = j.download_url as string | undefined;
+      const label = `${j.channel_display ?? channel} · ${j.width}×${j.height}`;
+      if (dl) {
+        setLastDownload({ url: dl, label });
+        setMsg(`Rendered for ${label} — ready to download ↓`);
+        try { window.open(dl, '_blank', 'noopener,noreferrer'); } catch { /* pop-up blocked, banner link still works */ }
+      } else {
+        setMsg(`Rendered for ${channel} — queued as ${j.render_id ?? 'render'}`);
+      }
     } catch (e: any) {
       setMsg(`Failed: ${e.message}`);
     } finally {
@@ -175,6 +203,10 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                     padding:'4px 10px', fontSize:11, fontWeight:600, background:'transparent', color:INK,
                     border:'1px solid '+INK, borderRadius:2, cursor:'pointer', whiteSpace:'nowrap',
                   }}>Edit ✎</button>
+                  <button onClick={() => deleteAsset(r.asset_id, r.original_filename ?? null)} disabled={busyRow === r.asset_id} title="Delete from library (soft-delete)" style={{
+                    padding:'4px 8px', fontSize:11, fontWeight:600, background:'transparent', color:'#B23A2E',
+                    border:'1px solid #B23A2E', borderRadius:2, cursor:'pointer', whiteSpace:'nowrap',
+                  }}>✕ Delete</button>
                   {onSendToAi ? (
                     <button onClick={() => onSendToAi(r.asset_id)} style={{
                       padding:'4px 10px', fontSize:11, fontWeight:600, background:'transparent', color:FOREST,
