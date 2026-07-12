@@ -20,11 +20,12 @@ import ContactsPanel from './panels/ContactsPanel';
 import SocialPanel from './panels/SocialPanel';
 import TeamPanel from './panels/TeamPanel';
 import OwnerPanel from './panels/OwnerPanel';
+import TransportPanel from './panels/TransportPanel';
 
 type Tab =
   | 'identity' | 'owner' | 'location' | 'brand' | 'policies'
   | 'rooms' | 'facilities' | 'activities' | 'seasons'
-  | 'certifications' | 'contacts' | 'social' | 'team';
+  | 'certifications' | 'contacts' | 'social' | 'team' | 'transport';
 
 const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => number | null }[] = [
   { key: 'identity',       label: 'Identity',       subtitle: 'Legal & licensing',            count: () => null },
@@ -35,6 +36,7 @@ const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => numb
   { key: 'rooms',          label: 'Rooms',          subtitle: 'Room type catalog',            count: (d) => d.rooms.length },
   { key: 'facilities',     label: 'Facilities',     subtitle: 'Pool · spa · dining',          count: (d) => d.facilities.length },
   { key: 'activities',     label: 'Activities',     subtitle: 'Wellness · culture · adventure', count: (d) => d.activities.length },
+  { key: 'transport',      label: 'Transport',      subtitle: 'Shuttle · private car · boat',   count: (d) => d.transport?.length ?? 0 },
   { key: 'seasons',        label: 'Seasons',        subtitle: 'High / low calendar',          count: (d) => d.seasons.length },
   { key: 'certifications', label: 'Certifications', subtitle: 'SLH · ASEAN Green · etc',      count: (d) => d.certifications.length },
   { key: 'contacts',       label: 'Contacts',       subtitle: 'Reservations · GM · owner',    count: (d) => d.contacts.length },
@@ -152,6 +154,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} propertyId={propertyId} />}
           {active === 'facilities'     && <FacilitiesPanel     data={data.facilities}     propertyId={propertyId} />}
           {active === 'activities'     && <ActivitiesPanel     data={data.activities}     propertyId={propertyId} />}
+          {active === 'transport'      && <TransportPanel      data={data.transport ?? []}     propertyId={propertyId} />}
           {active === 'seasons'        && <SeasonsPanel        data={data.seasons}        propertyId={propertyId} />}
           {active === 'certifications' && <CertificationsPanel data={data.certifications} propertyId={propertyId} />}
           {active === 'contacts'       && <ContactsPanel       data={data.contacts}       propertyId={propertyId} />}
