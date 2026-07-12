@@ -11,6 +11,7 @@
 
 import { Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import LinkPhotosPanel from './LinkPhotosPanel';
 
 // --- types -----------------------------------------------------------
 interface Rule {
@@ -95,6 +96,7 @@ interface Props {
   categories: PromptCategory[];
   rooms: RoomOption[];
   facilities: FacilityOption[];
+  mediaPage?: any[];
 }
 
 // --- tokens ----------------------------------------------------------
@@ -116,12 +118,17 @@ function csvIn(v: string[] | null | undefined): string { return (v ?? []).join('
 function csvOut(s: string): string[] { return s.split(',').map(x => x.trim()).filter(Boolean); }
 
 // --- root ------------------------------------------------------------
-export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality, categories, rooms, facilities }: Props) {
+export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality, categories, rooms, facilities, mediaPage = [] }: Props) {
   const [tab, setTab] = useState<TabKey>('rules');
   const [banner, setBanner] = useState<{ tone: 'ok'|'err'; text: string } | null>(null);
 
   const bannerBg = banner?.tone === 'ok' ? '#EAF3EA' : '#FBE9E7';
   const bannerFg = banner?.tone === 'ok' ? FOREST : RED;
+
+  // PBS 2026-07-12 pm: Link Photos widget always visible at top of Settings
+  const LinkPhotosMount = () => (
+    <LinkPhotosPanel propertyId={propertyId} rooms={rooms} facilities={facilities} mediaPage={mediaPage as any[]} />
+  );
 
   const tabs: Array<{ key: TabKey; label: string; count: number }> = [
     { key: 'rules',      label: 'Guardrails',        count: rulesActive.length },
@@ -132,6 +139,7 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
 
   return (
     <div>
+      <LinkPhotosMount />
       {banner && (
         <div style={{ padding:'10px 14px', background:bannerBg, color:bannerFg, border:'1px solid '+HAIR, borderRadius:4, marginBottom:12, fontSize:12 }}>
           {banner.text}
@@ -1020,6 +1028,7 @@ const inp: React.CSSProperties = { width:'100%', padding:'6px 10px', fontSize:12
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
+      <LinkPhotosMount />
       <label style={{ display:'block', fontSize:10, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>{label}</label>
       {children}
     </div>
