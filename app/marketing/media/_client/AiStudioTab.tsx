@@ -94,9 +94,15 @@ const WHITE  = '#FFFFFF';
 // PBS 2026-07-11 pm: bucket media-ai is public — CDN URL for candidate thumbnails.
 const MEDIA_AI_PUBLIC = 'https://kpenyneooigsyuuomgct.supabase.co/storage/v1/object/public/media-ai/';
 
+// PBS 2026-07-11 pm: all 6 marketing.usage_tier values pickable.
+// Website hero + OTA profile still work but are governance-flagged for AI-generated assets.
 const TIERS = [
-  { key: 'tier_social_pool', label: 'Social pool' },
-  { key: 'tier_internal',    label: 'Internal only' },
+  { key: 'tier_website_hero', label: 'Website hero' },
+  { key: 'tier_ota_profile',  label: 'OTA profile' },
+  { key: 'tier_social_pool',  label: 'Social pool' },
+  { key: 'tier_internal',     label: 'Internal only' },
+  { key: 'tier_archive',      label: 'Archive' },
+  { key: 'tier_logos',        label: 'Logos / marks' },
 ];
 
 export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSourceAssetId, categories, rooms, facilities }: Props) {
