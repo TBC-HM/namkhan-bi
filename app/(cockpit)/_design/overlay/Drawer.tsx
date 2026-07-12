@@ -76,9 +76,9 @@ const S: Record<string, CSSProperties> = {
   // PBS 2026-06-29: pointerEvents on root, scrim transparent + click-through-to-close.
   // On dark themes (Namkhan) any opacity reads as "page went blank". Keep the
   // click-to-close behaviour but lose the visible tint.
-  scrim: { position: 'absolute', inset: 0, background: 'transparent' },
+  scrim: { position: 'absolute', inset: 0, background: 'transparent', pointerEvents: 'auto' },
   panel: {
-    position: 'relative', height: '100vh',
+    position: 'relative', height: '100vh', pointerEvents: 'auto',
     background: 'var(--paper, #FFFFFF)',
     color: 'var(--ink, #1B1B1B)',
     borderLeft: '1px solid var(--hairline, #E6DFCC)',
