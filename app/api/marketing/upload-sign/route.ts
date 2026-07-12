@@ -2,15 +2,14 @@
 // Signed-URL upload flow — bypasses Vercel's 4.5 MB function body cap.
 //
 // Browser sends ONLY the file metadata (filename + mime + size + sha256).
-// Server validates, dedup-checks, pre-creates the media.media_assets row,
-// mints a signed upload URL for media-raw bucket, returns { upload_url, asset_id, raw_path }.
-// The browser then PUTs the actual bytes directly to Supabase Storage.
+// Server validates, then calls SECURITY DEFINER RPC public.fn_media_asset_upload_signup
+// (dedup check + row insert in media.media_assets) and mints a signed upload URL for
+// media-raw bucket. Browser then PUTs the actual bytes direct to Storage.
 //
-// Body: { filename, content_type, size, sha256, photographer?, license?, campaign_tag? }
-//
-// 2026-07-12 pm: fixed silent-fail schema mismatch (marketing → media). Extended MIME allow-list
-//   to include video/mp4/quicktime/webm/etc + application/pdf so video footage and PDF flyers
-//   can be uploaded through the same dropzone. Bumped MAX_BYTES to 5 GB to match bucket cap.
+// 2026-07-12 pm: previous fix used `sb.schema('media' as any)` — this fails because
+// PostgREST exposes only `public` (plus a couple of exceptions). Third time we've been
+// burned on this. Now routing all media_assets writes through a public.fn_* RPC.
+// See memory: feedback_postgrest_schema_writes_repeat_burn.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -33,22 +32,6 @@ const ALLOWED_MIME = new Set([
 ]);
 
 const MAX_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB — matches media-raw bucket cap
-
-function inferAssetType(mime: string): 'photo' | 'video' | 'raw_dng' | 'document' {
-  if (mime === 'application/pdf') return 'document';
-  if (mime === 'image/x-adobe-dng') return 'raw_dng';
-  if (mime.startsWith('image/x-')) return 'raw_dng';
-  if (mime.startsWith('video/') || mime === 'application/mxf') return 'video';
-  return 'photo';
-}
-
-function safeName(name: string): string {
-  return name
-    .normalize('NFKD')
-    .replace(/[^\w.\-]+/g, '_')
-    .replace(/_{2,}/g, '_')
-    .slice(0, 200);
-}
 
 export async function POST(req: NextRequest) {
   let admin;
@@ -76,69 +59,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid_sha256' }, { status: 400 });
   }
 
-  // Dedupe — if we already have this exact file, return existing asset_id
-  const { data: existing } = await admin
-    .schema('media' as any)
-    .from('media_assets')
-    .select('asset_id, status, raw_path')
-    .eq('sha256', sha256)
-    .maybeSingle();
+  // Dedup + insert via SECURITY DEFINER RPC. Returns 1 row.
+  const { data: rows, error: rpcErr } = await admin.rpc('fn_media_asset_upload_signup', {
+    p_sha256: sha256,
+    p_filename: filename,
+    p_content_type: content_type,
+    p_size: size,
+    p_photographer: body.photographer ?? null,
+    p_license: body.license ?? 'owned',
+  });
 
-  if (existing) {
+  if (rpcErr) {
+    return NextResponse.json({
+      error: 'db_signup_failed',
+      detail: rpcErr.message,
+      code: rpcErr.code,
+      hint: rpcErr.hint,
+    }, { status: 500 });
+  }
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  if (!row?.asset_id || !row.raw_path) {
+    return NextResponse.json({ error: 'db_signup_no_row', row }, { status: 500 });
+  }
+
+  if (row.duplicate) {
     return NextResponse.json({
       duplicate: true,
-      asset_id: existing.asset_id,
-      raw_path: existing.raw_path,
-      status: existing.status,
+      asset_id: row.asset_id,
+      raw_path: row.raw_path,
+      status: row.status,
     });
   }
 
-  // Pre-insert row to claim asset_id
-  const { data: inserted, error: insertErr } = await admin
-    .schema('media' as any)
-    .from('media_assets')
-    .insert({
-      sha256,
-      original_filename: filename,
-      asset_type: inferAssetType(content_type),
-      mime_type: content_type,
-      file_size_bytes: size,
-      photographer: body.photographer || null,
-      license_type: body.license || 'owned',
-      status: 'ingested',
-    })
-    .select('asset_id')
-    .single();
-
-  if (insertErr || !inserted) {
-    return NextResponse.json({ error: 'db_insert_failed', detail: insertErr?.message }, { status: 500 });
-  }
-
-  // Path: yyyy/mm/<sha8>__<safe>
-  const now = new Date();
-  const yyyy = String(now.getUTCFullYear());
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const raw_path = `${yyyy}/${mm}/${sha256.slice(0, 8)}__${safeName(filename)}`;
-
-  // Update row with raw_path
-  await admin
-    .schema('media' as any)
-    .from('media_assets')
-    .update({ raw_path })
-    .eq('asset_id', inserted.asset_id);
-
-  // Mint signed upload URL (10 min)
+  // Mint signed upload URL (10 min).
   const { data: signed, error: signErr } = await admin.storage
     .from('media-raw')
-    .createSignedUploadUrl(raw_path);
+    .createSignedUploadUrl(row.raw_path);
 
   if (signErr || !signed) {
     return NextResponse.json({ error: 'sign_failed', detail: signErr?.message }, { status: 500 });
   }
 
   return NextResponse.json({
-    asset_id: inserted.asset_id,
-    raw_path,
+    asset_id: row.asset_id,
+    raw_path: row.raw_path,
     upload_url: signed.signedUrl,
     token: signed.token,
   });

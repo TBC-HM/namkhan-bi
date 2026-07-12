@@ -1,6 +1,10 @@
 // POST /api/marketing/upload-finalize
-// Confirms a signed-URL upload completed successfully. Optionally tags the asset
-// with campaign metadata that wasn't passed at sign time.
+// Confirms a signed-URL upload completed successfully via SECURITY DEFINER RPC
+// public.fn_media_asset_upload_finalize (dedup-safe, optional campaign_tag).
+//
+// 2026-07-12 pm: rewired off `sb.schema('media' as any)` (PostgREST doesn't
+// expose the media schema) — now goes through the public RPC. See memory
+// feedback_postgrest_schema_writes_repeat_burn.
 //
 // Body: { asset_id, campaign_tag? }
 // Returns: { ok, asset_id, status }
@@ -23,42 +27,19 @@ export async function POST(req: NextRequest) {
   const { asset_id, campaign_tag } = body;
   if (!asset_id) return NextResponse.json({ error: 'missing_asset_id' }, { status: 400 });
 
-  // Verify the file actually landed in storage
-  const { data: asset } = await admin
-    .schema('media' as any)
-    .from('media_assets')
-    .select('asset_id, raw_path, status, sha256')
-    .eq('asset_id', asset_id)
-    .maybeSingle();
-
-  if (!asset) return NextResponse.json({ error: 'asset_not_found' }, { status: 404 });
-  if (!asset.raw_path) return NextResponse.json({ error: 'no_raw_path' }, { status: 400 });
-
-  // Confirm storage object exists (defensive — the signed URL may have failed silently)
-  const { data: list } = await admin.storage
-    .from('media-raw')
-    .list(asset.raw_path.split('/').slice(0, -1).join('/'), {
-      search: asset.raw_path.split('/').pop(),
-    });
-  const found = list?.some(o => o.name === asset.raw_path.split('/').pop());
-
-  if (!found) {
-    // Mark as qc_failed so we don't leak orphan rows
-    await admin
-      .schema('media' as any)
-      .from('media_assets')
-      .update({ status: 'qc_failed', qc_flags: ['storage_object_missing'] })
-      .eq('asset_id', asset_id);
-    return NextResponse.json({ error: 'storage_object_missing' }, { status: 422 });
+  const { data: rows, error: rpcErr } = await admin.rpc('fn_media_asset_upload_finalize', {
+    p_asset_id: asset_id,
+    p_campaign_tag: campaign_tag ?? null,
+  });
+  if (rpcErr) {
+    return NextResponse.json({
+      error: 'db_finalize_failed',
+      detail: rpcErr.message,
+      code: rpcErr.code,
+      hint: rpcErr.hint,
+    }, { status: 500 });
   }
-
-  // Optional campaign tagging via free-keyword
-  if (campaign_tag && campaign_tag.length <= 64) {
-    await admin
-      .schema('media' as any)
-      .from('media_keywords_free')
-      .insert({ asset_id, keyword: campaign_tag.toLowerCase().trim(), source: 'human' });
-  }
-
-  return NextResponse.json({ ok: true, asset_id, status: asset.status });
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  if (!row?.ok) return NextResponse.json({ error: 'asset_not_found_or_no_raw_path' }, { status: 404 });
+  return NextResponse.json({ ok: true, asset_id: row.asset_id, status: row.status });
 }
