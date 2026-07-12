@@ -1,6 +1,8 @@
 // app/api/marketing/youtube/oauth-start/route.ts
 // PBS 2026-07-11 pm — Kick off Google OAuth for YouTube channel connection.
 // PKCE + state persist to marketing.yt_channel_connections via fn_yt_start_oauth.
+// PBS 2026-07-11 late — added yt-analytics.readonly + yt-analytics-monetary.readonly
+//                       scopes for the pro Analytics dashboard rebuild (step 1/2).
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import crypto from 'node:crypto';
@@ -15,6 +17,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/youtube.readonly',
   'https://www.googleapis.com/auth/youtube.force-ssl', // PBS 2026-07-11 pm: required for commentThreads.list + comments.insert (fixes 403 insufficientPermissions)
   'https://www.googleapis.com/auth/youtubepartner',
+  'https://www.googleapis.com/auth/yt-analytics.readonly',           // PBS 2026-07-11 late: reports.query metrics access
+  'https://www.googleapis.com/auth/yt-analytics-monetary.readonly',  // PBS 2026-07-11 late: revenue/ad-performance metrics access
 ].join(' ');
 
 function b64url(buf: Buffer): string {
