@@ -21,11 +21,13 @@ import SocialPanel from './panels/SocialPanel';
 import TeamPanel from './panels/TeamPanel';
 import OwnerPanel from './panels/OwnerPanel';
 import TransportPanel from './panels/TransportPanel';
+import ImekongPanel from './panels/ImekongPanel';
+import MeetingSpacesPanel from './panels/MeetingSpacesPanel';
 
 type Tab =
   | 'identity' | 'owner' | 'location' | 'brand' | 'policies'
   | 'rooms' | 'facilities' | 'activities' | 'seasons'
-  | 'certifications' | 'contacts' | 'social' | 'team' | 'transport';
+  | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces';
 
 const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => number | null }[] = [
   { key: 'identity',       label: 'Identity',       subtitle: 'Legal & licensing',            count: () => null },
@@ -37,6 +39,8 @@ const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => numb
   { key: 'facilities',     label: 'Facilities',     subtitle: 'Pool · spa · dining',          count: (d) => d.facilities.length },
   { key: 'activities',     label: 'Activities',     subtitle: 'Wellness · culture · adventure', count: (d) => d.activities.length },
   { key: 'transport',      label: 'Transport',      subtitle: 'Shuttle · private car · boat',   count: (d) => d.transport?.length ?? 0 },
+  { key: 'imekong',        label: 'Imekong',        subtitle: 'Boat spec · cruise packages',     count: (d) => (d.boats?.length ?? 0) + (d.boatCruises?.length ?? 0) },
+  { key: 'meeting_spaces', label: 'Meeting spaces', subtitle: 'Venues usable for MICE',           count: (d) => d.meetingSpaces?.length ?? 0 },
   { key: 'seasons',        label: 'Seasons',        subtitle: 'High / low calendar',          count: (d) => d.seasons.length },
   { key: 'certifications', label: 'Certifications', subtitle: 'SLH · ASEAN Green · etc',      count: (d) => d.certifications.length },
   { key: 'contacts',       label: 'Contacts',       subtitle: 'Reservations · GM · owner',    count: (d) => d.contacts.length },
@@ -155,6 +159,8 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'facilities'     && <FacilitiesPanel     data={data.facilities}     propertyId={propertyId} />}
           {active === 'activities'     && <ActivitiesPanel     data={data.activities}     propertyId={propertyId} />}
           {active === 'transport'      && <TransportPanel      data={data.transport ?? []}     propertyId={propertyId} />}
+          {active === 'imekong'        && <ImekongPanel        boats={data.boats ?? []} cruises={data.boatCruises ?? []} propertyId={propertyId} />}
+          {active === 'meeting_spaces' && <MeetingSpacesPanel data={data.meetingSpaces ?? []} />}
           {active === 'seasons'        && <SeasonsPanel        data={data.seasons}        propertyId={propertyId} />}
           {active === 'certifications' && <CertificationsPanel data={data.certifications} propertyId={propertyId} />}
           {active === 'contacts'       && <ContactsPanel       data={data.contacts}       propertyId={propertyId} />}
