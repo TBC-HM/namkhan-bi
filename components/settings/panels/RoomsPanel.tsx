@@ -164,6 +164,7 @@ export default function RoomsPanel({ data, roomUnits, propertyId }: {
                   {r.positioning_label && <div style={{ fontSize: 11, color: '#1F3A2E', fontStyle: 'italic', marginTop: 2 }}>{r.positioning_label}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
+                  <a href={`/h/${propertyId}/revenue/rooms?expand=${encodeURIComponent(r.display_name).replace(/%20/g, '+')}`} target="_blank" rel="noopener noreferrer" title="Open revenue slider for this room" style={{ ...btnGhost, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>↗ Revenue</a>
                   <button type="button" onClick={() => setDraft(toDraft(r))} style={btnGhost}>Edit</button>
                   {confirmDel === r.room_type_id ? <DeleteConfirm show busy={busy} onConfirm={() => del(r.room_type_id)} onCancel={() => setConfirmDel(null)} /> :
                     <button type="button" onClick={() => setConfirmDel(r.room_type_id)} style={btnGhost}>Delete</button>}
