@@ -17,7 +17,7 @@ const ALLOWED_TIERS = new Set([
   'tier_internal', 'tier_logos', 'tier_archive',
 ]);
 
-type WhatKind = 'room' | 'facility' | 'activity' | 'meeting_space' | 'transport';
+type WhatKind = 'room' | 'facility' | 'activity' | 'meeting_space' | 'transport' | 'boat' | 'boat_cruise';
 
 function joinNonEmpty(parts: Array<string | null | undefined>, sep = '. '): string {
   return parts.filter(p => typeof p === 'string' && p.trim().length > 0).join(sep);
@@ -84,6 +84,40 @@ function meetingSpaceBlock(row: any): string {
   return joinNonEmpty(bits);
 }
 
+function boatBlock(row: any): string {
+  if (!row) return '';
+  const bits: string[] = [];
+  bits.push(`SPECIFIC VESSEL: ${row.name}`);
+  if (row.model) bits.push(`Model: ${row.model}`);
+  if (row.length_m) bits.push(`${row.length_m} m long`);
+  if (row.engine_type) bits.push(`${row.engine_type}${row.engine_hp ? ` ${row.engine_hp} HP` : ''}`);
+  if (row.top_speed_knots) bits.push(`Top speed ${row.top_speed_knots} kn`);
+  if (row.capacity_pax) bits.push(`Capacity ${row.capacity_pax} pax`);
+  const amenities = arrToStr(row.amenities);
+  if (amenities) bits.push(`Onboard: ${amenities}`);
+  if (row.home_port) bits.push(`Home port: ${row.home_port}`);
+  if (row.description) bits.push(`Description: ${String(row.description).slice(0, 300)}`);
+  bits.push('Render this exact vessel — do not substitute a generic boat.');
+  return joinNonEmpty(bits);
+}
+
+function boatCruiseBlock(row: any, boatName: string | null): string {
+  if (!row) return '';
+  const bits: string[] = [];
+  bits.push(`SPECIFIC CRUISE: ${row.name}`);
+  if (boatName) bits.push(`aboard the ${boatName}`);
+  if (row.cruise_type) bits.push(`Type: ${row.cruise_type}`);
+  if (row.route_from && row.route_to) bits.push(`Route: ${row.route_from} → ${row.route_to}`);
+  if (row.duration_min) bits.push(`Duration ~${row.duration_min} min`);
+  if (row.capacity_pax) bits.push(`Capacity ${row.capacity_pax} pax`);
+  if (row.price_amount) bits.push(`Price ${row.price_amount} ${row.price_currency ?? ''}`.trim());
+  const seasons = arrToStr(row.available_season_codes);
+  if (seasons) bits.push(`Seasons: ${seasons}`);
+  if (row.description) bits.push(`Description: ${String(row.description).slice(0, 300)}`);
+  bits.push('Render this exact cruise package aboard the exact vessel.');
+  return joinNonEmpty(bits);
+}
+
 function whereFacilityBlock(row: any): string {
   if (!row) return '';
   const bits: string[] = [];
@@ -120,7 +154,7 @@ export async function POST(req: NextRequest) {
   // We add server-side ENTITY blocks for the kinds it doesn't know about (activity, transport,
   // meeting_space specific fields, WHERE facility) and append them to the user's prompt.
   let promptSuffix = '';
-  const kind = (what_kind && ['room','facility','activity','meeting_space','transport'].includes(what_kind)) ? (what_kind as WhatKind) : null;
+  const kind = (what_kind && ['room','facility','activity','meeting_space','transport','boat','boat_cruise'].includes(what_kind)) ? (what_kind as WhatKind) : null;
   const whatIdNum = what_id ? Number(what_id) : null;
   const whereIdNum = where_facility_id ? Number(where_facility_id) : null;
 
@@ -147,6 +181,24 @@ export async function POST(req: NextRequest) {
       const { data: fac } = await sb.schema('property' as any).from('facilities')
         .select('*').eq('facility_id', whatIdNum).eq('property_id', property_id).maybeSingle();
       const blk = meetingSpaceBlock(fac);
+      if (blk) promptSuffix += `\n\n${blk}`;
+    }
+    if (kind === 'boat' && whatIdNum) {
+      const { data: boat } = await sb.schema('property' as any).from('boats')
+        .select('*').eq('boat_id', whatIdNum).eq('property_id', property_id).maybeSingle();
+      const blk = boatBlock(boat);
+      if (blk) promptSuffix += `\n\n${blk}`;
+    }
+    if (kind === 'boat_cruise' && whatIdNum) {
+      const { data: cruise } = await sb.schema('property' as any).from('boat_cruises')
+        .select('*').eq('cruise_id', whatIdNum).eq('property_id', property_id).maybeSingle();
+      let boatName: string | null = null;
+      if (cruise?.boat_id) {
+        const { data: b } = await sb.schema('property' as any).from('boats')
+          .select('name').eq('boat_id', cruise.boat_id).maybeSingle();
+        boatName = b?.name ?? null;
+      }
+      const blk = boatCruiseBlock(cruise, boatName);
       if (blk) promptSuffix += `\n\n${blk}`;
     }
     if (whereIdNum && (!kind || kind !== 'facility' || whereIdNum !== whatIdNum)) {

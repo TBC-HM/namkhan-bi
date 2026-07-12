@@ -71,12 +71,17 @@ export interface TaxonomyEntry { id: number; name: string }
 export interface FacilityTaxonomyEntry extends TaxonomyEntry { parent_id: number | null; parent_name: string | null }
 export interface ActivityTaxonomyEntry extends TaxonomyEntry { facility_id: number | null; facility_name: string | null }
 export interface TransportTaxonomyEntry extends TaxonomyEntry { kind: string | null; route_from: string | null; route_to: string | null }
+export interface BoatTaxonomyEntry extends TaxonomyEntry { model: string | null; capacity_pax: number | null }
+export interface BoatCruiseTaxonomyEntry extends TaxonomyEntry { boat_name: string | null; kind: string | null; route_from: string | null; route_to: string | null }
 export interface MediaTaxonomy {
   rooms: TaxonomyEntry[];
   facilities: FacilityTaxonomyEntry[];
   activities: ActivityTaxonomyEntry[];
   meeting_spaces: TaxonomyEntry[];
   transport: TransportTaxonomyEntry[];
+  // 2026-07-12 pm: Imekong — boat (vessel) + boat_cruises (packages that run on the boat)
+  boats: BoatTaxonomyEntry[];
+  boat_cruises: BoatCruiseTaxonomyEntry[];
 }
 
 interface Props {

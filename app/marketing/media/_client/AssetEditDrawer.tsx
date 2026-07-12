@@ -20,6 +20,8 @@ export interface DrawerTaxonomy {
   activities:     Array<{ id: number; name: string; facility_name?: string | null }>;
   meeting_spaces: Array<{ id: number; name: string }>;
   transport:      Array<{ id: number; name: string; kind?: string | null; route_from?: string | null; route_to?: string | null }>;
+  boats?:         Array<{ id: number; name: string }>;
+  boat_cruises?:  Array<{ id: number; name: string; boat_name?: string | null }>;
 }
 
 export interface AssetEditRow {
@@ -222,6 +224,8 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
               ...taxonomy.activities.map(a => a.name),
               ...taxonomy.meeting_spaces.map(m => m.name),
               ...taxonomy.transport.map(t => t.name),
+              ...(taxonomy.boats ?? []).map(b => b.name),
+              ...(taxonomy.boat_cruises ?? []).map(c => c.name),
             ]);
             const isLegacy = area !== '' && !knownNames.has(area);
             return (
@@ -262,6 +266,20 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                     {taxonomy.transport.map(t => (
                       <option key={`trp-${t.id}`} value={t.name}>
                         {t.route_from && t.route_to ? `${t.name} · ${t.route_from} → ${t.route_to}` : t.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {(taxonomy.boats && taxonomy.boats.length > 0) && (
+                  <optgroup label="Imekong · Boats">
+                    {taxonomy.boats.map(b => <option key={`boat-${b.id}`} value={b.name}>{b.name}</option>)}
+                  </optgroup>
+                )}
+                {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
+                  <optgroup label="Imekong · Cruises">
+                    {taxonomy.boat_cruises.map(c => (
+                      <option key={`cruise-${c.id}`} value={c.name}>
+                        {c.boat_name ? `${c.name} · @ ${c.boat_name}` : c.name}
                       </option>
                     ))}
                   </optgroup>

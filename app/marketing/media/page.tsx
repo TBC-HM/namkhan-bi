@@ -20,7 +20,7 @@ async function loadAll(pid: number) {
   const sb = getSupabaseAdmin();
   const [
     byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories,
-    rooms, facilities, facilitiesRaw, activitiesRaw, transportRaw,
+    rooms, facilities, facilitiesRaw, activitiesRaw, transportRaw, boatsRaw, cruisesRaw,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(500),
@@ -40,6 +40,11 @@ async function loadAll(pid: number) {
     sb.schema('property' as any).from('activities').select('activity_id, name, facility_id')
       .eq('property_id', pid).eq('is_active', true).order('name'),
     sb.schema('property' as any).from('transport_options').select('transport_id, name, transport_type, route_from, route_to')
+      .eq('property_id', pid).eq('is_active', true).order('name'),
+    // 2026-07-12 pm: Imekong (boats + cruises) taxonomy
+    sb.schema('property' as any).from('boats').select('boat_id, name, model, capacity_pax')
+      .eq('property_id', pid).eq('is_active', true).order('name'),
+    sb.schema('property' as any).from('boat_cruises').select('cruise_id, name, boat_id, cruise_type, route_from, route_to')
       .eq('property_id', pid).eq('is_active', true).order('name'),
   ]);
 
@@ -64,6 +69,11 @@ async function loadAll(pid: number) {
     activities: (activitiesRaw.data ?? []).map((a: any) => ({ id: a.activity_id, name: a.name, facility_id: a.facility_id, facility_name: a.facility_id ? (facByPk.get(a.facility_id) ?? null) : null })),
     meeting_spaces: meetingSpaces,
     transport: (transportRaw.data ?? []).map((t: any) => ({ id: t.transport_id, name: t.name, kind: t.transport_type, route_from: t.route_from, route_to: t.route_to })),
+    boats: (boatsRaw.data ?? []).map((b: any) => ({ id: b.boat_id, name: b.name, model: b.model, capacity_pax: b.capacity_pax })),
+    boat_cruises: (cruisesRaw.data ?? []).map((c: any) => {
+      const boat = (boatsRaw.data ?? []).find((b: any) => b.boat_id === c.boat_id);
+      return { id: c.cruise_id, name: c.name, boat_name: boat?.name ?? null, kind: c.cruise_type, route_from: c.route_from, route_to: c.route_to };
+    }),
   };
 
   const areaSet = new Set<string>();
@@ -76,6 +86,8 @@ async function loadAll(pid: number) {
   for (const a of taxonomy.activities)     areaSet.add(a.name);
   for (const m of taxonomy.meeting_spaces) areaSet.add(m.name);
   for (const t of taxonomy.transport)      areaSet.add(t.name);
+  for (const b of taxonomy.boats)          areaSet.add(b.name);
+  for (const c of taxonomy.boat_cruises)   areaSet.add(c.name);
   // (c) any historical free-text values already tagged in library
   for (const row of (mediaPage.data ?? [])) {
     const v = (row as any).property_area;
@@ -100,6 +112,7 @@ async function loadAll(pid: number) {
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
       rooms.error, facilities.error, facilitiesRaw.error, activitiesRaw.error, transportRaw.error,
+      boatsRaw.error, cruisesRaw.error,
     ].filter(Boolean),
   };
 }

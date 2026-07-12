@@ -91,6 +91,8 @@ interface Props {
     activities:     Array<{ id: number; name: string; facility_name?: string | null }>;
     meeting_spaces: Array<{ id: number; name: string }>;
     transport:      Array<{ id: number; name: string }>;
+    boats?:         Array<{ id: number; name: string }>;
+    boat_cruises?:  Array<{ id: number; name: string; boat_name?: string | null }>;
   };
 }
 
@@ -146,7 +148,7 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
   // Grounding state (LEGACY: roomTypeId/facilityId retained as computed values from whatKind for
   // backward compat with the current edge fn which reads room_type_id / facility_id).
   // 2026-07-12 pm: canonical picker is now WHAT (5-taxonomy) + WHERE (facility).
-  type WhatKind = '' | 'room' | 'facility' | 'activity' | 'meeting_space' | 'transport';
+  type WhatKind = '' | 'room' | 'facility' | 'activity' | 'meeting_space' | 'transport' | 'boat' | 'boat_cruise';
   const [whatKind, setWhatKind]         = useState<WhatKind>('');
   const [whatId, setWhatId]             = useState<number | ''>('');
   const [whereFacilityId, setWhereFacilityId] = useState<number | ''>('');
@@ -166,6 +168,8 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
     if (whatKind === 'activity')      return taxonomy.activities.find(a => a.id === id)?.name ?? null;
     if (whatKind === 'meeting_space') return taxonomy.meeting_spaces.find(m => m.id === id)?.name ?? null;
     if (whatKind === 'transport')     return taxonomy.transport.find(t => t.id === id)?.name ?? null;
+    if (whatKind === 'boat')          return (taxonomy.boats ?? []).find(b => b.id === id)?.name ?? null;
+    if (whatKind === 'boat_cruise')   return (taxonomy.boat_cruises ?? []).find(c => c.id === id)?.name ?? null;
     return null;
   }, [taxonomy, whatKind, whatId]);
 
@@ -452,6 +456,16 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
                 {taxonomy.transport.length > 0 && (
                   <optgroup label="Transport">
                     {taxonomy.transport.map(t => <option key={`w-trp-${t.id}`} value={`transport:${t.id}`}>{t.name}</option>)}
+                  </optgroup>
+                )}
+                {(taxonomy.boats && taxonomy.boats.length > 0) && (
+                  <optgroup label="Imekong · Boats">
+                    {taxonomy.boats.map(b => <option key={`w-boat-${b.id}`} value={`boat:${b.id}`}>{b.name}</option>)}
+                  </optgroup>
+                )}
+                {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
+                  <optgroup label="Imekong · Cruises">
+                    {taxonomy.boat_cruises.map(c => <option key={`w-cruise-${c.id}`} value={`boat_cruise:${c.id}`}>{c.boat_name ? `${c.name} · @ ${c.boat_name}` : c.name}</option>)}
                   </optgroup>
                 )}
               </select>

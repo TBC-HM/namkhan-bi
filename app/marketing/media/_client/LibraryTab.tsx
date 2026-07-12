@@ -184,6 +184,12 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
               {taxonomy.transport.length > 0 && (
                 <optgroup label="Transport">{taxonomy.transport.map(t => <option key={`f-trp-${t.id}`} value={t.name}>{t.name}</option>)}</optgroup>
               )}
+              {(taxonomy.boats && taxonomy.boats.length > 0) && (
+                <optgroup label="Imekong · Boats">{taxonomy.boats.map(b => <option key={`f-boat-${b.id}`} value={b.name}>{b.name}</option>)}</optgroup>
+              )}
+              {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
+                <optgroup label="Imekong · Cruises">{taxonomy.boat_cruises.map(c => <option key={`f-cruise-${c.id}`} value={c.name}>{c.name}</option>)}</optgroup>
+              )}
             </>
           ) : (
             (areaOptions ?? []).map(a => <option key={a} value={a}>{a}</option>)

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   // Verify the file actually landed in storage
   const { data: asset } = await admin
-    .schema('marketing')
+    .schema('media' as any)
     .from('media_assets')
     .select('asset_id, raw_path, status, sha256')
     .eq('asset_id', asset_id)
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   if (!found) {
     // Mark as qc_failed so we don't leak orphan rows
     await admin
-      .schema('marketing')
+      .schema('media' as any)
       .from('media_assets')
       .update({ status: 'qc_failed', qc_flags: ['storage_object_missing'] })
       .eq('asset_id', asset_id);
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   // Optional campaign tagging via free-keyword
   if (campaign_tag && campaign_tag.length <= 64) {
     await admin
-      .schema('marketing')
+      .schema('media' as any)
       .from('media_keywords_free')
       .insert({ asset_id, keyword: campaign_tag.toLowerCase().trim(), source: 'human' });
   }

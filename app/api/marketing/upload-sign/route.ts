@@ -2,11 +2,15 @@
 // Signed-URL upload flow — bypasses Vercel's 4.5 MB function body cap.
 //
 // Browser sends ONLY the file metadata (filename + mime + size + sha256).
-// Server validates, dedup-checks, pre-creates the marketing.media_assets row,
+// Server validates, dedup-checks, pre-creates the media.media_assets row,
 // mints a signed upload URL for media-raw bucket, returns { upload_url, asset_id, raw_path }.
 // The browser then PUTs the actual bytes directly to Supabase Storage.
 //
 // Body: { filename, content_type, size, sha256, photographer?, license?, campaign_tag? }
+//
+// 2026-07-12 pm: fixed silent-fail schema mismatch (marketing → media). Extended MIME allow-list
+//   to include video/mp4/quicktime/webm/etc + application/pdf so video footage and PDF flyers
+//   can be uploaded through the same dropzone. Bumped MAX_BYTES to 5 GB to match bucket cap.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -14,16 +18,27 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Must stay in sync with storage.buckets['media-raw'].allowed_mime_types.
 const ALLOWED_MIME = new Set([
-  'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp',
-  'image/x-canon-cr2', 'image/x-nikon-nef', 'image/x-sony-arw', 'image/x-adobe-dng',
+  // Photos
+  'image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp', 'image/gif', 'image/tiff',
+  // RAW
+  'image/x-canon-cr2', 'image/x-canon-cr3', 'image/x-nikon-nef', 'image/x-sony-arw',
+  'image/x-adobe-dng', 'image/x-fuji-raf', 'image/x-panasonic-rw2',
+  // Video
+  'video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo', 'video/x-matroska',
+  'video/mpeg', 'video/3gpp', 'video/mp2t', 'video/x-m4v', 'application/mxf',
+  // Documents
+  'application/pdf',
 ]);
 
-const MAX_BYTES = 500 * 1024 * 1024; // 500 MB — bucket-level cap
+const MAX_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB — matches media-raw bucket cap
 
-function inferAssetType(mime: string): 'photo' | 'raw_dng' {
+function inferAssetType(mime: string): 'photo' | 'video' | 'raw_dng' | 'document' {
+  if (mime === 'application/pdf') return 'document';
   if (mime === 'image/x-adobe-dng') return 'raw_dng';
   if (mime.startsWith('image/x-')) return 'raw_dng';
+  if (mime.startsWith('video/') || mime === 'application/mxf') return 'video';
   return 'photo';
 }
 
@@ -63,7 +78,7 @@ export async function POST(req: NextRequest) {
 
   // Dedupe — if we already have this exact file, return existing asset_id
   const { data: existing } = await admin
-    .schema('marketing')
+    .schema('media' as any)
     .from('media_assets')
     .select('asset_id, status, raw_path')
     .eq('sha256', sha256)
@@ -80,7 +95,7 @@ export async function POST(req: NextRequest) {
 
   // Pre-insert row to claim asset_id
   const { data: inserted, error: insertErr } = await admin
-    .schema('marketing')
+    .schema('media' as any)
     .from('media_assets')
     .insert({
       sha256,
@@ -107,7 +122,7 @@ export async function POST(req: NextRequest) {
 
   // Update row with raw_path
   await admin
-    .schema('marketing')
+    .schema('media' as any)
     .from('media_assets')
     .update({ raw_path })
     .eq('asset_id', inserted.asset_id);
