@@ -124,9 +124,12 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       const dl = j.download_url as string | undefined;
       const label = `${j.channel_display ?? channel} · ${j.width}×${j.height}`;
       if (dl) {
-        setLastDownload({ url: dl, label });
-        setMsg(`Rendered for ${label} — ready to download ↓`);
-        try { window.open(dl, '_blank', 'noopener,noreferrer'); } catch { /* pop-up blocked, banner link still works */ }
+        const proxyUrl = `/api/marketing/media/download-render?asset_id=${assetId}&channel=${encodeURIComponent(channel)}`;
+        setLastDownload({ url: proxyUrl, label });
+        setMsg(`Rendered for ${label} — download started ✓`);
+        const proxy = `/api/marketing/media/download-render?asset_id=${assetId}&channel=${encodeURIComponent(channel)}`;
+        const link = document.createElement('a'); link.href = proxy; link.download = j.filename_hint ?? '';
+        document.body.appendChild(link); link.click(); link.remove();
       } else {
         setMsg(`Rendered for ${channel} — queued as ${j.render_id ?? 'render'}`);
       }
