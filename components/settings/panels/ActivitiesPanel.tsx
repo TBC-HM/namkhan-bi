@@ -19,6 +19,7 @@ type Row = {
   service_time_from: string | null; service_time_to: string | null;
   available_season_codes: string[] | null;
   dmc_price_amount: number | null; dmc_discount_pct: number | null;
+  facility_id: number | null;
 };
 
 interface Draft {
@@ -29,6 +30,7 @@ interface Draft {
   price_amount: string; price_currency: string; price_includes_vat_service: boolean; price_notes: string;
   service_time_from: string; service_time_to: string; available_season_codes: string[];
   dmc_price_amount: string; dmc_discount_pct: string;
+  facility_id: string;
 }
 
 const EMPTY: Draft = {
@@ -38,6 +40,7 @@ const EMPTY: Draft = {
   price_amount: '', price_currency: 'USD', price_includes_vat_service: true, price_notes: '',
   service_time_from: '', service_time_to: '', available_season_codes: [],
   dmc_price_amount: '', dmc_discount_pct: '',
+  facility_id: '',
 };
 
 const toDraft = (r: Row): Draft => ({
@@ -55,6 +58,7 @@ const toDraft = (r: Row): Draft => ({
   available_season_codes: r.available_season_codes ?? [],
   dmc_price_amount: r.dmc_price_amount?.toString() ?? '',
   dmc_discount_pct: r.dmc_discount_pct?.toString() ?? '',
+  facility_id: r.facility_id?.toString() ?? '',
 });
 
 interface Season { season_id: number; season_code: string; display_name: string | null; }
@@ -68,6 +72,16 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
   const [error, setError] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [localSeasons, setLocalSeasons] = useState<Season[]>(seasons);
+  const [facilities, setFacilities] = useState<Array<{ facility_id: number; name: string; category: string | null }>>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data: f } = await supabase.from('v_facilities_lite')
+        .select('facility_id, name, category').eq('property_id', propertyId)
+        .order('category', { ascending: true });
+      if (f) setFacilities(f as any);
+    })();
+  }, [propertyId]);
 
   // Fallback: fetch seasons client-side if parent didn't pass them
   useEffect(() => {
@@ -119,6 +133,7 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
         p_available_season_codes: draft.available_season_codes.length > 0 ? draft.available_season_codes : null,
         p_dmc_price_amount: draft.dmc_price_amount ? Number(draft.dmc_price_amount) : null,
         p_dmc_discount_pct: draft.dmc_discount_pct ? Number(draft.dmc_discount_pct) : null,
+        p_facility_id: draft.facility_id ? Number(draft.facility_id) : null,
       });
       if (e) { setError(e.message); return; }
       setDraft(null); router.refresh();
@@ -176,6 +191,13 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
               </div>
             )}
           </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A', fontWeight: 600, marginBottom: 4 }}>Facility (where this activity takes place)</div>
+            <select value={draft.facility_id} onChange={(e) => setDraft({ ...draft, facility_id: e.target.value })} style={{ padding: '6px 10px', fontSize: 13, border: '1px solid #E6DFCC', borderRadius: 3, background: '#FFFFFF', color: '#1B1B1B', width: '100%' }}>
+              <option value="">— none / on-property —</option>
+              {facilities.map(f => <option key={f.facility_id} value={f.facility_id}>{f.name}{f.category ? ` (${f.category})` : ''}</option>)}
+            </select>
+          </div>
           <LabeledTextarea label="Description" value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} span={3} />
           {/* DMC PRICING ROW — enter one, the other auto-computes on save */}
           <LabeledInput label="DMC price (net)" value={draft.dmc_price_amount} onChange={(v) => {
@@ -211,6 +233,7 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
                   {r.duration_min && <span style={{ fontSize: 11, color: '#5A5A5A' }}>{r.duration_min}m</span>}
                   {r.price_amount != null && <span style={pill('#E4F0E1', '#1F5C2C')}>{r.price_currency ?? 'USD'} {r.price_amount}{r.price_includes_vat_service ? ' (incl)' : ' (net)'}</span>}
                   {r.dmc_price_amount != null && <span style={pill('#EAE1F0', '#4A2C7A')}>DMC {r.price_currency ?? 'USD'} {r.dmc_price_amount}{r.dmc_discount_pct != null ? ` –${r.dmc_discount_pct}%` : ''}</span>}
+                  {r.facility_id != null && (() => { const f = facilities.find(x => x.facility_id === r.facility_id); return f ? <span style={pill('#EAE1F0', '#4A2C7A')}>@ {f.name}</span> : null; })()}
                   {r.is_complimentary && <span style={pill('#E4F0E1', '#1F5C2C')}>complimentary</span>}
                   {r.is_active === false && <span style={pill('#F5F0E1', '#8A8A8A')}>inactive</span>}
                 </div>
