@@ -68,7 +68,7 @@ export async function POST(req: Request) {
   const ticketId = tErr ? null : ticketRow?.id ?? null;
 
   if (wantRedirect) {
-    const back = new URL('https://namkhan-bi.vercel.app/marketing/youtube');
+    const back = new URL('https://namkhan-bi.vercel.app/marketing/youtube/planning');
     back.searchParams.set('scanned', '1');
     back.searchParams.set('brief', String(briefId));
     if (ticketId) back.searchParams.set('ticket', String(ticketId));

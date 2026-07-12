@@ -4,7 +4,10 @@
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getFreshAccessToken } from '@/lib/youtube/token';
+import { fetchChannel, isErr } from '@/lib/youtube/data';
 import YtSubTabs from '../_shared/SubTabs';
+import AnalyticsKPIs from '../_server/AnalyticsKPIs';
 import RunAuditButton from './_client/RunAuditButton';
 
 export const dynamic = 'force-dynamic';
@@ -63,6 +66,17 @@ function gradeColor(g: string | null): string {
 
 export default async function YtAnalyticsPage() {
   const sb = getSupabaseAdmin();
+
+  // Historical analytics — token + channel identity for AnalyticsKPIs
+  const tok = await getFreshAccessToken(NAMKHAN);
+  let channelStats: { subs: number; views: number; videos: number; ok: boolean; access_token?: string } = { subs: 0, views: 0, videos: 0, ok: false };
+  if (tok.ok && tok.access_token) {
+    const ch = await fetchChannel(tok.access_token);
+    if (!isErr(ch)) {
+      channelStats = { subs: ch.data.subscriberCount, views: ch.data.viewCount, videos: ch.data.videoCount, ok: true, access_token: tok.access_token };
+    }
+  }
+
   const { data: latestRunRaw } = await sb
     .from('v_yt_channel_audit_runs')
     .select('*').eq('property_id', NAMKHAN).order('generated_at', { ascending: false }).limit(1).maybeSingle();
@@ -83,6 +97,17 @@ export default async function YtAnalyticsPage() {
     <DashboardPage title="YouTube · channel management" tabs={tabs}>
       <div style={{ display: 'grid', gap: 16 }}>
         <YtSubTabs current="analytics" />
+
+        {/* PBS 2026-07-13: historical analytics + KPI dashboard lives at top of Analytics tab.
+            Falls back to a reconnect banner when the yt-analytics.readonly scope is missing. */}
+        {channelStats.ok && channelStats.access_token && (
+          <AnalyticsKPIs
+            accessToken={channelStats.access_token}
+            totalSubscribers={channelStats.subs}
+            totalViews={channelStats.views}
+            totalVideos={channelStats.videos}
+          />
+        )}
 
         {/* Header: latest run + button */}
         <div style={cardStyle}>

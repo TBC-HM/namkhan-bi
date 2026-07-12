@@ -6,7 +6,13 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const CLIENT_ID = '573294310855-fpfoprn101pjpp5fvr3eavdk0d0ml52i.apps.googleusercontent.com';
 const REDIRECT  = 'https://namkhan-bi.vercel.app/api/google/oauth/callback';
-const SCOPE     = 'https://www.googleapis.com/auth/business.manage';
+// PBS 2026-07-13: added gmail.readonly + gmail.metadata (for reservation email pulling)
+//   and plus.business.manage for legacy GBP endpoints. User must reconnect to grant new scopes.
+const SCOPE = [
+  'https://www.googleapis.com/auth/business.manage',
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.metadata',
+].join(' ');
 
 export const dynamic = 'force-dynamic';
 

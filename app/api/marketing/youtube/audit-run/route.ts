@@ -65,13 +65,13 @@ export async function POST() {
   const [chRes, plRes, vidRes] = await Promise.all([
     fetchChannel(tok.access_token),
     fetchChannelPlaylists(tok.access_token, tok.channel_id, 50),
-    fetchRecentVideos(tok.access_token, tok.channel_id, 24),
+    fetchRecentVideos(tok.access_token, tok.channel_id, 12),
   ]);
   if (isErr(chRes)) return err('channel_fetch_failed', 502, { detail: chRes.error });
   const ch = chRes.data;
   const playlists = isErr(plRes) ? [] : plRes.data;
   const videos = isErr(vidRes) ? [] : vidRes.data;
-  if (videos.length === 0) return err('no_videos_to_audit', 400, { detail: `channel ${ch.id} has 0 videos in the last 24-recent window` });
+  if (videos.length === 0) return err('no_videos_to_audit', 400, { detail: `channel ${ch.id} has 0 videos in the last 12-recent window` });
 
   // === 2) Pull brand context — vocab + pillars + reality ===
   const [vocabRes, pillarsRes, realityRes] = await Promise.all([
@@ -169,7 +169,13 @@ export async function POST() {
 
   const parsed = extractJsonBlock<AuditResp>(llm.text);
   if (!parsed || !Array.isArray(parsed.videos) || !Array.isArray(parsed.playlists)) {
-    return err('llm_bad_shape', 502, { raw_head: llm.text.slice(0, 400) });
+    const rawHead = llm.text.slice(0, 800);
+    const parsedShape = parsed ? JSON.stringify(Object.keys(parsed)).slice(0, 200) : 'null';
+    return err('llm_bad_shape', 502, {
+      detail: `parsed_shape=${parsedShape} · raw_head=${rawHead}`,
+      raw_head: rawHead,
+      parsed_shape: parsedShape,
+    });
   }
 
   // === 5) Persist via SECURITY DEFINER RPC (marketing schema is not PostgREST-exposed).
