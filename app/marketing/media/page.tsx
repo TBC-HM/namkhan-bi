@@ -20,7 +20,7 @@ async function loadAll(pid: number) {
   const sb = getSupabaseAdmin();
   const [
     byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories,
-    rooms, facilities,
+    rooms, facilities, facilitiesRaw, activitiesRaw, transportRaw,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(500),
@@ -34,23 +34,49 @@ async function loadAll(pid: number) {
       .order('sort_order', { ascending: true }),
     sb.from('v_room_grounding').select('*').eq('property_id', pid).order('room_type_id', { ascending: true }),
     sb.from('v_facility_grounding').select('*').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
+    // 2026-07-12 pm: 5-category taxonomy source rows (mirror Settings sidebar)
+    sb.schema('property' as any).from('facilities').select('facility_id, name, parent_facility_id, is_meeting_space')
+      .eq('property_id', pid).eq('is_active', true).order('name'),
+    sb.schema('property' as any).from('activities').select('activity_id, name, facility_id')
+      .eq('property_id', pid).eq('is_active', true).order('name'),
+    sb.schema('property' as any).from('transport_options').select('transport_id, name, transport_type, route_from, route_to')
+      .eq('property_id', pid).eq('is_active', true).order('name'),
   ]);
+
+  // === Build 5-category taxonomy (matches Settings sidebar) ===
+  const facilityRows = (facilitiesRaw.data ?? []) as Array<{ facility_id: number; name: string; parent_facility_id: number | null; is_meeting_space: boolean | null }>;
+  const facByPk = new Map<number, string>();
+  for (const f of facilityRows) facByPk.set(f.facility_id, f.name);
+  const meetingSpaces = facilityRows
+    .filter(f => f.is_meeting_space)
+    .map(f => ({ id: f.facility_id, name: f.name }));
+  const nonMeetingFacilities = facilityRows
+    .filter(f => !f.is_meeting_space)
+    .map(f => ({
+      id: f.facility_id,
+      name: f.name,
+      parent_id: f.parent_facility_id,
+      parent_name: f.parent_facility_id ? (facByPk.get(f.parent_facility_id) ?? null) : null,
+    }));
+  const taxonomy = {
+    rooms: (rooms.data ?? []).map((r: any) => ({ id: r.room_type_id, name: r.room_type_name })),
+    facilities: nonMeetingFacilities,
+    activities: (activitiesRaw.data ?? []).map((a: any) => ({ id: a.activity_id, name: a.name, facility_id: a.facility_id, facility_name: a.facility_id ? (facByPk.get(a.facility_id) ?? null) : null })),
+    meeting_spaces: meetingSpaces,
+    transport: (transportRaw.data ?? []).map((t: any) => ({ id: t.transport_id, name: t.name, kind: t.transport_type, route_from: t.route_from, route_to: t.route_to })),
+  };
 
   const areaSet = new Set<string>();
   // (a) canonical always-visible options
   areaSet.add('Logos');
   areaSet.add('No area');
-  // (b) all room names — from v_room_grounding load
-  for (const r of (rooms.data ?? [])) {
-    const n = (r as any).room_type_name;
-    if (n && typeof n === 'string') areaSet.add(n);
-  }
-  // (c) all facility names — from v_facility_grounding load
-  for (const f of (facilities.data ?? [])) {
-    const n = (f as any).facility_name;
-    if (n && typeof n === 'string') areaSet.add(n);
-  }
-  // (d) any historical values already tagged in library
+  // (b) all 5 taxonomy sources — one flat list for datalist/legacy fallback
+  for (const r of taxonomy.rooms)          areaSet.add(r.name);
+  for (const f of taxonomy.facilities)     areaSet.add(f.name);
+  for (const a of taxonomy.activities)     areaSet.add(a.name);
+  for (const m of taxonomy.meeting_spaces) areaSet.add(m.name);
+  for (const t of taxonomy.transport)      areaSet.add(t.name);
+  // (c) any historical free-text values already tagged in library
   for (const row of (mediaPage.data ?? [])) {
     const v = (row as any).property_area;
     if (v && typeof v === 'string') areaSet.add(v);
@@ -68,11 +94,12 @@ async function loadAll(pid: number) {
     categories: categories.data ?? [],
     rooms: rooms.data ?? [],
     facilities: facilities.data ?? [],
+    taxonomy,
     areaOptions,
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
-      rooms.error, facilities.error,
+      rooms.error, facilities.error, facilitiesRaw.error, activitiesRaw.error, transportRaw.error,
     ].filter(Boolean),
   };
 }
@@ -110,6 +137,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             categories={data.categories as any}
             rooms={data.rooms as any}
             facilities={data.facilities as any}
+            taxonomy={data.taxonomy as any}
             areaOptions={data.areaOptions}
           />
         </div>

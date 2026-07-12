@@ -6,7 +6,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import AssetEditDrawer, { type AssetEditRow } from './AssetEditDrawer';
+import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
 
 interface MediaRow {
   asset_id: string;
@@ -28,6 +28,7 @@ interface Props {
   mediaPage: MediaRow[];
   areaOptions: string[];
   rooms?: Array<{ room_type_id: number; room_type_name: string }>;
+  taxonomy?: DrawerTaxonomy;
 }
 
 const WHITE  = '#FFFFFF';
@@ -43,7 +44,7 @@ function isVideoRow(r: MediaRow): boolean {
   return /\.(mp4|mov|webm|m4v)(\?|$)/.test(p);
 }
 
-export default function ClarifyTab({ mediaPage, areaOptions, rooms = [] }: Props) {
+export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonomy }: Props) {
   const [editing, setEditing] = useState<MediaRow | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
 
@@ -136,6 +137,7 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [] }: Props
         asset={editing as AssetEditRow | null}
         areaOptions={areaOptions}
         rooms={rooms}
+        taxonomy={taxonomy}
         onSaved={(updated) => {
           // Optimistically drop this asset from the client-side filter — the
           // router.refresh() inside the drawer will re-fetch the source of truth.

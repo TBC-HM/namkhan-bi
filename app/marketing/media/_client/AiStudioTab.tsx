@@ -82,6 +82,16 @@ interface Props {
   categories: PromptCategory[];
   rooms: RoomOption[];
   facilities: FacilityOption[];
+  // 2026-07-12 pm: 5-category taxonomy (rooms · facilities · activities · meeting_spaces · transport).
+  // Accepted here for future extension of the grounding picker. Not yet used inside the tab
+  // because rooms + facilities already cover the current generation grounding cases.
+  taxonomy?: {
+    rooms:          Array<{ id: number; name: string }>;
+    facilities:     Array<{ id: number; name: string; parent_name?: string | null }>;
+    activities:     Array<{ id: number; name: string; facility_name?: string | null }>;
+    meeting_spaces: Array<{ id: number; name: string }>;
+    transport:      Array<{ id: number; name: string }>;
+  };
 }
 
 const HAIR   = '#E6DFCC';
@@ -105,7 +115,7 @@ const TIERS = [
   { key: 'tier_logos',        label: 'Logos / marks' },
 ];
 
-export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSourceAssetId, categories, rooms, facilities }: Props) {
+export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSourceAssetId, categories, rooms, facilities, taxonomy: _taxonomy }: Props) {
   const [mode, setMode] = useState<'prompt' | 'from_asset'>(initialSourceAssetId ? 'from_asset' : 'prompt');
   const [prompt, setPrompt] = useState('');
   const [tier, setTier] = useState('tier_social_pool');

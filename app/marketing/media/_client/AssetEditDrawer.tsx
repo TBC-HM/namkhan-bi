@@ -11,6 +11,17 @@ import { Drawer } from '@/app/(cockpit)/_design';
 
 export interface RoomOption { room_type_id: number; room_type_name: string; }
 
+// 2026-07-12 pm: mirrors MediaHub.MediaTaxonomy — kept local so this drawer can
+// be imported without pulling in the whole hub file. Optional so legacy callers
+// still work with datalist mode.
+export interface DrawerTaxonomy {
+  rooms:          Array<{ id: number; name: string }>;
+  facilities:     Array<{ id: number; name: string; parent_name?: string | null }>;
+  activities:     Array<{ id: number; name: string; facility_name?: string | null }>;
+  meeting_spaces: Array<{ id: number; name: string }>;
+  transport:      Array<{ id: number; name: string; kind?: string | null; route_from?: string | null; route_to?: string | null }>;
+}
+
 export interface AssetEditRow {
   asset_id: string;
   room_type_id?: number | null;
@@ -37,6 +48,7 @@ interface Props {
   asset: AssetEditRow | null;
   areaOptions: string[];
   rooms?: RoomOption[];
+  taxonomy?: DrawerTaxonomy;
   onSaved?: (updated: any) => void;
 }
 
@@ -73,7 +85,7 @@ function humanSize(v: any): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export default function AssetEditDrawer({ open, onClose, asset, areaOptions, rooms = [], onSaved }: Props) {
+export default function AssetEditDrawer({ open, onClose, asset, areaOptions, rooms = [], taxonomy, onSaved }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -200,10 +212,75 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
         </Field>
 
         <Field label="Property area">
-          <input value={area} onChange={e => setArea(e.target.value)} list="areaOptions" placeholder="e.g. Pool area · Garden · Guest room interior" style={S.input} />
-          <datalist id="areaOptions">
-            {areaOptions.map(a => <option key={a} value={a} />)}
-          </datalist>
+          {taxonomy ? (() => {
+            // 2026-07-12 pm: 5-category structured select mirrors Settings sidebar.
+            // Any name added in Settings surfaces here on next page load.
+            const knownNames = new Set<string>([
+              'Logos', 'No area',
+              ...taxonomy.rooms.map(r => r.name),
+              ...taxonomy.facilities.map(f => f.name),
+              ...taxonomy.activities.map(a => a.name),
+              ...taxonomy.meeting_spaces.map(m => m.name),
+              ...taxonomy.transport.map(t => t.name),
+            ]);
+            const isLegacy = area !== '' && !knownNames.has(area);
+            return (
+              <select value={area} onChange={e => setArea(e.target.value)} style={S.input}>
+                <option value="">(no property area)</option>
+                <option value="Logos">Logos</option>
+                <option value="No area">No area</option>
+                {taxonomy.rooms.length > 0 && (
+                  <optgroup label="Rooms">
+                    {taxonomy.rooms.map(r => <option key={`room-${r.id}`} value={r.name}>{r.name}</option>)}
+                  </optgroup>
+                )}
+                {taxonomy.facilities.length > 0 && (
+                  <optgroup label="Facilities">
+                    {taxonomy.facilities.map(f => (
+                      <option key={`fac-${f.id}`} value={f.name}>
+                        {f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {taxonomy.activities.length > 0 && (
+                  <optgroup label="Activities">
+                    {taxonomy.activities.map(a => (
+                      <option key={`act-${a.id}`} value={a.name}>
+                        {a.facility_name ? `${a.name} · @ ${a.facility_name}` : a.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {taxonomy.meeting_spaces.length > 0 && (
+                  <optgroup label="Meeting spaces">
+                    {taxonomy.meeting_spaces.map(m => <option key={`mtg-${m.id}`} value={m.name}>{m.name}</option>)}
+                  </optgroup>
+                )}
+                {taxonomy.transport.length > 0 && (
+                  <optgroup label="Transport">
+                    {taxonomy.transport.map(t => (
+                      <option key={`trp-${t.id}`} value={t.name}>
+                        {t.route_from && t.route_to ? `${t.name} · ${t.route_from} → ${t.route_to}` : t.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {isLegacy && (
+                  <optgroup label="Legacy (free text)">
+                    <option value={area}>{area}</option>
+                  </optgroup>
+                )}
+              </select>
+            );
+          })() : (
+            <>
+              <input value={area} onChange={e => setArea(e.target.value)} list="areaOptions" placeholder="e.g. Pool area · Garden · Guest room interior" style={S.input} />
+              <datalist id="areaOptions">
+                {areaOptions.map(a => <option key={a} value={a} />)}
+              </datalist>
+            </>
+          )}
         </Field>
 
         {rooms.length > 0 && (

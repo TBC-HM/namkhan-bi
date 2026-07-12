@@ -64,6 +64,21 @@ export interface FacilityOption {
   updated_at: string | null;
 }
 
+// 2026-07-12 pm: 5-category taxonomy that mirrors the Settings sidebar
+// (rooms · facilities · activities · meeting_spaces · transport). Sourced
+// from property.* server-side so any Settings add flows through on next load.
+export interface TaxonomyEntry { id: number; name: string }
+export interface FacilityTaxonomyEntry extends TaxonomyEntry { parent_id: number | null; parent_name: string | null }
+export interface ActivityTaxonomyEntry extends TaxonomyEntry { facility_id: number | null; facility_name: string | null }
+export interface TransportTaxonomyEntry extends TaxonomyEntry { kind: string | null; route_from: string | null; route_to: string | null }
+export interface MediaTaxonomy {
+  rooms: TaxonomyEntry[];
+  facilities: FacilityTaxonomyEntry[];
+  activities: ActivityTaxonomyEntry[];
+  meeting_spaces: TaxonomyEntry[];
+  transport: TransportTaxonomyEntry[];
+}
+
 interface Props {
   propertyId: number;
   byTier: any[];
@@ -76,6 +91,7 @@ interface Props {
   categories: PromptCategory[];
   rooms: RoomOption[];
   facilities: FacilityOption[];
+  taxonomy: MediaTaxonomy;
   areaOptions: string[];
 }
 
@@ -130,10 +146,10 @@ export default function MediaHub(props: Props) {
         })}
       </div>
 
-      {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} areaOptions={props.areaOptions} rooms={props.rooms} />}
-      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} categories={props.categories} rooms={props.rooms} facilities={props.facilities} />}
+      {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />}
+      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} />}
       {tab === 'video'    && <VideoTab    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} />}
-      {tab === 'clarify'  && <ClarifyTab  mediaPage={props.mediaPage} areaOptions={props.areaOptions} rooms={props.rooms} />}
+      {tab === 'clarify'  && <ClarifyTab  mediaPage={props.mediaPage} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />}
       {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} categories={props.categories} rooms={props.rooms} facilities={props.facilities} mediaPage={props.mediaPage} />}
     </div>
   );

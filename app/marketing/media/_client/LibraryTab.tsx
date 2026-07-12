@@ -5,7 +5,7 @@
 
 import { useMemo, useState, Fragment } from 'react';
 import UploadDropzone from './UploadDropzone';
-import AssetEditDrawer, { type AssetEditRow } from './AssetEditDrawer';
+import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
 
 interface TierRow { primary_tier: string | null; total: number | string; photos: number | string; videos: number | string; }
 interface MediaRow {
@@ -28,6 +28,7 @@ interface Props {
   onSendToAi?: (assetId: string) => void;
   areaOptions?: string[];
   rooms?: Array<{ room_type_id: number; room_type_name: string }>;
+  taxonomy?: DrawerTaxonomy;
 }
 
 const WHITE  = '#FFFFFF';
@@ -49,7 +50,7 @@ const TIER_CHIPS: Array<{ key: string; label: string }> = [
 
 function n(v: any): number { return Number(v ?? 0); }
 
-export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [] }: Props) {
+export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [], taxonomy }: Props) {
   const [tier, setTier] = useState<string>('');
   const [page, setPage] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
@@ -162,9 +163,31 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
           <input value={searchText} onChange={e => { setSearchText(e.target.value); setPage(0); }} placeholder="Search filename / area…" style={{ flex:'1 1 200px', minWidth:180, padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE }} />
-        <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(0); }} style={{ padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE, minWidth:160 }}>
+        <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(0); }} style={{ padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE, minWidth:180 }}>
           <option value="">All areas</option>
-          {(areaOptions ?? []).map(a => <option key={a} value={a}>{a}</option>)}
+          <option value="Logos">Logos</option>
+          <option value="No area">No area</option>
+          {taxonomy ? (
+            <>
+              {taxonomy.rooms.length > 0 && (
+                <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={`f-room-${r.id}`} value={r.name}>{r.name}</option>)}</optgroup>
+              )}
+              {taxonomy.facilities.length > 0 && (
+                <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={`f-fac-${f.id}`} value={f.name}>{f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}</option>)}</optgroup>
+              )}
+              {taxonomy.activities.length > 0 && (
+                <optgroup label="Activities">{taxonomy.activities.map(a => <option key={`f-act-${a.id}`} value={a.name}>{a.name}</option>)}</optgroup>
+              )}
+              {taxonomy.meeting_spaces.length > 0 && (
+                <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={`f-mtg-${m.id}`} value={m.name}>{m.name}</option>)}</optgroup>
+              )}
+              {taxonomy.transport.length > 0 && (
+                <optgroup label="Transport">{taxonomy.transport.map(t => <option key={`f-trp-${t.id}`} value={t.name}>{t.name}</option>)}</optgroup>
+              )}
+            </>
+          ) : (
+            (areaOptions ?? []).map(a => <option key={a} value={a}>{a}</option>)
+          )}
         </select>
         <button onClick={() => { setAiOnly(v => !v); setPage(0); }} style={{ padding:'4px 10px', fontSize:11, borderRadius:12, cursor:'pointer', border:'1px solid '+(aiOnly ? FOREST : HAIR), background: aiOnly ? FOREST : WHITE, color: aiOnly ? WHITE : INK, fontWeight: aiOnly ? 600 : 400, whiteSpace:'nowrap' }}>✨ AI only</button>
         {TIER_CHIPS.map(c => {
@@ -277,6 +300,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         asset={editing as AssetEditRow | null}
         areaOptions={areaOptions}
         rooms={rooms}
+        taxonomy={taxonomy}
       />
     </div>
   );
