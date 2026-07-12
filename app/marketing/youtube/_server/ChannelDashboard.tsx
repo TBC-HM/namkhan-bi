@@ -13,22 +13,12 @@
 import Link from 'next/link';
 import { getFreshAccessToken } from '@/lib/youtube/token';
 import {
-  fetchChannel, fetchRecentVideos, fetchRecentComments, fetchChannelPlaylists, isErr,
-  type VideoItem, type CommentItem, type PlaylistItem,
+  fetchChannel, fetchRecentVideos, fetchRecentComments, isErr,
+  type VideoItem, type CommentItem,
 } from '@/lib/youtube/data';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import CommentReplyForm from '../_client/CommentReplyForm';
 import DashboardActions from '../_client/DashboardActions';
-
-interface PillarRow {
-  id: string;
-  pillar_key: string;
-  label: string;
-  description: string | null;
-  target_cadence: string | null;
-  youtube_playlist_id: string | null;
-  sort_order: number | null;
-}
+import AnalyticsKPIs from './AnalyticsKPIs';
 
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
@@ -143,21 +133,12 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
     );
   }
 
-  // 2) Fetch all five in parallel — each is handled independently below.
-  const sb = getSupabaseAdmin();
-  const [chRes, vidRes, comRes, plRes, pillarsRes] = await Promise.all([
+  // 2) Fetch identity + videos + comments in parallel — Playlists + Programs live on their own sub-pages now.
+  const [chRes, vidRes, comRes] = await Promise.all([
     fetchChannel(tok.access_token),
     fetchRecentVideos(tok.access_token, tok.channel_id, 24),
     fetchRecentComments(tok.access_token, tok.channel_id, 20),
-    fetchChannelPlaylists(tok.access_token, tok.channel_id, 50),
-    sb.from('v_yt_content_pillars')
-      .select('id,pillar_key,label,description,target_cadence,youtube_playlist_id,sort_order')
-      .eq('property_id', propertyId).eq('active', true)
-      .order('sort_order', { ascending: true }),
   ]);
-  const playlists: PlaylistItem[] = isErr(plRes) ? [] : plRes.data;
-  const plError = isErr(plRes) ? `${plRes.error}${plRes.detail ? ` · ${plRes.detail.slice(0, 120)}` : ''}` : null;
-  const pillars: PillarRow[] = (pillarsRes.data ?? []) as PillarRow[];
 
   // 3) Channel identity is the anchor. If channel fetch failed, we still surface a
   //    clear reconnect card — but distinct from the token-level failure above.
@@ -232,92 +213,15 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
         )}
       </div>
 
-      {/* ── B · CONTENT PROGRAMS (from marketing.yt_content_pillars) */}
-      <div style={{ ...CARD, gridColumn: '1 / -1' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <div style={{ ...SECTION_H, marginBottom: 0 }}>Content programs ({pillars.length})</div>
-          <div style={{ fontSize: 11, color: INK_M }}>
-            Planned series &amp; cadence · edit in <Link href="/marketing/youtube/pillars" style={{ color: FOREST, textDecoration: 'none' }}>Settings ↗</Link>
-          </div>
-        </div>
-        {pillars.length === 0 ? (
-          <div style={{ fontSize: 13, color: INK_M }}>No programs defined yet.</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-            {pillars.map((p) => {
-              const linked = playlists.find((pl) => pl.id === p.youtube_playlist_id);
-              return (
-                <div key={p.id} style={{ border: `1px solid ${HAIR}`, borderRadius: 4, padding: 12, background: WHITE }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <div style={{ fontSize: 13, color: INK, fontWeight: 600 }}>{p.label}</div>
-                    <span style={{
-                      fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em',
-                      padding: '2px 6px', borderRadius: 2, fontWeight: 600,
-                      background: p.target_cadence === 'weekly' ? '#E8F0EC' : CREAM,
-                      color: p.target_cadence === 'weekly' ? FOREST : INK_S,
-                      whiteSpace: 'nowrap',
-                    }}>{p.target_cadence ?? 'ad hoc'}</span>
-                  </div>
-                  {p.description && (
-                    <div style={{ fontSize: 11, color: INK_M, marginTop: 6, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {p.description}
-                    </div>
-                  )}
-                  <div style={{ marginTop: 8, fontSize: 11, color: linked ? FOREST : INK_M }}>
-                    {linked
-                      ? `🎬 ${linked.itemCount} videos · playlist linked`
-                      : '⚠ no playlist linked yet'}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* ── B · ANALYTICS KPIs + CHARTS (Watch Time · Subs · Traffic · Devices · Geo) */}
+      <AnalyticsKPIs
+        accessToken={tok.access_token}
+        totalSubscribers={ch.subscriberCount}
+        totalViews={ch.viewCount}
+        totalVideos={ch.videoCount}
+      />
 
-      {/* ── C · CHANNEL PLAYLISTS (live from Data API v3) */}
-      <div style={{ ...CARD, gridColumn: '1 / -1' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <div style={{ ...SECTION_H, marginBottom: 0 }}>Channel playlists ({playlists.length})</div>
-          {plError && (
-            <div style={{ fontSize: 11, color: RED }}>Couldn&apos;t load playlists: {plError}</div>
-          )}
-        </div>
-        {playlists.length === 0 ? (
-          <div style={{ fontSize: 13, color: INK_M }}>
-            {plError ? '—' : 'No playlists on this channel yet. Create one on YouTube Studio to organise videos by series.'}
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-            {playlists.map((pl) => {
-              const thumb = pl.thumbnails.medium?.url ?? pl.thumbnails.high?.url ?? pl.thumbnails.default?.url ?? null;
-              return (
-                <a key={pl.id}
-                  href={`https://www.youtube.com/playlist?list=${pl.id}`}
-                  target="_blank" rel="noreferrer noopener"
-                  style={{ display: 'block', border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden', background: WHITE, textDecoration: 'none', color: INK }}>
-                  {thumb ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={thumb} alt={pl.title} style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: CREAM }} />
-                  ) : (
-                    <div style={{ aspectRatio: '16 / 9', background: CREAM }} />
-                  )}
-                  <div style={{ padding: 10 }}>
-                    <div style={{ fontSize: 13, color: INK, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 34 }}>{pl.title}</div>
-                    <div style={{ fontSize: 11, color: INK_M, marginTop: 6, display: 'flex', gap: 10 }}>
-                      <span>{pl.itemCount} videos</span>
-                      {pl.privacyStatus && <span>· {pl.privacyStatus}</span>}
-                      <span style={{ marginLeft: 'auto', color: FOREST }}>Open ↗</span>
-                    </div>
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── D · RECENT UPLOADS (renders independently) */}
+      {/* ── C · RECENT UPLOADS (renders independently) */}
       <div style={{ ...CARD, gridColumn: '1 / -1' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <div style={{ ...SECTION_H, marginBottom: 0 }}>Recent uploads ({videos.length})</div>
