@@ -431,7 +431,7 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
                 <LabeledCheckbox label="Double bed" checked={draft.treatment_has_double_bed} onChange={(v) => setDraft({ ...draft, treatment_has_double_bed: v })} />
                 <LabeledCheckbox label="Couples setup" checked={draft.treatment_has_couples_setup} onChange={(v) => setDraft({ ...draft, treatment_has_couples_setup: v })} />
               </div>
-              <LabeledTextarea label="Ambient notes" value={draft.treatment_ambient_notes} onChange={(v) => setDraft({ ...draft, treatment_ambient_notes: v })} span={3} rows={2} placeholder="candles, aromatherapy, sound bath..." />
+              <LabeledTextarea label="Ambient notes (candles · aromatherapy · sound bath...)" value={draft.treatment_ambient_notes} onChange={(v) => setDraft({ ...draft, treatment_ambient_notes: v })} span={3} rows={2} />
             </>
           )}
           {/* MEETING SPACE OVERLAY */}
