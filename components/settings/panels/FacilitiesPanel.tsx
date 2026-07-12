@@ -177,9 +177,13 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
 
   // Category hint booleans for conditional field visibility
   const cat = (draft?.category ?? '').toLowerCase();
-  const showSpa   = cat.includes('spa') || cat.includes('wellness') || cat.includes('treatment');
-  const showPool  = cat.includes('pool') || cat.includes('spa') || cat.includes('wellness') || draft?.pool_type !== '';
-  const showSauna = cat.includes('sauna') || cat.includes('spa') || cat.includes('wellness') || draft?.sauna_type !== '';
+  const nm = (draft?.name ?? '').toLowerCase();
+  const hasSpaKw   = cat.includes('spa') || cat.includes('treatment') || nm.includes('spa') || Boolean(draft?.treatment_rooms_count && Number(draft.treatment_rooms_count) > 0);
+  const hasPoolKw  = cat.includes('pool') || nm.includes('pool') || nm.includes('plunge') || Boolean(draft?.pool_type);
+  const hasSaunaKw = cat.includes('sauna') || nm.includes('sauna') || Boolean(draft?.sauna_type);
+  const showSpa   = hasSpaKw;
+  const showPool  = hasPoolKw;
+  const showSauna = hasSaunaKw;
 
   function save() {
     if (!draft) return;
