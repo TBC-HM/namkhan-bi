@@ -1,8 +1,11 @@
 // app/api/marketing/media/ai-accept/route.ts
 // POST — mark an ai_generation as accepted and mint a media.media_assets row.
+// PBS 2026-07-11 pm: Rewritten to call fn_media_asset_accept_from_generation RPC.
+// Root cause of previous asset_insert_failed loop: sb.schema('media').from(...)
+// silently no-ops because PostgREST only exposes public. All writes to non-public
+// schemas MUST go through SECURITY DEFINER RPCs per claude_md §0.5.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import crypto from 'node:crypto';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,60 +13,30 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   let sb;
   try { sb = getSupabaseAdmin(); }
-  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }); }
+  catch (e: unknown) { return NextResponse.json({ error: (e as Error).message }, { status: 500 }); }
 
-  let body: any;
+  let body: { generation_id?: string; candidate_path?: string; accepted_by?: string };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
 
-  const { generation_id, candidate_path } = body || {};
-  if (!generation_id || !candidate_path) return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
-
-  try {
-    // Pull the source generation row (via bridge)
-    const { data: gen, error: genErr } = await sb.from('v_ai_generations').select('*').eq('id', generation_id).maybeSingle();
-    if (genErr || !gen) return NextResponse.json({ error: 'generation_not_found', detail: genErr?.message }, { status: 404 });
-
-    // Insert into media.media_assets via schema-scoped client.
-    // PBS 2026-07-12: sha256 is NOT NULL on media.media_assets. AI-generated PNGs don't have
-    // a source-file hash we can compute (they live in storage as opaque blobs), so we synthesize
-    // a stable hex hash from generation_id + candidate_path — always unique per generation.
-    const syntheticSha256 = crypto.createHash('sha256').update(generation_id + ':' + candidate_path).digest('hex');
-
-    const insertPayload = {
-      property_id: gen.property_id,
-      sha256: syntheticSha256,
-      original_filename: candidate_path.split('/').pop() ?? candidate_path,
-      asset_type: 'photo',
-      mime_type: 'image/png',
-      master_path: candidate_path,
-      status: 'ready',
-      primary_tier: gen.target_tier,
-      is_ai_generated: true,
-      gen_prompt: gen.effective_prompt ?? gen.prompt,
-      gen_engine: gen.engine,
-      gen_seed: null,
-      accepted_by: 'PBS',
-      accepted_at: new Date().toISOString(),
-    };
-    const { data: asset, error: insErr } = await sb
-      .schema('media')
-      .from('media_assets')
-      .insert(insertPayload)
-      .select('asset_id')
-      .single();
-    if (insErr || !asset) return NextResponse.json({ error: 'asset_insert_failed', detail: insErr?.message }, { status: 500 });
-
-    // Flip the ai_generation row to accepted + link chosen_asset_id
-    const { error: updErr } = await sb
-      .schema('media')
-      .from('ai_generations')
-      .update({ status: 'accepted', chosen_asset_id: asset.asset_id })
-      .eq('id', generation_id);
-    if (updErr) return NextResponse.json({ error: 'gen_update_failed', asset_id: asset.asset_id, detail: updErr.message }, { status: 500 });
-
-    return NextResponse.json({ ok: true, asset_id: asset.asset_id });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? 'unknown' }, { status: 500 });
+  const { generation_id, candidate_path, accepted_by } = body || {};
+  if (!generation_id || !candidate_path) {
+    return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
   }
+
+  const { data, error } = await sb.rpc('fn_media_asset_accept_from_generation', {
+    p_generation_id: generation_id,
+    p_candidate_path: candidate_path,
+    p_accepted_by:   accepted_by ?? 'PBS',
+  });
+
+  if (error) {
+    return NextResponse.json({
+      error:  'asset_insert_failed',
+      detail: error.message,
+      code:   error.code,
+      hint:   error.hint,
+    }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, asset_id: data });
 }
