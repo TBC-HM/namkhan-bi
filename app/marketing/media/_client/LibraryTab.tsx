@@ -69,13 +69,28 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     return { tot, ota, hero, social, internal };
   }, [byTier]);
 
-  const filtered = useMemo(() => {
-    if (!tier) return mediaPage;
-    return mediaPage.filter(r => r.primary_tier === tier);
-  }, [mediaPage, tier]);
+  // PBS 2026-07-12 pm: filter state — search text · area · AI-only.
+  const [searchText, setSearchText] = useState('');
+  const [areaFilter, setAreaFilter] = useState('');
+  const [aiOnly, setAiOnly] = useState(false);
 
-  const pageRows = visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const filtered = useMemo(() => {
+    let out = mediaPage;
+    if (tier)         out = out.filter(r => r.primary_tier === tier);
+    if (areaFilter)   out = out.filter(r => (r.property_area ?? '') === areaFilter);
+    if (aiOnly)       out = out.filter((r: any) => r.is_ai_generated === true);
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      out = out.filter(r =>
+        (r.original_filename ?? '').toLowerCase().includes(q) ||
+        (r.property_area     ?? '').toLowerCase().includes(q)
+      );
+    }
+    return out;
+  }, [mediaPage, tier, areaFilter, aiOnly, searchText]);
+
   const visible = filtered.filter(r => !localDismiss.has(r.asset_id));
+  const pageRows = visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
 
   async function deleteAsset(assetId: string, filename: string | null) {
@@ -143,7 +158,13 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       {/* Filter row + upload */}
       <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-          {TIER_CHIPS.map(c => {
+          <input value={searchText} onChange={e => { setSearchText(e.target.value); setPage(0); }} placeholder="Search filename / area…" style={{ flex:'1 1 200px', minWidth:180, padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE }} />
+        <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(0); }} style={{ padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE, minWidth:160 }}>
+          <option value="">All areas</option>
+          {(areaOptions ?? []).map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <button onClick={() => { setAiOnly(v => !v); setPage(0); }} style={{ padding:'4px 10px', fontSize:11, borderRadius:12, cursor:'pointer', border:'1px solid '+(aiOnly ? FOREST : HAIR), background: aiOnly ? FOREST : WHITE, color: aiOnly ? WHITE : INK, fontWeight: aiOnly ? 600 : 400, whiteSpace:'nowrap' }}>✨ AI only</button>
+        {TIER_CHIPS.map(c => {
             const active = tier === c.key;
             return (
               <button key={c.key || 'all'} onClick={() => { setTier(c.key); setPage(0); }} style={{
@@ -207,12 +228,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                     padding:'4px 8px', fontSize:11, fontWeight:600, background:'transparent', color:'#B23A2E',
                     border:'1px solid #B23A2E', borderRadius:2, cursor:'pointer', whiteSpace:'nowrap',
                   }}>✕ Delete</button>
-                  {onSendToAi ? (
-                    <button onClick={() => onSendToAi(r.asset_id)} style={{
-                      padding:'4px 10px', fontSize:11, fontWeight:600, background:'transparent', color:FOREST,
-                      border:'1px solid ' + FOREST, borderRadius:2, cursor:'pointer', whiteSpace:'nowrap',
-                    }}>Use for AI ✎</button>
-                  ) : null}
                   <button onClick={() => setUseForMenu(useForMenu === r.asset_id ? null : r.asset_id)} disabled={busyRow === r.asset_id} style={{
                     fontSize:10, padding:'4px 8px', background:WHITE, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', color:INK,
                   }}>Use for…</button>
@@ -220,6 +235,11 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                 </div>
                 {useForMenu === r.asset_id && (
                   <div style={{ marginTop:4, background:WHITE, border:'1px solid '+HAIR, borderRadius:3, padding:4, maxHeight:160, overflow:'auto' }}>
+                    {onSendToAi && (
+                      <button onClick={() => { onSendToAi(r.asset_id); setUseForMenu(null); }} style={{
+                        display:'block', width:'100%', textAlign:'left', padding:'6px 8px', fontSize:11, fontWeight:600, background:'#F5F1E6', border:'none', borderBottom:'1px solid '+HAIR, cursor:'pointer', color:FOREST,
+                      }}>✨ AI Studio (refine / restyle)</button>
+                    )}
                     {channelSpecs.map(c => (
                       <Fragment key={c.channel}>
                         <button onClick={() => renderForChannel(r.asset_id, c.channel)} style={{
