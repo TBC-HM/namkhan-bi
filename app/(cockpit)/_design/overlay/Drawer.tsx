@@ -69,6 +69,8 @@ const S: Record<string, CSSProperties> = {
     position: 'fixed', inset: 0, zIndex: 100,
     display: 'flex', justifyContent: 'flex-end',
     fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
+    background: 'transparent',
+    pointerEvents: 'none',
   },
   // PBS #199 v7: drawer scrim lightened (40% black → 12% black) so the underlying page remains clearly visible while drawer is open.
   // PBS 2026-06-29: pointerEvents on root, scrim transparent + click-through-to-close.
