@@ -18,6 +18,7 @@ type Row = {
   price_includes_vat_service: boolean | null; price_notes: string | null;
   service_time_from: string | null; service_time_to: string | null;
   available_season_codes: string[] | null;
+  dmc_price_amount: number | null; dmc_discount_pct: number | null;
 };
 
 interface Draft {
@@ -27,6 +28,7 @@ interface Draft {
   is_complimentary: boolean; is_active: boolean; display_order: string;
   price_amount: string; price_currency: string; price_includes_vat_service: boolean; price_notes: string;
   service_time_from: string; service_time_to: string; available_season_codes: string[];
+  dmc_price_amount: string; dmc_discount_pct: string;
 }
 
 const EMPTY: Draft = {
@@ -35,6 +37,7 @@ const EMPTY: Draft = {
   is_complimentary: false, is_active: true, display_order: '',
   price_amount: '', price_currency: 'USD', price_includes_vat_service: true, price_notes: '',
   service_time_from: '', service_time_to: '', available_season_codes: [],
+  dmc_price_amount: '', dmc_discount_pct: '',
 };
 
 const toDraft = (r: Row): Draft => ({
@@ -50,6 +53,8 @@ const toDraft = (r: Row): Draft => ({
   service_time_from: r.service_time_from ? String(r.service_time_from).slice(0, 5) : '',
   service_time_to:   r.service_time_to   ? String(r.service_time_to).slice(0, 5)   : '',
   available_season_codes: r.available_season_codes ?? [],
+  dmc_price_amount: r.dmc_price_amount?.toString() ?? '',
+  dmc_discount_pct: r.dmc_discount_pct?.toString() ?? '',
 });
 
 interface Season { season_id: number; season_code: string; display_name: string | null; }
@@ -68,7 +73,7 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
   useEffect(() => {
     if (localSeasons.length > 0) return;
     (async () => {
-      const { data: s } = await supabase.schema('property').from('seasons')
+      const { data: s } = await supabase.from('v_seasons')
         .select('season_id, season_code, display_name').eq('property_id', propertyId)
         .order('date_start', { ascending: true });
       if (s) setLocalSeasons(s as any);
@@ -112,6 +117,8 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
         p_service_time_from: draft.service_time_from || null,
         p_service_time_to:   draft.service_time_to   || null,
         p_available_season_codes: draft.available_season_codes.length > 0 ? draft.available_season_codes : null,
+        p_dmc_price_amount: draft.dmc_price_amount ? Number(draft.dmc_price_amount) : null,
+        p_dmc_discount_pct: draft.dmc_discount_pct ? Number(draft.dmc_discount_pct) : null,
       });
       if (e) { setError(e.message); return; }
       setDraft(null); router.refresh();
@@ -170,6 +177,22 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
             )}
           </div>
           <LabeledTextarea label="Description" value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} span={3} />
+          {/* DMC PRICING ROW — enter one, the other auto-computes on save */}
+          <LabeledInput label="DMC price (net)" value={draft.dmc_price_amount} onChange={(v) => {
+            const guest = Number(draft.price_amount || 0);
+            const dmc = Number(v || 0);
+            const pct = guest > 0 && dmc > 0 ? ((1 - dmc/guest) * 100).toFixed(2) : draft.dmc_discount_pct;
+            setDraft({ ...draft, dmc_price_amount: v, dmc_discount_pct: v ? pct : '' });
+          }} type="number" placeholder="e.g. 30" />
+          <LabeledInput label="DMC discount %" value={draft.dmc_discount_pct} onChange={(v) => {
+            const guest = Number(draft.price_amount || 0);
+            const pct = Number(v || 0);
+            const dmc = guest > 0 && pct >= 0 ? (guest * (1 - pct/100)).toFixed(2) : draft.dmc_price_amount;
+            setDraft({ ...draft, dmc_discount_pct: v, dmc_price_amount: v ? dmc : '' });
+          }} type="number" placeholder="e.g. 25" />
+          <div style={{ fontSize: 11, color: '#5A5A5A', alignSelf: 'flex-end', paddingBottom: 8 }}>
+            {draft.price_amount && draft.dmc_price_amount ? `Guest ${draft.price_currency ?? 'USD'} ${draft.price_amount} → DMC ${draft.price_currency ?? 'USD'} ${draft.dmc_price_amount}${draft.dmc_discount_pct ? ` (–${draft.dmc_discount_pct}%)` : ''}` : 'Auto-computes'}
+          </div>
           <LabeledTextarea label="Price notes" value={draft.price_notes} onChange={(v) => setDraft({ ...draft, price_notes: v })} span={3} rows={2} />
           <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 16 }}>
             <LabeledCheckbox label="Complimentary" checked={draft.is_complimentary} onChange={(v) => setDraft({ ...draft, is_complimentary: v })} />
@@ -187,6 +210,7 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
                   {r.category && <span style={pill('#F5F0E1', '#5A5A5A')}>{r.category}</span>}
                   {r.duration_min && <span style={{ fontSize: 11, color: '#5A5A5A' }}>{r.duration_min}m</span>}
                   {r.price_amount != null && <span style={pill('#E4F0E1', '#1F5C2C')}>{r.price_currency ?? 'USD'} {r.price_amount}{r.price_includes_vat_service ? ' (incl)' : ' (net)'}</span>}
+                  {r.dmc_price_amount != null && <span style={pill('#EAE1F0', '#4A2C7A')}>DMC {r.price_currency ?? 'USD'} {r.dmc_price_amount}{r.dmc_discount_pct != null ? ` –${r.dmc_discount_pct}%` : ''}</span>}
                   {r.is_complimentary && <span style={pill('#E4F0E1', '#1F5C2C')}>complimentary</span>}
                   {r.is_active === false && <span style={pill('#F5F0E1', '#8A8A8A')}>inactive</span>}
                 </div>
