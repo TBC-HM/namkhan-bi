@@ -22,6 +22,21 @@ type Row = {
   size_sqm: number | null; length_m: number | null; width_m: number | null;
   capacity_seated: number | null; capacity_standing: number | null;
   capacity_yoga: number | null; capacity_dining: number | null;
+  is_meeting_space: boolean | null;
+  meeting_ceiling_height_m: number | null;
+  meeting_has_daylight: boolean | null; meeting_has_blackout: boolean | null; meeting_has_ac: boolean | null;
+  meeting_has_projector: boolean | null; meeting_has_screen: boolean | null;
+  meeting_has_sound_system: boolean | null; meeting_has_mic: boolean | null;
+  meeting_has_whiteboard: boolean | null; meeting_has_flipchart: boolean | null;
+  meeting_has_wifi: boolean | null; meeting_wifi_mbps: number | null; meeting_power_outlets: number | null;
+  meeting_capacity_theatre: number | null; meeting_capacity_classroom: number | null;
+  meeting_capacity_ushape: number | null; meeting_capacity_boardroom: number | null;
+  meeting_capacity_banquet: number | null; meeting_capacity_cabaret: number | null;
+  meeting_capacity_reception: number | null;
+  meeting_half_day_rate: number | null; meeting_full_day_rate: number | null;
+  meeting_setup_fee: number | null; meeting_rate_currency: string | null;
+  meeting_catering_options: string[] | null;
+  meeting_location_tag: string | null; meeting_notes: string | null;
 };
 
 interface Draft {
@@ -37,6 +52,21 @@ interface Draft {
   size_sqm: string; length_m: string; width_m: string;
   capacity_seated: string; capacity_standing: string;
   capacity_yoga: string; capacity_dining: string;
+  is_meeting_space: boolean;
+  meeting_ceiling_height_m: string;
+  meeting_has_daylight: boolean; meeting_has_blackout: boolean; meeting_has_ac: boolean;
+  meeting_has_projector: boolean; meeting_has_screen: boolean;
+  meeting_has_sound_system: boolean; meeting_has_mic: boolean;
+  meeting_has_whiteboard: boolean; meeting_has_flipchart: boolean;
+  meeting_has_wifi: boolean; meeting_wifi_mbps: string; meeting_power_outlets: string;
+  meeting_capacity_theatre: string; meeting_capacity_classroom: string;
+  meeting_capacity_ushape: string; meeting_capacity_boardroom: string;
+  meeting_capacity_banquet: string; meeting_capacity_cabaret: string;
+  meeting_capacity_reception: string;
+  meeting_half_day_rate: string; meeting_full_day_rate: string;
+  meeting_setup_fee: string; meeting_rate_currency: string;
+  meeting_catering_options: string[];
+  meeting_location_tag: string; meeting_notes: string;
 }
 
 const EMPTY: Draft = {
@@ -48,6 +78,19 @@ const EMPTY: Draft = {
   opening_time: '', closing_time: '',
   size_sqm: '', length_m: '', width_m: '',
   capacity_seated: '', capacity_standing: '', capacity_yoga: '', capacity_dining: '',
+  is_meeting_space: false, meeting_ceiling_height_m: '',
+  meeting_has_daylight: false, meeting_has_blackout: false, meeting_has_ac: false,
+  meeting_has_projector: false, meeting_has_screen: false,
+  meeting_has_sound_system: false, meeting_has_mic: false,
+  meeting_has_whiteboard: false, meeting_has_flipchart: false,
+  meeting_has_wifi: false, meeting_wifi_mbps: '', meeting_power_outlets: '',
+  meeting_capacity_theatre: '', meeting_capacity_classroom: '',
+  meeting_capacity_ushape: '', meeting_capacity_boardroom: '',
+  meeting_capacity_banquet: '', meeting_capacity_cabaret: '',
+  meeting_capacity_reception: '',
+  meeting_half_day_rate: '', meeting_full_day_rate: '', meeting_setup_fee: '',
+  meeting_rate_currency: 'USD', meeting_catering_options: [],
+  meeting_location_tag: '', meeting_notes: '',
 };
 
 const toDraft = (r: Row): Draft => ({
@@ -72,6 +115,29 @@ const toDraft = (r: Row): Draft => ({
   capacity_standing: r.capacity_standing?.toString() ?? '',
   capacity_yoga: r.capacity_yoga?.toString() ?? '',
   capacity_dining: r.capacity_dining?.toString() ?? '',
+  is_meeting_space: !!r.is_meeting_space,
+  meeting_ceiling_height_m: r.meeting_ceiling_height_m?.toString() ?? '',
+  meeting_has_daylight: !!r.meeting_has_daylight, meeting_has_blackout: !!r.meeting_has_blackout, meeting_has_ac: !!r.meeting_has_ac,
+  meeting_has_projector: !!r.meeting_has_projector, meeting_has_screen: !!r.meeting_has_screen,
+  meeting_has_sound_system: !!r.meeting_has_sound_system, meeting_has_mic: !!r.meeting_has_mic,
+  meeting_has_whiteboard: !!r.meeting_has_whiteboard, meeting_has_flipchart: !!r.meeting_has_flipchart,
+  meeting_has_wifi: !!r.meeting_has_wifi,
+  meeting_wifi_mbps: r.meeting_wifi_mbps?.toString() ?? '',
+  meeting_power_outlets: r.meeting_power_outlets?.toString() ?? '',
+  meeting_capacity_theatre: r.meeting_capacity_theatre?.toString() ?? '',
+  meeting_capacity_classroom: r.meeting_capacity_classroom?.toString() ?? '',
+  meeting_capacity_ushape: r.meeting_capacity_ushape?.toString() ?? '',
+  meeting_capacity_boardroom: r.meeting_capacity_boardroom?.toString() ?? '',
+  meeting_capacity_banquet: r.meeting_capacity_banquet?.toString() ?? '',
+  meeting_capacity_cabaret: r.meeting_capacity_cabaret?.toString() ?? '',
+  meeting_capacity_reception: r.meeting_capacity_reception?.toString() ?? '',
+  meeting_half_day_rate: r.meeting_half_day_rate?.toString() ?? '',
+  meeting_full_day_rate: r.meeting_full_day_rate?.toString() ?? '',
+  meeting_setup_fee: r.meeting_setup_fee?.toString() ?? '',
+  meeting_rate_currency: r.meeting_rate_currency ?? 'USD',
+  meeting_catering_options: r.meeting_catering_options ?? [],
+  meeting_location_tag: r.meeting_location_tag ?? '',
+  meeting_notes: r.meeting_notes ?? '',
 });
 
 const POOL_TYPE_OPTS = ['', 'rock', 'infinity', 'lap', 'plunge', 'natural'];
@@ -147,6 +213,29 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
         p_capacity_standing: draft.capacity_standing ? Number(draft.capacity_standing) : null,
         p_capacity_yoga:     draft.capacity_yoga     ? Number(draft.capacity_yoga)     : null,
         p_capacity_dining:   draft.capacity_dining   ? Number(draft.capacity_dining)   : null,
+        p_is_meeting_space: draft.is_meeting_space,
+        p_meeting_ceiling_height_m: draft.meeting_ceiling_height_m ? Number(draft.meeting_ceiling_height_m) : null,
+        p_meeting_has_daylight: draft.meeting_has_daylight, p_meeting_has_blackout: draft.meeting_has_blackout, p_meeting_has_ac: draft.meeting_has_ac,
+        p_meeting_has_projector: draft.meeting_has_projector, p_meeting_has_screen: draft.meeting_has_screen,
+        p_meeting_has_sound_system: draft.meeting_has_sound_system, p_meeting_has_mic: draft.meeting_has_mic,
+        p_meeting_has_whiteboard: draft.meeting_has_whiteboard, p_meeting_has_flipchart: draft.meeting_has_flipchart,
+        p_meeting_has_wifi: draft.meeting_has_wifi,
+        p_meeting_wifi_mbps: draft.meeting_wifi_mbps ? Number(draft.meeting_wifi_mbps) : null,
+        p_meeting_power_outlets: draft.meeting_power_outlets ? Number(draft.meeting_power_outlets) : null,
+        p_meeting_capacity_theatre: draft.meeting_capacity_theatre ? Number(draft.meeting_capacity_theatre) : null,
+        p_meeting_capacity_classroom: draft.meeting_capacity_classroom ? Number(draft.meeting_capacity_classroom) : null,
+        p_meeting_capacity_ushape: draft.meeting_capacity_ushape ? Number(draft.meeting_capacity_ushape) : null,
+        p_meeting_capacity_boardroom: draft.meeting_capacity_boardroom ? Number(draft.meeting_capacity_boardroom) : null,
+        p_meeting_capacity_banquet: draft.meeting_capacity_banquet ? Number(draft.meeting_capacity_banquet) : null,
+        p_meeting_capacity_cabaret: draft.meeting_capacity_cabaret ? Number(draft.meeting_capacity_cabaret) : null,
+        p_meeting_capacity_reception: draft.meeting_capacity_reception ? Number(draft.meeting_capacity_reception) : null,
+        p_meeting_half_day_rate: draft.meeting_half_day_rate ? Number(draft.meeting_half_day_rate) : null,
+        p_meeting_full_day_rate: draft.meeting_full_day_rate ? Number(draft.meeting_full_day_rate) : null,
+        p_meeting_setup_fee: draft.meeting_setup_fee ? Number(draft.meeting_setup_fee) : null,
+        p_meeting_rate_currency: draft.meeting_rate_currency || 'USD',
+        p_meeting_catering_options: draft.meeting_catering_options.length > 0 ? draft.meeting_catering_options : null,
+        p_meeting_location_tag: draft.meeting_location_tag.trim() || null,
+        p_meeting_notes: draft.meeting_notes.trim() || null,
       });
       if (e) { setError(e.message); return; }
       setDraft(null); router.refresh();
@@ -263,6 +352,48 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
             <>
               <div style={{ gridColumn: '1 / -1', paddingTop: 6, borderTop: '1px solid #E6DFCC', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#5A5A5A' }}>Sauna specifics</div>
               <LabeledSelect label="Sauna type" value={draft.sauna_type} onChange={(v) => setDraft({ ...draft, sauna_type: v })} options={SAUNA_TYPE_OPTS} />
+            </>
+          )}
+          {/* MEETING SPACE OVERLAY */}
+          <div style={{ gridColumn: '1 / -1', paddingTop: 8, borderTop: '1px solid #E6DFCC' }}>
+            <LabeledCheckbox label="Usable as meeting space" checked={draft.is_meeting_space} onChange={(v) => setDraft({ ...draft, is_meeting_space: v })} />
+          </div>
+          {draft.is_meeting_space && (
+            <>
+              <div style={{ gridColumn: '1 / -1', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#5A5A5A' }}>Meeting space specs</div>
+              <LabeledInput label="Ceiling height (m)" value={draft.meeting_ceiling_height_m} onChange={(v) => setDraft({ ...draft, meeting_ceiling_height_m: v })} type="number" />
+              <LabeledInput label="Location tag" value={draft.meeting_location_tag} onChange={(v) => setDraft({ ...draft, meeting_location_tag: v })} placeholder="e.g. Riverside · Ground floor" span={2} />
+              <LabeledInput label="Theatre" value={draft.meeting_capacity_theatre} onChange={(v) => setDraft({ ...draft, meeting_capacity_theatre: v })} type="number" />
+              <LabeledInput label="Classroom" value={draft.meeting_capacity_classroom} onChange={(v) => setDraft({ ...draft, meeting_capacity_classroom: v })} type="number" />
+              <LabeledInput label="U-shape" value={draft.meeting_capacity_ushape} onChange={(v) => setDraft({ ...draft, meeting_capacity_ushape: v })} type="number" />
+              <LabeledInput label="Boardroom" value={draft.meeting_capacity_boardroom} onChange={(v) => setDraft({ ...draft, meeting_capacity_boardroom: v })} type="number" />
+              <LabeledInput label="Banquet" value={draft.meeting_capacity_banquet} onChange={(v) => setDraft({ ...draft, meeting_capacity_banquet: v })} type="number" />
+              <LabeledInput label="Cabaret" value={draft.meeting_capacity_cabaret} onChange={(v) => setDraft({ ...draft, meeting_capacity_cabaret: v })} type="number" />
+              <LabeledInput label="Reception" value={draft.meeting_capacity_reception} onChange={(v) => setDraft({ ...draft, meeting_capacity_reception: v })} type="number" />
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                <LabeledCheckbox label="AC" checked={draft.meeting_has_ac} onChange={(v) => setDraft({ ...draft, meeting_has_ac: v })} />
+                <LabeledCheckbox label="Natural daylight" checked={draft.meeting_has_daylight} onChange={(v) => setDraft({ ...draft, meeting_has_daylight: v })} />
+                <LabeledCheckbox label="Blackout" checked={draft.meeting_has_blackout} onChange={(v) => setDraft({ ...draft, meeting_has_blackout: v })} />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                <LabeledCheckbox label="Projector" checked={draft.meeting_has_projector} onChange={(v) => setDraft({ ...draft, meeting_has_projector: v })} />
+                <LabeledCheckbox label="Screen" checked={draft.meeting_has_screen} onChange={(v) => setDraft({ ...draft, meeting_has_screen: v })} />
+                <LabeledCheckbox label="Sound system" checked={draft.meeting_has_sound_system} onChange={(v) => setDraft({ ...draft, meeting_has_sound_system: v })} />
+                <LabeledCheckbox label="Microphone" checked={draft.meeting_has_mic} onChange={(v) => setDraft({ ...draft, meeting_has_mic: v })} />
+                <LabeledCheckbox label="Whiteboard" checked={draft.meeting_has_whiteboard} onChange={(v) => setDraft({ ...draft, meeting_has_whiteboard: v })} />
+                <LabeledCheckbox label="Flipchart" checked={draft.meeting_has_flipchart} onChange={(v) => setDraft({ ...draft, meeting_has_flipchart: v })} />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <LabeledCheckbox label="Wi-Fi" checked={draft.meeting_has_wifi} onChange={(v) => setDraft({ ...draft, meeting_has_wifi: v })} />
+                <div style={{ minWidth: 120 }}><LabeledInput label="Wi-Fi Mbps" value={draft.meeting_wifi_mbps} onChange={(v) => setDraft({ ...draft, meeting_wifi_mbps: v })} type="number" /></div>
+                <div style={{ minWidth: 120 }}><LabeledInput label="Power outlets" value={draft.meeting_power_outlets} onChange={(v) => setDraft({ ...draft, meeting_power_outlets: v })} type="number" /></div>
+              </div>
+              <LabeledInput label="Half-day rate" value={draft.meeting_half_day_rate} onChange={(v) => setDraft({ ...draft, meeting_half_day_rate: v })} type="number" />
+              <LabeledInput label="Full-day rate" value={draft.meeting_full_day_rate} onChange={(v) => setDraft({ ...draft, meeting_full_day_rate: v })} type="number" />
+              <LabeledInput label="Setup fee" value={draft.meeting_setup_fee} onChange={(v) => setDraft({ ...draft, meeting_setup_fee: v })} type="number" />
+              <LabeledInput label="Rate currency" value={draft.meeting_rate_currency} onChange={(v) => setDraft({ ...draft, meeting_rate_currency: v })} />
+              <ArrayInput label="Catering options" value={draft.meeting_catering_options} onChange={(v) => setDraft({ ...draft, meeting_catering_options: v })} placeholder="coffee break, buffet lunch, cocktail" span={2} />
+              <LabeledTextarea label="Meeting notes" value={draft.meeting_notes} onChange={(v) => setDraft({ ...draft, meeting_notes: v })} span={3} />
             </>
           )}
           <LabeledTextarea label="Notes" value={draft.notes} onChange={(v) => setDraft({ ...draft, notes: v })} span={3} />
