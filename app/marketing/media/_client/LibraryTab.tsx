@@ -27,6 +27,7 @@ interface Props {
   channelSpecs: ChannelSpec[];
   onSendToAi?: (assetId: string) => void;
   areaOptions?: string[];
+  rooms?: Array<{ room_type_id: number; room_type_name: string }>;
 }
 
 const WHITE  = '#FFFFFF';
@@ -48,7 +49,7 @@ const TIER_CHIPS: Array<{ key: string; label: string }> = [
 
 function n(v: any): number { return Number(v ?? 0); }
 
-export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [] }: Props) {
+export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [] }: Props) {
   const [tier, setTier] = useState<string>('');
   const [page, setPage] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
