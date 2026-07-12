@@ -17,7 +17,7 @@ async function getPropertyData(propertyId: number) {
   const [
     identity, location, brand, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
-    team, owner, roomUnits,
+    team, owner, roomUnits, transport,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
@@ -40,6 +40,7 @@ async function getPropertyData(propertyId: number) {
     supabase.schema('property').from('owner_entity').select('*').eq('property_id', propertyId).maybeSingle(),
     // PBS 2026-07-03: unit counts for the Rooms tab — public view over PMS silver.
     supabase.from('v_room_type_units').select('room_type_name, units').eq('property_id', propertyId),
+    supabase.schema('property').from('transport_options').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
   ]);
 
   return {
@@ -57,6 +58,7 @@ async function getPropertyData(propertyId: number) {
     team: team.data ?? [],
     owner: owner.data,
     roomUnits: (roomUnits.data ?? []) as Array<{ room_type_name: string; units: number }>,
+    transport: transport.data ?? [],
   };
 }
 
