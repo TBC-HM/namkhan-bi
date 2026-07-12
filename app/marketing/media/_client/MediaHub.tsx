@@ -1,19 +1,14 @@
 // app/marketing/media/_client/MediaHub.tsx
 // PBS 2026-07-12 — Client tab strip for Media hub.
-// PBS 2026-07-11 pm: added Library→AI Studio jump. Clicking "Send to AI" on
-// any Library row switches to AI Studio and preselects that asset.
-// 2026-07-11 pm (later): pipes `categories` (v_ai_prompt_categories) into
-// both AiStudioTab (dropdown source) and SettingsTab (Prompt Categories sub-tab).
-// 2026-07-12: added `clarify` tab (4th, before Settings) — grid of assets
-// missing property_area or primary_tier; click a thumb → AssetEditDrawer.
-// 2026-07-12 pm: added `rooms` + `facilities` grounding — piped into
-// AiStudioTab (category-driven dropdowns) and SettingsTab (Reality profile panels).
+// 2026-07-12 pm: swap the thin VideoTab for VideoHub — the new 4-tab internal
+// strip (Video Library · Video AI Studio · Video Clarify · Video Settings)
+// per task #148.
 'use client';
 
 import { useState } from 'react';
 import LibraryTab from './LibraryTab';
 import AiStudioTab from './AiStudioTab';
-import VideoTab from './VideoTab';
+import VideoHub from './VideoHub';
 import ClarifyTab from './ClarifyTab';
 import SettingsTab from './SettingsTab';
 
@@ -64,9 +59,17 @@ export interface FacilityOption {
   updated_at: string | null;
 }
 
+export interface VideoTemplate {
+  template_key: string;
+  display_name: string;
+  description: string | null;
+  duration_sec: number;
+  min_assets: number;
+  max_assets: number;
+  aspect: string;
+}
+
 // 2026-07-12 pm: 5-category taxonomy that mirrors the Settings sidebar
-// (rooms · facilities · activities · meeting_spaces · transport). Sourced
-// from property.* server-side so any Settings add flows through on next load.
 export interface TaxonomyEntry { id: number; name: string }
 export interface FacilityTaxonomyEntry extends TaxonomyEntry { parent_id: number | null; parent_name: string | null }
 export interface ActivityTaxonomyEntry extends TaxonomyEntry { facility_id: number | null; facility_name: string | null }
@@ -79,7 +82,6 @@ export interface MediaTaxonomy {
   activities: ActivityTaxonomyEntry[];
   meeting_spaces: TaxonomyEntry[];
   transport: TransportTaxonomyEntry[];
-  // 2026-07-12 pm: Imekong — boat (vessel) + boat_cruises (packages that run on the boat)
   boats: BoatTaxonomyEntry[];
   boat_cruises: BoatCruiseTaxonomyEntry[];
 }
@@ -98,6 +100,7 @@ interface Props {
   facilities: FacilityOption[];
   taxonomy: MediaTaxonomy;
   areaOptions: string[];
+  videoTemplates?: VideoTemplate[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -153,7 +156,7 @@ export default function MediaHub(props: Props) {
 
       {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />}
       {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} />}
-      {tab === 'video'    && <VideoTab    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} />}
+      {tab === 'video'    && <VideoHub    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} templates={props.videoTemplates ?? []} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} areaOptions={props.areaOptions} />}
       {tab === 'clarify'  && <ClarifyTab  mediaPage={props.mediaPage} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />}
       {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} categories={props.categories} rooms={props.rooms} facilities={props.facilities} mediaPage={props.mediaPage} />}
     </div>

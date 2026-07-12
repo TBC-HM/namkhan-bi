@@ -6,6 +6,7 @@
 // 2026-07-12: derives distinct property_area values for the Edit drawer datalist.
 // 2026-07-12 pm: added rooms + facilities grounding — pipes v_room_grounding + v_facility_grounding
 //   into AiStudioTab (category-driven dropdowns) and SettingsTab (Reality profile companion panels).
+// 2026-07-12 pm (task #148): loads v_video_templates for the new Video AI Studio composer.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -21,6 +22,7 @@ async function loadAll(pid: number) {
   const [
     byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories,
     rooms, facilities, facilitiesRaw, activitiesRaw, transportRaw, boatsRaw, cruisesRaw,
+    videoTemplates,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(500),
@@ -46,6 +48,8 @@ async function loadAll(pid: number) {
       .eq('property_id', pid).eq('is_active', true).order('name'),
     sb.schema('property' as any).from('boat_cruises').select('cruise_id, name, boat_id, cruise_type, route_from, route_to')
       .eq('property_id', pid).eq('is_active', true).order('name'),
+    // 2026-07-12 pm task #148: video templates for AI Studio composer
+    sb.from('v_video_templates').select('*').order('sort_order', { ascending: true }),
   ]);
 
   // === Build 5-category taxonomy (matches Settings sidebar) ===
@@ -77,10 +81,8 @@ async function loadAll(pid: number) {
   };
 
   const areaSet = new Set<string>();
-  // (a) canonical always-visible options
   areaSet.add('Logos');
   areaSet.add('No area');
-  // (b) all 5 taxonomy sources — one flat list for datalist/legacy fallback
   for (const r of taxonomy.rooms)          areaSet.add(r.name);
   for (const f of taxonomy.facilities)     areaSet.add(f.name);
   for (const a of taxonomy.activities)     areaSet.add(a.name);
@@ -88,7 +90,6 @@ async function loadAll(pid: number) {
   for (const t of taxonomy.transport)      areaSet.add(t.name);
   for (const b of taxonomy.boats)          areaSet.add(b.name);
   for (const c of taxonomy.boat_cruises)   areaSet.add(c.name);
-  // (c) any historical free-text values already tagged in library
   for (const row of (mediaPage.data ?? [])) {
     const v = (row as any).property_area;
     if (v && typeof v === 'string') areaSet.add(v);
@@ -108,11 +109,12 @@ async function loadAll(pid: number) {
     facilities: facilities.data ?? [],
     taxonomy,
     areaOptions,
+    videoTemplates: videoTemplates.data ?? [],
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
       rooms.error, facilities.error, facilitiesRaw.error, activitiesRaw.error, transportRaw.error,
-      boatsRaw.error, cruisesRaw.error,
+      boatsRaw.error, cruisesRaw.error, videoTemplates.error,
     ].filter(Boolean),
   };
 }
@@ -152,6 +154,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             facilities={data.facilities as any}
             taxonomy={data.taxonomy as any}
             areaOptions={data.areaOptions}
+            videoTemplates={data.videoTemplates as any}
           />
         </div>
       </DashboardPage>
