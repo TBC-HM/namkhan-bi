@@ -1,5 +1,5 @@
 // app/api/marketing/media/entity-ref/list/route.ts
-// GET ?property_id=… — return all reference-photo links for a property. Feeds LinkPhotosPanel.
+// GET ?property_id=... — return all reference-photo links for a property.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
