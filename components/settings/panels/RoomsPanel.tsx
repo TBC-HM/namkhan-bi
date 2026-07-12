@@ -1,6 +1,6 @@
 // components/settings/panels/RoomsPanel.tsx
+// PBS 2026-07-12 pm v2: added unit_count + bathroom_sqm + terrace_sqm + length_m + width_m.
 // PBS 2026-07-03: full CRUD · edit / add / delete room types.
-// Bookable inventory count per type comes from public.v_room_type_units.
 'use client';
 
 import { useState, useTransition } from 'react';
@@ -9,16 +9,61 @@ import { PanelHeader, EmptyState } from './_shared';
 import { supabase } from '@/lib/supabase';
 import { btnPrimary, btnGhost, rowStyle, ErrorBanner, LabeledInput, LabeledCheckbox, LabeledSelect, LabeledTextarea, ArrayInput, FormShell, DeleteConfirm, pill } from './_settings_ui';
 
-type Row = { room_type_id: number; property_id: number; display_name: string; positioning_tier: string | null; positioning_label: string | null; short_pitch: string | null; long_description: string | null; size_sqm: number | null; garden_sqm: number | null; max_occupancy: number | null; max_adults: number | null; max_children: number | null; extra_bed_allowed: boolean | null; bed_config: string[] | null; view_type: string[] | null; ideal_for: string[] | null; hero_image_url: string | null; fact_sheet_url: string | null; internal_notes: string | null };
+type Row = {
+  room_type_id: number; property_id: number; display_name: string;
+  positioning_tier: string | null; positioning_label: string | null;
+  short_pitch: string | null; long_description: string | null;
+  size_sqm: number | null; garden_sqm: number | null;
+  bathroom_sqm: number | null; terrace_sqm: number | null;
+  length_m: number | null; width_m: number | null; unit_count: number | null;
+  max_occupancy: number | null; max_adults: number | null; max_children: number | null;
+  extra_bed_allowed: boolean | null; bed_config: string[] | null; view_type: string[] | null;
+  ideal_for: string[] | null; hero_image_url: string | null; fact_sheet_url: string | null;
+  internal_notes: string | null;
+};
 
-interface Draft { room_type_id: number | null; display_name: string; positioning_tier: string; positioning_label: string; short_pitch: string; long_description: string; size_sqm: string; garden_sqm: string; max_occupancy: string; max_adults: string; max_children: string; extra_bed_allowed: boolean; bed_config: string[]; view_type: string[]; ideal_for: string[]; hero_image_url: string; fact_sheet_url: string; internal_notes: string; }
-const EMPTY: Draft = { room_type_id: null, display_name: '', positioning_tier: '', positioning_label: '', short_pitch: '', long_description: '', size_sqm: '', garden_sqm: '', max_occupancy: '', max_adults: '', max_children: '', extra_bed_allowed: false, bed_config: [], view_type: [], ideal_for: [], hero_image_url: '', fact_sheet_url: '', internal_notes: '' };
-const toDraft = (r: Row): Draft => ({ room_type_id: r.room_type_id, display_name: r.display_name ?? '', positioning_tier: r.positioning_tier ?? '', positioning_label: r.positioning_label ?? '', short_pitch: r.short_pitch ?? '', long_description: r.long_description ?? '', size_sqm: r.size_sqm?.toString() ?? '', garden_sqm: r.garden_sqm?.toString() ?? '', max_occupancy: r.max_occupancy?.toString() ?? '', max_adults: r.max_adults?.toString() ?? '', max_children: r.max_children?.toString() ?? '', extra_bed_allowed: !!r.extra_bed_allowed, bed_config: r.bed_config ?? [], view_type: r.view_type ?? [], ideal_for: r.ideal_for ?? [], hero_image_url: r.hero_image_url ?? '', fact_sheet_url: r.fact_sheet_url ?? '', internal_notes: r.internal_notes ?? '' });
+interface Draft {
+  room_type_id: number | null;
+  display_name: string; positioning_tier: string; positioning_label: string;
+  short_pitch: string; long_description: string;
+  size_sqm: string; garden_sqm: string; bathroom_sqm: string; terrace_sqm: string;
+  length_m: string; width_m: string; unit_count: string;
+  max_occupancy: string; max_adults: string; max_children: string;
+  extra_bed_allowed: boolean; bed_config: string[]; view_type: string[]; ideal_for: string[];
+  hero_image_url: string; fact_sheet_url: string; internal_notes: string;
+}
+
+const EMPTY: Draft = {
+  room_type_id: null, display_name: '', positioning_tier: '', positioning_label: '',
+  short_pitch: '', long_description: '',
+  size_sqm: '', garden_sqm: '', bathroom_sqm: '', terrace_sqm: '',
+  length_m: '', width_m: '', unit_count: '',
+  max_occupancy: '', max_adults: '', max_children: '', extra_bed_allowed: false,
+  bed_config: [], view_type: [], ideal_for: [], hero_image_url: '', fact_sheet_url: '', internal_notes: '',
+};
+
+const toDraft = (r: Row): Draft => ({
+  room_type_id: r.room_type_id,
+  display_name: r.display_name ?? '', positioning_tier: r.positioning_tier ?? '',
+  positioning_label: r.positioning_label ?? '', short_pitch: r.short_pitch ?? '',
+  long_description: r.long_description ?? '',
+  size_sqm: r.size_sqm?.toString() ?? '', garden_sqm: r.garden_sqm?.toString() ?? '',
+  bathroom_sqm: r.bathroom_sqm?.toString() ?? '', terrace_sqm: r.terrace_sqm?.toString() ?? '',
+  length_m: r.length_m?.toString() ?? '', width_m: r.width_m?.toString() ?? '',
+  unit_count: r.unit_count?.toString() ?? '',
+  max_occupancy: r.max_occupancy?.toString() ?? '', max_adults: r.max_adults?.toString() ?? '',
+  max_children: r.max_children?.toString() ?? '', extra_bed_allowed: !!r.extra_bed_allowed,
+  bed_config: r.bed_config ?? [], view_type: r.view_type ?? [], ideal_for: r.ideal_for ?? [],
+  hero_image_url: r.hero_image_url ?? '', fact_sheet_url: r.fact_sheet_url ?? '',
+  internal_notes: r.internal_notes ?? '',
+});
 
 const TIER_OPTIONS = ['', 'entry', 'premium', 'signature'];
 const tierColor: Record<string, string> = { signature: '#1F5C2C', premium: '#8B5A1C', entry: '#5A5A5A' };
 
-export default function RoomsPanel({ data, roomUnits, propertyId }: { data: Row[]; roomUnits?: Array<{ room_type_name: string; units: number }>; propertyId: number }) {
+export default function RoomsPanel({ data, roomUnits, propertyId }: {
+  data: Row[]; roomUnits?: Array<{ room_type_name: string; units: number }>; propertyId: number;
+}) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, startTransition] = useTransition();
@@ -53,11 +98,17 @@ export default function RoomsPanel({ data, roomUnits, propertyId }: { data: Row[
         p_hero_image_url: draft.hero_image_url.trim() || null,
         p_fact_sheet_url: draft.fact_sheet_url.trim() || null,
         p_internal_notes: draft.internal_notes.trim() || null,
+        p_unit_count: draft.unit_count ? Number(draft.unit_count) : null,
+        p_bathroom_sqm: draft.bathroom_sqm ? Number(draft.bathroom_sqm) : null,
+        p_terrace_sqm: draft.terrace_sqm ? Number(draft.terrace_sqm) : null,
+        p_length_m: draft.length_m ? Number(draft.length_m) : null,
+        p_width_m: draft.width_m ? Number(draft.width_m) : null,
       });
       if (e) { setError(e.message); return; }
       setDraft(null); router.refresh();
     });
   }
+
   function del(id: number) {
     startTransition(async () => {
       const { error: e } = await supabase.rpc('fn_delete_property_room', { p_room_type_id: id, p_property_id: propertyId });
@@ -76,11 +127,15 @@ export default function RoomsPanel({ data, roomUnits, propertyId }: { data: Row[
           <LabeledInput label="Display name *" value={draft.display_name} onChange={(v) => setDraft({ ...draft, display_name: v })} span={2} />
           <LabeledSelect label="Tier" value={draft.positioning_tier} onChange={(v) => setDraft({ ...draft, positioning_tier: v })} options={TIER_OPTIONS} />
           <LabeledInput label="Positioning label" value={draft.positioning_label} onChange={(v) => setDraft({ ...draft, positioning_label: v })} span={3} />
+          <LabeledInput label="Amount of rooms (units)" value={draft.unit_count} onChange={(v) => setDraft({ ...draft, unit_count: v })} type="number" placeholder="e.g. 5" />
           <LabeledTextarea label="Short pitch" value={draft.short_pitch} onChange={(v) => setDraft({ ...draft, short_pitch: v })} span={3} rows={2} />
           <LabeledTextarea label="Long description" value={draft.long_description} onChange={(v) => setDraft({ ...draft, long_description: v })} span={3} rows={5} />
-          <LabeledInput label="Size (m²)" value={draft.size_sqm} onChange={(v) => setDraft({ ...draft, size_sqm: v })} type="number" />
+          <LabeledInput label="Size interior (m²)" value={draft.size_sqm} onChange={(v) => setDraft({ ...draft, size_sqm: v })} type="number" />
+          <LabeledInput label="Bathroom (m²)" value={draft.bathroom_sqm} onChange={(v) => setDraft({ ...draft, bathroom_sqm: v })} type="number" />
+          <LabeledInput label="Terrace (m²)" value={draft.terrace_sqm} onChange={(v) => setDraft({ ...draft, terrace_sqm: v })} type="number" />
           <LabeledInput label="Garden (m²)" value={draft.garden_sqm} onChange={(v) => setDraft({ ...draft, garden_sqm: v })} type="number" />
-          <div />
+          <LabeledInput label="Length (m)" value={draft.length_m} onChange={(v) => setDraft({ ...draft, length_m: v })} type="number" />
+          <LabeledInput label="Width (m)" value={draft.width_m} onChange={(v) => setDraft({ ...draft, width_m: v })} type="number" />
           <LabeledInput label="Max occupancy" value={draft.max_occupancy} onChange={(v) => setDraft({ ...draft, max_occupancy: v })} type="number" />
           <LabeledInput label="Max adults" value={draft.max_adults} onChange={(v) => setDraft({ ...draft, max_adults: v })} type="number" />
           <LabeledInput label="Max children" value={draft.max_children} onChange={(v) => setDraft({ ...draft, max_children: v })} type="number" />
@@ -104,7 +159,7 @@ export default function RoomsPanel({ data, roomUnits, propertyId }: { data: Row[
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontFamily: 'var(--serif, ui-serif, Georgia, serif)', fontSize: 18, fontWeight: 500 }}>{r.display_name}</span>
-                    {unitMap.get(r.display_name) != null && unitMap.get(r.display_name)! > 0 && <span style={pill('#F5F0E1', '#1B1B1B')}>×{unitMap.get(r.display_name)}</span>}
+                    {r.unit_count != null && r.unit_count > 0 && <span style={pill('#F5F0E1', '#1B1B1B')}>×{r.unit_count}</span>}
                     {r.positioning_tier && <span style={pill('#F5F0E1', tierColor[r.positioning_tier] ?? '#5A5A5A')}>{r.positioning_tier}</span>}
                   </div>
                   {r.short_pitch && <div style={{ fontSize: 12, color: '#5A5A5A', marginTop: 3 }}>{r.short_pitch}</div>}
@@ -117,7 +172,10 @@ export default function RoomsPanel({ data, roomUnits, propertyId }: { data: Row[
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, fontSize: 12, color: '#1B1B1B' }}>
+                <MetaCell label="Amount">{r.unit_count ?? '—'}</MetaCell>
                 <MetaCell label="Size">{r.size_sqm ? `${r.size_sqm} m²` : '—'}{r.garden_sqm ? ` + ${r.garden_sqm} m² garden` : ''}</MetaCell>
+                <MetaCell label="Bathroom / Terrace">{r.bathroom_sqm ? `${r.bathroom_sqm} m²` : '—'}{r.terrace_sqm ? ` + ${r.terrace_sqm} m² terrace` : ''}</MetaCell>
+                <MetaCell label="LxW">{r.length_m && r.width_m ? `${r.length_m}×${r.width_m} m` : '—'}</MetaCell>
                 <MetaCell label="Max occupancy">{r.max_occupancy ?? '—'} ({r.max_adults ?? '?'}A + {r.max_children ?? '?'}C)</MetaCell>
                 <MetaCell label="Extra bed">{r.extra_bed_allowed ? 'Yes' : 'No'}</MetaCell>
                 <MetaCell label="View">{(r.view_type ?? []).join(', ') || '—'}</MetaCell>
