@@ -74,7 +74,7 @@ export default async function YouTubePlaylistsPage() {
                 const thumb = pl.thumbnails.medium?.url ?? pl.thumbnails.high?.url ?? pl.thumbnails.default?.url ?? null;
                 const linkedPillar = pillarByPlaylistId.get(pl.id);
                 return (
-                  <a key={pl.id} href={`https://www.youtube.com/playlist?list=${pl.id}`} target="_blank" rel="noreferrer noopener"
+                  <Link key={pl.id} href={`/marketing/youtube/playlists/${encodeURIComponent(pl.id)}`}
                     style={{ display: 'block', border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden', background: WHITE, textDecoration: 'none', color: INK }}>
                     {thumb ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -94,7 +94,7 @@ export default async function YouTubePlaylistsPage() {
                         <div style={{ marginTop: 6, fontSize: 10, color: INK_M }}>no program linked</div>
                       )}
                     </div>
-                  </a>
+                  </Link>
                 );
               })}
             </div>

@@ -133,28 +133,28 @@ export default async function AnalyticsKPIs({ accessToken, totalSubscribers, tot
     fetchGeography(accessToken, 28),
   ]);
 
-  const scopeMissing = !series30.ok && (series30.error === 'youtube_analytics_401' || series30.error === 'youtube_analytics_403');
-  if (scopeMissing) {
-    return (
-      <div style={{ ...CARD, gridColumn: '1 / -1', background: '#FDF7E6', borderColor: AMBER }}>
-        <div style={{ fontSize: 13, color: AMBER, fontWeight: 600, marginBottom: 6 }}>
-          Analytics not authorised
+  if (series30.ok === false) {
+    const err = series30.error;
+    const detail = series30.detail;
+    const scopeMissing = err === 'youtube_analytics_401' || err === 'youtube_analytics_403';
+    if (scopeMissing) {
+      return (
+        <div style={{ ...CARD, gridColumn: '1 / -1', background: '#FDF7E6', borderColor: AMBER }}>
+          <div style={{ fontSize: 13, color: AMBER, fontWeight: 600, marginBottom: 6 }}>Analytics not authorised</div>
+          <div style={{ fontSize: 12, color: INK_S, marginBottom: 10 }}>
+            The YouTube Analytics API needs the <code>yt-analytics.readonly</code> scope. Reconnect to authorise it — no data is lost.
+          </div>
+          <Link href={`/api/marketing/youtube/oauth-start?property_id=260955`}
+            style={{ display: 'inline-block', padding: '8px 14px', border: `1px solid ${FOREST}`, borderRadius: 3, background: FOREST, color: WHITE, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500 }}>
+            Reconnect YouTube
+          </Link>
         </div>
-        <div style={{ fontSize: 12, color: INK_S, marginBottom: 10 }}>
-          The YouTube Analytics API needs the <code>yt-analytics.readonly</code> scope which wasn't granted last time you connected. Reconnect to authorise it — no data is lost.
-        </div>
-        <Link href={`/api/marketing/youtube/oauth-start?property_id=260955`}
-          style={{ display: 'inline-block', padding: '8px 14px', border: `1px solid ${FOREST}`, borderRadius: 3, background: FOREST, color: WHITE, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500 }}>
-          Reconnect YouTube
-        </Link>
-      </div>
-    );
-  }
-  if (!series30.ok) {
+      );
+    }
     return (
       <div style={{ ...CARD, gridColumn: '1 / -1', background: '#FBE7E4', borderColor: RED }}>
         <div style={{ fontSize: 13, color: RED, fontWeight: 500 }}>
-          Analytics fetch failed: {series30.error}{series30.detail ? ` · ${series30.detail.slice(0, 160)}` : ''}
+          Analytics fetch failed: {err}{detail ? ` · ${detail.slice(0, 160)}` : ''}
         </div>
       </div>
     );
@@ -189,15 +189,20 @@ export default async function AnalyticsKPIs({ accessToken, totalSubscribers, tot
     });
   }
 
-  const trafficSegs = traffic28.ok
+  const trafficSegs = traffic28.ok === true
     ? traffic28.sources.slice(0, 6).map((t) => ({ label: t.source, value: t.views, color: TRAFFIC_COLORS[t.source] ?? '#5A5A5A' }))
     : [];
-  const deviceSegs = devices28.ok
-    ? devices28.devices.map((d) => ({ label: d.device, value: d.views, color: DEVICE_COLORS[d.device] ?? '#5A5A5A' }))
+  const deviceSegs = devices28.ok === true
+    ? devices28.devices.map((d) => ({ label: d.type, value: d.views, color: DEVICE_COLORS[d.type] ?? '#5A5A5A' }))
     : [];
-  const topGeo = geo28.ok
-    ? [...geo28.rows].sort((a, b) => b.avgViewDuration - a.avgViewDuration).slice(0, 5)
+  const topGeo = geo28.ok === true
+    ? [...geo28.countries].sort((a, b) => b.views - a.views).slice(0, 5)
     : [];
+
+  // Pre-compute error strings for display (TS narrows here so we can access .error).
+  const trafficErr = traffic28.ok === false ? traffic28.error : null;
+  const devicesErr = devices28.ok === false ? devices28.error : null;
+  const geoErr     = geo28.ok === false ? geo28.error : null;
 
   return (
     <>
@@ -254,13 +259,13 @@ export default async function AnalyticsKPIs({ accessToken, totalSubscribers, tot
             <div style={SECTION_H}>Traffic sources · last 28 days</div>
             {trafficSegs.length > 0
               ? <Donut segments={trafficSegs} />
-              : <div style={{ fontSize: 11, color: INK_M }}>{traffic28.ok ? 'no data' : `error: ${traffic28.error}`}</div>}
+              : <div style={{ fontSize: 11, color: INK_M }}>{trafficErr ? `error: ${trafficErr}` : 'no data'}</div>}
           </div>
           <div>
             <div style={SECTION_H}>Views by device · 28 days</div>
             {deviceSegs.length > 0
               ? <Donut segments={deviceSegs} />
-              : <div style={{ fontSize: 11, color: INK_M }}>{devices28.ok ? 'no data' : `error: ${devices28.error}`}</div>}
+              : <div style={{ fontSize: 11, color: INK_M }}>{devicesErr ? `error: ${devicesErr}` : 'no data'}</div>}
           </div>
           <div>
             <div style={SECTION_H}>Top 5 countries · avg view duration (s)</div>
@@ -281,7 +286,7 @@ export default async function AnalyticsKPIs({ accessToken, totalSubscribers, tot
                 })}
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: INK_M }}>{geo28.ok ? 'no data' : `error: ${geo28.error}`}</div>
+              <div style={{ fontSize: 11, color: INK_M }}>{geoErr ? `error: ${geoErr}` : 'no data'}</div>
             )}
           </div>
         </div>

@@ -276,6 +276,80 @@ export async function fetchChannelPlaylists(
   return { ok: true, data: mapped };
 }
 
+// ---- playlist items --------------------------------------------------------
+
+export interface PlaylistVideo {
+  videoId:      string;
+  title:        string;
+  description:  string;
+  publishedAt:  string;
+  thumbnails:   Thumbnails;
+  position:     number;
+  channelTitle: string;
+  // Populated from a second /videos call so we can rank + surface performance.
+  views?:       number;
+  likes?:       number;
+  comments?:    number;
+  duration?:    string;
+}
+
+interface PlaylistItemsResp {
+  items?: Array<{
+    snippet?: {
+      title?: string;
+      description?: string;
+      publishedAt?: string;
+      position?: number;
+      channelTitle?: string;
+      thumbnails?: Thumbnails;
+      resourceId?: { videoId?: string };
+    };
+  }>;
+  nextPageToken?: string;
+}
+
+export async function fetchPlaylistItemsWithStats(
+  accessToken: string,
+  playlistId: string,
+  max = 50,
+): Promise<YtResult<PlaylistVideo[]>> {
+  const listUrl = `${API}/playlistItems?part=snippet&playlistId=${encodeURIComponent(playlistId)}&maxResults=${Math.min(max, 50)}`;
+  const list = await ytFetch<PlaylistItemsResp>(listUrl, accessToken);
+  if (isErr(list)) return { ok: false, error: list.error, detail: list.detail };
+  const items: PlaylistVideo[] = (list.data.items ?? [])
+    .filter((it) => it.snippet?.resourceId?.videoId)
+    .map((it) => ({
+      videoId:      it.snippet!.resourceId!.videoId!,
+      title:        it.snippet?.title ?? '(untitled)',
+      description:  it.snippet?.description ?? '',
+      publishedAt:  it.snippet?.publishedAt ?? '',
+      thumbnails:   it.snippet?.thumbnails ?? {},
+      position:     Number(it.snippet?.position ?? 0),
+      channelTitle: it.snippet?.channelTitle ?? '',
+    }));
+  if (items.length === 0) return { ok: true, data: [] };
+
+  // Batch-lookup video stats (chunk of 50 IDs is the API cap)
+  const ids = items.map((i) => i.videoId).slice(0, 50);
+  const vidUrl = `${API}/videos?part=statistics,contentDetails&id=${ids.join(',')}`;
+  const v = await ytFetch<VideosListResp>(vidUrl, accessToken);
+  if (isErr(v)) return { ok: true, data: items };  // still return the list without stats
+  const statsById = new Map<string, { views: number; likes: number; comments: number; duration: string }>();
+  for (const it of (v.data.items ?? [])) {
+    statsById.set(it.id, {
+      views:    Number(it.statistics?.viewCount ?? 0),
+      likes:    Number(it.statistics?.likeCount ?? 0),
+      comments: Number(it.statistics?.commentCount ?? 0),
+      duration: String(it.contentDetails?.duration ?? ''),
+    });
+  }
+  for (const it of items) {
+    const s = statsById.get(it.videoId);
+    if (s) { it.views = s.views; it.likes = s.likes; it.comments = s.comments; it.duration = s.duration; }
+  }
+  return { ok: true, data: items };
+}
+
 // ---- reply to comment ------------------------------------------------------
 
 interface CreatedCommentResp {

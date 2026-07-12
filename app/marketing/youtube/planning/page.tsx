@@ -1,5 +1,6 @@
 // app/marketing/youtube/planning/page.tsx
 // PBS 2026-07-13 — Planning sub-tab: programs (pillars) + trend briefs + scheduled + recently published.
+import Link from 'next/link';
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -68,7 +69,8 @@ export default async function YouTubePlanningPage() {
           {pillars.length === 0 ? <div style={{ fontSize: 13, color: INK_M }}>No programs defined.</div> : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
               {pillars.map((p) => (
-                <div key={p.id} style={{ border: `1px solid ${HAIR}`, borderRadius: 4, padding: 12, background: WHITE }}>
+                <Link key={p.id} href={`/marketing/youtube/planning/${encodeURIComponent(p.pillar_key)}`}
+                  style={{ display: 'block', border: `1px solid ${HAIR}`, borderRadius: 4, padding: 12, background: WHITE, textDecoration: 'none', color: INK }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                     <div style={{ fontSize: 13, color: INK, fontWeight: 600 }}>{p.label}</div>
                     <span style={{
@@ -81,7 +83,7 @@ export default async function YouTubePlanningPage() {
                   <div style={{ marginTop: 8, fontSize: 11, color: p.youtube_playlist_id ? FOREST : AMBER }}>
                     {p.youtube_playlist_id ? '🎬 playlist linked' : '⚠ no playlist linked'}
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
