@@ -225,6 +225,57 @@ export async function fetchRecentComments(
   return { ok: true, data: mapped };
 }
 
+// ---- channel playlists -----------------------------------------------------
+
+export interface PlaylistItem {
+  id: string;
+  title: string;
+  description: string;
+  itemCount: number;
+  publishedAt: string;
+  updatedAt: string | null;    // API doesn't expose an updatedAt on playlists; we surface latest video publishedAt via a second fetch if needed
+  privacyStatus: string | null;
+  thumbnails: Thumbnails;
+}
+
+interface PlaylistsListResp {
+  items?: Array<{
+    id: string;
+    snippet?: {
+      title?: string;
+      description?: string;
+      publishedAt?: string;
+      thumbnails?: Thumbnails;
+    };
+    contentDetails?: { itemCount?: number };
+    status?: { privacyStatus?: string };
+  }>;
+  nextPageToken?: string;
+}
+
+export async function fetchChannelPlaylists(
+  accessToken: string,
+  channelId: string,
+  max = 50,
+): Promise<YtResult<PlaylistItem[]>> {
+  const url = `${API}/playlists?part=snippet,contentDetails,status&channelId=${encodeURIComponent(channelId)}&maxResults=${Math.min(max, 50)}`;
+  const r = await ytFetch<PlaylistsListResp>(url, accessToken);
+  if (isErr(r)) return { ok: false, error: r.error, detail: r.detail };
+  const mapped: PlaylistItem[] = (r.data.items ?? []).map((it) => ({
+    id:            it.id,
+    title:         it.snippet?.title ?? '(untitled)',
+    description:   it.snippet?.description ?? '',
+    itemCount:     Number(it.contentDetails?.itemCount ?? 0),
+    publishedAt:   it.snippet?.publishedAt ?? '',
+    updatedAt:     null,
+    privacyStatus: it.status?.privacyStatus ?? null,
+    thumbnails:    it.snippet?.thumbnails ?? {},
+  }));
+  // Sort by itemCount desc so the biggest playlists show first
+  mapped.sort((a, b) => b.itemCount - a.itemCount);
+  return { ok: true, data: mapped };
+}
+
 // ---- reply to comment ------------------------------------------------------
 
 interface CreatedCommentResp {

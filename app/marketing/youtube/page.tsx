@@ -257,23 +257,32 @@ export default async function MarketingYouTubePage({ searchParams }: PageProps) 
           </div>
         )}
 
-        {/* ===== B · Flow diagram =========================================== */}
-        <div style={{ ...CARD, gridColumn: '1 / -1' }}>
-          <div style={SECTION_H}>Pipeline · stage → agent → in flight</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
-            <FlowChevron n={1} title="Research"    agent="Probe" count={stage_research}  phaseB={false} />
-            <FlowChevron n={2} title="Request"     agent="PBS/Lumen" count={stage_request} phaseB={false} />
-            <FlowChevron n={3} title="Script + EDL" agent="Reel" count={stage_script}   phaseB={true}  />
-            <FlowChevron n={4} title="Guardrail"   agent="Lumen HoD" count={stage_guardrail} phaseB={true}  />
-            <FlowChevron n={5} title="Render"      agent="Reel + Shotstack" count={stage_render} phaseB={true}  />
-            <FlowChevron n={6} title="Approve"     agent="PBS" count={stage_approve}    phaseB={false} />
-            <FlowChevron n={7} title="Publish"     agent="Quill + Tribe" count={stage_publish}  phaseB={true}  />
+        {/* ===== B · Flow diagram (only shown when pipeline has activity) === */}
+        {(stage_research + stage_request + stage_script + stage_guardrail + stage_render + stage_approve + stage_publish) > 0 ? (
+          <div style={{ ...CARD, gridColumn: '1 / -1' }}>
+            <div style={SECTION_H}>Pipeline · stage → agent → in flight</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+              <FlowChevron n={1} title="Research"    agent="Probe" count={stage_research}  phaseB={false} />
+              <FlowChevron n={2} title="Request"     agent="PBS/Lumen" count={stage_request} phaseB={false} />
+              <FlowChevron n={3} title="Script + EDL" agent="Reel" count={stage_script}   phaseB={true}  />
+              <FlowChevron n={4} title="Guardrail"   agent="Lumen HoD" count={stage_guardrail} phaseB={true}  />
+              <FlowChevron n={5} title="Render"      agent="Reel + Shotstack" count={stage_render} phaseB={true}  />
+              <FlowChevron n={6} title="Approve"     agent="PBS" count={stage_approve}    phaseB={false} />
+              <FlowChevron n={7} title="Publish"     agent="Quill + Tribe" count={stage_publish}  phaseB={true}  />
+            </div>
+            <div style={{ marginTop: 12, fontSize: 12, color: INK_M }}>
+              Amber label = phase B (skill handler not built yet). Green = wired and functional now.
+            </div>
           </div>
-          <div style={{ marginTop: 12, fontSize: 12, color: INK_M }}>
-            Amber label = phase B (skill handler not built yet — the skill is granted but no code executes it).
-            Green = wired and functional now.
+        ) : (
+          <div style={{ ...CARD, gridColumn: '1 / -1', background: CREAM }}>
+            <div style={{ fontSize: 12, color: INK_S, display: 'flex', gap: 12, alignItems: 'center' }}>
+              <span style={{ fontWeight: 600 }}>Pipeline dormant</span>
+              <span style={{ color: INK_M }}>·</span>
+              <span style={{ color: INK_M }}>No videos in flight yet. Programs above show the planned cadence; the 7-stage flow appears here once a video is requested.</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ===== C · Request a video ======================================= */}
         <div style={{ ...CARD, gridColumn: '1 / -1' }}>
