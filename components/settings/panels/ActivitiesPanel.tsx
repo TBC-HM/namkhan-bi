@@ -1,24 +1,93 @@
 // components/settings/panels/ActivitiesPanel.tsx
+// PBS 2026-07-12 pm v2: added price (amount + currency + incl VAT+service + notes), service time (from/to), available seasons.
 // PBS 2026-07-03: full CRUD.
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PanelHeader, EmptyState } from './_shared';
 import { supabase } from '@/lib/supabase';
 import { btnPrimary, btnGhost, rowStyle, ErrorBanner, LabeledInput, LabeledCheckbox, LabeledTextarea, FormShell, DeleteConfirm, pill } from './_settings_ui';
 
-type Row = { activity_id: number; property_id: number; category: string | null; name: string; description: string | null; duration_min: number | null; group_type: string | null; age_restriction: string | null; bookable_via: string | null; is_complimentary: boolean | null; is_active: boolean | null; display_order: number | null };
-interface Draft { activity_id: number | null; category: string; name: string; description: string; duration_min: string; group_type: string; age_restriction: string; bookable_via: string; is_complimentary: boolean; is_active: boolean; display_order: string; }
-const EMPTY: Draft = { activity_id: null, category: '', name: '', description: '', duration_min: '', group_type: '', age_restriction: '', bookable_via: '', is_complimentary: false, is_active: true, display_order: '' };
-const toDraft = (r: Row): Draft => ({ activity_id: r.activity_id, category: r.category ?? '', name: r.name ?? '', description: r.description ?? '', duration_min: r.duration_min?.toString() ?? '', group_type: r.group_type ?? '', age_restriction: r.age_restriction ?? '', bookable_via: r.bookable_via ?? '', is_complimentary: !!r.is_complimentary, is_active: r.is_active !== false, display_order: r.display_order?.toString() ?? '' });
+type Row = {
+  activity_id: number; property_id: number; category: string | null; name: string;
+  description: string | null; duration_min: number | null; group_type: string | null;
+  age_restriction: string | null; bookable_via: string | null;
+  is_complimentary: boolean | null; is_active: boolean | null; display_order: number | null;
+  price_amount: number | null; price_currency: string | null;
+  price_includes_vat_service: boolean | null; price_notes: string | null;
+  service_time_from: string | null; service_time_to: string | null;
+  available_season_codes: string[] | null;
+};
 
-export default function ActivitiesPanel({ data, propertyId }: { data: Row[]; propertyId: number }) {
+interface Draft {
+  activity_id: number | null;
+  category: string; name: string; description: string; duration_min: string;
+  group_type: string; age_restriction: string; bookable_via: string;
+  is_complimentary: boolean; is_active: boolean; display_order: string;
+  price_amount: string; price_currency: string; price_includes_vat_service: boolean; price_notes: string;
+  service_time_from: string; service_time_to: string; available_season_codes: string[];
+}
+
+const EMPTY: Draft = {
+  activity_id: null, category: '', name: '', description: '', duration_min: '',
+  group_type: '', age_restriction: '', bookable_via: '',
+  is_complimentary: false, is_active: true, display_order: '',
+  price_amount: '', price_currency: 'USD', price_includes_vat_service: true, price_notes: '',
+  service_time_from: '', service_time_to: '', available_season_codes: [],
+};
+
+const toDraft = (r: Row): Draft => ({
+  activity_id: r.activity_id, category: r.category ?? '', name: r.name ?? '',
+  description: r.description ?? '', duration_min: r.duration_min?.toString() ?? '',
+  group_type: r.group_type ?? '', age_restriction: r.age_restriction ?? '',
+  bookable_via: r.bookable_via ?? '', is_complimentary: !!r.is_complimentary,
+  is_active: r.is_active !== false, display_order: r.display_order?.toString() ?? '',
+  price_amount: r.price_amount?.toString() ?? '',
+  price_currency: r.price_currency ?? 'USD',
+  price_includes_vat_service: r.price_includes_vat_service !== false,
+  price_notes: r.price_notes ?? '',
+  service_time_from: r.service_time_from ? String(r.service_time_from).slice(0, 5) : '',
+  service_time_to:   r.service_time_to   ? String(r.service_time_to).slice(0, 5)   : '',
+  available_season_codes: r.available_season_codes ?? [],
+});
+
+interface Season { season_id: number; season_code: string; display_name: string | null; }
+
+export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
+  data: Row[]; propertyId: number; seasons?: Season[];
+}) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
+  const [localSeasons, setLocalSeasons] = useState<Season[]>(seasons);
+
+  // Fallback: fetch seasons client-side if parent didn't pass them
+  useEffect(() => {
+    if (localSeasons.length > 0) return;
+    (async () => {
+      const { data: s } = await supabase.schema('property').from('seasons')
+        .select('season_id, season_code, display_name').eq('property_id', propertyId)
+        .order('date_start', { ascending: true });
+      if (s) setLocalSeasons(s as any);
+    })();
+  }, [propertyId, localSeasons.length]);
+
+  // Dedupe season codes for the checklist
+  const seasonCodes = Array.from(new Set(localSeasons.map(s => s.season_code))).filter(Boolean);
+
+  function toggleSeason(code: string) {
+    if (!draft) return;
+    const has = draft.available_season_codes.includes(code);
+    setDraft({
+      ...draft,
+      available_season_codes: has
+        ? draft.available_season_codes.filter(c => c !== code)
+        : [...draft.available_season_codes, code],
+    });
+  }
 
   function save() {
     if (!draft) return;
@@ -36,11 +105,19 @@ export default function ActivitiesPanel({ data, propertyId }: { data: Row[]; pro
         p_is_complimentary: draft.is_complimentary,
         p_is_active: draft.is_active,
         p_display_order: draft.display_order ? Number(draft.display_order) : null,
+        p_price_amount: draft.price_amount ? Number(draft.price_amount) : null,
+        p_price_currency: draft.price_currency || 'USD',
+        p_price_includes_vat_service: draft.price_includes_vat_service,
+        p_price_notes: draft.price_notes.trim() || null,
+        p_service_time_from: draft.service_time_from || null,
+        p_service_time_to:   draft.service_time_to   || null,
+        p_available_season_codes: draft.available_season_codes.length > 0 ? draft.available_season_codes : null,
       });
       if (e) { setError(e.message); return; }
       setDraft(null); router.refresh();
     });
   }
+
   function del(id: number) {
     startTransition(async () => {
       const { error: e } = await supabase.rpc('fn_delete_property_activity', { p_activity_id: id, p_property_id: propertyId });
@@ -63,7 +140,37 @@ export default function ActivitiesPanel({ data, propertyId }: { data: Row[]; pro
           <LabeledInput label="Age restriction" value={draft.age_restriction} onChange={(v) => setDraft({ ...draft, age_restriction: v })} placeholder="e.g. 12+" />
           <LabeledInput label="Bookable via" value={draft.bookable_via} onChange={(v) => setDraft({ ...draft, bookable_via: v })} placeholder="reception / online" />
           <LabeledInput label="Display order" value={draft.display_order} onChange={(v) => setDraft({ ...draft, display_order: v })} type="number" />
+          {/* PRICE ROW */}
+          <LabeledInput label="Price (all-in)" value={draft.price_amount} onChange={(v) => setDraft({ ...draft, price_amount: v })} type="number" placeholder="e.g. 45" />
+          <LabeledInput label="Currency" value={draft.price_currency} onChange={(v) => setDraft({ ...draft, price_currency: v })} placeholder="USD" />
+          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 6 }}>
+            <LabeledCheckbox label="Price includes VAT + service" checked={draft.price_includes_vat_service} onChange={(v) => setDraft({ ...draft, price_includes_vat_service: v })} />
+          </div>
+          <LabeledInput label="Service from" value={draft.service_time_from} onChange={(v) => setDraft({ ...draft, service_time_from: v })} placeholder="e.g. 07:00" />
+          <LabeledInput label="Service to"   value={draft.service_time_to}   onChange={(v) => setDraft({ ...draft, service_time_to: v })}   placeholder="e.g. 19:00" />
+          <div />
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A', fontWeight: 600, marginBottom: 6 }}>Available in seasons</div>
+            {seasonCodes.length === 0 ? (
+              <div style={{ fontSize: 11, color: '#5A5A5A' }}>No seasons defined yet — add them in the Seasons panel first, then reopen this form. Leave empty = year-round.</div>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {seasonCodes.map(code => {
+                  const on = draft.available_season_codes.includes(code);
+                  return (
+                    <button key={code} type="button" onClick={() => toggleSeason(code)} style={{
+                      padding: '5px 12px', fontSize: 12, borderRadius: 14, cursor: 'pointer',
+                      border: '1px solid ' + (on ? '#1F3A2E' : '#E6DFCC'),
+                      background: on ? '#1F3A2E' : '#FFFFFF', color: on ? '#FFFFFF' : '#1B1B1B',
+                      fontWeight: on ? 600 : 400,
+                    }}>{on ? '✓ ' : ''}{code}</button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <LabeledTextarea label="Description" value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} span={3} />
+          <LabeledTextarea label="Price notes" value={draft.price_notes} onChange={(v) => setDraft({ ...draft, price_notes: v })} span={3} rows={2} />
           <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 16 }}>
             <LabeledCheckbox label="Complimentary" checked={draft.is_complimentary} onChange={(v) => setDraft({ ...draft, is_complimentary: v })} />
             <LabeledCheckbox label="Active" checked={draft.is_active} onChange={(v) => setDraft({ ...draft, is_active: v })} />
@@ -79,10 +186,17 @@ export default function ActivitiesPanel({ data, propertyId }: { data: Row[]; pro
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{r.name}</span>
                   {r.category && <span style={pill('#F5F0E1', '#5A5A5A')}>{r.category}</span>}
                   {r.duration_min && <span style={{ fontSize: 11, color: '#5A5A5A' }}>{r.duration_min}m</span>}
+                  {r.price_amount != null && <span style={pill('#E4F0E1', '#1F5C2C')}>{r.price_currency ?? 'USD'} {r.price_amount}{r.price_includes_vat_service ? ' (incl)' : ' (net)'}</span>}
                   {r.is_complimentary && <span style={pill('#E4F0E1', '#1F5C2C')}>complimentary</span>}
                   {r.is_active === false && <span style={pill('#F5F0E1', '#8A8A8A')}>inactive</span>}
                 </div>
                 {r.description && <div style={{ fontSize: 12, marginTop: 4 }}>{r.description}</div>}
+                {(r.service_time_from || r.service_time_to || (r.available_season_codes && r.available_season_codes.length > 0)) && (
+                  <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 3, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {(r.service_time_from || r.service_time_to) && <span>service {String(r.service_time_from ?? '?').slice(0, 5)}–{String(r.service_time_to ?? '?').slice(0, 5)}</span>}
+                    {r.available_season_codes && r.available_season_codes.length > 0 && <span>seasons: {r.available_season_codes.join(', ')}</span>}
+                  </div>
+                )}
                 {(r.group_type || r.age_restriction || r.bookable_via) && (
                   <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 3, display: 'flex', gap: 12 }}>
                     {r.group_type && <span>{r.group_type}</span>}
