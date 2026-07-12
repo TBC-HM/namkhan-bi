@@ -221,6 +221,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         onClose={() => setEditing(null)}
         asset={editing as AssetEditRow | null}
         areaOptions={areaOptions}
+        rooms={rooms}
       />
     </div>
   );
