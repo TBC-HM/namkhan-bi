@@ -9,8 +9,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/app/(cockpit)/_design';
 
+export interface RoomOption { room_type_id: number; room_type_name: string; }
+
 export interface AssetEditRow {
   asset_id: string;
+  room_type_id?: number | null;
   original_filename?: string | null;
   caption?: string | null;
   alt_text?: string | null;
@@ -33,6 +36,7 @@ interface Props {
   onClose: () => void;
   asset: AssetEditRow | null;
   areaOptions: string[];
+  rooms?: RoomOption[];
   onSaved?: (updated: any) => void;
 }
 
@@ -69,7 +73,7 @@ function humanSize(v: any): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export default function AssetEditDrawer({ open, onClose, asset, areaOptions, onSaved }: Props) {
+export default function AssetEditDrawer({ open, onClose, asset, areaOptions, rooms = [], onSaved }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -81,6 +85,7 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, onS
   const [tier, setTier]           = useState('');
   const [area, setArea]           = useState('');
   const [aiGen, setAiGen]         = useState(false);
+  const [roomTypeId, setRoomTypeId] = useState<string>('');
 
   useEffect(() => {
     if (!open || !asset) return;
@@ -91,6 +96,7 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, onS
     setTier(asset.primary_tier ?? '');
     setArea(asset.property_area ?? '');
     setAiGen(Boolean(asset.is_ai_generated));
+    setRoomTypeId(asset.room_type_id != null ? String(asset.room_type_id) : '');
   }, [open, asset]);
 
   if (!asset) return null;
@@ -109,6 +115,8 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, onS
       if (tier    !== (asset.primary_tier ?? ''))        payload.primary_tier = tier || null;
       if (area    !== (asset.property_area ?? ''))       payload.property_area = area || null;
       if (aiGen   !== Boolean(asset.is_ai_generated))    payload.is_ai_generated = aiGen;
+      const currentRoom = asset.room_type_id != null ? String(asset.room_type_id) : '';
+      if (roomTypeId !== currentRoom) payload.room_type_id = roomTypeId || null;
 
       const res = await fetch('/api/marketing/media/asset-update', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -197,6 +205,15 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, onS
             {areaOptions.map(a => <option key={a} value={a} />)}
           </datalist>
         </Field>
+
+        {rooms.length > 0 && (
+          <Field label="Room category (optional)">
+            <select value={roomTypeId} onChange={e => setRoomTypeId(e.target.value)} style={S.input}>
+              <option value="">(not a room shot)</option>
+              {rooms.map(r => <option key={r.room_type_id} value={r.room_type_id}>{r.room_type_name}</option>)}
+            </select>
+          </Field>
+        )}
 
         <Field label="AI generated">
           <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:INK }}>
