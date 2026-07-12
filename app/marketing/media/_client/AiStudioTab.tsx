@@ -112,6 +112,7 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
   const [sourceAssetId, setSourceAssetId] = useState<string | null>(initialSourceAssetId ?? null);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ tone: 'ok'|'err'|'warn'; text: string } | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null); // PBS 2026-07-12: full-size overlay on candidate click
   const [rows, setRows] = useState<AiGen[]>(aiGens);
   const [polling, setPolling] = useState<string | null>(null);
 
@@ -598,31 +599,33 @@ export default function AiStudioTab({ propertyId, mediaPage, aiGens, initialSour
                   <strong>reason:</strong> {g.reality_reason}
                 </div>
               )}
-              {g.candidate_paths && g.candidate_paths.length > 0 && !g.chosen_asset_id && (
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:10, marginTop:10 }}>
+              {g.candidate_paths && g.candidate_paths.length > 0 && (
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(110px, 1fr))', gap:6, marginTop:10 }}>
                   {g.candidate_paths.map((p, i) => (
-                    <div key={g.id + '_' + i} style={{ border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', background:WHITE }}>
-                      <a href={MEDIA_AI_PUBLIC + p} target="_blank" rel="noopener noreferrer" title="Open full-size in new tab" style={{ display:'block', aspectRatio:'1 / 1', background:'#F5F1E6' }}>
+                    <div key={g.id + '_' + i} style={{ border:'1px solid '+HAIR, borderRadius:3, overflow:'hidden', background:WHITE }}>
+                      <button onClick={() => setLightbox(MEDIA_AI_PUBLIC + p)} title="Click to enlarge" style={{ display:'block', width:'100%', aspectRatio:'1 / 1', background:'#F5F1E6', padding:0, border:'none', cursor:'zoom-in' }}>
                         <img src={MEDIA_AI_PUBLIC + p} alt={'candidate '+(i+1)} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
-                      </a>
-                      <div style={{ display:'flex', gap:3, padding:6, borderTop:'1px solid '+HAIR, flexWrap:'wrap' }}>
-                        <button onClick={() => accept(g.id, p)} style={{
-                          flex:1, minWidth:70, padding:'6px 6px', fontSize:10, background:FOREST, color:WHITE, border:'none', borderRadius:3, cursor:'pointer', fontWeight:600,
-                        }} title="Add this candidate to the Library">Accept</button>
-                        <button onClick={() => refine(g.id, p)} style={{
-                          flex:1, minWidth:70, padding:'6px 6px', fontSize:10, background:WHITE, color:FOREST, border:'1px solid '+FOREST, borderRadius:3, cursor:'pointer', fontWeight:600,
-                        }} title="Use this image as the source for a 2nd-round generation with a refined prompt">Refine ✨</button>
-                        <a href={MEDIA_AI_PUBLIC + p} target="_blank" rel="noopener noreferrer" style={{
-                          padding:'6px 8px', fontSize:10, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', textDecoration:'none', display:'inline-flex', alignItems:'center',
-                        }} title="Open in new tab to download / edit externally">↗</a>
+                      </button>
+                      <div style={{ display:'flex', gap:2, padding:3, borderTop:'1px solid '+HAIR }}>
+                        <button onClick={() => accept(g.id, p)} title="Add to Library" style={{ flex:1, padding:'3px 4px', fontSize:9, background:FOREST, color:WHITE, border:'none', borderRadius:2, cursor:'pointer', fontWeight:600 }}>✓</button>
+                        <button onClick={() => refine(g.id, p)} title="Refine — use as source for a new 2nd-round generation" style={{ flex:1, padding:'3px 4px', fontSize:9, background:WHITE, color:FOREST, border:'1px solid '+FOREST, borderRadius:2, cursor:'pointer', fontWeight:600 }}>✨</button>
+                        <a href={MEDIA_AI_PUBLIC + p} target="_blank" rel="noopener noreferrer" title="Open in new tab to download" style={{ padding:'3px 6px', fontSize:9, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:2, textDecoration:'none', display:'inline-flex', alignItems:'center' }}>↗</a>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              {g.chosen_asset_id && <div style={{ fontSize:10, color:FOREST, marginTop:4 }}>✓ accepted as asset {g.chosen_asset_id.slice(0, 8)}</div>}
+              {g.chosen_asset_id && <div style={{ fontSize:10, color:FOREST, marginTop:6, padding:'2px 6px', border:'1px solid '+FOREST, borderRadius:12, display:'inline-block' }}>✓ accepted → asset {g.chosen_asset_id.slice(0, 8)} (candidates retained above for history)</div>}
             </div>
           ))}
+        </div>
+      )}
+
+      {lightbox && (
+        <div onClick={() => setLightbox(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', cursor:'zoom-out', padding:20 }}>
+          <button onClick={(e) => { e.stopPropagation(); setLightbox(null); }} style={{ position:'absolute', top:12, right:16, background:'rgba(255,255,255,0.15)', color:WHITE, border:'none', borderRadius:20, width:36, height:36, fontSize:18, cursor:'pointer' }} title="Close (Esc)">×</button>
+          <img src={lightbox} alt="candidate full-size" onClick={(e) => e.stopPropagation()} style={{ maxWidth:'90vw', maxHeight:'90vh', objectFit:'contain', boxShadow:'0 10px 40px rgba(0,0,0,0.5)' }} />
+          <a href={lightbox} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ position:'absolute', bottom:20, right:20, padding:'8px 14px', fontSize:12, background:FOREST, color:WHITE, borderRadius:3, textDecoration:'none', fontWeight:600 }}>↓ Open / download</a>
         </div>
       )}
     </div>
