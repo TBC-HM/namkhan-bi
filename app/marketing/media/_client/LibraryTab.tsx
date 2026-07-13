@@ -4,6 +4,8 @@
 // 2026-07-13 · MEDIA QA v1 — tile now shows a bottom-right quality badge
 //   (FOREST 80+ · CREAM 60-79 · AMBER 40-59 · RED <40 · HAIR unscored).
 // 2026-07-14 · TASK 1 — Library now hides untagged photos (Clarify-only domain).
+// 2026-07-14 · MEDIA QA v2 — tile filename shows seo_target_filename (Iris SEO)
+//   with original_filename kept as a hover tooltip. Search matches both.
 'use client';
 
 import { useMemo, useState, Fragment } from 'react';
@@ -14,6 +16,7 @@ import { qaBadge } from '@/lib/mediaQa';
 interface TierRow { primary_tier: string | null; total: number | string; photos: number | string; videos: number | string; }
 interface MediaRow {
   asset_id: string; asset_type?: string; original_filename: string;
+  seo_target_filename?: string | null;
   caption: string | null; primary_tier: string | null; property_area: string | null;
   captured_at?: string | null; qc_score: number | null; public_url: string | null;
   width_px: number | null; height_px: number | null;
@@ -23,6 +26,13 @@ interface MediaRow {
   created_at?: string | null;
   technical_score?: number | null; aesthetic_score?: number | null; marketing_score?: number | null;
   quality_index?: number | null; qa_notes?: any; qa_model?: string | null; qa_scored_at?: string | null;
+}
+
+// PBS 2026-07-14 · prefer Iris SEO filename on the tile, original stays as tooltip.
+function displayName(r: MediaRow): string {
+  const seo = (r.seo_target_filename ?? '').trim();
+  if (seo) return seo;
+  return (r.original_filename ?? '').trim() || r.asset_id.slice(0, 8);
 }
 interface ChannelSpec { channel: string; display_name: string; }
 
@@ -80,9 +90,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const [areaFilter, setAreaFilter] = useState('');
   const [aiOnly, setAiOnly] = useState(false);
 
-  // TASK 1 (2026-07-14): Library shows only FULLY TAGGED photos.
-  // Untagged rows are handled exclusively by ClarifyTab. This is a hard rail
-  // BEFORE any user-facing chip / search / area filter.
   const isFullyTagged = (r: MediaRow) =>
     !!r.primary_tier && !!r.property_area && r.property_area.trim() !== '';
 
@@ -101,8 +108,9 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     if (searchText) {
       const q = searchText.toLowerCase();
       out = out.filter(r =>
-        (r.original_filename ?? '').toLowerCase().includes(q) ||
-        (r.property_area     ?? '').toLowerCase().includes(q)
+        (r.original_filename     ?? '').toLowerCase().includes(q) ||
+        (r.seo_target_filename   ?? '').toLowerCase().includes(q) ||
+        (r.property_area         ?? '').toLowerCase().includes(q)
       );
     }
     return out;
@@ -160,7 +168,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
 
   return (
     <div>
-      {/* KPI strip */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8, marginBottom:16 }}>
         {[
           { label: 'Total ready', value: totals.tot },
@@ -176,7 +183,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         ))}
       </div>
 
-      {/* Filter row + upload */}
       <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
           <input value={searchText} onChange={e => { setSearchText(e.target.value); setPage(0); }} placeholder="Search filename / area" style={{ flex:'1 1 200px', minWidth:180, padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE }} />
@@ -246,7 +252,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         </div>
       )}
 
-      {/* Grid */}
       {pageRows.length === 0 ? (
         <div style={{ padding:40, textAlign:'center', color:INK_M, background:WHITE, border:'1px solid '+HAIR, borderRadius:4 }}>
           No assets match this filter.
@@ -275,7 +280,10 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                 }}>{badge.label}</div>
               </div>
               <div style={{ padding:'6px 8px', fontSize:10, color:INK, borderTop:'1px solid '+HAIR, flex:1, display:'flex', flexDirection:'column', gap:4 }}>
-                <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.original_filename}</div>
+                <div
+                  title={r.original_filename ? 'Original: ' + r.original_filename : undefined}
+                  style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
+                >{displayName(r)}</div>
                 <div style={{ color:INK_M, display:'flex', gap:6, flexWrap:'wrap' }}>
                   {r.primary_tier && <span>{r.primary_tier}</span>}
                   {r.property_area && <span>{r.property_area}</span>}
@@ -317,7 +325,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop:16, alignItems:'center' }}>
           <button disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))} style={{
