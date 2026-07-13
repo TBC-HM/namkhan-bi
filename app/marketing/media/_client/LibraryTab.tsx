@@ -241,7 +241,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           No assets match this filter.
         </div>
       ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:12 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:12 }}>
           {pageRows.map(r => {
             const badge = qaBadge(r.quality_index ?? null);
             return (
@@ -250,9 +250,9 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                 {r.public_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={r.public_url} alt={r.original_filename} loading="lazy"
-                    style={{ width:'100%', height:140, objectFit:'cover', background:'#F5F0E1' }} />
+                    style={{ width:'100%', aspectRatio:'16/9', minHeight:160, objectFit:'cover', background:'#F5F0E1', display:'block' }} />
                 ) : (
-                  <div style={{ width:'100%', height:140, background:'#F5F0E1', color:INK_M, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>no preview</div>
+                  <div style={{ width:'100%', aspectRatio:'16/9', minHeight:160, background:'#F5F0E1', color:INK_M, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>no preview</div>
                 )}
                 <div title={r.quality_index != null ? `Quality index ${r.quality_index}%` : 'Not scored yet'} style={{
                   position: 'absolute', right: 4, bottom: 4,
