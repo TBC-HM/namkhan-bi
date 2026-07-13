@@ -67,6 +67,9 @@ function gradeColor(g: string | null): string {
 export default async function YtAnalyticsPage() {
   const sb = getSupabaseAdmin();
 
+  // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC. No-op if token still valid.
+  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
+
   // Historical analytics — token + channel identity for AnalyticsKPIs
   const tok = await getFreshAccessToken(NAMKHAN);
   let channelStats: { subs: number; views: number; videos: number; ok: boolean; access_token?: string; channel_id?: string } = { subs: 0, views: 0, videos: 0, ok: false };
