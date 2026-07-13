@@ -15,6 +15,7 @@ import { SALES_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getCurrentAuthUser } from '@/lib/userGmail';
 import { listActiveMailboxes, listSharedInbox } from '@/lib/sharedGmail';
+import AddAliasForm from './AddAliasForm';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -120,7 +121,7 @@ export default async function SalesMailsPage({
                 Register at least one shared alias (e.g. <code>book@thenamkhan.com</code>) to segment the unified inbox.
                 Add it below or use the &quot;Manage aliases&quot; button on the inbox once one exists.
               </p>
-              <AddAliasFormServer />
+              <AddAliasForm />
             </div>
           </Container>
         </div>
@@ -158,8 +159,6 @@ export default async function SalesMailsPage({
   );
 }
 
-// ---- helpers (server) ----------------------------------------------------
-
 function connectBannerStyle(): React.CSSProperties {
   return {
     display: 'flex',
@@ -194,12 +193,4 @@ function infoStripStyle(color: string): React.CSSProperties {
     fontSize: 12,
     color,
   };
-}
-
-// Note: this is a server island. The actual form interactivity is delegated
-// to a tiny client child (AddAliasFormClient) so we can keep the RSC boundary
-// clean.
-function AddAliasFormServer() {
-  const AddAliasFormClient = require('./AddAliasForm').default;
-  return <AddAliasFormClient />;
 }
