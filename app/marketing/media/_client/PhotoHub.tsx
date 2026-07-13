@@ -1,9 +1,7 @@
 // app/marketing/media/_client/PhotoHub.tsx
-// PBS 2026-07-13 · Task A — Photo sub-hub mirroring VideoHub's 4-tab nested
-// strip. Sits under the top-level MediaHub 2-tab shell (Pics · Videos) so both
-// media types have symmetrical navigation: Library · AI Studio · Clarify · Settings.
-// 2026-07-13 (later) · Task B — added "Coverage" sub-tab surfacing the live
-// (category × usage_tier) matrix from public.v_media_coverage_matrix.
+// PBS 2026-07-13 · Task A — Photo sub-hub mirroring VideoHub's 4-tab nested strip.
+// 2026-07-13 · Task B — added "Coverage" sub-tab surfacing v_media_coverage_matrix.
+// PBS 2026-07-14 · Task B (media area) — passes guardrails to SettingsTab.
 'use client';
 
 import { useState } from 'react';
@@ -12,7 +10,7 @@ import AiStudioTab from './AiStudioTab';
 import ClarifyTab from './ClarifyTab';
 import SettingsTab from './SettingsTab';
 import CoverageTab, { type CoverageRow } from './CoverageTab';
-import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy } from './MediaHub';
+import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy, GuardrailsData } from './MediaHub';
 
 type Sub = 'library' | 'ai' | 'clarify' | 'coverage' | 'settings';
 
@@ -32,6 +30,7 @@ interface Props {
   coverageRows?: CoverageRow[];
   initialSub?: Sub;
   initialAiAssetId?: string | null;
+  guardrails: GuardrailsData;
 }
 
 const HAIR   = '#E6DFCC';
@@ -51,7 +50,6 @@ export default function PhotoHub(props: Props) {
   const [sub, setSub] = useState<Sub>(props.initialSub ?? 'library');
   const [aiInitialAssetId, setAiInitialAssetId] = useState<string | null>(props.initialAiAssetId ?? null);
 
-  // Photo-only slice — Clarify counts only photos missing area/tier
   const photoRows = (props.mediaPage ?? []).filter((r: any) => !isVideoRow(r));
   const clarifyCount = photoRows.filter((r: any) => r.property_area == null || r.primary_tier == null).length;
 
@@ -140,6 +138,7 @@ export default function PhotoHub(props: Props) {
           rooms={props.rooms}
           facilities={props.facilities}
           mediaPage={props.mediaPage}
+          guardrails={props.guardrails}
         />
       )}
     </div>
