@@ -5,6 +5,7 @@ import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import RequestVideoForm from '../_client/RequestVideoForm';
+import StartProductionButton from '../_client/StartProductionButton';
 import YtSubTabs from '../_shared/SubTabs';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ const AMBER  = '#B48A3A';
 const RED    = '#B03826';
 
 interface JobRow { render_job_id: string; status: string; brief_id: string | null; output_url: string | null; submitted_at_utc: string | null; finished_at_utc: string | null; guardrail_passed_at_utc: string | null; error_msg: string | null }
-interface ReqRow { id: string; status: string; angle: string | null; style: string | null; created_at: string | null }
+interface ReqRow { id: string; status: string; angle: string | null; style: string | null; duration_seconds: number | null; created_at: string | null }
 interface BriefRow { brief_id: string; generated_at_utc: string | null }
 interface PersonRow{ id: number; full_name: string }
 interface RateRow  { rate_type: string; currency: string; floor_amount: number; ceiling_amount: number; disclaimer_verbatim: string | null }
@@ -36,7 +37,7 @@ export default async function YouTubeProductionPage() {
       .select('render_job_id,status,brief_id,output_url,submitted_at_utc,finished_at_utc,guardrail_passed_at_utc,error_msg')
       .eq('property_id', NAMKHAN).order('submitted_at_utc', { ascending: false }).limit(30),
     sb.from('v_yt_video_requests')
-      .select('id,status,angle,style,created_at')
+      .select('id,status,angle,style,duration_seconds,created_at')
       .eq('property_id', NAMKHAN).order('created_at', { ascending: false }).limit(20),
     sb.from('v_yt_trend_briefs')
       .select('brief_id,generated_at_utc')
@@ -120,6 +121,36 @@ export default async function YouTubeProductionPage() {
             approvedPeople={people.map((p) => ({ id: p.id, full_name: p.full_name }))}
           />
         </div>
+
+        {/* Queued for production — PBS 2026-07-13 */}
+        {requests.filter((r) => r.status === 'queued').length > 0 && (
+          <div style={cardStyle}>
+            <div style={sectionH}>Queued for production ({requests.filter((r) => r.status === 'queued').length})</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead><tr>
+                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Title / angle</th>
+                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Style</th>
+                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Length</th>
+                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Queued</th>
+                <th style={{ textAlign: 'right', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Action</th>
+              </tr></thead>
+              <tbody>{requests.filter((r) => r.status === 'queued').map((r) => {
+                const firstLine = (r.angle ?? '(untitled)').split('\n')[0];
+                return (
+                  <tr key={r.id}>
+                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK }}>{firstLine}</td>
+                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK_M }}>{r.style ?? '—'}</td>
+                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK_M }}>{r.duration_seconds != null ? `${r.duration_seconds}s` : '—'}</td>
+                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK_M, fontSize: 11 }}>{r.created_at ? new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ') : '—'}</td>
+                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, textAlign: 'right' }}>
+                      <StartProductionButton requestId={r.id} />
+                    </td>
+                  </tr>
+                );
+              })}</tbody>
+            </table>
+          </div>
+        )}
 
         {/* Ready for review */}
         {readyForReview.length > 0 && (
