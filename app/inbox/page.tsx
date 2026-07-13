@@ -61,13 +61,13 @@ export default async function InboxPage() {
       id:              m.id,
       threadId:        m.threadId,
       from:            m.from ?? '',
-      to:              m.to ?? '',
+      to:              conn.gmail_address ?? user.email,
       subject:         m.subject ?? '(no subject)',
       snippet:         m.snippet ?? '',
       date:            m.date ?? '',
-      dateMs:          m.dateMs ?? 0,
+      dateMs:          m.date ? (Date.parse(m.date) || 0) : 0,
       unread:          !!m.unread,
-      starred:         !!m.starred,
+      starred:         false,
     }));
   } catch (e) {
     fetchErr = e instanceof Error ? e.message : 'inbox_fetch_failed';
