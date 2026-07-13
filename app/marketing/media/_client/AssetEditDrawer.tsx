@@ -4,9 +4,11 @@
 // 2026-07-13 pm · MEDIA QA v1 — collapsible "Quality Score" breakdown with
 //   tech/aes/mkt bars, naming-convention check, detected-text flags, and
 //   Re-score button that POSTs to /api/marketing/media/qa-rescore.
-// 2026-07-14 · MEDIA QA v2 — per-slider Iris reasoning (technical_reasoning /
-//   aesthetic_reasoning / marketing_reasoning) rendered inline under each
-//   slider row, plus qa_notes.failures[] chips under the composite.
+// 2026-07-14 · MEDIA QA v2 — per-slider Iris reasoning + failures[] chips,
+//   filename header now shows the SEO name with an info tooltip pointing to
+//   the original + storage path, "Crop to…" dropdown appears when qa_notes
+//   carries an aspect_ratio failure AND source dims meet a channel's minimum,
+//   "Rescore" button relabelled "Regenerate & re-apply".
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -31,6 +33,8 @@ export interface AssetEditRow {
   asset_id: string;
   room_type_id?: number | null;
   original_filename?: string | null;
+  seo_target_filename?: string | null;
+  raw_path?: string | null;
   caption?: string | null;
   alt_text?: string | null;
   primary_tier?: string | null;
@@ -56,7 +60,6 @@ export interface AssetEditRow {
   audio_language?: string | null;
   color_profile?: string | null;
   visual_description?: string | null;
-  // Media QA v1
   technical_score?: number | null;
   aesthetic_score?: number | null;
   marketing_score?: number | null;
@@ -65,6 +68,30 @@ export interface AssetEditRow {
   qa_model?: string | null;
   qa_scored_at?: string | null;
   detected_text?: string | null;
+}
+
+interface AspectRule { channel: string; ratio: string; min_width_px: number; min_height_px: number; }
+let __ASPECT_RULES_CACHE: AspectRule[] | null = null;
+async function loadAspectRules(): Promise<AspectRule[]> {
+  if (__ASPECT_RULES_CACHE) return __ASPECT_RULES_CACHE;
+  try {
+    const res = await fetch('/api/marketing/media/aspect-rules', { cache: 'no-store' });
+    if (res.ok) {
+      const j = await res.json();
+      if (Array.isArray(j?.rules)) { __ASPECT_RULES_CACHE = j.rules as AspectRule[]; return __ASPECT_RULES_CACHE; }
+    }
+  } catch { /* fall through */ }
+  __ASPECT_RULES_CACHE = [
+    { channel: 'yt_hero',  ratio: '16:9', min_width_px: 1920, min_height_px: 1080 },
+    { channel: 'yt_thumb', ratio: '16:9', min_width_px: 1280, min_height_px: 720 },
+    { channel: 'ig_feed',  ratio: '1:1',  min_width_px: 1080, min_height_px: 1080 },
+    { channel: 'ig_reel',  ratio: '9:16', min_width_px: 1080, min_height_px: 1920 },
+    { channel: 'tiktok',   ratio: '9:16', min_width_px: 1080, min_height_px: 1920 },
+    { channel: 'web_hero', ratio: '3:2',  min_width_px: 2400, min_height_px: 1600 },
+    { channel: 'ota_hero', ratio: '4:3',  min_width_px: 2048, min_height_px: 1536 },
+    { channel: 'brochure', ratio: '3:2',  min_width_px: 2400, min_height_px: 1600 },
+  ];
+  return __ASPECT_RULES_CACHE;
 }
 
 interface Props {
@@ -125,9 +152,9 @@ function isVideo(row: AssetEditRow | null): boolean {
 function humanSize(v: any): string {
   const n = Number(v ?? 0);
   if (!n) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
 }
 
 function fmtDurMMSS(sec: number | null | undefined): string {
@@ -135,10 +162,9 @@ function fmtDurMMSS(sec: number | null | undefined): string {
   const s = Math.round(Number(sec));
   const m = Math.floor(s / 60);
   const r = s % 60;
-  return `${m}:${String(r).padStart(2, '0')}`;
+  return m + ':' + String(r).padStart(2, '0');
 }
 
-// Small horizontal bar for QA score breakdown (0-100).
 function QaBar({ value, label, detail }: { value: number | null | undefined; label: string; detail?: string }) {
   const v = value == null ? 0 : Math.max(0, Math.min(100, Number(value)));
   const badge = qaBadge(value ?? null);
@@ -181,11 +207,13 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
   const [colorProfile, setColorProfile] = useState('');
   const [visualDescription, setVisualDescription] = useState('');
 
-  // QA re-score state
   const [rescoring, setRescoring] = useState(false);
   const [rescoreMsg, setRescoreMsg] = useState<string | null>(null);
 
-  // QA slider state (0-100, null when unscored). Drives the 3 sliders in the QA section.
+  const [aspectRules, setAspectRules] = useState<AspectRule[]>([]);
+  const [cropBusy, setCropBusy] = useState(false);
+  const [cropMsg, setCropMsg] = useState<string | null>(null);
+
   const [tSlider, setTSlider] = useState<number | null>(null);
   const [aSlider, setASlider] = useState<number | null>(null);
   const [mSlider, setMSlider] = useState<number | null>(null);
@@ -194,7 +222,8 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
 
   useEffect(() => {
     if (!open || !asset) return;
-    setErr(null); setOk(null); setRescoreMsg(null);
+    setErr(null); setOk(null); setRescoreMsg(null); setCropMsg(null);
+    void loadAspectRules().then(setAspectRules).catch(() => setAspectRules([]));
     setFilename(asset.original_filename ?? '');
     setCaption(asset.caption ?? '');
     setAltText(asset.alt_text ?? '');
@@ -279,7 +308,7 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
 
   async function rescore() {
     if (!asset) return;
-    setRescoring(true); setRescoreMsg('Rescoring… (~40s per image)');
+    setRescoring(true); setRescoreMsg('Regenerating with Iris… (~40s per image)');
     try {
       const res = await fetch('/api/marketing/media/qa-rescore', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -288,7 +317,7 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'rescore_failed');
       const r = j.result ?? {};
-      setRescoreMsg(`Rescored ✓ · tech ${r.technical_score ?? '?'} · aes ${r.aesthetic_score ?? '?'} · mkt ${r.marketing_score ?? '?'} · quality ${r.quality_index ?? '?'}%`);
+      setRescoreMsg('Regenerated ✓ · tech ' + (r.technical_score ?? '?') + ' · aes ' + (r.aesthetic_score ?? '?') + ' · mkt ' + (r.marketing_score ?? '?') + ' · quality ' + (r.quality_index ?? '?') + '%');
       if (typeof r.technical_score === 'number') setTSlider(r.technical_score);
       if (typeof r.aesthetic_score === 'number') setASlider(r.aesthetic_score);
       if (typeof r.marketing_score === 'number') setMSlider(r.marketing_score);
@@ -369,7 +398,6 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
             ) : (
               <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:INK_M }}>no preview</div>
             )}
-            {/* QA badge overlay on thumbnail */}
             <div style={{
               position:'absolute', right:4, bottom:4,
               background: badge.bg, color: badge.fg,
@@ -390,9 +418,30 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
         {err && <div style={S.errBanner}>Save failed: {err}</div>}
         {ok  && <div style={S.okBanner}>{ok}</div>}
 
-        <Field label="Filename">
+        {/* Filename header — display SEO name (from Iris) with hover tooltip showing
+            the original + storage path. The <input> below is the editable working
+            filename that gets persisted via fn_media_asset_update. */}
+        <div>
+          <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:4, display:'flex', alignItems:'center', gap:6 }}>
+            <span>Filename</span>
+            <span
+              title={
+                (asset.original_filename ? 'Original: ' + asset.original_filename + '\n' : '') +
+                (asset.master_path ? 'Master path: ' + asset.master_path + '\n' : '') +
+                (asset.raw_path ? 'Raw path: ' + asset.raw_path : '')
+              }
+              style={{
+                display:'inline-flex', alignItems:'center', justifyContent:'center',
+                width:14, height:14, borderRadius:7, border:'1px solid '+HAIR,
+                fontSize:9, color:INK_M, cursor:'help', background:WHITE,
+              }}
+            >?</span>
+            {asset.seo_target_filename && (
+              <span style={{ fontStyle:'italic', color:INK_M, fontSize:10 }}>Iris SEO name applied</span>
+            )}
+          </div>
           <input value={filename} onChange={e => setFilename(e.target.value)} style={S.input} />
-        </Field>
+        </div>
 
         <Field label="Caption">
           <textarea value={caption} onChange={e => setCaption(e.target.value)} rows={3} style={S.textarea} />
@@ -429,14 +478,14 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                 <option value="No area">No area</option>
                 {taxonomy.rooms.length > 0 && (
                   <optgroup label="Rooms">
-                    {taxonomy.rooms.map(r => <option key={`room-${r.id}`} value={r.name}>{r.name}</option>)}
+                    {taxonomy.rooms.map(r => <option key={'room-' + r.id} value={r.name}>{r.name}</option>)}
                   </optgroup>
                 )}
                 {taxonomy.facilities.length > 0 && (
                   <optgroup label="Facilities">
                     {taxonomy.facilities.map(f => (
-                      <option key={`fac-${f.id}`} value={f.name}>
-                        {f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}
+                      <option key={'fac-' + f.id} value={f.name}>
+                        {f.parent_name ? f.name + ' · ↳ ' + f.parent_name : f.name}
                       </option>
                     ))}
                   </optgroup>
@@ -444,36 +493,36 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                 {taxonomy.activities.length > 0 && (
                   <optgroup label="Activities">
                     {taxonomy.activities.map(a => (
-                      <option key={`act-${a.id}`} value={a.name}>
-                        {a.facility_name ? `${a.name} · @ ${a.facility_name}` : a.name}
+                      <option key={'act-' + a.id} value={a.name}>
+                        {a.facility_name ? a.name + ' · @ ' + a.facility_name : a.name}
                       </option>
                     ))}
                   </optgroup>
                 )}
                 {taxonomy.meeting_spaces.length > 0 && (
                   <optgroup label="Meeting spaces">
-                    {taxonomy.meeting_spaces.map(m => <option key={`mtg-${m.id}`} value={m.name}>{m.name}</option>)}
+                    {taxonomy.meeting_spaces.map(m => <option key={'mtg-' + m.id} value={m.name}>{m.name}</option>)}
                   </optgroup>
                 )}
                 {taxonomy.transport.length > 0 && (
                   <optgroup label="Transport">
                     {taxonomy.transport.map(t => (
-                      <option key={`trp-${t.id}`} value={t.name}>
-                        {t.route_from && t.route_to ? `${t.name} · ${t.route_from} → ${t.route_to}` : t.name}
+                      <option key={'trp-' + t.id} value={t.name}>
+                        {t.route_from && t.route_to ? t.name + ' · ' + t.route_from + ' → ' + t.route_to : t.name}
                       </option>
                     ))}
                   </optgroup>
                 )}
                 {(taxonomy.boats && taxonomy.boats.length > 0) && (
                   <optgroup label="Imekong · Boats">
-                    {taxonomy.boats.map(b => <option key={`boat-${b.id}`} value={b.name}>{b.name}</option>)}
+                    {taxonomy.boats.map(b => <option key={'boat-' + b.id} value={b.name}>{b.name}</option>)}
                   </optgroup>
                 )}
                 {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
                   <optgroup label="Imekong · Cruises">
                     {taxonomy.boat_cruises.map(c => (
-                      <option key={`cruise-${c.id}`} value={c.name}>
-                        {c.boat_name ? `${c.name} · @ ${c.boat_name}` : c.name}
+                      <option key={'cruise-' + c.id} value={c.name}>
+                        {c.boat_name ? c.name + ' · @ ' + c.boat_name : c.name}
                       </option>
                     ))}
                   </optgroup>
@@ -563,20 +612,18 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
               </Field>
 
               <Field label="Visual description">
-                <textarea value={visualDescription} onChange={e => setVisualDescription(e.target.value)} rows={3} placeholder="One-sentence description of what's in the clip." style={S.textarea} />
+                <textarea value={visualDescription} onChange={e => setVisualDescription(e.target.value)} rows={3} placeholder="One-sentence description of what is in the clip." style={S.textarea} />
               </Field>
             </div>
           </details>
         )}
 
-        {/* Media QA v1 — collapsible score breakdown */}
         <details style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, padding:'8px 12px' }} open={qIndex != null}>
           <summary style={{ fontSize:11, fontWeight:600, color:INK, cursor:'pointer', letterSpacing:'0.06em', textTransform:'uppercase', display:'flex', alignItems:'center', gap:8, justifyContent:'space-between' }}>
             <span>Quality Score · {qIndex == null ? 'not yet scored' : qIndex + '%'}</span>
             <span style={{ background: badge.bg, color: badge.fg, padding: '2px 8px', borderRadius: 3, fontSize: 10 }}>{badge.label}</span>
           </summary>
           <div style={{ display:'flex', flexDirection:'column', gap:14, marginTop:12 }}>
-            {/* Sliders — always visible so PBS can override manually */}
             <div style={{ display:'flex', flexDirection:'column', gap:10, background:CREAM, border:'1px solid '+HAIR, borderRadius:3, padding:10 }}>
               <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Manual override</div>
               <SliderRow label="Technical" value={tSlider} setValue={setTSlider} reasoning={notes?.technical_reasoning ?? null} />
@@ -593,6 +640,65 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                 </span>
               </div>
               <FailureChips failures={notes?.failures} />
+
+              {(() => {
+                const failures = Array.isArray(notes?.failures) ? notes!.failures : [];
+                const hasAspectFail = failures.some((f: any) =>
+                  f && typeof f.rule_type === 'string' && f.rule_type.toLowerCase().startsWith('aspect'));
+                if (!hasAspectFail) return null;
+                const srcW = Number(asset.width_px ?? 0);
+                const srcH = Number(asset.height_px ?? 0);
+                const eligible = aspectRules.filter(r =>
+                  srcW >= r.min_width_px && srcH >= r.min_height_px);
+                return (
+                  <div style={{ borderTop:'1px solid '+HAIR, paddingTop:8, display:'flex', flexDirection:'column', gap:6 }}>
+                    <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>
+                      Crop to aspect
+                    </div>
+                    {eligible.length === 0 ? (
+                      <div style={{ fontSize:10, color:INK_M }}>Source too small to crop to any channel.</div>
+                    ) : (
+                      <div style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+                        <select
+                          disabled={cropBusy}
+                          defaultValue=""
+                          onChange={async (e) => {
+                            const channel = e.currentTarget.value;
+                            e.currentTarget.value = '';
+                            if (!channel) return;
+                            if (!window.confirm('Crop this master to ' + channel + '? This overwrites master_path.')) return;
+                            setCropBusy(true); setCropMsg('Cropping to ' + channel + '…');
+                            try {
+                              const res = await fetch('/api/marketing/media/crop-to-aspect', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ asset_id: asset.asset_id, channel }),
+                              });
+                              const j = await res.json();
+                              if (!res.ok || !j.ok) throw new Error(j.error || 'crop_failed');
+                              setCropMsg('Cropped ✓ ' + channel + ' · ' + (j.output?.width_px) + '×' + (j.output?.height_px));
+                              router.refresh();
+                            } catch (e: any) {
+                              setCropMsg('Crop failed: ' + e.message);
+                            } finally {
+                              setCropBusy(false);
+                            }
+                          }}
+                          style={{ padding:'4px 8px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, background:WHITE, color:INK }}
+                        >
+                          <option value="">Crop to…</option>
+                          {eligible.map(r => (
+                            <option key={r.channel} value={r.channel}>
+                              {r.channel} · {r.ratio} · min {r.min_width_px}×{r.min_height_px}
+                            </option>
+                          ))}
+                        </select>
+                        {cropMsg && <span style={{ fontSize:10, color:INK_M }}>{cropMsg}</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                 <button type="button" onClick={saveScores} disabled={savingScores || (tSlider == null && aSlider == null && mSlider == null)}
                   style={{ padding:'6px 14px', fontSize:11, fontWeight:600, background: savingScores ? INK_M : FOREST, color:WHITE, border:'none', borderRadius:3, cursor: savingScores ? 'default' : 'pointer' }}>
@@ -600,7 +706,7 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                 </button>
                 <button type="button" onClick={rescore} disabled={rescoring}
                   style={{ padding:'6px 14px', fontSize:11, fontWeight:600, background: rescoring ? INK_M : WHITE, color: rescoring ? WHITE : INK, border:'1px solid '+HAIR, borderRadius:3, cursor: rescoring ? 'default' : 'pointer' }}>
-                  {rescoring ? 'Scoring…' : 'Rescore with Iris'}
+                  {rescoring ? 'Scoring…' : 'Regenerate & re-apply'}
                 </button>
                 {savedScoresMsg && <span style={{ fontSize:10, color:INK_M }}>{savedScoresMsg}</span>}
                 {rescoreMsg && !savedScoresMsg && <span style={{ fontSize:10, color:INK_M }}>{rescoreMsg}</span>}
@@ -609,11 +715,10 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
 
             {qIndex == null ? (
               <div style={{ fontSize:11, color:INK_M }}>
-                Not yet scored by Iris. Use the sliders above for a manual score, or click <b>Rescore with Iris</b> to run the model.
+                Not yet scored by Iris. Use the sliders above for a manual score, or click <b>Regenerate & re-apply</b> to run the model.
               </div>
             ) : (
               <>
-                {/* Technical */}
                 <div>
                   <div style={S.qaSectionHeader}>
                     <span>Technical</span>
@@ -624,7 +729,6 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                   <QaBar label="Noise"     value={tech?.noise?.value}     detail={tech?.noise?.detail} />
                 </div>
 
-                {/* Aesthetic */}
                 <div>
                   <div style={S.qaSectionHeader}>
                     <span>Aesthetic</span>
@@ -635,7 +739,6 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                   <QaBar label="Lighting"  value={aes?.lighting?.value}  detail={aes?.lighting?.detail} />
                 </div>
 
-                {/* Marketing */}
                 <div>
                   <div style={S.qaSectionHeader}>
                     <span>Marketing</span>
@@ -646,29 +749,6 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                   <QaBar label="Commercial polish" value={mkt?.commercial_polish?.value} detail={mkt?.commercial_polish?.detail} />
                 </div>
 
-                {/* Naming convention */}
-                {naming && (
-                  <div style={{ background:CREAM, border:'1px solid '+HAIR, borderRadius: 3, padding: '8px 10px' }}>
-                    <div style={S.qaSectionHeader}>
-                      <span>Naming convention</span>
-                      <span style={{
-                        ...S.qaBadge,
-                        background: naming.matched === true ? OK : naming.matched === false ? RED : HAIR,
-                        color: naming.matched == null ? INK_M : WHITE,
-                      }}>{naming.matched === true ? '✓ match' : naming.matched === false ? '✗ off' : 'no rule'}</span>
-                    </div>
-                    {naming.expected && (
-                      <div style={{ fontSize: 10, color: INK_M, fontFamily: 'ui-monospace, Menlo, monospace', marginTop: 4 }}>{naming.expected}</div>
-                    )}
-                    {Array.isArray(naming.violations) && naming.violations.length > 0 && (
-                      <ul style={{ margin: '6px 0 0', paddingLeft: 16, fontSize: 10, color: RED }}>
-                        {naming.violations.map((v: string, i: number) => <li key={i}>{v}</li>)}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                {/* Detected text & flags */}
                 {(asset.detected_text || flags) && (
                   <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 3, padding: '8px 10px' }}>
                     <div style={S.qaSectionHeader}><span>Detected text · flags</span></div>
