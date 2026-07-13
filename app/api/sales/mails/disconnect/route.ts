@@ -1,5 +1,6 @@
 // app/api/sales/mails/disconnect/route.ts
-// POST { mailbox_id }
+// POST { mailbox_id } — deactivates the ALIAS row (not any OAuth token).
+// The per-user Gmail connection stays intact.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
