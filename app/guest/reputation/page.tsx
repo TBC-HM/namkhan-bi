@@ -177,6 +177,19 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
         </div>
 
 
+        {!oauth && (
+          <div style={{ gridColumn:'1 / -1', padding:'12px 16px', borderRadius:6, background:'#FDF7E6', border:'1px solid #E8CB84', color:'#8B6914', fontSize:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
+            <div><strong>Google Business Profile not connected.</strong> Connect to pull reviews + Maps insights.</div>
+            <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={{ padding:'6px 14px', background:GREEN, color:WHITE, borderRadius:4, fontSize:11, fontWeight:600, textDecoration:'none', letterSpacing:'0.04em', textTransform:'uppercase' }}>Connect Google →</TenantLink>
+          </div>
+        )}
+        {oauth && !oauth.location_id && (
+          <div style={{ gridColumn:'1 / -1', padding:'12px 16px', borderRadius:6, background:'#FDF7E6', border:'1px solid #E8CB84', color:'#8B6914', fontSize:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
+            <div><strong>Google connected but no location detected.</strong> Reconnect to grant Gmail + business.manage scopes and complete Business Profile setup.</div>
+            <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={{ padding:'6px 14px', background:GREEN, color:WHITE, borderRadius:4, fontSize:11, fontWeight:600, textDecoration:'none', letterSpacing:'0.04em', textTransform:'uppercase' }}>Reconnect Google →</TenantLink>
+          </div>
+        )}
+
         {oauth && oauth.location_id && (
           <div style={{ gridColumn:'1 / -1', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'14px 16px' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', flexWrap:'wrap', gap:8, marginBottom:12 }}>
@@ -188,7 +201,10 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
                 <div style={{ fontSize:16, fontWeight:600, color:INK }}>{oauth.location_name ?? 'Location auto-detection pending'}</div>
                 <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>Connected {fmtDate(oauth.connected_at)}</div>
               </div>
-              <TenantLink href={`/api/google/pull-now?property=${pid}`} style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>Pull latest</TenantLink>
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={{ padding:'5px 12px', fontSize:11, fontWeight:500, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:4, textDecoration:'none' }}>Reconnect</TenantLink>
+                <TenantLink href={`/api/google/pull-now?property=${pid}`} style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>Pull latest</TenantLink>
+              </div>
             </div>
             <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600, marginBottom:6 }}>Maps insights</div>
             {mapsRows.length === 0 ? (
