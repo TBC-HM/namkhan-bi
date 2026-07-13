@@ -1,6 +1,7 @@
 // app/marketing/media/_client/MediaHub.tsx
 // PBS 2026-07-13 · Video AI Studio v1 — pass stylePresets + musicTracks
 // through to VideoHub → VideoSettingsTab.
+// PBS 2026-07-14 · Task B — thread photo guardrails through PhotoHub.
 'use client';
 
 import { useState } from 'react';
@@ -8,6 +9,10 @@ import PhotoHub from './PhotoHub';
 import VideoHub from './VideoHub';
 import type { VideoBriefRow } from './VideoBriefsPanel';
 import type { PillarOption } from './NewVideoBriefForm';
+import type {
+  NamingRow, CaptionRow, AltTextRow, TierThresholdRow,
+  AspectRatioRow, TextPolicyRow, BrandPaletteRow,
+} from './PhotoGuardrailsPanel';
 
 type TabKey = 'pics' | 'videos';
 
@@ -58,6 +63,16 @@ export interface MediaTaxonomy {
   boat_cruises: BoatCruiseTaxonomyEntry[];
 }
 
+export interface GuardrailsData {
+  naming: NamingRow[];
+  captions: CaptionRow[];
+  altText: AltTextRow[];
+  tierThresholds: TierThresholdRow[];
+  aspectRatios: AspectRatioRow[];
+  textPolicy: TextPolicyRow | null;
+  brandPalette: BrandPaletteRow[];
+}
+
 interface Props {
   propertyId: number;
   byTier: any[];
@@ -78,6 +93,7 @@ interface Props {
   coverageRows?: any[];
   stylePresets?: any[];
   musicTracks?: any[];
+  guardrails?: GuardrailsData;
 }
 
 const HAIR   = '#E6DFCC';
@@ -92,6 +108,11 @@ function isVideoRow(r: any): boolean {
   const p = (r?.public_url ?? r?.master_path ?? '').toLowerCase();
   return /\.(mp4|mov|webm|m4v)(\?|$)/.test(p);
 }
+
+const EMPTY_GUARDRAILS: GuardrailsData = {
+  naming: [], captions: [], altText: [], tierThresholds: [],
+  aspectRatios: [], textPolicy: null, brandPalette: [],
+};
 
 export default function MediaHub(props: Props) {
   const [tab, setTab] = useState<TabKey>('pics');
@@ -148,6 +169,7 @@ export default function MediaHub(props: Props) {
           taxonomy={props.taxonomy}
           areaOptions={props.areaOptions}
           coverageRows={props.coverageRows as any}
+          guardrails={props.guardrails ?? EMPTY_GUARDRAILS}
         />
       )}
       {tab === 'videos' && (
