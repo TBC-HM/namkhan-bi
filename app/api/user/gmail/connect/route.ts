@@ -12,7 +12,7 @@ export async function GET() {
   const user = await getCurrentAuthUser();
   if (!user) return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_APP_URL || 'https://namkhan-bi.vercel.app'));
   try {
-    const url = buildUserAuthUrl(user.id);
+    const url = await buildUserAuthUrl(user.id);
     return NextResponse.redirect(url);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'unknown';
