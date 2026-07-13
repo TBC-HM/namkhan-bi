@@ -1,8 +1,8 @@
 // app/marketing/media/page.tsx
 // PBS 2026-07-13 · Video AI Studio v1 — loads v_video_style_presets +
 // v_video_music_tracks for VideoSettingsTab.
-// PBS 2026-07-14 · Task A — bumped mediaPage limit 500 -> 5000 so Clarify tile
-// counts all ~1,036 photos with missing area/tier (was suppressing ~637 rows).
+// PBS 2026-07-14 · Task A — mediaPage limit 500 -> 5000.
+// PBS 2026-07-14 · Task B — loads 7 photo guardrails datasets.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -20,6 +20,8 @@ async function loadAll(pid: number) {
     rooms, facilities, facilitiesRaw, activitiesRaw, transportRaw, boatsRaw, cruisesRaw,
     videoTemplates, videoBriefs, pillars, coverageMatrix,
     stylePresets, musicTracks,
+    // Task B guardrails:
+    guardNaming, guardCaptions, guardAltText, guardTiers, guardRatios, guardTextPolicy, guardPalette,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(5000),
@@ -44,6 +46,14 @@ async function loadAll(pid: number) {
     sb.from('v_media_coverage_matrix').select('scope_label, scope_type, scope_key, property_id, primary_tier, n').eq('property_id', pid),
     sb.from('v_video_style_presets').select('*').or(`property_id.is.null,property_id.eq.${pid}`),
     sb.from('v_video_music_tracks').select('*').order('created_at', { ascending: false }).limit(100),
+    // Task B guardrails
+    sb.from('v_media_naming_conventions').select('*').or('scope.eq.photo,scope.is.null'),
+    sb.from('v_media_caption_rules').select('*'),
+    sb.from('v_media_alt_text_rules').select('*'),
+    sb.from('v_media_tier_thresholds').select('*'),
+    sb.from('v_media_aspect_ratio_rules').select('*'),
+    sb.from('v_media_text_policy').select('*').eq('id', 1).maybeSingle(),
+    sb.from('v_media_brand_palette').select('*'),
   ]);
 
   const facilityRows = (facilitiesRaw.data ?? []) as Array<{ facility_id: number; name: string; parent_facility_id: number | null; is_meeting_space: boolean | null }>;
@@ -102,12 +112,23 @@ async function loadAll(pid: number) {
     coverageRows: coverageMatrix.data ?? [],
     stylePresets: stylePresets.data ?? [],
     musicTracks: musicTracks.data ?? [],
+    guardrails: {
+      naming: guardNaming.data ?? [],
+      captions: guardCaptions.data ?? [],
+      altText: guardAltText.data ?? [],
+      tierThresholds: guardTiers.data ?? [],
+      aspectRatios: guardRatios.data ?? [],
+      textPolicy: guardTextPolicy.data ?? null,
+      brandPalette: guardPalette.data ?? [],
+    },
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
       rooms.error, facilities.error, facilitiesRaw.error, activitiesRaw.error, transportRaw.error,
       boatsRaw.error, cruisesRaw.error, videoTemplates.error, videoBriefs.error, pillars.error,
       coverageMatrix.error, stylePresets.error, musicTracks.error,
+      guardNaming.error, guardCaptions.error, guardAltText.error, guardTiers.error, guardRatios.error,
+      guardTextPolicy.error, guardPalette.error,
     ].filter(Boolean),
   };
 }
@@ -153,6 +174,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             coverageRows={data.coverageRows as any}
             stylePresets={data.stylePresets as any}
             musicTracks={data.musicTracks as any}
+            guardrails={data.guardrails as any}
           />
         </div>
       </DashboardPage>
