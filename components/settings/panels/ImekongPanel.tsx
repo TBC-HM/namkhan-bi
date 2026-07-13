@@ -6,7 +6,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PanelHeader, EmptyState } from './_shared';
 import { supabase } from '@/lib/supabase';
-import { btnPrimary, btnGhost, rowStyle, ErrorBanner, LabeledInput, LabeledCheckbox, LabeledSelect, LabeledTextarea, ArrayInput, FormShell, DeleteConfirm, pill } from './_settings_ui';
+import { btnPrimary, btnGhost, rowStyle, ErrorBanner, SavedFlash, LabeledInput, LabeledCheckbox, LabeledSelect, LabeledTextarea, ArrayInput, FormShell, DeleteConfirm, pill } from './_settings_ui';
 
 type Boat = {
   boat_id: number; property_id: number; name: string;
@@ -122,6 +122,7 @@ export default function ImekongPanel({ boats, cruises, propertyId }: {
   const [cruiseDraft, setCruiseDraft] = useState<CruiseDraft | null>(null);
   const [busy, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [confirmDelBoat, setConfirmDelBoat] = useState<number | null>(null);
   const [confirmDelCruise, setConfirmDelCruise] = useState<number | null>(null);
   const [seasons, setSeasons] = useState<Season[]>([]);
@@ -178,7 +179,10 @@ export default function ImekongPanel({ boats, cruises, propertyId }: {
         p_is_active: boatDraft.is_active,
       });
       if (e) { setError(e.message); return; }
-      setBoatDraft(null); router.refresh();
+      setBoatDraft(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      router.refresh();
     });
   }
   function delBoat(id: number) {
@@ -220,7 +224,10 @@ export default function ImekongPanel({ boats, cruises, propertyId }: {
         p_display_order: cruiseDraft.display_order ? Number(cruiseDraft.display_order) : null,
       });
       if (e) { setError(e.message); return; }
-      setCruiseDraft(null); router.refresh();
+      setCruiseDraft(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      router.refresh();
     });
   }
   function delCruise(id: number) {
@@ -241,6 +248,7 @@ export default function ImekongPanel({ boats, cruises, propertyId }: {
           <button type="button" onClick={() => setCruiseDraft({ ...EMPTY_CRUISE, boat_id: boats[0]?.boat_id?.toString() ?? '' })} style={btnPrimary}>+ Cruise</button>
         </div>} />
       <ErrorBanner error={error} />
+      <SavedFlash show={saved} />
 
       {boatDraft && (
         <FormShell title={boatDraft.boat_id ? 'Edit boat' : 'New boat'} onSave={saveBoat} onCancel={() => { setBoatDraft(null); setError(null); }} busy={busy}>
@@ -285,8 +293,8 @@ export default function ImekongPanel({ boats, cruises, propertyId }: {
           <LabeledInput label="Route to" value={cruiseDraft.route_to} onChange={(v) => setCruiseDraft({ ...cruiseDraft, route_to: v })} />
           <LabeledInput label="Duration (min)" value={cruiseDraft.duration_min} onChange={(v) => setCruiseDraft({ ...cruiseDraft, duration_min: v })} type="number" />
           <LabeledInput label="Capacity (pax)" value={cruiseDraft.capacity_pax} onChange={(v) => setCruiseDraft({ ...cruiseDraft, capacity_pax: v })} type="number" />
-          <LabeledInput label="Service from" value={cruiseDraft.service_time_from} onChange={(v) => setCruiseDraft({ ...cruiseDraft, service_time_from: v })} placeholder="HH:MM" />
-          <LabeledInput label="Service to" value={cruiseDraft.service_time_to} onChange={(v) => setCruiseDraft({ ...cruiseDraft, service_time_to: v })} placeholder="HH:MM" />
+          <LabeledInput label="Service from" value={cruiseDraft.service_time_from} onChange={(v) => setCruiseDraft({ ...cruiseDraft, service_time_from: v })} type="time" />
+          <LabeledInput label="Service to" value={cruiseDraft.service_time_to} onChange={(v) => setCruiseDraft({ ...cruiseDraft, service_time_to: v })} type="time" />
           {/* PRICE */}
           <LabeledInput label="Price (all-in)" value={cruiseDraft.price_amount} onChange={(v) => setCruiseDraft({ ...cruiseDraft, price_amount: v })} type="number" />
           <LabeledInput label="Currency" value={cruiseDraft.price_currency} onChange={(v) => setCruiseDraft({ ...cruiseDraft, price_currency: v })} />
