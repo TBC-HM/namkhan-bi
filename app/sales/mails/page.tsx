@@ -8,6 +8,7 @@
 //   - Guard 3: at least one shared alias must be registered. If not →
 //     CREAM banner + inline Add-alias form.
 //   - When both are good → hydrate <UnifiedMailInbox/>.
+// PBS 2026-07-14 addition: header link → /mail (full-screen mailbox).
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import UnifiedMailInbox, { type Thread, type MailboxSummary } from '@/app/(cockpit)/_design/UnifiedMailInbox';
@@ -140,6 +141,9 @@ export default async function SalesMailsPage({
     console.error('[sales/mails] initial hydrate failed', e);
   }
 
+  const firstAliasSlug = mailboxes[0]?.mailbox_address?.split('@')[0] ?? '';
+  const fullMailHref = firstAliasSlug ? '/mail?account=' + encodeURIComponent(firstAliasSlug) : '/mail';
+
   return (
     <DashboardPage title="Sales · Mails" tabs={tabs}>
       {searchParams?.connected && (
@@ -161,8 +165,9 @@ export default async function SalesMailsPage({
           <strong>Inbox fetch failed:</strong> {hydrateErr}
         </div>
       )}
-      <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 4, fontSize: 11, color: T.INK_M, marginBottom: 8 }}>
-        Debug: {mailboxes.length} aliases · {initialThreads.length} threads · signed in as {user.email}
+      <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 4, fontSize: 11, color: T.INK_M, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <span>Debug: {mailboxes.length} aliases · {initialThreads.length} threads · signed in as {user.email}</span>
+        <a href={fullMailHref} style={{ color: T.FOREST, textDecoration: 'none', fontWeight: 600 }}>→ Open in full mailbox</a>
       </div>
       <UnifiedMailInbox initialThreads={initialThreads} mailboxes={mailboxes} />
     </DashboardPage>
