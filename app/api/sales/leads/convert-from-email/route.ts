@@ -5,8 +5,6 @@
 // Idempotent: if a lead already exists with email_thread_id = thread_id,
 // returns { lead_id, existing:true }. Otherwise creates a new lead with
 // origin='inbound_email' and returns { lead_id, existing:false }.
-// Also opportunistically links any stored sales.email_messages rows that
-// share the thread_id via UPDATE inside fn_lead_convert_from_email.
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
