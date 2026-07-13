@@ -7,7 +7,7 @@
 // Pure read-only — pre-fetched on the server and handed down as `rows`.
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 
 // Data contract from public.v_media_coverage_matrix
 export interface CoverageRow {
@@ -75,16 +75,18 @@ interface Section {
   key: string;
   label: string;
   hint: string;
-  labels: string[];                              // ordered row labels
-  matrix: Record<string, Record<string, number>>; // label -> tier -> n
+  labels: string[];
+  matrix: Record<string, Record<string, number>>;
   rowTotals: Record<string, number>;
   colTotals: Record<string, number>;
   grandTotal: number;
 }
 
 function buildSection(scopeType: string, rows: CoverageRow[]): Section {
-  const meta = SECTIONS.find(s => s.key === scopeType)!;
-  // Collect all distinct labels for this scope (even those with zero photos)
+  const meta = SECTIONS.find(s => s.key === scopeType);
+  const label = meta?.label ?? scopeType;
+  const hint  = meta?.hint  ?? '';
+
   const labelSet = new Set<string>();
   for (const r of rows) {
     if (r.scope_type === scopeType) labelSet.add(r.scope_label);
@@ -104,18 +106,18 @@ function buildSection(scopeType: string, rows: CoverageRow[]): Section {
   let grand = 0;
   for (const r of rows) {
     if (r.scope_type !== scopeType) continue;
-    const label = r.scope_label;
+    const lbl = r.scope_label;
     const tier = r.primary_tier;
     const n = typeof r.n === 'string' ? Number(r.n) : (r.n ?? 0);
     if (!Number.isFinite(n) || n <= 0) continue;
-    if (!tier || !TIERS.includes(tier)) continue; // NULL primary_tier is a gap → counted only via row LEFT JOIN as 0
-    matrix[label][tier] += n;
-    rowTotals[label] += n;
-    colTotals[tier]  += n;
+    if (!tier || !TIERS.includes(tier)) continue;
+    matrix[lbl][tier] += n;
+    rowTotals[lbl] += n;
+    colTotals[tier] += n;
     grand += n;
   }
 
-  return { key: scopeType, label: meta.label, hint: meta.hint, labels, matrix, rowTotals, colTotals, grandTotal: grand };
+  return { key: scopeType, label, hint, labels, matrix, rowTotals, colTotals, grandTotal: grand };
 }
 
 export default function CoverageTab({ rows }: Props) {
@@ -260,35 +262,35 @@ function SectionTable({ section }: { section: Section }) {
 }
 
 // --- shared cell styles ---
-const hdrCellBase: React.CSSProperties = {
+const hdrCellBase: CSSProperties = {
   padding: '8px 10px', fontSize: 10, letterSpacing: '0.06em',
   textTransform: 'uppercase', color: INK_M, fontWeight: 600,
   borderBottom: '1px solid ' + HAIR, textAlign: 'right',
   whiteSpace: 'nowrap', background: WHITE,
 };
-const hdrCellLeft: React.CSSProperties = { ...hdrCellBase, textAlign: 'left' };
-const hdrCell: React.CSSProperties = { ...hdrCellBase };
-const hdrCellTotal: React.CSSProperties = { ...hdrCellBase, borderLeft: '1px solid ' + HAIR, color: INK };
+const hdrCellLeft: CSSProperties = { ...hdrCellBase, textAlign: 'left' };
+const hdrCell: CSSProperties = { ...hdrCellBase };
+const hdrCellTotal: CSSProperties = { ...hdrCellBase, borderLeft: '1px solid ' + HAIR, color: INK };
 
-const bodyCellBase: React.CSSProperties = {
+const bodyCellBase: CSSProperties = {
   padding: '6px 10px', borderTop: '1px solid ' + HAIR,
   textAlign: 'right', fontVariantNumeric: 'tabular-nums',
 };
-const bodyCellLeft: React.CSSProperties = {
+const bodyCellLeft: CSSProperties = {
   ...bodyCellBase, textAlign: 'left', color: INK, fontWeight: 500,
 };
-const bodyCell: React.CSSProperties = { ...bodyCellBase };
-const bodyCellTotal: React.CSSProperties = {
+const bodyCell: CSSProperties = { ...bodyCellBase };
+const bodyCellTotal: CSSProperties = {
   ...bodyCellBase, borderLeft: '1px solid ' + HAIR, background: WHITE,
 };
 
-const footCellBase: React.CSSProperties = {
+const footCellBase: CSSProperties = {
   padding: '8px 10px', borderTop: '2px solid ' + HAIR,
   textAlign: 'right', fontVariantNumeric: 'tabular-nums',
   fontSize: 11, fontWeight: 700, background: WHITE,
 };
-const footCellLeft: React.CSSProperties = {
+const footCellLeft: CSSProperties = {
   ...footCellBase, textAlign: 'left', color: INK,
   fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
 };
-const footCell: React.CSSProperties = { ...footCellBase, color: INK };
+const footCell: CSSProperties = { ...footCellBase, color: INK };
