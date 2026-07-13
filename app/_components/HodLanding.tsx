@@ -62,15 +62,22 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       .eq('dept_slug', slug)
       .eq('property_id', pid)
       .eq('is_due', true),
+    // PBS 2026-07-14: scope to templates that belong to THIS dept.
+    // Empty allow-list = no rows (correct: dept has no report catalogue yet).
     supabase.from('v_revenue_report_recipients')
       .select('id, property_id, template_key, cadence, email, name, next_fire_at, created_at')
-      .eq('property_id', pid).order('next_fire_at', { ascending: true }).limit(500),
+      .eq('property_id', pid)
+      .in('template_key', allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'])
+      .order('next_fire_at', { ascending: true }).limit(500),
     supabase.from('v_revenue_report_sends')
       .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
-      .eq('property_id', pid).limit(200),
+      .eq('property_id', pid)
+      .in('template_key', allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'])
+      .limit(200),
     supabase.from('v_revenue_report_sends')
       .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
       .eq('property_id', pid).eq('recipient_email', DEFAULT_USER_EMAIL)
+      .in('template_key', allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'])
       .order('sent_at', { ascending: false }).limit(20),
     supabase.from('v_hod_shortcuts')
       .select('id, label, href, kind')
@@ -91,12 +98,20 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   }));
 
   const reportTypes = cfg.reportTypes ?? [];
+  // PBS 2026-07-14: generic daily/weekly/monthly template keys belong to
+  // Revenue's canonical report catalogue. Other HoDs (operations, finance,
+  // marketing, holding_*) surface ONLY their dept-specific report types so
+  // their Scheduled reports + Send log don't pick up Revenue's daily digests.
+  const includeGenericScheduled = slug === 'revenue';
   const reportOptions = [
-    { value: 'daily',   label: 'Daily report' },
-    { value: 'weekly',  label: 'Weekly report' },
-    { value: 'monthly', label: 'Monthly report' },
+    ...(includeGenericScheduled ? [
+      { value: 'daily',   label: 'Daily report' },
+      { value: 'weekly',  label: 'Weekly report' },
+      { value: 'monthly', label: 'Monthly report' },
+    ] : []),
     ...reportTypes.map((rt) => ({ value: rt.value, label: rt.label })),
   ];
+  const allowedTemplateKeys = reportOptions.map((o) => o.value);
 
   const hodTabs = subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href,
@@ -173,7 +188,9 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </div>
       )}
 
-      {reportTypes.length > 0 && (
+      {/* PBS 2026-07-14: Build-a-report container hidden on Operations HoD — duplicated
+         function of the "Scheduled reports" recipient form below. Kept for Revenue etc. */}
+      {reportTypes.length > 0 && slug !== 'operations' && (
         <div style={fullRow}>
           <Container title="Build a report" subtitle="pick a type · narrow with chips · open print-ready render" density="compact">
             <ReportBuilder reportTypes={reportTypes} hrefPrefix={pid === PROPERTY_ID ? '' : `/h/${pid}`} />
