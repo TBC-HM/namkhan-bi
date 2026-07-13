@@ -5,10 +5,14 @@
 // After save + router.refresh(), fixed assets drop out of the client-side filter.
 // 2026-07-13 · Coordinator scope-add — PICS clarify skips videos; videos live
 // in the dedicated VideoClarifyTab. All KPI counts use the photos-only slice.
+// 2026-07-13 (pm) · Coordinator — any video row that slips through the photos
+// filter still gets a ▶ overlay → VideoPlayerModal, and an inline <video>
+// poster (seek-to-10%) instead of a broken <img>.
 'use client';
 
 import { useMemo, useState } from 'react';
 import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
+import VideoPlayerModal, { type VideoPlayerAsset } from './VideoPlayerModal';
 
 interface MediaRow {
   asset_id: string;
@@ -48,6 +52,7 @@ function isVideoRow(r: MediaRow): boolean {
 
 export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonomy }: Props) {
   const [editing, setEditing] = useState<MediaRow | null>(null);
+  const [playing, setPlaying] = useState<MediaRow | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
 
   // Photos-only slice — video clarify has its own tab (VideoClarifyTab).
@@ -102,8 +107,23 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
               }}>
                 <div style={{ position: 'relative', width: '100%', height: 120, background: '#F5F0E1' }}>
                   {r.public_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.public_url} alt={r.original_filename ?? ''} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                    isVideoRow(r) ? (
+                      <video
+                        src={r.public_url}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        onLoadedMetadata={(e) => {
+                          const v = e.currentTarget;
+                          const d = Number.isFinite(v.duration) ? v.duration : 0;
+                          v.currentTime = d > 0 ? Math.min(d * 0.1, 3) : 0;
+                        }}
+                        style={{ width:'100%', height:'100%', objectFit:'cover', background:'#F5F0E1', display:'block' }}
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={r.public_url} alt={r.original_filename ?? ''} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                    )
                   ) : (
                     <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:INK_M }}>no preview</div>
                   )}
@@ -115,6 +135,23 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                       }}>{b.label}</span>
                     ))}
                   </div>
+                  {/* Centered ▶ overlay — only for video rows that slipped past the photos filter */}
+                  {r.public_url && isVideoRow(r) && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Play video"
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPlaying(r); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setPlaying(r); } }}
+                      style={{
+                        position:'absolute', top:'50%', left:'50%', transform:'translate(-50%, -50%)',
+                        width:28, height:28, borderRadius:14, background:'#084838',
+                        color:'#FFFFFF', fontSize:12, cursor:'pointer',
+                        display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700,
+                        boxShadow:'0 2px 8px rgba(0,0,0,0.3)', zIndex:2,
+                      }}
+                    >▶</span>
+                  )}
                 </div>
                 <div style={{ padding:'6px 8px', borderTop:'1px solid '+HAIR, fontSize:10 }}>
                   <div style={{ color:INK, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -142,6 +179,12 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
             setLocalDismiss(s => new Set(s).add(updated.asset_id));
           }
         }}
+      />
+
+      <VideoPlayerModal
+        open={playing != null}
+        onClose={() => setPlaying(null)}
+        asset={playing as VideoPlayerAsset | null}
       />
     </div>
   );
