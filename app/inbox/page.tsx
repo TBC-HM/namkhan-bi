@@ -52,7 +52,7 @@ export default async function InboxPage() {
   let fetchErr: string | null = null;
   try {
     const { access } = await refreshIfExpired(user.id);
-    const msgs = await listInboxMessages(access, 'all', 30);
+    const msgs = await listInboxMessages(access, 'all', 200);
     threads = msgs.map((m) => ({
       mailbox_id:      'personal',
       mailbox_address: conn.gmail_address ?? user.email,
