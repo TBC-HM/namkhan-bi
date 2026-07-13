@@ -8,9 +8,12 @@
 // Zero cells are muted #8B7355 and non-interactive. Totals also clickable
 // (single-dimension filter). Data source: page.tsx uses dynamic='force-dynamic'
 // + revalidate=0, so rows are fresh on every mount / tab switch.
+// PBS 2026-07-14 · drill-down now fetches from /api/marketing/media/coverage-drilldown
+// (fresh DB query per click) instead of filtering the preloaded mediaPage window,
+// which was capped at 5,000 rows and could miss matches on high-count cells.
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 
 // Data contract from public.v_media_coverage_matrix
 export interface CoverageRow {
@@ -209,12 +212,40 @@ function filterMediaCol(
   });
 }
 
+interface DrillQuery {
+  dim: 'room_type' | 'facility' | 'activity' | 'area';
+  value: string;
+  room_type_id?: string;
+  tier?: string;
+}
+
 interface DrillState {
-  title: string;
+  titlePrefix: string;
+  query: DrillQuery;
+  loading: boolean;
   items: MediaRowLite[];
 }
 
-export default function CoverageTab({ rows, mediaPage = [] }: Props) {
+async function fetchDrill(query: DrillQuery): Promise<MediaRowLite[]> {
+  const params = new URLSearchParams();
+  params.set('dim', query.dim);
+  if (query.value) params.set('value', query.value);
+  if (query.room_type_id) params.set('room_type_id', query.room_type_id);
+  if (query.tier) params.set('tier', query.tier);
+  const res = await fetch(`/api/marketing/media/coverage-drilldown?${params.toString()}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) return [];
+  const json = await res.json().catch(() => ({ ok: false }));
+  if (!json?.ok) return [];
+  return (json.rows ?? []) as MediaRowLite[];
+}
+
+// Kept for optional client-side fallback only; drill-down now hits the API.
+void filterMedia; void filterMediaRow; void filterMediaCol;
+
+export default function CoverageTab({ rows, mediaPage: _mediaPage = [] }: Props) {
+  void _mediaPage;
   const [drill, setDrill] = useState<DrillState | null>(null);
 
   const sections = useMemo(
@@ -227,30 +258,82 @@ export default function CoverageTab({ rows, mediaPage = [] }: Props) {
     [sections],
   );
 
+  useEffect(() => {
+    if (!drill || !drill.loading) return;
+    // Column-total mode manages its own promise; skip.
+    if (drill.query.value.startsWith('__col:')) return;
+    let cancelled = false;
+    fetchDrill(drill.query).then(items => {
+      if (cancelled) return;
+      setDrill(prev => (prev && prev.query === drill.query
+        ? { ...prev, loading: false, items }
+        : prev));
+    });
+    return () => { cancelled = true; };
+  }, [drill]);
+
   function openCell(section: Section, label: string, tier: string, n: number) {
     if (n <= 0) return;
-    const items = filterMedia(mediaPage, section.key, label, section.keys[label], tier);
+    const query: DrillQuery = {
+      dim: section.key as DrillQuery['dim'],
+      value: label,
+      room_type_id: section.key === 'room_type' ? (section.keys[label] ?? undefined) : undefined,
+      tier,
+    };
     setDrill({
-      title: `${label} × ${TIER_LABELS[tier] ?? tier} — ${items.length} photo${items.length === 1 ? '' : 's'}`,
-      items,
+      titlePrefix: `${label} × ${TIER_LABELS[tier] ?? tier}`,
+      query,
+      loading: true,
+      items: [],
     });
   }
 
   function openRow(section: Section, label: string, total: number) {
     if (total <= 0) return;
-    const items = filterMediaRow(mediaPage, section.key, label, section.keys[label]);
+    const query: DrillQuery = {
+      dim: section.key as DrillQuery['dim'],
+      value: label,
+      room_type_id: section.key === 'room_type' ? (section.keys[label] ?? undefined) : undefined,
+    };
     setDrill({
-      title: `${label} — all tiers — ${items.length} photo${items.length === 1 ? '' : 's'}`,
-      items,
+      titlePrefix: `${label} — all tiers`,
+      query,
+      loading: true,
+      items: [],
     });
   }
 
   function openCol(section: Section, tier: string, total: number) {
     if (total <= 0) return;
-    const items = filterMediaCol(mediaPage, section, tier);
+    // Column totals need a per-scope fetch loop; issue N parallel requests
+    // (one per labelled row in the section), then merge + de-dupe.
+    const labels = section.labels;
+    const titlePrefix = `${section.label} — ${TIER_LABELS[tier] ?? tier}`;
     setDrill({
-      title: `${section.label} — ${TIER_LABELS[tier] ?? tier} — ${items.length} photo${items.length === 1 ? '' : 's'}`,
-      items,
+      titlePrefix,
+      // sentinel: `dim = area` + empty value flags column-total mode below
+      query: { dim: section.key as DrillQuery['dim'], value: `__col:${tier}`, tier },
+      loading: true,
+      items: [],
+    });
+    Promise.all(labels.map(lbl => fetchDrill({
+      dim: section.key as DrillQuery['dim'],
+      value: lbl,
+      room_type_id: section.key === 'room_type' ? (section.keys[lbl] ?? undefined) : undefined,
+      tier,
+    }))).then(chunks => {
+      const seen = new Set<string>();
+      const merged: MediaRowLite[] = [];
+      for (const chunk of chunks) {
+        for (const row of chunk) {
+          if (seen.has(row.asset_id)) continue;
+          seen.add(row.asset_id);
+          merged.push(row);
+        }
+      }
+      setDrill(prev => (prev && prev.titlePrefix === titlePrefix
+        ? { ...prev, loading: false, items: merged }
+        : prev));
     });
   }
 
@@ -291,7 +374,12 @@ export default function CoverageTab({ rows, mediaPage = [] }: Props) {
 
       {drill && (
         <DrillModal
-          title={drill.title}
+          title={
+            drill.loading
+              ? drill.titlePrefix
+              : `${drill.titlePrefix} — ${drill.items.length} photo${drill.items.length === 1 ? '' : 's'}`
+          }
+          loading={drill.loading}
           items={drill.items}
           onClose={() => setDrill(null)}
         />
@@ -521,10 +609,12 @@ function FootCellDrill({ n, onClick }: { n: number; onClick: () => void }) {
 
 function DrillModal({
   title,
+  loading,
   items,
   onClose,
 }: {
   title: string;
+  loading: boolean;
   items: MediaRowLite[];
   onClose: () => void;
 }) {
@@ -572,12 +662,39 @@ function DrillModal({
         </div>
 
         <div style={{ padding: 16, overflowY: 'auto', flex: 1, background: WHITE }}>
-          {items.length === 0 ? (
+          {loading ? (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+              gap: 12,
+            }}>
+              {[0, 1, 2].map(i => (
+                <div
+                  key={i}
+                  style={{
+                    background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4,
+                    overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                  }}
+                >
+                  <div style={{
+                    width: '100%', aspectRatio: '4 / 3', background: CREAM,
+                  }} className="cov-shimmer" />
+                  <div style={{
+                    padding: '6px 8px', height: 14, background: CREAM,
+                    borderTop: '1px solid ' + HAIR, margin: 0,
+                  }} className="cov-shimmer" />
+                  <div style={{
+                    padding: '2px 8px 6px', height: 10, background: CREAM,
+                    margin: 4,
+                  }} className="cov-shimmer" />
+                </div>
+              ))}
+            </div>
+          ) : items.length === 0 ? (
             <div style={{
               padding: 32, textAlign: 'center', fontSize: 12, color: INK_M,
             }}>
-              No photos match this filter. The coverage view may include rows
-              not currently loaded in the mediaPage window.
+              No photos match this filter.
             </div>
           ) : (
             <div style={{
@@ -637,6 +754,16 @@ function DrillModal({
       <style>{`
         .cov-cell-btn:hover { text-decoration: underline; }
         .cov-cell-btn:focus-visible { outline: 2px solid ${FOREST}; outline-offset: -2px; }
+        .cov-shimmer { position: relative; overflow: hidden; }
+        .cov-shimmer::after {
+          content: ''; position: absolute; inset: 0;
+          background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%);
+          animation: cov-shim 1.2s infinite;
+        }
+        @keyframes cov-shim {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
       `}</style>
     </div>
   );
