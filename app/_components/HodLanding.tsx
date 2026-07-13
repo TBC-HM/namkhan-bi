@@ -11,6 +11,11 @@
 //
 // PBS 2026-07-09: optional `settingsHref` renders a gear icon next to the Ask
 // button. Used on /holding/* HoD landings to jump into /holding/settings.
+// PBS 2026-07-14 HOTFIX: reportTypes / reportOptions / allowedTemplateKeys were
+// declared AFTER the Promise.all that referenced them → ReferenceError (TDZ) →
+// /operations + /sales + every HoD landing 500ed (digest 1285825404).
+// Moved catalogue computation above the await + kept the ['__none__'] sentinel
+// so empty allow-lists don't blow up PostgREST .in().
 
 import TenantLink from '@/components/nav/TenantLink';
 import {
@@ -55,6 +60,26 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
 
   const subPages = rewriteSubPagesForProperty(cfg.subPages ?? [], pid);
 
+  // PBS 2026-07-14 HOTFIX: compute report catalogue BEFORE the Promise.all
+  // so the .in('template_key', allowedTemplateKeys) filters are legal (no TDZ).
+  const reportTypes = cfg.reportTypes ?? [];
+  // Generic daily/weekly/monthly template keys belong to Revenue's canonical
+  // report catalogue. Other HoDs (operations, finance, marketing, holding_*)
+  // surface ONLY their dept-specific report types so their Scheduled reports
+  // + Send log don't pick up Revenue's daily digests.
+  const includeGenericScheduled = slug === 'revenue';
+  const reportOptions = [
+    ...(includeGenericScheduled ? [
+      { value: 'daily',   label: 'Daily report' },
+      { value: 'weekly',  label: 'Weekly report' },
+      { value: 'monthly', label: 'Monthly report' },
+    ] : []),
+    ...reportTypes.map((rt) => ({ value: rt.value, label: rt.label })),
+  ];
+  const allowedTemplateKeys = reportOptions.map((o) => o.value);
+  // Sentinel avoids Supabase .in('template_key', []) throwing on empty allow-list.
+  const templateFilter = allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'];
+
   const [dueTasksRes, scheduledRes, sendsRes, myReportsRes, shortcutsRes] = await Promise.all([
     supabase
       .from('v_hod_tasks_due')
@@ -62,22 +87,20 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       .eq('dept_slug', slug)
       .eq('property_id', pid)
       .eq('is_due', true),
-    // PBS 2026-07-14: scope to templates that belong to THIS dept.
-    // Empty allow-list = no rows (correct: dept has no report catalogue yet).
     supabase.from('v_revenue_report_recipients')
       .select('id, property_id, template_key, cadence, email, name, next_fire_at, created_at')
       .eq('property_id', pid)
-      .in('template_key', allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'])
+      .in('template_key', templateFilter)
       .order('next_fire_at', { ascending: true }).limit(500),
     supabase.from('v_revenue_report_sends')
       .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
       .eq('property_id', pid)
-      .in('template_key', allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'])
+      .in('template_key', templateFilter)
       .limit(200),
     supabase.from('v_revenue_report_sends')
       .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
       .eq('property_id', pid).eq('recipient_email', DEFAULT_USER_EMAIL)
-      .in('template_key', allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'])
+      .in('template_key', templateFilter)
       .order('sent_at', { ascending: false }).limit(20),
     supabase.from('v_hod_shortcuts')
       .select('id, label, href, kind')
@@ -96,22 +119,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   const tiles: KpiTileProps[] = liveTiles ?? (cfg.kpiTiles ?? []).map((k) => ({
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
   }));
-
-  const reportTypes = cfg.reportTypes ?? [];
-  // PBS 2026-07-14: generic daily/weekly/monthly template keys belong to
-  // Revenue's canonical report catalogue. Other HoDs (operations, finance,
-  // marketing, holding_*) surface ONLY their dept-specific report types so
-  // their Scheduled reports + Send log don't pick up Revenue's daily digests.
-  const includeGenericScheduled = slug === 'revenue';
-  const reportOptions = [
-    ...(includeGenericScheduled ? [
-      { value: 'daily',   label: 'Daily report' },
-      { value: 'weekly',  label: 'Weekly report' },
-      { value: 'monthly', label: 'Monthly report' },
-    ] : []),
-    ...reportTypes.map((rt) => ({ value: rt.value, label: rt.label })),
-  ];
-  const allowedTemplateKeys = reportOptions.map((o) => o.value);
 
   const hodTabs = subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href,
@@ -167,7 +174,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
             </ul>
           )}
         </Container>
-        <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
+        <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
           <HodTasksList deptSlug={slug} propertyId={pid} />
         </Container>
         <Container title="External links" subtitle="Extranet · Cloudbeds · SLH login · anywhere outside the cockpit" density="compact">
