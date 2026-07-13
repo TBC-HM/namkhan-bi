@@ -67,7 +67,6 @@ export async function POST(req: Request) {
         scheduled_month:   prop.scheduled_month,
         requested_by_role: 'marketing_hod',
       },
-      project_id:     prop.property_id ?? NAMKHAN,
     })
     .select('id')
     .single();
