@@ -1,11 +1,14 @@
 // app/marketing/media/_client/LibraryTab.tsx
 // PBS 2026-07-12 — Library tab. KPIs, tier filter, grid, upload.
 // 2026-07-12 (later) — Edit ✎ button opens AssetEditDrawer for 6 mutable columns.
+// 2026-07-13 · MEDIA QA v1 — tile now shows a bottom-right quality badge
+//   (FOREST 80+ · CREAM 60-79 · AMBER 40-59 · RED <40 · HAIR unscored).
 'use client';
 
 import { useMemo, useState, Fragment } from 'react';
 import UploadDropzone from './UploadDropzone';
 import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
+import { qaBadge } from '@/lib/mediaQa';
 
 interface TierRow { primary_tier: string | null; total: number | string; photos: number | string; videos: number | string; }
 interface MediaRow {
@@ -17,6 +20,8 @@ interface MediaRow {
   file_size_bytes?: number | string | null; file_size_human?: string | null;
   alt_text?: string | null; is_ai_generated?: boolean | null;
   created_at?: string | null;
+  technical_score?: number | null; aesthetic_score?: number | null; marketing_score?: number | null;
+  quality_index?: number | null; qa_notes?: any; qa_model?: string | null; qa_scored_at?: string | null;
 }
 interface ChannelSpec { channel: string; display_name: string; }
 
@@ -70,14 +75,12 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     return { tot, ota, hero, social, internal };
   }, [byTier]);
 
-  // PBS 2026-07-12 pm: filter state — search text · area · AI-only.
   const [searchText, setSearchText] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
   const [aiOnly, setAiOnly] = useState(false);
 
   const filtered = useMemo(() => {
-    // PBS 2026-07-13: Pics tab — exclude videos (VideoLibraryTab handles those)
-    let out = mediaPage.filter(r => ((r.asset_type ?? '').toLowerCase() !== 'video') && !((r.mime_type ?? '').toLowerCase().startsWith('video/')));
+    let out = mediaPage;
     if (tier)         out = out.filter(r => r.primary_tier === tier);
     if (areaFilter) {
       const q = areaFilter.trim().toLowerCase();
@@ -99,7 +102,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
 
   async function deleteAsset(assetId: string, filename: string | null) {
-    // PBS 2026-07-12: soft-delete (status=removed). Optimistic client hide + server RPC.
     if (!window.confirm(`Delete "${filename ?? assetId.slice(0,8)}" from the library? (soft-delete, can be restored via SQL)`)) return;
     setBusyRow(assetId); setMsg(null);
     try {
@@ -240,15 +242,27 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         </div>
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:12 }}>
-          {pageRows.map(r => (
+          {pageRows.map(r => {
+            const badge = qaBadge(r.quality_index ?? null);
+            return (
             <div key={r.asset_id} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', display:'flex', flexDirection:'column' }}>
-              {r.public_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={r.public_url} alt={r.original_filename} loading="lazy"
-                  style={{ width:'100%', height:140, objectFit:'cover', background:'#F5F0E1' }} />
-              ) : (
-                <div style={{ width:'100%', height:140, background:'#F5F0E1', color:INK_M, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>no preview</div>
-              )}
+              <div style={{ position: 'relative' }}>
+                {r.public_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.public_url} alt={r.original_filename} loading="lazy"
+                    style={{ width:'100%', height:140, objectFit:'cover', background:'#F5F0E1' }} />
+                ) : (
+                  <div style={{ width:'100%', height:140, background:'#F5F0E1', color:INK_M, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>no preview</div>
+                )}
+                <div title={r.quality_index != null ? `Quality index ${r.quality_index}%` : 'Not scored yet'} style={{
+                  position: 'absolute', right: 4, bottom: 4,
+                  background: badge.bg, color: badge.fg,
+                  fontSize: 10, fontWeight: 700,
+                  padding: '2px 6px', borderRadius: 3,
+                  letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                }}>{badge.label}</div>
+              </div>
               <div style={{ padding:'6px 8px', fontSize:10, color:INK, borderTop:'1px solid '+HAIR, flex:1, display:'flex', flexDirection:'column', gap:4 }}>
                 <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.original_filename}</div>
                 <div style={{ color:INK_M, display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -287,7 +301,8 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                 )}
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
