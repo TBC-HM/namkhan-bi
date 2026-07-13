@@ -1,7 +1,3 @@
-// lib/video/curated_music_library.json — DO NOT EDIT INLINE
-// PBS 2026-07-13 · Fallback catalog when Pixabay API key is absent.
-// 30 CC0 royalty-free tracks sourced from Pixabay / YouTube Audio Library.
-// Structure matches marketing.video_music_tracks bridge (v_video_music_tracks).
 [
   { "id":"curated-01","title":"Ambient Piano","artist":"Music_Unlimited","duration_sec":180,"mood_tags":["ambient","cinematic","emotional"],"url":"https://cdn.pixabay.com/audio/2026/03/09/audio_87e05a8712.mp3","license_terms":"royalty_free_attribution" },
   { "id":"curated-02","title":"Golden Hour","artist":"SoulProdMusic","duration_sec":150,"mood_tags":["ambient","emotional","cinematic"],"url":"https://cdn.pixabay.com/audio/2026/06/05/audio_2c5a4d0f1a.mp3","license_terms":"royalty_free_attribution" },
