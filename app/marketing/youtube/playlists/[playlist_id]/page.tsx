@@ -95,6 +95,10 @@ interface Params { params: { playlist_id: string } }
 export default async function YtPlaylistDetailPage({ params }: Params) {
   const playlistId = decodeURIComponent(params.playlist_id);
   const sb = getSupabaseAdmin();
+
+  // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC. No-op if token still valid.
+  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
+
   const { data: connection } = await sb
     .from('v_yt_channel_connections')
     .select('id,channel_id').eq('property_id', NAMKHAN).eq('active', true).maybeSingle();
