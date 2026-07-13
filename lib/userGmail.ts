@@ -18,6 +18,24 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
+// PBS 2026-07-13: read OAuth client from Supabase vault (rotated to unified
+// namkhan-bi-vercel client). Falls back to process.env for local dev.
+async function getGoogleOAuthClient(): Promise<{ clientId: string; clientSecret: string }> {
+  let clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || '';
+  let clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+  try {
+    const admin = getSupabaseAdmin();
+    const [cidRes, csecRes] = await Promise.all([
+      admin.rpc('fn_get_secret', { p_name: 'GOOGLE_CLIENT_ID' }),
+      admin.rpc('fn_get_secret', { p_name: 'GOOGLE_CLIENT_SECRET' }),
+    ]);
+    if (!cidRes.error && typeof cidRes.data === 'string' && cidRes.data.length > 20) clientId = cidRes.data;
+    if (!csecRes.error && typeof csecRes.data === 'string' && csecRes.data.length > 10) clientSecret = csecRes.data;
+  } catch { /* keep env fallback */ }
+  if (!clientId || !clientSecret) throw new Error('GOOGLE_CLIENT_ID/SECRET missing in vault + env');
+  return { clientId, clientSecret };
+}
+
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -51,9 +69,8 @@ function redirectUri(): string {
   return base.replace(/\/$/, '') + '/api/user/gmail/callback';
 }
 
-export function buildUserAuthUrl(state: string): string {
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID;
-  if (!clientId) throw new Error('GOOGLE_CLIENT_ID env var missing');
+export async function buildUserAuthUrl(state: string): Promise<string> {
+  const { clientId } = await getGoogleOAuthClient();
   const u = new URL(GOOGLE_AUTH_URL);
   u.searchParams.set('client_id', clientId);
   u.searchParams.set('redirect_uri', redirectUri());
@@ -75,8 +92,7 @@ export interface TokenResp {
 }
 
 export async function exchangeCode(code: string): Promise<TokenResp> {
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || '';
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+  const { clientId, clientSecret } = await getGoogleOAuthClient();
   const r = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
