@@ -1,20 +1,20 @@
 // app/(cockpit)/_design/UnifiedMailInbox.tsx
-// Sales · Mails — unified inbox across shared Google Workspace mailboxes.
+// Sales · Mails — unified inbox across shared Gmail aliases (filter mode).
 // Full-width primitive (gridColumn: 1/-1). Design tokens per PBS 2026-07-13.
 //
-// Contract:
-//   - Server hydrates initialThreads + mailboxes summary. Client-side handles
-//     mailbox pill filter, unread toggle, search (throttled), refresh, mark-read,
-//     star, load-more.
-//   - Reply falls back to a Gmail deep link until ComposeModal.tsx (from the
-//     per-user Gmail agent) lands. When it does, swap the anchor for the modal.
-//   - No functions passed server→client — all data pre-shaped on the server.
+// PBS 2026-07-13 · v2 pivot to filter mode:
+//   - No more per-mailbox OAuth Connect button. Instead, "Manage aliases"
+//     opens a small modal to add / remove aliases.
+//   - Reply action opens ComposeModal (shared-mailbox mode) instead of a
+//     Gmail deep link. Modal POSTs to /api/sales/mails/send.
+//   - Same read/mark-read/star wiring; server now uses the current user's
+//     personal Gmail token to fan out `deliveredto:` searches.
 
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ComposeModal, { type ComposePrefill } from '@/app/_components/ComposeModal';
 
-// ---- design tokens (memory-locked palette) ----
 const T = {
   WHITE:  '#FFFFFF',
   HAIR:   '#E6DFCC',
@@ -27,7 +27,6 @@ const T = {
   AMBER:  '#B48A3A',
 };
 
-// ---- public types ----
 export interface Thread {
   mailbox_id: string;
   mailbox_address: string;
@@ -58,7 +57,6 @@ export interface UnifiedMailInboxProps {
   initialThreads: Thread[];
   mailboxes: MailboxSummary[];
   defaultMailboxId?: string;
-  connectHref?: string;
 }
 
 function parseFrom(raw: string): { name: string; email: string } {
@@ -95,8 +93,9 @@ function gmailDeepLink(threadId: string): string {
 }
 
 export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
-  const { mailboxes, initialThreads, defaultMailboxId, connectHref } = props;
+  const { mailboxes: initialMailboxes, initialThreads, defaultMailboxId } = props;
 
+  const [mailboxes, setMailboxes] = useState<MailboxSummary[]>(initialMailboxes);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
   const [selectedMailbox, setSelectedMailbox] = useState<string>(defaultMailboxId ?? 'all');
   const [unreadOnly, setUnreadOnly] = useState<boolean>(false);
@@ -105,6 +104,8 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
   const [limit, setLimit] = useState<number>(50);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [busyMsgId, setBusyMsgId] = useState<string | null>(null);
+  const [showManage, setShowManage] = useState(false);
+  const [composeFor, setComposeFor] = useState<{ prefill: ComposePrefill; mailboxId: string; mailboxLabel: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -158,13 +159,39 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
     } finally { setBusyMsgId(null); }
   }, []);
 
+  const openReply = useCallback((t: Thread) => {
+    const parsed = parseFrom(t.from);
+    const subject = /^re[: ]/i.test(t.subject) ? t.subject : ('Re: ' + (t.subject || ''));
+    setComposeFor({
+      prefill: {
+        to: parsed.email || t.from,
+        subject,
+        thread_id: t.threadId,
+        in_reply_to: t.id,
+        quoted_from: t.from,
+        quoted_date: t.date,
+        quoted_snippet: t.snippet,
+      },
+      mailboxId: t.mailbox_id,
+      mailboxLabel: t.label,
+    });
+  }, []);
+
+  const refreshMailboxes = useCallback(async () => {
+    // Reload alias list after add/remove via the inbox page's own view.
+    // We hit a lightweight fetch to /api/sales/mails/inbox with limit=1 just
+    // to force a re-read? Simpler: /api/sales/mails/inbox already returns
+    // threads only. So we page-reload just the aliases via a dedicated call
+    // to the bridge view through the inbox endpoint's params. For MVP we
+    // simply reload the page after mutations to re-hydrate the primitive.
+    location.reload();
+  }, []);
+
   return (
     <div style={S.wrap}>
       <div style={S.headerRow}>
-        <div style={S.headerTitle}>Shared inboxes · unified</div>
-        {connectHref && (
-          <a href={connectHref} style={S.connectLink}>+ Connect another mailbox</a>
-        )}
+        <div style={S.headerTitle}>Shared inboxes · unified · filter mode</div>
+        <button type="button" onClick={() => setShowManage(true)} style={S.manageBtn}>Manage aliases</button>
       </div>
 
       <div style={S.filterBar}>
@@ -238,6 +265,7 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
             busy={busyMsgId === t.id}
             onMarkRead={() => void markRead(t)}
             onToggleStar={() => void toggleStar(t)}
+            onReply={() => openReply(t)}
           />
         ))}
 
@@ -254,6 +282,25 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
           </div>
         )}
       </div>
+
+      {showManage && (
+        <ManageAliasesModal
+          mailboxes={mailboxes}
+          onClose={() => setShowManage(false)}
+          onChanged={(next) => setMailboxes(next)}
+          onNeedFullReload={() => void refreshMailboxes()}
+        />
+      )}
+
+      {composeFor && (
+        <ComposeModal
+          prefill={composeFor.prefill}
+          sharedMailboxId={composeFor.mailboxId}
+          sharedMailboxLabel={composeFor.mailboxLabel}
+          onClose={() => setComposeFor(null)}
+          onSent={() => { setComposeFor(null); void load(); }}
+        />
+      )}
     </div>
   );
 }
@@ -284,8 +331,8 @@ function PillButton(props: { label: string; active: boolean; color: string; onCl
   );
 }
 
-function MailRow(props: { t: Thread; busy: boolean; onMarkRead: () => void; onToggleStar: () => void }) {
-  const { t, busy, onMarkRead, onToggleStar } = props;
+function MailRow(props: { t: Thread; busy: boolean; onMarkRead: () => void; onToggleStar: () => void; onReply: () => void }) {
+  const { t, busy, onMarkRead, onToggleStar, onReply } = props;
   const [hover, setHover] = useState(false);
   const parsed = parseFrom(t.from);
   const displayName = parsed.name || parsed.email.split('@')[0];
@@ -353,7 +400,7 @@ function MailRow(props: { t: Thread; busy: boolean; onMarkRead: () => void; onTo
       <div style={{ width: 200, textAlign: 'right', display: 'flex', gap: 4, justifyContent: 'flex-end', visibility: hover ? 'visible' : 'hidden' }}>
         <IconAction title="Open in Gmail" href={gmailDeepLink(t.threadId)}>↗</IconAction>
         {t.unread && <IconAction title="Mark read" onClick={onMarkRead}>✓</IconAction>}
-        <IconAction title="Reply in Gmail" href={gmailDeepLink(t.threadId)}>✎</IconAction>
+        <IconAction title="Reply from this alias" onClick={onReply}>✎</IconAction>
         <IconAction title={t.starred ? 'Unstar' : 'Star'} onClick={onToggleStar}>
           <span style={{ color: t.starred ? T.AMBER : T.INK_S }}>★</span>
         </IconAction>
@@ -383,6 +430,126 @@ function IconAction(props: { title: string; onClick?: () => void; href?: string;
   return <button type="button" title={title} onClick={onClick} style={common}>{children}</button>;
 }
 
+function ManageAliasesModal(props: {
+  mailboxes: MailboxSummary[];
+  onClose: () => void;
+  onChanged: (next: MailboxSummary[]) => void;
+  onNeedFullReload: () => void;
+}) {
+  const { mailboxes, onClose, onNeedFullReload } = props;
+  const [addr, setAddr] = useState('');
+  const [label, setLabel] = useState('');
+  const [color, setColor] = useState('#084838');
+  const [sortOrder, setSortOrder] = useState<string>('100');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string>('');
+
+  const activeMailboxes = mailboxes.filter((m) => m.active);
+
+  const add = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await fetch('/api/sales/mails/add-alias', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mailbox_address: addr.trim().toLowerCase(),
+          label: label.trim(),
+          badge_color: color.trim(),
+          sort_order: Number(sortOrder) || 100,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok || j.error) { setErr(j.detail ?? j.error ?? 'add failed'); return; }
+      onNeedFullReload();
+    } finally { setBusy(false); }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Remove this alias? Its inbox will disappear from the unified view.')) return;
+    setBusy(true); setErr('');
+    try {
+      const r = await fetch('/api/sales/mails/disconnect', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mailbox_id: id }),
+      });
+      if (!r.ok) { const j = await r.json(); setErr(j.detail ?? j.error ?? 'remove failed'); return; }
+      onNeedFullReload();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 4900,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div style={{ width: 520, background: T.WHITE, borderRadius: 8, border: '1px solid ' + T.HAIR, boxShadow: '0 20px 60px rgba(0,0,0,0.35)' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid ' + T.HAIR, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.INK }}>Manage shared aliases</div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: T.INK_M, cursor: 'pointer', fontSize: 16 }}>×</button>
+        </div>
+
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 11, color: T.INK_M, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>Active</div>
+            {activeMailboxes.length === 0 ? (
+              <div style={{ fontSize: 13, color: T.INK_M }}>No active aliases yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {activeMailboxes.map((m) => (
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', border: '1px solid ' + T.HAIR, borderRadius: 6 }}>
+                    <span style={{ display: 'inline-block', background: m.badge_color, color: T.WHITE, padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>{m.label}</span>
+                    <span style={{ fontSize: 12, color: T.INK }}>{m.mailbox_address}</span>
+                    <button
+                      type="button"
+                      onClick={() => void remove(m.id)}
+                      style={{ marginLeft: 'auto', background: T.WHITE, color: T.RED, border: '1px solid ' + T.HAIR, borderRadius: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                      disabled={busy}
+                    >Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11, color: T.INK_M, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>Add alias</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="alias@thenamkhan.com" style={S.modalInput} />
+              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Booking)" style={S.modalInput} />
+              <input value={color} onChange={(e) => setColor(e.target.value)} placeholder="#084838" style={S.modalInput} />
+              <input value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} placeholder="Sort order" style={S.modalInput} />
+            </div>
+            <div style={{ fontSize: 11, color: T.INK_M, marginTop: 6 }}>
+              Only <code>@thenamkhan.com</code> addresses are accepted. Add Send-As for the alias in your Gmail settings to enable replies.
+            </div>
+            {err && <div style={{ marginTop: 8, padding: '6px 10px', background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 4, color: T.RED, fontSize: 12 }}>{err}</div>}
+            <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => void add()}
+                style={{ background: T.FOREST, color: T.WHITE, border: 'none', borderRadius: 4, padding: '8px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                disabled={busy || !addr.trim() || !label.trim()}
+              >Add alias</button>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{ background: T.WHITE, color: T.INK, border: '1px solid ' + T.HAIR, borderRadius: 4, padding: '8px 14px', fontSize: 12, cursor: 'pointer' }}
+              >Close</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const S: Record<string, React.CSSProperties> = {
   wrap: {
     gridColumn: '1 / -1',
@@ -406,11 +573,15 @@ const S: Record<string, React.CSSProperties> = {
     color: T.INK,
     letterSpacing: '.01em',
   },
-  connectLink: {
-    fontSize: 12,
+  manageBtn: {
+    background: T.WHITE,
     color: T.FOREST,
-    textDecoration: 'none',
+    border: '1px solid ' + T.HAIR,
+    borderRadius: 6,
+    padding: '5px 12px',
+    fontSize: 12,
     fontWeight: 600,
+    cursor: 'pointer',
   },
   filterBar: {
     display: 'flex',
@@ -510,5 +681,15 @@ const S: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
+  },
+  modalInput: {
+    height: 32,
+    padding: '0 10px',
+    border: '1px solid ' + T.HAIR,
+    borderRadius: 4,
+    fontSize: 12,
+    color: T.INK,
+    background: T.WHITE,
+    outline: 'none',
   },
 };
