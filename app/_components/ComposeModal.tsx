@@ -1,12 +1,16 @@
 'use client';
 // app/_components/ComposeModal.tsx
 // Minimal Gmail compose + reply modal. Reply pre-fills to / subject / thread_id
-// / in_reply_to via `prefill`. Formatting via document.execCommand (no library).
-// Tier 3 — v1. Attachments / send-later / templates / autocomplete out of scope.
+// / in_reply_to via prefill. Formatting via document.execCommand (no library).
+//
+// Tier 3 — v2 (2026-07-13). Adds shared-mailbox filter-mode support:
+//   - Pass sharedMailboxId to POST to /api/sales/mails/send (Send-As)
+//     instead of /api/user/gmail/send (personal Gmail).
 
 import { useEffect, useRef, useState } from 'react';
 
-const WHITE = '#FFFFFF', HAIR = '#E6DFCC', INK = '#1B1B1B', INK_M = '#5A5A5A', FOREST = '#084838', CREAM = '#F5F0E1', RED = '#B03826', OK = '#0E7A4B';
+const WHITE = '#FFFFFF', HAIR = '#E6DFCC', INK = '#1B1B1B', INK_M = '#5A5A5A',
+      FOREST = '#084838', CREAM = '#F5F0E1', RED = '#B03826', OK = '#0E7A4B';
 
 export interface ComposePrefill {
   to?: string;
@@ -22,9 +26,17 @@ interface Props {
   prefill?: ComposePrefill;
   onClose: () => void;
   onSent?: () => void;
+  /**
+   * If set, this compose targets a shared alias (Send-As mode).
+   * Sends POST to /api/sales/mails/send with mailbox_id in the body.
+   * If unset, sends POST to /api/user/gmail/send (personal).
+   */
+  sharedMailboxId?: string;
+  /** Optional badge label shown in the modal header, e.g. "Booking". */
+  sharedMailboxLabel?: string;
 }
 
-export default function ComposeModal({ prefill, onClose, onSent }: Props) {
+export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId, sharedMailboxLabel }: Props) {
   const [to, setTo] = useState(prefill?.to ?? '');
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
@@ -68,24 +80,27 @@ export default function ComposeModal({ prefill, onClose, onSent }: Props) {
     setSending(true);
     setFlash('idle');
     try {
-      const r = await fetch('/api/user/gmail/send', {
+      const endpoint = sharedMailboxId ? '/api/sales/mails/send' : '/api/user/gmail/send';
+      const payload: Record<string, unknown> = {
+        to: to.trim(),
+        cc: cc.trim() || undefined,
+        bcc: bcc.trim() || undefined,
+        subject: subject.trim(),
+        body_html: html,
+        body_plain: plain,
+        in_reply_to: prefill?.in_reply_to,
+        thread_id: prefill?.thread_id,
+      };
+      if (sharedMailboxId) payload.mailbox_id = sharedMailboxId;
+      const r = await fetch(endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          to: to.trim(),
-          cc: cc.trim() || undefined,
-          bcc: bcc.trim() || undefined,
-          subject: subject.trim(),
-          body_html: html,
-          body_plain: plain,
-          in_reply_to: prefill?.in_reply_to,
-          thread_id: prefill?.thread_id,
-        }),
+        body: JSON.stringify(payload),
       });
       const j = await r.json();
-      if (r.ok) {
+      if (r.ok && j.ok !== false) {
         setFlash('ok');
-        setFlashMsg('Sent ✓');
+        setFlashMsg('Sent');
         setTimeout(() => { onSent?.(); onClose(); }, 1200);
       } else {
         setFlash('err');
@@ -98,6 +113,9 @@ export default function ComposeModal({ prefill, onClose, onSent }: Props) {
   }
 
   const disabled = sending || !to.trim() || !subject.trim();
+  const modeLabel = sharedMailboxId
+    ? (sharedMailboxLabel ? sharedMailboxLabel + ' · Reply' : 'Shared reply')
+    : (prefill?.thread_id ? 'Reply' : 'New message');
 
   return (
     <div
@@ -121,7 +139,7 @@ export default function ComposeModal({ prefill, onClose, onSent }: Props) {
         }}
       >
         <div style={{ padding: '14px 16px', borderBottom: '1px solid ' + HAIR, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{prefill?.thread_id ? 'Reply' : 'New message'}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{modeLabel}</div>
           <button onClick={maybeDiscard} style={{ background: 'transparent', border: 'none', color: INK_M, cursor: 'pointer', fontSize: 16 }} aria-label="Close">×</button>
         </div>
 
@@ -157,7 +175,7 @@ export default function ComposeModal({ prefill, onClose, onSent }: Props) {
               style={{ ...toolbarBtn, fontWeight: b.bold ? 700 : 400, fontStyle: b.italic ? 'italic' : 'normal', textDecoration: b.underline ? 'underline' : 'none' }}
             >{b.label}</button>
           ))}
-          <button onClick={insertLink} style={toolbarBtn} title="Link">🔗</button>
+          <button onClick={insertLink} style={toolbarBtn} title="Link">link</button>
           <button onClick={() => exec('insertOrderedList')} style={toolbarBtn} title="Numbered list">1.</button>
           <button onClick={() => exec('insertUnorderedList')} style={toolbarBtn} title="Bulleted list">•</button>
         </div>
