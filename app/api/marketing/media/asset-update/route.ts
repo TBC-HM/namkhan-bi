@@ -1,7 +1,13 @@
 // app/api/marketing/media/asset-update/route.ts
 // POST — update mutable fields on a media asset via SECURITY DEFINER RPC.
-// Fields: original_filename, caption, alt_text, primary_tier, property_area, is_ai_generated.
+// Photo fields: original_filename, caption, alt_text, primary_tier, property_area,
+//               is_ai_generated, room_type_id.
+// Video fields: visual_description, captured_at, camera_make/model/lens, has_audio,
+//               audio_type, audio_language, color_profile, video_codec, audio_codec,
+//               poster_frame_sec, seasonal_scope[], brand_room_type_scope[],
+//               do_not_modify, has_identifiable_people, license_type, photographer.
 // PBS 2026-07-12 — Edit ✎ button (Library + Clarify tabs).
+// PBS 2026-07-13 · Task C — video field whitelist added.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -13,6 +19,23 @@ const TIERS = new Set([
   'tier_website_hero', 'tier_ota_profile', 'tier_social_pool',
   'tier_internal', 'tier_logos', 'tier_archive',
 ]);
+const AUDIO_TYPES = new Set(['none','dialog','narration','music','ambient','mixed']);
+const COLOR_PROFILES = new Set(['rec709','HLG','HDR10','Log','sRGB']);
+const LICENSE_TYPES = new Set(['owned','licensed','cc_by','editorial_only','influencer_ugc','guest_ugc']);
+
+const STRING_KEYS = [
+  'original_filename', 'caption', 'alt_text', 'primary_tier',
+  'property_area', 'room_type_id',
+  // video
+  'visual_description', 'captured_at', 'camera_make', 'camera_model', 'lens',
+  'audio_type', 'audio_language', 'color_profile', 'video_codec', 'audio_codec',
+  'license_type', 'photographer',
+];
+const BOOL_KEYS = [
+  'is_ai_generated', 'has_audio', 'do_not_modify', 'has_identifiable_people',
+];
+const NUM_KEYS = ['poster_frame_sec'];
+const ARR_KEYS = ['seasonal_scope', 'brand_room_type_scope'];
 
 export async function POST(req: NextRequest) {
   let sb;
@@ -27,18 +50,38 @@ export async function POST(req: NextRequest) {
   if (!asset_id || typeof asset_id !== 'string' || !UUID_RE.test(asset_id)) {
     return NextResponse.json({ error: 'asset_id must be a UUID' }, { status: 400 });
   }
-  if (body.primary_tier != null && !TIERS.has(String(body.primary_tier))) {
+  if (body.primary_tier != null && body.primary_tier !== '' && !TIERS.has(String(body.primary_tier))) {
     return NextResponse.json({ error: 'invalid primary_tier' }, { status: 400 });
   }
+  if (body.audio_type != null && body.audio_type !== '' && !AUDIO_TYPES.has(String(body.audio_type))) {
+    return NextResponse.json({ error: 'invalid audio_type' }, { status: 400 });
+  }
+  if (body.color_profile != null && body.color_profile !== '' && !COLOR_PROFILES.has(String(body.color_profile))) {
+    return NextResponse.json({ error: 'invalid color_profile' }, { status: 400 });
+  }
+  if (body.license_type != null && body.license_type !== '' && !LICENSE_TYPES.has(String(body.license_type))) {
+    return NextResponse.json({ error: 'invalid license_type' }, { status: 400 });
+  }
 
-  // Build the JSONB payload — only include fields the caller sent, so
-  // COALESCE in the RPC leaves untouched columns alone.
   const payload: Record<string, any> = { asset_id };
-  for (const k of ['original_filename', 'caption', 'alt_text', 'primary_tier', 'property_area', 'room_type_id']) {
+  for (const k of STRING_KEYS) {
     if (body[k] !== undefined) payload[k] = body[k] == null ? null : String(body[k]);
   }
-  if (body.is_ai_generated !== undefined) {
-    payload.is_ai_generated = Boolean(body.is_ai_generated);
+  for (const k of BOOL_KEYS) {
+    if (body[k] !== undefined) payload[k] = Boolean(body[k]);
+  }
+  for (const k of NUM_KEYS) {
+    if (body[k] !== undefined) {
+      if (body[k] == null || body[k] === '') payload[k] = null;
+      else if (Number.isNaN(Number(body[k]))) return NextResponse.json({ error: `invalid ${k}` }, { status: 400 });
+      else payload[k] = Number(body[k]);
+    }
+  }
+  for (const k of ARR_KEYS) {
+    if (body[k] !== undefined) {
+      if (!Array.isArray(body[k])) return NextResponse.json({ error: `${k} must be an array` }, { status: 400 });
+      payload[k] = body[k].map((v: any) => String(v)).filter(Boolean);
+    }
   }
 
   try {
