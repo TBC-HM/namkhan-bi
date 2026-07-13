@@ -1,11 +1,11 @@
 // app/marketing/youtube/production/page.tsx
-// PBS 2026-07-13 — Production sub-tab: flow chevrons + request form + ready for review
-// + rate card + vocabulary + blacklist + approved people.
+// PBS 2026-07-13 — Production sub-tab: clickable pipeline chevrons (explorer)
+// + request form + rate card + vocabulary + blacklist + approved people.
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import RequestVideoForm from '../_client/RequestVideoForm';
-import StartProductionButton from '../_client/StartProductionButton';
+import PipelineChevronExplorer from '../_client/PipelineChevronExplorer';
 import YtSubTabs from '../_shared/SubTabs';
 
 export const dynamic = 'force-dynamic';
@@ -16,10 +16,8 @@ const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
 const INK    = '#1B1B1B';
 const INK_M  = '#5A5A5A';
-const INK_S  = '#3A3A3A';
 const FOREST = '#084838';
 const CREAM  = '#F5F0E1';
-const AMBER  = '#B48A3A';
 const RED    = '#B03826';
 
 interface JobRow { render_job_id: string; status: string; brief_id: string | null; output_url: string | null; submitted_at_utc: string | null; finished_at_utc: string | null; guardrail_passed_at_utc: string | null; error_msg: string | null }
@@ -63,13 +61,50 @@ export default async function YouTubeProductionPage() {
   const vocab = (vocabRes.data ?? []) as VocabRow[];
   const black = (blackRes.data ?? []) as BlackRow[];
 
-  const readyForReview = jobs.filter((j) => j.status === 'ready');
-  const stage_research  = briefs.length;
-  const stage_request   = requests.filter((r) => r.status === 'queued').length;
-  const stage_script    = requests.filter((r) => r.status === 'scripting').length + jobs.filter((j) => j.status === 'draft').length;
-  const stage_render    = jobs.filter((j) => ['queued','rendering'].includes(j.status)).length;
-  const stage_approve   = jobs.filter((j) => j.status === 'ready').length;
-  const totalStages = stage_research + stage_request + stage_script + stage_render + stage_approve;
+  // Pre-format all pipeline rows server-side (RSC boundary: only serializable data)
+  const researchItems = briefs.map((b) => ({
+    brief_id: b.brief_id,
+    generated_at_utc: b.generated_at_utc,
+  }));
+  const requestItems = requests
+    .filter((r) => r.status === 'queued')
+    .map((r) => ({
+      id: r.id,
+      style: r.style,
+      duration_seconds: r.duration_seconds,
+      angle_first_line: (r.angle ?? '(untitled)').split('\n')[0],
+      created_at: r.created_at,
+    }));
+  const scriptItems = [
+    ...requests.filter((r) => r.status === 'scripting').map((r) => ({
+      id: r.id,
+      kind: 'request' as const,
+      style: r.style,
+      angle_first_line: (r.angle ?? '(untitled)').split('\n')[0],
+      created_at: r.created_at,
+    })),
+    ...jobs.filter((j) => j.status === 'draft').map((j) => ({
+      id: j.render_job_id,
+      kind: 'job' as const,
+      style: null,
+      angle_first_line: j.brief_id ? `brief ${j.brief_id.slice(0, 8)}` : '(no brief)',
+      created_at: j.submitted_at_utc,
+    })),
+  ];
+  const renderItems = jobs
+    .filter((j) => ['queued', 'rendering'].includes(j.status))
+    .map((j) => ({
+      render_job_id: j.render_job_id,
+      status: j.status,
+      submitted_at_utc: j.submitted_at_utc,
+    }));
+  const approveItems = jobs
+    .filter((j) => j.status === 'ready')
+    .map((j) => ({
+      render_job_id: j.render_job_id,
+      output_url: j.output_url,
+      finished_at_utc: j.finished_at_utc,
+    }));
 
   const tabs = MARKETING_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
   const cardStyle: React.CSSProperties = { background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 20, gridColumn: '1 / -1' };
@@ -85,32 +120,14 @@ export default async function YouTubeProductionPage() {
       <div style={{ display: 'grid', gap: 16 }}>
         <YtSubTabs current="production" />
 
-        {/* Flow chevrons — collapse if all zero */}
-        {totalStages > 0 ? (
-          <div style={cardStyle}>
-            <div style={sectionH}>Pipeline · in flight</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, fontSize: 12 }}>
-              {[
-                { label: 'Research', n: stage_research },
-                { label: 'Request',  n: stage_request },
-                { label: 'Script',   n: stage_script },
-                { label: 'Render',   n: stage_render },
-                { label: 'Approve',  n: stage_approve },
-              ].map((s) => (
-                <div key={s.label} style={{ padding: 12, background: s.n > 0 ? '#E8F0EC' : CREAM, borderRadius: 3, textAlign: 'center', border: `1px solid ${HAIR}` }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: s.n > 0 ? FOREST : INK_M }}>{s.n}</div>
-                  <div style={{ fontSize: 10, color: INK_M, textTransform: 'uppercase', letterSpacing: '.06em' }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div style={{ ...cardStyle, background: CREAM }}>
-            <div style={{ fontSize: 12, color: INK_S }}>
-              <strong>Pipeline dormant.</strong> Request a video below to kick off Research → Script → Render → Approve.
-            </div>
-          </div>
-        )}
+        {/* Clickable pipeline chevrons — replaces static tiles + Queued table + Ready-for-review table */}
+        <PipelineChevronExplorer
+          research={researchItems}
+          request={requestItems}
+          script={scriptItems}
+          render={renderItems}
+          approve={approveItems}
+        />
 
         {/* Request form */}
         <div style={cardStyle}>
@@ -121,57 +138,6 @@ export default async function YouTubeProductionPage() {
             approvedPeople={people.map((p) => ({ id: p.id, full_name: p.full_name }))}
           />
         </div>
-
-        {/* Queued for production — PBS 2026-07-13 */}
-        {requests.filter((r) => r.status === 'queued').length > 0 && (
-          <div style={cardStyle}>
-            <div style={sectionH}>Queued for production ({requests.filter((r) => r.status === 'queued').length})</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead><tr>
-                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Title / angle</th>
-                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Style</th>
-                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Length</th>
-                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Queued</th>
-                <th style={{ textAlign: 'right', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Action</th>
-              </tr></thead>
-              <tbody>{requests.filter((r) => r.status === 'queued').map((r) => {
-                const firstLine = (r.angle ?? '(untitled)').split('\n')[0];
-                return (
-                  <tr key={r.id}>
-                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK }}>{firstLine}</td>
-                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK_M }}>{r.style ?? '—'}</td>
-                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK_M }}>{r.duration_seconds != null ? `${r.duration_seconds}s` : '—'}</td>
-                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK_M, fontSize: 11 }}>{r.created_at ? new Date(r.created_at).toISOString().slice(0, 16).replace('T', ' ') : '—'}</td>
-                    <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, textAlign: 'right' }}>
-                      <StartProductionButton requestId={r.id} />
-                    </td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Ready for review */}
-        {readyForReview.length > 0 && (
-          <div style={cardStyle}>
-            <div style={sectionH}>Ready for review ({readyForReview.length})</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead><tr>
-                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Job</th>
-                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Finished</th>
-                <th style={{ textAlign: 'left', padding: '8px', borderBottom: `1px solid ${HAIR}`, fontSize: 10, color: INK_M, textTransform: 'uppercase' }}>Preview</th>
-              </tr></thead>
-              <tbody>{readyForReview.map((j) => (
-                <tr key={j.render_job_id}>
-                  <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, fontFamily: 'monospace', color: INK_S }}>{j.render_job_id.slice(0, 8)}</td>
-                  <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}`, color: INK }}>{j.finished_at_utc ? new Date(j.finished_at_utc).toISOString().slice(0, 16).replace('T', ' ') : '—'}</td>
-                  <td style={{ padding: '8px', borderBottom: `1px solid ${HAIR}` }}>{j.output_url ? <a href={j.output_url} target="_blank" rel="noreferrer noopener" style={{ color: FOREST }}>Watch ↗</a> : '—'}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        )}
 
         {/* Rate card + vocabulary + blacklist */}
         <div style={{ ...cardStyle, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
