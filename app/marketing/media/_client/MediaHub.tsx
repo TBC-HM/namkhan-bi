@@ -101,6 +101,7 @@ interface Props {
   videoTemplates?: VideoTemplate[];
   videoBriefs?: VideoBriefRow[];
   pillars?: PillarOption[];
+  coverageRows?: any[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -176,6 +177,7 @@ export default function MediaHub(props: Props) {
           facilities={props.facilities}
           taxonomy={props.taxonomy}
           areaOptions={props.areaOptions}
+          coverageRows={props.coverageRows as any}
         />
       )}
       {tab === 'videos' && (
