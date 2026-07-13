@@ -131,10 +131,12 @@ export default async function SalesMailsPage({
 
   // ---- all guards passed → hydrate the inbox ----
   let initialThreads: Thread[] = [];
+  let hydrateErr: string | null = null;
   try {
     const list = await listActiveMailboxes();
     initialThreads = await listSharedInbox(user.id, list, { limit: 100 });
   } catch (e) {
+    hydrateErr = e instanceof Error ? e.message : String(e);
     console.error('[sales/mails] initial hydrate failed', e);
   }
 
@@ -154,6 +156,14 @@ export default async function SalesMailsPage({
           </Container>
         </div>
       )}
+      {hydrateErr && (
+        <div style={{ gridColumn: '1 / -1', padding: '12px 16px', background: '#FBE8E4', border: '1px solid #E8B7AB', borderRadius: 4, fontSize: 12, color: T.RED, marginBottom: 8 }}>
+          <strong>Inbox fetch failed:</strong> {hydrateErr}
+        </div>
+      )}
+      <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 4, fontSize: 11, color: T.INK_M, marginBottom: 8 }}>
+        Debug: {mailboxes.length} aliases · {initialThreads.length} threads · signed in as {user.email}
+      </div>
       <UnifiedMailInbox initialThreads={initialThreads} mailboxes={mailboxes} />
     </DashboardPage>
   );
