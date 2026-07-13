@@ -182,6 +182,13 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
   const [rescoring, setRescoring] = useState(false);
   const [rescoreMsg, setRescoreMsg] = useState<string | null>(null);
 
+  // QA slider state (0-100, null when unscored). Drives the 3 sliders in the QA section.
+  const [tSlider, setTSlider] = useState<number | null>(null);
+  const [aSlider, setASlider] = useState<number | null>(null);
+  const [mSlider, setMSlider] = useState<number | null>(null);
+  const [savingScores, setSavingScores] = useState(false);
+  const [savedScoresMsg, setSavedScoresMsg] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open || !asset) return;
     setErr(null); setOk(null); setRescoreMsg(null);
@@ -201,6 +208,10 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
     setAudioLanguage(asset.audio_language ?? '');
     setColorProfile(asset.color_profile ?? '');
     setVisualDescription(asset.visual_description ?? '');
+    setTSlider(asset.technical_score ?? null);
+    setASlider(asset.aesthetic_score ?? null);
+    setMSlider(asset.marketing_score ?? null);
+    setSavedScoresMsg(null);
     setDrawerPlaying(false);
   }, [open, asset]);
 
@@ -275,11 +286,43 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
       if (!res.ok) throw new Error(j.error || 'rescore_failed');
       const r = j.result ?? {};
       setRescoreMsg(`Rescored ✓ · tech ${r.technical_score ?? '?'} · aes ${r.aesthetic_score ?? '?'} · mkt ${r.marketing_score ?? '?'} · quality ${r.quality_index ?? '?'}%`);
+      if (typeof r.technical_score === 'number') setTSlider(r.technical_score);
+      if (typeof r.aesthetic_score === 'number') setASlider(r.aesthetic_score);
+      if (typeof r.marketing_score === 'number') setMSlider(r.marketing_score);
       router.refresh();
     } catch (e: any) {
       setRescoreMsg('Rescore failed: ' + e.message);
     } finally {
       setRescoring(false);
+    }
+  }
+
+  async function saveScores() {
+    if (!asset) return;
+    setSavingScores(true); setSavedScoresMsg(null);
+    try {
+      const baseNotes = (asset.qa_notes ?? {}) as any;
+      const merged = { ...baseNotes, manual_override: {
+        by: 'PBS', at: new Date().toISOString(),
+        technical: tSlider, aesthetic: aSlider, marketing: mSlider,
+      }};
+      const res = await fetch('/api/marketing/media/asset-qa-save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_id: asset.asset_id,
+          technical: tSlider, aesthetic: aSlider, marketing: mSlider,
+          notes: merged,
+          model: asset.qa_model ?? 'manual',
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || 'save_failed');
+      setSavedScoresMsg('Scores saved ✓');
+      router.refresh();
+    } catch (e: any) {
+      setSavedScoresMsg('Save failed: ' + e.message);
+    } finally {
+      setSavingScores(false);
     }
   }
 
@@ -530,9 +573,39 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
             <span style={{ background: badge.bg, color: badge.fg, padding: '2px 8px', borderRadius: 3, fontSize: 10 }}>{badge.label}</span>
           </summary>
           <div style={{ display:'flex', flexDirection:'column', gap:14, marginTop:12 }}>
+            {/* Sliders — always visible so PBS can override manually */}
+            <div style={{ display:'flex', flexDirection:'column', gap:10, background:CREAM, border:'1px solid '+HAIR, borderRadius:3, padding:10 }}>
+              <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Manual override</div>
+              <SliderRow label="Technical" value={tSlider} setValue={setTSlider} />
+              <SliderRow label="Aesthetic" value={aSlider} setValue={setASlider} />
+              <SliderRow label="Marketing" value={mSlider} setValue={setMSlider} />
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid '+HAIR, paddingTop:8, marginTop:2 }}>
+                <span style={{ fontSize:11, color:INK, fontWeight:600 }}>Composite</span>
+                <span style={{ fontSize:12, color:INK, fontWeight:700, fontVariantNumeric:'tabular-nums' }}>
+                  {(() => {
+                    const t = tSlider ?? 0, a = aSlider ?? 0, m = mSlider ?? 0;
+                    if (tSlider == null && aSlider == null && mSlider == null) return '—';
+                    return Math.round(t*0.4 + a*0.3 + m*0.3) + '%';
+                  })()}
+                </span>
+              </div>
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <button type="button" onClick={saveScores} disabled={savingScores || (tSlider == null && aSlider == null && mSlider == null)}
+                  style={{ padding:'6px 14px', fontSize:11, fontWeight:600, background: savingScores ? INK_M : FOREST, color:WHITE, border:'none', borderRadius:3, cursor: savingScores ? 'default' : 'pointer' }}>
+                  {savingScores ? 'Saving…' : 'Save Scores'}
+                </button>
+                <button type="button" onClick={rescore} disabled={rescoring}
+                  style={{ padding:'6px 14px', fontSize:11, fontWeight:600, background: rescoring ? INK_M : WHITE, color: rescoring ? WHITE : INK, border:'1px solid '+HAIR, borderRadius:3, cursor: rescoring ? 'default' : 'pointer' }}>
+                  {rescoring ? 'Scoring…' : 'Rescore with Iris'}
+                </button>
+                {savedScoresMsg && <span style={{ fontSize:10, color:INK_M }}>{savedScoresMsg}</span>}
+                {rescoreMsg && !savedScoresMsg && <span style={{ fontSize:10, color:INK_M }}>{rescoreMsg}</span>}
+              </div>
+            </div>
+
             {qIndex == null ? (
               <div style={{ fontSize:11, color:INK_M }}>
-                This asset has not been through the QA engine yet. Click Re-score below to run technical / aesthetic / marketing scoring against the current image.
+                Not yet scored by Iris. Use the sliders above for a manual score, or click <b>Rescore with Iris</b> to run the model.
               </div>
             ) : (
               <>
@@ -613,24 +686,11 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
               </>
             )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid ' + HAIR, paddingTop: 8 }}>
-              <button
-                type="button"
-                onClick={rescore}
-                disabled={rescoring}
-                style={{
-                  padding: '6px 14px', fontSize: 11, fontWeight: 600,
-                  background: rescoring ? INK_M : FOREST, color: WHITE,
-                  border: 'none', borderRadius: 3, cursor: rescoring ? 'default' : 'pointer',
-                }}
-              >{rescoring ? 'Scoring…' : 'Re-score'}</button>
-              {rescoreMsg && <span style={{ fontSize: 10, color: INK_M }}>{rescoreMsg}</span>}
-              {asset.qa_scored_at && !rescoreMsg && (
-                <span style={{ fontSize: 10, color: INK_M }}>
-                  scored {String(asset.qa_scored_at).slice(0, 10)} · model {asset.qa_model?.split('-').slice(0,3).join('-') ?? '?'}
-                </span>
-              )}
-            </div>
+            {asset.qa_scored_at && (
+              <div style={{ fontSize: 10, color: INK_M, borderTop: '1px solid ' + HAIR, paddingTop: 6 }}>
+                Scored by {asset.qa_model?.split('-').slice(0,3).join('-') ?? '?'} · {String(asset.qa_scored_at).slice(0, 10)}
+              </div>
+            )}
           </div>
         </details>
       </div>
@@ -649,6 +709,21 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
 function qaBadgeStyle(v: number | null | undefined): React.CSSProperties {
   const b = qaBadge(v ?? null);
   return { background: b.bg, color: b.fg };
+}
+
+function SliderRow({ label, value, setValue }: { label: string; value: number | null; setValue: (v: number | null) => void }) {
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'78px 1fr 34px', alignItems:'center', gap:8 }}>
+      <span style={{ fontSize:11, color:'#1B1B1B', fontWeight:600 }}>{label}</span>
+      <input
+        type="range" min={0} max={100} step={1}
+        value={value ?? 0}
+        onChange={e => setValue(Number(e.target.value))}
+        style={{ width:'100%', accentColor:'#1B1B1B' }}
+      />
+      <span style={{ fontSize:11, color:'#1B1B1B', fontVariantNumeric:'tabular-nums', textAlign:'right' }}>{value ?? '—'}</span>
+    </div>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
