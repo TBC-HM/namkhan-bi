@@ -1,9 +1,12 @@
 // app/api/sales/mails/send/route.ts
-// POST { mailbox_id, to, cc?, bcc?, subject, body_html, thread_id?, in_reply_to? }
-// The From: header is enforced to the shared mailbox_address of the
-// connection — clients cannot spoof another sender.
+// POST { mailbox_id, to, cc?, bcc?, subject, body_html, body_plain?,
+//        thread_id?, in_reply_to?, references? }
+// Sends FROM the alias in mailbox_id using the current user's Gmail token
+// via Send-As. If the alias isn't configured in Gmail's Send-As settings,
+// we surface a plain-english error.
 import { NextRequest, NextResponse } from 'next/server';
-import { refreshIfExpired, sendMessage } from '@/lib/sharedGmail';
+import { getCurrentAuthUser } from '@/lib/userGmail';
+import { sendFromShared } from '@/lib/sharedGmail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,12 +18,15 @@ interface SendBody {
   bcc?: string;
   subject?: string;
   body_html?: string;
+  body_plain?: string;
   thread_id?: string;
   in_reply_to?: string;
   references?: string;
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getCurrentAuthUser();
+  if (!user) return NextResponse.json({ error: 'not_authenticated' }, { status: 401 });
   let body: SendBody;
   try { body = (await req.json()) as SendBody; }
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
@@ -29,21 +35,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'missing_params' }, { status: 400 });
   }
   try {
-    const { access, mailbox } = await refreshIfExpired(mailbox_id);
-    const sent = await sendMessage(access, {
-      from: mailbox.mailbox_address,
+    const res = await sendFromShared(user.id, mailbox_id, {
       to,
       cc: body.cc,
       bcc: body.bcc,
       subject,
       body_html,
+      body_plain: body.body_plain,
       thread_id: body.thread_id,
       in_reply_to: body.in_reply_to,
       references: body.references,
     });
-    return NextResponse.json({ ok: true, id: sent.id, threadId: sent.threadId });
+    if (!res.ok) return NextResponse.json(res, { status: 400 });
+    return NextResponse.json(res);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'unknown';
-    return NextResponse.json({ error: 'send_failed', detail: msg }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'send_failed', detail: msg }, { status: 500 });
   }
 }
