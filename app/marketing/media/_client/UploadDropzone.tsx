@@ -2,6 +2,10 @@
 // PBS 2026-07-12 — drag+drop upload using existing sign+finalize endpoints.
 // 2026-07-12 pm: accept images + videos + PDF. Filename-extension MIME fallback so files
 //   dropped without a browser MIME still get the right content_type sent to sign endpoint.
+// 2026-07-13 · Task D — after successful video PUT, extract duration + dims + a poster
+//   frame in the browser via <video>+<canvas>, PUT poster.jpg into `media-thumbnails`
+//   via a new signed URL, and POST the metadata back to /asset-video-meta which calls
+//   fn_media_asset_video_meta_update.
 'use client';
 
 import { useState, useRef } from 'react';
@@ -13,8 +17,6 @@ const INK    = '#1B1B1B';
 const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
 
-// Filename-extension → MIME. Used when the browser doesn't set File.type
-// (RAW files often; some drag-drops from external tools; older browsers).
 const EXT_MIME: Record<string, string> = {
   // Photos
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
@@ -40,6 +42,75 @@ async function sha256hex(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
   const hash = await crypto.subtle.digest('SHA-256', buf);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+interface VideoMeta {
+  duration_sec: number;
+  width_px: number;
+  height_px: number;
+  has_audio: boolean;
+  poster_blob: Blob | null;
+}
+
+// Extract duration + native resolution + a poster frame from a File via the
+// browser's <video> element and <canvas>. Returns null on failure (e.g. codec
+// unsupported by the browser — QuickTime ProRes, MXF, etc). We treat that as
+// non-fatal: the upload succeeded, just no thumb + metadata this pass.
+async function extractVideoMetadata(file: File): Promise<VideoMeta | null> {
+  let url: string | null = null;
+  try {
+    url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.src = url;
+    video.muted = true;
+    video.preload = 'metadata';
+    video.crossOrigin = 'anonymous';
+
+    // Load metadata
+    await new Promise<void>((resolve, reject) => {
+      const to = setTimeout(() => reject(new Error('metadata timeout')), 15000);
+      video.onloadedmetadata = () => { clearTimeout(to); resolve(); };
+      video.onerror = () => { clearTimeout(to); reject(new Error('video load error')); };
+    });
+
+    const duration_sec = Number.isFinite(video.duration) ? video.duration : 0;
+    const width_px  = video.videoWidth  || 0;
+    const height_px = video.videoHeight || 0;
+
+    // Audio track detection is not standardised. Firefox exposes mozHasAudio.
+    // Chrome exposes webkitAudioDecodedByteCount only after playback starts.
+    // Default true (most user-recorded footage has audio) unless mozHasAudio=false.
+    const mozAudio = (video as any).mozHasAudio;
+    const has_audio = mozAudio === false ? false : true;
+
+    // Seek to 10% for a decent poster frame (capped at 5s).
+    let poster_blob: Blob | null = null;
+    try {
+      const seekTo = Math.min(duration_sec * 0.1, 5);
+      await new Promise<void>((resolve, reject) => {
+        const to = setTimeout(() => reject(new Error('seek timeout')), 10000);
+        video.onseeked = () => { clearTimeout(to); resolve(); };
+        video.onerror = () => { clearTimeout(to); reject(new Error('seek error')); };
+        video.currentTime = seekTo;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = width_px;
+      canvas.height = height_px;
+      const ctx = canvas.getContext('2d');
+      if (ctx && width_px > 0 && height_px > 0) {
+        ctx.drawImage(video, 0, 0, width_px, height_px);
+        poster_blob = await new Promise<Blob | null>(resolve => canvas.toBlob(b => resolve(b), 'image/jpeg', 0.85));
+      }
+    } catch {
+      poster_blob = null;
+    }
+
+    return { duration_sec, width_px, height_px, has_audio, poster_blob };
+  } catch {
+    return null;
+  } finally {
+    if (url) URL.revokeObjectURL(url);
+  }
 }
 
 export default function UploadDropzone({ onResult }: Props) {
@@ -86,6 +157,47 @@ export default function UploadDropzone({ onResult }: Props) {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ asset_id: signJson.asset_id }),
         });
+
+        // Task D — client-side probe for videos (duration + poster + dims + audio).
+        // Non-fatal: if the browser can't decode (ProRes / MXF / very large files),
+        // we still count the upload as ok.
+        if (mime.startsWith('video/')) {
+          setProg(`Probing ${f.name}…`);
+          const meta = await extractVideoMetadata(f);
+          if (meta) {
+            // Upload poster (if we got one)
+            if (meta.poster_blob) {
+              try {
+                const posterSignRes = await fetch('/api/marketing/media/thumbnail-sign', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ asset_id: signJson.asset_id }),
+                });
+                const posterSignJson = await posterSignRes.json();
+                if (posterSignRes.ok && posterSignJson.upload_url) {
+                  await fetch(posterSignJson.upload_url, {
+                    method: 'PUT',
+                    body: meta.poster_blob,
+                    headers: { 'Content-Type': 'image/jpeg' },
+                  });
+                }
+              } catch { /* non-fatal */ }
+            }
+            // POST metadata back to the RPC
+            try {
+              await fetch('/api/marketing/media/asset-video-meta', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  asset_id: signJson.asset_id,
+                  duration_sec: meta.duration_sec,
+                  width_px: meta.width_px,
+                  height_px: meta.height_px,
+                  has_audio: meta.has_audio,
+                }),
+              });
+            } catch { /* non-fatal */ }
+          }
+        }
+
         ok++;
       } catch (e: any) {
         fail++;
