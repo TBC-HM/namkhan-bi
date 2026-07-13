@@ -3,11 +3,9 @@
 // public.fn_media_asset_upload_finalize (dedup-safe, optional campaign_tag).
 //
 // 2026-07-12 pm: rewired off `sb.schema('media' as any)` (PostgREST doesn't
-// expose the media schema) — now goes through the public RPC. See memory
-// feedback_postgrest_schema_writes_repeat_burn.
-//
-// Body: { asset_id, campaign_tag? }
-// Returns: { ok, asset_id, status }
+// expose the media schema) — now goes through the public RPC.
+// 2026-07-13 pm · MEDIA QA v1: after successful finalize we fire-and-forget the
+// media-qa-score edge fn so every fresh upload gets tech/aes/mkt scores.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -41,5 +39,15 @@ export async function POST(req: NextRequest) {
   }
   const row = Array.isArray(rows) ? rows[0] : rows;
   if (!row?.ok) return NextResponse.json({ error: 'asset_not_found_or_no_raw_path' }, { status: 404 });
-  return NextResponse.json({ ok: true, asset_id: row.asset_id, status: row.status });
+
+  // Fire-and-forget QA scoring. Don't block the finalize response — Anthropic
+  // vision takes ~40s and we don't want the upload UX to wait.
+  admin.functions
+    .invoke('media-qa-score', { body: { asset_id: row.asset_id } })
+    .then((r) => {
+      if (r?.error) console.warn('[upload-finalize] qa auto-score error', r.error);
+    })
+    .catch((e) => console.warn('[upload-finalize] qa auto-score exception', e));
+
+  return NextResponse.json({ ok: true, asset_id: row.asset_id, status: row.status, qa_scoring: 'queued' });
 }
