@@ -1,19 +1,22 @@
 // app/marketing/media/_client/VideoHub.tsx
-// PBS 2026-07-12 · Task #148 — internal 4-tab strip for the Video area:
-//   • Library — VideoLibraryTab
-//   • AI Studio — VideoAiStudioTab (Shotstack EDL composer)
-//   • Clarify — VideoClarifyTab
-//   • Settings — passthrough note (image + video share same guardrails/channels)
-// Mounted from MediaHub in place of the old thin VideoTab.
+// PBS 2026-07-12 · Task #148 — internal 5-tab strip for the Video area:
+//   • Video Briefs — VideoBriefsPanel (Phase 2 unified pipeline entry point)
+//   • Video Library — VideoLibraryTab
+//   • Video AI Studio — VideoAiStudioTab (Shotstack EDL composer)
+//   • Video Clarify — VideoClarifyTab
+//   • Video Settings — passthrough note (image + video share same guardrails/channels)
+// 2026-07-13 · Phase 2: added Video Briefs as the leftmost / default sub-tab.
 'use client';
 
 import { useState } from 'react';
+import VideoBriefsPanel, { type VideoBriefRow } from './VideoBriefsPanel';
 import VideoLibraryTab from './VideoLibraryTab';
 import VideoAiStudioTab from './VideoAiStudioTab';
 import VideoClarifyTab from './VideoClarifyTab';
+import type { PillarOption } from './NewVideoBriefForm';
 import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy } from './MediaHub';
 
-type Sub = 'library' | 'ai' | 'clarify' | 'settings';
+type Sub = 'briefs' | 'library' | 'ai' | 'clarify' | 'settings';
 
 interface VideoTemplate {
   template_key: string;
@@ -36,6 +39,8 @@ interface Props {
   facilities: FacilityOption[];
   taxonomy: MediaTaxonomy;
   areaOptions: string[];
+  videoBriefs?: VideoBriefRow[];
+  pillars?: PillarOption[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -54,13 +59,16 @@ function isVideoRow(r: any): boolean {
 }
 
 export default function VideoHub(props: Props) {
-  const [sub, setSub] = useState<Sub>('library');
+  const [sub, setSub] = useState<Sub>('briefs');
   const [aiInitialAssetId, setAiInitialAssetId] = useState<string | null>(null);
 
   const videoRows = (props.mediaPage ?? []).filter(isVideoRow);
   const clarifyCount = videoRows.filter((r: any) => r.property_area == null || r.primary_tier == null).length;
+  const openBriefs = (props.videoBriefs ?? []).filter(b =>
+    b.status !== 'archived' && b.status !== 'published').length;
 
   const TABS: Array<{ key: Sub; label: string; badge?: number }> = [
+    { key: 'briefs',   label: 'Video Briefs',   badge: openBriefs },
     { key: 'library',  label: 'Video Library'   },
     { key: 'ai',       label: 'Video AI Studio' },
     { key: 'clarify',  label: 'Video Clarify',  badge: clarifyCount },
@@ -99,6 +107,14 @@ export default function VideoHub(props: Props) {
           );
         })}
       </div>
+
+      {sub === 'briefs' && (
+        <VideoBriefsPanel
+          propertyId={props.propertyId}
+          briefs={props.videoBriefs ?? []}
+          pillars={props.pillars ?? []}
+        />
+      )}
 
       {sub === 'library'  && (
         <VideoLibraryTab
