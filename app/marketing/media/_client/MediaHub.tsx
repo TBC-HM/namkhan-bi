@@ -2,6 +2,7 @@
 // PBS 2026-07-13 · Video AI Studio v1 — pass stylePresets + musicTracks
 // through to VideoHub → VideoSettingsTab.
 // PBS 2026-07-14 · Task B — thread photo guardrails through PhotoHub.
+// PBS 2026-07-14 · TASK 3 — thread reviewRows through PhotoHub.
 'use client';
 
 import { useState } from 'react';
@@ -9,6 +10,7 @@ import PhotoHub from './PhotoHub';
 import VideoHub from './VideoHub';
 import type { VideoBriefRow } from './VideoBriefsPanel';
 import type { PillarOption } from './NewVideoBriefForm';
+import type { ReviewRow } from './ReviewTab';
 import type {
   NamingRow, CaptionRow, AltTextRow, TierThresholdRow,
   AspectRatioRow, TextPolicyRow, BrandPaletteRow,
@@ -91,6 +93,7 @@ interface Props {
   videoBriefs?: VideoBriefRow[];
   pillars?: PillarOption[];
   coverageRows?: any[];
+  reviewRows?: ReviewRow[];
   stylePresets?: any[];
   musicTracks?: any[];
   guardrails?: GuardrailsData;
@@ -169,6 +172,7 @@ export default function MediaHub(props: Props) {
           taxonomy={props.taxonomy}
           areaOptions={props.areaOptions}
           coverageRows={props.coverageRows as any}
+          reviewRows={props.reviewRows}
           guardrails={props.guardrails ?? EMPTY_GUARDRAILS}
         />
       )}
