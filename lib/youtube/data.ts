@@ -7,9 +7,13 @@
 // callers narrow reliably (TS was failing to narrow the `Ok<T> | ErrShape`
 // union at return sites when Ok was a bare type alias, breaking CI).
 //
+// PBS 2026-07-13 — fetchRecentVideos now paginates: `max` accepted up to 200.
+//   Search API caps 50/page → we walk pageToken; Videos API caps 50 IDs/call
+//   → we batch. Quota at max=200: search(4) + videos(4) = ~408 units (still
+//   under 10 000/day). Callers can request 24 (dashboard uploads list) or
+//   200 (deep aggregates for heatmaps + ranking).
+//
 // Auth: Authorization: Bearer <accessToken>
-// Quota per dashboard load: channels=1 + search=100 + videos=1 + commentThreads=1 = 103 units
-// (YouTube gives ~10 000/day, so ~90 loads/day.)
 
 const API = 'https://www.googleapis.com/youtube/v3';
 
@@ -120,10 +124,11 @@ export async function fetchChannel(accessToken: string, channelId: string): Prom
   return { ok: true, data: info };
 }
 
-// ---- recent videos ---------------------------------------------------------
+// ---- recent videos (paginated up to `max`, cap 200) -----------------------
 
 interface SearchListResp {
   items?: Array<{ id?: { videoId?: string } }>;
+  nextPageToken?: string;
 }
 interface VideosListResp {
   items?: Array<{
@@ -144,36 +149,63 @@ export async function fetchRecentVideos(
   channelId: string,
   max = 24,
 ): Promise<YtResult<VideoItem[]>> {
-  const searchUrl = `${API}/search?part=id&channelId=${encodeURIComponent(channelId)}&order=date&type=video&maxResults=${max}`;
-  const s = await ytFetch<SearchListResp>(searchUrl, accessToken);
-  if (isErr(s)) return { ok: false, error: s.error, detail: s.detail };
+  const cap = Math.max(1, Math.min(max, 200));
+  const ids: string[] = [];
+  let pageToken: string | null = null;
 
-  const ids = (s.data.items ?? [])
-    .map((x) => x.id?.videoId)
-    .filter((x): x is string => Boolean(x));
+  // Search API caps maxResults=50; paginate via pageToken until we reach `cap`
+  // or exhaust results.
+  while (ids.length < cap) {
+    const perPage = Math.min(50, cap - ids.length);
+    const params = new URLSearchParams({
+      part: 'id',
+      channelId,
+      order: 'date',
+      type: 'video',
+      maxResults: String(perPage),
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const s = await ytFetch<SearchListResp>(`${API}/search?${params.toString()}`, accessToken);
+    if (isErr(s)) return { ok: false, error: s.error, detail: s.detail };
+    for (const it of s.data.items ?? []) {
+      const vid = it.id?.videoId;
+      if (vid) ids.push(vid);
+    }
+    if (!s.data.nextPageToken) break;
+    pageToken = s.data.nextPageToken;
+  }
+
   if (ids.length === 0) return { ok: true, data: [] };
 
-  const vidUrl = `${API}/videos?part=snippet,statistics,contentDetails&id=${ids.join(',')}`;
-  const v = await ytFetch<VideosListResp>(vidUrl, accessToken);
-  if (isErr(v)) return { ok: false, error: v.error, detail: v.detail };
+  // Videos API caps 50 IDs per call — batch.
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += 50) batches.push(ids.slice(i, i + 50));
 
-  const mapped: VideoItem[] = (v.data.items ?? []).map((it) => ({
-    id:          it.id,
-    title:       it.snippet?.title ?? '(untitled)',
-    description: it.snippet?.description ?? '',
-    publishedAt: it.snippet?.publishedAt ?? '',
-    thumbnails:  it.snippet?.thumbnails ?? {},
-    duration:    it.contentDetails?.duration ?? 'PT0S',
-    views:       Number(it.statistics?.viewCount ?? 0),
-    likes:       Number(it.statistics?.likeCount ?? 0),
-    comments:    Number(it.statistics?.commentCount ?? 0),
-  }));
+  const all: VideoItem[] = [];
+  for (const batch of batches) {
+    const vidUrl = `${API}/videos?part=snippet,statistics,contentDetails&id=${batch.join(',')}`;
+    const v = await ytFetch<VideosListResp>(vidUrl, accessToken);
+    if (isErr(v)) return { ok: false, error: v.error, detail: v.detail };
+    for (const it of v.data.items ?? []) {
+      all.push({
+        id:          it.id,
+        title:       it.snippet?.title ?? '(untitled)',
+        description: it.snippet?.description ?? '',
+        publishedAt: it.snippet?.publishedAt ?? '',
+        thumbnails:  it.snippet?.thumbnails ?? {},
+        duration:    it.contentDetails?.duration ?? 'PT0S',
+        views:       Number(it.statistics?.viewCount ?? 0),
+        likes:       Number(it.statistics?.likeCount ?? 0),
+        comments:    Number(it.statistics?.commentCount ?? 0),
+      });
+    }
+  }
 
-  // preserve search order (most recent first)
+  // Preserve original search order (most recent first)
   const idx = new Map(ids.map((x, i) => [x, i]));
-  mapped.sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
+  all.sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
 
-  return { ok: true, data: mapped };
+  return { ok: true, data: all };
 }
 
 // ---- recent comments -------------------------------------------------------
@@ -233,7 +265,7 @@ export interface PlaylistItem {
   description: string;
   itemCount: number;
   publishedAt: string;
-  updatedAt: string | null;    // API doesn't expose an updatedAt on playlists; we surface latest video publishedAt via a second fetch if needed
+  updatedAt: string | null;
   privacyStatus: string | null;
   thumbnails: Thumbnails;
 }
@@ -271,7 +303,6 @@ export async function fetchChannelPlaylists(
     privacyStatus: it.status?.privacyStatus ?? null,
     thumbnails:    it.snippet?.thumbnails ?? {},
   }));
-  // Sort by itemCount desc so the biggest playlists show first
   mapped.sort((a, b) => b.itemCount - a.itemCount);
   return { ok: true, data: mapped };
 }
@@ -286,7 +317,6 @@ export interface PlaylistVideo {
   thumbnails:   Thumbnails;
   position:     number;
   channelTitle: string;
-  // Populated from a second /videos call so we can rank + surface performance.
   views?:       number;
   likes?:       number;
   comments?:    number;
@@ -329,11 +359,10 @@ export async function fetchPlaylistItemsWithStats(
     }));
   if (items.length === 0) return { ok: true, data: [] };
 
-  // Batch-lookup video stats (chunk of 50 IDs is the API cap)
   const ids = items.map((i) => i.videoId).slice(0, 50);
   const vidUrl = `${API}/videos?part=statistics,contentDetails&id=${ids.join(',')}`;
   const v = await ytFetch<VideosListResp>(vidUrl, accessToken);
-  if (isErr(v)) return { ok: true, data: items };  // still return the list without stats
+  if (isErr(v)) return { ok: true, data: items };
   const statsById = new Map<string, { views: number; likes: number; comments: number; duration: string }>();
   for (const it of (v.data.items ?? [])) {
     statsById.set(it.id, {
