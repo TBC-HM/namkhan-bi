@@ -3,6 +3,9 @@
 // 2026-07-13 · Task B — added "Coverage" sub-tab surfacing v_media_coverage_matrix.
 // PBS 2026-07-14 · Task B (media area) — passes guardrails to SettingsTab.
 // PBS 2026-07-14 · TASK 3 — new "Review" sub-tab powered by v_media_review_queue.
+// PBS 2026-07-14 · Coverage drill-down — pass mediaPage to CoverageTab so cells
+//   open a filtered thumbnail modal. Data source unchanged; page.tsx already
+//   fetches with dynamic='force-dynamic' + revalidate=0.
 'use client';
 
 import { useState } from 'react';
@@ -135,7 +138,10 @@ export default function PhotoHub(props: Props) {
         <ReviewTab rows={props.reviewRows ?? []} />
       )}
       {sub === 'coverage' && (
-        <CoverageTab rows={props.coverageRows ?? []} />
+        <CoverageTab
+          rows={props.coverageRows ?? []}
+          mediaPage={props.mediaPage ?? []}
+        />
       )}
       {sub === 'settings' && (
         <SettingsTab
