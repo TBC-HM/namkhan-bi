@@ -6,7 +6,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PanelHeader, EmptyState } from './_shared';
 import { supabase } from '@/lib/supabase';
-import { btnPrimary, btnGhost, rowStyle, ErrorBanner, LabeledInput, LabeledCheckbox, LabeledSelect, LabeledTextarea, FormShell, DeleteConfirm, pill } from './_settings_ui';
+import { btnPrimary, btnGhost, rowStyle, ErrorBanner, SavedFlash, LabeledInput, LabeledCheckbox, LabeledSelect, LabeledTextarea, FormShell, DeleteConfirm, pill } from './_settings_ui';
 
 type Row = {
   transport_id: number; property_id: number; name: string; transport_type: string | null;
@@ -78,6 +78,7 @@ export default function TransportPanel({ data, propertyId }: { data: Row[]; prop
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [seasons, setSeasons] = useState<Season[]>([]);
 
@@ -135,7 +136,10 @@ export default function TransportPanel({ data, propertyId }: { data: Row[]; prop
         p_display_order: draft.display_order ? Number(draft.display_order) : null,
       });
       if (e) { setError(e.message); return; }
-      setDraft(null); router.refresh();
+      setDraft(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      router.refresh();
     });
   }
 
@@ -152,6 +156,7 @@ export default function TransportPanel({ data, propertyId }: { data: Row[]; prop
       <PanelHeader title="Transport" subtitle={`${data.length} option${data.length === 1 ? '' : 's'} · shuttle · private car · tuktuk · boat`}
         action={<button type="button" onClick={() => setDraft({ ...EMPTY })} style={btnPrimary}>+ Add</button>} />
       <ErrorBanner error={error} />
+      <SavedFlash show={saved} />
       {draft && (
         <FormShell title={draft.transport_id ? 'Edit transport option' : 'New transport option'} onSave={save} onCancel={() => { setDraft(null); setError(null); }} busy={busy}>
           <LabeledInput label="Name *" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} span={2} placeholder="e.g. Airport shuttle" />
@@ -161,8 +166,8 @@ export default function TransportPanel({ data, propertyId }: { data: Row[]; prop
           <LabeledInput label="Distance (km)" value={draft.distance_km} onChange={(v) => setDraft({ ...draft, distance_km: v })} type="number" />
           <LabeledInput label="Duration (min)" value={draft.duration_min} onChange={(v) => setDraft({ ...draft, duration_min: v })} type="number" />
           <LabeledInput label="Capacity (pax)" value={draft.capacity_pax} onChange={(v) => setDraft({ ...draft, capacity_pax: v })} type="number" />
-          <LabeledInput label="Service from" value={draft.service_time_from} onChange={(v) => setDraft({ ...draft, service_time_from: v })} placeholder="HH:MM" />
-          <LabeledInput label="Service to"   value={draft.service_time_to}   onChange={(v) => setDraft({ ...draft, service_time_to: v })}   placeholder="HH:MM" />
+          <LabeledInput label="Service from" value={draft.service_time_from} onChange={(v) => setDraft({ ...draft, service_time_from: v })} type="time" />
+          <LabeledInput label="Service to"   value={draft.service_time_to}   onChange={(v) => setDraft({ ...draft, service_time_to: v })}   type="time" />
           <LabeledInput label="Bookable via" value={draft.bookable_via} onChange={(v) => setDraft({ ...draft, bookable_via: v })} placeholder="reception / online" />
           <LabeledInput label="Age restriction" value={draft.age_restriction} onChange={(v) => setDraft({ ...draft, age_restriction: v })} placeholder="e.g. 3+" />
           <LabeledInput label="Display order" value={draft.display_order} onChange={(v) => setDraft({ ...draft, display_order: v })} type="number" />
