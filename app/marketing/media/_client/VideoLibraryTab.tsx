@@ -4,11 +4,14 @@
 // mp4/mov/webm/m4v). Duration filter (short/mid/long), tier chips, area
 // optgroup, AI-generated toggle, search. Edit ✎ → AssetEditDrawer. Delete
 // via same /asset-delete route. Use-for-channel path unchanged.
+// 2026-07-13 · Coordinator — centered ▶ overlay opens VideoPlayerModal;
+// clicks elsewhere on the tile keep opening the edit drawer.
 'use client';
 
 import { useMemo, useState, Fragment } from 'react';
 import UploadDropzone from './UploadDropzone';
 import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
+import VideoPlayerModal, { type VideoPlayerAsset } from './VideoPlayerModal';
 
 interface MediaRow {
   asset_id: string; asset_type?: string; original_filename: string;
@@ -19,6 +22,8 @@ interface MediaRow {
   file_size_bytes?: number | string | null; file_size_human?: string | null;
   alt_text?: string | null; is_ai_generated?: boolean | null;
   duration_sec?: number | null;
+  aspect_ratio?: string | null;
+  camera_make?: string | null;
   created_at?: string | null;
 }
 interface ChannelSpec { channel: string; display_name: string; video_aspect_ratio: string | null; }
@@ -67,10 +72,10 @@ function isVideoRow(r: MediaRow): boolean {
 function fmtDur(sec: number | null | undefined): string {
   if (sec == null || Number.isNaN(Number(sec))) return '';
   const s = Math.round(Number(sec));
-  if (s < 60) return `${s}s`;
+  if (s < 60) return ${'`'}${'$'}{s}s${'`'};
   const m = Math.floor(s / 60);
   const r = s % 60;
-  return r === 0 ? `${m}m` : `${m}m ${r}s`;
+  return r === 0 ? ${'`'}${'$'}{m}m${'`'} : ${'`'}${'$'}{m}m ${'$'}{r}s${'`'};
 }
 
 export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [], taxonomy }: Props) {
@@ -82,6 +87,7 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
   const [msg, setMsg] = useState<string | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<MediaRow | null>(null);
+  const [playing, setPlaying] = useState<MediaRow | null>(null);
 
   const [searchText, setSearchText] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
@@ -131,7 +137,7 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
   }, [videosAll]);
 
   async function deleteAsset(assetId: string, filename: string | null) {
-    if (!window.confirm(`Delete video "${filename ?? assetId.slice(0,8)}" from the library? (soft-delete)`)) return;
+    if (!window.confirm(${'`'}Delete video "${'$'}{filename ?? assetId.slice(0,8)}" from the library? (soft-delete)${'`'})) return;
     setBusyRow(assetId); setMsg(null);
     try {
       const res = await fetch('/api/marketing/media/asset-delete', {
@@ -141,8 +147,8 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'delete_failed');
       setLocalDismiss(s => { const next = new Set(s); next.add(assetId); return next; });
-      setMsg(`Deleted ${filename ?? assetId.slice(0,8)} — refresh to sync`);
-    } catch (e: any) { setMsg(`Delete failed: ${e.message}`); }
+      setMsg(${'`'}Deleted ${'$'}{filename ?? assetId.slice(0,8)} — refresh to sync${'`'});
+    } catch (e: any) { setMsg(${'`'}Delete failed: ${'$'}{e.message}${'`'}); }
     finally { setBusyRow(null); }
   }
 
@@ -157,17 +163,17 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'failed');
-      const label = `${j.channel_display ?? channel}`;
+      const label = ${'`'}${'$'}{j.channel_display ?? channel}${'`'};
       if (j.download_url) {
-        const proxy = `/api/marketing/media/download-render?asset_id=${assetId}&channel=${encodeURIComponent(channel)}`;
+        const proxy = ${'`'}/api/marketing/media/download-render?asset_id=${'$'}{assetId}&channel=${'$'}{encodeURIComponent(channel)}${'`'};
         const link = document.createElement('a'); link.href = proxy; link.download = j.filename_hint ?? '';
         document.body.appendChild(link); link.click(); link.remove();
-        setMsg(`Rendered for ${label} — download started ✓`);
+        setMsg(${'`'}Rendered for ${'$'}{label} — download started ✓${'`'});
       } else {
-        setMsg(`Rendered for ${channel} — queued as ${j.render_id ?? 'render'}`);
+        setMsg(${'`'}Rendered for ${'$'}{channel} — queued as ${'$'}{j.render_id ?? 'render'}${'`'});
       }
     } catch (e: any) {
-      setMsg(`Failed: ${e.message}`);
+      setMsg(${'`'}Failed: ${'$'}{e.message}${'`'});
     } finally {
       setBusyRow(null);
     }
@@ -202,25 +208,25 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
             {taxonomy ? (
               <>
                 {taxonomy.rooms.length > 0 && (
-                  <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={`fv-room-${r.id}`} value={r.name}>{r.name}</option>)}</optgroup>
+                  <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={${'`'}fv-room-${'$'}{r.id}${'`'}} value={r.name}>{r.name}</option>)}</optgroup>
                 )}
                 {taxonomy.facilities.length > 0 && (
-                  <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={`fv-fac-${f.id}`} value={f.name}>{f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}</option>)}</optgroup>
+                  <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={${'`'}fv-fac-${'$'}{f.id}${'`'}} value={f.name}>{f.parent_name ? ${'`'}${'$'}{f.name} · ↳ ${'$'}{f.parent_name}${'`'} : f.name}</option>)}</optgroup>
                 )}
                 {taxonomy.activities.length > 0 && (
-                  <optgroup label="Activities">{taxonomy.activities.map(a => <option key={`fv-act-${a.id}`} value={a.name}>{a.name}</option>)}</optgroup>
+                  <optgroup label="Activities">{taxonomy.activities.map(a => <option key={${'`'}fv-act-${'$'}{a.id}${'`'}} value={a.name}>{a.name}</option>)}</optgroup>
                 )}
                 {taxonomy.meeting_spaces.length > 0 && (
-                  <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={`fv-mtg-${m.id}`} value={m.name}>{m.name}</option>)}</optgroup>
+                  <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={${'`'}fv-mtg-${'$'}{m.id}${'`'}} value={m.name}>{m.name}</option>)}</optgroup>
                 )}
                 {taxonomy.transport.length > 0 && (
-                  <optgroup label="Transport">{taxonomy.transport.map(t => <option key={`fv-trp-${t.id}`} value={t.name}>{t.name}</option>)}</optgroup>
+                  <optgroup label="Transport">{taxonomy.transport.map(t => <option key={${'`'}fv-trp-${'$'}{t.id}${'`'}} value={t.name}>{t.name}</option>)}</optgroup>
                 )}
                 {(taxonomy.boats && taxonomy.boats.length > 0) && (
-                  <optgroup label="Imekong · Boats">{taxonomy.boats.map(b => <option key={`fv-boat-${b.id}`} value={b.name}>{b.name}</option>)}</optgroup>
+                  <optgroup label="Imekong · Boats">{taxonomy.boats.map(b => <option key={${'`'}fv-boat-${'$'}{b.id}${'`'}} value={b.name}>{b.name}</option>)}</optgroup>
                 )}
                 {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
-                  <optgroup label="Imekong · Cruises">{taxonomy.boat_cruises.map(c => <option key={`fv-cruise-${c.id}`} value={c.name}>{c.name}</option>)}</optgroup>
+                  <optgroup label="Imekong · Cruises">{taxonomy.boat_cruises.map(c => <option key={${'`'}fv-cruise-${'$'}{c.id}${'`'}} value={c.name}>{c.name}</option>)}</optgroup>
                 )}
               </>
             ) : (
@@ -281,6 +287,19 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
                 ) : (
                   <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:INK_M }}>no preview</div>
                 )}
+                {/* Centered ▶ overlay — opens embedded player instead of edit drawer */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setPlaying(r); }}
+                  aria-label="Play video"
+                  style={{
+                    position:'absolute', top:'50%', left:'50%', transform:'translate(-50%, -50%)',
+                    width:44, height:44, borderRadius:22, background:'rgba(255,255,255,0.9)',
+                    border:'none', color:'#084838', fontSize:20, cursor:'pointer',
+                    display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700,
+                    boxShadow:'0 2px 8px rgba(0,0,0,0.3)',
+                  }}
+                >▶</button>
                 <div style={{ position:'absolute', bottom:6, left:6, background:'rgba(0,0,0,0.55)', color:WHITE, fontSize:9, fontWeight:600, padding:'2px 5px', borderRadius:2, letterSpacing:'0.04em' }}>▶ VIDEO</div>
                 {r.duration_sec != null && (
                   <div style={{ position:'absolute', bottom:6, right:6, background:'rgba(0,0,0,0.55)', color:WHITE, fontSize:10, fontWeight:600, padding:'2px 5px', borderRadius:2 }}>{fmtDur(r.duration_sec)}</div>
@@ -351,6 +370,12 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
         areaOptions={areaOptions}
         rooms={rooms}
         taxonomy={taxonomy}
+      />
+
+      <VideoPlayerModal
+        open={playing != null}
+        onClose={() => setPlaying(null)}
+        asset={playing as VideoPlayerAsset | null}
       />
     </div>
   );
