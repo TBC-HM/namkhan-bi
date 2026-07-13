@@ -95,9 +95,9 @@ interface RawChannelResp {
   }>;
 }
 
-export async function fetchChannel(accessToken: string): Promise<YtResult<ChannelInfo>> {
+export async function fetchChannel(accessToken: string, channelId: string): Promise<YtResult<ChannelInfo>> {
   const r = await ytFetch<RawChannelResp>(
-    `${API}/channels?part=snippet,statistics,brandingSettings&mine=true`,
+    `${API}/channels?part=snippet,statistics,brandingSettings&id=${encodeURIComponent(channelId)}`,
     accessToken,
   );
   if (isErr(r)) return { ok: false, error: r.error, detail: r.detail };
