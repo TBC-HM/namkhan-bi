@@ -2,6 +2,8 @@
 // PBS 2026-07-13 · Task A — Photo sub-hub mirroring VideoHub's 4-tab nested
 // strip. Sits under the top-level MediaHub 2-tab shell (Pics · Videos) so both
 // media types have symmetrical navigation: Library · AI Studio · Clarify · Settings.
+// 2026-07-13 (later) · Task B — added "Coverage" sub-tab surfacing the live
+// (category × usage_tier) matrix from public.v_media_coverage_matrix.
 'use client';
 
 import { useState } from 'react';
@@ -9,9 +11,10 @@ import LibraryTab from './LibraryTab';
 import AiStudioTab from './AiStudioTab';
 import ClarifyTab from './ClarifyTab';
 import SettingsTab from './SettingsTab';
+import CoverageTab, { type CoverageRow } from './CoverageTab';
 import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy } from './MediaHub';
 
-type Sub = 'library' | 'ai' | 'clarify' | 'settings';
+type Sub = 'library' | 'ai' | 'clarify' | 'coverage' | 'settings';
 
 interface Props {
   propertyId: number;
@@ -26,6 +29,7 @@ interface Props {
   facilities: FacilityOption[];
   taxonomy: MediaTaxonomy;
   areaOptions: string[];
+  coverageRows?: CoverageRow[];
   initialSub?: Sub;
   initialAiAssetId?: string | null;
 }
@@ -55,6 +59,7 @@ export default function PhotoHub(props: Props) {
     { key: 'library',  label: 'Photo Library'   },
     { key: 'ai',       label: 'Photo AI Studio' },
     { key: 'clarify',  label: 'Photo Clarify',  badge: clarifyCount },
+    { key: 'coverage', label: 'Coverage'        },
     { key: 'settings', label: 'Photo Settings'  },
   ];
 
@@ -121,6 +126,9 @@ export default function PhotoHub(props: Props) {
           rooms={props.rooms}
           taxonomy={props.taxonomy}
         />
+      )}
+      {sub === 'coverage' && (
+        <CoverageTab rows={props.coverageRows ?? []} />
       )}
       {sub === 'settings' && (
         <SettingsTab
