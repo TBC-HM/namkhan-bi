@@ -1,8 +1,7 @@
 // app/account/page.tsx
 // PBS 2026-07-09: personal profile page — name/preferred/phone/email/job_title.
 // Reads app.profiles for the signed-in user, renders ProfileForm.
-// Prior state: user dropdown "Account" link pointed to /settings/users (users admin
-// matrix) which was wrong. That link now goes here; user admin lives at /settings/users.
+// PBS 2026-07-13: added Gmail connection link (settings/gmail).
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { cookies } from 'next/headers';
@@ -51,6 +50,12 @@ export default async function AccountPage() {
     .select('*')
     .eq('user_id', cur.id)
     .maybeSingle();
+  const { data: gmailConn } = await admin
+    .from('v_user_gmail_connections')
+    .select('gmail_address, active')
+    .eq('user_id', cur.id)
+    .eq('active', true)
+    .maybeSingle();
 
   const initial = {
     full_name:      (profile?.full_name as string | null) ?? '',
@@ -68,6 +73,20 @@ export default async function AccountPage() {
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Your profile" subtitle="These details appear across the app · Email is your login (change via Supabase support)" density="compact">
           <ProfileForm initial={initial} />
+        </Container>
+      </div>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Gmail" subtitle="Connect your @thenamkhan.com Google account to see your inbox in the top nav + send email from inside the app" density="compact">
+          <div style={{ padding: 12, fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              {gmailConn?.active
+                ? <>Connected as <strong>{gmailConn.gmail_address as string}</strong></>
+                : <>Not connected</>}
+            </div>
+            <a href="/settings/gmail" style={{ color: '#084838', textDecoration: 'none', fontWeight: 600 }}>
+              {gmailConn?.active ? 'Manage →' : 'Connect Gmail →'}
+            </a>
+          </div>
         </Container>
       </div>
       <div style={{ gridColumn: '1 / -1' }}>
