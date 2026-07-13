@@ -1,18 +1,13 @@
 // app/marketing/media/_client/ClarifyTab.tsx
-// PBS 2026-07-12 — Clarify tab. Shows assets missing property_area or primary_tier
-// (ai_confidence predicate skipped — not exposed on v_marketing_media_page).
-// Clicking a thumb opens AssetEditDrawer (reused from LibraryTab).
-// After save + router.refresh(), fixed assets drop out of the client-side filter.
-// 2026-07-13 · Coordinator scope-add — PICS clarify skips videos; videos live
-// in the dedicated VideoClarifyTab. All KPI counts use the photos-only slice.
-// 2026-07-13 (pm) · Coordinator — any video row that slips through the photos
-// filter still gets a ▶ overlay → VideoPlayerModal, and an inline <video>
-// poster (seek-to-10%) instead of a broken <img>.
+// PBS 2026-07-12 — Clarify tab.
+// 2026-07-13 · Coordinator scope-add — PICS clarify skips videos.
+// 2026-07-13 pm · MEDIA QA v1 — tile now shows bottom-right quality badge.
 'use client';
 
 import { useMemo, useState } from 'react';
 import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
 import VideoPlayerModal, { type VideoPlayerAsset } from './VideoPlayerModal';
+import { qaBadge } from '@/lib/mediaQa';
 
 interface MediaRow {
   asset_id: string;
@@ -28,6 +23,12 @@ interface MediaRow {
   file_size_bytes: number | string | null;
   file_size_human: string | null;
   created_at: string | null;
+  quality_index?: number | null;
+  technical_score?: number | null;
+  aesthetic_score?: number | null;
+  marketing_score?: number | null;
+  qa_notes?: any;
+  qa_scored_at?: string | null;
 }
 
 interface Props {
@@ -55,7 +56,6 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
   const [playing, setPlaying] = useState<MediaRow | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
 
-  // Photos-only slice — video clarify has its own tab (VideoClarifyTab).
   const photos = useMemo(() => mediaPage.filter(r => !isVideoRow(r)), [mediaPage]);
 
   const clarify = useMemo(() => {
@@ -75,7 +75,6 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
 
   return (
     <div>
-      {/* KPI strip */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8, marginBottom:16 }}>
         {[
           { label: 'To clarify', value: stats.toClarify, tone: stats.toClarify > 0 ? RED : INK },
@@ -100,6 +99,7 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
             const badges: Array<{ k: string; label: string }> = [];
             if (!r.property_area) badges.push({ k: 'area', label: '?area' });
             if (!r.primary_tier)  badges.push({ k: 'tier', label: '?tier' });
+            const qBadge = qaBadge(r.quality_index ?? null);
             return (
               <button key={r.asset_id} onClick={() => setEditing(r)} style={{
                 background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, overflow: 'hidden',
@@ -135,7 +135,14 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                       }}>{b.label}</span>
                     ))}
                   </div>
-                  {/* Centered ▶ overlay — only for video rows that slipped past the photos filter */}
+                  {/* QA badge — bottom-right */}
+                  <div title={r.quality_index != null ? `Quality index ${r.quality_index}%` : 'Not scored yet'} style={{
+                    position:'absolute', right:4, bottom:4,
+                    background: qBadge.bg, color: qBadge.fg,
+                    fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3,
+                    letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                  }}>{qBadge.label}</div>
                   {r.public_url && isVideoRow(r) && (
                     <span
                       role="button"
@@ -173,8 +180,6 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
         rooms={rooms}
         taxonomy={taxonomy}
         onSaved={(updated) => {
-          // Optimistically drop this asset from the client-side filter — the
-          // router.refresh() inside the drawer will re-fetch the source of truth.
           if (updated?.asset_id) {
             setLocalDismiss(s => new Set(s).add(updated.asset_id));
           }
