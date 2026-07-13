@@ -1,10 +1,7 @@
 // app/marketing/media/_client/VideoAiStudioTab.tsx
-// PBS 2026-07-12 · Task #148 — Video AI Studio (Shotstack).
-// Composer: Template · Category · What (5-taxonomy) · Assets multi-select · Voiceover.
-// Submit → POST /api/marketing/media/video-render with {template_key, asset_ids,
-// voiceover_text, target_channel}. Route builds Shotstack EDL from template
-// scaffold + asset URLs, dispatches to Shotstack /render, stores row.
-// Render queue below polls GET ?id= every 15s until done/failed.
+// PBS 2026-07-13 · Video AI Studio v1 — prompt-first workflow.
+// Two-state view: PROMPT input → PREVIEW (shots + script + thumbnails + music).
+// Legacy composer preserved in git history (task #148 revision 1).
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -17,27 +14,21 @@ interface MediaRow {
   mime_type?: string | null; master_path?: string | null;
   duration_sec?: number | null;
 }
-
 interface ChannelSpec { channel: string; display_name: string; video_aspect_ratio: string | null; video_max_duration_sec: number | null; }
-
 interface VideoTemplate {
-  template_key: string;
-  display_name: string;
-  description: string | null;
-  duration_sec: number;
-  min_assets: number;
-  max_assets: number;
-  aspect: string;
+  template_key: string; display_name: string; description: string | null;
+  duration_sec: number; min_assets: number; max_assets: number; aspect: string;
 }
-
 interface VideoEditRow {
   id: string; property_id: number; title: string | null; channel: string;
   aspect: string | null; timeline: any; source_asset_ids: string[] | null;
   status: string; shotstack_render_id: string | null; output_asset_id: string | null;
   cost_eur: number | null; cost_cap_eur: number | null; created_by: string | null;
   created_at: string; rendered_at: string | null;
+  error_msg?: string | null;
+  thumbnails?: any;
+  design_prompt?: string | null;
 }
-
 interface Props {
   propertyId: number;
   mediaPage: MediaRow[];
@@ -56,379 +47,413 @@ const HAIR   = '#E6DFCC';
 const INK    = '#1B1B1B';
 const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
-const RED    = '#B23A2E';
-const OK     = '#0E7A4B';
+const CREAM  = '#F5F0E1';
+const RED    = '#B03826';
 
-function isImageRow(r: MediaRow): boolean {
-  if ((r.asset_type ?? '').toLowerCase() === 'photo') return true;
-  const mt = (r.mime_type ?? '').toLowerCase();
-  if (mt.startsWith('image/')) return true;
-  const p = (r.public_url ?? r.master_path ?? '').toLowerCase();
-  return /\.(jpg|jpeg|png|webp|heic|heif)(\?|$)/.test(p);
-}
-function isVideoRow(r: MediaRow): boolean {
-  if ((r.asset_type ?? '').toLowerCase() === 'video') return true;
-  const mt = (r.mime_type ?? '').toLowerCase();
-  if (mt.startsWith('video/')) return true;
-  const p = (r.public_url ?? r.master_path ?? '').toLowerCase();
-  return /\.(mp4|mov|webm|m4v)(\?|$)/.test(p);
+type Length = 15|30|60|90|180;
+type Style  = 'cinematic'|'snappy'|'editorial'|'casual';
+type Channel = 'youtube_16_9'|'youtube_shorts_9_16'|'instagram_reels'|'tiktok'|'facebook'|'website_hero';
+type VoiceMode = 'none'|'openai_tts'|'upload';
+type Voice = 'alloy'|'echo'|'fable'|'onyx'|'nova'|'shimmer';
+type MusicMood = 'none'|'ambient'|'upbeat'|'emotional'|'cinematic';
+
+const LENGTH_CHOICES: Array<{ v: Length; label: string }> = [
+  { v: 15, label: '15s' }, { v: 30, label: '30s' }, { v: 60, label: '60s' },
+  { v: 90, label: '90s' }, { v: 180, label: '3min' },
+];
+const STYLE_CHOICES: Array<{ v: Style; label: string; hint: string }> = [
+  { v: 'cinematic', label: 'Cinematic', hint: 'Slow, wide, emotional' },
+  { v: 'snappy',    label: 'Snappy',    hint: 'Fast cuts, TikTok energy' },
+  { v: 'editorial', label: 'Editorial', hint: 'Documentary rhythm' },
+  { v: 'casual',    label: 'Casual',    hint: 'Warm, friendly, unpolished' },
+];
+const CHANNEL_CHOICES: Array<{ v: Channel; label: string; aspect: string }> = [
+  { v: 'youtube_16_9',        label: 'YT 16:9',    aspect: '16:9' },
+  { v: 'youtube_shorts_9_16', label: 'Shorts',     aspect: '9:16' },
+  { v: 'instagram_reels',     label: 'Reels 9:16', aspect: '9:16' },
+  { v: 'tiktok',              label: 'TikTok',     aspect: '9:16' },
+  { v: 'website_hero',        label: 'Web Hero',   aspect: '16:9' },
+];
+const VOICE_CHOICES: Voice[] = ['alloy','echo','fable','onyx','nova','shimmer'];
+const MOOD_CHOICES: MusicMood[] = ['none','ambient','upbeat','emotional','cinematic'];
+
+interface DesignResult {
+  ok: boolean;
+  shots: Array<{ asset_id: string; public_url: string; area: string | null; tier: string | null; reason: string | null }>;
+  script: string;
+  scenes: string[];
+  keywords: string[];
+  music: { title: string; artist: string | null; url: string; mood_tags: string[]; source: string } | null;
+  thumbnails: Array<{ channel: string; display_name: string; width: number; height: number; url: string | null }>;
+  thumbnail_asset_id: string | null;
+  edl_preview: any;
+  total_duration_sec: number;
+  preset: any;
+  error?: string;
+  detail?: string;
 }
 
 export default function VideoAiStudioTab({
   propertyId, mediaPage, channelSpecs, videoEdits, templates,
   categories, rooms, facilities, taxonomy, initialSourceAssetId,
 }: Props) {
-  // Composer state
-  const [templateKey, setTemplateKey] = useState<string>(templates[0]?.template_key ?? '');
-  const [categoryKey, setCategoryKey] = useState<string>('');
-  const [whatArea, setWhatArea]       = useState<string>('');
-  const [whereFacilityId, setWhereFacilityId] = useState<string>('');
-  const [title, setTitle] = useState<string>('');
-  const [voiceover, setVoiceover] = useState<string>('');
-  const [targetChannel, setTargetChannel] = useState<string>(
-    (channelSpecs.find(c => c.video_aspect_ratio)?.channel) ?? 'youtube'
-  );
-  const [assetIds, setAssetIds] = useState<string[]>(initialSourceAssetId ? [initialSourceAssetId] : []);
-  const [assetQuery, setAssetQuery] = useState<string>('');
+  // Prompt-first state
+  const [prompt, setPrompt] = useState<string>('');
+  const [length, setLength] = useState<Length>(30);
+  const [style, setStyle] = useState<Style>('cinematic');
+  const [channel, setChannel] = useState<Channel>('youtube_16_9');
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>('openai_tts');
+  const [voice, setVoice] = useState<Voice>('nova');
+  const [musicMood, setMusicMood] = useState<MusicMood>('ambient');
+  const [areas, setAreas] = useState<Record<string, boolean>>({ Rooms: true, 'F&B': true, Wellness: true, River: true, Recreation: false });
+  const [title, setTitle] = useState<string>('THE NAMKHAN');
+  const [tagline, setTagline] = useState<string>('Luang Prabang · Laos');
 
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<{ tone: 'ok'|'err'|'warn'; text: string } | null>(null);
+  const [result, setResult] = useState<DesignResult | null>(null);
   const [rows, setRows] = useState<VideoEditRow[]>(videoEdits);
+  const [rendering, setRendering] = useState<boolean>(false);
+
+  // Suggested area chips derived from mediaPage
+  const areaChips = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of mediaPage) if (r.property_area) set.add(r.property_area);
+    return Array.from(set).slice(0, 12);
+  }, [mediaPage]);
 
   useEffect(() => {
-    if (initialSourceAssetId && !assetIds.includes(initialSourceAssetId)) {
-      setAssetIds(prev => [initialSourceAssetId, ...prev]);
-    }
-  }, [initialSourceAssetId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const template = useMemo(
-    () => templates.find(t => t.template_key === templateKey) ?? null,
-    [templates, templateKey]
-  );
-
-  // Poll queued/rendering rows every 15s.
-  useEffect(() => {
-    const openRows = rows.filter(r => ['queued', 'rendering', 'fetching', 'saving'].includes((r.status ?? '').toLowerCase()));
-    if (openRows.length === 0) return;
-    const t = setInterval(async () => {
-      for (const r of openRows) {
+    // Poll rendering rows every 12s
+    const timer = setInterval(async () => {
+      const pending = rows.filter(r => r.status === 'rendering' || r.status === 'queued');
+      if (pending.length === 0) return;
+      for (const r of pending) {
         try {
-          const res = await fetch(`/api/marketing/media/video-render?id=${r.id}`, { cache: 'no-store' });
-          if (!res.ok) continue;
+          const res = await fetch('/api/marketing/media/video-render?id=' + r.id, { cache: 'no-store' });
           const j = await res.json();
-          if (j?.row?.id) {
-            setRows(prev => prev.map(x => x.id === j.row.id ? j.row : x));
-          }
+          if (j?.ok && j?.row) setRows(prev => prev.map(x => x.id === r.id ? j.row : x));
         } catch { /* silent */ }
       }
-    }, 15000);
-    return () => clearInterval(t);
+    }, 12000);
+    return () => clearInterval(timer);
   }, [rows]);
 
-  const assetsForPicker = useMemo(() => {
-    let out = mediaPage.filter(r => isImageRow(r) || isVideoRow(r));
-    if (assetQuery) {
-      const q = assetQuery.toLowerCase();
-      out = out.filter(r =>
-        (r.original_filename ?? '').toLowerCase().includes(q) ||
-        (r.property_area ?? '').toLowerCase().includes(q)
-      );
-    }
-    return out.slice(0, 200);
-  }, [mediaPage, assetQuery]);
-
-  const assetsSelected = useMemo(
-    () => mediaPage.filter(r => assetIds.includes(r.asset_id)),
-    [mediaPage, assetIds]
-  );
-
-  function toggleAsset(id: string) {
-    setAssetIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
-
-  const minAssets = template?.min_assets ?? 3;
-  const maxAssets = template?.max_assets ?? 10;
-
-  async function submit() {
-    setBanner(null);
-    if (!template) { setBanner({ tone:'err', text:'Pick a template first.' }); return; }
-    if (assetIds.length < minAssets) {
-      setBanner({ tone:'err', text:`Pick at least ${minAssets} asset${minAssets===1?'':'s'} — this template needs ${minAssets}–${maxAssets}.` });
-      return;
-    }
-    if (assetIds.length > maxAssets) {
-      setBanner({ tone:'err', text:`Trim to ${maxAssets} assets — this template maxes out at ${maxAssets}.` });
-      return;
-    }
-    setBusy(true);
+  async function designVideo() {
+    if (!prompt.trim()) { setBanner({ tone: 'err', text: 'Enter a prompt first' }); return; }
+    setBusy(true); setBanner(null); setResult(null);
     try {
-      const res = await fetch('/api/marketing/media/video-render', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const includedAreas = Object.entries(areas).filter(([, v]) => v).map(([k]) => k);
+      const res = await fetch('/api/marketing/media/video-design', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           property_id: propertyId,
-          template_key: template.template_key,
-          asset_ids: assetIds,
-          voiceover_text: voiceover.trim() || null,
-          target_channel: targetChannel,
-          title: title.trim() || null,
-          context: {
-            category_key: categoryKey || null,
-            what_area:    whatArea || null,
-            where_facility_id: whereFacilityId ? Number(whereFacilityId) : null,
-          },
+          prompt: prompt.trim(),
+          length_sec: length,
+          style, channel,
+          voiceover_mode: voiceMode,
+          voice_id: voice,
+          music_mood: musicMood,
+          areas_included: includedAreas,
+          title, tagline,
+          include_thumbnails: true,
+        }),
+      });
+      const j = (await res.json()) as DesignResult;
+      if (!res.ok || !j.ok) {
+        setBanner({ tone: 'err', text: 'Design failed: ' + (j.error ?? 'unknown') + (j.detail ? ' — ' + j.detail : '') });
+      } else {
+        setResult(j);
+        setBanner({ tone: 'ok', text: 'Design ready · ' + j.shots.length + ' shots · ~' + Math.round(j.total_duration_sec) + 's' });
+      }
+    } catch (e: any) {
+      setBanner({ tone: 'err', text: 'Crashed: ' + (e?.message ?? 'unknown') });
+    } finally { setBusy(false); }
+  }
+
+  async function renderFull() {
+    if (!result?.edl_preview) return;
+    setRendering(true); setBanner(null);
+    try {
+      const res = await fetch('/api/marketing/media/video-render', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          property_id: propertyId,
+          title, channel, aspect: CHANNEL_CHOICES.find(c => c.v === channel)?.aspect ?? '16:9',
+          edl: result.edl_preview,
+          thumbnails: result.thumbnails,
+          voiceover_script: voiceMode === 'openai_tts' ? result.script : null,
+          voice_id: voice,
+          design_prompt: prompt,
+          style_key: style,
+          source_asset_ids: result.shots.map(s => s.asset_id),
+          cost_cap_eur: 5,
         }),
       });
       const j = await res.json();
-      if (!res.ok) {
-        if (j.error === 'shotstack_key_missing_in_vault' || j.error === 'vault_key_missing_SHOTSTACK_API_KEY') {
-          setBanner({ tone:'err', text:'Shotstack key not configured — add SHOTSTACK_API_KEY to Supabase vault.' });
-        } else {
-          setBanner({ tone:'err', text:`Failed: ${j.error ?? res.statusText}${j.detail ? ' · ' + j.detail : ''}` });
-        }
-        return;
+      if (!res.ok || !j.ok) {
+        setBanner({ tone: 'err', text: 'Render failed: ' + (j.error ?? 'unknown') + (j.detail ? ' — ' + j.detail : '') });
+      } else {
+        setBanner({ tone: 'ok', text: 'Render dispatched · ' + (j.row?.shotstack_render_id ?? j.id) });
+        if (j.row) setRows(prev => [j.row, ...prev]);
       }
-      setBanner({ tone:'ok', text:`Queued · render_id=${j.id?.slice(0,8) ?? '?'} · status=${j.row?.status ?? 'queued'}. Poll updates below every 15s.` });
-      if (j.row) setRows(prev => [j.row, ...prev]);
-      // Reset selection so PBS can start next round; keep template + category context.
-      setAssetIds([]);
     } catch (e: any) {
-      setBanner({ tone:'err', text:`Failed: ${e.message}` });
-    } finally {
-      setBusy(false);
-    }
+      setBanner({ tone: 'err', text: 'Crashed: ' + (e?.message ?? 'unknown') });
+    } finally { setRendering(false); }
   }
 
-  const bannerBg = banner?.tone === 'ok' ? '#EAF3EA' : banner?.tone === 'err' ? '#FBE9E7' : '#F7F0E1';
-  const bannerFg = banner?.tone === 'ok' ? FOREST : banner?.tone === 'err' ? RED : INK;
-
-  const facilityOptions = facilities.length > 0 ? facilities : [];
-  const videoCategories = categories.filter(c => c.active);
+  function resetDesign() { setResult(null); setBanner(null); }
 
   return (
     <div>
+      {/* Banner */}
       {banner && (
-        <div style={{ padding:'10px 14px', background:bannerBg, color:bannerFg, border:'1px solid '+HAIR, borderRadius:4, marginBottom:12, fontSize:12 }}>
-          {banner.text} <button onClick={() => setBanner(null)} style={{ marginLeft:8, background:'none', border:'none', cursor:'pointer', color:INK_M }}>×</button>
+        <div style={{
+          padding: '8px 12px', marginBottom: 12,
+          background: banner.tone === 'err' ? '#FCE9E5' : banner.tone === 'warn' ? '#FBF3DC' : '#E5F3EC',
+          border: '1px solid ' + (banner.tone === 'err' ? RED : banner.tone === 'warn' ? '#B48A3A' : FOREST),
+          borderRadius: 4, fontSize: 12, color: INK,
+        }}>
+          {banner.text}
+          <button onClick={() => setBanner(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: INK_M }}>×</button>
         </div>
       )}
 
-      {/* Composer — 3 columns like AI Studio */}
-      <div style={{ display:'grid', gridTemplateColumns:'320px 1fr 300px', gap:12, marginBottom:16 }}>
-        {/* Left: Template + Category + What + Where + Title */}
-        <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:12, display:'flex', flexDirection:'column', gap:12 }}>
-          <div>
-            <Label>Template</Label>
-            <select value={templateKey} onChange={e => setTemplateKey(e.target.value)} style={S.input}>
-              {templates.map(t => <option key={t.template_key} value={t.template_key}>{t.display_name}</option>)}
-            </select>
-            {template && (
-              <div style={{ fontSize:10, color:INK_M, marginTop:4 }}>
-                {template.description} · {template.duration_sec}s · {template.min_assets}–{template.max_assets} shots · {template.aspect}
-              </div>
-            )}
+      {!result ? (
+        // ── PROMPT VIEW ───────────────────────────────────────────
+        <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, padding: 20 }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK_M, fontWeight: 700, marginBottom: 12 }}>
+            Prompt-first video studio
           </div>
 
-          <div>
-            <Label>Category (prompt style)</Label>
-            <select value={categoryKey} onChange={e => setCategoryKey(e.target.value)} style={S.input}>
-              <option value="">(no category)</option>
-              {videoCategories.map(c => <option key={c.key} value={c.key}>{c.display_name}</option>)}
-            </select>
-          </div>
+          <textarea
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            placeholder='Sunset promo — pool, villas, ROOTS dinner'
+            rows={3}
+            style={{
+              width: '100%', padding: 12, fontSize: 14, borderRadius: 4,
+              border: '1px solid ' + HAIR, color: INK, background: WHITE,
+              fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',
+            }}
+          />
 
-          <div>
-            <Label>What (property area)</Label>
-            <select value={whatArea} onChange={e => setWhatArea(e.target.value)} style={S.input}>
-              <option value="">(pick an area)</option>
-              {taxonomy.rooms.length > 0 && (
-                <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={`v-room-${r.id}`} value={r.name}>{r.name}</option>)}</optgroup>
-              )}
-              {taxonomy.facilities.length > 0 && (
-                <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={`v-fac-${f.id}`} value={f.name}>{f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}</option>)}</optgroup>
-              )}
-              {taxonomy.activities.length > 0 && (
-                <optgroup label="Activities">{taxonomy.activities.map(a => <option key={`v-act-${a.id}`} value={a.name}>{a.name}</option>)}</optgroup>
-              )}
-              {taxonomy.meeting_spaces.length > 0 && (
-                <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={`v-mtg-${m.id}`} value={m.name}>{m.name}</option>)}</optgroup>
-              )}
-              {taxonomy.transport.length > 0 && (
-                <optgroup label="Transport">{taxonomy.transport.map(t => <option key={`v-trp-${t.id}`} value={t.name}>{t.name}</option>)}</optgroup>
-              )}
-              {(taxonomy.boats && taxonomy.boats.length > 0) && (
-                <optgroup label="Imekong · Boats">{taxonomy.boats.map(b => <option key={`v-boat-${b.id}`} value={b.name}>{b.name}</option>)}</optgroup>
-              )}
-              {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
-                <optgroup label="Imekong · Cruises">{taxonomy.boat_cruises.map(c => <option key={`v-cruise-${c.id}`} value={c.name}>{c.name}</option>)}</optgroup>
-              )}
-            </select>
-          </div>
-
-          <div>
-            <Label>Where (facility · optional)</Label>
-            <select value={whereFacilityId} onChange={e => setWhereFacilityId(e.target.value)} style={S.input}>
-              <option value="">(no facility bias)</option>
-              {facilityOptions.map(f => <option key={f.facility_id} value={f.facility_id}>{f.facility_name}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <Label>Title (optional)</Label>
-            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Sunset bumper — Kingfisher Loft" style={S.input} />
-          </div>
-        </div>
-
-        {/* Middle: Asset multi-select */}
-        <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:12, display:'flex', flexDirection:'column' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8, gap:8 }}>
-            <div style={{ fontSize:11, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>
-              Shots · {assetIds.length}/{maxAssets} picked · need ≥ {minAssets}
+          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10, alignItems: 'center', marginTop: 16 }}>
+            <div style={{ fontSize: 11, color: INK_M, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>Length</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {LENGTH_CHOICES.map(l => (
+                <button key={l.v} onClick={() => setLength(l.v)} style={chip(length === l.v)}>{l.label}</button>
+              ))}
             </div>
-            <input value={assetQuery} onChange={e => setAssetQuery(e.target.value)} placeholder="Search…" style={{ ...S.input, maxWidth:200, padding:'4px 8px', fontSize:11 }} />
+
+            <div style={{ fontSize: 11, color: INK_M, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>Style</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {STYLE_CHOICES.map(s => (
+                <button key={s.v} onClick={() => setStyle(s.v)} title={s.hint} style={chip(style === s.v)}>{s.label}</button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 11, color: INK_M, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>Channel</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {CHANNEL_CHOICES.map(c => (
+                <button key={c.v} onClick={() => setChannel(c.v)} style={chip(channel === c.v)}>{c.label}</button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 11, color: INK_M, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>Voice</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {(['none','openai_tts','upload'] as VoiceMode[]).map(m => (
+                <button key={m} onClick={() => setVoiceMode(m)} style={chip(voiceMode === m)}>
+                  {m === 'none' ? 'None' : m === 'openai_tts' ? 'OpenAI TTS' : 'Upload MP3'}
+                </button>
+              ))}
+              {voiceMode === 'openai_tts' && (
+                <select value={voice} onChange={e => setVoice(e.target.value as Voice)}
+                  style={{ padding: '4px 8px', fontSize: 11, border: '1px solid ' + HAIR, borderRadius: 3, background: WHITE, color: INK }}>
+                  {VOICE_CHOICES.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              )}
+            </div>
+
+            <div style={{ fontSize: 11, color: INK_M, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>Music</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {MOOD_CHOICES.map(m => (
+                <button key={m} onClick={() => setMusicMood(m)} style={chip(musicMood === m)}>
+                  {m === 'none' ? 'None' : m.charAt(0).toUpperCase() + m.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 11, color: INK_M, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>Areas</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {['Rooms','F&B','Wellness','River','Recreation'].map(a => (
+                <button key={a} onClick={() => setAreas(v => ({ ...v, [a]: !v[a] }))} style={chip(!!areas[a])}>
+                  {areas[a] ? '✓ ' : ''}{a}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 11, color: INK_M, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>Title</div>
+            <input value={title} onChange={e => setTitle(e.target.value)}
+              style={{ padding: '6px 10px', fontSize: 12, border: '1px solid ' + HAIR, borderRadius: 3, color: INK, background: WHITE }} />
+
+            <div style={{ fontSize: 11, color: INK_M, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>Tagline</div>
+            <input value={tagline} onChange={e => setTagline(e.target.value)}
+              style={{ padding: '6px 10px', fontSize: 12, border: '1px solid ' + HAIR, borderRadius: 3, color: INK, background: WHITE }} />
           </div>
 
-          {/* Selected strip */}
-          {assetsSelected.length > 0 && (
-            <div style={{ marginBottom:10, padding:8, background:'#F5F1E6', border:'1px solid '+HAIR, borderRadius:4 }}>
-              <div style={{ fontSize:10, color:INK_M, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Selected · will be stitched in this order</div>
-              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                {assetsSelected.map((r, idx) => (
-                  <div key={r.asset_id} style={{ position:'relative', width:80, height:60, border:'2px solid '+FOREST, borderRadius:3, overflow:'hidden' }}>
-                    {r.public_url ? (
-                      isVideoRow(r)
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        ? <video src={r.public_url} preload="metadata" muted style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                        // eslint-disable-next-line @next/next/no-img-element
-                        : <img src={r.public_url} alt={r.original_filename} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                    ) : (
-                      <div style={{ width:'100%', height:'100%', background:'#DDD' }} />
+          <button onClick={designVideo} disabled={busy || !prompt.trim()} style={{
+            marginTop: 20, padding: '10px 24px', fontSize: 13, fontWeight: 700,
+            background: busy ? INK_M : FOREST, color: WHITE, border: 'none', borderRadius: 4,
+            cursor: busy ? 'progress' : 'pointer', letterSpacing: '0.06em', textTransform: 'uppercase',
+          }}>{busy ? 'Designing…' : '✦ Design Video'}</button>
+        </div>
+      ) : (
+        // ── PREVIEW VIEW ──────────────────────────────────────────
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button onClick={resetDesign} style={{
+              padding: '6px 12px', fontSize: 11, background: WHITE, color: INK, border: '1px solid ' + HAIR, borderRadius: 3, cursor: 'pointer',
+            }}>← New prompt</button>
+            <div style={{ fontSize: 12, color: INK_M }}>
+              AI cut · {result.shots.length} shots · ~{Math.round(result.total_duration_sec)}s · {style}
+            </div>
+          </div>
+
+          {/* Shot strip */}
+          <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, padding: 16, marginBottom: 12 }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, fontWeight: 700, marginBottom: 10 }}>
+              Selected shots
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+              {result.shots.map((s, i) => (
+                <div key={s.asset_id} style={{ border: '1px solid ' + HAIR, borderRadius: 4, overflow: 'hidden', background: WHITE }}>
+                  <div style={{ position: 'relative', aspectRatio: '16/9', background: CREAM }}>
+                    {s.public_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.public_url} alt={s.asset_id} loading='lazy'
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     )}
-                    <div style={{ position:'absolute', top:0, left:0, background:FOREST, color:WHITE, fontSize:9, fontWeight:700, padding:'1px 4px' }}>{idx+1}</div>
-                    <button onClick={() => toggleAsset(r.asset_id)} title="Remove" style={{
-                      position:'absolute', top:0, right:0, background:RED, color:WHITE, border:'none',
-                      fontSize:9, fontWeight:700, padding:'1px 4px', cursor:'pointer',
-                    }}>×</button>
+                    <div style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.72)', color: WHITE, fontSize: 10, padding: '2px 6px', borderRadius: 2, fontWeight: 700 }}>#{i + 1}</div>
+                  </div>
+                  <div style={{ padding: '6px 8px', fontSize: 10, color: INK_M }}>
+                    <div style={{ color: INK, fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{s.area ?? 'no area'}</div>
+                    <div style={{ marginTop: 2, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{s.tier ?? ''}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Script + music */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, padding: 16 }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, fontWeight: 700, marginBottom: 6 }}>Voiceover script</div>
+              <div style={{ fontSize: 13, lineHeight: 1.5, color: INK }}>
+                {result.script || <span style={{ color: INK_M, fontStyle: 'italic' }}>No script generated</span>}
+              </div>
+            </div>
+            <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, padding: 16 }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, fontWeight: 700, marginBottom: 6 }}>Music</div>
+              {result.music ? (
+                <div style={{ fontSize: 12, color: INK }}>
+                  <div style={{ fontWeight: 700 }}>{result.music.title}</div>
+                  <div style={{ color: INK_M, marginTop: 2 }}>{result.music.artist ?? 'Unknown'} · {result.music.source}</div>
+                  <audio controls src={result.music.url} style={{ marginTop: 8, width: '100%' }} />
+                </div>
+              ) : <div style={{ fontSize: 12, color: INK_M }}>No music selected</div>}
+            </div>
+          </div>
+
+          {/* Thumbnails */}
+          {result.thumbnails.length > 0 && (
+            <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, padding: 16, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, fontWeight: 700, marginBottom: 10 }}>
+                Per-channel thumbnails
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+                {result.thumbnails.map(t => (
+                  <div key={t.channel} style={{ border: '1px solid ' + HAIR, borderRadius: 4, overflow: 'hidden', background: WHITE }}>
+                    <div style={{ position: 'relative', background: CREAM, height: 120 }}>
+                      {t.url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={t.url} alt={t.channel} loading='lazy'
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ padding: 10, fontSize: 11, color: INK_M }}>generation failed</div>
+                      )}
+                    </div>
+                    <div style={{ padding: '6px 8px', fontSize: 10 }}>
+                      <div style={{ color: INK, fontWeight: 600 }}>{t.display_name}</div>
+                      <div style={{ color: INK_M, marginTop: 1 }}>{t.width}×{t.height}</div>
+                      {t.url && (
+                        <a href={t.url} download style={{ display: 'inline-block', marginTop: 4, fontSize: 10, color: FOREST, fontWeight: 600 }}>Download</a>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Picker grid */}
-          <div style={{ flex:1, overflow:'auto', maxHeight:360, display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(90px, 1fr))', gap:6 }}>
-            {assetsForPicker.map(r => {
-              const picked = assetIds.includes(r.asset_id);
-              const video = isVideoRow(r);
-              return (
-                <button key={r.asset_id} onClick={() => toggleAsset(r.asset_id)} style={{
-                  position:'relative', border: picked ? '2px solid '+FOREST : '1px solid '+HAIR,
-                  borderRadius:3, padding:0, background:WHITE, cursor:'pointer', overflow:'hidden',
-                }}>
-                  <div style={{ position:'relative', width:'100%', height:72, background:'#F5F0E1' }}>
-                    {r.public_url ? (
-                      video
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        ? <video src={r.public_url} preload="metadata" muted style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                        // eslint-disable-next-line @next/next/no-img-element
-                        : <img src={r.public_url} alt={r.original_filename} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                    ) : (
-                      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, color:INK_M }}>no preview</div>
-                    )}
-                    {video && (
-                      <div style={{ position:'absolute', bottom:2, left:2, background:'rgba(0,0,0,0.6)', color:WHITE, fontSize:8, fontWeight:600, padding:'1px 3px', borderRadius:2 }}>▶</div>
-                    )}
-                    {picked && (
-                      <div style={{ position:'absolute', top:2, right:2, background:FOREST, color:WHITE, fontSize:9, fontWeight:700, padding:'1px 4px', borderRadius:2 }}>✓</div>
-                    )}
-                  </div>
-                  <div style={{ padding:'2px 4px', fontSize:9, color:INK, textAlign:'left', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.original_filename}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Right: Voiceover + Channel + Submit */}
-        <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:12, display:'flex', flexDirection:'column', gap:12 }}>
-          <div>
-            <Label>Target channel</Label>
-            <select value={targetChannel} onChange={e => setTargetChannel(e.target.value)} style={S.input}>
-              {channelSpecs.filter(c => c.video_aspect_ratio).map(c => (
-                <option key={c.channel} value={c.channel}>{c.display_name} · {c.video_aspect_ratio}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <Label>Voiceover (optional · ElevenLabs)</Label>
-            <textarea value={voiceover} onChange={e => setVoiceover(e.target.value)} rows={6} placeholder="Leave empty for silent." style={{ ...S.input, resize:'vertical', fontFamily:'inherit' }} />
-            <div style={{ fontSize:10, color:INK_M, marginTop:4 }}>
-              If empty → silent cut. If set → TTS'd via ElevenLabs when key present.
-            </div>
-          </div>
-
-          <div>
-            <Label>Music track</Label>
-            <div style={{ fontSize:11, color:INK_M, padding:'8px 10px', border:'1px dashed '+HAIR, borderRadius:3 }}>
-              TODO — royalty-free music library. Coming after Voiceover proves out.
-            </div>
-          </div>
-
-          <button onClick={submit} disabled={busy || !template} style={{
-            padding:'10px 14px', fontSize:13, fontWeight:700, background:FOREST, color:WHITE,
-            border:'none', borderRadius:4, cursor: (busy || !template) ? 'default' : 'pointer',
-            opacity: (busy || !template) ? 0.6 : 1,
-          }}>{busy ? 'Queueing…' : 'Render video ▸'}</button>
-        </div>
-      </div>
-
-      {/* Render queue */}
-      <div style={{ marginBottom:8, fontSize:11, color:INK_M, textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>
-        Render queue · {rows.length}
-      </div>
-      {rows.length === 0 ? (
-        <div style={{ padding:20, textAlign:'center', color:INK_M, background:WHITE, border:'1px solid '+HAIR, borderRadius:4, fontSize:12 }}>No renders yet.</div>
-      ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {rows.slice(0, 50).map(v => {
-            const status = (v.status ?? '').toLowerCase();
-            const done   = status === 'done' || status === 'completed';
-            const failed = status === 'failed' || status === 'error';
-            const tone   = done ? OK : failed ? RED : INK;
-            return (
-              <div key={v.id} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, padding:12, fontSize:12, color:INK }}>
-                <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'baseline', flexWrap:'wrap' }}>
-                  <span style={{ fontWeight:600 }}>{v.title || '(untitled)'} · {v.channel}{v.aspect ? ' · ' + v.aspect : ''}</span>
-                  <span style={{ fontSize:10, color:INK_M }}>{new Date(v.created_at).toLocaleString()}</span>
-                </div>
-                <div style={{ display:'flex', gap:8, marginTop:4, fontSize:10, color:INK_M, flexWrap:'wrap' }}>
-                  <span>status: <strong style={{ color:tone }}>{v.status}</strong></span>
-                  {v.shotstack_render_id && <span>shotstack: {v.shotstack_render_id.slice(0, 10)}…</span>}
-                  {v.output_asset_id && <span>asset: {v.output_asset_id.slice(0, 8)}…</span>}
-                  {v.cost_eur != null && <span>cost: €{Number(v.cost_eur).toFixed(2)}</span>}
-                  {v.source_asset_ids && <span>shots: {v.source_asset_ids.length}</span>}
-                </div>
-                {done && (v as any).output_url && (
-                  <a href={(v as any).output_url as string} target="_blank" rel="noopener noreferrer" style={{
-                    display:'inline-block', marginTop:6, fontSize:11, color:FOREST, fontWeight:600, textDecoration:'underline',
-                  }}>Preview / download ▸</a>
-                )}
-              </div>
-            );
-          })}
+          <button onClick={renderFull} disabled={rendering} style={{
+            padding: '12px 28px', fontSize: 13, fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '0.06em', background: rendering ? INK_M : FOREST, color: WHITE,
+            border: 'none', borderRadius: 4, cursor: rendering ? 'progress' : 'pointer',
+          }}>{rendering ? 'Dispatching…' : '🎬 Render Full Video'}</button>
         </div>
       )}
+
+      {/* Render queue below */}
+      <div style={{ marginTop: 24 }}>
+        <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, fontWeight: 700, marginBottom: 8 }}>
+          Recent renders ({rows.length})
+        </div>
+        <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: CREAM, borderBottom: '1px solid ' + HAIR }}>
+                <th style={{ padding: 8, textAlign: 'left', color: INK_M, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Title</th>
+                <th style={{ padding: 8, textAlign: 'left', color: INK_M, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Channel</th>
+                <th style={{ padding: 8, textAlign: 'left', color: INK_M, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Status</th>
+                <th style={{ padding: 8, textAlign: 'left', color: INK_M, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Created</th>
+                <th style={{ padding: 8, textAlign: 'left', color: INK_M, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Error / Output</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 20).map(r => (
+                <tr key={r.id} style={{ borderBottom: '1px solid ' + HAIR }}>
+                  <td style={{ padding: 8, color: INK }}>{r.title ?? r.id.slice(0, 8)}</td>
+                  <td style={{ padding: 8, color: INK_M }}>{r.channel}</td>
+                  <td style={{ padding: 8 }}>
+                    <span style={{
+                      padding: '2px 8px', borderRadius: 3, fontSize: 10, fontWeight: 700,
+                      background: r.status === 'done' ? '#E5F3EC' : r.status === 'failed' ? '#FCE9E5' : '#FBF3DC',
+                      color: r.status === 'done' ? FOREST : r.status === 'failed' ? RED : '#B48A3A',
+                    }}>{r.status}</span>
+                  </td>
+                  <td style={{ padding: 8, color: INK_M }}>{new Date(r.created_at).toLocaleString()}</td>
+                  <td style={{ padding: 8, color: r.status === 'failed' ? RED : INK_M, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.error_msg ?? ''}>
+                    {r.error_msg ?? (r.output_asset_id ? 'asset ' + r.output_asset_id.slice(0, 8) : '—')}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: INK_M, fontStyle: 'italic' }}>No renders yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
-}
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:4, fontWeight:600 }}>{children}</div>;
+  function chip(active: boolean): React.CSSProperties {
+    return {
+      padding: '5px 12px', fontSize: 11, fontWeight: 600, borderRadius: 3,
+      border: '1px solid ' + (active ? FOREST : HAIR),
+      background: active ? FOREST : WHITE,
+      color: active ? WHITE : INK,
+      cursor: 'pointer', whiteSpace: 'nowrap',
+    };
+  }
 }
-
-const S: Record<string, React.CSSProperties> = {
-  input: {
-    width: '100%', padding: '6px 10px', fontSize: 12, color: INK,
-    background: WHITE, border: '1px solid ' + HAIR, borderRadius: 3, outline: 'none',
-  },
-};
