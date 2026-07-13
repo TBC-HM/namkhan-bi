@@ -1,18 +1,13 @@
 // app/sales/mails/page.tsx
 // Sales · Mails — unified shared-mailbox inbox (filter mode).
-// PBS 2026-07-13 pivot:
-//   - Guard 1: user must be signed in.
-//   - Guard 2: user must have connected their PERSONAL Gmail
-//     (marketing.user_gmail_connections). If not → CREAM banner + Connect
-//     Gmail link to /settings/gmail.
-//   - Guard 3: at least one shared alias must be registered. If not →
-//     CREAM banner + inline Add-alias form.
-//   - When both are good → hydrate <UnifiedMailInbox/>.
-// PBS 2026-07-14 addition: header link → /mail (full-screen mailbox).
-// PBS 2026-07-14 (TASK 2): per-alias diagnostic chip strip. When an alias
-//   returns 0 messages after successful load, show muted subtitle + a small
-//   "?" info tooltip explaining the Workspace routing fix. Errored aliases
-//   render "error — reconnect".
+// PBS 2026-07-14 (mail-to-lead UX pivot):
+//   - Removed the standalone MailToLeadPanel table below the inbox.
+//   - Convert-to-Lead is now inline per-row inside <UnifiedMailInbox/> via
+//     renderRowActions, plus multi-select bulk Convert / Dismiss on selected
+//     threads. See UnifiedMailInbox v3 props.
+//   - Dismissed threads are stored in sales.dismissed_mail_threads (RPC
+//     public.fn_dismiss_mail_thread) and surfaced back to the inbox via
+//     v_dismissed_mail_threads → passed as dismissedThreadIds prop.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import UnifiedMailInbox, { type Thread, type MailboxSummary } from '@/app/(cockpit)/_design/UnifiedMailInbox';
@@ -21,8 +16,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getCurrentAuthUser } from '@/lib/userGmail';
 import { listActiveMailboxes, listSharedInbox } from '@/lib/sharedGmail';
 import AddAliasForm from './AddAliasForm';
-// PBS 2026-07-14 (Sales CRM upgrade) — companion panel + lead lookup below.
-import MailToLeadPanel from './MailToLeadPanel';
+import MailsClientActions from './MailsClientActions';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -56,7 +50,6 @@ export default async function SalesMailsPage({
 
   const user = await getCurrentAuthUser();
 
-  // ---- guard 1: not signed in ----
   if (!user) {
     return (
       <DashboardPage title="Sales · Mails" tabs={tabs}>
@@ -72,7 +65,6 @@ export default async function SalesMailsPage({
     );
   }
 
-  // ---- guard 2: personal Gmail not connected ----
   const admin = getSupabaseAdmin();
   const { data: personalConn } = await admin
     .from('v_user_gmail_connections')
@@ -102,7 +94,6 @@ export default async function SalesMailsPage({
     );
   }
 
-  // ---- guard 3: no aliases registered ----
   const { data: rowsRaw } = await admin
     .from('v_shared_mailbox_connections')
     .select('id, mailbox_address, label, badge_color, sort_order, active')
@@ -137,7 +128,6 @@ export default async function SalesMailsPage({
     );
   }
 
-  // ---- all guards passed → hydrate the inbox ----
   let initialThreads: Thread[] = [];
   let hydrateErr: string | null = null;
   try {
@@ -151,9 +141,7 @@ export default async function SalesMailsPage({
   const firstAliasSlug = mailboxes[0]?.mailbox_address?.split('@')[0] ?? '';
   const fullMailHref = firstAliasSlug ? '/mail?account=' + encodeURIComponent(firstAliasSlug) : '/mail';
 
-  // PBS 2026-07-14 (Sales CRM upgrade) — precompute which threads already
-  // have a lead so the companion panel can render "Open lead #N" instead of
-  // "Convert to Lead" for known threads. One query, no per-row roundtrips.
+  // Precompute lead links for visible threads.
   const threadIdList = Array.from(new Set(initialThreads.map((t) => t.threadId))).slice(0, 100);
   const linkedLeadByThreadId: Record<string, number> = {};
   if (threadIdList.length > 0) {
@@ -167,10 +155,24 @@ export default async function SalesMailsPage({
     }
   }
 
-  // TASK 2 (2026-07-14): per-alias status from initialThreads count.
-  // "0 msgs" chips get a muted subtitle + info tooltip; hydrate error → all
-  // chips show "error — reconnect" (single failure point today = personal
-  // Gmail token / shared alias listing).
+  // Precompute dismissed thread set (skip Convert action if already dismissed).
+  const dismissedIds: string[] = [];
+  if (threadIdList.length > 0) {
+    const { data: dismissedRows } = await admin
+      .from('v_dismissed_mail_threads')
+      .select('thread_id')
+      .in('thread_id', threadIdList);
+    for (const row of (dismissedRows ?? [])) {
+      const tid = (row as { thread_id: string | null }).thread_id;
+      if (tid) dismissedIds.push(tid);
+    }
+  }
+
+  // mailbox_id → mailbox_alias slug for the API payloads.
+  const aliasByMailboxId: Record<string, string> = {};
+  for (const m of mailboxes) aliasByMailboxId[m.id] = m.mailbox_address.split('@')[0] || 'sales';
+
+  // Per-alias diagnostic strip (unchanged).
   const perAlias: Array<{
     id: string; label: string; alias: string; badge_color: string;
     count: number; errored: boolean;
@@ -202,7 +204,6 @@ export default async function SalesMailsPage({
         </div>
       )}
 
-      {/* TASK 2 · per-alias diagnostic strip */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
         {perAlias.map((a) => {
           const zeroCount = !a.errored && a.count === 0;
@@ -274,8 +275,14 @@ export default async function SalesMailsPage({
         <span>Debug: {mailboxes.length} aliases · {initialThreads.length} threads · signed in as {user.email}</span>
         <a href={fullMailHref} style={{ color: T.FOREST, textDecoration: 'none', fontWeight: 600 }}>Open in full mailbox</a>
       </div>
-      <UnifiedMailInbox initialThreads={initialThreads} mailboxes={mailboxes} />
-      <MailToLeadPanel threads={initialThreads} linkedLeadByThreadId={linkedLeadByThreadId} />
+
+      <MailsClientActions
+        initialThreads={initialThreads}
+        mailboxes={mailboxes}
+        linkedLeadByThreadId={linkedLeadByThreadId}
+        dismissedThreadIds={dismissedIds}
+        aliasByMailboxId={aliasByMailboxId}
+      />
     </DashboardPage>
   );
 }
