@@ -520,7 +520,7 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
               <a href="/messy-data"                onClick={() => setUserOpen(false)} style={S.link}>Messy data</a>
               {isAdmin && (
                 <>
-                  <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email categories</a>
+                  <a href="/settings/gmail" onClick={() => setUserOpen(false)} style={S.link}>Connect email</a>
                   <a href="/settings/users"            onClick={() => setUserOpen(false)} style={S.link}>Users &amp; roles</a>
                 </>
               )}
