@@ -3,6 +3,10 @@
 // Top-nav Gmail icon + dropdown. Silent (renders nothing) if the user has no
 // connection. Polls /api/user/gmail/inbox every 60s. Row actions: Open ↗,
 // Mark read, Reply (opens ComposeModal with prefill).
+//
+// PBS 2026-07-14: footer link "Open full mailbox →" now deep-links to /mail
+// (the full-screen professional mailbox). Popup is preserved as the glance
+// surface.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ComposeModal, { type ComposePrefill } from './ComposeModal';
@@ -177,7 +181,8 @@ export default function GmailNavDropdown() {
             <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: INK_M }}>No unread messages.</div>
           )}
 
-          <div style={{ padding: '8px 12px', borderTop: '1px solid ' + HAIR, textAlign: 'center' }}>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid ' + HAIR, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <a href="/mail" style={{ fontSize: 11, color: FOREST, textDecoration: 'none', fontWeight: 600 }}>Open full mailbox →</a>
             <a href="/settings/gmail" style={{ fontSize: 11, color: INK_M, textDecoration: 'none' }}>Settings</a>
           </div>
         </div>
