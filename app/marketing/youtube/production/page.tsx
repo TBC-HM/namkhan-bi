@@ -30,6 +30,10 @@ interface BlackRow { competitor_name: string; city: string | null; country_iso2:
 
 export default async function YouTubeProductionPage() {
   const sb = getSupabaseAdmin();
+
+  // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC. No-op if token still valid.
+  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
+
   const [jobsRes, requestsRes, briefsRes, peopleRes, ratesRes, vocabRes, blackRes] = await Promise.all([
     sb.from('v_yt_render_jobs')
       .select('render_job_id,status,brief_id,output_url,submitted_at_utc,finished_at_utc,guardrail_passed_at_utc,error_msg')
