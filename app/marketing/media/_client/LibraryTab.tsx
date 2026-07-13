@@ -1,8 +1,9 @@
 // app/marketing/media/_client/LibraryTab.tsx
 // PBS 2026-07-12 — Library tab. KPIs, tier filter, grid, upload.
-// 2026-07-12 (later) — Edit ✎ button opens AssetEditDrawer for 6 mutable columns.
+// 2026-07-12 (later) — Edit button opens AssetEditDrawer for 6 mutable columns.
 // 2026-07-13 · MEDIA QA v1 — tile now shows a bottom-right quality badge
 //   (FOREST 80+ · CREAM 60-79 · AMBER 40-59 · RED <40 · HAIR unscored).
+// 2026-07-14 · TASK 1 — Library now hides untagged photos (Clarify-only domain).
 'use client';
 
 import { useMemo, useState, Fragment } from 'react';
@@ -79,8 +80,18 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const [areaFilter, setAreaFilter] = useState('');
   const [aiOnly, setAiOnly] = useState(false);
 
+  // TASK 1 (2026-07-14): Library shows only FULLY TAGGED photos.
+  // Untagged rows are handled exclusively by ClarifyTab. This is a hard rail
+  // BEFORE any user-facing chip / search / area filter.
+  const isFullyTagged = (r: MediaRow) =>
+    !!r.primary_tier && !!r.property_area && r.property_area.trim() !== '';
+
   const filtered = useMemo(() => {
-    let out = mediaPage;
+    let out = mediaPage.filter(r =>
+      ((r.asset_type ?? '').toLowerCase() !== 'video') &&
+      !((r.mime_type ?? '').toLowerCase().startsWith('video/')) &&
+      isFullyTagged(r)
+    );
     if (tier)         out = out.filter(r => r.primary_tier === tier);
     if (areaFilter) {
       const q = areaFilter.trim().toLowerCase();
@@ -102,7 +113,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
 
   async function deleteAsset(assetId: string, filename: string | null) {
-    if (!window.confirm(`Delete "${filename ?? assetId.slice(0,8)}" from the library? (soft-delete, can be restored via SQL)`)) return;
+    if (!window.confirm('Delete "' + (filename ?? assetId.slice(0,8)) + '" from the library? (soft-delete, can be restored via SQL)')) return;
     setBusyRow(assetId); setMsg(null);
     try {
       const res = await fetch('/api/marketing/media/asset-delete', {
@@ -112,8 +123,8 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'delete_failed');
       setLocalDismiss(s => { const next = new Set(s); next.add(assetId); return next; });
-      setMsg(`Deleted ${filename ?? assetId.slice(0,8)} — refresh to sync`);
-    } catch (e: any) { setMsg(`Delete failed: ${e.message}`); }
+      setMsg('Deleted ' + (filename ?? assetId.slice(0,8)) + ' — refresh to sync');
+    } catch (e: any) { setMsg('Delete failed: ' + e.message); }
     finally { setBusyRow(null); }
   }
 
@@ -129,19 +140,19 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'failed');
       const dl = j.download_url as string | undefined;
-      const label = `${j.channel_display ?? channel} · ${j.width}×${j.height}`;
+      const label = (j.channel_display ?? channel) + ' · ' + j.width + 'x' + j.height;
       if (dl) {
-        const proxyUrl = `/api/marketing/media/download-render?asset_id=${assetId}&channel=${encodeURIComponent(channel)}`;
+        const proxyUrl = '/api/marketing/media/download-render?asset_id=' + assetId + '&channel=' + encodeURIComponent(channel);
         setLastDownload({ url: proxyUrl, label });
-        setMsg(`Rendered for ${label} — download started ✓`);
-        const proxy = `/api/marketing/media/download-render?asset_id=${assetId}&channel=${encodeURIComponent(channel)}`;
+        setMsg('Rendered for ' + label + ' — download started');
+        const proxy = '/api/marketing/media/download-render?asset_id=' + assetId + '&channel=' + encodeURIComponent(channel);
         const link = document.createElement('a'); link.href = proxy; link.download = j.filename_hint ?? '';
         document.body.appendChild(link); link.click(); link.remove();
       } else {
-        setMsg(`Rendered for ${channel} — queued as ${j.render_id ?? 'render'}`);
+        setMsg('Rendered for ' + channel + ' — queued as ' + (j.render_id ?? 'render'));
       }
     } catch (e: any) {
-      setMsg(`Failed: ${e.message}`);
+      setMsg('Failed: ' + e.message);
     } finally {
       setBusyRow(null);
     }
@@ -168,7 +179,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       {/* Filter row + upload */}
       <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-          <input value={searchText} onChange={e => { setSearchText(e.target.value); setPage(0); }} placeholder="Search filename / area…" style={{ flex:'1 1 200px', minWidth:180, padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE }} />
+          <input value={searchText} onChange={e => { setSearchText(e.target.value); setPage(0); }} placeholder="Search filename / area" style={{ flex:'1 1 200px', minWidth:180, padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE }} />
         <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(0); }} style={{ padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE, minWidth:180 }}>
           <option value="">All areas</option>
           <option value="Logos">Logos</option>
@@ -176,32 +187,32 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           {taxonomy ? (
             <>
               {taxonomy.rooms.length > 0 && (
-                <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={`f-room-${r.id}`} value={r.name}>{r.name}</option>)}</optgroup>
+                <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={'f-room-'+r.id} value={r.name}>{r.name}</option>)}</optgroup>
               )}
               {taxonomy.facilities.length > 0 && (
-                <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={`f-fac-${f.id}`} value={f.name}>{f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}</option>)}</optgroup>
+                <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={'f-fac-'+f.id} value={f.name}>{f.parent_name ? f.name + ' - ' + f.parent_name : f.name}</option>)}</optgroup>
               )}
               {taxonomy.activities.length > 0 && (
-                <optgroup label="Activities">{taxonomy.activities.map(a => <option key={`f-act-${a.id}`} value={a.name}>{a.name}</option>)}</optgroup>
+                <optgroup label="Activities">{taxonomy.activities.map(a => <option key={'f-act-'+a.id} value={a.name}>{a.name}</option>)}</optgroup>
               )}
               {taxonomy.meeting_spaces.length > 0 && (
-                <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={`f-mtg-${m.id}`} value={m.name}>{m.name}</option>)}</optgroup>
+                <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={'f-mtg-'+m.id} value={m.name}>{m.name}</option>)}</optgroup>
               )}
               {taxonomy.transport.length > 0 && (
-                <optgroup label="Transport">{taxonomy.transport.map(t => <option key={`f-trp-${t.id}`} value={t.name}>{t.name}</option>)}</optgroup>
+                <optgroup label="Transport">{taxonomy.transport.map(t => <option key={'f-trp-'+t.id} value={t.name}>{t.name}</option>)}</optgroup>
               )}
               {(taxonomy.boats && taxonomy.boats.length > 0) && (
-                <optgroup label="Imekong · Boats">{taxonomy.boats.map(b => <option key={`f-boat-${b.id}`} value={b.name}>{b.name}</option>)}</optgroup>
+                <optgroup label="Imekong Boats">{taxonomy.boats.map(b => <option key={'f-boat-'+b.id} value={b.name}>{b.name}</option>)}</optgroup>
               )}
               {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
-                <optgroup label="Imekong · Cruises">{taxonomy.boat_cruises.map(c => <option key={`f-cruise-${c.id}`} value={c.name}>{c.name}</option>)}</optgroup>
+                <optgroup label="Imekong Cruises">{taxonomy.boat_cruises.map(c => <option key={'f-cruise-'+c.id} value={c.name}>{c.name}</option>)}</optgroup>
               )}
             </>
           ) : (
             (areaOptions ?? []).map(a => <option key={a} value={a}>{a}</option>)
           )}
         </select>
-        <button onClick={() => { setAiOnly(v => !v); setPage(0); }} style={{ padding:'4px 10px', fontSize:11, borderRadius:12, cursor:'pointer', border:'1px solid '+(aiOnly ? FOREST : HAIR), background: aiOnly ? FOREST : WHITE, color: aiOnly ? WHITE : INK, fontWeight: aiOnly ? 600 : 400, whiteSpace:'nowrap' }}>✨ AI only</button>
+        <button onClick={() => { setAiOnly(v => !v); setPage(0); }} style={{ padding:'4px 10px', fontSize:11, borderRadius:12, cursor:'pointer', border:'1px solid '+(aiOnly ? FOREST : HAIR), background: aiOnly ? FOREST : WHITE, color: aiOnly ? WHITE : INK, fontWeight: aiOnly ? 600 : 400, whiteSpace:'nowrap' }}>AI only</button>
         {TIER_CHIPS.map(c => {
             const active = tier === c.key;
             return (
@@ -215,7 +226,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           })}
         </div>
         <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
-          <span style={{ fontSize:11, color:INK_M }}>{filtered.length.toLocaleString()} shown</span>
+          <span style={{ fontSize:11, color:INK_M }}>{filtered.length.toLocaleString()} tagged photos shown</span>
           <button onClick={() => setShowUpload(v => !v)} style={{
             padding:'6px 14px', fontSize:12, fontWeight:600, background:FOREST, color:WHITE,
             border:'none', borderRadius:4, cursor:'pointer',
@@ -231,7 +242,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
 
       {msg && (
         <div style={{ padding:'8px 12px', background:'#F7F0E1', border:'1px solid '+HAIR, borderRadius:4, marginBottom:12, fontSize:12, color:INK }}>
-          {msg} <button onClick={() => setMsg(null)} style={{ marginLeft:8, background:'none', border:'none', cursor:'pointer', color:INK_M }}>×</button>
+          {msg} <button onClick={() => setMsg(null)} style={{ marginLeft:8, background:'none', border:'none', cursor:'pointer', color:INK_M }}>x</button>
         </div>
       )}
 
@@ -254,7 +265,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                 ) : (
                   <div style={{ width:'100%', aspectRatio:'16/9', minHeight:160, background:'#F5F0E1', color:INK_M, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>no preview</div>
                 )}
-                <div title={r.quality_index != null ? `Quality index ${r.quality_index}%` : 'Not scored yet'} style={{
+                <div title={r.quality_index != null ? 'Quality index ' + r.quality_index + '%' : 'Not scored yet'} style={{
                   position: 'absolute', right: 4, bottom: 4,
                   background: badge.bg, color: badge.fg,
                   fontSize: 10, fontWeight: 700,
@@ -267,28 +278,28 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                 <div style={{ fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.original_filename}</div>
                 <div style={{ color:INK_M, display:'flex', gap:6, flexWrap:'wrap' }}>
                   {r.primary_tier && <span>{r.primary_tier}</span>}
-                  {r.property_area && <span>· {r.property_area}</span>}
+                  {r.property_area && <span>{r.property_area}</span>}
                 </div>
                 <div style={{ marginTop:'auto', display:'flex', gap:4, alignItems:'center', flexWrap:'wrap' }}>
                   <button onClick={() => setEditing(r)} style={{
                     padding:'4px 10px', fontSize:11, fontWeight:600, background:'transparent', color:INK,
                     border:'1px solid '+INK, borderRadius:2, cursor:'pointer', whiteSpace:'nowrap',
-                  }}>Edit ✎</button>
+                  }}>Edit</button>
                   <button onClick={() => deleteAsset(r.asset_id, r.original_filename ?? null)} disabled={busyRow === r.asset_id} title="Delete from library (soft-delete)" style={{
                     padding:'4px 8px', fontSize:11, fontWeight:600, background:'transparent', color:'#B23A2E',
                     border:'1px solid #B23A2E', borderRadius:2, cursor:'pointer', whiteSpace:'nowrap',
-                  }}>✕ Delete</button>
+                  }}>Delete</button>
                   <button onClick={() => setUseForMenu(useForMenu === r.asset_id ? null : r.asset_id)} disabled={busyRow === r.asset_id} style={{
                     fontSize:10, padding:'4px 8px', background:WHITE, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', color:INK,
-                  }}>Use for…</button>
-                  {busyRow === r.asset_id && <span style={{ fontSize:10, color:INK_M }}>…</span>}
+                  }}>Use for</button>
+                  {busyRow === r.asset_id && <span style={{ fontSize:10, color:INK_M }}>...</span>}
                 </div>
                 {useForMenu === r.asset_id && (
                   <div style={{ marginTop:4, background:WHITE, border:'1px solid '+HAIR, borderRadius:3, padding:4, maxHeight:160, overflow:'auto' }}>
                     {onSendToAi && (
                       <button onClick={() => { onSendToAi(r.asset_id); setUseForMenu(null); }} style={{
                         display:'block', width:'100%', textAlign:'left', padding:'6px 8px', fontSize:11, fontWeight:600, background:'#F5F1E6', border:'none', borderBottom:'1px solid '+HAIR, cursor:'pointer', color:FOREST,
-                      }}>✨ AI Studio (refine / restyle)</button>
+                      }}>AI Studio (refine / restyle)</button>
                     )}
                     {channelSpecs.map(c => (
                       <Fragment key={c.channel}>
@@ -311,11 +322,11 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop:16, alignItems:'center' }}>
           <button disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))} style={{
             padding:'4px 10px', fontSize:11, border:'1px solid '+HAIR, background:WHITE, borderRadius:3, cursor: page === 0 ? 'default' : 'pointer', color:INK,
-          }}>← Prev</button>
+          }}>Prev</button>
           <span style={{ fontSize:11, color:INK_M }}>Page {page + 1} of {totalPages}</span>
           <button disabled={page + 1 >= totalPages} onClick={() => setPage(p => p + 1)} style={{
             padding:'4px 10px', fontSize:11, border:'1px solid '+HAIR, background:WHITE, borderRadius:3, cursor: page + 1 >= totalPages ? 'default' : 'pointer', color:INK,
-          }}>Next →</button>
+          }}>Next</button>
         </div>
       )}
 
