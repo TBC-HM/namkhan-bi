@@ -7,7 +7,7 @@ import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { PanelHeader, EmptyState } from './_shared';
 import { supabase } from '@/lib/supabase';
-import { btnPrimary, btnGhost, rowStyle, ErrorBanner, LabeledInput, LabeledCheckbox, LabeledSelect, LabeledTextarea, ArrayInput, FormShell, DeleteConfirm, pill } from './_settings_ui';
+import { btnPrimary, btnGhost, rowStyle, ErrorBanner, SavedFlash, LabeledInput, LabeledCheckbox, LabeledSelect, LabeledTextarea, ArrayInput, FormShell, DeleteConfirm, pill } from './_settings_ui';
 
 type Row = {
   facility_id: number; property_id: number; category: string | null; name: string;
@@ -186,6 +186,7 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
 
   // Group by parent for display
@@ -296,7 +297,10 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
         p_treatment_ambient_notes: draft.treatment_ambient_notes.trim() || null,
       });
       if (e) { setError(e.message); return; }
-      setDraft(null); router.refresh();
+      setDraft(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      router.refresh();
     });
   }
 
@@ -360,6 +364,7 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
       <PanelHeader title="Facilities" subtitle={`${data.length} facilities · Pool · spa · dining · setup catalog`}
         action={<button type="button" onClick={() => setDraft({ ...EMPTY })} style={btnPrimary}>+ Add</button>} />
       <ErrorBanner error={error} />
+      <SavedFlash show={saved} />
       {draft && (
         <FormShell title={draft.facility_id ? 'Edit facility' : 'New facility'} onSave={save} onCancel={() => { setDraft(null); setError(null); }} busy={busy}>
           <LabeledInput label="Name *" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} span={2} />
@@ -373,8 +378,8 @@ export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; pro
           </div>
           <LabeledTextarea label="Description" value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} span={3} rows={2} />
           <LabeledInput label="Hours" value={draft.hours} onChange={(v) => setDraft({ ...draft, hours: v })} placeholder="e.g. 06:00-22:00 or 24h" />
-          <LabeledInput label="Opens" value={draft.opening_time} onChange={(v) => setDraft({ ...draft, opening_time: v })} placeholder="HH:MM" />
-          <LabeledInput label="Closes" value={draft.closing_time} onChange={(v) => setDraft({ ...draft, closing_time: v })} placeholder="HH:MM" />
+          <LabeledInput label="Opens" value={draft.opening_time} onChange={(v) => setDraft({ ...draft, opening_time: v })} type="time" />
+          <LabeledInput label="Closes" value={draft.closing_time} onChange={(v) => setDraft({ ...draft, closing_time: v })} type="time" />
           {/* GENERIC DIMS + CAPACITY */}
           <LabeledInput label="Size (m²)" value={draft.size_sqm} onChange={(v) => setDraft({ ...draft, size_sqm: v })} type="number" />
           <LabeledInput label="Length (m)" value={draft.length_m} onChange={(v) => setDraft({ ...draft, length_m: v })} type="number" />
