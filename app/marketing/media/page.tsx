@@ -1,15 +1,6 @@
 // app/marketing/media/page.tsx
-// PBS 2026-07-12 — Media Hub (brief media-ai-video-ui).
-// Server component. Loads server-side, renders <MediaHub/> client.
-// Sub-tabs: Library · AI Studio · Video · Clarify · Settings.
-// 2026-07-11 pm: added categories fetch (v_ai_prompt_categories) for AI Studio dropdown + Settings tab.
-// 2026-07-12: derives distinct property_area values for the Edit drawer datalist.
-// 2026-07-12 pm: added rooms + facilities grounding — pipes v_room_grounding + v_facility_grounding
-//   into AiStudioTab (category-driven dropdowns) and SettingsTab (Reality profile companion panels).
-// 2026-07-12 pm (task #148): loads v_video_templates for the new Video AI Studio composer.
-// 2026-07-13 · Phase 2 unified video pipeline: loads v_marketing_video_briefs + v_yt_content_pillars
-//   for the new Video Briefs sub-tab inside VideoHub.
-// 2026-07-13 · Task B: loads v_media_coverage_matrix for the Coverage sub-tab under Pics.
+// PBS 2026-07-13 · Video AI Studio v1 — loads v_video_style_presets +
+// v_video_music_tracks for VideoSettingsTab.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -26,9 +17,10 @@ async function loadAll(pid: number) {
     byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories,
     rooms, facilities, facilitiesRaw, activitiesRaw, transportRaw, boatsRaw, cruisesRaw,
     videoTemplates, videoBriefs, pillars, coverageMatrix,
+    stylePresets, musicTracks,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
-    sb.from('v_marketing_media_page').select('*').limit(5000),
+    sb.from('v_marketing_media_page').select('*').limit(500),
     sb.from('v_media_channel_specs').select('*'),
     sb.from('v_media_rules_active').select('*'),
     sb.from('v_ai_generations').select('*').order('created_at', { ascending: false }).limit(50),
@@ -39,43 +31,29 @@ async function loadAll(pid: number) {
       .order('sort_order', { ascending: true }),
     sb.from('v_room_grounding').select('*').eq('property_id', pid).order('room_type_id', { ascending: true }),
     sb.from('v_facility_grounding').select('*').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
-    // 2026-07-12 pm: 5-category taxonomy source rows (mirror Settings sidebar)
-    sb.schema('property' as any).from('facilities').select('facility_id, name, parent_facility_id, is_meeting_space')
-      .eq('property_id', pid).eq('is_active', true).order('name'),
-    sb.schema('property' as any).from('activities').select('activity_id, name, facility_id')
-      .eq('property_id', pid).eq('is_active', true).order('name'),
-    sb.schema('property' as any).from('transport_options').select('transport_id, name, transport_type, route_from, route_to')
-      .eq('property_id', pid).eq('is_active', true).order('name'),
-    // 2026-07-12 pm: Imekong (boats + cruises) taxonomy
-    sb.schema('property' as any).from('boats').select('boat_id, name, model, capacity_pax')
-      .eq('property_id', pid).eq('is_active', true).order('name'),
-    sb.schema('property' as any).from('boat_cruises').select('cruise_id, name, boat_id, cruise_type, route_from, route_to')
-      .eq('property_id', pid).eq('is_active', true).order('name'),
-    // 2026-07-12 pm task #148: video templates for AI Studio composer
+    sb.schema('property' as any).from('facilities').select('facility_id, name, parent_facility_id, is_meeting_space').eq('property_id', pid).eq('is_active', true).order('name'),
+    sb.schema('property' as any).from('activities').select('activity_id, name, facility_id').eq('property_id', pid).eq('is_active', true).order('name'),
+    sb.schema('property' as any).from('transport_options').select('transport_id, name, transport_type, route_from, route_to').eq('property_id', pid).eq('is_active', true).order('name'),
+    sb.schema('property' as any).from('boats').select('boat_id, name, model, capacity_pax').eq('property_id', pid).eq('is_active', true).order('name'),
+    sb.schema('property' as any).from('boat_cruises').select('cruise_id, name, boat_id, cruise_type, route_from, route_to').eq('property_id', pid).eq('is_active', true).order('name'),
     sb.from('v_video_templates').select('*').order('sort_order', { ascending: true }),
-    // 2026-07-13 · Phase 2: unified video briefs
     sb.from('v_marketing_video_briefs').select('*').eq('property_id', pid).order('created_at', { ascending: false }),
-    // 2026-07-13 · Phase 2: content pillars for brief tagging
     sb.from('v_yt_content_pillars').select('pillar_key, label').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
-    // 2026-07-13 · Task B: photo coverage matrix (rows × usage_tier)
     sb.from('v_media_coverage_matrix').select('scope_label, scope_type, scope_key, property_id, primary_tier, n').eq('property_id', pid),
+    // Video AI Studio v1 (2026-07-13):
+    sb.from('v_video_style_presets').select('*').or(`property_id.is.null,property_id.eq.${pid}`),
+    sb.from('v_video_music_tracks').select('*').order('created_at', { ascending: false }).limit(100),
   ]);
 
-  // === Build 5-category taxonomy (matches Settings sidebar) ===
   const facilityRows = (facilitiesRaw.data ?? []) as Array<{ facility_id: number; name: string; parent_facility_id: number | null; is_meeting_space: boolean | null }>;
   const facByPk = new Map<number, string>();
   for (const f of facilityRows) facByPk.set(f.facility_id, f.name);
-  const meetingSpaces = facilityRows
-    .filter(f => f.is_meeting_space)
-    .map(f => ({ id: f.facility_id, name: f.name }));
-  const nonMeetingFacilities = facilityRows
-    .filter(f => !f.is_meeting_space)
-    .map(f => ({
-      id: f.facility_id,
-      name: f.name,
-      parent_id: f.parent_facility_id,
-      parent_name: f.parent_facility_id ? (facByPk.get(f.parent_facility_id) ?? null) : null,
-    }));
+  const meetingSpaces = facilityRows.filter(f => f.is_meeting_space).map(f => ({ id: f.facility_id, name: f.name }));
+  const nonMeetingFacilities = facilityRows.filter(f => !f.is_meeting_space).map(f => ({
+    id: f.facility_id, name: f.name,
+    parent_id: f.parent_facility_id,
+    parent_name: f.parent_facility_id ? (facByPk.get(f.parent_facility_id) ?? null) : null,
+  }));
   const taxonomy = {
     rooms: (rooms.data ?? []).map((r: any) => ({ id: r.room_type_id, name: r.room_type_name })),
     facilities: nonMeetingFacilities,
@@ -90,8 +68,7 @@ async function loadAll(pid: number) {
   };
 
   const areaSet = new Set<string>();
-  areaSet.add('Logos');
-  areaSet.add('No area');
+  areaSet.add('Logos'); areaSet.add('No area');
   for (const r of taxonomy.rooms)          areaSet.add(r.name);
   for (const f of taxonomy.facilities)     areaSet.add(f.name);
   for (const a of taxonomy.activities)     areaSet.add(a.name);
@@ -122,12 +99,14 @@ async function loadAll(pid: number) {
     videoBriefs: videoBriefs.data ?? [],
     pillars: pillars.data ?? [],
     coverageRows: coverageMatrix.data ?? [],
+    stylePresets: stylePresets.data ?? [],
+    musicTracks: musicTracks.data ?? [],
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
       rooms.error, facilities.error, facilitiesRaw.error, activitiesRaw.error, transportRaw.error,
       boatsRaw.error, cruisesRaw.error, videoTemplates.error, videoBriefs.error, pillars.error,
-      coverageMatrix.error,
+      coverageMatrix.error, stylePresets.error, musicTracks.error,
     ].filter(Boolean),
   };
 }
@@ -171,6 +150,8 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             videoBriefs={data.videoBriefs as any}
             pillars={data.pillars as any}
             coverageRows={data.coverageRows as any}
+            stylePresets={data.stylePresets as any}
+            musicTracks={data.musicTracks as any}
           />
         </div>
       </DashboardPage>
