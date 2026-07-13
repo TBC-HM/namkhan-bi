@@ -174,7 +174,7 @@ export interface InboxThread {
   unread: boolean;
 }
 
-export async function listInboxMessages(access: string, scope: 'unread' | 'all' = 'unread', maxResults = 15): Promise<InboxThread[]> {
+export async function listInboxMessages(access: string, scope: 'unread' | 'all' = 'unread', maxResults = 200): Promise<InboxThread[]> {
   const q = scope === 'unread' ? 'in:inbox is:unread' : 'in:inbox';
   const listUrl = GMAIL_API + '/users/me/messages?maxResults=' + maxResults + '&q=' + encodeURIComponent(q);
   const listR = await fetch(listUrl, { headers: { authorization: 'Bearer ' + access } });
