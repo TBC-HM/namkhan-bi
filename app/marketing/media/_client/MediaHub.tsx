@@ -1,22 +1,17 @@
 // app/marketing/media/_client/MediaHub.tsx
-// PBS 2026-07-12 — Client tab strip for Media hub.
-// 2026-07-12 pm: swap the thin VideoTab for VideoHub — the new 4-tab internal
-// strip (Video Library · Video AI Studio · Video Clarify · Video Settings)
-// per task #148.
-// 2026-07-13 · Phase 2: pipe videoBriefs + pillars through to VideoHub for the
-// new "Video Briefs" sub-tab (unified video pipeline entry point).
+// PBS 2026-07-13 · Task A — flattened top strip replaced with 2-tab shell:
+//   • Pics   → PhotoHub  (Library · AI Studio · Clarify · Settings)
+//   • Videos → VideoHub  (Video Briefs · Library · AI Studio · Clarify · Settings)
+// Historical 4+1 flat strip preserved in git history.
 'use client';
 
 import { useState } from 'react';
-import LibraryTab from './LibraryTab';
-import AiStudioTab from './AiStudioTab';
+import PhotoHub from './PhotoHub';
 import VideoHub from './VideoHub';
-import ClarifyTab from './ClarifyTab';
-import SettingsTab from './SettingsTab';
 import type { VideoBriefRow } from './VideoBriefsPanel';
 import type { PillarOption } from './NewVideoBriefForm';
 
-type TabKey = 'library' | 'ai' | 'video' | 'clarify' | 'settings';
+type TabKey = 'pics' | 'videos';
 
 export interface PromptCategory {
   key: string;
@@ -73,7 +68,6 @@ export interface VideoTemplate {
   aspect: string;
 }
 
-// 2026-07-12 pm: 5-category taxonomy that mirrors the Settings sidebar
 export interface TaxonomyEntry { id: number; name: string }
 export interface FacilityTaxonomyEntry extends TaxonomyEntry { parent_id: number | null; parent_name: string | null }
 export interface ActivityTaxonomyEntry extends TaxonomyEntry { facility_id: number | null; facility_name: string | null }
@@ -114,26 +108,27 @@ const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
 const RED    = '#B23A2E';
 
-export default function MediaHub(props: Props) {
-  const [tab, setTab] = useState<TabKey>('library');
-  const [aiInitialAssetId, setAiInitialAssetId] = useState<string | null>(null);
+function isVideoRow(r: any): boolean {
+  if ((r?.asset_type ?? '').toLowerCase() === 'video') return true;
+  const mt = (r?.mime_type ?? '').toLowerCase();
+  if (mt.startsWith('video/')) return true;
+  const p = (r?.public_url ?? r?.master_path ?? '').toLowerCase();
+  return /\.(mp4|mov|webm|m4v)(\?|$)/.test(p);
+}
 
-  const clarifyCount = (props.mediaPage ?? []).filter((r: any) => r.property_area == null || r.primary_tier == null).length;
+export default function MediaHub(props: Props) {
+  const [tab, setTab] = useState<TabKey>('pics');
+
+  const videoRows = (props.mediaPage ?? []).filter(isVideoRow);
+  const picsCount = (props.mediaPage ?? []).length - videoRows.length;
+  const vidsCount = videoRows.length;
   const openBriefsCount = (props.videoBriefs ?? []).filter(b =>
     b.status !== 'archived' && b.status !== 'published').length;
 
-  const TABS: Array<{ key: TabKey; label: string; badge?: number }> = [
-    { key: 'library',  label: 'Library'    },
-    { key: 'ai',       label: 'AI Studio'  },
-    { key: 'video',    label: 'Video',     badge: openBriefsCount },
-    { key: 'clarify',  label: 'Clarify',   badge: clarifyCount },
-    { key: 'settings', label: 'Settings ⚙' },
+  const TABS: Array<{ key: TabKey; label: string; badge?: number; count?: number }> = [
+    { key: 'pics',   label: 'Pics',   count: picsCount },
+    { key: 'videos', label: 'Videos', count: vidsCount, badge: openBriefsCount },
   ];
-
-  function handleSendToAi(assetId: string) {
-    setAiInitialAssetId(assetId);
-    setTab('ai');
-  }
 
   return (
     <div>
@@ -143,14 +138,19 @@ export default function MediaHub(props: Props) {
           const showBadge = t.badge != null && t.badge > 0;
           return (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding:'10px 18px', fontSize:12, letterSpacing:'0.06em',
+              padding:'10px 22px', fontSize:12, letterSpacing:'0.06em',
               textTransform:'uppercase', border:'none', background:'transparent',
               color: active ? FOREST : INK_M,
               borderBottom: active ? '2px solid ' + FOREST : '2px solid transparent',
               fontWeight: active ? 700 : 500, cursor:'pointer', marginBottom:-1,
-              display:'inline-flex', alignItems:'center', gap:6,
+              display:'inline-flex', alignItems:'center', gap:8,
             }}>
-              {t.label}
+              <span>{t.label}</span>
+              {t.count != null && (
+                <span style={{ fontSize:10, color: active ? FOREST : INK_M, opacity:0.7 }}>
+                  · {t.count.toLocaleString()}
+                </span>
+              )}
               {showBadge && (
                 <span style={{
                   background: RED, color: '#FFF', fontSize: 9, fontWeight: 700,
@@ -162,11 +162,38 @@ export default function MediaHub(props: Props) {
         })}
       </div>
 
-      {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />}
-      {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} />}
-      {tab === 'video'    && <VideoHub    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} templates={props.videoTemplates ?? []} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} areaOptions={props.areaOptions} videoBriefs={props.videoBriefs} pillars={props.pillars} />}
-      {tab === 'clarify'  && <ClarifyTab  mediaPage={props.mediaPage} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />}
-      {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} categories={props.categories} rooms={props.rooms} facilities={props.facilities} mediaPage={props.mediaPage} />}
+      {tab === 'pics' && (
+        <PhotoHub
+          propertyId={props.propertyId}
+          byTier={props.byTier}
+          mediaPage={props.mediaPage}
+          channelSpecs={props.channelSpecs}
+          rulesActive={props.rulesActive}
+          aiGens={props.aiGens}
+          reality={props.reality}
+          categories={props.categories}
+          rooms={props.rooms}
+          facilities={props.facilities}
+          taxonomy={props.taxonomy}
+          areaOptions={props.areaOptions}
+        />
+      )}
+      {tab === 'videos' && (
+        <VideoHub
+          propertyId={props.propertyId}
+          mediaPage={props.mediaPage}
+          channelSpecs={props.channelSpecs}
+          videoEdits={props.videoEdits}
+          templates={props.videoTemplates ?? []}
+          categories={props.categories}
+          rooms={props.rooms}
+          facilities={props.facilities}
+          taxonomy={props.taxonomy}
+          areaOptions={props.areaOptions}
+          videoBriefs={props.videoBriefs}
+          pillars={props.pillars}
+        />
+      )}
     </div>
   );
 }
