@@ -1,10 +1,14 @@
 // app/marketing/media/_client/VideoClarifyTab.tsx
 // PBS 2026-07-12 · Task #148 — Clarify triage for VIDEOS only.
 // Mirrors ClarifyTab exactly but pre-filters to asset_type='video' / mp4/mov/webm/m4v.
+// 2026-07-13 · Coordinator — centered ▶ overlay opens VideoPlayerModal for
+// preview; tile body still opens the edit drawer. Inline <video> seeks to 10%
+// (or 3s) via onLoadedMetadata for a real first-frame poster.
 'use client';
 
 import { useMemo, useState } from 'react';
 import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
+import VideoPlayerModal, { type VideoPlayerAsset } from './VideoPlayerModal';
 
 interface MediaRow {
   asset_id: string;
@@ -47,6 +51,7 @@ function isVideoRow(r: MediaRow): boolean {
 
 export default function VideoClarifyTab({ mediaPage, areaOptions, rooms = [], taxonomy }: Props) {
   const [editing, setEditing] = useState<MediaRow | null>(null);
+  const [playing, setPlaying] = useState<MediaRow | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
 
   const videosAll = useMemo(() => mediaPage.filter(isVideoRow), [mediaPage]);
@@ -102,7 +107,18 @@ export default function VideoClarifyTab({ mediaPage, areaOptions, rooms = [], ta
               }}>
                 <div style={{ position: 'relative', width: '100%', height: 130, background: '#F5F0E1' }}>
                   {r.public_url ? (
-                    <video src={r.public_url} preload="metadata" muted style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                    <video
+                      src={r.public_url}
+                      preload="metadata"
+                      muted
+                      playsInline
+                      onLoadedMetadata={(e) => {
+                        const v = e.currentTarget;
+                        const d = Number.isFinite(v.duration) ? v.duration : 0;
+                        v.currentTime = d > 0 ? Math.min(d * 0.1, 3) : 0;
+                      }}
+                      style={{ width:'100%', height:'100%', objectFit:'cover', background:'#F5F0E1', display:'block' }}
+                    />
                   ) : (
                     <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:INK_M }}>no preview</div>
                   )}
@@ -114,6 +130,23 @@ export default function VideoClarifyTab({ mediaPage, areaOptions, rooms = [], ta
                       }}>{b.label}</span>
                     ))}
                   </div>
+                  {/* Centered ▶ overlay — opens embedded player instead of edit drawer */}
+                  {r.public_url && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Play video"
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setPlaying(r); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); setPlaying(r); } }}
+                      style={{
+                        position:'absolute', top:'50%', left:'50%', transform:'translate(-50%, -50%)',
+                        width:28, height:28, borderRadius:14, background:'#084838',
+                        color:'#FFFFFF', fontSize:12, cursor:'pointer',
+                        display:'flex', alignItems:'center', justifyContent:'center', fontWeight:700,
+                        boxShadow:'0 2px 8px rgba(0,0,0,0.3)', zIndex:2,
+                      }}
+                    >▶</span>
+                  )}
                   <div style={{ position:'absolute', bottom:6, right:6, background:'rgba(0,0,0,0.55)', color:WHITE, fontSize:9, fontWeight:600, padding:'2px 5px', borderRadius:2, letterSpacing:'0.04em' }}>▶ VIDEO</div>
                 </div>
                 <div style={{ padding:'6px 8px', borderTop:'1px solid '+HAIR, fontSize:10 }}>
@@ -138,6 +171,12 @@ export default function VideoClarifyTab({ mediaPage, areaOptions, rooms = [], ta
         onSaved={(updated) => {
           if (updated?.asset_id) setLocalDismiss(s => new Set(s).add(updated.asset_id));
         }}
+      />
+
+      <VideoPlayerModal
+        open={playing != null}
+        onClose={() => setPlaying(null)}
+        asset={playing as VideoPlayerAsset | null}
       />
     </div>
   );
