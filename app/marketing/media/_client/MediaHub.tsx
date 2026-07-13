@@ -3,6 +3,8 @@
 // 2026-07-12 pm: swap the thin VideoTab for VideoHub — the new 4-tab internal
 // strip (Video Library · Video AI Studio · Video Clarify · Video Settings)
 // per task #148.
+// 2026-07-13 · Phase 2: pipe videoBriefs + pillars through to VideoHub for the
+// new "Video Briefs" sub-tab (unified video pipeline entry point).
 'use client';
 
 import { useState } from 'react';
@@ -11,6 +13,8 @@ import AiStudioTab from './AiStudioTab';
 import VideoHub from './VideoHub';
 import ClarifyTab from './ClarifyTab';
 import SettingsTab from './SettingsTab';
+import type { VideoBriefRow } from './VideoBriefsPanel';
+import type { PillarOption } from './NewVideoBriefForm';
 
 type TabKey = 'library' | 'ai' | 'video' | 'clarify' | 'settings';
 
@@ -101,6 +105,8 @@ interface Props {
   taxonomy: MediaTaxonomy;
   areaOptions: string[];
   videoTemplates?: VideoTemplate[];
+  videoBriefs?: VideoBriefRow[];
+  pillars?: PillarOption[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -113,11 +119,13 @@ export default function MediaHub(props: Props) {
   const [aiInitialAssetId, setAiInitialAssetId] = useState<string | null>(null);
 
   const clarifyCount = (props.mediaPage ?? []).filter((r: any) => r.property_area == null || r.primary_tier == null).length;
+  const openBriefsCount = (props.videoBriefs ?? []).filter(b =>
+    b.status !== 'archived' && b.status !== 'published').length;
 
   const TABS: Array<{ key: TabKey; label: string; badge?: number }> = [
     { key: 'library',  label: 'Library'    },
     { key: 'ai',       label: 'AI Studio'  },
-    { key: 'video',    label: 'Video'      },
+    { key: 'video',    label: 'Video',     badge: openBriefsCount },
     { key: 'clarify',  label: 'Clarify',   badge: clarifyCount },
     { key: 'settings', label: 'Settings ⚙' },
   ];
@@ -156,7 +164,7 @@ export default function MediaHub(props: Props) {
 
       {tab === 'library'  && <LibraryTab  propertyId={props.propertyId} byTier={props.byTier} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />}
       {tab === 'ai'       && <AiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} aiGens={props.aiGens} initialSourceAssetId={aiInitialAssetId} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} />}
-      {tab === 'video'    && <VideoHub    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} templates={props.videoTemplates ?? []} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} areaOptions={props.areaOptions} />}
+      {tab === 'video'    && <VideoHub    propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} templates={props.videoTemplates ?? []} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} areaOptions={props.areaOptions} videoBriefs={props.videoBriefs} pillars={props.pillars} />}
       {tab === 'clarify'  && <ClarifyTab  mediaPage={props.mediaPage} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />}
       {tab === 'settings' && <SettingsTab propertyId={props.propertyId} channelSpecs={props.channelSpecs} rulesActive={props.rulesActive} reality={props.reality} categories={props.categories} rooms={props.rooms} facilities={props.facilities} mediaPage={props.mediaPage} />}
     </div>
