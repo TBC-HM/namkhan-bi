@@ -72,10 +72,10 @@ function isVideoRow(r: MediaRow): boolean {
 function fmtDur(sec: number | null | undefined): string {
   if (sec == null || Number.isNaN(Number(sec))) return '';
   const s = Math.round(Number(sec));
-  if (s < 60) return ${'`'}${'$'}{s}s${'`'};
+  if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
   const r = s % 60;
-  return r === 0 ? ${'`'}${'$'}{m}m${'`'} : ${'`'}${'$'}{m}m ${'$'}{r}s${'`'};
+  return r === 0 ? `${m}m` : `${m}m ${r}s`;
 }
 
 export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [], taxonomy }: Props) {
@@ -137,7 +137,7 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
   }, [videosAll]);
 
   async function deleteAsset(assetId: string, filename: string | null) {
-    if (!window.confirm(${'`'}Delete video "${'$'}{filename ?? assetId.slice(0,8)}" from the library? (soft-delete)${'`'})) return;
+    if (!window.confirm(`Delete video "${filename ?? assetId.slice(0,8)}" from the library? (soft-delete)`)) return;
     setBusyRow(assetId); setMsg(null);
     try {
       const res = await fetch('/api/marketing/media/asset-delete', {
@@ -147,8 +147,8 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'delete_failed');
       setLocalDismiss(s => { const next = new Set(s); next.add(assetId); return next; });
-      setMsg(${'`'}Deleted ${'$'}{filename ?? assetId.slice(0,8)} — refresh to sync${'`'});
-    } catch (e: any) { setMsg(${'`'}Delete failed: ${'$'}{e.message}${'`'}); }
+      setMsg(`Deleted ${filename ?? assetId.slice(0,8)} — refresh to sync`);
+    } catch (e: any) { setMsg(`Delete failed: ${e.message}`); }
     finally { setBusyRow(null); }
   }
 
@@ -163,17 +163,17 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || 'failed');
-      const label = ${'`'}${'$'}{j.channel_display ?? channel}${'`'};
+      const label = `${j.channel_display ?? channel}`;
       if (j.download_url) {
-        const proxy = ${'`'}/api/marketing/media/download-render?asset_id=${'$'}{assetId}&channel=${'$'}{encodeURIComponent(channel)}${'`'};
+        const proxy = `/api/marketing/media/download-render?asset_id=${assetId}&channel=${encodeURIComponent(channel)}`;
         const link = document.createElement('a'); link.href = proxy; link.download = j.filename_hint ?? '';
         document.body.appendChild(link); link.click(); link.remove();
-        setMsg(${'`'}Rendered for ${'$'}{label} — download started ✓${'`'});
+        setMsg(`Rendered for ${label} — download started ✓`);
       } else {
-        setMsg(${'`'}Rendered for ${'$'}{channel} — queued as ${'$'}{j.render_id ?? 'render'}${'`'});
+        setMsg(`Rendered for ${channel} — queued as ${j.render_id ?? 'render'}`);
       }
     } catch (e: any) {
-      setMsg(${'`'}Failed: ${'$'}{e.message}${'`'});
+      setMsg(`Failed: ${e.message}`);
     } finally {
       setBusyRow(null);
     }
@@ -208,25 +208,25 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
             {taxonomy ? (
               <>
                 {taxonomy.rooms.length > 0 && (
-                  <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={${'`'}fv-room-${'$'}{r.id}${'`'}} value={r.name}>{r.name}</option>)}</optgroup>
+                  <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={`fv-room-${r.id}`} value={r.name}>{r.name}</option>)}</optgroup>
                 )}
                 {taxonomy.facilities.length > 0 && (
-                  <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={${'`'}fv-fac-${'$'}{f.id}${'`'}} value={f.name}>{f.parent_name ? ${'`'}${'$'}{f.name} · ↳ ${'$'}{f.parent_name}${'`'} : f.name}</option>)}</optgroup>
+                  <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={`fv-fac-${f.id}`} value={f.name}>{f.parent_name ? `${f.name} · ↳ ${f.parent_name}` : f.name}</option>)}</optgroup>
                 )}
                 {taxonomy.activities.length > 0 && (
-                  <optgroup label="Activities">{taxonomy.activities.map(a => <option key={${'`'}fv-act-${'$'}{a.id}${'`'}} value={a.name}>{a.name}</option>)}</optgroup>
+                  <optgroup label="Activities">{taxonomy.activities.map(a => <option key={`fv-act-${a.id}`} value={a.name}>{a.name}</option>)}</optgroup>
                 )}
                 {taxonomy.meeting_spaces.length > 0 && (
-                  <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={${'`'}fv-mtg-${'$'}{m.id}${'`'}} value={m.name}>{m.name}</option>)}</optgroup>
+                  <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={`fv-mtg-${m.id}`} value={m.name}>{m.name}</option>)}</optgroup>
                 )}
                 {taxonomy.transport.length > 0 && (
-                  <optgroup label="Transport">{taxonomy.transport.map(t => <option key={${'`'}fv-trp-${'$'}{t.id}${'`'}} value={t.name}>{t.name}</option>)}</optgroup>
+                  <optgroup label="Transport">{taxonomy.transport.map(t => <option key={`fv-trp-${t.id}`} value={t.name}>{t.name}</option>)}</optgroup>
                 )}
                 {(taxonomy.boats && taxonomy.boats.length > 0) && (
-                  <optgroup label="Imekong · Boats">{taxonomy.boats.map(b => <option key={${'`'}fv-boat-${'$'}{b.id}${'`'}} value={b.name}>{b.name}</option>)}</optgroup>
+                  <optgroup label="Imekong · Boats">{taxonomy.boats.map(b => <option key={`fv-boat-${b.id}`} value={b.name}>{b.name}</option>)}</optgroup>
                 )}
                 {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
-                  <optgroup label="Imekong · Cruises">{taxonomy.boat_cruises.map(c => <option key={${'`'}fv-cruise-${'$'}{c.id}${'`'}} value={c.name}>{c.name}</option>)}</optgroup>
+                  <optgroup label="Imekong · Cruises">{taxonomy.boat_cruises.map(c => <option key={`fv-cruise-${c.id}`} value={c.name}>{c.name}</option>)}</optgroup>
                 )}
               </>
             ) : (
