@@ -9,6 +9,7 @@
 // 2026-07-12 pm (task #148): loads v_video_templates for the new Video AI Studio composer.
 // 2026-07-13 · Phase 2 unified video pipeline: loads v_marketing_video_briefs + v_yt_content_pillars
 //   for the new Video Briefs sub-tab inside VideoHub.
+// 2026-07-13 · Task B: loads v_media_coverage_matrix for the Coverage sub-tab under Pics.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -24,7 +25,7 @@ async function loadAll(pid: number) {
   const [
     byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories,
     rooms, facilities, facilitiesRaw, activitiesRaw, transportRaw, boatsRaw, cruisesRaw,
-    videoTemplates, videoBriefs, pillars,
+    videoTemplates, videoBriefs, pillars, coverageMatrix,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(500),
@@ -56,6 +57,8 @@ async function loadAll(pid: number) {
     sb.from('v_marketing_video_briefs').select('*').eq('property_id', pid).order('created_at', { ascending: false }),
     // 2026-07-13 · Phase 2: content pillars for brief tagging
     sb.from('v_yt_content_pillars').select('pillar_key, label').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
+    // 2026-07-13 · Task B: photo coverage matrix (rows × usage_tier)
+    sb.from('v_media_coverage_matrix').select('scope_label, scope_type, scope_key, property_id, primary_tier, n').eq('property_id', pid),
   ]);
 
   // === Build 5-category taxonomy (matches Settings sidebar) ===
@@ -118,11 +121,13 @@ async function loadAll(pid: number) {
     videoTemplates: videoTemplates.data ?? [],
     videoBriefs: videoBriefs.data ?? [],
     pillars: pillars.data ?? [],
+    coverageRows: coverageMatrix.data ?? [],
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
       rooms.error, facilities.error, facilitiesRaw.error, activitiesRaw.error, transportRaw.error,
       boatsRaw.error, cruisesRaw.error, videoTemplates.error, videoBriefs.error, pillars.error,
+      coverageMatrix.error,
     ].filter(Boolean),
   };
 }
@@ -165,6 +170,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             videoTemplates={data.videoTemplates as any}
             videoBriefs={data.videoBriefs as any}
             pillars={data.pillars as any}
+            coverageRows={data.coverageRows as any}
           />
         </div>
       </DashboardPage>
