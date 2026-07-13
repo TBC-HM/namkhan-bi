@@ -8,6 +8,7 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
 import UserDetailActions from '../_components/UserDetailActions';
 
@@ -225,8 +226,8 @@ function propertyLabel(pid: number): string {
   return String(pid);
 }
 
-const miniTh: React.CSSProperties = {
+const miniTh: CSSProperties = {
   textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid #E6DFCC',
   fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#3A3A3A', fontWeight: 700,
 };
-const miniTd: React.CSSProperties = { padding: '6px 8px', borderBottom: '1px solid #F5F0E1', color: '#1B1B1B', fontSize: 12 };
+const miniTd: CSSProperties = { padding: '6px 8px', borderBottom: '1px solid #F5F0E1', color: '#1B1B1B', fontSize: 12 };
