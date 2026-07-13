@@ -21,6 +21,8 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getCurrentAuthUser } from '@/lib/userGmail';
 import { listActiveMailboxes, listSharedInbox } from '@/lib/sharedGmail';
 import AddAliasForm from './AddAliasForm';
+// PBS 2026-07-14 (Sales CRM upgrade) — companion panel + lead lookup below.
+import MailToLeadPanel from './MailToLeadPanel';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -149,6 +151,22 @@ export default async function SalesMailsPage({
   const firstAliasSlug = mailboxes[0]?.mailbox_address?.split('@')[0] ?? '';
   const fullMailHref = firstAliasSlug ? '/mail?account=' + encodeURIComponent(firstAliasSlug) : '/mail';
 
+  // PBS 2026-07-14 (Sales CRM upgrade) — precompute which threads already
+  // have a lead so the companion panel can render "Open lead #N" instead of
+  // "Convert to Lead" for known threads. One query, no per-row roundtrips.
+  const threadIdList = Array.from(new Set(initialThreads.map((t) => t.threadId))).slice(0, 100);
+  const linkedLeadByThreadId: Record<string, number> = {};
+  if (threadIdList.length > 0) {
+    const { data: leadsForThreads } = await admin
+      .from('v_leads_full')
+      .select('id, email_thread_id')
+      .in('email_thread_id', threadIdList);
+    for (const row of (leadsForThreads ?? [])) {
+      const tid = (row as { email_thread_id: string | null }).email_thread_id;
+      if (tid) linkedLeadByThreadId[tid] = Number((row as { id: number }).id);
+    }
+  }
+
   // TASK 2 (2026-07-14): per-alias status from initialThreads count.
   // "0 msgs" chips get a muted subtitle + info tooltip; hydrate error → all
   // chips show "error — reconnect" (single failure point today = personal
@@ -257,6 +275,7 @@ export default async function SalesMailsPage({
         <a href={fullMailHref} style={{ color: T.FOREST, textDecoration: 'none', fontWeight: 600 }}>Open in full mailbox</a>
       </div>
       <UnifiedMailInbox initialThreads={initialThreads} mailboxes={mailboxes} />
+      <MailToLeadPanel threads={initialThreads} linkedLeadByThreadId={linkedLeadByThreadId} />
     </DashboardPage>
   );
 }
