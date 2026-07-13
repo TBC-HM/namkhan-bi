@@ -78,6 +78,10 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
   const pid = propertyId ?? PROPERTY_ID;
   const sb = getSupabaseAdmin();
 
+  // PBS 2026-07-13: proactively refresh expired Google OAuth token via SECURITY DEFINER RPC.
+  // No-op if token still valid; RPC uses stored refresh_token + vault client creds.
+  try { await sb.rpc('fn_google_oauth_refresh_if_expired', { p_property_id: pid }); } catch { /* silent — banner will prompt reconnect if truly dead */ }
+
   const [oauthR, reviewsR, mapsR, listingsR, summaryR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', pid).order('reviewed_at', { ascending: false }).limit(50),
