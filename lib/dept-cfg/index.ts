@@ -301,6 +301,11 @@ const CONTACTS_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
 
 // ─── Operations report catalogue ─────────────────────────────────────────
 const OPS_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
+  // PBS 2026-07-14 #93: Ops daily digest scheduled report. Template row lives
+  // in documentation.revenue_report_templates (key='operations_daily'). Preview
+  // page at /operations/reports/scheduled/daily/preview. Backing edge fn:
+  // supabase/functions/render-operations-report.
+  { value: 'operations_daily', label: 'Operations Daily Report', hrefBase: '/operations/reports/scheduled/daily/preview', dimGroups: [] },
   { value: 'covers', label: 'Covers', hrefBase: '/h/260955/reports?dept=operations&type=covers', dimGroups: [
     { key: 'win', label: 'Window', options: [
       { value: 'today', label: 'Today' }, { value: '7d', label: 'Last 7d' }, { value: '30d', label: 'Last 30d' },
