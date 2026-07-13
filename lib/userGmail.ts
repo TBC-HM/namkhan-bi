@@ -77,7 +77,9 @@ export async function buildUserAuthUrl(state: string): Promise<string> {
   u.searchParams.set('scope', USER_GMAIL_SCOPES);
   u.searchParams.set('access_type', 'offline');
   u.searchParams.set('prompt', 'consent');
-  u.searchParams.set('include_granted_scopes', 'true');
+  // PBS 2026-07-13: FALSE — otherwise Google auto-re-grants gmail.metadata from prior consent,
+  // which then blocks all ?q= searches (Metadata scope does not support q parameter).
+  u.searchParams.set('include_granted_scopes', 'false');
   u.searchParams.set('state', state);
   return u.toString();
 }
