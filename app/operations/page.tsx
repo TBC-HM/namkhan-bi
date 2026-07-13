@@ -8,6 +8,10 @@ import type { KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import OpsFlightsContainer from './_components/OpsFlightsContainer';
+// PBS 2026-07-14 #93: Reservations Operations Manager mail panel — sits between
+// Flights and Scheduled reports, uses shared HOD-DISMISSED Gmail label.
+import RomMailPanel from './_components/RomMailPanel';
+import { Container } from '@/app/(cockpit)/_design';
 import { evaluateOperationsRules, type OperationsContext, type OperationsTargets } from '@/lib/rules/operations';
 
 export const revalidate = 60;
@@ -122,7 +126,20 @@ export default async function OperationsPage() {
     <HodLanding
       slug="operations"
       liveTiles={liveTiles}
-      extraContainers={<OpsFlightsContainer initial={initialFlights} />}
+      extraContainers={
+        <>
+          <OpsFlightsContainer initial={initialFlights} />
+          <div style={{ gridColumn: '1 / -1' }}>
+            <Container
+              title="Reservations Operations Manager"
+              subtitle="Mails from rom@thenamkhan.com · reply or dismiss inline · dismissed items shared with Revenue"
+              density="compact"
+            >
+              <RomMailPanel />
+            </Container>
+          </div>
+        </>
+      }
       conclusions={{
         insights,
         title: 'CONCLUSIONS · capture · arrivals · sold-out',
