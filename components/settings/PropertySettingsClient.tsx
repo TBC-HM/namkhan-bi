@@ -1,8 +1,6 @@
 // components/settings/PropertySettingsClient.tsx
-// PBS 2026-07-03: paper-white + hairline redesign. Old wrapper used
-// var(--card) / var(--brass) / var(--paper-deep) which resolve to DARK on
-// Namkhan (:root --paper-warm = #15110c). Rewritten with hardcoded #FFFFFF
-// backgrounds + #E6DFCC hairlines + #1B1B1B ink text per token-ladder memo.
+// PBS 2026-07-03: paper-white + hairline redesign.
+// PBS 2026-07-13: added "Media QA" tab between "Brand & Reality" and "Policies".
 
 'use client';
 
@@ -11,6 +9,7 @@ import IdentityPanel from './panels/IdentityPanel';
 import LocationPanel from './panels/LocationPanel';
 import BrandPanel from './panels/BrandPanel';
 import BrandRealityPanel from './panels/BrandRealityPanel';
+import MediaQaPanel from './panels/MediaQaPanel';
 import PoliciesPanel from './panels/PoliciesPanel';
 import RoomsPanel from './panels/RoomsPanel';
 import FacilitiesPanel from './panels/FacilitiesPanel';
@@ -26,7 +25,7 @@ import ImekongPanel from './panels/ImekongPanel';
 import MeetingSpacesPanel from './panels/MeetingSpacesPanel';
 
 type Tab =
-  | 'identity' | 'owner' | 'location' | 'brand' | 'reality' | 'policies'
+  | 'identity' | 'owner' | 'location' | 'brand' | 'reality' | 'media_qa' | 'policies'
   | 'rooms' | 'facilities' | 'activities' | 'seasons'
   | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces';
 
@@ -36,6 +35,7 @@ const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => numb
   { key: 'location',       label: 'Location',       subtitle: 'Address · GPS · climate',      count: () => null },
   { key: 'brand',          label: 'Brand',          subtitle: 'Logo · palette · copy',        count: () => null },
   { key: 'reality',        label: 'Brand & Reality', subtitle: 'AI grounding · vibe · palette · forbidden', count: () => null },
+  { key: 'media_qa',       label: 'Media QA',        subtitle: 'Naming rules · backfill scoring', count: () => null },
   { key: 'policies',       label: 'Policies',       subtitle: 'Bookings & terms',             count: () => null },
   { key: 'rooms',          label: 'Rooms',          subtitle: 'Room type catalog',            count: (d) => d.rooms.length },
   { key: 'facilities',     label: 'Facilities',     subtitle: 'Pool · spa · dining',          count: (d) => d.facilities.length },
@@ -55,9 +55,6 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
 
   return (
     <div className="settings-paper-scope" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
-      {/* PBS 2026-07-03: token override for the whole settings subtree so every
-          nested panel (which still reads var(--card), var(--brass), var(--ink)
-          etc.) resolves to paper-white values instead of the :root dark defaults. */}
       <style>{`
         .settings-paper-scope,
         .settings-paper-scope * {
@@ -157,6 +154,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'location'       && <LocationPanel       data={data.location}       propertyId={propertyId} />}
           {active === 'brand'          && <BrandPanel          data={data.brand}          propertyId={propertyId} />}
           {active === 'reality'        && <BrandRealityPanel   data={data.brandReality}   propertyId={propertyId} />}
+          {active === 'media_qa'       && <MediaQaPanel        propertyId={propertyId} />}
           {active === 'policies'       && <PoliciesPanel       data={data.policies}       propertyId={propertyId} />}
           {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} propertyId={propertyId} />}
           {active === 'facilities'     && <FacilitiesPanel     data={data.facilities}     propertyId={propertyId} />}
