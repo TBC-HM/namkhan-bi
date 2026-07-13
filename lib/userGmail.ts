@@ -284,3 +284,282 @@ export async function sendMessage(access: string, p: SendParams): Promise<{ id: 
   const j = (await r.json()) as { id: string; threadId: string };
   return j;
 }
+
+// ==========================================================================
+// Full-screen /mail client helpers (added 2026-07-14).
+// User-scoped wrappers that pull a fresh access token via refreshIfExpired().
+// ==========================================================================
+
+export interface GmailListRow {
+  id: string;
+  threadId: string;
+  subject: string;
+  from: string;
+  to: string;
+  date: string;
+  dateMs: number;
+  snippet: string;
+  unread: boolean;
+  starred: boolean;
+  hasAttachment: boolean;
+  labelIds: string[];
+}
+
+export interface GmailMessageFull {
+  id: string;
+  threadId: string;
+  subject: string;
+  from: string;
+  to: string;
+  cc: string;
+  date: string;
+  dateMs: number;
+  snippet: string;
+  htmlBody: string;
+  textBody: string;
+  labelIds: string[];
+  headers: Record<string, string>;
+  unread: boolean;
+  starred: boolean;
+}
+
+export interface GmailLabel {
+  id: string;
+  name: string;
+  type: 'system' | 'user';
+  messagesUnread: number;
+  messagesTotal: number;
+}
+
+interface GmailPayloadPart {
+  mimeType?: string;
+  filename?: string;
+  body?: { data?: string; size?: number; attachmentId?: string };
+  parts?: GmailPayloadPart[];
+  headers?: Array<{ name: string; value: string }>;
+}
+
+interface GmailMessageRaw {
+  id: string;
+  threadId: string;
+  snippet?: string;
+  internalDate?: string;
+  labelIds?: string[];
+  payload?: GmailPayloadPart;
+}
+
+function decodeB64Url(data: string): string {
+  const s = data.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
+  try { return Buffer.from(s + pad, 'base64').toString('utf8'); } catch { return ''; }
+}
+
+interface WalkAcc { html: string; text: string; hasAttachment: boolean }
+
+function walkParts(part: GmailPayloadPart | undefined, acc: WalkAcc): void {
+  if (!part) return;
+  const mime = (part.mimeType || '').toLowerCase();
+  const filename = part.filename || '';
+  if (filename && filename.length > 0) acc.hasAttachment = true;
+  if (mime === 'text/html' && part.body?.data && !acc.html) {
+    acc.html = decodeB64Url(part.body.data);
+  } else if (mime === 'text/plain' && part.body?.data && !acc.text) {
+    acc.text = decodeB64Url(part.body.data);
+  }
+  if (part.parts && part.parts.length > 0) {
+    for (const p of part.parts) walkParts(p, acc);
+  }
+}
+
+function headersToMap(part: GmailPayloadPart | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  const hs = part?.headers ?? [];
+  for (const h of hs) out[h.name.toLowerCase()] = h.value;
+  return out;
+}
+
+function parseMessage(j: GmailMessageRaw): GmailMessageFull {
+  const acc: WalkAcc = { html: '', text: '', hasAttachment: false };
+  walkParts(j.payload, acc);
+  const hmap = headersToMap(j.payload);
+  const dateStr = hmap['date'] ?? '';
+  const dateMs = j.internalDate ? Number(j.internalDate) : (dateStr ? Date.parse(dateStr) || 0 : 0);
+  const labelIds = j.labelIds ?? [];
+  const html = acc.html || (acc.text ? '<pre style="white-space:pre-wrap;font-family:inherit;margin:0">' + escapeHtml(acc.text) + '</pre>' : '');
+  return {
+    id: j.id,
+    threadId: j.threadId,
+    subject: hmap['subject'] ?? '',
+    from: hmap['from'] ?? '',
+    to: hmap['to'] ?? '',
+    cc: hmap['cc'] ?? '',
+    date: dateStr,
+    dateMs,
+    snippet: j.snippet ?? '',
+    htmlBody: html,
+    textBody: acc.text,
+    labelIds,
+    headers: hmap,
+    unread: labelIds.includes('UNREAD'),
+    starred: labelIds.includes('STARRED'),
+  };
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function gapi<T>(access: string, path: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(GMAIL_API + path, {
+    ...init,
+    headers: {
+      authorization: 'Bearer ' + access,
+      'content-type': 'application/json',
+      ...(init?.headers as Record<string, string> | undefined),
+    },
+  });
+  if (!r.ok) throw new Error('gmail_' + r.status + '_' + (await r.text()).slice(0, 200));
+  return (await r.json()) as T;
+}
+
+export async function getMessage(userId: string, messageId: string): Promise<GmailMessageFull> {
+  const { access } = await refreshIfExpired(userId);
+  const j = await gapi<GmailMessageRaw>(access, '/users/me/messages/' + messageId + '?format=full');
+  return parseMessage(j);
+}
+
+export async function getThread(userId: string, threadId: string): Promise<GmailMessageFull[]> {
+  const { access } = await refreshIfExpired(userId);
+  const j = await gapi<{ messages?: GmailMessageRaw[] }>(access, '/users/me/threads/' + threadId + '?format=full');
+  const parsed = (j.messages ?? []).map(parseMessage);
+  parsed.sort((a, b) => a.dateMs - b.dateMs);
+  return parsed;
+}
+
+export async function listLabels(userId: string): Promise<GmailLabel[]> {
+  const { access } = await refreshIfExpired(userId);
+  const j = await gapi<{ labels?: Array<{ id: string; name: string; type: string; messagesUnread?: number; messagesTotal?: number }> }>(access, '/users/me/labels');
+  const rows = (j.labels ?? []).map((l) => ({ id: l.id, name: l.name, type: (l.type === 'user' ? 'user' : 'system') as 'user' | 'system', messagesUnread: 0, messagesTotal: 0 }));
+  // Fill counts where present (labels list endpoint doesn't always include counts — fetch details for unread ones only if requested).
+  // For efficiency we do a small parallel batch for user + system.
+  const detailed = await Promise.all(rows.map(async (r) => {
+    try {
+      const d = await gapi<{ messagesUnread?: number; messagesTotal?: number }>(access, '/users/me/labels/' + r.id);
+      return { ...r, messagesUnread: d.messagesUnread ?? 0, messagesTotal: d.messagesTotal ?? 0 };
+    } catch { return r; }
+  }));
+  return detailed;
+}
+
+export async function modifyLabelsForUser(userId: string, messageId: string, add: string[] = [], remove: string[] = []): Promise<void> {
+  const { access } = await refreshIfExpired(userId);
+  await modifyLabels(access, messageId, add, remove);
+}
+
+export async function archiveMessage(userId: string, messageId: string): Promise<void> {
+  return modifyLabelsForUser(userId, messageId, [], ['INBOX']);
+}
+
+export async function trashMessage(userId: string, messageId: string): Promise<void> {
+  const { access } = await refreshIfExpired(userId);
+  const r = await fetch(GMAIL_API + '/users/me/messages/' + messageId + '/trash', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + access },
+  });
+  if (!r.ok) throw new Error('gmail_trash_failed_' + r.status);
+}
+
+export async function starMessage(userId: string, messageId: string, on: boolean): Promise<void> {
+  return on
+    ? modifyLabelsForUser(userId, messageId, ['STARRED'], [])
+    : modifyLabelsForUser(userId, messageId, [], ['STARRED']);
+}
+
+export async function markRead(userId: string, messageId: string, read: boolean): Promise<void> {
+  return read
+    ? modifyLabelsForUser(userId, messageId, [], ['UNREAD'])
+    : modifyLabelsForUser(userId, messageId, ['UNREAD'], []);
+}
+
+export async function replyToMessage(
+  userId: string,
+  threadId: string,
+  inReplyToId: string,
+  body: string,
+  subject: string,
+  to: string,
+): Promise<{ id: string; threadId: string }> {
+  const { access, gmail } = await refreshIfExpired(userId);
+  return sendMessage(access, {
+    from: gmail,
+    to,
+    subject,
+    body_html: body,
+    in_reply_to: inReplyToId,
+    references: inReplyToId,
+    thread_id: threadId,
+  });
+}
+
+export interface ListInLabelResult {
+  messages: GmailListRow[];
+  nextPageToken: string | null;
+}
+
+export async function listMessagesInLabel(
+  userId: string,
+  labelId: string,
+  q?: string,
+  pageToken?: string,
+  maxResults = 50,
+): Promise<ListInLabelResult> {
+  const { access } = await refreshIfExpired(userId);
+  const params = new URLSearchParams();
+  params.set('maxResults', String(maxResults));
+  if (labelId) params.set('labelIds', labelId);
+  if (q && q.trim()) params.set('q', q.trim());
+  if (pageToken) params.set('pageToken', pageToken);
+  const listJ = await gapi<{ messages?: Array<{ id: string; threadId: string }>; nextPageToken?: string }>(access, '/users/me/messages?' + params.toString());
+  const items = listJ.messages ?? [];
+  if (items.length === 0) return { messages: [], nextPageToken: listJ.nextPageToken ?? null };
+
+  const detail = await Promise.all(items.map(async (m) => {
+    try {
+      const j = await gapi<GmailMessageRaw>(
+        access,
+        '/users/me/messages/' + m.id + '?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date',
+      );
+      const hmap = headersToMap(j.payload);
+      const dateStr = hmap['date'] ?? '';
+      const dateMs = j.internalDate ? Number(j.internalDate) : (dateStr ? Date.parse(dateStr) || 0 : 0);
+      const labelIds = j.labelIds ?? [];
+      // Detect attachment presence by scanning parts for a filename.
+      let hasAttachment = false;
+      const scan = (p: GmailPayloadPart | undefined) => {
+        if (!p) return;
+        if (p.filename && p.filename.length > 0) hasAttachment = true;
+        (p.parts ?? []).forEach(scan);
+      };
+      scan(j.payload);
+      return {
+        id: j.id,
+        threadId: j.threadId,
+        subject: hmap['subject'] ?? '',
+        from: hmap['from'] ?? '',
+        to: hmap['to'] ?? '',
+        date: dateStr,
+        dateMs,
+        snippet: j.snippet ?? '',
+        unread: labelIds.includes('UNREAD'),
+        starred: labelIds.includes('STARRED'),
+        hasAttachment,
+        labelIds,
+      } as GmailListRow;
+    } catch { return null; }
+  }));
+
+  return {
+    messages: detail.filter((x): x is GmailListRow => x !== null),
+    nextPageToken: listJ.nextPageToken ?? null,
+  };
+}
