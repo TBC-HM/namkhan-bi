@@ -31,6 +31,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/cockpit/webhooks') ||
     pathname.startsWith('/api/cockpit/docs/backup') || // CI pre-deploy backup
     pathname.startsWith('/api/auth/') || // login / request-access / callback exchange
+    pathname.startsWith('/api/marketing/media/preview') || // PBS 2026-07-14: <img> tag can't send session cookie in all contexts; endpoint validates uuid + uses SECURITY DEFINER RPC; signed URLs are time-limited
     PUBLIC_PATHS.some(p => pathname.startsWith(p))
   ) return NextResponse.next()
 
