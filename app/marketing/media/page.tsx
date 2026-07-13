@@ -1,6 +1,8 @@
 // app/marketing/media/page.tsx
 // PBS 2026-07-13 · Video AI Studio v1 — loads v_video_style_presets +
 // v_video_music_tracks for VideoSettingsTab.
+// PBS 2026-07-14 · Task A — bumped mediaPage limit 500 -> 5000 so Clarify tile
+// counts all ~1,036 photos with missing area/tier (was suppressing ~637 rows).
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -20,7 +22,7 @@ async function loadAll(pid: number) {
     stylePresets, musicTracks,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
-    sb.from('v_marketing_media_page').select('*').limit(500),
+    sb.from('v_marketing_media_page').select('*').limit(5000),
     sb.from('v_media_channel_specs').select('*'),
     sb.from('v_media_rules_active').select('*'),
     sb.from('v_ai_generations').select('*').order('created_at', { ascending: false }).limit(50),
@@ -40,7 +42,6 @@ async function loadAll(pid: number) {
     sb.from('v_marketing_video_briefs').select('*').eq('property_id', pid).order('created_at', { ascending: false }),
     sb.from('v_yt_content_pillars').select('pillar_key, label').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
     sb.from('v_media_coverage_matrix').select('scope_label, scope_type, scope_key, property_id, primary_tier, n').eq('property_id', pid),
-    // Video AI Studio v1 (2026-07-13):
     sb.from('v_video_style_presets').select('*').or(`property_id.is.null,property_id.eq.${pid}`),
     sb.from('v_video_music_tracks').select('*').order('created_at', { ascending: false }).limit(100),
   ]);
