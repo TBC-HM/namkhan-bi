@@ -216,6 +216,7 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
       {/* ── B · ANALYTICS KPIs + CHARTS (Watch Time · Subs · Traffic · Devices · Geo) */}
       <AnalyticsKPIs
         accessToken={tok.access_token}
+        channelId={tok.channel_id}
         totalSubscribers={ch.subscriberCount}
         totalViews={ch.viewCount}
         totalVideos={ch.videoCount}

@@ -89,10 +89,11 @@ function s(row: Array<string | number>, idx: number | undefined): string {
  */
 export async function fetchChannelDaySeries(
   accessToken: string,
+  channelId: string,
   days: number = 30,
 ): Promise<{ ok: true; rows: Array<{ day: string; views: number; watchMinutes: number; subsGained: number; subsLost: number; likes: number; comments: number; shares: number }> } | ErrShape> {
   const r = await analyticsFetch({
-    ids: 'channel==MINE',
+    ids: `channel==${channelId}`,
     startDate: isoDaysAgo(days),
     endDate: isoToday(),
     metrics: 'views,estimatedMinutesWatched,subscribersGained,subscribersLost,likes,comments,shares',
@@ -124,11 +125,12 @@ export async function fetchChannelDaySeries(
  */
 export async function fetchPerVideoStats(
   accessToken: string,
+  channelId: string,
   days: number,
   maxVideos: number = 20,
 ): Promise<{ ok: true; videos: Array<{ videoId: string; views: number; watchMinutes: number; avgViewDuration: number; avgViewPercentage: number; likes: number; comments: number; shares: number; subsGained: number; impressions?: number; cardImpressions?: number; cardCTR?: number }> } | ErrShape> {
   const r = await analyticsFetch({
-    ids: 'channel==MINE',
+    ids: `channel==${channelId}`,
     startDate: isoDaysAgo(days),
     endDate: isoToday(),
     metrics: 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes,comments,shares,subscribersGained,impressions,cardImpressions,cardClickRate',
@@ -191,11 +193,12 @@ const TRAFFIC_LABELS: Record<string, string> = {
  */
 export async function fetchTrafficSources(
   accessToken: string,
+  channelId: string,
   days: number,
   videoId?: string,
 ): Promise<{ ok: true; sources: Array<{ source: string; label: string; views: number; watchMinutes: number }> } | ErrShape> {
   const params: Record<string, string | number> = {
-    ids: 'channel==MINE',
+    ids: `channel==${channelId}`,
     startDate: isoDaysAgo(days),
     endDate: isoToday(),
     metrics: 'views,estimatedMinutesWatched',
@@ -229,10 +232,11 @@ export async function fetchTrafficSources(
  */
 export async function fetchRetentionCurve(
   accessToken: string,
+  channelId: string,
   videoId: string,
 ): Promise<{ ok: true; points: Array<{ ratio: number; audienceWatchRatio: number; relativePerf: number }> } | ErrShape> {
   const r = await analyticsFetch({
-    ids: 'channel==MINE',
+    ids: `channel==${channelId}`,
     startDate: '2005-01-01', // lifetime — retention curve is a video-lifetime metric
     endDate: isoToday(),
     metrics: 'audienceWatchRatio,relativeRetentionPerformance',
@@ -260,11 +264,12 @@ export async function fetchRetentionCurve(
  */
 export async function fetchGeography(
   accessToken: string,
+  channelId: string,
   days: number,
   videoId?: string,
 ): Promise<{ ok: true; countries: Array<{ code: string; views: number; watchMinutes: number }> } | ErrShape> {
   const params: Record<string, string | number> = {
-    ids: 'channel==MINE',
+    ids: `channel==${channelId}`,
     startDate: isoDaysAgo(days),
     endDate: isoToday(),
     metrics: 'views,estimatedMinutesWatched',
@@ -294,11 +299,12 @@ export async function fetchGeography(
  */
 export async function fetchDemographics(
   accessToken: string,
+  channelId: string,
   days: number,
   videoId?: string,
 ): Promise<{ ok: true; buckets: Array<{ ageGroup: string; gender: string; percentage: number }> } | ErrShape> {
   const params: Record<string, string | number> = {
-    ids: 'channel==MINE',
+    ids: `channel==${channelId}`,
     startDate: isoDaysAgo(days),
     endDate: isoToday(),
     metrics: 'viewerPercentage',
@@ -327,10 +333,11 @@ export async function fetchDemographics(
  */
 export async function fetchDeviceTypes(
   accessToken: string,
+  channelId: string,
   days: number,
 ): Promise<{ ok: true; devices: Array<{ type: string; views: number; watchMinutes: number }> } | ErrShape> {
   const r = await analyticsFetch({
-    ids: 'channel==MINE',
+    ids: `channel==${channelId}`,
     startDate: isoDaysAgo(days),
     endDate: isoToday(),
     metrics: 'views,estimatedMinutesWatched',
@@ -366,10 +373,11 @@ export async function fetchDeviceTypes(
  */
 export async function fetchSubscriberSources(
   accessToken: string,
+  channelId: string,
   days: number,
 ): Promise<{ ok: true; sources: Array<{ source: string; subsGained: number }> } | ErrShape> {
   const r = await analyticsFetch({
-    ids: 'channel==MINE',
+    ids: `channel==${channelId}`,
     startDate: isoDaysAgo(days),
     endDate: isoToday(),
     metrics: 'subscribersGained',

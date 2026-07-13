@@ -120,17 +120,21 @@ const DEVICE_COLORS: Record<string, string> = {
 
 interface Props {
   accessToken: string;
+  channelId: string;
   totalSubscribers: number;
   totalViews: number;
   totalVideos: number;
 }
 
-export default async function AnalyticsKPIs({ accessToken, totalSubscribers, totalViews, totalVideos }: Props) {
+export default async function AnalyticsKPIs({ accessToken, channelId, totalSubscribers, totalViews, totalVideos }: Props) {
+  // 2026-07-13: pass channelId explicitly — brand-account channels don't resolve via
+  // channel==MINE (that returns the personal Google account, which has 0 activity → all zeros).
+  // Same burn as Data API v3 (task #101). Fix: scope every Analytics query to the actual channel_id.
   const [series30, traffic28, devices28, geo28] = await Promise.all([
-    fetchChannelDaySeries(accessToken, 30),
-    fetchTrafficSources(accessToken, 28),
-    fetchDeviceTypes(accessToken, 28),
-    fetchGeography(accessToken, 28),
+    fetchChannelDaySeries(accessToken, channelId, 30),
+    fetchTrafficSources(accessToken, channelId, 28),
+    fetchDeviceTypes(accessToken, channelId, 28),
+    fetchGeography(accessToken, channelId, 28),
   ]);
 
   if (series30.ok === false) {
