@@ -6,9 +6,14 @@
 // 2026-07-14 · TASK 1 — Library now hides untagged photos (Clarify-only domain).
 // 2026-07-14 · MEDIA QA v2 — tile filename shows seo_target_filename (Iris SEO)
 //   with original_filename kept as a hover tooltip. Search matches both.
+// 2026-07-14 · TASK 2 — "All areas" dropdown is now data-driven from
+//   /api/marketing/media/area-facets (DISTINCT property_area + counts). The old
+//   Settings-taxonomy list (rooms/facilities/activities/etc) surfaced fine-grained
+//   entries that yield 0 photos because tagging uses coarse values like
+//   pool/restaurant/rooms/grounds/lifestyle. Taxonomy stays for AssetEditDrawer.
 'use client';
 
-import { useMemo, useState, Fragment } from 'react';
+import { useEffect, useMemo, useState, Fragment } from 'react';
 import UploadDropzone from './UploadDropzone';
 import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
 import { qaBadge } from '@/lib/mediaQa';
@@ -89,6 +94,22 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const [searchText, setSearchText] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
   const [aiOnly, setAiOnly] = useState(false);
+  const [areaFacets, setAreaFacets] = useState<Array<{ area: string; count: number }>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/marketing/media/area-facets', { cache: 'no-store' });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (cancelled) return;
+        const areas = Array.isArray(j?.areas) ? j.areas as Array<{ area: string; count: number }> : [];
+        setAreaFacets(areas);
+      } catch { /* silent — fallback to static options */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const isFullyTagged = (r: MediaRow) =>
     !!r.primary_tier && !!r.property_area && r.property_area.trim() !== '';
@@ -188,10 +209,14 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           <input value={searchText} onChange={e => { setSearchText(e.target.value); setPage(0); }} placeholder="Search filename / area" style={{ flex:'1 1 200px', minWidth:180, padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE }} />
         <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(0); }} style={{ padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE, minWidth:180 }}>
           <option value="">All areas</option>
-          <option value="Logos">Logos</option>
-          <option value="No area">No area</option>
-          {taxonomy ? (
+          {areaFacets.length > 0 ? (
+            areaFacets.map(f => (
+              <option key={'af-'+f.area} value={f.area}>{f.area + ' · ' + f.count.toLocaleString()}</option>
+            ))
+          ) : taxonomy ? (
             <>
+              <option value="Logos">Logos</option>
+              <option value="No area">No area</option>
               {taxonomy.rooms.length > 0 && (
                 <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={'f-room-'+r.id} value={r.name}>{r.name}</option>)}</optgroup>
               )}
@@ -215,7 +240,11 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
               )}
             </>
           ) : (
-            (areaOptions ?? []).map(a => <option key={a} value={a}>{a}</option>)
+            <>
+              <option value="Logos">Logos</option>
+              <option value="No area">No area</option>
+              {(areaOptions ?? []).map(a => <option key={a} value={a}>{a}</option>)}
+            </>
           )}
         </select>
         <button onClick={() => { setAiOnly(v => !v); setPage(0); }} style={{ padding:'4px 10px', fontSize:11, borderRadius:12, cursor:'pointer', border:'1px solid '+(aiOnly ? FOREST : HAIR), background: aiOnly ? FOREST : WHITE, color: aiOnly ? WHITE : INK, fontWeight: aiOnly ? 600 : 400, whiteSpace:'nowrap' }}>AI only</button>
