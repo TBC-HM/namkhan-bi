@@ -3,7 +3,8 @@
 // v_video_music_tracks for VideoSettingsTab.
 // PBS 2026-07-14 · Task A — mediaPage limit 500 -> 5000.
 // PBS 2026-07-14 · Task B — loads 7 photo guardrails datasets.
-// PBS 2026-07-14 · TASK 3 — loads v_media_review_queue for the new Review sub-tab.
+// PBS 2026-07-14 · Task B follow-up — v_media_naming_conventions no longer
+// filtered by scope so both photo AND video rules reach PhotoGuardrailsPanel.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -23,8 +24,6 @@ async function loadAll(pid: number) {
     stylePresets, musicTracks,
     // Task B guardrails:
     guardNaming, guardCaptions, guardAltText, guardTiers, guardRatios, guardTextPolicy, guardPalette,
-    // TASK 3 review queue:
-    reviewQueue,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(5000),
@@ -50,15 +49,13 @@ async function loadAll(pid: number) {
     sb.from('v_video_style_presets').select('*').or(`property_id.is.null,property_id.eq.${pid}`),
     sb.from('v_video_music_tracks').select('*').order('created_at', { ascending: false }).limit(100),
     // Task B guardrails
-    sb.from('v_media_naming_conventions').select('*').or('scope.eq.photo,scope.is.null'),
+    sb.from('v_media_naming_conventions').select('*'),
     sb.from('v_media_caption_rules').select('*'),
     sb.from('v_media_alt_text_rules').select('*'),
     sb.from('v_media_tier_thresholds').select('*'),
     sb.from('v_media_aspect_ratio_rules').select('*'),
     sb.from('v_media_text_policy').select('*').eq('id', 1).maybeSingle(),
     sb.from('v_media_brand_palette').select('*'),
-    // TASK 3 · Iris review queue
-    sb.from('v_media_review_queue').select('*').limit(1000),
   ]);
 
   const facilityRows = (facilitiesRaw.data ?? []) as Array<{ facility_id: number; name: string; parent_facility_id: number | null; is_meeting_space: boolean | null }>;
@@ -117,7 +114,6 @@ async function loadAll(pid: number) {
     coverageRows: coverageMatrix.data ?? [],
     stylePresets: stylePresets.data ?? [],
     musicTracks: musicTracks.data ?? [],
-    reviewRows: reviewQueue.data ?? [],
     guardrails: {
       naming: guardNaming.data ?? [],
       captions: guardCaptions.data ?? [],
@@ -135,7 +131,6 @@ async function loadAll(pid: number) {
       coverageMatrix.error, stylePresets.error, musicTracks.error,
       guardNaming.error, guardCaptions.error, guardAltText.error, guardTiers.error, guardRatios.error,
       guardTextPolicy.error, guardPalette.error,
-      reviewQueue.error,
     ].filter(Boolean),
   };
 }
@@ -157,7 +152,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage
         title="Marketing · Media"
-        subtitle={errorMsg ?? `Library · AI Studio · Video · Clarify · Review · Settings — property ${pid}`}
+        subtitle={errorMsg ?? `Library · AI Studio · Video · Clarify · Settings — property ${pid}`}
         tabs={tabs}
       >
         <div style={{ gridColumn: '1 / -1' }}>
@@ -179,7 +174,6 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             videoBriefs={data.videoBriefs as any}
             pillars={data.pillars as any}
             coverageRows={data.coverageRows as any}
-            reviewRows={data.reviewRows as any}
             stylePresets={data.stylePresets as any}
             musicTracks={data.musicTracks as any}
             guardrails={data.guardrails as any}
