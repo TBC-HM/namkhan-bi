@@ -1,11 +1,6 @@
 // app/marketing/media/_client/VideoHub.tsx
-// PBS 2026-07-12 · Task #148 — internal 5-tab strip for the Video area:
-//   • Video Briefs — VideoBriefsPanel (Phase 2 unified pipeline entry point)
-//   • Video Library — VideoLibraryTab
-//   • Video AI Studio — VideoAiStudioTab (Shotstack EDL composer)
-//   • Video Clarify — VideoClarifyTab
-//   • Video Settings — passthrough note (image + video share same guardrails/channels)
-// 2026-07-13 · Phase 2: added Video Briefs as the leftmost / default sub-tab.
+// PBS 2026-07-13 · Video AI Studio v1 — VideoSettingsTab replaces the
+// pass-through settings note. Includes style-preset + music-library editing.
 'use client';
 
 import { useState } from 'react';
@@ -13,21 +8,16 @@ import VideoBriefsPanel, { type VideoBriefRow } from './VideoBriefsPanel';
 import VideoLibraryTab from './VideoLibraryTab';
 import VideoAiStudioTab from './VideoAiStudioTab';
 import VideoClarifyTab from './VideoClarifyTab';
+import VideoSettingsTab from './VideoSettingsTab';
 import type { PillarOption } from './NewVideoBriefForm';
 import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy } from './MediaHub';
 
 type Sub = 'briefs' | 'library' | 'ai' | 'clarify' | 'settings';
 
 interface VideoTemplate {
-  template_key: string;
-  display_name: string;
-  description: string | null;
-  duration_sec: number;
-  min_assets: number;
-  max_assets: number;
-  aspect: string;
+  template_key: string; display_name: string; description: string | null;
+  duration_sec: number; min_assets: number; max_assets: number; aspect: string;
 }
-
 interface Props {
   propertyId: number;
   mediaPage: any[];
@@ -41,13 +31,13 @@ interface Props {
   areaOptions: string[];
   videoBriefs?: VideoBriefRow[];
   pillars?: PillarOption[];
+  stylePresets?: any[];
+  musicTracks?: any[];
 }
 
 const HAIR   = '#E6DFCC';
-const INK    = '#1B1B1B';
 const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
-const WHITE  = '#FFFFFF';
 const RED    = '#B23A2E';
 
 function isVideoRow(r: any): boolean {
@@ -64,8 +54,7 @@ export default function VideoHub(props: Props) {
 
   const videoRows = (props.mediaPage ?? []).filter(isVideoRow);
   const clarifyCount = videoRows.filter((r: any) => r.property_area == null || r.primary_tier == null).length;
-  const openBriefs = (props.videoBriefs ?? []).filter(b =>
-    b.status !== 'archived' && b.status !== 'published').length;
+  const openBriefs = (props.videoBriefs ?? []).filter(b => b.status !== 'archived' && b.status !== 'published').length;
 
   const TABS: Array<{ key: Sub; label: string; badge?: number }> = [
     { key: 'briefs',   label: 'Video Briefs',   badge: openBriefs },
@@ -82,7 +71,6 @@ export default function VideoHub(props: Props) {
 
   return (
     <div>
-      {/* Sub-tab strip — lighter chrome, sits below the main MediaHub tabs */}
       <div style={{ display:'flex', gap:4, borderBottom:'1px solid '+HAIR, marginBottom:16, background:'#FAF7EE', paddingLeft:6, borderTop:'1px solid '+HAIR }}>
         {TABS.map(t => {
           const active = sub === t.key;
@@ -109,65 +97,19 @@ export default function VideoHub(props: Props) {
       </div>
 
       {sub === 'briefs' && (
-        <VideoBriefsPanel
-          propertyId={props.propertyId}
-          briefs={props.videoBriefs ?? []}
-          pillars={props.pillars ?? []}
-        />
+        <VideoBriefsPanel propertyId={props.propertyId} briefs={props.videoBriefs ?? []} pillars={props.pillars ?? []} />
       )}
-
       {sub === 'library'  && (
-        <VideoLibraryTab
-          propertyId={props.propertyId}
-          mediaPage={props.mediaPage}
-          channelSpecs={props.channelSpecs}
-          onSendToAi={handleSendToAi}
-          areaOptions={props.areaOptions}
-          rooms={props.rooms}
-          taxonomy={props.taxonomy}
-        />
+        <VideoLibraryTab propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} onSendToAi={handleSendToAi} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />
       )}
-
       {sub === 'ai' && (
-        <VideoAiStudioTab
-          propertyId={props.propertyId}
-          mediaPage={props.mediaPage}
-          channelSpecs={props.channelSpecs}
-          videoEdits={props.videoEdits}
-          templates={props.templates}
-          categories={props.categories}
-          rooms={props.rooms}
-          facilities={props.facilities}
-          taxonomy={props.taxonomy}
-          initialSourceAssetId={aiInitialAssetId}
-        />
+        <VideoAiStudioTab propertyId={props.propertyId} mediaPage={props.mediaPage} channelSpecs={props.channelSpecs} videoEdits={props.videoEdits} templates={props.templates} categories={props.categories} rooms={props.rooms} facilities={props.facilities} taxonomy={props.taxonomy} initialSourceAssetId={aiInitialAssetId} />
       )}
-
       {sub === 'clarify' && (
-        <VideoClarifyTab
-          mediaPage={props.mediaPage}
-          areaOptions={props.areaOptions}
-          rooms={props.rooms}
-          taxonomy={props.taxonomy}
-        />
+        <VideoClarifyTab mediaPage={props.mediaPage} areaOptions={props.areaOptions} rooms={props.rooms} taxonomy={props.taxonomy} />
       )}
-
       {sub === 'settings' && (
-        <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:20, color:INK }}>
-          <div style={{ fontSize:12, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:700, marginBottom:8 }}>
-            Video settings
-          </div>
-          <p style={{ fontSize:13, color:INK, lineHeight:1.5, marginBottom:12 }}>
-            Video shares the same guardrails and channel specs as image. Manage them in the
-            main <strong>Settings ⚙</strong> tab (top-level strip) under <em>Guardrails</em> and{' '}
-            <em>Channels</em>. Video-specific spec columns (aspect ratio, max duration,
-            audio required) are already listed there for every channel.
-          </p>
-          <p style={{ fontSize:12, color:INK_M, lineHeight:1.5 }}>
-            Video templates (currently 3: sunset bumper 15s, program intro 30s, program montage 60s)
-            live in <code>media.video_templates</code>. Add rows there to expand the AI Studio picker.
-          </p>
-        </div>
+        <VideoSettingsTab propertyId={props.propertyId} presets={props.stylePresets ?? []} musicTracks={props.musicTracks ?? []} />
       )}
     </div>
   );
