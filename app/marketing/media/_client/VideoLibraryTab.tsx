@@ -6,6 +6,9 @@
 // via same /asset-delete route. Use-for-channel path unchanged.
 // 2026-07-13 · Coordinator — centered ▶ overlay opens VideoPlayerModal;
 // clicks elsewhere on the tile keep opening the edit drawer.
+// 2026-07-13 (pm) · Poster fix — inline <video> seeks to 10% (or 3s) via
+// onLoadedMetadata so the browser renders a real first-frame preview
+// instead of the cream placeholder. muted + playsInline + no controls.
 'use client';
 
 import { useMemo, useState, Fragment } from 'react';
@@ -283,7 +286,18 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
             <div key={r.asset_id} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', display:'flex', flexDirection:'column' }}>
               <div style={{ position:'relative', width:'100%', height:150, background:'#F5F0E1' }}>
                 {r.public_url ? (
-                  <video src={r.public_url} preload="metadata" muted style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                  <video
+                    src={r.public_url}
+                    preload="metadata"
+                    muted
+                    playsInline
+                    onLoadedMetadata={(e) => {
+                      const v = e.currentTarget;
+                      const d = Number.isFinite(v.duration) ? v.duration : 0;
+                      v.currentTime = d > 0 ? Math.min(d * 0.1, 3) : 0;
+                    }}
+                    style={{ width:'100%', height:'100%', objectFit:'cover', background:'#F5F0E1', display:'block' }}
+                  />
                 ) : (
                   <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, color:INK_M }}>no preview</div>
                 )}
