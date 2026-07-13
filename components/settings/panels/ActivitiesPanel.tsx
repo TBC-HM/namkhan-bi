@@ -7,7 +7,7 @@ import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PanelHeader, EmptyState } from './_shared';
 import { supabase } from '@/lib/supabase';
-import { btnPrimary, btnGhost, rowStyle, ErrorBanner, LabeledInput, LabeledCheckbox, LabeledTextarea, FormShell, DeleteConfirm, pill } from './_settings_ui';
+import { btnPrimary, btnGhost, rowStyle, ErrorBanner, SavedFlash, LabeledInput, LabeledCheckbox, LabeledTextarea, FormShell, DeleteConfirm, pill } from './_settings_ui';
 
 type Row = {
   activity_id: number; property_id: number; category: string | null; name: string;
@@ -70,6 +70,7 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [localSeasons, setLocalSeasons] = useState<Season[]>(seasons);
   const [facilities, setFacilities] = useState<Array<{ facility_id: number; name: string; category: string | null }>>([]);
@@ -136,7 +137,10 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
         p_facility_id: draft.facility_id ? Number(draft.facility_id) : null,
       });
       if (e) { setError(e.message); return; }
-      setDraft(null); router.refresh();
+      setDraft(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      router.refresh();
     });
   }
 
@@ -153,6 +157,7 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
       <PanelHeader title="Activities" subtitle={`${data.length} activit${data.length === 1 ? 'y' : 'ies'} · wellness · culture · adventure`}
         action={<button type="button" onClick={() => setDraft({ ...EMPTY })} style={btnPrimary}>+ Add</button>} />
       <ErrorBanner error={error} />
+      <SavedFlash show={saved} />
       {draft && (
         <FormShell title={draft.activity_id ? 'Edit activity' : 'New activity'} onSave={save} onCancel={() => { setDraft(null); setError(null); }} busy={busy}>
           <LabeledInput label="Category" value={draft.category} onChange={(v) => setDraft({ ...draft, category: v })} placeholder="e.g. wellness" />
@@ -168,8 +173,8 @@ export default function ActivitiesPanel({ data, propertyId, seasons = [] }: {
           <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 6 }}>
             <LabeledCheckbox label="Price includes VAT + service" checked={draft.price_includes_vat_service} onChange={(v) => setDraft({ ...draft, price_includes_vat_service: v })} />
           </div>
-          <LabeledInput label="Service from" value={draft.service_time_from} onChange={(v) => setDraft({ ...draft, service_time_from: v })} placeholder="e.g. 07:00" />
-          <LabeledInput label="Service to"   value={draft.service_time_to}   onChange={(v) => setDraft({ ...draft, service_time_to: v })}   placeholder="e.g. 19:00" />
+          <LabeledInput label="Service from" value={draft.service_time_from} onChange={(v) => setDraft({ ...draft, service_time_from: v })} type="time" />
+          <LabeledInput label="Service to"   value={draft.service_time_to}   onChange={(v) => setDraft({ ...draft, service_time_to: v })}   type="time" />
           <div />
           <div style={{ gridColumn: '1 / -1' }}>
             <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A', fontWeight: 600, marginBottom: 6 }}>Available in seasons</div>
