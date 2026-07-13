@@ -3,6 +3,8 @@
 // (ai_confidence predicate skipped — not exposed on v_marketing_media_page).
 // Clicking a thumb opens AssetEditDrawer (reused from LibraryTab).
 // After save + router.refresh(), fixed assets drop out of the client-side filter.
+// 2026-07-13 · Coordinator scope-add — PICS clarify skips videos; videos live
+// in the dedicated VideoClarifyTab. All KPI counts use the photos-only slice.
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -48,20 +50,23 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
   const [editing, setEditing] = useState<MediaRow | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
 
+  // Photos-only slice — video clarify has its own tab (VideoClarifyTab).
+  const photos = useMemo(() => mediaPage.filter(r => !isVideoRow(r)), [mediaPage]);
+
   const clarify = useMemo(() => {
-    return mediaPage.filter(r => {
+    return photos.filter(r => {
       if (localDismiss.has(r.asset_id)) return false;
       return r.property_area == null || r.primary_tier == null;
     });
-  }, [mediaPage, localDismiss]);
+  }, [photos, localDismiss]);
 
   const stats = useMemo(() => {
-    const total = mediaPage.length;
-    const withArea = mediaPage.filter(r => r.property_area != null).length;
-    const withTier = mediaPage.filter(r => r.primary_tier != null).length;
-    const clean = mediaPage.filter(r => r.property_area != null && r.primary_tier != null).length;
+    const total = photos.length;
+    const withArea = photos.filter(r => r.property_area != null).length;
+    const withTier = photos.filter(r => r.primary_tier != null).length;
+    const clean = photos.filter(r => r.property_area != null && r.primary_tier != null).length;
     return { toClarify: clarify.length, withArea, withTier, clean, total };
-  }, [mediaPage, clarify.length]);
+  }, [photos, clarify.length]);
 
   return (
     <div>
@@ -82,12 +87,11 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
 
       {clarify.length === 0 ? (
         <div style={{ padding:40, textAlign:'center', color:INK_M, background:WHITE, border:'1px solid '+HAIR, borderRadius:4 }}>
-          Nothing to clarify — every asset has an area and a tier. ✓
+          Nothing to clarify — every photo has an area and a tier. Videos live in the Videos → Clarify tab.
         </div>
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:12 }}>
           {clarify.map(r => {
-            const video = isVideoRow(r);
             const badges: Array<{ k: string; label: string }> = [];
             if (!r.property_area) badges.push({ k: 'area', label: '?area' });
             if (!r.primary_tier)  badges.push({ k: 'tier', label: '?tier' });
@@ -98,12 +102,8 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
               }}>
                 <div style={{ position: 'relative', width: '100%', height: 120, background: '#F5F0E1' }}>
                   {r.public_url ? (
-                    video ? (
-                      <video src={r.public_url} preload="metadata" muted style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={r.public_url} alt={r.original_filename ?? ''} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                    )
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.public_url} alt={r.original_filename ?? ''} loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                   ) : (
                     <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:INK_M }}>no preview</div>
                   )}
@@ -115,9 +115,6 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                       }}>{b.label}</span>
                     ))}
                   </div>
-                  {video && (
-                    <div style={{ position:'absolute', bottom:6, right:6, background:'rgba(0,0,0,0.55)', color:WHITE, fontSize:9, fontWeight:600, padding:'2px 5px', borderRadius:2, letterSpacing:'0.04em' }}>VIDEO</div>
-                  )}
                 </div>
                 <div style={{ padding:'6px 8px', borderTop:'1px solid '+HAIR, fontSize:10 }}>
                   <div style={{ color:INK, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
