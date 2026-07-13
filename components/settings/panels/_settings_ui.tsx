@@ -29,6 +29,18 @@ export function ErrorBanner({ error }: { error: string | null }) {
   );
 }
 
+// PBS 2026-07-13 — inline "✓ Saved" flash used across all CRUD panels.
+// Panels drive it by setting a boolean; the auto-hide timer is caller-managed
+// (use useSaveFlash hook below to avoid boilerplate).
+export function SavedFlash({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div style={{ margin: '12px 20px', padding: '8px 12px', background: '#E4F0E1', border: '1px solid #C8DFC8', borderRadius: 4, fontSize: 12, color: '#1F5C2C', fontWeight: 500 }}>
+      ✓ Saved
+    </div>
+  );
+}
+
 export function LabeledInput({ label, value, onChange, type = 'text', placeholder, span = 1 }: {
   label: string; value: string; onChange: (v: string) => void;
   type?: string; placeholder?: string; span?: 1 | 2 | 3;
