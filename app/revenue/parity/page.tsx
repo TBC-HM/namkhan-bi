@@ -22,6 +22,7 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import { fmtTableUsd, fmtIsoDate, EMPTY } from '@/lib/format';
+import { LighthouseIngestStatus } from '../_shared/LighthouseIngestStatus';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -355,6 +356,10 @@ export default async function ParityPage({ propertyId }: Props) {
       subtitle={lastShopIso ? `competitive pricing position · last shop ${fmtIsoDate(lastShopIso)}` : 'awaiting first shop'}
       tabs={tabs}
     >
+      {/* 2026-07-14 — Daily email-ingest status strip */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <LighthouseIngestStatus report="rate_integrity" />
+      </div>
       {/* 2026-07-09 — Own-OTA Rate Integrity strip (LOS 1 · 2 guests) */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 0 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
         <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
