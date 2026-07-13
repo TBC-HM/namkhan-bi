@@ -36,13 +36,12 @@ async function getLastRun(report: IngestReportType): Promise<IngestRunRow | null
 function fmtTs(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  // ISO short: 2026-07-14 07:15 UTC
   const yyyy = d.getUTCFullYear();
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
   const hh = String(d.getUTCHours()).padStart(2, '0');
   const mi = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi} UTC`;
+  return yyyy + '-' + mm + '-' + dd + ' ' + hh + ':' + mi + ' UTC';
 }
 
 export async function LighthouseIngestStatus({ report }: { report: IngestReportType }) {
