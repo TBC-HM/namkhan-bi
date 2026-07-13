@@ -121,7 +121,7 @@ export default async function SalesMailsPage({
     <DashboardPage title="Sales · Mails" tabs={tabs}>
       {searchParams?.connected && (
         <div style={{ gridColumn: '1 / -1' }}>
-          <Container density="compact">
+          <Container title="Mailbox connected" density="compact">
             <div style={{ background: '#F5F0E1', border: '1px solid #E6DFCC', borderRadius: 6, padding: 10, fontSize: 12, color: '#084838' }}>
               Connected {searchParams.connected} · inbox will refresh momentarily.
             </div>
@@ -130,7 +130,7 @@ export default async function SalesMailsPage({
       )}
       {searchParams?.error && (
         <div style={{ gridColumn: '1 / -1' }}>
-          <Container density="compact">
+          <Container title="Connect issue" density="compact">
             <div style={{ background: '#F5F0E1', border: '1px solid #E6DFCC', borderRadius: 6, padding: 10, fontSize: 12, color: '#B03826' }}>
               Connect failed: {searchParams.error}
             </div>
