@@ -2,17 +2,21 @@
 // Sales · Mails — unified inbox across shared Gmail aliases (filter mode).
 // Full-width primitive (gridColumn: 1/-1). Design tokens per PBS 2026-07-13.
 //
-// PBS 2026-07-13 · v2 pivot to filter mode:
-//   - No more per-mailbox OAuth Connect button. Instead, "Manage aliases"
-//     opens a small modal to add / remove aliases.
-//   - Reply action opens ComposeModal (shared-mailbox mode) instead of a
-//     Gmail deep link. Modal POSTs to /api/sales/mails/send.
-//   - Same read/mark-read/star wiring; server now uses the current user's
-//     personal Gmail token to fan out `deliveredto:` searches.
+// PBS 2026-07-13 · v2 pivot to filter mode.
+// PBS 2026-07-14 · v3 mail-to-lead UX:
+//   - New optional props: enableMultiSelect, renderRowActions, linkedLeads,
+//     dismissedThreadIds, bulk callbacks.
+//   - Backward-compatible: existing callers (like /inbox) that omit the new
+//     props see zero visual change.
+//   - Multi-select adds a leading checkbox column + sticky bulk-action bar.
+//   - renderRowActions renders per-row inline actions (e.g. Convert chip)
+//     BEFORE the existing hover-only icon actions cluster.
+//   - linkedLeads / dismissedThreadIds drive the Lead #N and Dismissed chips
+//     rendered inside the built-in inline action slot.
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import ComposeModal, { type ComposePrefill } from '@/app/_components/ComposeModal';
 
 const T = {
@@ -23,6 +27,8 @@ const T = {
   INK_S:  '#3A3A3A',
   FOREST: '#084838',
   CREAM:  '#F5F0E1',
+  CHIP:   '#F5F0E0',
+  MUTED:  '#8B7355',
   RED:    '#B03826',
   AMBER:  '#B48A3A',
 };
@@ -57,6 +63,15 @@ export interface UnifiedMailInboxProps {
   initialThreads: Thread[];
   mailboxes: MailboxSummary[];
   defaultMailboxId?: string;
+  // v3 optional props (mail-to-lead UX)
+  renderRowActions?: (thread: Thread) => ReactNode;
+  linkedLeads?: Record<string, number>;
+  dismissedThreadIds?: string[] | Set<string>;
+  enableMultiSelect?: boolean;
+  bulkActionLabel?: string;
+  bulkSecondaryLabel?: string;
+  onBulkPrimary?: (threads: Thread[]) => Promise<void> | void;
+  onBulkSecondary?: (threads: Thread[]) => Promise<void> | void;
 }
 
 function parseFrom(raw: string): { name: string; email: string } {
@@ -93,7 +108,19 @@ function gmailDeepLink(threadId: string): string {
 }
 
 export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
-  const { mailboxes: initialMailboxes, initialThreads, defaultMailboxId } = props;
+  const {
+    mailboxes: initialMailboxes,
+    initialThreads,
+    defaultMailboxId,
+    renderRowActions,
+    linkedLeads,
+    dismissedThreadIds,
+    enableMultiSelect,
+    bulkActionLabel,
+    bulkSecondaryLabel,
+    onBulkPrimary,
+    onBulkSecondary,
+  } = props;
 
   const [mailboxes, setMailboxes] = useState<MailboxSummary[]>(initialMailboxes);
   const [threads, setThreads] = useState<Thread[]>(initialThreads);
@@ -106,7 +133,15 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
   const [busyMsgId, setBusyMsgId] = useState<string | null>(null);
   const [showManage, setShowManage] = useState(false);
   const [composeFor, setComposeFor] = useState<{ prefill: ComposePrefill; mailboxId: string; mailboxLabel: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState<'primary'|'secondary'|null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dismissedSet = useMemo<Set<string>>(() => {
+    if (!dismissedThreadIds) return new Set();
+    if (dismissedThreadIds instanceof Set) return dismissedThreadIds;
+    return new Set(dismissedThreadIds);
+  }, [dismissedThreadIds]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -132,6 +167,17 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
   }, [selectedMailbox, unreadOnly, committedSearch, limit]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Clear stale selections when the visible thread list changes.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(threads.map((t) => t.id));
+      const next = new Set<string>();
+      prev.forEach((id) => { if (visible.has(id)) next.add(id); });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [threads]);
 
   const activeMailboxes = useMemo(() => mailboxes.filter((m) => m.active), [mailboxes]);
 
@@ -178,14 +224,59 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
   }, []);
 
   const refreshMailboxes = useCallback(async () => {
-    // Reload alias list after add/remove via the inbox page's own view.
-    // We hit a lightweight fetch to /api/sales/mails/inbox with limit=1 just
-    // to force a re-read? Simpler: /api/sales/mails/inbox already returns
-    // threads only. So we page-reload just the aliases via a dedicated call
-    // to the bridge view through the inbox endpoint's params. For MVP we
-    // simply reload the page after mutations to re-hydrate the primitive.
     location.reload();
   }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectedThreads = useMemo(() => threads.filter((t) => selectedIds.has(t.id)), [threads, selectedIds]);
+  const allVisibleSelected = threads.length > 0 && threads.every((t) => selectedIds.has(t.id));
+  const someVisibleSelected = threads.some((t) => selectedIds.has(t.id));
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (allVisibleSelected) {
+        const next = new Set(prev);
+        threads.forEach((t) => next.delete(t.id));
+        return next;
+      }
+      const next = new Set(prev);
+      threads.forEach((t) => next.add(t.id));
+      return next;
+    });
+  }, [threads, allVisibleSelected]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const runBulkPrimary = useCallback(async () => {
+    if (!onBulkPrimary || selectedThreads.length === 0) return;
+    setBulkBusy('primary');
+    try {
+      await onBulkPrimary(selectedThreads);
+      clearSelection();
+    } finally { setBulkBusy(null); }
+  }, [onBulkPrimary, selectedThreads, clearSelection]);
+
+  const runBulkSecondary = useCallback(async () => {
+    if (!onBulkSecondary || selectedThreads.length === 0) return;
+    setBulkBusy('secondary');
+    try {
+      await onBulkSecondary(selectedThreads);
+      clearSelection();
+    } finally { setBulkBusy(null); }
+  }, [onBulkSecondary, selectedThreads, clearSelection]);
+
+  const showCheckboxes = !!enableMultiSelect;
+  const showBulkBar = showCheckboxes && selectedIds.size > 0;
+  const nSel = selectedIds.size;
+  const primaryLabel = (bulkActionLabel ?? 'Convert to Leads') + ' (' + nSel + ')';
+  const secondaryLabel = (bulkSecondaryLabel ?? 'Dismiss') + ' (' + nSel + ')';
 
   return (
     <div style={S.wrap}>
@@ -193,6 +284,36 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
         <div style={S.headerTitle}>Shared inboxes · unified · filter mode</div>
         <button type="button" onClick={() => setShowManage(true)} style={S.manageBtn}>Manage aliases</button>
       </div>
+
+      {showBulkBar && (
+        <div style={S.bulkBar} role="region" aria-label="Bulk actions">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: T.INK }}>{nSel} selected</span>
+            {onBulkPrimary && (
+              <button
+                type="button"
+                onClick={() => void runBulkPrimary()}
+                disabled={bulkBusy !== null}
+                style={S.bulkPrimaryBtn}
+              >{bulkBusy === 'primary' ? 'Working…' : primaryLabel}</button>
+            )}
+            {onBulkSecondary && (
+              <button
+                type="button"
+                onClick={() => void runBulkSecondary()}
+                disabled={bulkBusy !== null}
+                style={S.bulkSecondaryBtn}
+              >{bulkBusy === 'secondary' ? 'Working…' : secondaryLabel}</button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={clearSelection}
+            aria-label="Clear selection"
+            style={S.bulkClearBtn}
+          >×</button>
+        </div>
+      )}
 
       <div style={S.filterBar}>
         <div style={S.pillRow}>
@@ -247,11 +368,23 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
 
       <div style={S.tableWrap} role="table" aria-label="Unified mailbox inbox">
         <div style={S.tableHead} role="row">
+          {showCheckboxes && (
+            <div style={{ width: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <input
+                type="checkbox"
+                aria-label="Select all visible"
+                checked={allVisibleSelected}
+                ref={(el) => { if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected; }}
+                onChange={toggleSelectAllVisible}
+                style={cbStyle()}
+              />
+            </div>
+          )}
           <div style={{ ...S.th, width: 100 }}>Mailbox</div>
           <div style={{ ...S.th, width: 220 }}>From</div>
           <div style={{ ...S.th, flex: 1 }}>Subject</div>
           <div style={{ ...S.th, width: 100, textAlign: 'right' }}>Time</div>
-          <div style={{ ...S.th, width: 200, textAlign: 'right' }}>Actions</div>
+          <div style={{ ...S.th, width: 240, textAlign: 'right' }}>Actions</div>
         </div>
 
         {threads.length === 0 ? (
@@ -263,9 +396,15 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
             key={t.mailbox_id + ':' + t.id}
             t={t}
             busy={busyMsgId === t.id}
+            showCheckbox={showCheckboxes}
+            checked={selectedIds.has(t.id)}
+            onToggleCheck={() => toggleSelect(t.id)}
             onMarkRead={() => void markRead(t)}
             onToggleStar={() => void toggleStar(t)}
             onReply={() => openReply(t)}
+            linkedLeadId={linkedLeads?.[t.threadId]}
+            dismissed={dismissedSet.has(t.threadId)}
+            extraActions={renderRowActions ? renderRowActions(t) : null}
           />
         ))}
 
@@ -331,14 +470,37 @@ function PillButton(props: { label: string; active: boolean; color: string; onCl
   );
 }
 
-function MailRow(props: { t: Thread; busy: boolean; onMarkRead: () => void; onToggleStar: () => void; onReply: () => void }) {
-  const { t, busy, onMarkRead, onToggleStar, onReply } = props;
+function cbStyle(): React.CSSProperties {
+  return {
+    width: 12,
+    height: 12,
+    margin: 0,
+    accentColor: T.INK,
+    cursor: 'pointer',
+  };
+}
+
+function MailRow(props: {
+  t: Thread;
+  busy: boolean;
+  showCheckbox: boolean;
+  checked: boolean;
+  onToggleCheck: () => void;
+  onMarkRead: () => void;
+  onToggleStar: () => void;
+  onReply: () => void;
+  linkedLeadId?: number;
+  dismissed?: boolean;
+  extraActions?: ReactNode;
+}) {
+  const { t, busy, showCheckbox, checked, onToggleCheck, onMarkRead, onToggleStar, onReply, linkedLeadId, dismissed, extraActions } = props;
   const [hover, setHover] = useState(false);
   const parsed = parseFrom(t.from);
   const displayName = parsed.name || parsed.email.split('@')[0];
   const domain = parsed.email.includes('@') ? '@' + parsed.email.split('@')[1] : '';
-  const rowBg = hover ? T.CREAM : T.WHITE;
+  const rowBg = checked ? T.CHIP : (hover ? T.CREAM : T.WHITE);
   const unreadBorder = t.unread ? '3px solid ' + T.FOREST : '3px solid transparent';
+  const showCheckboxAlways = checked || hover;
 
   return (
     <div
@@ -356,6 +518,17 @@ function MailRow(props: { t: Thread; busy: boolean; onMarkRead: () => void; onTo
         opacity: busy ? 0.55 : 1,
       }}
     >
+      {showCheckbox && (
+        <div style={{ width: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <input
+            type="checkbox"
+            aria-label="Select thread"
+            checked={checked}
+            onChange={onToggleCheck}
+            style={{ ...cbStyle(), visibility: showCheckboxAlways ? 'visible' : 'hidden' }}
+          />
+        </div>
+      )}
       <div style={{ width: 100 }}>
         <span
           style={{
@@ -397,16 +570,59 @@ function MailRow(props: { t: Thread; busy: boolean; onMarkRead: () => void; onTo
 
       <div style={{ width: 100, textAlign: 'right', fontSize: 12, color: T.INK_M }}>{relTime(t.dateMs)}</div>
 
-      <div style={{ width: 200, textAlign: 'right', display: 'flex', gap: 4, justifyContent: 'flex-end', visibility: hover ? 'visible' : 'hidden' }}>
-        <IconAction title="Open in Gmail" href={gmailDeepLink(t.threadId)}>↗</IconAction>
-        {t.unread && <IconAction title="Mark read" onClick={onMarkRead}>✓</IconAction>}
-        <IconAction title="Reply from this alias" onClick={onReply}>✎</IconAction>
-        <IconAction title={t.starred ? 'Unstar' : 'Star'} onClick={onToggleStar}>
-          <span style={{ color: t.starred ? T.AMBER : T.INK_S }}>★</span>
-        </IconAction>
+      <div style={{ width: 240, textAlign: 'right', display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {/* Persistent chips (always visible): lead link, dismissed marker, extraActions */}
+        {linkedLeadId ? (
+          <a
+            href={'/sales/leads?highlight=' + linkedLeadId}
+            title={'Open lead #' + linkedLeadId}
+            style={leadChipStyle()}
+          >→ Lead #{linkedLeadId}</a>
+        ) : dismissed ? (
+          <span style={dismissedChipStyle()} title="This thread was dismissed">Dismissed</span>
+        ) : extraActions ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center' }}>{extraActions}</span>
+        ) : null}
+        {/* Hover-only icon cluster */}
+        <span style={{ display: 'inline-flex', gap: 4, visibility: hover ? 'visible' : 'hidden' }}>
+          <IconAction title="Open in Gmail" href={gmailDeepLink(t.threadId)}>↗</IconAction>
+          {t.unread && <IconAction title="Mark read" onClick={onMarkRead}>✓</IconAction>}
+          <IconAction title="Reply from this alias" onClick={onReply}>✎</IconAction>
+          <IconAction title={t.starred ? 'Unstar' : 'Star'} onClick={onToggleStar}>
+            <span style={{ color: t.starred ? T.AMBER : T.INK_S }}>★</span>
+          </IconAction>
+        </span>
       </div>
     </div>
   );
+}
+
+function leadChipStyle(): React.CSSProperties {
+  return {
+    background: T.CHIP,
+    color: T.MUTED,
+    border: '1px solid ' + T.HAIR,
+    borderRadius: 4,
+    padding: '4px 8px',
+    fontSize: 11,
+    fontWeight: 600,
+    textDecoration: 'none',
+    fontStyle: 'italic',
+    whiteSpace: 'nowrap',
+  };
+}
+
+function dismissedChipStyle(): React.CSSProperties {
+  return {
+    background: T.WHITE,
+    color: T.MUTED,
+    border: '1px solid ' + T.HAIR,
+    borderRadius: 4,
+    padding: '4px 8px',
+    fontSize: 11,
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+  };
 }
 
 function IconAction(props: { title: string; onClick?: () => void; href?: string; children: React.ReactNode }) {
@@ -582,6 +798,47 @@ const S: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
+  },
+  bulkBar: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 3,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    padding: '12px 16px',
+    background: T.WHITE,
+    borderBottom: '1px solid ' + T.HAIR,
+  },
+  bulkPrimaryBtn: {
+    background: T.INK,
+    color: T.WHITE,
+    border: '1px solid ' + T.INK,
+    borderRadius: 6,
+    padding: '6px 14px',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  bulkSecondaryBtn: {
+    background: T.WHITE,
+    color: T.INK,
+    border: '1px solid ' + T.HAIR,
+    borderRadius: 6,
+    padding: '6px 14px',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  bulkClearBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: T.INK_M,
+    cursor: 'pointer',
+    fontSize: 18,
+    lineHeight: 1,
+    padding: '2px 6px',
   },
   filterBar: {
     display: 'flex',
