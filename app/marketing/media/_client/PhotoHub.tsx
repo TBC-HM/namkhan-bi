@@ -2,6 +2,7 @@
 // PBS 2026-07-13 · Task A — Photo sub-hub mirroring VideoHub's 4-tab nested strip.
 // 2026-07-13 · Task B — added "Coverage" sub-tab surfacing v_media_coverage_matrix.
 // PBS 2026-07-14 · Task B (media area) — passes guardrails to SettingsTab.
+// PBS 2026-07-14 · TASK 3 — new "Review" sub-tab powered by v_media_review_queue.
 'use client';
 
 import { useState } from 'react';
@@ -10,9 +11,10 @@ import AiStudioTab from './AiStudioTab';
 import ClarifyTab from './ClarifyTab';
 import SettingsTab from './SettingsTab';
 import CoverageTab, { type CoverageRow } from './CoverageTab';
+import ReviewTab, { type ReviewRow } from './ReviewTab';
 import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy, GuardrailsData } from './MediaHub';
 
-type Sub = 'library' | 'ai' | 'clarify' | 'coverage' | 'settings';
+type Sub = 'library' | 'ai' | 'clarify' | 'review' | 'coverage' | 'settings';
 
 interface Props {
   propertyId: number;
@@ -28,6 +30,7 @@ interface Props {
   taxonomy: MediaTaxonomy;
   areaOptions: string[];
   coverageRows?: CoverageRow[];
+  reviewRows?: ReviewRow[];
   initialSub?: Sub;
   initialAiAssetId?: string | null;
   guardrails: GuardrailsData;
@@ -37,6 +40,7 @@ const HAIR   = '#E6DFCC';
 const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
 const RED    = '#B23A2E';
+const AMBER  = '#B87F26';
 
 function isVideoRow(r: any): boolean {
   if ((r?.asset_type ?? '').toLowerCase() === 'video') return true;
@@ -52,11 +56,13 @@ export default function PhotoHub(props: Props) {
 
   const photoRows = (props.mediaPage ?? []).filter((r: any) => !isVideoRow(r));
   const clarifyCount = photoRows.filter((r: any) => r.property_area == null || r.primary_tier == null).length;
+  const reviewCount = (props.reviewRows ?? []).length;
 
-  const TABS: Array<{ key: Sub; label: string; badge?: number }> = [
+  const TABS: Array<{ key: Sub; label: string; badge?: number; badgeColor?: string }> = [
     { key: 'library',  label: 'Photo Library'   },
     { key: 'ai',       label: 'Photo AI Studio' },
-    { key: 'clarify',  label: 'Photo Clarify',  badge: clarifyCount },
+    { key: 'clarify',  label: 'Photo Clarify',  badge: clarifyCount, badgeColor: RED },
+    { key: 'review',   label: 'Review',         badge: reviewCount,  badgeColor: AMBER },
     { key: 'coverage', label: 'Coverage'        },
     { key: 'settings', label: 'Photo Settings'  },
   ];
@@ -84,7 +90,7 @@ export default function PhotoHub(props: Props) {
               {t.label}
               {showBadge && (
                 <span style={{
-                  background: RED, color: '#FFF', fontSize: 9, fontWeight: 700,
+                  background: t.badgeColor || RED, color: '#FFF', fontSize: 9, fontWeight: 700,
                   padding: '1px 6px', borderRadius: 8, letterSpacing: 0,
                 }}>{t.badge}</span>
               )}
@@ -124,6 +130,9 @@ export default function PhotoHub(props: Props) {
           rooms={props.rooms}
           taxonomy={props.taxonomy}
         />
+      )}
+      {sub === 'review' && (
+        <ReviewTab rows={props.reviewRows ?? []} />
       )}
       {sub === 'coverage' && (
         <CoverageTab rows={props.coverageRows ?? []} />
