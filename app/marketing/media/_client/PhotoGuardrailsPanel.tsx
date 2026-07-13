@@ -1,6 +1,8 @@
 // app/marketing/media/_client/PhotoGuardrailsPanel.tsx
 // PBS 2026-07-14 · Task B — Photo Guardrails: 7 editable sub-panels.
 // Naming · Captions · Alt-text · Tier thresholds · Aspect ratios · Text policy · Brand palette.
+// 2026-07-14 · NamingPanel now shows scope=photo AND scope=video as fixed rows;
+// consumed by parent page.tsx which no longer filters .or('scope.eq.photo,scope.is.null').
 'use client';
 
 import { useState } from 'react';
@@ -233,7 +235,7 @@ function NamingPanel({ propertyId, rows, setBanner }: { propertyId: number; rows
       await postJson('/api/marketing/media/guardrails/naming', {
         id: r.id ?? null,
         property_id: r.property_id ?? propertyId,
-        scope: 'photo',
+        scope: r.scope ?? 'photo',
         pattern: r.pattern,
         examples: r.examples ?? [],
         description: r.description ?? null,
@@ -247,31 +249,61 @@ function NamingPanel({ propertyId, rows, setBanner }: { propertyId: number; rows
     } finally { setSaving(false); }
   }
 
+  const scopes: Array<'photo' | 'video'> = ['photo', 'video'];
+  const rowByScope = new Map<string, NamingRow>();
+  for (const r of rows) if (r.scope) rowByScope.set(r.scope, r);
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: INK_M }}>{rows.length} row{rows.length === 1 ? '' : 's'} · scope=photo</span>
-        <Btn label="+ Add naming rule" tone="primary" onClick={() => setDraft({ pattern: '', examples: [], active: true })} />
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 13, color: INK, fontWeight: 600, marginBottom: 2 }}>File Naming Convention</div>
+        <div style={{ fontSize: 11, color: INK_M }}>One rule per scope. Iris reads these at score time to check original_filename against the pattern.</div>
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead><tr><th style={th}>Pattern</th><th style={th}>Description</th><th style={th}>Examples</th><th style={th}>Active</th><th style={th}></th></tr></thead>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 10 }}>
+        <thead><tr><th style={th}>Scope</th><th style={th}>Pattern</th><th style={th}>Description</th><th style={th}>Examples</th><th style={th}>Active</th><th style={th}></th></tr></thead>
         <tbody>
-          {rows.map(r => (
-            <tr key={r.id}>
-              <td style={{ ...td, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{r.pattern}</td>
-              <td style={td}>{r.description ?? <span style={{ color: INK_M }}>—</span>}</td>
-              <td style={{ ...td, color: INK_M }}>{(r.examples ?? []).join(' · ') || '—'}</td>
-              <td style={td}>{r.active ? 'yes' : 'no'}</td>
-              <td style={td}><Btn label="edit" onClick={() => setDraft(r)} /></td>
-            </tr>
-          ))}
+          {scopes.map(s => {
+            const r = rowByScope.get(s);
+            return (
+              <tr key={s}>
+                <td style={{ ...td, fontWeight: 600, textTransform: 'capitalize' }}>{s}</td>
+                {r ? (
+                  <>
+                    <td style={{ ...td, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{r.pattern}</td>
+                    <td style={td}>{r.description ?? <span style={{ color: INK_M }}>—</span>}</td>
+                    <td style={{ ...td, color: INK_M }}>{(r.examples ?? []).join(' · ') || '—'}</td>
+                    <td style={td}>{r.active ? 'yes' : 'no'}</td>
+                    <td style={td}><Btn label="edit" onClick={() => setDraft(r)} /></td>
+                  </>
+                ) : (
+                  <>
+                    <td style={{ ...td, color: INK_M }} colSpan={4}>no rule yet</td>
+                    <td style={td}><Btn label="add" onClick={() => setDraft({ scope: s, pattern: '', examples: [], active: true, property_id: null } as Partial<NamingRow>)} /></td>
+                  </>
+                )}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
+      <div style={{ fontSize: 11, color: INK_M }}>
+        {rows.length} row{rows.length === 1 ? '' : 's'} · scopes covered: {rows.map(r => r.scope ?? '(any)').join(', ') || '—'}
+      </div>
+
       {draft && (
         <div style={{ marginTop: 14, padding: 12, background: '#FAF7EE', border: '1px solid ' + HAIR, borderRadius: 4 }}>
+          <div style={{ fontSize: 12, color: INK, fontWeight: 600, marginBottom: 8, textTransform: 'capitalize' }}>
+            Edit {draft.scope ?? 'photo'} naming rule
+          </div>
           <div style={{ display: 'grid', gap: 10 }}>
+            <label style={{ fontSize: 11, color: INK_M }}>Scope
+              <select value={draft.scope ?? 'photo'} onChange={e => setDraft({ ...draft, scope: e.target.value })} style={{ ...input, width: '100%' }}>
+                <option value="photo">photo</option>
+                <option value="video">video</option>
+              </select>
+            </label>
             <label style={{ fontSize: 11, color: INK_M }}>Pattern
               <input value={draft.pattern ?? ''} onChange={e => setDraft({ ...draft, pattern: e.target.value })} placeholder="Location_Scene_ShotType_Orientation" style={{ ...input, width: '100%' }} />
             </label>
