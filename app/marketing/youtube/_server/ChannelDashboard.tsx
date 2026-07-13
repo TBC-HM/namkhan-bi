@@ -135,7 +135,7 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
 
   // 2) Fetch identity + videos + comments in parallel — Playlists + Programs live on their own sub-pages now.
   const [chRes, vidRes, comRes] = await Promise.all([
-    fetchChannel(tok.access_token),
+    fetchChannel(tok.access_token, tok.channel_id),
     fetchRecentVideos(tok.access_token, tok.channel_id, 24),
     fetchRecentComments(tok.access_token, tok.channel_id, 20),
   ]);
