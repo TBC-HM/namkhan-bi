@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
   for (const r of scored_ok) {
     const naming = r.result?.naming_convention;
     if (naming && naming.matched === false) fails['naming'] = (fails['naming'] ?? 0) + 1;
+    if (r.result?.is_hotel_property === false) fails['non_hotel'] = (fails['non_hotel'] ?? 0) + 1;
   }
   for (const r of results.filter(x => !x.ok)) {
     fails['errors'] = (fails['errors'] ?? 0) + 1;
