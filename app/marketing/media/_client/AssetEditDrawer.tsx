@@ -4,6 +4,9 @@
 // 2026-07-13 pm · MEDIA QA v1 — collapsible "Quality Score" breakdown with
 //   tech/aes/mkt bars, naming-convention check, detected-text flags, and
 //   Re-score button that POSTs to /api/marketing/media/qa-rescore.
+// 2026-07-14 · MEDIA QA v2 — per-slider Iris reasoning (technical_reasoning /
+//   aesthetic_reasoning / marketing_reasoning) rendered inline under each
+//   slider row, plus qa_notes.failures[] chips under the composite.
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -576,9 +579,9 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
             {/* Sliders — always visible so PBS can override manually */}
             <div style={{ display:'flex', flexDirection:'column', gap:10, background:CREAM, border:'1px solid '+HAIR, borderRadius:3, padding:10 }}>
               <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Manual override</div>
-              <SliderRow label="Technical" value={tSlider} setValue={setTSlider} />
-              <SliderRow label="Aesthetic" value={aSlider} setValue={setASlider} />
-              <SliderRow label="Marketing" value={mSlider} setValue={setMSlider} />
+              <SliderRow label="Technical" value={tSlider} setValue={setTSlider} reasoning={notes?.technical_reasoning ?? null} />
+              <SliderRow label="Aesthetic" value={aSlider} setValue={setASlider} reasoning={notes?.aesthetic_reasoning ?? null} />
+              <SliderRow label="Marketing" value={mSlider} setValue={setMSlider} reasoning={notes?.marketing_reasoning ?? null} />
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid '+HAIR, paddingTop:8, marginTop:2 }}>
                 <span style={{ fontSize:11, color:INK, fontWeight:600 }}>Composite</span>
                 <span style={{ fontSize:12, color:INK, fontWeight:700, fontVariantNumeric:'tabular-nums' }}>
@@ -589,6 +592,7 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
                   })()}
                 </span>
               </div>
+              <FailureChips failures={notes?.failures} />
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                 <button type="button" onClick={saveScores} disabled={savingScores || (tSlider == null && aSlider == null && mSlider == null)}
                   style={{ padding:'6px 14px', fontSize:11, fontWeight:600, background: savingScores ? INK_M : FOREST, color:WHITE, border:'none', borderRadius:3, cursor: savingScores ? 'default' : 'pointer' }}>
@@ -711,17 +715,71 @@ function qaBadgeStyle(v: number | null | undefined): React.CSSProperties {
   return { background: b.bg, color: b.fg };
 }
 
-function SliderRow({ label, value, setValue }: { label: string; value: number | null; setValue: (v: number | null) => void }) {
+function SliderRow({ label, value, setValue, reasoning }: { label: string; value: number | null; setValue: (v: number | null) => void; reasoning?: string | null }) {
+  const text = reasoning && reasoning.trim() ? reasoning.trim() : null;
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'78px 1fr 34px', alignItems:'center', gap:8 }}>
-      <span style={{ fontSize:11, color:'#1B1B1B', fontWeight:600 }}>{label}</span>
-      <input
-        type="range" min={0} max={100} step={1}
-        value={value ?? 0}
-        onChange={e => setValue(Number(e.target.value))}
-        style={{ width:'100%', accentColor:'#1B1B1B' }}
-      />
-      <span style={{ fontSize:11, color:'#1B1B1B', fontVariantNumeric:'tabular-nums', textAlign:'right' }}>{value ?? '—'}</span>
+    <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'78px 1fr 34px', alignItems:'center', gap:8 }}>
+        <span style={{ fontSize:11, color:'#1B1B1B', fontWeight:600 }}>{label}</span>
+        <input
+          type="range" min={0} max={100} step={1}
+          value={value ?? 0}
+          onChange={e => setValue(Number(e.target.value))}
+          style={{ width:'100%', accentColor:'#1B1B1B' }}
+        />
+        <span style={{ fontSize:11, color:'#1B1B1B', fontVariantNumeric:'tabular-nums', textAlign:'right' }}>{value ?? '—'}</span>
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          color: '#8B7355',
+          fontStyle: 'italic',
+          lineHeight: 1.4,
+          marginLeft: 86,
+          display: '-webkit-box',
+          WebkitLineClamp: 4,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}
+      >
+        {text ?? '— no reasoning recorded'}
+      </div>
+    </div>
+  );
+}
+
+function FailureChips({ failures }: { failures: any[] | null | undefined }) {
+  const list = Array.isArray(failures) ? failures.filter((f) => f && typeof f === 'object') : [];
+  if (list.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+      {list.map((f: any, i: number) => {
+        const rt = String(f.rule_type ?? 'rule');
+        const rd = String(f.rule_detail ?? '');
+        return (
+          <span
+            key={i}
+            title={rd}
+            style={{
+              display: 'inline-block',
+              padding: '3px 8px',
+              fontSize: 10,
+              fontWeight: 600,
+              color: '#B84A2C',
+              background: '#FFF6F2',
+              border: '1px solid #B84A2C',
+              borderRadius: 12,
+              letterSpacing: '0.02em',
+              maxWidth: 340,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {rt}{rd ? ' · ' + rd : ''}
+          </span>
+        );
+      })}
     </div>
   );
 }
