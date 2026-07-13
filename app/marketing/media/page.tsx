@@ -7,6 +7,8 @@
 // 2026-07-12 pm: added rooms + facilities grounding — pipes v_room_grounding + v_facility_grounding
 //   into AiStudioTab (category-driven dropdowns) and SettingsTab (Reality profile companion panels).
 // 2026-07-12 pm (task #148): loads v_video_templates for the new Video AI Studio composer.
+// 2026-07-13 · Phase 2 unified video pipeline: loads v_marketing_video_briefs + v_yt_content_pillars
+//   for the new Video Briefs sub-tab inside VideoHub.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -22,7 +24,7 @@ async function loadAll(pid: number) {
   const [
     byTier, mediaPage, channelSpecs, rulesActive, aiGens, videoEdits, reality, categories,
     rooms, facilities, facilitiesRaw, activitiesRaw, transportRaw, boatsRaw, cruisesRaw,
-    videoTemplates,
+    videoTemplates, videoBriefs, pillars,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(500),
@@ -50,6 +52,10 @@ async function loadAll(pid: number) {
       .eq('property_id', pid).eq('is_active', true).order('name'),
     // 2026-07-12 pm task #148: video templates for AI Studio composer
     sb.from('v_video_templates').select('*').order('sort_order', { ascending: true }),
+    // 2026-07-13 · Phase 2: unified video briefs
+    sb.from('v_marketing_video_briefs').select('*').eq('property_id', pid).order('created_at', { ascending: false }),
+    // 2026-07-13 · Phase 2: content pillars for brief tagging
+    sb.from('v_yt_content_pillars').select('pillar_key, label').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
   ]);
 
   // === Build 5-category taxonomy (matches Settings sidebar) ===
@@ -110,11 +116,13 @@ async function loadAll(pid: number) {
     taxonomy,
     areaOptions,
     videoTemplates: videoTemplates.data ?? [],
+    videoBriefs: videoBriefs.data ?? [],
+    pillars: pillars.data ?? [],
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
       rooms.error, facilities.error, facilitiesRaw.error, activitiesRaw.error, transportRaw.error,
-      boatsRaw.error, cruisesRaw.error, videoTemplates.error,
+      boatsRaw.error, cruisesRaw.error, videoTemplates.error, videoBriefs.error, pillars.error,
     ].filter(Boolean),
   };
 }
@@ -155,6 +163,8 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             taxonomy={data.taxonomy as any}
             areaOptions={data.areaOptions}
             videoTemplates={data.videoTemplates as any}
+            videoBriefs={data.videoBriefs as any}
+            pillars={data.pillars as any}
           />
         </div>
       </DashboardPage>
