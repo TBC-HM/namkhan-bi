@@ -149,7 +149,7 @@ function StageBody({ stage, research, request, script, render, approve }: { stag
             <td style={td}>{r.angle_first_line}</td>
             <td style={{ ...tdMuted, fontSize: 11 }}>{fmtTs(r.created_at)}</td>
             <td style={{ ...td, textAlign: 'right' }}>
-              <StartProductionButton requestId={r.id} />
+              <StartProductionButton requestId={r.id} onSuccess={() => setOpen('script')} />
             </td>
           </tr>
         ))}</tbody>
