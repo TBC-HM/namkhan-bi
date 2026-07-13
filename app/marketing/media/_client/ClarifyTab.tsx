@@ -2,6 +2,9 @@
 // PBS 2026-07-12 — Clarify tab.
 // 2026-07-13 · Coordinator scope-add — PICS clarify skips videos.
 // 2026-07-13 pm · MEDIA QA v1 — tile now shows bottom-right quality badge.
+// 2026-07-14 · MEDIA QA v2 — tile now displays seo_target_filename (Iris SEO)
+//   with original_filename kept as a hover tooltip. Naming failures no longer
+//   surface here — the RPC auto-applies Iris's compliant filename at score time.
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -12,6 +15,7 @@ import { qaBadge } from '@/lib/mediaQa';
 interface MediaRow {
   asset_id: string;
   original_filename: string | null;
+  seo_target_filename?: string | null;
   primary_tier: string | null;
   property_area: string | null;
   public_url: string | null;
@@ -29,6 +33,15 @@ interface MediaRow {
   marketing_score?: number | null;
   qa_notes?: any;
   qa_scored_at?: string | null;
+}
+
+// PBS 2026-07-14 · display swap — prefer Iris SEO filename, keep original as tooltip.
+function displayName(r: MediaRow): string {
+  const seo = (r.seo_target_filename ?? '').trim();
+  if (seo) return seo;
+  const orig = (r.original_filename ?? '').trim();
+  if (orig) return orig;
+  return r.asset_id.slice(0, 8);
 }
 
 interface Props {
@@ -136,7 +149,7 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                     ))}
                   </div>
                   {/* QA badge — bottom-right */}
-                  <div title={r.quality_index != null ? `Quality index ${r.quality_index}%` : 'Not scored yet'} style={{
+                  <div title={r.quality_index != null ? 'Quality index ' + r.quality_index + '%' : 'Not scored yet'} style={{
                     position:'absolute', right:4, bottom:4,
                     background: qBadge.bg, color: qBadge.fg,
                     fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3,
@@ -161,8 +174,11 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                   )}
                 </div>
                 <div style={{ padding:'6px 8px', borderTop:'1px solid '+HAIR, fontSize:10 }}>
-                  <div style={{ color:INK, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {r.original_filename ?? r.asset_id.slice(0, 8)}
+                  <div
+                    title={r.original_filename ? 'Original: ' + r.original_filename : undefined}
+                    style={{ color:INK, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
+                  >
+                    {displayName(r)}
                   </div>
                   <div style={{ color:INK_M, marginTop:2 }}>Click to edit ✎</div>
                 </div>
