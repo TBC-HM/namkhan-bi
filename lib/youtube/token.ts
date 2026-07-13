@@ -10,6 +10,13 @@
 //
 // Everything vault-adjacent runs through those two RPCs so we never touch vault.* from the
 // PostgREST client directly (per feedback_postgrest_non_public_schema_write_silent_noop).
+//
+// PBS 2026-07-13 — auto-refresh safety net. getFreshAccessToken now proactively calls
+// public.fn_yt_refresh_if_expired(p_property_id) BEFORE reading secrets. That RPC is a
+// no-op if the token has >2min life; otherwise it refreshes server-side using vault
+// credentials. This means PBS never has to re-connect YouTube — every server loader
+// that calls getFreshAccessToken() gets a fresh token automatically. The subsequent
+// Google refresh path below is retained as a fallback (belt + braces).
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -72,9 +79,14 @@ interface GoogleTokenResponse {
   error_description?: string;
 }
 
-// Returns a valid access token — refreshes if expiry < 2 min out.
+// Returns a valid access token — auto-refresh via SECURITY DEFINER RPC first,
+// then fallback to direct Google refresh if the RPC path didn't rotate.
 export async function getFreshAccessToken(propertyId: number): Promise<FreshTokenResult> {
   const sb = getSupabaseAdmin();
+
+  // 1) Proactive server-side refresh via RPC. No-op if token still valid.
+  // Silent on failure — the read-secrets path below will surface any real error.
+  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: propertyId }); } catch { /* silent */ }
 
   const { data: raw, error: rpcErr } = await sb.rpc('fn_yt_read_connection_secrets', { p_property_id: propertyId });
   if (rpcErr) return { ok: false, error: 'rpc_read_failed', detail: rpcErr.message };
@@ -89,7 +101,7 @@ export async function getFreshAccessToken(propertyId: number): Promise<FreshToke
   const nowMs = Date.now();
   const twoMinMs = 2 * 60 * 1000;
 
-  // Fresh — return current
+  // Fresh — return current (the RPC above should have refreshed if needed).
   if (expiresMs - nowMs > twoMinMs) {
     return {
       ok: true,
@@ -100,7 +112,7 @@ export async function getFreshAccessToken(propertyId: number): Promise<FreshToke
     };
   }
 
-  // Refresh via Google
+  // Fallback: Refresh via Google directly if the RPC didn't (belt + braces).
   const body = new URLSearchParams({
     client_id:     s.client_id.trim(),
     client_secret: s.client_secret.trim(),
