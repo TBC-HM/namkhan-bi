@@ -63,7 +63,7 @@ export async function POST() {
 
   // === 1) Pull channel state — identity, playlists, recent videos ===
   const [chRes, plRes, vidRes] = await Promise.all([
-    fetchChannel(tok.access_token),
+    fetchChannel(tok.access_token, tok.channel_id),
     fetchChannelPlaylists(tok.access_token, tok.channel_id, 50),
     fetchRecentVideos(tok.access_token, tok.channel_id, 12),
   ]);
