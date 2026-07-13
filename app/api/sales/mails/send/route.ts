@@ -7,6 +7,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentAuthUser } from '@/lib/userGmail';
 import { sendFromShared } from '@/lib/sharedGmail';
+// PBS 2026-07-14 (Sales CRM upgrade · Phase F) — after a shared-mailbox
+// reply lands, look up any matching lead by thread_id and auto-advance stage
+// (new→contacted; contacted→engaged; higher stages no-op). Best-effort; a
+// failure here must NEVER break the send response.
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,6 +52,26 @@ export async function POST(req: NextRequest) {
       references: body.references,
     });
     if (!res.ok) return NextResponse.json(res, { status: 400 });
+
+    // PBS 2026-07-14 · Phase F post-send hook (best-effort, non-blocking).
+    try {
+      const outboundThreadId = res.thread_id || body.thread_id;
+      if (outboundThreadId) {
+        const admin = getSupabaseAdmin();
+        const { data: leadRow } = await admin
+          .from('v_leads_full')
+          .select('id, stage')
+          .eq('email_thread_id', outboundThreadId)
+          .maybeSingle();
+        const leadId = leadRow ? Number((leadRow as { id: number }).id) : null;
+        if (leadId) {
+          await admin.rpc('fn_lead_advance_stage', { p_lead_id: leadId, p_reason: 'outbound_reply_sent' });
+        }
+      }
+    } catch (hookErr) {
+      console.error('[sales/mails/send] auto-advance hook failed', hookErr);
+    }
+
     return NextResponse.json(res);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'unknown';
