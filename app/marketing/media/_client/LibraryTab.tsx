@@ -76,7 +76,8 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const [aiOnly, setAiOnly] = useState(false);
 
   const filtered = useMemo(() => {
-    let out = mediaPage;
+    // PBS 2026-07-13: Pics tab — exclude videos (VideoLibraryTab handles those)
+    let out = mediaPage.filter(r => ((r.asset_type ?? '').toLowerCase() !== 'video') && !((r.mime_type ?? '').toLowerCase().startsWith('video/')));
     if (tier)         out = out.filter(r => r.primary_tier === tier);
     if (areaFilter) {
       const q = areaFilter.trim().toLowerCase();
