@@ -281,10 +281,10 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
             : 'No videos match this filter.'}
         </div>
       ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:12 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(260px, 1fr))', gap:12 }}>
           {pageRows.map(r => (
             <div key={r.asset_id} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', display:'flex', flexDirection:'column' }}>
-              <div style={{ position:'relative', width:'100%', height:150, background:'#F5F0E1' }}>
+              <div style={{ position:'relative', width:'100%', aspectRatio:'16/9', minHeight:170, background:'#F5F0E1' }}>
                 {r.public_url ? (
                   <video
                     src={r.public_url}
