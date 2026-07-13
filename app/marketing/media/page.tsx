@@ -28,7 +28,7 @@ async function loadAll(pid: number) {
     videoTemplates, videoBriefs, pillars, coverageMatrix,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
-    sb.from('v_marketing_media_page').select('*').limit(500),
+    sb.from('v_marketing_media_page').select('*').limit(5000),
     sb.from('v_media_channel_specs').select('*'),
     sb.from('v_media_rules_active').select('*'),
     sb.from('v_ai_generations').select('*').order('created_at', { ascending: false }).limit(50),
