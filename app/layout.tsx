@@ -5,6 +5,9 @@
 // (Namkhan=black · Donna=beige · Beyond=white) — that's now the only
 // visual differentiator between properties.
 //
+// PBS 2026-07-13: mount GmailNavDropdown (top-right nav icon for per-user
+// Gmail inbox + compose/reply). Silent when the user is not connected.
+//
 // Original comment (2026-05-08): green frame REMOVED per PBS directive.
 // Old: LeftRail + main column with green PILLAR header + horizontal tabs.
 // New: edge-to-edge content; navigation handled by floating <NDropdown />
@@ -15,6 +18,7 @@ import Script from 'next/script';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import './../styles/globals.css';
 import NDropdown from '@/components/nav/NDropdown';
+import GmailNavDropdown from '@/app/_components/GmailNavDropdown';
 import CapacityResetOnPillarChange from '@/components/nav/CapacityResetOnPillarChange';
 import AgentEditModal from '@/components/agents/AgentEditModal';
 import BugWidget from '@/components/cockpit/BugWidget';
@@ -67,6 +71,7 @@ document.documentElement.setAttribute('data-property',v);}catch(e){}})();
         <PropertyThemeWatcher />
         <CapacityResetOnPillarChange />
         <NDropdown />
+        <GmailNavDropdown />
         <TopDeptStrip />
         <div className="site-paper-scope">
           {children}
