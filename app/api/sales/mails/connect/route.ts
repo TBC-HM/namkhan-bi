@@ -1,26 +1,28 @@
 // app/api/sales/mails/connect/route.ts
-// GET → starts OAuth for a shared mailbox.
-// Query: ?mailbox=book@thenamkhan.com&label=Booking
-// Domain-guarded to *@thenamkhan.com.
+// Filter-mode variant: nothing to connect per-mailbox anymore.
+// If user has no personal Gmail connection yet, redirect to /settings/gmail.
+// Otherwise redirect straight to /sales/mails.
 import { NextRequest, NextResponse } from 'next/server';
-import { buildSharedAuthUrl, signState, getCurrentAuthUser } from '@/lib/sharedGmail';
+import { getCurrentAuthUser } from '@/lib/userGmail';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
-  const mailbox = (req.nextUrl.searchParams.get('mailbox') ?? '').trim().toLowerCase();
-  const label = (req.nextUrl.searchParams.get('label') ?? '').trim();
-  if (!mailbox || !mailbox.endsWith('@thenamkhan.com')) {
-    return NextResponse.json({ error: 'domain_not_allowed' }, { status: 400 });
-  }
+export async function GET(_req: NextRequest) {
   const user = await getCurrentAuthUser();
-  const state = signState({
-    mailbox,
-    label: label || mailbox.split('@')[0],
-    connected_by: user?.id ?? null,
-    ts: Date.now(),
-  });
-  const url = buildSharedAuthUrl(state, mailbox);
-  return NextResponse.redirect(url);
+  const next = '/sales/mails';
+  if (!user) {
+    return NextResponse.redirect(new URL('/login?next=' + encodeURIComponent(next), _req.url));
+  }
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from('v_user_gmail_connections')
+    .select('active')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!data || !data.active) {
+    return NextResponse.redirect(new URL('/settings/gmail?next=' + encodeURIComponent(next), _req.url));
+  }
+  return NextResponse.redirect(new URL(next, _req.url));
 }
