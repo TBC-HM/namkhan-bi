@@ -20,6 +20,7 @@ import ShortcutsPanel, { type Shortcut } from './_components/ShortcutsPanel';
 import ExternalLinksPanel, { type ExternalLink } from './_components/ExternalLinksPanel';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
+import RmMailPanel from './_components/RmMailPanel';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
 import ConclusionBlock from '@/app/_components/ConclusionBlock';
@@ -541,6 +542,13 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
 
       <div style={fullRow}>
         <BookingActivity propertyId={pid} searchParams={searchParams} />
+      </div>
+
+      {/* PBS 2026-07-14: Reservations Manager mail feed — Mai Vo only.
+          Full-width, sits above Scheduled reports. Client component polls
+          /api/hod/revenue/mails every 60s while tab visible. */}
+      <div style={fullRow}>
+        <RmMailPanel />
       </div>
 
       {/* PBS 2026-07-08: Scheduled reports + Send log moved to the BOTTOM of the
