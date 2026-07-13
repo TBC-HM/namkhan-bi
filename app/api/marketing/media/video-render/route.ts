@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const host = (process.env.SHOTSTACK_HOST ?? 'https://api.shotstack.io/v1').replace(/\/$/, '');
+  const host = (process.env.SHOTSTACK_HOST ?? 'https://api.shotstack.io/edit/v1').replace(/\/$/, '');
   try {
     const res = await fetch(`${host}/render`, {
       method: 'POST',
@@ -279,7 +279,7 @@ export async function GET(req: NextRequest) {
   if (shotstackId && (status === 'rendering' || status === 'queued')) {
     const key = await getVaultSecret('SHOTSTACK_API_KEY');
     if (key) {
-      const host = (process.env.SHOTSTACK_HOST ?? 'https://api.shotstack.io/v1').replace(/\/$/, '');
+      const host = (process.env.SHOTSTACK_HOST ?? 'https://api.shotstack.io/edit/v1').replace(/\/$/, '');
       try {
         const r = await fetch(`${host}/render/${encodeURIComponent(shotstackId)}`, {
           headers: { 'x-api-key': key }, cache: 'no-store',
