@@ -1,8 +1,6 @@
 // app/marketing/media/_client/MediaHub.tsx
-// PBS 2026-07-13 · Task A — flattened top strip replaced with 2-tab shell:
-//   • Pics   → PhotoHub  (Library · AI Studio · Clarify · Settings)
-//   • Videos → VideoHub  (Video Briefs · Library · AI Studio · Clarify · Settings)
-// Historical 4+1 flat strip preserved in git history.
+// PBS 2026-07-13 · Video AI Studio v1 — pass stylePresets + musicTracks
+// through to VideoHub → VideoSettingsTab.
 'use client';
 
 import { useState } from 'react';
@@ -27,47 +25,23 @@ export interface PromptCategory {
   created_at: string;
   requires_context?: 'room' | 'facility' | 'none' | null;
 }
-
 export interface RoomOption {
-  room_type_id: number;
-  property_id: number;
-  room_type_name: string;
-  room_type_name_short: string | null;
-  max_guests: number | null;
-  units: number | null;
-  description_clean: string | null;
-  amenities: string[] | null;
-  amenities_count: number | null;
+  room_type_id: number; property_id: number; room_type_name: string;
+  room_type_name_short: string | null; max_guests: number | null; units: number | null;
+  description_clean: string | null; amenities: string[] | null; amenities_count: number | null;
 }
-
 export interface FacilityOption {
-  facility_id: number;
-  property_id: number;
-  category: string | null;
-  facility_name: string;
-  facility_description: string | null;
-  facility_key: string | null;
-  ai_description: string | null;
-  materials: string[] | null;
-  view_direction: string | null;
-  signature_elements: string[] | null;
-  time_of_day_hint: string | null;
-  active: boolean;
-  sort_order: number;
-  updated_by: string | null;
-  updated_at: string | null;
+  facility_id: number; property_id: number; category: string | null;
+  facility_name: string; facility_description: string | null;
+  facility_key: string | null; ai_description: string | null;
+  materials: string[] | null; view_direction: string | null;
+  signature_elements: string[] | null; time_of_day_hint: string | null;
+  active: boolean; sort_order: number; updated_by: string | null; updated_at: string | null;
 }
-
 export interface VideoTemplate {
-  template_key: string;
-  display_name: string;
-  description: string | null;
-  duration_sec: number;
-  min_assets: number;
-  max_assets: number;
-  aspect: string;
+  template_key: string; display_name: string; description: string | null;
+  duration_sec: number; min_assets: number; max_assets: number; aspect: string;
 }
-
 export interface TaxonomyEntry { id: number; name: string }
 export interface FacilityTaxonomyEntry extends TaxonomyEntry { parent_id: number | null; parent_name: string | null }
 export interface ActivityTaxonomyEntry extends TaxonomyEntry { facility_id: number | null; facility_name: string | null }
@@ -102,6 +76,8 @@ interface Props {
   videoBriefs?: VideoBriefRow[];
   pillars?: PillarOption[];
   coverageRows?: any[];
+  stylePresets?: any[];
+  musicTracks?: any[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -123,8 +99,7 @@ export default function MediaHub(props: Props) {
   const videoRows = (props.mediaPage ?? []).filter(isVideoRow);
   const picsCount = (props.mediaPage ?? []).length - videoRows.length;
   const vidsCount = videoRows.length;
-  const openBriefsCount = (props.videoBriefs ?? []).filter(b =>
-    b.status !== 'archived' && b.status !== 'published').length;
+  const openBriefsCount = (props.videoBriefs ?? []).filter(b => b.status !== 'archived' && b.status !== 'published').length;
 
   const TABS: Array<{ key: TabKey; label: string; badge?: number; count?: number }> = [
     { key: 'pics',   label: 'Pics',   count: picsCount },
@@ -148,15 +123,10 @@ export default function MediaHub(props: Props) {
             }}>
               <span>{t.label}</span>
               {t.count != null && (
-                <span style={{ fontSize:10, color: active ? FOREST : INK_M, opacity:0.7 }}>
-                  · {t.count.toLocaleString()}
-                </span>
+                <span style={{ fontSize:10, color: active ? FOREST : INK_M, opacity:0.7 }}>· {t.count.toLocaleString()}</span>
               )}
               {showBadge && (
-                <span style={{
-                  background: RED, color: '#FFF', fontSize: 9, fontWeight: 700,
-                  padding: '1px 6px', borderRadius: 8, letterSpacing: 0,
-                }}>{t.badge}</span>
+                <span style={{ background: RED, color: '#FFF', fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 8, letterSpacing: 0 }}>{t.badge}</span>
               )}
             </button>
           );
@@ -194,6 +164,8 @@ export default function MediaHub(props: Props) {
           areaOptions={props.areaOptions}
           videoBriefs={props.videoBriefs}
           pillars={props.pillars}
+          stylePresets={props.stylePresets ?? []}
+          musicTracks={props.musicTracks ?? []}
         />
       )}
     </div>
