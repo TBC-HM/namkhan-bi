@@ -1,9 +1,13 @@
 // app/marketing/youtube/planning/page.tsx
 // PBS 2026-07-13 — Planning sub-tab: programs (pillars) + trend briefs + scheduled + recently published.
+// PBS 2026-07-13 pm — Task A: proactive fn_yt_refresh_if_expired at loader top so PBS never has to reconnect.
+// PBS 2026-07-13 pm — Task B: new "Existing YouTube playlists" container below pillars, pulled live via YT Data API.
 import Link from 'next/link';
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getFreshAccessToken } from '@/lib/youtube/token';
+import { fetchChannelPlaylists, isErr, type PlaylistItem } from '@/lib/youtube/data';
 import YtSubTabs from '../_shared/SubTabs';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +33,11 @@ function fmtDate(d: string | null | undefined) {
 
 export default async function YouTubePlanningPage() {
   const sb = getSupabaseAdmin();
-  const [pillarsRes, pubsRes, briefsRes] = await Promise.all([
+
+  // Task A · Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC. No-op if token still valid.
+  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
+
+  const [pillarsRes, pubsRes, briefsRes, connectionRes] = await Promise.all([
     sb.from('v_yt_content_pillars')
       .select('id,pillar_key,label,description,target_cadence,youtube_playlist_id,sort_order')
       .eq('property_id', NAMKHAN).eq('active', true).order('sort_order'),
@@ -39,16 +47,37 @@ export default async function YouTubePlanningPage() {
     sb.from('v_yt_trend_briefs')
       .select('brief_id,generated_at_utc,activation_score,keyword_seeds')
       .eq('property_id', NAMKHAN).order('generated_at_utc', { ascending: false }).limit(10),
+    sb.from('v_yt_channel_connections')
+      .select('id,channel_id,channel_title').eq('property_id', NAMKHAN).eq('active', true).maybeSingle(),
   ]);
   const pillars = (pillarsRes.data ?? []) as Array<{ id: string; pillar_key: string; label: string; description: string | null; target_cadence: string | null; youtube_playlist_id: string | null }>;
   const pubs = (pubsRes.data ?? []) as PubRow[];
   const briefs = (briefsRes.data ?? []) as BriefRow[];
+  const connection = connectionRes.data as { id: string; channel_id: string | null; channel_title: string | null } | null;
   const now = Date.now();
   const scheduled = pubs.filter((p) => p.scheduled_publish_utc && !p.actual_publish_utc && new Date(p.scheduled_publish_utc).getTime() >= now)
     .sort((a, b) => new Date(a.scheduled_publish_utc!).getTime() - new Date(b.scheduled_publish_utc!).getTime());
   const recent = pubs.filter((p) => p.actual_publish_utc)
     .sort((a, b) => new Date(b.actual_publish_utc!).getTime() - new Date(a.actual_publish_utc!).getTime())
     .slice(0, 10);
+
+  // Task B · fetch existing playlists live from YT Data API
+  let playlists: PlaylistItem[] = [];
+  let playlistsErr: string | null = null;
+  let tokenInvalid = false;
+  if (connection?.channel_id) {
+    const tok = await getFreshAccessToken(NAMKHAN);
+    if (!tok.ok || !tok.access_token) {
+      tokenInvalid = true;
+    } else {
+      const plRes = await fetchChannelPlaylists(tok.access_token, connection.channel_id, 50);
+      if (isErr(plRes)) {
+        playlistsErr = `${plRes.error}${plRes.detail ? ` · ${plRes.detail.slice(0, 120)}` : ''}`;
+      } else {
+        playlists = plRes.data;
+      }
+    }
+  }
 
   const tabs = MARKETING_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
 
@@ -85,6 +114,53 @@ export default async function YouTubePlanningPage() {
                   </div>
                 </Link>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Task B · Existing YouTube playlists — live from Data API */}
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+            <div style={{ ...sectionH, marginBottom: 0 }}>Existing YouTube playlists ({playlists.length})</div>
+            <div style={{ fontSize: 11, color: INK_M }}>pulled live from YouTube Data API</div>
+          </div>
+          {tokenInvalid ? (
+            <div style={{ padding: 12, background: '#FFF9EA', border: `1px solid ${AMBER}`, borderRadius: 3, fontSize: 12, color: INK_S }}>
+              Cannot fetch playlists — YouTube token invalid, please reconnect.
+            </div>
+          ) : !connection?.channel_id ? (
+            <div style={{ padding: 12, background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 3, fontSize: 12, color: INK_M }}>
+              YouTube channel not connected. Reconnect via Dashboard.
+            </div>
+          ) : playlistsErr ? (
+            <div style={{ padding: 12, background: '#FFF9EA', border: `1px solid ${AMBER}`, borderRadius: 3, fontSize: 12, color: INK_S }}>
+              Couldn&apos;t load: {playlistsErr}
+            </div>
+          ) : playlists.length === 0 ? (
+            <div style={{ padding: 12, background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 3, fontSize: 12, color: INK_M }}>
+              No playlists yet on this channel.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+              {playlists.map((pl) => {
+                const thumb = pl.thumbnails.medium?.url ?? pl.thumbnails.high?.url ?? pl.thumbnails.default?.url ?? null;
+                return (
+                  <Link key={pl.id} href={`/marketing/youtube/playlists/${encodeURIComponent(pl.id)}`}
+                    style={{ display: 'block', border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden', background: WHITE, textDecoration: 'none', color: INK }}>
+                    {thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={thumb} alt={pl.title} style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: CREAM }} />
+                    ) : <div style={{ aspectRatio: '16 / 9', background: CREAM }} />}
+                    <div style={{ padding: 12 }}>
+                      <div style={{ fontSize: 14, color: INK, fontWeight: 600, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 36 }}>{pl.title}</div>
+                      <div style={{ fontSize: 11, color: INK_M, marginTop: 6 }}>{pl.itemCount} videos</div>
+                      {pl.description && (
+                        <div style={{ fontSize: 11, color: INK_M, marginTop: 6, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{pl.description}</div>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
