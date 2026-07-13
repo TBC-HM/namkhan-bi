@@ -1,5 +1,6 @@
 // app/marketing/youtube/dashboard/page.tsx
 // PBS 2026-07-13 — Dashboard sub-tab. Channel identity + AnalyticsKPIs + Recent uploads + Comments.
+// PBS 2026-07-13 pm — proactive fn_yt_refresh_if_expired at top of loader so PBS never has to reconnect.
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -14,6 +15,11 @@ const NAMKHAN = 260955;
 
 export default async function YouTubeDashboardPage() {
   const sb = getSupabaseAdmin();
+
+  // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC.
+  // No-op if token still valid; refreshes server-side using vault refresh_token + client creds.
+  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
+
   const { data: connection } = await sb
     .from('v_yt_channel_connections')
     .select('id,channel_id,channel_title')
