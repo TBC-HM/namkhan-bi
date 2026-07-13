@@ -3,11 +3,16 @@
 // Uses the canonical <Drawer/> primitive from @/app/(cockpit)/_design.
 // POSTs to /api/marketing/media/asset-update. On success calls router.refresh()
 // via the onSaved() prop so parent re-fetches and updated row leaves Clarify grid.
+// 2026-07-13 · Coordinator scope-add — for video assets:
+//   (1) ▶ Play video button at top of body opens VideoPlayerModal.
+//   (2) Collapsible "Video technical" details block with duration/aspect/
+//       capture date, camera fields, audio, colour profile, visual description.
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/app/(cockpit)/_design';
+import VideoPlayerModal, { type VideoPlayerAsset } from './VideoPlayerModal';
 
 export interface RoomOption { room_type_id: number; room_type_name: string; }
 
@@ -42,6 +47,18 @@ export interface AssetEditRow {
   file_size_bytes?: number | string | null;
   file_size_human?: string | null;
   created_at?: string | null;
+  // Video-specific (optional; may be null for photos or older uploads)
+  duration_sec?: number | null;
+  aspect_ratio?: string | null;
+  captured_at?: string | null;
+  camera_make?: string | null;
+  camera_model?: string | null;
+  lens?: string | null;
+  has_audio?: boolean | null;
+  audio_type?: string | null;
+  audio_language?: string | null;
+  color_profile?: string | null;
+  visual_description?: string | null;
 }
 
 interface Props {
@@ -61,6 +78,25 @@ const TIERS: Array<{ key: string; label: string }> = [
   { key: 'tier_internal',     label: 'Internal'     },
   { key: 'tier_logos',        label: 'Logos'        },
   { key: 'tier_archive',      label: 'Archive'      },
+];
+
+const AUDIO_TYPES: Array<{ key: string; label: string }> = [
+  { key: '',          label: '(unset)'  },
+  { key: 'none',      label: 'None'     },
+  { key: 'dialog',    label: 'Dialog'   },
+  { key: 'narration', label: 'Narration' },
+  { key: 'music',     label: 'Music'    },
+  { key: 'ambient',   label: 'Ambient'  },
+  { key: 'mixed',     label: 'Mixed'    },
+];
+
+const COLOR_PROFILES: Array<{ key: string; label: string }> = [
+  { key: '',       label: '(unset)' },
+  { key: 'rec709', label: 'Rec.709' },
+  { key: 'HLG',    label: 'HLG'     },
+  { key: 'HDR10',  label: 'HDR10'   },
+  { key: 'Log',    label: 'Log'     },
+  { key: 'sRGB',   label: 'sRGB'    },
 ];
 
 const WHITE = '#FFFFFF';
@@ -87,6 +123,14 @@ function humanSize(v: any): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function fmtDurMMSS(sec: number | null | undefined): string {
+  if (sec == null || Number.isNaN(Number(sec))) return '';
+  const s = Math.round(Number(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
 export default function AssetEditDrawer({ open, onClose, asset, areaOptions, rooms = [], taxonomy, onSaved }: Props) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -101,6 +145,18 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
   const [aiGen, setAiGen]         = useState(false);
   const [roomTypeId, setRoomTypeId] = useState<string>('');
 
+  // Video-specific state
+  const [drawerPlaying, setDrawerPlaying] = useState(false);
+  const [capturedAt, setCapturedAt] = useState('');
+  const [cameraMake, setCameraMake] = useState('');
+  const [cameraModel, setCameraModel] = useState('');
+  const [lens, setLens] = useState('');
+  const [hasAudio, setHasAudio] = useState(false);
+  const [audioType, setAudioType] = useState('');
+  const [audioLanguage, setAudioLanguage] = useState('');
+  const [colorProfile, setColorProfile] = useState('');
+  const [visualDescription, setVisualDescription] = useState('');
+
   useEffect(() => {
     if (!open || !asset) return;
     setErr(null); setOk(null);
@@ -111,6 +167,17 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
     setArea(asset.property_area ?? '');
     setAiGen(Boolean(asset.is_ai_generated));
     setRoomTypeId(asset.room_type_id != null ? String(asset.room_type_id) : '');
+    // Video-specific — trimmed to yyyy-mm-dd for the date input
+    setCapturedAt(asset.captured_at ? String(asset.captured_at).slice(0, 10) : '');
+    setCameraMake(asset.camera_make ?? '');
+    setCameraModel(asset.camera_model ?? '');
+    setLens(asset.lens ?? '');
+    setHasAudio(Boolean(asset.has_audio));
+    setAudioType(asset.audio_type ?? '');
+    setAudioLanguage(asset.audio_language ?? '');
+    setColorProfile(asset.color_profile ?? '');
+    setVisualDescription(asset.visual_description ?? '');
+    setDrawerPlaying(false);
   }, [open, asset]);
 
   if (!asset) return null;
@@ -131,6 +198,20 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
       if (aiGen   !== Boolean(asset.is_ai_generated))    payload.is_ai_generated = aiGen;
       const currentRoom = asset.room_type_id != null ? String(asset.room_type_id) : '';
       if (roomTypeId !== currentRoom) payload.room_type_id = roomTypeId || null;
+
+      // Video-specific diffs (only emitted when the asset is a video)
+      if (video) {
+        const curCapturedAt = asset.captured_at ? String(asset.captured_at).slice(0, 10) : '';
+        if (capturedAt        !== curCapturedAt)                     payload.captured_at        = capturedAt || null;
+        if (cameraMake        !== (asset.camera_make ?? ''))         payload.camera_make        = cameraMake;
+        if (cameraModel       !== (asset.camera_model ?? ''))        payload.camera_model       = cameraModel;
+        if (lens              !== (asset.lens ?? ''))                payload.lens               = lens;
+        if (hasAudio          !== Boolean(asset.has_audio))          payload.has_audio          = hasAudio;
+        if (audioType         !== (asset.audio_type ?? ''))          payload.audio_type         = audioType || null;
+        if (audioLanguage     !== (asset.audio_language ?? ''))      payload.audio_language     = audioLanguage;
+        if (colorProfile      !== (asset.color_profile ?? ''))       payload.color_profile      = colorProfile || null;
+        if (visualDescription !== (asset.visual_description ?? ''))  payload.visual_description = visualDescription;
+      }
 
       const res = await fetch('/api/marketing/media/asset-update', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -166,6 +247,19 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
       }
     >
       <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        {video && (
+          <button
+            type="button"
+            onClick={() => setDrawerPlaying(true)}
+            style={{
+              display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px',
+              background:FOREST, color:WHITE, border:'none', borderRadius:4,
+              fontSize:12, fontWeight:600, cursor:'pointer', letterSpacing:'0.04em',
+              textTransform:'uppercase', alignSelf:'flex-start',
+            }}
+          >▶ Play video</button>
+        )}
+
         {/* Thumbnail + read-only meta */}
         <div style={{ display:'flex', gap:12 }}>
           <div style={{ width:140, height:105, background:'#F5F0E1', border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', flexShrink:0 }}>
@@ -316,7 +410,80 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
             <span>Mark this asset as AI-generated</span>
           </label>
         </Field>
+
+        {video && (
+          <details style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, padding:'8px 12px' }}>
+            <summary style={{ fontSize:11, fontWeight:600, color:INK, cursor:'pointer', letterSpacing:'0.06em', textTransform:'uppercase' }}>Video technical</summary>
+            <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:12 }}>
+              {/* Read-only pills: duration + aspect ratio */}
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {asset.duration_sec != null && (
+                  <span style={S.pill}>Duration · {fmtDurMMSS(asset.duration_sec)}</span>
+                )}
+                {asset.aspect_ratio && (
+                  <span style={S.pill}>Aspect · {asset.aspect_ratio}</span>
+                )}
+                {asset.duration_sec == null && !asset.aspect_ratio && (
+                  <span style={{ fontSize:10, color:INK_M }}>Duration / aspect not detected on ingest.</span>
+                )}
+              </div>
+
+              <Field label="Captured at">
+                <input type="date" value={capturedAt} onChange={e => setCapturedAt(e.target.value)} style={S.input} />
+              </Field>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <Field label="Camera make">
+                  <input value={cameraMake} onChange={e => setCameraMake(e.target.value)} placeholder="e.g. DJI · Sony · iPhone" style={S.input} />
+                </Field>
+                <Field label="Camera model">
+                  <input value={cameraModel} onChange={e => setCameraModel(e.target.value)} placeholder="e.g. Mavic 3 · A7S III · 15 Pro" style={S.input} />
+                </Field>
+              </div>
+
+              <Field label="Lens">
+                <input value={lens} onChange={e => setLens(e.target.value)} placeholder="e.g. 24-70 f/2.8 · wide · drone stock" style={S.input} />
+              </Field>
+
+              <Field label="Audio">
+                <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:12, color:INK }}>
+                  <input type="checkbox" checked={hasAudio} onChange={e => setHasAudio(e.target.checked)} />
+                  <span>This clip has an audio track</span>
+                </label>
+              </Field>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <Field label="Audio type">
+                  <select value={audioType} onChange={e => setAudioType(e.target.value)} style={S.input}>
+                    {AUDIO_TYPES.map(a => <option key={a.key || 'unset'} value={a.key}>{a.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Audio language">
+                  <input value={audioLanguage} onChange={e => setAudioLanguage(e.target.value)} placeholder="e.g. en · lo · fr" style={S.input} />
+                </Field>
+              </div>
+
+              <Field label="Colour profile">
+                <select value={colorProfile} onChange={e => setColorProfile(e.target.value)} style={S.input}>
+                  {COLOR_PROFILES.map(c => <option key={c.key || 'unset'} value={c.key}>{c.label}</option>)}
+                </select>
+              </Field>
+
+              <Field label="Visual description">
+                <textarea value={visualDescription} onChange={e => setVisualDescription(e.target.value)} rows={3} placeholder="One-sentence description of what's in the clip — used for AI search and channel routing." style={S.textarea} />
+              </Field>
+            </div>
+          </details>
+        )}
       </div>
+
+      {video && (
+        <VideoPlayerModal
+          open={drawerPlaying}
+          onClose={() => setDrawerPlaying(false)}
+          asset={asset as VideoPlayerAsset}
+        />
+      )}
     </Drawer>
   );
 }
@@ -356,4 +523,9 @@ const S: Record<string, React.CSSProperties> = {
   },
   metaK: { display: 'inline-block', minWidth: 44, color: INK_M },
   metaV: { color: INK, fontWeight: 500 },
+  pill: {
+    display: 'inline-block', padding: '3px 8px', fontSize: 10, fontWeight: 600,
+    color: INK, background: '#F5F0E1', border: '1px solid ' + HAIR, borderRadius: 12,
+    letterSpacing: '0.02em',
+  },
 };
