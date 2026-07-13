@@ -9,6 +9,10 @@
 //     CREAM banner + inline Add-alias form.
 //   - When both are good → hydrate <UnifiedMailInbox/>.
 // PBS 2026-07-14 addition: header link → /mail (full-screen mailbox).
+// PBS 2026-07-14 (TASK 2): per-alias diagnostic chip strip. When an alias
+//   returns 0 messages after successful load, show muted subtitle + a small
+//   "?" info tooltip explaining the Workspace routing fix. Errored aliases
+//   render "error — reconnect".
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import UnifiedMailInbox, { type Thread, type MailboxSummary } from '@/app/(cockpit)/_design/UnifiedMailInbox';
@@ -33,6 +37,7 @@ interface RowShape {
 const T = {
   WHITE: '#FFFFFF', HAIR: '#E6DFCC', INK: '#1B1B1B', INK_M: '#5A5A5A',
   FOREST: '#084838', CREAM: '#F5F0E1', RED: '#B03826',
+  MUTED: '#8B7355', ERR: '#B84A2C',
 };
 
 const NEXT_HREF = '/sales/mails';
@@ -57,7 +62,7 @@ export default async function SalesMailsPage({
           <Container title="Sign in required" density="compact">
             <div style={connectBannerStyle()}>
               <p style={{ margin: 0, fontSize: 13, color: T.INK }}>Sign in with your @thenamkhan.com Gmail to view the shared inboxes.</p>
-              <a href={'/login?next=' + encodeURIComponent(NEXT_HREF)} style={forestBtn()}>Sign in →</a>
+              <a href={'/login?next=' + encodeURIComponent(NEXT_HREF)} style={forestBtn()}>Sign in</a>
             </div>
           </Container>
         </div>
@@ -84,7 +89,7 @@ export default async function SalesMailsPage({
                 (<strong>book</strong>, <strong>gm</strong>, <strong>reservations</strong>) via Gmail&apos;s <code>deliveredto:</code> filter and Send-As.
                 Connect your Gmail once to unlock all three inboxes.
               </p>
-              <a href={CONNECT_GMAIL_HREF} style={forestBtn()}>Connect Gmail →</a>
+              <a href={CONNECT_GMAIL_HREF} style={forestBtn()}>Connect Gmail</a>
               <p style={{ margin: 0, fontSize: 11, color: T.INK_M }}>
                 Also add each alias as a Send-As identity in your Gmail settings before you reply from it.
               </p>
@@ -144,6 +149,19 @@ export default async function SalesMailsPage({
   const firstAliasSlug = mailboxes[0]?.mailbox_address?.split('@')[0] ?? '';
   const fullMailHref = firstAliasSlug ? '/mail?account=' + encodeURIComponent(firstAliasSlug) : '/mail';
 
+  // TASK 2 (2026-07-14): per-alias status from initialThreads count.
+  // "0 msgs" chips get a muted subtitle + info tooltip; hydrate error → all
+  // chips show "error — reconnect" (single failure point today = personal
+  // Gmail token / shared alias listing).
+  const perAlias: Array<{
+    id: string; label: string; alias: string; badge_color: string;
+    count: number; errored: boolean;
+  }> = mailboxes.map((m) => {
+    const alias = m.mailbox_address.split('@')[0];
+    const count = initialThreads.filter((t) => t.mailbox_id === m.id).length;
+    return { id: m.id, label: m.label, alias, badge_color: m.badge_color, count, errored: !!hydrateErr };
+  });
+
   return (
     <DashboardPage title="Sales · Mails" tabs={tabs}>
       {searchParams?.connected && (
@@ -165,9 +183,78 @@ export default async function SalesMailsPage({
           <strong>Inbox fetch failed:</strong> {hydrateErr}
         </div>
       )}
+
+      {/* TASK 2 · per-alias diagnostic strip */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        {perAlias.map((a) => {
+          const zeroCount = !a.errored && a.count === 0;
+          const bg = a.errored ? '#FBE8E4' : (zeroCount ? T.CREAM : T.WHITE);
+          const borderColor = a.errored ? '#E8B7AB' : T.HAIR;
+          return (
+            <div
+              key={a.id}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '6px 10px',
+                background: bg,
+                border: '1px solid ' + borderColor,
+                borderRadius: 6,
+                minHeight: 40,
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  background: a.badge_color || T.FOREST,
+                  color: T.WHITE,
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.02em',
+                }}
+              >
+                {a.label}
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                <span style={{ fontSize: 12, color: T.INK, fontWeight: 600 }}>
+                  {a.errored ? 'error' : (a.count + ' msg' + (a.count === 1 ? '' : 's'))}
+                </span>
+                {a.errored && (
+                  <span style={{ fontSize: 11, color: T.ERR }}>error — reconnect</span>
+                )}
+                {zeroCount && (
+                  <span style={{ fontSize: 11, color: T.MUTED }}>0 msgs — check Workspace routing</span>
+                )}
+              </div>
+              {zeroCount && (
+                <span
+                  title={
+                    'Mail sent to ' + a.alias + '@thenamkhan.com isn’t landing in your pb@ inbox. ' +
+                    'Add it as an alias on your account at admin.google.com → Users → Add alternate email, ' +
+                    'or set up a Gmail routing rule.'
+                  }
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 18, height: 18, borderRadius: 9,
+                    background: T.HAIR, color: T.MUTED,
+                    fontSize: 11, fontWeight: 700, cursor: 'help',
+                    userSelect: 'none',
+                  }}
+                  aria-label={'Why is ' + a.alias + ' showing 0 messages?'}
+                >
+                  ?
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       <div style={{ gridColumn: '1 / -1', padding: '8px 12px', background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 4, fontSize: 11, color: T.INK_M, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <span>Debug: {mailboxes.length} aliases · {initialThreads.length} threads · signed in as {user.email}</span>
-        <a href={fullMailHref} style={{ color: T.FOREST, textDecoration: 'none', fontWeight: 600 }}>→ Open in full mailbox</a>
+        <a href={fullMailHref} style={{ color: T.FOREST, textDecoration: 'none', fontWeight: 600 }}>Open in full mailbox</a>
       </div>
       <UnifiedMailInbox initialThreads={initialThreads} mailboxes={mailboxes} />
     </DashboardPage>
