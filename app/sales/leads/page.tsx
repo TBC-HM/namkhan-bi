@@ -1,11 +1,68 @@
 // app/sales/leads/page.tsx
-// PBS 2026-07-11 pm (dir 1) — /sales/leads → /sales/pipeline redirect.
-// Preserves the old URL for existing bookmarks/tickets while the flow now
-// lives at /sales/new + /sales/pipeline.
-import { redirect } from 'next/navigation';
+// PBS 2026-07-14 (Sales CRM upgrade) — replaces the 2026-07-11 redirect stub.
+// This is now the Lead CMS: browse, filter, view profile, edit, advance stage,
+// and create new. Highlight query param opens a specific lead drawer (used by
+// the /sales/mails "Convert to Lead" flow that redirects with ?highlight=<id>).
+//
+// Server component: fetches leads list + stages, mounts the client cockpit.
+// Bridge views: public.v_leads_full + public.v_pipeline_stages.
+
+import { DashboardPage } from '@/app/(cockpit)/_design';
+import { SALES_SUBPAGES } from '../_subpages';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import LeadsCMSClient, { type LeadRow, type StageRow } from './_components/LeadsCMSClient';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-export default function LeadsRedirect() {
-  redirect('/sales/pipeline');
+const NAMKHAN = 260955;
+
+interface PageProps {
+  propertyId?: number;
+  searchParams?: { highlight?: string; stage?: string };
+}
+
+async function loadData(propertyId: number) {
+  const sb = getSupabaseAdmin();
+  const [leadsRes, stagesRes] = await Promise.all([
+    sb.from('v_leads_full')
+      .select('*')
+      .eq('property_id', propertyId)
+      .neq('status', 'deleted')
+      .order('stage_changed_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(500),
+    sb.from('v_pipeline_stages')
+      .select('*')
+      .order('stage_order', { ascending: true }),
+  ]);
+  return {
+    leads: (leadsRes.data ?? []) as LeadRow[],
+    stages: (stagesRes.data ?? []) as StageRow[],
+  };
+}
+
+export default async function SalesLeadsPage({ propertyId, searchParams }: PageProps = {}) {
+  const pid = propertyId ?? NAMKHAN;
+  const { leads, stages } = await loadData(pid);
+  const tabs = SALES_SUBPAGES.map((s) => ({
+    key: s.href, label: s.label, href: s.href, active: s.href === '/sales/leads',
+  }));
+  const highlightId = searchParams?.highlight ? parseInt(searchParams.highlight, 10) : null;
+  return (
+    <DashboardPage
+      title="Leads · CRM"
+      subtitle="Manage every lead and pipeline stage in one place."
+      tabs={tabs}
+    >
+      <div style={{ gridColumn: '1 / -1' }}>
+        <LeadsCMSClient
+          initialLeads={leads}
+          stages={stages}
+          propertyId={pid}
+          highlightId={Number.isFinite(highlightId) ? highlightId : null}
+        />
+      </div>
+    </DashboardPage>
+  );
 }
