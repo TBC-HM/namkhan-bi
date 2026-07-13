@@ -1,5 +1,6 @@
 // app/marketing/youtube/playlists/page.tsx
 // PBS 2026-07-13 — Playlists sub-tab. Live channel playlists via Data API v3.
+// PBS 2026-07-13 pm — proactive fn_yt_refresh_if_expired at loader top so PBS never has to reconnect.
 import Link from 'next/link';
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
@@ -22,6 +23,10 @@ const RED    = '#B03826';
 
 export default async function YouTubePlaylistsPage() {
   const sb = getSupabaseAdmin();
+
+  // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC. No-op if token still valid.
+  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
+
   const { data: connection } = await sb
     .from('v_yt_channel_connections')
     .select('id,channel_id,channel_title')
