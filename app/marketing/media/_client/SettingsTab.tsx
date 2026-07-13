@@ -16,6 +16,20 @@
 import { Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import LinkPhotosPanel from './LinkPhotosPanel';
+import PhotoGuardrailsPanel, {
+  type NamingRow, type CaptionRow, type AltTextRow, type TierThresholdRow,
+  type AspectRatioRow, type TextPolicyRow, type BrandPaletteRow,
+} from './PhotoGuardrailsPanel';
+
+export interface PhotoGuardrailsBundle {
+  naming: NamingRow[];
+  captions: CaptionRow[];
+  altText: AltTextRow[];
+  tierThresholds: TierThresholdRow[];
+  aspectRatios: AspectRatioRow[];
+  textPolicy: TextPolicyRow | null;
+  brandPalette: BrandPaletteRow[];
+}
 
 // --- types -----------------------------------------------------------
 interface Rule {
@@ -101,6 +115,7 @@ interface Props {
   rooms: RoomOption[];
   facilities: FacilityOption[];
   mediaPage?: any[];
+  guardrails?: PhotoGuardrailsBundle;
 }
 
 // --- tokens ----------------------------------------------------------
@@ -116,13 +131,13 @@ const EFFECTS = ['allow','deny','require_approval','warn'];
 const TIERS   = ['tier_website_hero','tier_ota_profile','tier_social_pool','tier_internal','tier_logos','tier_archive'];
 const AI_TIERS = ['tier_social_pool','tier_internal'];
 
-type TabKey = 'rules' | 'channels' | 'reality' | 'categories';
+type TabKey = 'photo_guardrails' | 'rules' | 'channels' | 'reality' | 'categories';
 
 function csvIn(v: string[] | null | undefined): string { return (v ?? []).join(', '); }
 function csvOut(s: string): string[] { return s.split(',').map(x => x.trim()).filter(Boolean); }
 
 // --- root ------------------------------------------------------------
-export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality, categories, rooms, facilities, mediaPage = [] }: Props) {
+export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality, categories, rooms, facilities, mediaPage = [], guardrails }: Props) {
   const [tab, setTab] = useState<TabKey>('rules');
   const [banner, setBanner] = useState<{ tone: 'ok'|'err'; text: string } | null>(null);
   const linkPhotosBlock = <LinkPhotosPanel propertyId={propertyId} rooms={rooms} facilities={facilities} mediaPage={mediaPage as any[]} />;
@@ -134,6 +149,7 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
     { key: 'rules',      label: 'Guardrails',        count: rulesActive.length },
     { key: 'channels',   label: 'Output channels',   count: channelSpecs.length },
     { key: 'reality',    label: 'AI profiles',       count: rooms.length + facilities.length },
+    { key: 'photo_guardrails', label: 'Photo Guardrails', count: (guardrails ? (guardrails.naming.length + guardrails.captions.length + guardrails.altText.length + guardrails.tierThresholds.length + guardrails.aspectRatios.length + (guardrails.textPolicy ? 1 : 0) + guardrails.brandPalette.length) : 0) },
     { key: 'categories', label: 'Prompt categories', count: (categories ?? []).length },
   ];
 
@@ -178,6 +194,18 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
           <RoomProfilesPanel   propertyId={propertyId} rooms={rooms} />
           <FacilityProfilesPanel propertyId={propertyId} facilities={facilities} setBanner={setBanner} />
         </div>
+      )}
+      {tab === 'photo_guardrails' && guardrails && (
+        <PhotoGuardrailsPanel
+          propertyId={propertyId}
+          naming={guardrails.naming}
+          captions={guardrails.captions}
+          altText={guardrails.altText}
+          tierThresholds={guardrails.tierThresholds}
+          aspectRatios={guardrails.aspectRatios}
+          textPolicy={guardrails.textPolicy}
+          brandPalette={guardrails.brandPalette}
+        />
       )}
       {tab === 'categories' && <PromptCategoriesPanel  propertyId={propertyId} rows={categories ?? []} setBanner={setBanner} />}
     </div>
