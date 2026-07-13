@@ -3,7 +3,8 @@
 // v_marketing_media_page matching one dimension of the coverage matrix.
 // PBS 2026-07-14 — replaces client-side filter on a preloaded mediaPage
 // window that was missing rows (mediaPage capped at 5,000, but coverage
-// aggregates the full table).
+// aggregates the full table). CAP=500 because the top matrix cell
+// (restaurant × tier_ota_profile) already has 256 photos on 2026-07-14.
 //
 // Params:
 //   dim=area|facility|room_type|activity   (required)
@@ -21,7 +22,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const CAP = 200;
+const CAP = 500;
 
 export async function GET(req: NextRequest) {
   let sb;
