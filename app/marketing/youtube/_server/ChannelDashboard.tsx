@@ -9,6 +9,17 @@
 //
 // PBS 2026-07-11 evening — switched from `!x.ok` narrowing to `isErr(x)` type
 //   predicate so TS reliably narrows YtResult<T> to ErrShape. Fixes CI TS2339.
+//
+// PBS 2026-07-13 — YouTube-pro-style analytics containers inserted between
+//   AnalyticsKPIs and the Recent Uploads grid. Five expandable cards:
+//     1. Last 24 hrs uploads (with delta framing)
+//     2. Most viewed all-time  (top 10 → top 25 on expand)
+//     3. Least viewed / needs love  (bottom 10 → bottom 25 on expand)
+//     4. Best publish-day heatmap  (7-cell strip, expand for table)
+//     5. Best publish-hour heatmap (8-bucket strip, expand for table)
+//   All aggregation is server-side over `videos` (bumped to max=200). No
+//   function props cross the RSC boundary — ExpandableSection only toggles
+//   show/hide state.
 
 import Link from 'next/link';
 import { getFreshAccessToken } from '@/lib/youtube/token';
@@ -18,6 +29,7 @@ import {
 } from '@/lib/youtube/data';
 import CommentReplyForm from '../_client/CommentReplyForm';
 import DashboardActions from '../_client/DashboardActions';
+import ExpandableSection from '../_client/ExpandableSection';
 import AnalyticsKPIs from './AnalyticsKPIs';
 
 const WHITE  = '#FFFFFF';
@@ -81,6 +93,34 @@ function bestThumb(t: VideoItem['thumbnails'] | undefined): string | null {
   return t?.maxres?.url ?? t?.standard?.url ?? t?.high?.url ?? t?.medium?.url ?? t?.default?.url ?? null;
 }
 
+function fmtDate(iso: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toISOString().slice(0, 10);
+}
+
+// Deep-forest intensity for heatmap cells. `t` in [0,1].
+function heatColor(t: number): string {
+  const clamped = Math.max(0, Math.min(1, t));
+  // Fade from cream (t=0) to forest (t=1)
+  const startR = 245, startG = 240, startB = 225;   // #F5F0E1
+  const endR   = 8,   endG   = 72,  endB   = 56;    // #084838
+  const r = Math.round(startR + (endR - startR) * clamped);
+  const g = Math.round(startG + (endG - startG) * clamped);
+  const b = Math.round(startB + (endB - startB) * clamped);
+  return `rgb(${r},${g},${b})`;
+}
+function heatTextColor(t: number): string {
+  return t > 0.55 ? WHITE : INK;
+}
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const sorted = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
 function ReconnectCard({ propertyId, title, reason }: { propertyId: number; title: string; reason: string }) {
   return (
     <div style={{ ...CARD, gridColumn: '1 / -1', background: '#FBE7E4', borderColor: RED }}>
@@ -120,6 +160,118 @@ function CommentsAmberBanner({ propertyId, kind, detail }: { propertyId: number;
   );
 }
 
+// ── Row primitive shared by sections 1/2/3 ────────────────────────────────
+function VideoRow({
+  rank, v, extra,
+}: { rank: number; v: VideoItem; extra?: React.ReactNode }) {
+  const thumb = bestThumb(v.thumbnails);
+  const dur = fmtDuration(v.duration);
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '28px 96px 1fr auto',
+      gap: 12, alignItems: 'center',
+      padding: '10px 0', borderTop: `1px solid ${HAIR}`,
+    }}>
+      <div style={{ fontSize: 11, color: INK_M, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+        {rank}
+      </div>
+      <a href={`https://youtube.com/watch?v=${v.id}`} target="_blank" rel="noreferrer noopener"
+         style={{ position: 'relative', display: 'block', aspectRatio: '16 / 9', background: CREAM, borderRadius: 2, overflow: 'hidden' }}>
+        {thumb && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumb} alt={v.title}
+               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        )}
+        {dur && (
+          <span style={{
+            position: 'absolute', bottom: 3, right: 3,
+            background: 'rgba(0,0,0,.82)', color: WHITE,
+            fontSize: 9, padding: '1px 4px', borderRadius: 2, fontWeight: 500,
+          }}>{dur}</span>
+        )}
+      </a>
+      <div style={{ minWidth: 0 }}>
+        <a href={`https://youtube.com/watch?v=${v.id}`} target="_blank" rel="noreferrer noopener"
+           style={{
+             display: 'block', fontSize: 13, color: INK, fontWeight: 500,
+             textDecoration: 'none', lineHeight: 1.3,
+             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+           }}>
+          {v.title}
+        </a>
+        <div style={{ fontSize: 11, color: INK_M, marginTop: 4, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <span>{fmtCompact(v.views)} views</span>
+          <span>{fmt(v.likes)} likes</span>
+          <span>{fmt(v.comments)} comments</span>
+          <span>{fmtDate(v.publishedAt)}</span>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: INK_M, textAlign: 'right', whiteSpace: 'nowrap' }}>
+        {extra}
+      </div>
+    </div>
+  );
+}
+
+// ── Heatmap primitives ────────────────────────────────────────────────────
+function HeatCell({ label, sublabel, value, intensity, wide }: {
+  label: string; sublabel?: string; value: string; intensity: number; wide?: boolean;
+}) {
+  return (
+    <div style={{
+      background: heatColor(intensity),
+      color: heatTextColor(intensity),
+      border: `1px solid ${HAIR}`,
+      borderRadius: 3,
+      padding: wide ? '14px 10px' : '12px 6px',
+      textAlign: 'center',
+      minWidth: 0,
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase' }}>
+        {label}
+      </div>
+      {sublabel && (
+        <div style={{ fontSize: 9, opacity: .75, marginTop: 2 }}>{sublabel}</div>
+      )}
+      <div style={{ fontSize: 18, fontWeight: 500, marginTop: 6, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function HeatDetailTable({ rows }: {
+  rows: Array<{ label: string; median: number; count: number; total: number }>;
+}) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 100px 80px 120px',
+        gap: 8, fontSize: 10, color: INK_M, textTransform: 'uppercase', letterSpacing: '.04em',
+        padding: '6px 0', borderBottom: `1px solid ${HAIR}`, fontWeight: 500,
+      }}>
+        <div>Bucket</div>
+        <div style={{ textAlign: 'right' }}>Median views</div>
+        <div style={{ textAlign: 'right' }}>Videos</div>
+        <div style={{ textAlign: 'right' }}>Total views</div>
+      </div>
+      {rows.map((r) => (
+        <div key={r.label} style={{
+          display: 'grid', gridTemplateColumns: '1fr 100px 80px 120px',
+          gap: 8, fontSize: 12, color: INK, padding: '6px 0', borderBottom: `1px solid ${HAIR}`,
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          <div>{r.label}</div>
+          <div style={{ textAlign: 'right' }}>{fmt(r.median)}</div>
+          <div style={{ textAlign: 'right', color: INK_M }}>{r.count}</div>
+          <div style={{ textAlign: 'right', color: INK_M }}>{fmt(r.total)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function ChannelDashboard({ propertyId }: { propertyId: number }) {
   // 1) Token: if we can't even get an access token, we cannot render anything useful.
   const tok = await getFreshAccessToken(propertyId);
@@ -133,15 +285,13 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
     );
   }
 
-  // 2) Fetch identity + videos + comments in parallel — Playlists + Programs live on their own sub-pages now.
+  // 2) Fetch identity + videos (deep · up to 200 for aggregates) + comments in parallel.
   const [chRes, vidRes, comRes] = await Promise.all([
     fetchChannel(tok.access_token, tok.channel_id),
-    fetchRecentVideos(tok.access_token, tok.channel_id, 24),
+    fetchRecentVideos(tok.access_token, tok.channel_id, 200),
     fetchRecentComments(tok.access_token, tok.channel_id, 20),
   ]);
 
-  // 3) Channel identity is the anchor. If channel fetch failed, we still surface a
-  //    clear reconnect card — but distinct from the token-level failure above.
   if (isErr(chRes)) {
     const detail = chRes.detail ? ` · ${chRes.detail.slice(0, 200)}` : '';
     return (
@@ -164,6 +314,83 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
 
   const avatar = ch.thumbnails.high?.url ?? ch.thumbnails.medium?.url ?? ch.thumbnails.default?.url ?? null;
   const vidTitle = new Map(videos.map((v) => [v.id, v.title]));
+
+  // ── Aggregations (server-side, pre-formatted for RSC boundary) ──────────
+  const now = Date.now();
+
+  // 1) Last 24 hrs uploads
+  const last24 = videos.filter((v) => {
+    const t = new Date(v.publishedAt).getTime();
+    return t && (now - t) <= 24 * 3600 * 1000;
+  });
+  const daysSinceLastUpload = (() => {
+    const times = videos
+      .map((v) => new Date(v.publishedAt).getTime())
+      .filter((t) => !isNaN(t) && t > 0);
+    if (times.length === 0) return null;
+    const latest = Math.max(...times);
+    return Math.floor((now - latest) / (24 * 3600 * 1000));
+  })();
+
+  // 2) Most viewed all-time
+  const mostViewed = [...videos].sort((a, b) => b.views - a.views).slice(0, 25);
+
+  // 3) Least viewed / needs love
+  const leastViewed = [...videos]
+    .filter((v) => v.views > 0)  // drop private/removed placeholders
+    .sort((a, b) => a.views - b.views)
+    .slice(0, 25);
+
+  // 4) Best publish-day heatmap (median views per weekday)
+  const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const DAY_FULL   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const byDay: number[][] = Array.from({ length: 7 }, () => []);
+  for (const v of videos) {
+    const d = new Date(v.publishedAt);
+    if (!isNaN(d.getTime())) byDay[d.getUTCDay()].push(v.views);
+  }
+  const dayStats = DAY_LABELS.map((lbl, i) => ({
+    label: lbl,
+    full:  DAY_FULL[i],
+    count: byDay[i].length,
+    total: byDay[i].reduce((s, x) => s + x, 0),
+    median: median(byDay[i]),
+  }));
+  const dayMaxMedian = Math.max(1, ...dayStats.map((s) => s.median));
+
+  // 5) Best publish-hour heatmap (median views per 3-hour bucket, UTC)
+  const HOUR_BUCKETS = [
+    { label: '00–03', from: 0,  to: 3  },
+    { label: '03–06', from: 3,  to: 6  },
+    { label: '06–09', from: 6,  to: 9  },
+    { label: '09–12', from: 9,  to: 12 },
+    { label: '12–15', from: 12, to: 15 },
+    { label: '15–18', from: 15, to: 18 },
+    { label: '18–21', from: 18, to: 21 },
+    { label: '21–24', from: 21, to: 24 },
+  ];
+  const byHour: number[][] = Array.from({ length: HOUR_BUCKETS.length }, () => []);
+  for (const v of videos) {
+    const d = new Date(v.publishedAt);
+    if (isNaN(d.getTime())) continue;
+    const h = d.getUTCHours();
+    const idx = HOUR_BUCKETS.findIndex((b) => h >= b.from && h < b.to);
+    if (idx >= 0) byHour[idx].push(v.views);
+  }
+  const hourStats = HOUR_BUCKETS.map((b, i) => ({
+    label: b.label,
+    full:  `${b.label} UTC`,
+    count: byHour[i].length,
+    total: byHour[i].reduce((s, x) => s + x, 0),
+    median: median(byHour[i]),
+  }));
+  const hourMaxMedian = Math.max(1, ...hourStats.map((s) => s.median));
+
+  const empty = (
+    <div style={{ fontSize: 12, color: INK_M, padding: '12px 0' }}>
+      No videos found — the aggregate sections need at least one upload with statistics.
+    </div>
+  );
 
   return (
     <>
@@ -222,6 +449,173 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
         totalVideos={ch.videoCount}
       />
 
+      {/* ── B2 · YOUTUBE-PRO REVIEW STRIP (5 expandable containers) */}
+
+      {/* 1 · Last 24 hrs */}
+      <ExpandableSection
+        title="Last 24 hrs"
+        subtitle={
+          last24.length === 0 && daysSinceLastUpload !== null
+            ? `No new uploads · last published ${daysSinceLastUpload} day${daysSinceLastUpload === 1 ? '' : 's'} ago`
+            : `${last24.length} upload${last24.length === 1 ? '' : 's'} in the last 24 hours`
+        }
+        count={last24.length}
+        initialRows={5}
+        emptyState={
+          <div style={{ fontSize: 12, color: INK_M, padding: '8px 0' }}>
+            {daysSinceLastUpload !== null
+              ? `No uploads in the last 24 hrs. Last upload was ${daysSinceLastUpload} day${daysSinceLastUpload === 1 ? '' : 's'} ago.`
+              : 'No uploads on this channel yet.'}
+          </div>
+        }
+        rows={last24.map((v, i) => (
+          <VideoRow
+            key={v.id}
+            rank={i + 1}
+            v={v}
+            extra={
+              <>
+                <span style={{ color: FOREST, fontWeight: 500 }}>{timeAgo(v.publishedAt)}</span>
+                <div style={{ fontSize: 10, color: INK_M, marginTop: 2 }}>fresh</div>
+              </>
+            }
+          />
+        ))}
+      />
+
+      {/* 2 · Most viewed all-time */}
+      <ExpandableSection
+        title="Most viewed all-time"
+        subtitle="Sorted by lifetime views across your last 200 uploads"
+        count={mostViewed.length}
+        initialRows={10}
+        expandLabel={`Show top ${Math.min(25, mostViewed.length)}`}
+        emptyState={empty}
+        rows={mostViewed.map((v, i) => (
+          <VideoRow
+            key={v.id}
+            rank={i + 1}
+            v={v}
+            extra={
+              <>
+                <span style={{ color: INK, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtCompact(v.views)}
+                </span>
+                <div style={{ fontSize: 10, color: INK_M, marginTop: 2 }}>total views</div>
+              </>
+            }
+          />
+        ))}
+      />
+
+      {/* 3 · Least viewed / needs love */}
+      <ExpandableSection
+        title="Least viewed · needs love"
+        subtitle="Bottom performers by lifetime views. Candidates for a re-cut, new thumbnail or title A/B."
+        count={leastViewed.length}
+        initialRows={10}
+        expandLabel={`Show bottom ${Math.min(25, leastViewed.length)}`}
+        emptyState={empty}
+        rows={leastViewed.map((v, i) => (
+          <VideoRow
+            key={v.id}
+            rank={i + 1}
+            v={v}
+            extra={
+              <>
+                <span style={{ color: INK, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtCompact(v.views)}
+                </span>
+                <Link
+                  href={`/marketing/youtube/production?ref=${encodeURIComponent(v.id)}`}
+                  style={{
+                    display: 'block', marginTop: 2, fontSize: 10, color: FOREST,
+                    textDecoration: 'none', fontWeight: 500,
+                  }}>
+                  → Suggest re-cut
+                </Link>
+              </>
+            }
+          />
+        ))}
+      />
+
+      {/* 4 · Best publish-day heatmap */}
+      <ExpandableSection
+        title="Best publish day"
+        subtitle="Median views per weekday · deeper green = higher median (all times UTC)"
+        collapsedChildren={
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+            {dayStats.map((s) => (
+              <HeatCell
+                key={s.label}
+                label={s.label}
+                sublabel={`${s.count} video${s.count === 1 ? '' : 's'}`}
+                value={fmtCompact(s.median)}
+                intensity={s.median / dayMaxMedian}
+                wide
+              />
+            ))}
+          </div>
+        }
+        expandedChildren={
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+              {dayStats.map((s) => (
+                <HeatCell
+                  key={s.label}
+                  label={s.label}
+                  sublabel={`${s.count} video${s.count === 1 ? '' : 's'}`}
+                  value={fmtCompact(s.median)}
+                  intensity={s.median / dayMaxMedian}
+                  wide
+                />
+              ))}
+            </div>
+            <HeatDetailTable rows={dayStats.map((s) => ({
+              label: s.full, median: s.median, count: s.count, total: s.total,
+            }))} />
+          </>
+        }
+      />
+
+      {/* 5 · Best publish-hour heatmap */}
+      <ExpandableSection
+        title="Best publish hour"
+        subtitle="Median views per 3-hour bucket · deeper green = higher median (all times UTC)"
+        collapsedChildren={
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 6 }}>
+            {hourStats.map((s) => (
+              <HeatCell
+                key={s.label}
+                label={s.label}
+                sublabel={`${s.count} video${s.count === 1 ? '' : 's'}`}
+                value={fmtCompact(s.median)}
+                intensity={s.median / hourMaxMedian}
+              />
+            ))}
+          </div>
+        }
+        expandedChildren={
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 6 }}>
+              {hourStats.map((s) => (
+                <HeatCell
+                  key={s.label}
+                  label={s.label}
+                  sublabel={`${s.count} video${s.count === 1 ? '' : 's'}`}
+                  value={fmtCompact(s.median)}
+                  intensity={s.median / hourMaxMedian}
+                />
+              ))}
+            </div>
+            <HeatDetailTable rows={hourStats.map((s) => ({
+              label: s.full, median: s.median, count: s.count, total: s.total,
+            }))} />
+          </>
+        }
+      />
+
       {/* ── C · RECENT UPLOADS (renders independently) */}
       <div style={{ ...CARD, gridColumn: '1 / -1' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
@@ -247,7 +641,7 @@ export default async function ChannelDashboard({ propertyId }: { propertyId: num
             gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
             gap: 16,
           }}>
-            {videos.map((v) => {
+            {videos.slice(0, 24).map((v) => {
               const thumb = bestThumb(v.thumbnails);
               const dur = fmtDuration(v.duration);
               return (
