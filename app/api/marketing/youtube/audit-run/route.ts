@@ -56,6 +56,9 @@ interface AuditResp {
 export async function POST() {
   const sb = getSupabaseAdmin();
 
+  // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC. No-op if token still valid.
+  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
+
   const tok = await getFreshAccessToken(NAMKHAN);
   if (!tok.ok || !tok.access_token || !tok.channel_id) {
     return err('token_unavailable', 400, { detail: tok.error ?? 'unknown' });
