@@ -456,7 +456,9 @@ const SALES_CFG: DeptCfg = {
     // ICP Segments added as read-only sub-tab. TOP MENU UNCHANGED.
     { label: 'HoD',           href: '/sales'           },
     { label: 'Mails',         href: '/sales/mails'     },  // PBS 2026-07-13 shared-mailbox inbox
-    { label: 'Create New',    href: '/sales/new'       },
+    // PBS 2026-07-14: nav rename "Create New" → "Leads" (points at the new CRM at /sales/leads).
+    // /sales/new route stays live; the CreateLead client is still accessible from within the Leads CMS drawer.
+    { label: 'Leads',         href: '/sales/leads'    },
     { label: 'Pipeline',      href: '/sales/pipeline'  },
     { label: 'Accounts',      href: '/sales/accounts'  },
     { label: 'ICP Segments',  href: '/sales/icp'       },
