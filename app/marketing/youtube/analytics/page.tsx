@@ -71,7 +71,7 @@ export default async function YtAnalyticsPage() {
   const tok = await getFreshAccessToken(NAMKHAN);
   let channelStats: { subs: number; views: number; videos: number; ok: boolean; access_token?: string; channel_id?: string } = { subs: 0, views: 0, videos: 0, ok: false };
   if (tok.ok && tok.access_token && tok.channel_id) {
-    const ch = await fetchChannel(tok.access_token);
+    const ch = await fetchChannel(tok.access_token, tok.channel_id);
     if (!isErr(ch)) {
       channelStats = { subs: ch.data.subscriberCount, views: ch.data.viewCount, videos: ch.data.videoCount, ok: true, access_token: tok.access_token, channel_id: tok.channel_id };
     }
