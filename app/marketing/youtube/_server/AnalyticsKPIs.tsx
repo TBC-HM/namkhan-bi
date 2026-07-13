@@ -140,13 +140,15 @@ export default async function AnalyticsKPIs({ accessToken, channelId, totalSubsc
   if (series30.ok === false) {
     const err = series30.error;
     const detail = series30.detail;
-    const scopeMissing = err === 'youtube_analytics_401' || err === 'youtube_analytics_403';
+    const scopeMissing = err === 'youtube_analytics_401' || err === 'youtube_analytics_403' || err === 'analytics_api_401' || err === 'analytics_api_403';
     if (scopeMissing) {
       return (
         <div style={{ ...CARD, gridColumn: '1 / -1', background: '#FDF7E6', borderColor: AMBER }}>
-          <div style={{ fontSize: 13, color: AMBER, fontWeight: 600, marginBottom: 6 }}>Analytics not authorised</div>
-          <div style={{ fontSize: 12, color: INK_S, marginBottom: 10 }}>
-            The YouTube Analytics API needs the <code>yt-analytics.readonly</code> scope. Reconnect to authorise it — no data is lost.
+          <div style={{ fontSize: 13, color: AMBER, fontWeight: 600, marginBottom: 6 }}>Analytics forbidden — reconnect using the Namkhan brand identity</div>
+          <div style={{ fontSize: 12, color: INK_S, marginBottom: 10, lineHeight: 1.5 }}>
+            All required scopes are granted (verified via Google tokeninfo), but the OAuth token is bound to your <strong>personal</strong> Google identity, not the Namkhan brand channel. YouTube Analytics only serves reports where the token owner is the channel owner.
+            <br /><br />
+            <strong>Fix (2 min):</strong> Open <a href="https://youtube.com" target="_blank" rel="noreferrer noopener" style={{ color: FOREST, textDecoration: 'underline' }}>youtube.com</a>, click your avatar top-right, <strong>Switch account</strong> → pick <em>The Namkhan Resort</em>. Confirm the brand is now active. Then click Reconnect below.
           </div>
           <Link href={`/api/marketing/youtube/oauth-start?property_id=260955`}
             style={{ display: 'inline-block', padding: '8px 14px', border: `1px solid ${FOREST}`, borderRadius: 3, background: FOREST, color: WHITE, fontSize: 12, letterSpacing: '.04em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500 }}>
