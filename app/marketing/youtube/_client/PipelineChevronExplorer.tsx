@@ -101,14 +101,14 @@ export default function PipelineChevronExplorer(props: Props) {
           <div style={{ ...sectionH, marginBottom: 8 }}>
             {stages.find((s) => s.key === open)?.label} · detail
           </div>
-          <StageBody stage={open} research={research} request={request} script={script} render={render} approve={approve} />
+          <StageBody stage={open} research={research} request={request} script={script} render={render} approve={approve} onStartSuccess={() => setOpen('script')} />
         </div>
       )}
     </div>
   );
 }
 
-function StageBody({ stage, research, request, script, render, approve }: { stage: StageKey } & Props) {
+function StageBody({ stage, research, request, script, render, approve, onStartSuccess }: { stage: StageKey; onStartSuccess: () => void } & Props) {
   const empty = <div style={{ fontSize: 12, color: INK_M, padding: '8px 0' }}>No items in this stage.</div>;
 
   if (stage === 'research') {
@@ -149,7 +149,7 @@ function StageBody({ stage, research, request, script, render, approve }: { stag
             <td style={td}>{r.angle_first_line}</td>
             <td style={{ ...tdMuted, fontSize: 11 }}>{fmtTs(r.created_at)}</td>
             <td style={{ ...td, textAlign: 'right' }}>
-              <StartProductionButton requestId={r.id} onSuccess={() => setOpen('script')} />
+              <StartProductionButton requestId={r.id} onSuccess={onStartSuccess} />
             </td>
           </tr>
         ))}</tbody>
