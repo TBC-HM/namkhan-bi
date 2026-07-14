@@ -223,15 +223,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
             rows={scheduledRows}
             propertyId={pid}
             reportOptions={reportOptions}
-            previewHrefBuilder={(r) => {
-              // PBS 2026-07-14 · Ops daily preview lives at /operations/reports/scheduled/daily/preview
-              // and maps segment `daily` -> template_key `operations_daily` (see that page.tsx).
-              if (r.template_key === 'operations_daily') {
-                return `/operations/reports/scheduled/daily/preview?property_id=${r.property_id}`;
-              }
-              const key = ['daily','weekly','monthly'].includes(r.template_key) ? r.template_key : 'daily';
-              return `/revenue/reports/scheduled/${key}/preview?property_id=${r.property_id}`;
-            }}
+            previewMode={slug === 'operations' ? 'operations' : 'revenue'}
           />
         </Container>
       </div>
