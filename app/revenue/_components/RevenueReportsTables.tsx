@@ -7,7 +7,6 @@
 'use client';
 
 import { useMemo, useState, useTransition, type CSSProperties } from 'react';
-import { useRouter } from 'next/navigation';
 
 // ─── Shared table shell ─────────────────────────────────────────────
 
@@ -38,7 +37,6 @@ export function SortableTable<Row extends { id: number | string }>({
   const [checked, setChecked] = useState<Set<number | string>>(new Set());
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
-  const router = useRouter();
 
   const sorted = useMemo(() => {
     const col = columns.find((c) => c.key === sort.key);
@@ -76,7 +74,7 @@ export function SortableTable<Row extends { id: number | string }>({
         setChecked(new Set());
         setMsg(`✓ ${ids.length} row${ids.length === 1 ? '' : 's'} removed`);
         setTimeout(() => setMsg(null), 3000);
-        router.refresh();
+        window.location.reload();
       } catch (e) {
         setMsg(`✗ ${(e as Error).message}`);
       }
@@ -159,7 +157,6 @@ export function AddRecipientForm({ propertyId, reportOptions }: { propertyId: nu
   const [cadence, setCadence] = useState<'daily'|'weekly'|'monthly'>('daily');
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
-  const router = useRouter();
   const submit = () => {
     if (!email.trim()) return;
     startTransition(async () => {
@@ -172,8 +169,7 @@ export function AddRecipientForm({ propertyId, reportOptions }: { propertyId: nu
         if (!r.ok) throw new Error(`add failed (${r.status})`);
         setMsg('✓ added');
         setEmail(''); setName('');
-        router.refresh();
-        setTimeout(() => setMsg(null), 2000);
+        setTimeout(() => window.location.reload(), 300);
       } catch (e) {
         setMsg(`✗ ${(e as Error).message}`);
       }
@@ -216,10 +212,16 @@ export interface ScheduledRow {
   created_at: string;
 }
 
-export function ScheduledReportsTable({ rows, propertyId, reportOptions }: {
+export function ScheduledReportsTable({ rows, propertyId, reportOptions, previewHrefBuilder }: {
   rows: ScheduledRow[]; propertyId: number; reportOptions: ReportOption[];
+  // PBS 2026-07-14 · dept-aware Preview URL. Defaults to /revenue/... for backward-compat.
+  // Ops HoD passes a builder that routes to /operations/reports/scheduled/daily/preview.
+  previewHrefBuilder?: (row: ScheduledRow) => string;
 }) {
-  const router = useRouter();
+  const buildPreview = previewHrefBuilder ?? ((r: ScheduledRow) => {
+    const key = ['daily','weekly','monthly'].includes(r.template_key) ? r.template_key : 'daily';
+    return `/revenue/reports/scheduled/${key}/preview?property_id=${r.property_id}`;
+  });
   const labelFor = (key: string) => reportOptions.find((o) => o.value === key)?.label ?? key;
   return (
     <>
@@ -235,16 +237,13 @@ export function ScheduledReportsTable({ rows, propertyId, reportOptions }: {
           { key: 'cadence',      label: 'Frequency', render: (r) => ({ daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[r.cadence] ?? r.cadence) },
           { key: 'next_fire_at', label: 'Next date', render: (r) => (r.next_fire_at ? new Date(r.next_fire_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—') },
           // PBS 2026-07-08: Preview link per row — opens the report preview page in a new tab.
-          { key: 'template_key', label: 'Preview', align: 'center', render: (r) => {
-            const key = ['daily','weekly','monthly'].includes(r.template_key) ? r.template_key : 'daily';
-            return (
-              <a href={`/revenue/reports/scheduled/${key}/preview?property_id=${r.property_id}`}
-                 target="_blank" rel="noopener noreferrer"
-                 style={{ padding: '3px 10px', border: '1px solid #084838', color: '#084838', borderRadius: 4, fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
-                Preview
-              </a>
-            );
-          }},
+          { key: 'template_key', label: 'Preview', align: 'center', render: (r) => (
+            <a href={buildPreview(r)}
+               target="_blank" rel="noopener noreferrer"
+               style={{ padding: '3px 10px', border: '1px solid #084838', color: '#084838', borderRadius: 4, fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
+              Preview
+            </a>
+          )},
           // PBS 2026-07-09 pm: per-row dismiss X (single-row unschedule).
           { key: 'id', label: '', align: 'center', render: (r) => (
             <button
@@ -257,7 +256,7 @@ export function ScheduledReportsTable({ rows, propertyId, reportOptions }: {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ ids: [r.id] }),
                 });
-                if (res.ok) router.refresh();
+                if (res.ok) window.location.reload();
                 else alert(`dismiss failed (${res.status})`);
               }}
               style={{ padding: '3px 8px', border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#B04A2F', borderRadius: 4, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
