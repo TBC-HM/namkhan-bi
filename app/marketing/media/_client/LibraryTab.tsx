@@ -112,8 +112,12 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     return () => { cancelled = true; };
   }, []);
 
-  const isFullyTagged = (r: MediaRow) =>
-    !!r.primary_tier && !!r.property_area && r.property_area.trim() !== '';
+  const isFullyTagged = (r: MediaRow) => {
+    if (!r.primary_tier) return false;
+    if (r.property_area && r.property_area.trim() !== '') return true;
+    const anyFk = (r as any).room_type_id || (r as any).facility_id || (r as any).activity_id || (r as any).certification_id || (r as any).contact_id;
+    return !!anyFk;
+  };
 
   const filtered = useMemo(() => {
     let out = mediaPage.filter(r =>
