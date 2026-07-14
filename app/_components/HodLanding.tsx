@@ -68,11 +68,18 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   // surface ONLY their dept-specific report types so their Scheduled reports
   // + Send log don't pick up Revenue's daily digests.
   const includeGenericScheduled = slug === 'revenue';
+  // PBS 2026-07-14 · Ops HoD surfaces the operations_daily template so the
+  // Report Scheduler dropdown has a "Daily" that maps to render-operations-report
+  // (not the revenue daily). Preview URL is dept-aware via previewHrefBuilder below.
+  const includeOperationsScheduled = slug === 'operations';
   const reportOptions = [
     ...(includeGenericScheduled ? [
       { value: 'daily',   label: 'Daily report' },
       { value: 'weekly',  label: 'Weekly report' },
       { value: 'monthly', label: 'Monthly report' },
+    ] : []),
+    ...(includeOperationsScheduled ? [
+      { value: 'operations_daily', label: 'Daily report' },
     ] : []),
     ...reportTypes.map((rt) => ({ value: rt.value, label: rt.label })),
   ];
@@ -216,6 +223,15 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
             rows={scheduledRows}
             propertyId={pid}
             reportOptions={reportOptions}
+            previewHrefBuilder={(r) => {
+              // PBS 2026-07-14 · Ops daily preview lives at /operations/reports/scheduled/daily/preview
+              // and maps segment `daily` -> template_key `operations_daily` (see that page.tsx).
+              if (r.template_key === 'operations_daily') {
+                return `/operations/reports/scheduled/daily/preview?property_id=${r.property_id}`;
+              }
+              const key = ['daily','weekly','monthly'].includes(r.template_key) ? r.template_key : 'daily';
+              return `/revenue/reports/scheduled/${key}/preview?property_id=${r.property_id}`;
+            }}
           />
         </Container>
       </div>
