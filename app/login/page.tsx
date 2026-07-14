@@ -4,6 +4,10 @@
 // PBS 2026-07-14: reads ?reason=idle to show a muted "signed out after 60 min
 // of inactivity" line above the form when the middleware idle-timeout kicks
 // the user back here.
+// PBS 2026-07-14: post-signIn calls /api/auth/post-login to resolve the
+// per-user landing_page override (tenancy.holding_users.landing_page).
+// Ladder = user override > owner default (/holding/ceo) > property default (/)
+// > /login?err=no_access. Explicit ?next= wins over the ladder.
 'use client';
 
 import { useEffect, useState, type CSSProperties } from 'react';
@@ -21,7 +25,7 @@ const IDLE_MINUTES = Number(process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES ?? '60'
 
 export default function LoginPage() {
   const router = useRouter();
-  const [next, setNext] = useState('/');
+  const [next, setNext] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -36,7 +40,7 @@ export default function LoginPage() {
     try {
       const p = new URLSearchParams(window.location.search);
       const n = p.get('next');
-      if (n && n.startsWith('/')) setNext(n);
+      if (n && n.startsWith('/') && !n.startsWith('//')) setNext(n);
       const r = p.get('reason');
       if (r === 'idle') {
         setReasonMsg('Signed out after ' + IDLE_MINUTES + ' min of inactivity.');
@@ -44,13 +48,30 @@ export default function LoginPage() {
     } catch { /* ignore */ }
   }, []);
 
+  async function resolveRedirect(): Promise<string> {
+    // Call /api/auth/post-login (server) to get per-user landing_page or fallback.
+    try {
+      const r = await fetch('/api/auth/post-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ next }),
+      });
+      const body = await r.json().catch(() => ({}));
+      const dest = typeof body?.redirect_to === 'string' ? body.redirect_to : null;
+      if (dest && dest.startsWith('/') && !dest.startsWith('//')) return dest;
+    } catch { /* fall through */ }
+    // Fallback: explicit ?next=, else /holding/ceo (safer than the legacy /).
+    return next ?? '/holding/ceo';
+  }
+
   async function signIn() {
     if (!email.trim() || !pw || busy) return;
     setBusy(true); setErr(''); setOk('');
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
+    if (error) { setBusy(false); setErr(error.message); return; }
+    const dest = await resolveRedirect();
     setBusy(false);
-    if (error) { setErr(error.message); return; }
-    router.push(next);
+    router.push(dest);
     router.refresh();
   }
 
@@ -88,7 +109,7 @@ export default function LoginPage() {
   const hintText = mode === 'signin'
     ? 'Enter your email and password.'
     : mode === 'forgot'
-    ? 'Enter your email — we\'ll send you a reset link.'
+    ? 'Enter your email — we will send you a reset link.'
     : 'Not on the platform yet? Ask PBS for access.';
   const primaryLabel = busy
     ? (mode === 'signin' ? 'Signing in…' : mode === 'forgot' ? 'Sending…' : 'Requesting…')
