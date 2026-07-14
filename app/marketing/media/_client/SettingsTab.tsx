@@ -17,7 +17,7 @@
 //   Explainer: Reality is Laos-wide. Rooms come from PMS. Facilities are editable here.
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import LinkPhotosPanel from './LinkPhotosPanel';
 import PhotoGuardrailsPanel, {
@@ -1094,13 +1094,14 @@ function MediaArchiveThresholdBanner({ setBanner }: { setBanner: BannerFn }) {
   const [pid, setPid] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
+    let cancelled = false;
     fetch('/api/marketing/media/settings', { cache:'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(j => { if (j) { setVal(String(j.archive_threshold ?? 30)); setAuto(!!j.auto_archive); setPid(j.property_id ?? null); } })
+      .then(j => { if (!cancelled && j) { setVal(String(j.archive_threshold ?? 30)); setAuto(!!j.auto_archive); setPid(j.property_id ?? null); } })
       .catch(() => {});
-    return 0;
-  });
+    return () => { cancelled = true; };
+  }, []);
 
   async function save() {
     if (pid == null) return;
