@@ -1,105 +1,30 @@
 // lib/sharedGmail.ts
-// Filter-mode shared mailbox helpers for /sales/mails + HoD mail panels.
-//
-// PBS 2026-07-14 (source-of-truth pivot):
-//   /sales/mails + all HoD panels now read + send via a SINGLE shared
-//   Gmail token owned by the account stored in
-//   marketing.shared_mailbox_config.source_email (default pb@thenamkhan.com).
-//   Personal /mail + top-nav dropdown continue to use per-user tokens
-//   (lib/userGmail).
+// Filter-mode shared mailbox helpers for /sales/mails.
+// PBS 2026-07-13 pivot — per-mailbox OAuth was blocked by GCP org policies.
+// New model: use the CURRENT USER's personal Gmail token (from
+// marketing.user_gmail_connections) to read + send for shared aliases.
 //
 // Reads: Gmail search with `deliveredto:<addr>` operator matches messages
 //        where any recipient was that alias. We fan out one search per alias,
-//        merge + sort by internalDate desc, tag each row with mailbox_id.
+//        then merge + sort by internalDate desc, tagging each row with the
+//        alias `mailbox_id` for badge tinting in the UI.
 //
 // Sends: Build RFC 2822 with `From: "Label" <alias@thenamkhan.com>` and POST
-//        to users/me/messages/send using the SHARED user's token. Alias must
-//        be configured as Send-As under pb@thenamkhan.com's Gmail settings.
+//        to users/me/messages/send. Gmail rejects the send if the alias is
+//        not configured as a Send-As identity in the user's Gmail settings.
+//        We surface that error verbatim.
 //
 // Design contract (see claude_md v3.24 §0.5):
-//   - No secrets read on PostgREST — the shared user's token is fetched via
-//     the same SECURITY DEFINER RPCs (fn_gmail_get_connection) that back
-//     lib/userGmail's refreshIfExpired().
-//   - Shared source is public.fn_shared_mailbox_source() → resolved to a
-//     user_id via marketing.user_gmail_connections in getSharedUserId().
+//   - No secrets read on PostgREST — the user's token comes from
+//     lib/userGmail's `refreshIfExpired(userId)` which uses SECURITY DEFINER
+//     RPCs under the hood.
+//   - Shared alias metadata comes from public.v_shared_mailbox_connections.
+//   - Alias writes go through fn_shared_mailbox_upsert / _disconnect.
 
 import { refreshIfExpired as refreshUserToken } from '@/lib/userGmail';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1';
-
-// ---- shared-source resolution ---------------------------------------------
-
-let _cachedSharedUserId: { at: number; source: string; user_id: string } | null = null;
-const SHARED_TTL_MS = 60_000; // re-resolve every 60s in case source_email is swapped
-
-/**
- * Resolve the shared mailbox source (source_email) + owning auth user_id.
- * Reads from public.v_shared_mailbox_source, joins to
- * marketing.user_gmail_connections to find the active auth user_id whose
- * gmail_address matches. Throws with a stable error code if not connected.
- */
-export async function getSharedUserId(): Promise<{ user_id: string; source_email: string }> {
-  const now = Date.now();
-  if (_cachedSharedUserId && now - _cachedSharedUserId.at < SHARED_TTL_MS) {
-    return { user_id: _cachedSharedUserId.user_id, source_email: _cachedSharedUserId.source };
-  }
-  const admin = getSupabaseAdmin();
-  const { data: srcRow, error: srcErr } = await admin
-    .from('v_shared_mailbox_source')
-    .select('source_email')
-    .eq('id', 1)
-    .maybeSingle();
-  if (srcErr || !srcRow?.source_email) throw new Error('shared_source_missing');
-  const source = String((srcRow as { source_email: string }).source_email).toLowerCase();
-
-  const { data: connRow, error: connErr } = await admin
-    .from('v_user_gmail_connections')
-    .select('user_id, gmail_address, active')
-    .eq('active', true)
-    .ilike('gmail_address', source)
-    .maybeSingle();
-  if (connErr || !connRow) throw new Error('shared_source_not_connected_' + source);
-  const userId = String((connRow as { user_id: string }).user_id);
-  _cachedSharedUserId = { at: now, source, user_id: userId };
-  return { user_id: userId, source_email: source };
-}
-
-/**
- * Return a fresh access token for the SHARED mailbox account.
- * Refreshes via the same helper used for personal tokens.
- * Marked clearly as SHARED — do NOT use for /mail or top-nav dropdown.
- */
-export async function getSharedGmailAccessToken(): Promise<{ access: string; gmail: string }> {
-  const { user_id } = await getSharedUserId();
-  return refreshUserToken(user_id);
-}
-
-// ---- audit log (fire-and-forget) ------------------------------------------
-
-export interface LogArgs {
-  user_id: string;
-  user_email: string;
-  action: 'view' | 'reply_sent' | 'dismiss' | 'convert_to_lead' | 'star' | 'mark_read';
-  thread_id?: string | null;
-  mailbox_alias?: string | null;
-  metadata?: Record<string, unknown> | null;
-}
-
-/** Fire-and-forget audit write. Never throws, never blocks. */
-export function logSharedMailboxEvent(args: LogArgs): void {
-  const admin = getSupabaseAdmin();
-  admin.rpc('fn_log_shared_mailbox_event', {
-    p_user_id: args.user_id,
-    p_user_email: args.user_email,
-    p_action: args.action,
-    p_thread_id: args.thread_id ?? null,
-    p_mailbox_alias: args.mailbox_alias ?? null,
-    p_metadata: (args.metadata as unknown as object) ?? null,
-  }).then(({ error }) => {
-    if (error) console.error('[shared_mailbox_event log failed]', args.action, error.message);
-  }).catch((e) => console.error('[shared_mailbox_event log threw]', args.action, e));
-}
 
 // ---- public types ----------------------------------------------------------
 
@@ -184,7 +109,10 @@ interface GmailMessage {
 }
 
 function buildQuery(addr: string, opts: ListOpts): string {
-  const clauses: string[] = ['deliveredto:' + addr];
+  const clauses: string[] = [
+    '(to:' + addr + ' OR cc:' + addr + ' OR from:' + addr + ')',
+    '-label:HOD-DISMISSED',
+  ];
   if (opts.unreadOnly) clauses.push('is:unread');
   if (opts.q && opts.q.trim()) clauses.push('(' + opts.q.trim() + ')');
   return clauses.join(' ');
@@ -196,7 +124,7 @@ async function fetchMessagesForAlias(
   opts: ListOpts,
 ): Promise<SharedThread[]> {
   const q = buildQuery(mailbox.mailbox_address, opts);
-  const limit = Math.max(1, Math.min(100, opts.limit ?? 50));
+  const limit = Math.max(1, Math.min(200, opts.limit ?? 200));
   const listUrl = GMAIL_API + '/users/me/messages?maxResults=' + limit + '&q=' + encodeURIComponent(q);
   const listR = await fetch(listUrl, { headers: { authorization: 'Bearer ' + access } });
   if (!listR.ok) return [];
@@ -237,18 +165,16 @@ async function fetchMessagesForAlias(
 }
 
 /**
- * List the shared inbox across N aliases using the SHARED mailbox token.
- * Second arg kept for backwards-compat (was userId in legacy per-user model)
- * but is now IGNORED — routing is fixed to the shared source. Merges,
- * dedupes by (mailbox_id, message id), sorts by dateMs desc.
+ * List the shared inbox across N aliases using ONE user token.
+ * Merges results, dedupes by (mailbox_id, message id), sorts by dateMs desc.
  */
 export async function listSharedInbox(
-  _legacyUserId: string,
+  userId: string,
   mailboxes: SharedMailbox[],
   opts: ListOpts = {},
 ): Promise<SharedThread[]> {
   if (mailboxes.length === 0) return [];
-  const { access } = await getSharedGmailAccessToken();
+  const { access } = await refreshUserToken(userId);
   const perAlias = await Promise.all(mailboxes.map((m) => fetchMessagesForAlias(access, m, opts)));
   const all: SharedThread[] = [];
   const seen = new Set<string>();
@@ -265,20 +191,15 @@ export async function listSharedInbox(
   return all.slice(0, cap);
 }
 
-// ---- label ops (SHARED token) ---------------------------------------------
+// ---- label ops -------------------------------------------------------------
 
-/**
- * Modify labels on a message in the SHARED mailbox.
- * Signature kept `(legacyUserId, messageId, add, remove)` for back-compat with
- * existing callers — first arg is IGNORED (route may pass user.id).
- */
 export async function modifyLabels(
-  _legacyUserId: string,
+  userId: string,
   messageId: string,
   addLabelIds: string[] = [],
   removeLabelIds: string[] = [],
 ): Promise<void> {
-  const { access } = await getSharedGmailAccessToken();
+  const { access } = await refreshUserToken(userId);
   const url = GMAIL_API + '/users/me/messages/' + messageId + '/modify';
   const r = await fetch(url, {
     method: 'POST',
@@ -312,19 +233,19 @@ export type SharedSendResult =
   | { ok: false; error: string; detail?: string };
 
 /**
- * Send a message FROM one of the aliases using the SHARED mailbox token.
- * Requires the alias to be configured as Send-As under the shared account.
- * First arg (legacyUserId) is retained for signature-compat but IGNORED.
+ * Send a message FROM one of the aliases using the current user's token.
+ * Requires Send-As configured in Gmail for that alias — otherwise Gmail
+ * returns 400 "Invalid alias" (or 403), which we surface verbatim.
  */
 export async function sendFromShared(
-  _legacyUserId: string,
+  userId: string,
   mailboxId: string,
   msg: SharedSendMsg,
 ): Promise<SharedSendResult> {
   const mailbox = await getMailboxById(mailboxId);
   if (!mailbox) return { ok: false, error: 'mailbox_not_found' };
 
-  const { access } = await getSharedGmailAccessToken();
+  const { access } = await refreshUserToken(userId);
 
   const boundary = 'nmkbi_' + Math.random().toString(36).slice(2, 12);
   const plain = msg.body_plain ?? msg.body_html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
@@ -372,8 +293,9 @@ export async function sendFromShared(
   });
   if (!r.ok) {
     const detail = (await r.text()).slice(0, 400);
+    // Detect the classic Send-As not-configured error and surface it plainly.
     if (r.status === 400 && detail.toLowerCase().includes('invalid') && detail.toLowerCase().includes('alias')) {
-      return { ok: false, error: 'send_as_not_configured', detail: 'Add ' + mailbox.mailbox_address + ' as a Send-As identity under the shared Gmail account, then retry. Gmail said: ' + detail };
+      return { ok: false, error: 'send_as_not_configured', detail: 'Add ' + mailbox.mailbox_address + ' as a Send-As identity in your Gmail settings, then retry. Gmail said: ' + detail };
     }
     return { ok: false, error: 'gmail_send_failed_' + r.status, detail };
   }
