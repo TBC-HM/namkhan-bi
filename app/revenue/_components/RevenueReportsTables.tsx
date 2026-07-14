@@ -7,6 +7,7 @@
 'use client';
 
 import { useMemo, useState, useTransition, type CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
 
 // ─── Shared table shell ─────────────────────────────────────────────
 
@@ -37,6 +38,7 @@ export function SortableTable<Row extends { id: number | string }>({
   const [checked, setChecked] = useState<Set<number | string>>(new Set());
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
 
   const sorted = useMemo(() => {
     const col = columns.find((c) => c.key === sort.key);
@@ -74,7 +76,7 @@ export function SortableTable<Row extends { id: number | string }>({
         setChecked(new Set());
         setMsg(`✓ ${ids.length} row${ids.length === 1 ? '' : 's'} removed`);
         setTimeout(() => setMsg(null), 3000);
-        window.location.reload();
+        router.refresh();
       } catch (e) {
         setMsg(`✗ ${(e as Error).message}`);
       }
@@ -157,6 +159,7 @@ export function AddRecipientForm({ propertyId, reportOptions }: { propertyId: nu
   const [cadence, setCadence] = useState<'daily'|'weekly'|'monthly'>('daily');
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
   const submit = () => {
     if (!email.trim()) return;
     startTransition(async () => {
@@ -169,7 +172,8 @@ export function AddRecipientForm({ propertyId, reportOptions }: { propertyId: nu
         if (!r.ok) throw new Error(`add failed (${r.status})`);
         setMsg('✓ added');
         setEmail(''); setName('');
-        setTimeout(() => window.location.reload(), 300);
+        router.refresh();
+        setTimeout(() => setMsg(null), 2000);
       } catch (e) {
         setMsg(`✗ ${(e as Error).message}`);
       }
@@ -215,6 +219,7 @@ export interface ScheduledRow {
 export function ScheduledReportsTable({ rows, propertyId, reportOptions }: {
   rows: ScheduledRow[]; propertyId: number; reportOptions: ReportOption[];
 }) {
+  const router = useRouter();
   const labelFor = (key: string) => reportOptions.find((o) => o.value === key)?.label ?? key;
   return (
     <>
@@ -252,7 +257,7 @@ export function ScheduledReportsTable({ rows, propertyId, reportOptions }: {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ ids: [r.id] }),
                 });
-                if (res.ok) window.location.reload();
+                if (res.ok) router.refresh();
                 else alert(`dismiss failed (${res.status})`);
               }}
               style={{ padding: '3px 8px', border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#B04A2F', borderRadius: 4, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
