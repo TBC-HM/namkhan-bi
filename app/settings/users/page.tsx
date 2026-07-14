@@ -8,6 +8,7 @@
 //   Non-admins are redirected to '/' with an ?err=admin_required flash.
 // - 2026-07-13 invited_at pulled from auth.users so UsersMatrix can render
 //   the "Invitation sent" pill next to Last sign-in.
+// - 2026-07-14 landing_page loaded from v_holding_users_flat → UserRow.
 
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
@@ -60,7 +61,7 @@ async function loadUsers(): Promise<UserRow[]> {
 
   const [propRes, holdRes] = await Promise.all([
     sb.from('v_property_users_flat').select('user_id, property_id, role, status, full_name'),
-    sb.from('v_holding_users_flat').select('auth_user_id, role, status, full_name'),
+    sb.from('v_holding_users_flat').select('auth_user_id, role, status, full_name, landing_page'),
   ]);
   const propByUser = new Map<string, Array<{ property_id: number; role: string; status: string }>>();
   const nameByUser = new Map<string, string>();
@@ -69,9 +70,9 @@ async function loadUsers(): Promise<UserRow[]> {
     propByUser.get(r.user_id)!.push({ property_id: r.property_id, role: r.role, status: r.status });
     if (r.full_name && !nameByUser.has(r.user_id)) nameByUser.set(r.user_id, r.full_name);
   }
-  const holdByUser = new Map<string, { role: string; status: string }>();
-  for (const r of (holdRes.data ?? []) as Array<{ auth_user_id: string; role: string; status: string; full_name: string | null }>) {
-    if (r.status === 'active') holdByUser.set(r.auth_user_id, { role: r.role, status: r.status });
+  const holdByUser = new Map<string, { role: string; status: string; landing_page: string | null }>();
+  for (const r of (holdRes.data ?? []) as Array<{ auth_user_id: string; role: string; status: string; full_name: string | null; landing_page: string | null }>) {
+    if (r.status === 'active') holdByUser.set(r.auth_user_id, { role: r.role, status: r.status, landing_page: r.landing_page });
     if (r.full_name && !nameByUser.has(r.auth_user_id)) nameByUser.set(r.auth_user_id, r.full_name);
   }
 
@@ -86,6 +87,7 @@ async function loadUsers(): Promise<UserRow[]> {
     invited_at: (u as unknown as { invited_at?: string | null }).invited_at ?? null,
     holding_role: holdByUser.get(u.id)?.role ?? null,
     property_grants: propByUser.get(u.id) ?? [],
+    landing_page: holdByUser.get(u.id)?.landing_page ?? null,
   }));
 }
 
