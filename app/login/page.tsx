@@ -1,9 +1,9 @@
 // app/login/page.tsx
 // ADR-112 · Supabase Auth email/password login.
 // PBS 2026-07-09: Sign in · Forgot password · Request access.
-// v3: swapped useSearchParams (which requires a Suspense boundary and was
-// leaking Next.js's "404: This page could not be found" fallback into the SSR
-// output) for a client-only window.location.search read in useEffect.
+// PBS 2026-07-14: reads ?reason=idle to show a muted "signed out after 60 min
+// of inactivity" line above the form when the middleware idle-timeout kicks
+// the user back here.
 'use client';
 
 import { useEffect, useState, type CSSProperties } from 'react';
@@ -17,6 +17,8 @@ const supabase = createBrowserClient(
 
 type Mode = 'signin' | 'forgot' | 'request';
 
+const IDLE_MINUTES = Number(process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES ?? '60') || 60;
+
 export default function LoginPage() {
   const router = useRouter();
   const [next, setNext] = useState('/');
@@ -25,17 +27,20 @@ export default function LoginPage() {
   const [pw, setPw] = useState('');
   const [name, setName] = useState('');
   const [reason, setReason] = useState('');
+  const [reasonMsg, setReasonMsg] = useState('');
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    // Client-only: read ?next=… without pulling in useSearchParams (which
-    // requires a Suspense boundary and would otherwise leak the 404 fallback).
     try {
       const p = new URLSearchParams(window.location.search);
       const n = p.get('next');
       if (n && n.startsWith('/')) setNext(n);
+      const r = p.get('reason');
+      if (r === 'idle') {
+        setReasonMsg('Signed out after ' + IDLE_MINUTES + ' min of inactivity.');
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -93,6 +98,9 @@ export default function LoginPage() {
     <div style={pageStyle}>
       <div style={cardStyle}>
         <div style={eyebrowStyle}>The Beyond Circle · Workspace</div>
+        {reasonMsg && mode === 'signin' && (
+          <div style={reasonStyle}>{reasonMsg}</div>
+        )}
         <h1 style={titleStyle}>{titleText}</h1>
         <p style={hintStyle}>{hintText}</p>
 
@@ -144,7 +152,6 @@ export default function LoginPage() {
           {primaryLabel}
         </button>
 
-        {/* Secondary navigation between the 3 modes. */}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
           {mode === 'signin' ? (
             <>
@@ -166,9 +173,6 @@ export default function LoginPage() {
   );
 }
 
-// PBS 2026-07-09: every color is hardcoded because the layout injects
-// site-paper-scope tokens that would otherwise bleed light values into
-// input/button color inheritance and produce white-on-white text.
 const pageStyle: CSSProperties = {
   minHeight: '100vh', display: 'grid', placeItems: 'center',
   background: '#F4EFE2', color: '#1B1B1B',
@@ -186,6 +190,11 @@ const eyebrowStyle: CSSProperties = {
 };
 const titleStyle: CSSProperties = { margin: '0 0 6px', fontSize: 22, color: '#084838', fontWeight: 700 };
 const hintStyle: CSSProperties = { color: '#3A3A3A', fontSize: 12, marginBottom: 18, fontWeight: 500 };
+const reasonStyle: CSSProperties = {
+  fontSize: 11, color: '#6B6B6B', marginBottom: 10, fontWeight: 500,
+  padding: '6px 10px', background: '#F5F1E5',
+  border: '1px solid #E6DFCC', borderRadius: 6,
+};
 const inputStyle: CSSProperties = {
   width: '100%', padding: '10px 12px', fontSize: 13,
   border: '1px solid #C8C0A6', borderRadius: 6,
