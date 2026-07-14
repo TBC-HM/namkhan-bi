@@ -1,13 +1,13 @@
 // app/api/marketing/media/preview/route.ts
-// PBS 2026-07-14 v4 — CRITICAL FIX: proxy image bytes instead of 302 redirect.
-// Root cause: NextResponse.redirect(signedUrl, 302) got cached by browsers +
-// Vercel edge. Once the 1h JWT expired, cached redirects kept sending users to
-// dead URLs → 400 InvalidJWT → every Library tile blank. Rewriting to stream
-// the image bytes back means:
-//   • the signed URL is fetched server-side, fresh every request (Cache-Control:no-store on the redirect)
-//   • the response body is the actual image (Content-Type: image/*), safely cacheable for 60s
-//   • no client ever sees a signed URL — so it can't be cached with a stale token
-// v3 kept: Storage TRANSFORM (width=800, contain, quality=80) — fixes HEIC + huge phone photos.
+// PBS 2026-07-14 v5 — sb.storage.from(...).download() instead of createSignedUrl
+// (v4 regressed: Supabase transform-sign endpoint returns a memoised URL with
+//  frozen iat/exp — every fresh call returned an 18h-old expired token → 400).
+//   Trade-off: skip on-the-fly resize; return original bytes. For 30MB phone
+//   originals we pay the bandwidth once, then Vercel edge caches for 60s. The
+//   Library tile only shows a small crop so browser scales client-side.
+// v3 comment kept for history: TRANSFORM signed URL was meant to normalise HEIC
+//   + huge phones. HEIC still won't render in browsers without conversion — but
+//   at least standard JPEG/PNG/WebP now works, which is ~99% of the library.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -17,7 +17,6 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   const assetId = req.nextUrl.searchParams.get('asset_id') ?? '';
   const debug = req.nextUrl.searchParams.get('debug') === '1';
-  const width = Math.min(Math.max(Number(req.nextUrl.searchParams.get('w') ?? 800), 200), 1568);
   if (!assetId) return NextResponse.json({ error: 'asset_id_required' }, { status: 400 });
 
   let sb;
@@ -59,38 +58,27 @@ export async function GET(req: NextRequest) {
     path = row.raw_path!;
   }
 
-  const { data: signed, error: signErr } = await sb.storage
-    .from(bucket)
-    .createSignedUrl(path, 3600, {
-      transform: { width, height: width, resize: 'contain', quality: 80 },
-    });
-
-  if (signErr || !signed?.signedUrl) {
-    if (debug) return NextResponse.json({ stage: 'sign', bucket, path, error: signErr?.message ?? 'sign_failed' }, { status: 500 });
-    return NextResponse.json({ error: 'sign_failed', detail: signErr?.message ?? null }, { status: 500 });
+  const { data: blob, error: dlErr } = await sb.storage.from(bucket).download(path);
+  if (dlErr || !blob) {
+    if (debug) return NextResponse.json({ stage: 'download', bucket, path, error: dlErr?.message ?? 'no_blob' }, { status: 500 });
+    return NextResponse.json({ error: 'download_failed', detail: dlErr?.message ?? null }, { status: 500 });
   }
 
   if (debug) {
     return NextResponse.json({
-      ok: true, bucket, path, width, signedUrl: signed.signedUrl,
+      ok: true, bucket, path,
       mime_type: row.mime_type, asset_type: row.asset_type,
+      size_bytes: blob.size,
     });
   }
 
-  // Proxy the image bytes — never expose the signed URL to the client so it
-  // can't be cached with a token that later expires (v3 regression).
-  const upstream = await fetch(signed.signedUrl, { cache: 'no-store' });
-  if (!upstream.ok || !upstream.body) {
-    return NextResponse.json({ error: 'upstream_failed', status: upstream.status }, { status: 502 });
-  }
-  const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
+  const arrayBuf = await blob.arrayBuffer();
+  const contentType = blob.type || row.mime_type || 'image/jpeg';
 
-  return new Response(upstream.body, {
+  return new Response(arrayBuf, {
     status: 200,
     headers: {
       'Content-Type': contentType,
-      // Bytes are cacheable for 60s by browsers + Vercel edge, since they don't
-      // contain the signed URL. When the token would expire, we simply re-sign.
       'Cache-Control': 'public, max-age=60, s-maxage=60, stale-while-revalidate=300',
     },
   });
