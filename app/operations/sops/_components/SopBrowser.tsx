@@ -127,32 +127,8 @@ export default function SopBrowser({ sops, generateHref, proposalsHref }: { sops
         <span style={{ fontSize: 11, color: INK_M }}>
           {filtered.length} of {sops.length} SOP{sops.length === 1 ? '' : 's'}
         </span>
-        {proposalsHref && (
-          <a
-            href={proposalsHref}
-            style={{
-              marginLeft: 'auto', padding: '6px 12px',
-              background: WHITE, color: '#0F5B4A', border: '1px solid #0F5B4A',
-              borderRadius: 4, fontSize: 11, fontWeight: 600,
-              textDecoration: 'none', letterSpacing: '0.02em',
-            }}
-          >
-            + Propose SOPs
-          </a>
-        )}
-        {generateHref && (
-          <a
-            href={generateHref}
-            style={{
-              marginLeft: proposalsHref ? 0 : 'auto', padding: '6px 12px',
-              background: '#0F5B4A', color: WHITE, border: '1px solid #0F5B4A',
-              borderRadius: 4, fontSize: 11, fontWeight: 600,
-              textDecoration: 'none', letterSpacing: '0.02em',
-            }}
-          >
-            + Generate SOP
-          </a>
-        )}
+        {/* PBS 2026-07-14 · #29 — removed inline "+ Propose SOPs" and "+ Generate SOP" action-bar buttons.
+            Sub-nav in the QA area now surfaces those as first-class tabs (Generate · Propose · Instructions). */}
       </div>
 
       {/* Dept chip nav */}
