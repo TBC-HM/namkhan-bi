@@ -61,6 +61,10 @@ interface ChannelSpec {
   video_max_duration_sec: number | null;
   video_max_size_mb: number | null;
   min_quality_score: number | null;
+  preferred_photos_per_room: number | null;
+  total_max_photos_per_profile: number | null;
+  aesthetic_style: string | null;
+  content_notes: string | null;
   notes: string | null;
 }
 interface Reality {
@@ -456,6 +460,10 @@ function ChannelsPanel({ rows, setBanner, propertyId }: { rows: ChannelSpec[]; s
           video_aspect_ratio: draft.video_aspect_ratio ?? null,
           video_max_size_mb: draft.video_max_size_mb ?? null,
           min_quality_score: draft.min_quality_score ?? null,
+          preferred_photos_per_room: draft.preferred_photos_per_room ?? null,
+          total_max_photos_per_profile: draft.total_max_photos_per_profile ?? null,
+          aesthetic_style: draft.aesthetic_style ?? null,
+          content_notes: draft.content_notes ?? '',
           notes: draft.notes ?? '',
         }),
       });
@@ -485,6 +493,9 @@ function ChannelsPanel({ rows, setBanner, propertyId }: { rows: ChannelSpec[]; s
               <th style={th}>Img min WxH</th>
               <th style={th}>Img max MB</th>
               <th style={{ ...th, whiteSpace:'nowrap' }}>Min score %</th>
+              <th style={{ ...th, whiteSpace:'nowrap' }}>Per room</th>
+              <th style={{ ...th, whiteSpace:'nowrap' }}>Profile max</th>
+              <th style={{ ...th, whiteSpace:'nowrap' }}>Style</th>
               <th style={th}>Video aspect</th>
               <th style={th}>Dur sec (min-max)</th>
               <th style={{ ...th, width:70 }}></th>
@@ -502,6 +513,9 @@ function ChannelsPanel({ rows, setBanner, propertyId }: { rows: ChannelSpec[]; s
                     <td style={td}>{(r.image_min_width ?? '—') + ' x ' + (r.image_min_height ?? '—')}</td>
                     <td style={td}>{r.image_max_size_mb ?? '—'}</td>
                     <td style={{ ...td, fontVariantNumeric:'tabular-nums' }}>{r.min_quality_score != null ? r.min_quality_score + '%' : '—'}</td>
+                    <td style={{ ...td, fontVariantNumeric:'tabular-nums' }}>{r.preferred_photos_per_room ?? '—'}</td>
+                    <td style={{ ...td, fontVariantNumeric:'tabular-nums' }}>{r.total_max_photos_per_profile ?? '—'}</td>
+                    <td style={td}>{r.aesthetic_style ?? '—'}</td>
                     <td style={td}>{r.video_aspect_ratio ?? '—'}</td>
                     <td style={td}>{(r.video_min_duration_sec ?? '—') + '–' + (r.video_max_duration_sec ?? '—')}</td>
                     <td style={td}>
@@ -513,7 +527,7 @@ function ChannelsPanel({ rows, setBanner, propertyId }: { rows: ChannelSpec[]; s
                   </tr>
                   {isEdit && (
                     <tr>
-                      <td colSpan={9} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
+                      <td colSpan={12} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
                         <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10 }}>
                           <Field label="image_min_width">
                             <input type="number" value={draft.image_min_width ?? ''} onChange={e => setDraft({ ...draft, image_min_width: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
@@ -530,6 +544,27 @@ function ChannelsPanel({ rows, setBanner, propertyId }: { rows: ChannelSpec[]; s
                           <Field label="min_quality_score (0-100 · photo must score ≥ this)">
                             <input type="number" min={0} max={100} value={draft.min_quality_score ?? ''} onChange={e => setDraft({ ...draft, min_quality_score: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
                           </Field>
+                          <Field label="preferred_photos_per_room">
+                            <input type="number" min={0} value={draft.preferred_photos_per_room ?? ''} onChange={e => setDraft({ ...draft, preferred_photos_per_room: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
+                          </Field>
+                          <Field label="total_max_photos_per_profile">
+                            <input type="number" min={0} value={draft.total_max_photos_per_profile ?? ''} onChange={e => setDraft({ ...draft, total_max_photos_per_profile: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
+                          </Field>
+                          <Field label="aesthetic_style">
+                            <select value={draft.aesthetic_style ?? ''} onChange={e => setDraft({ ...draft, aesthetic_style: e.target.value || null })} style={inp}>
+                              <option value="">—</option>
+                              <option value="detail_rich">detail_rich</option>
+                              <option value="minimalist">minimalist</option>
+                              <option value="lifestyle">lifestyle</option>
+                              <option value="luxury">luxury</option>
+                              <option value="editorial">editorial</option>
+                            </select>
+                          </Field>
+                          <div style={{ gridColumn:'1 / -1' }}>
+                            <Field label="content_notes (market angle: what this OTA's users respond to)">
+                              <textarea value={draft.content_notes ?? ''} onChange={e => setDraft({ ...draft, content_notes: e.target.value })} rows={2} style={{ ...inp, resize:'vertical' }} />
+                            </Field>
+                          </div>
                           <Field label="video_min_duration_sec">
                             <input type="number" step="0.1" value={draft.video_min_duration_sec ?? ''} onChange={e => setDraft({ ...draft, video_min_duration_sec: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
                           </Field>
@@ -801,7 +836,7 @@ function FacilityProfilesPanel({ propertyId, facilities, setBanner }: { property
                         </tr>
                         {isEdit && (
                           <tr>
-                            <td colSpan={9} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
+                            <td colSpan={12} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
                               <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10 }}>
                                 <Field label="facility_key (stable slug)">
                                   <input value={draft.facility_key ?? ''} onChange={e => setDraft({ ...draft, facility_key: e.target.value })} placeholder="roots_restaurant" style={inp} />
