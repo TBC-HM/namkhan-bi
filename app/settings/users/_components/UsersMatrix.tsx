@@ -9,6 +9,8 @@
 //   • New Deactivate button (soft, RPC-based) + Delete button (hard, email-confirm modal).
 //   • Buttons follow design tokens: amber (#B48A3A) for Deactivate, red (#B03826) for Delete.
 // PBS 2026-07-09 v3: per-row Invite button surfaces action_link fallback.
+// PBS 2026-07-14: UserRow.landing_page (edited in EditUserModal, resolved
+// in /api/auth/post-login).
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -30,6 +32,8 @@ export interface UserRow {
   invited_at: string | null;
   holding_role: string | null;
   property_grants: Array<{ property_id: number; role: string; status: string }>;
+  // PBS 2026-07-14: per-user post-login redirect target (absolute path or null).
+  landing_page: string | null;
 }
 
 // -----------------------------------------------------------------------------
