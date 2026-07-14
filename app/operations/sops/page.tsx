@@ -55,8 +55,31 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
 
+        {/* PBS 2026-07-14 · #29 — QA sub-nav strip. Replaces the 2 inline action-bar buttons on SopBrowser.
+            Surfaces: SOPs (this page) · Generate · Propose · Agent Instructions.
+            Agent Instructions lives at /h/[pid]/operations/qa/agent-instructions (property-scoped only). */}
+        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 4, borderBottom: '1px solid #E6DFCC', marginBottom: 12 }}>
+          {[
+            { key: 'sops',         label: 'SOPs',              href: pid === PROPERTY_ID ? '/operations/sops'                    : `/h/${pid}/operations/sops` },
+            { key: 'generate',     label: '+ Generate SOP',    href: generateHref },
+            { key: 'proposals',    label: 'Propose SOPs',      href: proposalsHref },
+            { key: 'instructions', label: 'Agent instructions', href: `/h/${pid}/operations/qa/agent-instructions` },
+          ].map((t) => {
+            const active = t.key === 'sops';
+            return (
+              <a key={t.key} href={t.href} style={{
+                padding: '8px 14px', fontSize: 11, letterSpacing: '0.05em', textTransform: 'uppercase',
+                borderBottom: active ? '2px solid #084838' : '2px solid transparent',
+                color: active ? '#084838' : '#5A5A5A',
+                fontWeight: active ? 700 : 500,
+                textDecoration: 'none', marginBottom: -1,
+              }}>{t.label}</a>
+            );
+          })}
+        </div>
+
         <div style={{ gridColumn: '1 / -1' }}>
-          <SopBrowser sops={sops} generateHref={generateHref} proposalsHref={proposalsHref} />
+          <SopBrowser sops={sops} />
         </div>
       </DashboardPage>
     </div>
