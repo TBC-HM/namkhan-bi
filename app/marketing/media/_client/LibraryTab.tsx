@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState, Fragment } from 'react';
 import UploadDropzone from './UploadDropzone';
 import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
 import LibraryOtaProposer from './LibraryOtaProposer';
+import BulkSelectBar from './BulkSelectBar';
 import { qaBadge } from '@/lib/mediaQa';
 
 interface TierRow { primary_tier: string | null; total: number | string; photos: number | string; videos: number | string; }
@@ -88,6 +89,10 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const [msg, setMsg] = useState<string | null>(null);
   const [lastDownload, setLastDownload] = useState<{ url: string; label: string } | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
+  // PBS 2026-07-14 · #203 · bulk-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSelect = (id: string) => setSelectedIds(s => { const next = new Set(s); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const clearSelection = () => setSelectedIds(new Set());
   const [editing, setEditing] = useState<MediaRow | null>(null);
 
   const totals = useMemo(() => {
@@ -238,6 +243,14 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       <div style={{ marginBottom:12 }}>
         <LibraryOtaProposer propertyId={propertyId} totalRooms={rooms.length || 10} />
       </div>
+      <BulkSelectBar
+        selectedIds={Array.from(selectedIds)}
+        onClear={clearSelection}
+        rooms={rooms.map(r => ({ id: r.room_type_id, name: r.room_type_name }))}
+        facilities={(taxonomy?.facilities ?? []).map(f => ({ id: f.id, name: f.name }))}
+        activities={(taxonomy?.activities ?? []).map(a => ({ id: a.id, name: a.name }))}
+        areaChoices={['restaurant','lifestyle','grounds','pool','bar','lobby','wellness','behind_scenes','Logos','No area']}
+      />
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8, marginBottom:16 }}>
         {[
           { label: 'Total ready', value: totals.tot },
@@ -298,6 +311,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         </div>
         <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
           <span style={{ fontSize:11, color:INK_M }}>{filtered.length.toLocaleString()} tagged photos shown</span>
+          <button onClick={() => setSelectedIds(s => { const next = new Set(s); for (const r of pageRows) next.add(r.asset_id); return next; })} style={{ padding:'4px 10px', fontSize:11, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer', whiteSpace:'nowrap' }} title="Add all visible photos on this page to the selection">✓ Select all on page</button>
           <button onClick={() => setShowUpload(v => !v)} style={{
             padding:'6px 14px', fontSize:12, fontWeight:600, background:FOREST, color:WHITE,
             border:'none', borderRadius:4, cursor:'pointer',
@@ -328,6 +342,13 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
             return (
             <div key={r.asset_id} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', display:'flex', flexDirection:'column' }}>
               <div style={{ position: 'relative' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(r.asset_id)}
+                  onChange={() => toggleSelect(r.asset_id)}
+                  style={{ position:'absolute', top:6, left:6, zIndex:5, width:18, height:18, cursor:'pointer', accentColor: FOREST }}
+                  title="Select for bulk actions"
+                />
                 {r.public_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={r.public_url} alt={r.original_filename} loading="lazy"
