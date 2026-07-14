@@ -1,10 +1,13 @@
 // app/api/sales/mails/dismiss/route.ts
-// POST { thread_ids: string[] } — batch dismiss shared-inbox threads that PBS
-// reviewed and does NOT want converted to a Lead. Each id is passed to the
-// SECURITY DEFINER RPC public.fn_dismiss_mail_thread(text,text) via supabase
-// admin. Idempotent by thread_id (ON CONFLICT DO NOTHING in DB layer).
+// POST { thread_ids: string[], mailbox_alias_by_id?: {} } — batch dismiss
+// shared-inbox threads. Runs against the SHARED mailbox token (via the
+// public.fn_dismiss_mail_thread SECURITY DEFINER RPC on the DB side).
+// Auth required — the actor's user_id is logged to
+// marketing.shared_mailbox_events for accountability (fire-and-forget).
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getCurrentAuthUser } from '@/lib/userGmail';
+import { logSharedMailboxEvent } from '@/lib/sharedGmail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +18,9 @@ interface Body {
 }
 
 export async function POST(req: NextRequest) {
+  const user = await getCurrentAuthUser();
+  if (!user) return NextResponse.json({ error: 'not_authenticated' }, { status: 401 });
+
   let body: Body;
   try { body = (await req.json()) as Body; }
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
@@ -33,8 +39,16 @@ export async function POST(req: NextRequest) {
       p_thread_id: tid,
       p_mailbox_alias,
     });
-    if (error) errors.push({ thread_id: tid, error: error.message });
-    else ok += 1;
+    if (error) {
+      errors.push({ thread_id: tid, error: error.message });
+    } else {
+      ok += 1;
+      logSharedMailboxEvent({
+        user_id: user.id, user_email: user.email,
+        action: 'dismiss', thread_id: tid, mailbox_alias: p_mailbox_alias,
+        metadata: { source: 'sales/mails' },
+      });
+    }
   }
   return NextResponse.json({ ok: true, dismissed: ok, failed: errors.length, errors });
 }
