@@ -173,7 +173,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       const picked: MediaRow[] = [];
       for (const r of sorted) {
         if (picked.length >= 100) break;
-        const cat = String((r as any).category ?? ''other'').toLowerCase();
+        const cat = String((r as any).category ?? 'other').toLowerCase();
         const n = perCat.get(cat) ?? 0;
         if (n >= 15) continue;
         picked.push(r);
