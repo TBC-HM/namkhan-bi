@@ -94,7 +94,9 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const [searchText, setSearchText] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
   const [aiOnly, setAiOnly] = useState(false);
-  const [areaFacets, setAreaFacets] = useState<Array<{ area: string; count: number }>>([]);
+  type FacetRow = { kind: string; sort_order: number; ref_id: string; area_key: string; name: string; extra: string | null; photo_count: number };
+  type FacetGroups = Record<'rooms'|'facilities'|'activities'|'certifications'|'team'|'other'|'uncategorized', FacetRow[]>;
+  const [facetGroups, setFacetGroups] = useState<FacetGroups | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,8 +106,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         if (!res.ok) return;
         const j = await res.json();
         if (cancelled) return;
-        const areas = Array.isArray(j?.areas) ? j.areas as Array<{ area: string; count: number }> : [];
-        setAreaFacets(areas);
+        if (j?.groups) setFacetGroups(j.groups as FacetGroups);
       } catch { /* silent — fallback to static options */ }
     })();
     return () => { cancelled = true; };
@@ -122,8 +123,17 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     );
     if (tier)         out = out.filter(r => r.primary_tier === tier);
     if (areaFilter) {
-      const q = areaFilter.trim().toLowerCase();
-      out = out.filter(r => (r.property_area ?? '').trim().toLowerCase() === q);
+      const key = areaFilter;
+      const [prefix, rest] = key.includes(':') ? key.split(':', 2) : [key, ''];
+      if (prefix === 'room')     out = out.filter(r => String((r as any).room_type_id ?? '') === rest);
+      else if (prefix === 'facility') out = out.filter(r => String((r as any).facility_id ?? '') === rest);
+      else if (prefix === 'activity') out = out.filter(r => String((r as any).activity_id ?? '') === rest);
+      else if (prefix === 'cert')     out = out.filter(r => String((r as any).certification_id ?? '') === rest);
+      else if (prefix === 'contact')  out = out.filter(r => String((r as any).contact_id ?? '') === rest);
+      else if (key === 'other:rooms')      out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && String((r as any).category ?? '').toLowerCase().startsWith('room'));
+      else if (key === 'other:facilities') out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && ['f&b','pool','lobby','exterior'].includes(String((r as any).category ?? '').toLowerCase()));
+      else if (key === 'other:activities') out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && String((r as any).category ?? '').toLowerCase().startsWith('activit'));
+      else if (key === 'uncategorized')    out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && !(r as any).certification_id && !(r as any).contact_id);
     }
     if (aiOnly)       out = out.filter((r: any) => r.is_ai_generated === true);
     if (searchText) {
@@ -207,44 +217,20 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
           <input value={searchText} onChange={e => { setSearchText(e.target.value); setPage(0); }} placeholder="Search filename / area" style={{ flex:'1 1 200px', minWidth:180, padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE }} />
-        <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(0); }} style={{ padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE, minWidth:180 }}>
+        <select value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setPage(0); }} style={{ padding:'6px 10px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3, color:INK, background:WHITE, minWidth:220 }}>
           <option value="">All areas</option>
-          {areaFacets.length > 0 ? (
-            areaFacets.map(f => (
-              <option key={'af-'+f.area} value={f.area}>{f.area + ' · ' + f.count.toLocaleString()}</option>
-            ))
-          ) : taxonomy ? (
+          {facetGroups ? (
             <>
-              <option value="Logos">Logos</option>
-              <option value="No area">No area</option>
-              {taxonomy.rooms.length > 0 && (
-                <optgroup label="Rooms">{taxonomy.rooms.map(r => <option key={'f-room-'+r.id} value={r.name}>{r.name}</option>)}</optgroup>
-              )}
-              {taxonomy.facilities.length > 0 && (
-                <optgroup label="Facilities">{taxonomy.facilities.map(f => <option key={'f-fac-'+f.id} value={f.name}>{f.parent_name ? f.name + ' - ' + f.parent_name : f.name}</option>)}</optgroup>
-              )}
-              {taxonomy.activities.length > 0 && (
-                <optgroup label="Activities">{taxonomy.activities.map(a => <option key={'f-act-'+a.id} value={a.name}>{a.name}</option>)}</optgroup>
-              )}
-              {taxonomy.meeting_spaces.length > 0 && (
-                <optgroup label="Meeting spaces">{taxonomy.meeting_spaces.map(m => <option key={'f-mtg-'+m.id} value={m.name}>{m.name}</option>)}</optgroup>
-              )}
-              {taxonomy.transport.length > 0 && (
-                <optgroup label="Transport">{taxonomy.transport.map(t => <option key={'f-trp-'+t.id} value={t.name}>{t.name}</option>)}</optgroup>
-              )}
-              {(taxonomy.boats && taxonomy.boats.length > 0) && (
-                <optgroup label="Imekong Boats">{taxonomy.boats.map(b => <option key={'f-boat-'+b.id} value={b.name}>{b.name}</option>)}</optgroup>
-              )}
-              {(taxonomy.boat_cruises && taxonomy.boat_cruises.length > 0) && (
-                <optgroup label="Imekong Cruises">{taxonomy.boat_cruises.map(c => <option key={'f-cruise-'+c.id} value={c.name}>{c.name}</option>)}</optgroup>
-              )}
+              {facetGroups.rooms.length > 0 && (<optgroup label="Rooms">{facetGroups.rooms.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.facilities.length > 0 && (<optgroup label="Facilities">{facetGroups.facilities.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.activities.length > 0 && (<optgroup label="Activities">{facetGroups.activities.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.certifications.length > 0 && (<optgroup label="Certifications">{facetGroups.certifications.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.team.length > 0 && (<optgroup label="Team">{facetGroups.team.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.other.length > 0 && (<optgroup label="Review — needs human sort">{facetGroups.other.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.uncategorized.length > 0 && (<optgroup label="Uncategorized">{facetGroups.uncategorized.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
             </>
           ) : (
-            <>
-              <option value="Logos">Logos</option>
-              <option value="No area">No area</option>
-              {(areaOptions ?? []).map(a => <option key={a} value={a}>{a}</option>)}
-            </>
+            <option disabled>Loading…</option>
           )}
         </select>
         <button onClick={() => { setAiOnly(v => !v); setPage(0); }} style={{ padding:'4px 10px', fontSize:11, borderRadius:12, cursor:'pointer', border:'1px solid '+(aiOnly ? FOREST : HAIR), background: aiOnly ? FOREST : WHITE, color: aiOnly ? WHITE : INK, fontWeight: aiOnly ? 600 : 400, whiteSpace:'nowrap' }}>AI only</button>
