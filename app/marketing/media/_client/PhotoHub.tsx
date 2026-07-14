@@ -15,9 +15,10 @@ import ClarifyTab from './ClarifyTab';
 import SettingsTab from './SettingsTab';
 import CoverageTab, { type CoverageRow } from './CoverageTab';
 import ReviewTab, { type ReviewRow } from './ReviewTab';
+import ProfilesTab from './ProfilesTab';
 import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy, GuardrailsData } from './MediaHub';
 
-type Sub = 'library' | 'ai' | 'clarify' | 'review' | 'coverage' | 'settings';
+type Sub = 'library' | 'ai' | 'clarify' | 'review' | 'coverage' | 'profiles' | 'settings';
 
 interface Props {
   propertyId: number;
@@ -67,6 +68,7 @@ export default function PhotoHub(props: Props) {
     { key: 'clarify',  label: 'Photo Clarify',  badge: clarifyCount, badgeColor: RED },
     { key: 'review',   label: 'Review',         badge: reviewCount,  badgeColor: AMBER },
     { key: 'coverage', label: 'Coverage'        },
+    { key: 'profiles', label: 'Profiles'         },
     { key: 'settings', label: 'Photo Settings'  },
   ];
 
@@ -142,6 +144,9 @@ export default function PhotoHub(props: Props) {
           rows={props.coverageRows ?? []}
           mediaPage={props.mediaPage ?? []}
         />
+      )}
+      {sub === 'profiles' && (
+        <ProfilesTab propertyId={props.propertyId} totalRooms={props.rooms.length || 10} />
       )}
       {sub === 'settings' && (
         <SettingsTab
