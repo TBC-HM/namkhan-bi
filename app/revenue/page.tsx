@@ -531,6 +531,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
           <div style={{ padding: 12, maxHeight: '70vh', overflowY: 'auto' }}>
             <ConclusionBlock
               bare
+              groupByPriority
               insights={revenueInsights}
               emptyText="Everything nominal. No forward-window alarms firing."
               storageKey={`revenue_hod_signals:${pid}`}
