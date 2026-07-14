@@ -9,6 +9,11 @@
 // so the OAuth consent flow completes automatically. Idempotent - once the row
 // exists (active=true) we never redirect again; expired access tokens refresh
 // silently via lib/userGmail helpers.
+// PBS 2026-07-14 (idle-timeout): server-side rolling cookie 'nb_last_seen'
+// invalidates the Supabase session after IDLE_TIMEOUT_MINUTES with no HTTP
+// activity. On lapse: pages redirect to /login?reason=idle&next=<path>, /api/*
+// returns 401 JSON. Cookie refreshed on every authenticated middleware pass
+// (page or api) so any active tab (auto-poll or navigation) keeps the session.
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -19,6 +24,16 @@ import { NextResponse, type NextRequest } from 'next/server'
 // The page itself validates the token and refuses if it's missing/expired.
 const PUBLIC_PATHS = ['/login', '/auth/callback', '/account/password', '/p/']
 
+// Idle-timeout constants. 60 min default; can be overridden by env at build
+// time. Cookie max-age is timeout + 5 min so a fresh cookie always outlives
+// the window it protects (avoids a race where the cookie expires client-side
+// before we get a chance to invalidate the session).
+const IDLE_TIMEOUT_MINUTES = Number(
+  process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES ?? '60',
+) || 60
+const IDLE_COOKIE = 'nb_last_seen'
+const IDLE_COOKIE_MAXAGE_S = (IDLE_TIMEOUT_MINUTES + 5) * 60
+
 // base64url -> JSON. Edge-safe (no Buffer / no Node crypto).
 function decodeJwtPayload(token: string): Record<string, unknown> {
   const parts = token.split('.')
@@ -26,6 +41,23 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
   const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
   const pad = b64.length % 4 === 0 ? b64 : b64 + '='.repeat(4 - (b64.length % 4))
   try { return JSON.parse(atob(pad)) } catch { return {} }
+}
+
+// Clear every Supabase auth cookie variant we know about, on the given
+// response. Called on idle-timeout so the next request is treated as
+// unauthenticated and bounces to /login.
+function clearSupabaseSessionCookies(res: NextResponse) {
+  const names = [
+    'sb-access-token',
+    'sb-refresh-token',
+    'sb-kpenyneooigsyuuomgct-auth-token',
+    'sb-kpenyneooigsyuuomgct-auth-token.0',
+    'sb-kpenyneooigsyuuomgct-auth-token.1',
+    IDLE_COOKIE,
+  ]
+  for (const n of names) {
+    res.cookies.set(n, '', { path: '/', maxAge: 0 })
+  }
 }
 
 export async function middleware(req: NextRequest) {
@@ -64,6 +96,53 @@ export async function middleware(req: NextRequest) {
     url.searchParams.set('next', pathname)
     return NextResponse.redirect(url)
   }
+
+  // -------- Idle-timeout check (server-side rolling cookie) --------
+  // Runs for every authenticated request (page or api). If nb_last_seen is
+  // missing OR older than IDLE_TIMEOUT_MINUTES, invalidate the session.
+  // Pages -> 302 to /login?reason=idle. /api/* -> 401 JSON (so client fetch
+  // loops can surface a 'session expired' toast without a hard redirect).
+  const nowMs = Date.now()
+  const lastSeenRaw = req.cookies.get(IDLE_COOKIE)?.value
+  const lastSeenMs = lastSeenRaw ? Number(lastSeenRaw) : NaN
+  const hasFreshCookie = Number.isFinite(lastSeenMs)
+    && (nowMs - lastSeenMs) < IDLE_TIMEOUT_MINUTES * 60 * 1000
+
+  if (!hasFreshCookie) {
+    if (lastSeenRaw !== undefined) {
+      // Cookie existed but is stale -> genuine idle lapse. If it's missing
+      // entirely, this is the first authenticated hit after login; treat as
+      // fresh and stamp below (do not lock out on the first page load).
+      const stale = Number.isFinite(lastSeenMs)
+      if (stale) {
+        const expired = NextResponse.json(
+          { error: 'session expired', reason: 'idle' },
+          { status: 401 },
+        )
+        clearSupabaseSessionCookies(expired)
+        if (pathname.startsWith('/api/')) return expired
+        const url = req.nextUrl.clone()
+        url.pathname = '/login'
+        url.search = ''
+        url.searchParams.set('reason', 'idle')
+        url.searchParams.set('next', pathname)
+        const redirect = NextResponse.redirect(url)
+        clearSupabaseSessionCookies(redirect)
+        return redirect
+      }
+    }
+  }
+
+  // Roll the cookie forward on every authenticated pass. HttpOnly so client
+  // JS can't tamper; Secure in prod (Vercel serves HTTPS); Lax for standard
+  // navigation. Path=/ so every route sees it. Max-Age = timeout + 5 min.
+  res.cookies.set(IDLE_COOKIE, String(nowMs), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: IDLE_COOKIE_MAXAGE_S,
+  })
 
   const { data: { session } } = await supabase.auth.getSession()
   const claims = session?.access_token ? decodeJwtPayload(session.access_token) : {}
