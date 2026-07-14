@@ -34,7 +34,7 @@ const STRING_KEYS = [
 const BOOL_KEYS = [
   'is_ai_generated', 'has_audio', 'do_not_modify', 'has_identifiable_people',
 ];
-const NUM_KEYS = ['poster_frame_sec'];
+const NUM_KEYS = ['poster_frame_sec', 'gps_lat', 'gps_lng'];
 const ARR_KEYS = ['seasonal_scope', 'brand_room_type_scope'];
 
 export async function POST(req: NextRequest) {
