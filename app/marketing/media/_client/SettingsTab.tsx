@@ -60,6 +60,7 @@ interface ChannelSpec {
   video_min_duration_sec: number | null;
   video_max_duration_sec: number | null;
   video_max_size_mb: number | null;
+  min_quality_score: number | null;
   notes: string | null;
 }
 interface Reality {
@@ -454,6 +455,7 @@ function ChannelsPanel({ rows, setBanner }: { rows: ChannelSpec[]; setBanner: Ba
           video_max_duration_sec: draft.video_max_duration_sec ?? null,
           video_aspect_ratio: draft.video_aspect_ratio ?? null,
           video_max_size_mb: draft.video_max_size_mb ?? null,
+          min_quality_score: draft.min_quality_score ?? null,
           notes: draft.notes ?? '',
         }),
       });
@@ -469,8 +471,9 @@ function ChannelsPanel({ rows, setBanner }: { rows: ChannelSpec[]; setBanner: Ba
 
   return (
     <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:16 }}>
+      <MediaArchiveThresholdBanner setBanner={setBanner} />
       <div style={{ marginBottom:10, fontSize:11, color:INK_M }}>
-        {rows.length} channels · source: public.v_media_channel_specs · writes: media.media_channel_specs (editable fields only)
+        {rows.length} channels · source: public.v_media_channel_specs · writes: media.media_channel_specs (editable fields only) · per-channel <strong>Min score %</strong> filters the Library "Use for" dropdown
       </div>
       <div style={{ overflowX:'auto' }}>
         <table style={{ width:'100%', fontSize:11, borderCollapse:'collapse' }}>
@@ -481,6 +484,7 @@ function ChannelsPanel({ rows, setBanner }: { rows: ChannelSpec[]; setBanner: Ba
               <th style={th}>Img aspect</th>
               <th style={th}>Img min WxH</th>
               <th style={th}>Img max MB</th>
+              <th style={{ ...th, whiteSpace:'nowrap' }}>Min score %</th>
               <th style={th}>Video aspect</th>
               <th style={th}>Dur sec (min-max)</th>
               <th style={{ ...th, width:70 }}></th>
@@ -497,6 +501,7 @@ function ChannelsPanel({ rows, setBanner }: { rows: ChannelSpec[]; setBanner: Ba
                     <td style={td}>{r.image_aspect_ratio ?? '—'}</td>
                     <td style={td}>{(r.image_min_width ?? '—') + ' x ' + (r.image_min_height ?? '—')}</td>
                     <td style={td}>{r.image_max_size_mb ?? '—'}</td>
+                    <td style={{ ...td, fontVariantNumeric:'tabular-nums' }}>{r.min_quality_score != null ? r.min_quality_score + '%' : '—'}</td>
                     <td style={td}>{r.video_aspect_ratio ?? '—'}</td>
                     <td style={td}>{(r.video_min_duration_sec ?? '—') + '–' + (r.video_max_duration_sec ?? '—')}</td>
                     <td style={td}>
@@ -508,7 +513,7 @@ function ChannelsPanel({ rows, setBanner }: { rows: ChannelSpec[]; setBanner: Ba
                   </tr>
                   {isEdit && (
                     <tr>
-                      <td colSpan={8} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
+                      <td colSpan={9} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
                         <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10 }}>
                           <Field label="image_min_width">
                             <input type="number" value={draft.image_min_width ?? ''} onChange={e => setDraft({ ...draft, image_min_width: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
@@ -521,6 +526,9 @@ function ChannelsPanel({ rows, setBanner }: { rows: ChannelSpec[]; setBanner: Ba
                           </Field>
                           <Field label="image_max_size_mb">
                             <input type="number" step="0.1" value={draft.image_max_size_mb ?? ''} onChange={e => setDraft({ ...draft, image_max_size_mb: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
+                          </Field>
+                          <Field label="min_quality_score (0-100 · photo must score ≥ this)">
+                            <input type="number" min={0} max={100} value={draft.min_quality_score ?? ''} onChange={e => setDraft({ ...draft, min_quality_score: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
                           </Field>
                           <Field label="video_min_duration_sec">
                             <input type="number" step="0.1" value={draft.video_min_duration_sec ?? ''} onChange={e => setDraft({ ...draft, video_min_duration_sec: e.target.value === '' ? null : Number(e.target.value) })} style={inp} />
@@ -793,7 +801,7 @@ function FacilityProfilesPanel({ propertyId, facilities, setBanner }: { property
                         </tr>
                         {isEdit && (
                           <tr>
-                            <td colSpan={8} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
+                            <td colSpan={9} style={{ padding:14, background:'#FAF6EC', borderTop:'1px solid '+HAIR }}>
                               <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10 }}>
                                 <Field label="facility_key (stable slug)">
                                   <input value={draft.facility_key ?? ''} onChange={e => setDraft({ ...draft, facility_key: e.target.value })} placeholder="roots_restaurant" style={inp} />
@@ -1070,6 +1078,56 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label style={{ display:'block', fontSize:10, color:INK_M, marginBottom:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ==================================================================
+// 2026-07-14 · Media archive threshold banner (top of Output channels tab)
+// Photos with quality_index below the archive_threshold route to the
+// Archive review list for a human decision (sort or score-override).
+// ==================================================================
+function MediaArchiveThresholdBanner({ setBanner }: { setBanner: BannerFn }) {
+  const router = useRouter();
+  const [val, setVal] = useState<string>('');
+  const [auto, setAuto] = useState<boolean>(false);
+  const [pid, setPid] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useState(() => {
+    fetch('/api/marketing/media/settings', { cache:'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (j) { setVal(String(j.archive_threshold ?? 30)); setAuto(!!j.auto_archive); setPid(j.property_id ?? null); } })
+      .catch(() => {});
+    return 0;
+  });
+
+  async function save() {
+    if (pid == null) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/marketing/media/settings', {
+        method:'POST', headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ property_id: pid, archive_threshold: Number(val || 30), auto_archive: auto }),
+      });
+      if (!res.ok) { const j = await res.json(); setBanner({ tone:'err', text:'Save failed: ' + (j.error ?? res.statusText) }); return; }
+      setBanner({ tone:'ok', text:'Archive threshold saved.' });
+      router.refresh();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ padding:'10px 14px', background:'#FFF9EA', border:'1px solid '+HAIR, borderRadius:4, marginBottom:12, fontSize:12, color:INK, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+      <strong>Archive threshold:</strong>
+      <input type="number" min={0} max={100} value={val} onChange={e => setVal(e.target.value)} style={{ width:70, padding:'4px 8px', fontSize:11, border:'1px solid '+HAIR, borderRadius:3 }} />
+      <span style={{ color:INK_M }}>photos with quality_index below this % are usable for nothing and routed to <em>Archive review</em> (human decides — sort or override the score).</span>
+      <label style={{ display:'flex', alignItems:'center', gap:6, marginLeft:'auto' }}>
+        <input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} />
+        <span style={{ fontSize:11 }}>auto-archive (skip review)</span>
+      </label>
+      <button onClick={save} disabled={saving || pid == null} style={{ padding:'6px 12px', fontSize:11, fontWeight:600, background:FOREST, color:'#FFFFFF', border:'none', borderRadius:3, cursor:'pointer' }}>
+        {saving ? 'Saving…' : 'Save'}
+      </button>
     </div>
   );
 }
