@@ -15,6 +15,7 @@ interface Spec {
   pref_per_room: number | null;
   profile_max: number | null;
   aesthetic_style: string | null;
+  hero_photo_count?: number | null;
   eligible_total: number;
   eligible_room_photos: number;
   rooms_covered: number;
@@ -32,6 +33,8 @@ interface CuratedRow {
   seo_target_filename: string | null;
   original_filename: string | null;
   public_url: string | null;
+  is_hero: boolean;
+  rank_in_property: number;
   is_selected: boolean;
   category: string | null;
   room_type_id: number | null;
@@ -72,8 +75,10 @@ export default function ProfilesTab({ propertyId, totalRooms }: { propertyId: nu
 
   const spec = specs.find(s => s.channel === selectedCh);
 
+  const heroPhotos = (curated ?? []).filter(r => r.is_hero).sort((a,b) => a.rank_in_property - b.rank_in_property);
+  const nonHero = (curated ?? []).filter(r => !r.is_hero);
   const byBucket = new Map<string, CuratedRow[]>();
-  for (const r of (curated ?? [])) {
+  for (const r of nonHero) {
     if (!byBucket.has(r.bucket_key)) byBucket.set(r.bucket_key, []);
     byBucket.get(r.bucket_key)!.push(r);
   }
@@ -143,7 +148,31 @@ export default function ProfilesTab({ propertyId, totalRooms }: { propertyId: nu
                 No photos yet meet this channel's minimum quality + dimensions. Lower the threshold in Output channels or upload/regenerate higher-quality photos.
               </div>
             ) : (
-              [...byBucket.entries()].map(([bucket, rows]) => (
+              (<>
+              {heroPhotos.length > 0 && (
+                <div style={{ marginBottom: 24, padding: 12, background: '#FAF6EC', border: '1px solid ' + HAIR, borderRadius: 4 }}>
+                  <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: FOREST }}>🏆 Hero photos · Top {heroPhotos.length}</span>
+                    <span style={{ fontSize: 10, color: INK_M }}>· property-wide, best quality — landing thumbnails + carousel front</span>
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:6 }}>
+                    {heroPhotos.map(r => (
+                      <div key={r.asset_id} style={{ background: WHITE, border:'1px solid '+HAIR, borderRadius:3, overflow:'hidden', position:'relative' }}>
+                        {r.public_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.public_url} alt={r.seo_target_filename ?? r.original_filename ?? ''} style={{ width:'100%', aspectRatio:'4/3', objectFit:'cover', display:'block', background: CREAM }} />
+                        ) : <div style={{ width:'100%', aspectRatio:'4/3', background: CREAM }} />}
+                        <div style={{ position:'absolute', top:4, left:4, padding:'2px 6px', background: FOREST, color: WHITE, fontSize:9, fontWeight:700, borderRadius:2 }}>#{r.rank_in_property}</div>
+                        <div style={{ padding:'4px 6px', fontSize:10, color:INK, display:'flex', justifyContent:'space-between' }}>
+                          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={r.seo_target_filename ?? ''}>{r.seo_target_filename ?? r.asset_id.slice(0,6)}</span>
+                          <span style={{ color:INK_M, marginLeft:4 }}>q{r.quality_index ?? '?'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {[...byBucket.entries()].map(([bucket, rows]) => (
                 <div key={bucket} style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK_M, marginBottom: 8 }}>
                     {bucket.replace('room:', 'Room · ').replace('facility:', 'Facility · ').replace('activity:', 'Activity · ').replace('category:', '')}
@@ -172,7 +201,8 @@ export default function ProfilesTab({ propertyId, totalRooms }: { propertyId: nu
                     ))}
                   </div>
                 </div>
-              ))
+              ))}
+              </>)
             )}
           </>
         )}
