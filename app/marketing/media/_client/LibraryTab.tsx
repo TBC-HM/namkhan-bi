@@ -39,7 +39,7 @@ function displayName(r: MediaRow): string {
   if (seo) return seo;
   return (r.original_filename ?? '').trim() || r.asset_id.slice(0, 8);
 }
-interface ChannelSpec { channel: string; display_name: string; }
+interface ChannelSpec { channel: string; display_name: string; min_quality_score?: number | null; image_min_width?: number | null; image_min_height?: number | null; }
 
 interface Props {
   propertyId: number;
@@ -328,13 +328,39 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                         display:'block', width:'100%', textAlign:'left', padding:'6px 8px', fontSize:11, fontWeight:600, background:'#F5F1E6', border:'none', borderBottom:'1px solid '+HAIR, cursor:'pointer', color:FOREST,
                       }}>AI Studio (refine / restyle)</button>
                     )}
-                    {channelSpecs.map(c => (
-                      <Fragment key={c.channel}>
-                        <button onClick={() => renderForChannel(r.asset_id, c.channel)} style={{
-                          display:'block', width:'100%', textAlign:'left', padding:'4px 6px', fontSize:10, background:'none', border:'none', cursor:'pointer', color:INK,
-                        }}>{c.display_name}</button>
-                      </Fragment>
-                    ))}
+                    {channelSpecs.map(c => {
+                      const q  = (r.quality_index ?? null) as number | null;
+                      const wq = (c.min_quality_score ?? null) as number | null;
+                      const wW = (c.image_min_width  ?? null) as number | null;
+                      const wH = (c.image_min_height ?? null) as number | null;
+                      const failScore = wq != null && q  != null && q  < wq;
+                      const failW     = wW != null && r.width_px  != null && r.width_px  < wW;
+                      const failH     = wH != null && r.height_px != null && r.height_px < wH;
+                      const unknown   = (wq != null && q == null) || ((wW != null || wH != null) && (r.width_px == null || r.height_px == null));
+                      const blocked   = failScore || failW || failH;
+                      const parts: string[] = [];
+                      if (failScore)  parts.push('quality ' + q + '% < min ' + wq + '%');
+                      if (failW || failH) parts.push('size ' + (r.width_px ?? '?') + '×' + (r.height_px ?? '?') + ' < min ' + (wW ?? '?') + '×' + (wH ?? '?'));
+                      if (unknown && parts.length === 0) parts.push('missing quality / dimensions — cannot verify');
+                      const reason = parts.join(' · ');
+                      return (
+                        <Fragment key={c.channel}>
+                          <button
+                            onClick={() => { if (!blocked) renderForChannel(r.asset_id, c.channel); }}
+                            disabled={blocked}
+                            title={blocked ? ('Blocked — ' + reason) : (unknown ? ('Warning — ' + reason) : (c.display_name + (wq != null ? ' · min ' + wq + '%' : '')))}
+                            style={{
+                              display:'block', width:'100%', textAlign:'left', padding:'4px 6px', fontSize:10,
+                              background: blocked ? '#F5F0E1' : 'none',
+                              border:'none',
+                              cursor: blocked ? 'not-allowed' : 'pointer',
+                              color: blocked ? INK_M : (unknown ? '#B23A2E' : INK),
+                              opacity: blocked ? 0.55 : 1,
+                            }}
+                          >{c.display_name}{blocked ? ' · blocked' : (unknown ? ' · ?' : '')}</button>
+                        </Fragment>
+                      );
+                    })}
                   </div>
                 )}
               </div>
