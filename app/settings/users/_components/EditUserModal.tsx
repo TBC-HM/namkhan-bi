@@ -1,6 +1,8 @@
 // app/settings/users/_components/EditUserModal.tsx
 // PBS 2026-07-09: modal for editing name / email / archiving a user.
 // Backend: /api/settings/users/update
+// PBS 2026-07-14: adds "Landing page" text input — per-user post-login
+// redirect. Empty = default fallback. Absolute paths only.
 'use client';
 
 import { useEffect, useState, useTransition, type CSSProperties } from 'react';
@@ -16,6 +18,7 @@ interface Props {
 export default function EditUserModal({ user, onClose, onSaved, onArchived }: Props) {
   const [name, setName] = useState<string>(user.full_name ?? '');
   const [email, setEmail] = useState<string>(user.email);
+  const [landingPage, setLandingPage] = useState<string>(user.landing_page ?? '');
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -28,16 +31,33 @@ export default function EditUserModal({ user, onClose, onSaved, onArchived }: Pr
 
   const save = () => {
     if (!email.trim()) { setErr('Email required'); return; }
+    // Client-side landing-page validation matching the server route.
+    const lpRaw = landingPage.trim();
+    if (lpRaw !== '' && (!lpRaw.startsWith('/') || lpRaw.startsWith('//'))) {
+      setErr('Landing page must be an absolute path starting with / (e.g. /holding/ceo).');
+      return;
+    }
     startTransition(async () => {
       setErr(null); setMsg(null);
       const r = await fetch('/api/settings/users/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, name: name.trim(), email: email.trim() }),
+        body: JSON.stringify({
+          user_id: user.id,
+          name: name.trim(),
+          email: email.trim(),
+          // Send even when empty ('' → server clears the column). Sending
+          // undefined would leave the current value untouched.
+          landing_page: lpRaw,
+        }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(body.error ?? `save failed (${r.status})`); return; }
-      onSaved({ full_name: name.trim(), email: email.trim() });
+      onSaved({
+        full_name: name.trim(),
+        email: email.trim(),
+        landing_page: lpRaw === '' ? null : lpRaw,
+      });
       setMsg('✓ saved');
       setTimeout(() => { onClose(); }, 900);
     });
@@ -74,6 +94,20 @@ export default function EditUserModal({ user, onClose, onSaved, onArchived }: Pr
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} />
         <div style={hintStyle}>
           Changing email updates the auth login + tenancy rows. Send a fresh invitation after if the address changed.
+        </div>
+
+        <label style={{ ...labelStyle, marginTop: 12 }}>Landing page (default: /dashboard)</label>
+        <input
+          type="text"
+          value={landingPage}
+          onChange={(e) => setLandingPage(e.target.value)}
+          style={inputStyle}
+          placeholder="/holding/ceo"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <div style={hintStyle}>
+          Where the user lands after logging in. Leave blank for the default (owners → /holding/ceo, others → their property home).
         </div>
 
         {err && <div style={errStyle}>{err}</div>}
