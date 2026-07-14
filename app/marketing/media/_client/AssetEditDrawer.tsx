@@ -39,6 +39,8 @@ export interface AssetEditRow {
   alt_text?: string | null;
   primary_tier?: string | null;
   property_area?: string | null;
+  gps_lat?: number | null;
+  gps_lng?: number | null;
   is_ai_generated?: boolean | null;
   public_url?: string | null;
   master_path?: string | null;
@@ -195,6 +197,9 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
   const [area, setArea]           = useState('');
   const [aiGen, setAiGen]         = useState(false);
   const [roomTypeId, setRoomTypeId] = useState<string>('');
+  // PBS 2026-07-14 · SEO Local · GPS lat/lng surfaced in the drawer.
+  const [gpsLat, setGpsLat] = useState<string>('');
+  const [gpsLng, setGpsLng] = useState<string>('');
 
   const [drawerPlaying, setDrawerPlaying] = useState(false);
   const [capturedAt, setCapturedAt] = useState('');
@@ -231,6 +236,8 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
     setArea(asset.property_area ?? '');
     setAiGen(Boolean(asset.is_ai_generated));
     setRoomTypeId(asset.room_type_id != null ? String(asset.room_type_id) : '');
+    setGpsLat(asset.gps_lat != null ? String(asset.gps_lat) : '');
+    setGpsLng(asset.gps_lng != null ? String(asset.gps_lng) : '');
     setCapturedAt(asset.captured_at ? String(asset.captured_at).slice(0, 10) : '');
     setCameraMake(asset.camera_make ?? '');
     setCameraModel(asset.camera_model ?? '');
@@ -274,6 +281,10 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
       if (aiGen   !== Boolean(asset.is_ai_generated))    payload.is_ai_generated = aiGen;
       const currentRoom = asset.room_type_id != null ? String(asset.room_type_id) : '';
       if (roomTypeId !== currentRoom) payload.room_type_id = roomTypeId || null;
+      const currentLat = asset.gps_lat != null ? String(asset.gps_lat) : '';
+      const currentLng = asset.gps_lng != null ? String(asset.gps_lng) : '';
+      if (gpsLat !== currentLat) payload.gps_lat = gpsLat === '' ? null : Number(gpsLat);
+      if (gpsLng !== currentLng) payload.gps_lng = gpsLng === '' ? null : Number(gpsLng);
 
       if (video) {
         const curCapturedAt = asset.captured_at ? String(asset.captured_at).slice(0, 10) : '';
@@ -558,6 +569,21 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
             <input type="checkbox" checked={aiGen} onChange={e => setAiGen(e.target.checked)} />
             <span>Mark this asset as AI-generated</span>
           </label>
+        </Field>
+
+        {/* PBS 2026-07-14 · SEO Local — GPS lat/lng. Values feed local-SEO downloads (search engines pick up geo metadata). */}
+        <Field label="SEO Local · GPS coordinates">
+          <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+            <input type="number" step="0.0001" placeholder="lat (e.g. 19.8563)" value={gpsLat} onChange={e => setGpsLat(e.target.value)} style={{ ...S.input, maxWidth:150 }} />
+            <input type="number" step="0.0001" placeholder="lng (e.g. 102.1354)" value={gpsLng} onChange={e => setGpsLng(e.target.value)} style={{ ...S.input, maxWidth:150 }} />
+            <button type="button" onClick={() => { setGpsLat('19.8563'); setGpsLng('102.1354'); }} style={{ padding:'6px 10px', fontSize:11, background:'#FFFFFF', color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer' }}>Use Namkhan centre</button>
+            <button type="button" onClick={() => { setGpsLat('39.5696'); setGpsLng('2.6502'); }} style={{ padding:'6px 10px', fontSize:11, background:'#FFFFFF', color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer' }}>Use Donna centre</button>
+            <button type="button" onClick={() => { setGpsLat(''); setGpsLng(''); }} style={{ padding:'6px 10px', fontSize:11, background:'#FFFFFF', color:INK_M, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer' }}>Clear</button>
+            {gpsLat && gpsLng && (
+              <a href={`https://www.google.com/maps?q=${gpsLat},${gpsLng}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:11, color:'#084838', textDecoration:'underline' }}>View on Google Maps →</a>
+            )}
+          </div>
+          <div style={{ fontSize:10, color:INK_M, marginTop:4 }}>Backfilled to 19.8563, 102.1354 (Namkhan centre) for all hotel photos on 2026-07-14. Edit here to pin a specific location.</div>
         </Field>
 
         {video && (
