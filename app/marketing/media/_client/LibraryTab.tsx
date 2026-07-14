@@ -60,6 +60,13 @@ const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
 const PAGE_SIZE = 24;
 
+const TOP_FILTERS: Array<{ k: 'all'|'top100'|'topRooms'|'topFacilities'; label: string }> = [
+  { k: 'all',           label: 'All' },
+  { k: 'top100',        label: 'Top 100' },
+  { k: 'topRooms',      label: 'Top rooms · 8/room' },
+  { k: 'topFacilities', label: 'Top facilities · 5/facility' },
+];
+
 const TIER_CHIPS: Array<{ key: string; label: string }> = [
   { key: '',                  label: 'All'      },
   { key: 'tier_ota_profile',  label: 'OTA'      },
@@ -95,6 +102,9 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   const [searchText, setSearchText] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
   const [aiOnly, setAiOnly] = useState(false);
+  // PBS 2026-07-14 · quick top-N filters
+  type TopFilter = 'all' | 'top100' | 'topRooms' | 'topFacilities';
+  const [topFilter, setTopFilter] = useState<TopFilter>('all');
   type FacetRow = { kind: string; sort_order: number; ref_id: string; area_key: string; name: string; extra: string | null; photo_count: number };
   type FacetGroups = Record<'rooms'|'facilities'|'activities'|'certifications'|'team'|'other'|'uncategorized', FacetRow[]>;
   const [facetGroups, setFacetGroups] = useState<FacetGroups | null>(null);
@@ -149,8 +159,29 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         (r.property_area         ?? '').toLowerCase().includes(q)
       );
     }
+    if (topFilter === 'top100') {
+      out = [...out].sort((a, b) => (b.quality_index ?? 0) - (a.quality_index ?? 0)).slice(0, 100);
+    } else if (topFilter === 'topRooms') {
+      const bucketed = new Map<string, MediaRow[]>();
+      for (const r of [...out].sort((a, b) => (b.quality_index ?? 0) - (a.quality_index ?? 0))) {
+        const k = String((r as any).room_type_id ?? ''); if (!k) continue;
+        const arr = bucketed.get(k) ?? [];
+        if (arr.length < 8) arr.push(r);
+        bucketed.set(k, arr);
+      }
+      out = [...bucketed.values()].flat();
+    } else if (topFilter === 'topFacilities') {
+      const bucketed = new Map<string, MediaRow[]>();
+      for (const r of [...out].sort((a, b) => (b.quality_index ?? 0) - (a.quality_index ?? 0))) {
+        const k = String((r as any).facility_id ?? ''); if (!k) continue;
+        const arr = bucketed.get(k) ?? [];
+        if (arr.length < 5) arr.push(r);
+        bucketed.set(k, arr);
+      }
+      out = [...bucketed.values()].flat();
+    }
     return out;
-  }, [mediaPage, tier, areaFilter, aiOnly, searchText]);
+  }, [mediaPage, tier, areaFilter, aiOnly, searchText, topFilter]);
 
   const visible = filtered.filter(r => !localDismiss.has(r.asset_id));
   const pageRows = visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -242,6 +273,17 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           )}
         </select>
         <button onClick={() => { setAiOnly(v => !v); setPage(0); }} style={{ padding:'4px 10px', fontSize:11, borderRadius:12, cursor:'pointer', border:'1px solid '+(aiOnly ? FOREST : HAIR), background: aiOnly ? FOREST : WHITE, color: aiOnly ? WHITE : INK, fontWeight: aiOnly ? 600 : 400, whiteSpace:'nowrap' }}>AI only</button>
+        {(TOP_FILTERS).map(f => {
+          const active = topFilter === f.k;
+          return (
+            <button key={'tf-'+f.k} onClick={() => { setTopFilter(f.k); setPage(0); }} style={{
+              padding:'4px 10px', fontSize:11, borderRadius:12, cursor:'pointer',
+              border:'1px solid '+(active ? FOREST : HAIR),
+              background: active ? FOREST : WHITE, color: active ? WHITE : INK,
+              fontWeight: active ? 600 : 400, whiteSpace:'nowrap',
+            }}>{f.label}</button>
+          );
+        })}
         {TIER_CHIPS.map(c => {
             const active = tier === c.key;
             return (
