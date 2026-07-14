@@ -278,6 +278,27 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
       if (altText !== (asset.alt_text ?? ''))            payload.alt_text = altText;
       if (tier    !== (asset.primary_tier ?? ''))        payload.primary_tier = tier || null;
       if (area    !== (asset.property_area ?? ''))       payload.property_area = area || null;
+      // PBS 2026-07-15 · #205 · resolve the selected area name to the right FK so photo moves OUT of "Other X" bucket.
+      if (area !== (asset.property_area ?? '')) {
+        const norm = (s: string) => s.trim().toLowerCase();
+        const target = norm(area);
+        let matchedFacility: number | null = null;
+        let matchedActivity: number | null = null;
+        let matchedRoom: number | null = null;
+        if (target) {
+          for (const f of (taxonomy?.facilities ?? [])) { if (norm(f.name) === target) { matchedFacility = f.id; break; } }
+          if (matchedFacility == null) {
+            for (const a of (taxonomy?.activities ?? [])) { if (norm(a.name) === target) { matchedActivity = a.id; break; } }
+          }
+          if (matchedFacility == null && matchedActivity == null) {
+            for (const r of (taxonomy?.rooms ?? [])) { if (norm(r.name) === target) { matchedRoom = r.id; break; } }
+          }
+        }
+        // Send the FK (null if area cleared or unmatched — RPC uses field-present semantics)
+        payload.facility_id = matchedFacility;
+        payload.activity_id = matchedActivity;
+        if (matchedRoom != null) payload.room_type_id = String(matchedRoom);
+      }
       if (aiGen   !== Boolean(asset.is_ai_generated))    payload.is_ai_generated = aiGen;
       const currentRoom = asset.room_type_id != null ? String(asset.room_type_id) : '';
       if (roomTypeId !== currentRoom) payload.room_type_id = roomTypeId || null;
