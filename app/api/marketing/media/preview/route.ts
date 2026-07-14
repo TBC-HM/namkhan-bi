@@ -1,14 +1,13 @@
 // app/api/marketing/media/preview/route.ts
-// PBS 2026-07-13 — Signed-URL proxy for media-raw preview.
-// v3 (2026-07-14): switch to Storage TRANSFORM (width=800, contain, quality=80,
-//   format=origin). Fixes:
-//   - blank tiles for 4 HEIC/HEIF files (browsers can't decode raw HEIC).
-//   - slow / dropped renders for 110+ files > 5MB (up to 30MB phone JPEGs) — the
-//     transform normalises everything to <100KB WebP/JPEG at the CDN edge.
-//   Adds ?debug=1 → returns JSON with resolved bucket/path/error-stage so future
-//   preview issues can be diagnosed without new deploys.
-// 2026-07-13 v2: PostgREST-public-only burn. Read via public bridge view
-//   v_marketing_media_page, not sb.schema('media').from('media_assets').
+// PBS 2026-07-14 v4 — CRITICAL FIX: proxy image bytes instead of 302 redirect.
+// Root cause: NextResponse.redirect(signedUrl, 302) got cached by browsers +
+// Vercel edge. Once the 1h JWT expired, cached redirects kept sending users to
+// dead URLs → 400 InvalidJWT → every Library tile blank. Rewriting to stream
+// the image bytes back means:
+//   • the signed URL is fetched server-side, fresh every request (Cache-Control:no-store on the redirect)
+//   • the response body is the actual image (Content-Type: image/*), safely cacheable for 60s
+//   • no client ever sees a signed URL — so it can't be cached with a stale token
+// v3 kept: Storage TRANSFORM (width=800, contain, quality=80) — fixes HEIC + huge phone photos.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -47,7 +46,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'no_raw_path' }, { status: 404 });
   }
 
-  // Prefer a master render when available; fall back to raw.
   let bucket: string;
   let path: string;
   if (row.master_path) {
@@ -79,5 +77,21 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.redirect(signed.signedUrl, 302);
+  // Proxy the image bytes — never expose the signed URL to the client so it
+  // can't be cached with a token that later expires (v3 regression).
+  const upstream = await fetch(signed.signedUrl, { cache: 'no-store' });
+  if (!upstream.ok || !upstream.body) {
+    return NextResponse.json({ error: 'upstream_failed', status: upstream.status }, { status: 502 });
+  }
+  const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
+
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType,
+      // Bytes are cacheable for 60s by browsers + Vercel edge, since they don't
+      // contain the signed URL. When the token would expire, we simply re-sign.
+      'Cache-Control': 'public, max-age=60, s-maxage=60, stale-while-revalidate=300',
+    },
+  });
 }
