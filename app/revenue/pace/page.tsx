@@ -33,6 +33,8 @@ import WindowSelect from '../_components/WindowSelect';
 import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
+import GranSelect from './_components/GranSelect';
+
 export const revalidate = 60;
 
 interface PaceRow {
@@ -343,18 +345,18 @@ export default async function PacePage({
           currentCmp={period.cmp ?? null}
           options={winOptions.map((o) => ({ value: o.k, label: '+' + o.label }))}
         />
-        <ControlGroup label="Granularity">
-          {granOptions.map((o) => (
-            <PillLink key={o.k} active={o.k === gran} href={hrefFor({ gran: o.k })}>{o.label}</PillLink>
-          ))}
-        </ControlGroup>
+        <GranSelect
+          value={gran}
+          options={granOptions}
+          hrefFor={Object.fromEntries(granOptions.map(o => [o.k, hrefFor({ gran: o.k })]))}
+        />
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-soft, #5A5A5A)' }}>{period.label}</span>
       </div>
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 4 }}>
         {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
       <Container title="Booking pace curve" subtitle="Daily rooms occupied · −30d to +30d window">
         <Chart
           variant="line"
@@ -380,20 +382,24 @@ export default async function PacePage({
         />
       </Container>
 
-      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle={`forward-only · from today onward · for current month, only nights ≥ today are counted (use /demand Pace table for whole-month totals) · grouped per ${gran}`}>
-        <Chart
-          variant="table"
-          data={bucketTable}
-          xKey="bucket"
-          series={[
-            { key: 'rns',      label: 'RNs' },
-            { key: 'rev',      label: 'Revenue' },
-            { key: 'occ',      label: 'Occ %' },
-            { key: 'cxl',      label: 'Cxl' },
-            { key: 'stly_pct', label: 'STLY %' },
-          ]}
-        />
-      </Container>
+      </div>
+
+      {/* PBS 2026-07-14 · #64 — Pace by stay-bucket moved OUT of the 3-col grid (now 2-col) to a full-width row at bottom for readability. */}
+      <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+        <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle={`forward-only · from today onward · for current month, only nights ≥ today are counted (use /demand Pace table for whole-month totals) · grouped per ${gran}`}>
+          <Chart
+            variant="table"
+            data={bucketTable}
+            xKey="bucket"
+            series={[
+              { key: 'rns',      label: 'RNs' },
+              { key: 'rev',      label: 'Revenue' },
+              { key: 'occ',      label: 'Occ %' },
+              { key: 'cxl',      label: 'Cxl' },
+              { key: 'stly_pct', label: 'STLY %' },
+            ]}
+          />
+        </Container>
       </div>
       {/* #106 — Pace by check-in month (Jan-2025 → forward); RN bar + LY overlay + variance table */}
       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
