@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
 import UploadDropzone from './UploadDropzone';
 import AssetEditDrawer, { type AssetEditRow, type DrawerTaxonomy } from './AssetEditDrawer';
+import LibraryOtaProposer from './LibraryOtaProposer';
 import { qaBadge } from '@/lib/mediaQa';
 
 interface TierRow { primary_tier: string | null; total: number | string; photos: number | string; videos: number | string; }
@@ -203,6 +204,9 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
 
   return (
     <div>
+      <div style={{ marginBottom:12 }}>
+        <LibraryOtaProposer propertyId={propertyId} totalRooms={rooms.length || 10} />
+      </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8, marginBottom:16 }}>
         {[
           { label: 'Total ready', value: totals.tot },
