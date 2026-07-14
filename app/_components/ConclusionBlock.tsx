@@ -5,7 +5,7 @@
 // Dismissed insights are hidden client-side and persisted in localStorage.
 
 import TenantLink from '@/components/nav/TenantLink';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
 export type InsightPriority = 'critical' | 'warning' | 'info' | 'positive' | 'observation';
 
@@ -43,6 +43,8 @@ interface Props {
   /** PBS 2026-07-08: when true, skip the internal green/dark title pill so the
    *  block can be embedded inside a Container primitive with a canonical title. */
   bare?: boolean;
+  /** PBS 2026-07-14 · adds a top chip-strip of priority counts + subtle group headers before each priority transition. */
+  groupByPriority?: boolean;
 }
 
 export default function ConclusionBlock({
@@ -53,6 +55,7 @@ export default function ConclusionBlock({
   emptyText = 'Nothing to flag right now — targets met.',
   maxRender = 12,
   storageKey = 'default',
+  groupByPriority = false,
 }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [mounted, setMounted] = useState(false);
@@ -137,15 +140,38 @@ export default function ConclusionBlock({
           </div>
         )}
 
-        {render.map((ins) => {
+        {groupByPriority && (
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap', padding:'4px 0 10px', borderBottom:'1px solid #F1EBD9', marginBottom:8 }}>
+            {('critical warning info observation positive'.split(' ') as InsightPriority[]).map((k) => {
+              const n = visible.filter(v => v.priority === k).length;
+              if (n === 0) return null;
+              const pk = PRI[k];
+              return (
+                <span key={k} style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 8px', border:'1px solid '+pk.dot+'55', background:pk.dot+'0F', borderRadius:99, fontSize:10, fontWeight:600, color:pk.dot }}>
+                  <span style={{ width:5, height:5, borderRadius:99, background:pk.dot }} />
+                  {pk.label}<span style={{ fontVariantNumeric:'tabular-nums', marginLeft:2 }}>{n}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+        {render.map((ins, idx) => {
           const p = PRI[ins.priority];
           const sig = insightSig(ins);
+          const showGroupHeader = groupByPriority && (idx === 0 || render[idx-1].priority !== ins.priority);
           const href = ins.href
             ?? (ins.insightKey ? `/guest/behaviour/insight/${ins.insightKey}` : undefined);
           const actionLabel = ins.action ?? (href ? 'See guests →' : undefined);
 
           return (
-            <div key={sig} style={row}>
+            <Fragment key={sig}>
+              {showGroupHeader && (
+                <div style={{ display:'flex', alignItems:'baseline', gap:8, padding:'10px 4px 6px', borderBottom:'1px solid #F1EBD9', marginTop: idx === 0 ? 0 : 10, marginBottom:4 }}>
+                  <span style={{ display:'inline-block', width:6, height:6, borderRadius:99, background:p.dot }} />
+                  <span style={{ fontSize:9, fontWeight:700, letterSpacing:'0.14em', color:p.dot }}>{p.label}</span>
+                </div>
+              )}
+            <div style={row}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 99, background: p.dot, marginTop: 6, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -223,6 +249,7 @@ export default function ConclusionBlock({
                 </div>
               )}
             </div>
+            </Fragment>
           );
         })}
 
