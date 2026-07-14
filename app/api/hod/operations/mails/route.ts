@@ -1,10 +1,11 @@
 // app/api/hod/operations/mails/route.ts
-// GET — list up to `max` messages from the Reservations Operations Manager
-// (rom@thenamkhan.com) in the current user's Gmail, excluding those already
-// marked HOD-DISMISSED (label shared with Revenue's panel).
+// GET — list up to `max` messages from rom@thenamkhan.com in the SHARED
+// mailbox (pb@thenamkhan.com), excluding HOD-DISMISSED. Auth required.
 // PBS 2026-07-14.
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentAuthUser, listMessagesInLabel } from '@/lib/userGmail';
+import { getCurrentAuthUser } from '@/lib/userGmail';
+import { logSharedMailboxEvent } from '@/lib/sharedGmail';
+import { listSharedMessagesByQuery } from '@/lib/hodRevenueMail';
 import { ROM_GMAIL_Q } from '@/lib/hodOperationsMail';
 
 export const runtime = 'nodejs';
@@ -16,21 +17,18 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const max = Math.max(1, Math.min(50, Number(url.searchParams.get('max') ?? '30')));
   try {
-    const res = await listMessagesInLabel(user.id, '', ROM_GMAIL_Q, undefined, max);
-    const rows = res.messages.map((m) => ({
-      id: m.id,
-      threadId: m.threadId,
-      subject: m.subject,
-      from: m.from,
-      date: m.date,
-      dateMs: m.dateMs,
-      snippet: m.snippet,
-      unread: m.unread,
-    }));
+    const rows = await listSharedMessagesByQuery(ROM_GMAIL_Q, max);
+    logSharedMailboxEvent({
+      user_id: user.id, user_email: user.email,
+      action: 'view', mailbox_alias: 'rom',
+      metadata: { queue: 'hod_operations', count: rows.length },
+    });
     return NextResponse.json({ ok: true, data: rows });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'list_failed';
-    if (msg.startsWith('gmail_401')) return NextResponse.json({ ok: false, error: 'gmail_not_connected' }, { status: 401 });
+    if (msg.startsWith('gmail_401') || msg.startsWith('shared_source_not_connected')) {
+      return NextResponse.json({ ok: false, error: 'shared_mailbox_not_connected' }, { status: 503 });
+    }
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
