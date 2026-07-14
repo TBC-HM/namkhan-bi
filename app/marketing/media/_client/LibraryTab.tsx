@@ -165,7 +165,21 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       );
     }
     if (topFilter === 'top100') {
-      out = [...out].sort((a, b) => (b.quality_index ?? 0) - (a.quality_index ?? 0)).slice(0, 100);
+      // PBS 2026-07-15 · Top 100 = property-wide showcase — no room photos + max 15 per category so F&B doesn''t dominate
+      const sorted = [...out]
+        .filter(r => !(r as any).room_type_id)
+        .sort((a, b) => (b.quality_index ?? 0) - (a.quality_index ?? 0));
+      const perCat = new Map<string, number>();
+      const picked: MediaRow[] = [];
+      for (const r of sorted) {
+        if (picked.length >= 100) break;
+        const cat = String((r as any).category ?? ''other'').toLowerCase();
+        const n = perCat.get(cat) ?? 0;
+        if (n >= 15) continue;
+        picked.push(r);
+        perCat.set(cat, n + 1);
+      }
+      out = picked;
     } else if (topFilter === 'topRooms') {
       const bucketed = new Map<string, MediaRow[]>();
       for (const r of [...out].sort((a, b) => (b.quality_index ?? 0) - (a.quality_index ?? 0))) {
