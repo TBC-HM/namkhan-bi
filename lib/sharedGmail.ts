@@ -82,9 +82,10 @@ export function logSharedMailboxEvent(args: LogArgs): void {
     p_thread_id: args.thread_id ?? null,
     p_mailbox_alias: args.mailbox_alias ?? null,
     p_metadata: (args.metadata as unknown as object) ?? null,
-  }).then(({ error }) => {
-    if (error) console.error('[shared_mailbox_event log failed]', args.action, error.message);
-  }).catch((e) => console.error('[shared_mailbox_event log threw]', args.action, e));
+  }).then(
+    ({ error }) => { if (error) console.error('[shared_mailbox_event log failed]', args.action, error.message); },
+    (e) => console.error('[shared_mailbox_event log threw]', args.action, e),
+  );
 }
 
 // ---- public types ----------------------------------------------------------
