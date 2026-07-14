@@ -1,5 +1,9 @@
 // app/marketing/media/_client/SettingsTab.tsx
-// PBS 2026-07-12 — Settings: 4 sub-tab strip (Guardrails / Channels / AI profiles / Prompt Categories).
+// PBS 2026-07-14 — Settings: sub-tab strip hoisted to TOP. 6 tabs:
+//   Link Photos · Guardrails · Output channels · AI profiles (read-only) · Photo Guardrails · Prompt categories.
+//   AI profiles is a read-only mirror of Property Settings (rooms/facilities/brand & reality).
+//   Link Photos is its own tab (Clarify-style) — no longer auto-rendered above the strip.
+// PBS 2026-07-12 — original 4-tab strip (Guardrails / Channels / AI profiles / Prompt Categories).
 // 2026-07-13: property-wide Reality profile (location · palette · vibe · forbidden) moved to
 //   Property Settings → "Brand & Reality" tab (single source of truth in property.brand_reality).
 //   This tab now only holds AI overlays that DON'T yet have a home in Property Settings:
@@ -131,7 +135,7 @@ const EFFECTS = ['allow','deny','require_approval','warn'];
 const TIERS   = ['tier_website_hero','tier_ota_profile','tier_social_pool','tier_internal','tier_logos','tier_archive'];
 const AI_TIERS = ['tier_social_pool','tier_internal'];
 
-type TabKey = 'photo_guardrails' | 'rules' | 'channels' | 'reality' | 'categories';
+type TabKey = 'photo_guardrails' | 'rules' | 'channels' | 'reality' | 'categories' | 'link_photos';
 
 function csvIn(v: string[] | null | undefined): string { return (v ?? []).join(', '); }
 function csvOut(s: string): string[] { return s.split(',').map(x => x.trim()).filter(Boolean); }
@@ -140,12 +144,13 @@ function csvOut(s: string): string[] { return s.split(',').map(x => x.trim()).fi
 export default function SettingsTab({ propertyId, channelSpecs, rulesActive, reality, categories, rooms, facilities, mediaPage = [], guardrails }: Props) {
   const [tab, setTab] = useState<TabKey>('rules');
   const [banner, setBanner] = useState<{ tone: 'ok'|'err'; text: string } | null>(null);
-  const linkPhotosBlock = <LinkPhotosPanel propertyId={propertyId} rooms={rooms} facilities={facilities} mediaPage={mediaPage as any[]} />;
+  // 2026-07-14 · Link Photos moved to its own tab (Clarify-style). No auto-block.
 
   const bannerBg = banner?.tone === 'ok' ? '#EAF3EA' : '#FBE9E7';
   const bannerFg = banner?.tone === 'ok' ? FOREST : RED;
 
   const tabs: Array<{ key: TabKey; label: string; count: number }> = [
+    { key: 'link_photos', label: 'Link photos',       count: (mediaPage ?? []).length },
     { key: 'rules',      label: 'Guardrails',        count: rulesActive.length },
     { key: 'channels',   label: 'Output channels',   count: channelSpecs.length },
     { key: 'reality',    label: 'AI profiles',       count: rooms.length + facilities.length },
@@ -155,7 +160,6 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
 
   return (
     <div>
-      {linkPhotosBlock}
       {banner && (
         <div style={{ padding:'10px 14px', background:bannerBg, color:bannerFg, border:'1px solid '+HAIR, borderRadius:4, marginBottom:12, fontSize:12 }}>
           {banner.text}
@@ -188,11 +192,17 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
       {tab === 'channels'   && <ChannelsPanel          rows={channelSpecs} setBanner={setBanner} />}
       {tab === 'reality'    && (
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-          <div style={{ padding:'12px 16px', background:'#FFF9EA', border:'1px solid '+HAIR, borderRadius:4, fontSize:12, color:INK }}>
-            <strong>Property-wide grounding moved:</strong> location · palette · vibe · forbidden terms now live in <a href={`/h/${propertyId}/settings/property`} style={{ color:FOREST, textDecoration:'underline' }}>Property Settings → Brand &amp; Reality</a> (single source of truth). The AI overlays below (per-room · per-facility) will migrate there next.
+          <div style={{ padding:'16px 20px', background:'#EAF3EA', border:'1px solid '+HAIR, borderRadius:6, fontSize:12, color:INK, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
+            <div>
+              <div style={{ fontWeight:700, marginBottom:4 }}>AI profiles are read-only here — Property Settings is the source of truth.</div>
+              <div style={{ color:INK_M, fontSize:11 }}>Rooms · Facilities · Activities · Brand &amp; Reality all live under Property Settings. Edits made anywhere else would drift. Iris still reads these values to ground every generation.</div>
+            </div>
+            <a href={`/h/${propertyId}/settings/property`} style={{ padding:'8px 14px', fontSize:12, fontWeight:600, background:FOREST, color:WHITE, borderRadius:4, textDecoration:'none', whiteSpace:'nowrap' }}>Edit in Property Settings →</a>
           </div>
           <RoomProfilesPanel   propertyId={propertyId} rooms={rooms} />
-          <FacilityProfilesPanel propertyId={propertyId} facilities={facilities} setBanner={setBanner} />
+          <div style={{ padding:'12px 16px', background:'#FFF9EA', border:'1px solid '+HAIR, borderRadius:4, fontSize:11, color:INK_M }}>
+            <strong>Facilities:</strong> {facilities.length} facility profiles read from <code>public.v_facility_grounding</code>. To edit AI enrichment (materials · view direction · signature elements · time-of-day hint), open <a href={`/h/${propertyId}/settings/property`} style={{ color:FOREST, textDecoration:'underline' }}>Property Settings → Facilities</a>.
+          </div>
         </div>
       )}
       {tab === 'photo_guardrails' && guardrails && (
@@ -208,6 +218,7 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
         />
       )}
       {tab === 'categories' && <PromptCategoriesPanel  propertyId={propertyId} rows={categories ?? []} setBanner={setBanner} />}
+      {tab === 'link_photos' && <LinkPhotosPanel propertyId={propertyId} rooms={rooms} facilities={facilities} mediaPage={mediaPage as any[]} />}
     </div>
   );
 }
