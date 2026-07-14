@@ -1,16 +1,15 @@
 // app/api/sales/mails/send/route.ts
 // POST { mailbox_id, to, cc?, bcc?, subject, body_html, body_plain?,
 //        thread_id?, in_reply_to?, references? }
-// Sends FROM the alias in mailbox_id using the current user's Gmail token
-// via Send-As. If the alias isn't configured in Gmail's Send-As settings,
-// we surface a plain-english error.
+// Sends FROM the alias in mailbox_id using the SHARED mailbox token via
+// Send-As. Alias must be configured under the shared account
+// (pb@thenamkhan.com) — otherwise Gmail returns a Send-As error.
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentAuthUser } from '@/lib/userGmail';
-import { sendFromShared } from '@/lib/sharedGmail';
+import { sendFromShared, logSharedMailboxEvent } from '@/lib/sharedGmail';
 // PBS 2026-07-14 (Sales CRM upgrade · Phase F) — after a shared-mailbox
-// reply lands, look up any matching lead by thread_id and auto-advance stage
-// (new→contacted; contacted→engaged; higher stages no-op). Best-effort; a
-// failure here must NEVER break the send response.
+// reply lands, look up any matching lead by thread_id and auto-advance stage.
+// Best-effort; a failure here must NEVER break the send response.
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
@@ -53,7 +52,16 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok) return NextResponse.json(res, { status: 400 });
 
-    // PBS 2026-07-14 · Phase F post-send hook (best-effort, non-blocking).
+    // Audit log (fire-and-forget).
+    logSharedMailboxEvent({
+      user_id: user.id, user_email: user.email,
+      action: 'reply_sent',
+      thread_id: res.thread_id,
+      mailbox_alias: mailbox_id,
+      metadata: { to, subject, message_id: res.message_id },
+    });
+
+    // Phase F post-send hook (best-effort, non-blocking).
     try {
       const outboundThreadId = res.thread_id || body.thread_id;
       if (outboundThreadId) {
