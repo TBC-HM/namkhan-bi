@@ -35,6 +35,8 @@ export async function GET(req: Request) {
     .from('v_media_area_taxonomy')
     .select('kind, sort_order, ref_id, area_key, name, extra, photo_count')
     .eq('property_id', propertyId)
+    // PBS 2026-07-15 · exclude 'team' (contacts) — not a photo location, was cluttering the dropdown
+    .neq('kind', 'team')
     .order('sort_order')
     .order('photo_count', { ascending: false })
     .order('name');
