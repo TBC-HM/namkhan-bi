@@ -7,6 +7,7 @@ import { roleLabel } from '@/lib/currentUser';
 
 export default function UserMenu({ user }: { user: CurrentUser }) {
   const [open, setOpen] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState<{ connected: boolean; address?: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,6 +25,17 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
     document.addEventListener('keydown', onEsc);
     return () => document.removeEventListener('keydown', onEsc);
   }, [open]);
+
+  // Lazy-load Gmail connection status when the dropdown opens.
+  useEffect(() => {
+    if (!open || gmailConnected !== null) return;
+    let cancelled = false;
+    fetch('/api/user/gmail/status', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : { connected: false })
+      .then((j) => { if (!cancelled) setGmailConnected(j as { connected: boolean; address?: string }); })
+      .catch(() => { if (!cancelled) setGmailConnected({ connected: false }); });
+    return () => { cancelled = true; };
+  }, [open, gmailConnected]);
 
   return (
     <div className="user-menu" ref={ref}>
@@ -59,6 +71,20 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
           <TenantLink href="/settings/notifications" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
             <span className="user-dropdown-icon">🔔</span>Notifications
           </TenantLink>
+          <a
+            href="/api/user/gmail/connect"
+            className="user-dropdown-item"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            <span className="user-dropdown-icon">✉</span>
+            {gmailConnected?.connected ? 'Reconnect Email' : 'Connect Email'}
+            {gmailConnected?.connected && gmailConnected.address && (
+              <span className="user-dropdown-coming" title={gmailConnected.address} style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {gmailConnected.address}
+              </span>
+            )}
+          </a>
           <button type="button" className="user-dropdown-item disabled" role="menuitem" disabled>
             <span className="user-dropdown-icon">⇄</span>Switch property
             <span className="user-dropdown-coming">single property</span>
