@@ -190,7 +190,7 @@ export default function SettingsTab({ propertyId, channelSpecs, rulesActive, rea
       </div>
 
       {tab === 'rules'      && <GuardrailsPanel        rows={rulesActive} setBanner={setBanner} />}
-      {tab === 'channels'   && <ChannelsPanel          rows={channelSpecs} setBanner={setBanner} />}
+      {tab === 'channels'   && <ChannelsPanel          rows={channelSpecs} setBanner={setBanner} propertyId={propertyId} />}
       {tab === 'reality'    && (
         <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
           <div style={{ padding:'16px 20px', background:'#EAF3EA', border:'1px solid '+HAIR, borderRadius:6, fontSize:12, color:INK, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
@@ -428,7 +428,7 @@ function GuardrailsPanel({ rows, setBanner }: { rows: Rule[]; setBanner: BannerF
 }
 
 // --- Channels panel --------------------------------------------------
-function ChannelsPanel({ rows, setBanner }: { rows: ChannelSpec[]; setBanner: BannerFn }) {
+function ChannelsPanel({ rows, setBanner, propertyId }: { rows: ChannelSpec[]; setBanner: BannerFn; propertyId: number }) {
   const router = useRouter();
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<ChannelSpec>>({});
@@ -471,7 +471,7 @@ function ChannelsPanel({ rows, setBanner }: { rows: ChannelSpec[]; setBanner: Ba
 
   return (
     <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:16 }}>
-      <MediaArchiveThresholdBanner setBanner={setBanner} />
+      <MediaArchiveThresholdBanner setBanner={setBanner} propertyId={propertyId} />
       <div style={{ marginBottom:10, fontSize:11, color:INK_M }}>
         {rows.length} channels · source: public.v_media_channel_specs · writes: media.media_channel_specs (editable fields only) · per-channel <strong>Min score %</strong> filters the Library "Use for" dropdown
       </div>
@@ -1087,24 +1087,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // Photos with quality_index below the archive_threshold route to the
 // Archive review list for a human decision (sort or score-override).
 // ==================================================================
-function MediaArchiveThresholdBanner({ setBanner }: { setBanner: BannerFn }) {
+function MediaArchiveThresholdBanner({ setBanner, propertyId }: { setBanner: BannerFn; propertyId: number }) {
   const router = useRouter();
-  const [val, setVal] = useState<string>('');
+  const [val, setVal] = useState<string>('30');
   const [auto, setAuto] = useState<boolean>(false);
-  const [pid, setPid] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const pid = propertyId;
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/marketing/media/settings', { cache:'no-store' })
+    fetch('/api/marketing/media/settings?property_id=' + propertyId, { cache:'no-store' })
       .then(r => r.ok ? r.json() : null)
-      .then(j => { if (!cancelled && j) { setVal(String(j.archive_threshold ?? 30)); setAuto(!!j.auto_archive); setPid(j.property_id ?? null); } })
+      .then(j => { if (!cancelled && j) { setVal(String(j.archive_threshold ?? 30)); setAuto(!!j.auto_archive); } })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [propertyId]);
 
   async function save() {
-    if (pid == null) return;
     setSaving(true);
     try {
       const res = await fetch('/api/marketing/media/settings', {
@@ -1126,7 +1125,7 @@ function MediaArchiveThresholdBanner({ setBanner }: { setBanner: BannerFn }) {
         <input type="checkbox" checked={auto} onChange={e => setAuto(e.target.checked)} />
         <span style={{ fontSize:11 }}>auto-archive (skip review)</span>
       </label>
-      <button onClick={save} disabled={saving || pid == null} style={{ padding:'6px 12px', fontSize:11, fontWeight:600, background:FOREST, color:'#FFFFFF', border:'none', borderRadius:3, cursor:'pointer' }}>
+      <button onClick={save} disabled={saving} style={{ padding:'6px 12px', fontSize:11, fontWeight:600, background:FOREST, color:'#FFFFFF', border:'none', borderRadius:3, cursor:'pointer' }}>
         {saving ? 'Saving…' : 'Save'}
       </button>
     </div>
