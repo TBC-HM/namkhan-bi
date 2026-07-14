@@ -212,16 +212,20 @@ export interface ScheduledRow {
   created_at: string;
 }
 
-export function ScheduledReportsTable({ rows, propertyId, reportOptions, previewHrefBuilder }: {
+export function ScheduledReportsTable({ rows, propertyId, reportOptions, previewMode = 'revenue' }: {
   rows: ScheduledRow[]; propertyId: number; reportOptions: ReportOption[];
-  // PBS 2026-07-14 · dept-aware Preview URL. Defaults to /revenue/... for backward-compat.
-  // Ops HoD passes a builder that routes to /operations/reports/scheduled/daily/preview.
-  previewHrefBuilder?: (row: ScheduledRow) => string;
+  // PBS 2026-07-14 v2 · dept-aware Preview URL via string enum (was a function prop
+  // — functions cannot cross the RSC server→client boundary in Next.js 15 and
+  // caused every HoD landing to 500 with digest 1754067955).
+  previewMode?: 'revenue' | 'operations';
 }) {
-  const buildPreview = previewHrefBuilder ?? ((r: ScheduledRow) => {
+  const buildPreview = (r: ScheduledRow) => {
+    if (previewMode === 'operations' || r.template_key === 'operations_daily') {
+      return `/operations/reports/scheduled/daily/preview?property_id=${r.property_id}`;
+    }
     const key = ['daily','weekly','monthly'].includes(r.template_key) ? r.template_key : 'daily';
     return `/revenue/reports/scheduled/${key}/preview?property_id=${r.property_id}`;
-  });
+  };
   const labelFor = (key: string) => reportOptions.find((o) => o.value === key)?.label ?? key;
   return (
     <>
