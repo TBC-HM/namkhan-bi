@@ -222,7 +222,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
 
         <div style={{ gridColumn: '1 / -1' }}>
           <Container
-            title="Forward outlook by night"
+            title="Forward table by Day"
             subtitle={`${pace.length} nights from today · monthly totals inline · Demand · Lighthouse (snapshot ${snapshotDate ?? 'pending'})`}
           >
             <div style={{ overflowX: 'auto', border: '1px solid #E6DFCC', borderRadius: 6 }}>
