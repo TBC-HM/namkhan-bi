@@ -65,11 +65,10 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const addDaysIsoLocal = (iso: string, n: number): string => { const d = new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0, 10); };
   const todayIso = isoInTz(new Date(), PROPERTY_TZ);
   const yesterdayIso = addDaysIsoLocal(todayIso, -1);
-  // PBS 2026-07-15: for booking/cancel activity + snapshot-delta pickup, use UTC anchor to
-  // match the pickup matrix (fn_pickup_otb_at uses booking_date::date in UTC). That way the
-  // HoD Pickup tile = the "Pickup Yesterday" column on /revenue/pickup = Cloudbeds pickup.
-  const todayUtcIso = new Date().toISOString().slice(0, 10);
-  const yesterdayUtcIso = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  // PBS 2026-07-15: Vientiane calendar day everywhere — yesterday = yesterday, no trailing 24h.
+  // fn_pickup_otb_at + fn_hod_day_activity were rewritten to cast booking_date/cancellation_date
+  // in property tz (Asia/Vientiane for Namkhan). Pickup matrix + daily report + HoD tiles now
+  // ALL agree on the calendar-day boundary — same anchor date returns the same numbers app-wide.
   const in90Iso = new Date(Date.now() + 90 * 86400_000).toISOString().slice(0, 10);
   const in30Iso = new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10);
   const in14Iso = new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10);
@@ -103,8 +102,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     getPulseTodayPickup(pid, yesterdayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, yesterdayIso).catch(() => [] as Array<unknown>),
     // PBS 2026-07-15: Cloudbeds-aligned tile inputs — gross bookings (incl. cancelled-today), cancellations (with original_amount), pickup net (snapshot delta).
-    supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: todayUtcIso }),
-    supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: yesterdayUtcIso }),
+    supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: todayIso }),
+    supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: yesterdayIso }),
     supabase.from('cockpit_bugs').select('id, body, status, created_at, page_url').not('status','in','(closed,resolved,wontfix,done)').order('created_at', { ascending: false }).limit(5),
     supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true }).eq('dept_slug', 'revenue').eq('property_id', pid).eq('is_due', true),
     supabase.rpc('fn_revenue_hod_today_kpi', { p_property_id: pid }),
