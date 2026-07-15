@@ -210,7 +210,7 @@ export default async function ParityPage({ propertyId }: Props) {
   const integrityCols: ChartSeries[] = [
     { key: 'day',       label: 'Day' },
     { key: 'stay',      label: 'Date' },
-    { key: 'direct',    label: 'Brand.com' },
+    { key: 'direct',    label: 'The Namkhan' },
     { key: 'booking',   label: 'Booking.com' },
     { key: 'expedia',   label: 'Expedia' },
     { key: 'agoda',     label: 'Agoda' },
@@ -311,7 +311,7 @@ export default async function ParityPage({ propertyId }: Props) {
   }));
   const otaCols: ChartSeries[] = [
     { key: 'stay_date',   label: 'Stay date' },
-    { key: 'direct',      label: 'Direct' },
+    { key: 'direct',      label: 'The Namkhan' },
     { key: 'booking',     label: 'Booking' },
     { key: 'agoda',       label: 'Agoda' },
     { key: 'expedia',     label: 'Expedia' },
