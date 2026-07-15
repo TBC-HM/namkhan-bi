@@ -37,9 +37,14 @@ const KNOWN_DEPTS: ReadonlySet<DeptSlug> = new Set<DeptSlug>([
 
 interface Props {
   params: { property_id: string; rest: string[] };
+  // PBS 2026-07-16: catch-all now takes searchParams so we can preserve the
+  // query string during the Namkhan redirect. Without this, ?dept=revenue
+  // on /h/260955/cockpit/chat vanished → /cockpit/chat received no dept →
+  // fell back to Felix instead of Vector.
+  searchParams?: Record<string, string | string[] | undefined>;
 }
 
-export default function CatchAllPropertyPage({ params }: Props) {
+export default function CatchAllPropertyPage({ params, searchParams }: Props) {
   const propertyId = Number(params.property_id);
   if (!KNOWN_PROPERTIES[propertyId]) notFound();
 
@@ -49,7 +54,16 @@ export default function CatchAllPropertyPage({ params }: Props) {
   // Namkhan default → forward to the canonical global page if it exists.
   // The global pages live at /<dept>/<sub> (Namkhan's legacy URL tree).
   if (propertyId === NAMKHAN_PROPERTY_ID) {
-    redirect(pathTail);
+    const qs = searchParams
+      ? new URLSearchParams(
+          Object.entries(searchParams).flatMap(([k, v]) =>
+            Array.isArray(v) ? v.map((vv) => [k, vv] as [string, string])
+            : v != null ? [[k, String(v)] as [string, string]]
+            : []
+          )
+        ).toString()
+      : '';
+    redirect(qs ? `${pathTail}?${qs}` : pathTail);
   }
 
   const propertyLabel = KNOWN_PROPERTIES[propertyId];
