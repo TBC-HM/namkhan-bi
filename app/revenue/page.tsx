@@ -447,7 +447,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // The seed config's `PACE = −14%` string was a hardcoded placeholder — never wired.
   const paceNext30      = paceNext90.filter((n) => n.daysOut >= 1 && n.daysOut <= 30);
   const paceTyRn        = paceNext30.reduce((s, n) => s + Number(n.confirmedRooms ?? 0), 0);
-  const paceLyRn        = paceNext30.reduce((s, n) => s + Number(n.stly ?? 0), 0);
+  const paceLyRn        = paceNext30.reduce((s, n) => s + Number(n.stlyRooms ?? 0), 0);
   const paceAbsDelta    = paceTyRn - paceLyRn;
   const pacePctDelta    = paceLyRn > 0 ? Math.round((paceAbsDelta / paceLyRn) * 100) : null;
   const paceSign        = paceAbsDelta > 0 ? '+' : '';
