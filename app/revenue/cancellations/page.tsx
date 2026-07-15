@@ -398,20 +398,25 @@ export default async function CancellationsPage({
   const basePath = propertyId ? `/h/${propertyId}/revenue/cancellations` : '/revenue/cancellations';
   const hrefFor = (w: Win) => `${basePath}${w === DEFAULT_WIN ? '' : `?win=${w}`}`;
 
+  // PBS 2026-07-15 · rollout brief: KpiTile.stly corner badge on cancel-count /
+  // lost-revenue / lost-RN tiles. SDLY values already computed above (sdlyCount,
+  // sdlyLostRev, sdlyLostRn). SDLY footnote text moved to the badge — footnote is
+  // now free to carry other context (kept empty here so nothing overlaps the pill).
   const tiles: KpiTileProps[] = [
     { label: 'Cancellations',   value: cxlCount, size: 'sm',
       delta: sdlyCount > 0 ? { value: dCount.value, period: 'vs SDLY', direction: dCount.direction, isGoodWhenUp: false } : undefined,
-      footnote: sdlyCount > 0 ? `SDLY ${sdlyCount}` : undefined },
+      stly: sdlyCount > 0 ? String(sdlyCount) : undefined },
     { label: `Cancel rate · ${cxlRateWinLabel}`, value: `${cxlRateHeadline.toFixed(1)}%`, size: 'sm',
       footnote: `${cxlRate30.toFixed(1)}% 30d · ${cxlRate90.toFixed(1)}% 90d` },
     { label: 'Lost revenue', value: Math.round(lostRev), currency: moneyCurrency, size: 'sm',
       delta: sdlyLostRev > 0 ? { value: dLostRev.value, period: 'vs SDLY', direction: dLostRev.direction, isGoodWhenUp: false } : undefined,
-      footnote: sdlyLostRev > 0 ? `SDLY ${fmt$(sdlyLostRev, moneyCurrency)}` : undefined },
+      stly: sdlyLostRev > 0 ? fmt$(sdlyLostRev, moneyCurrency) : undefined },
     { label: 'Lost room nights', value: lostRn, size: 'sm',
       delta: sdlyLostRn > 0 ? { value: dLostRn.value, period: 'vs SDLY', direction: dLostRn.direction, isGoodWhenUp: false } : undefined,
-      footnote: sdlyLostRn > 0 ? `SDLY ${sdlyLostRn}` : undefined },
+      stly: sdlyLostRn > 0 ? String(sdlyLostRn) : undefined },
     { label: 'Avg days to arrival', value: `${avgDta.toFixed(0)}d`, size: 'sm',
       delta: sdlyAvgDta > 0 ? { value: dDta.value, period: 'vs SDLY', direction: dDta.direction, isGoodWhenUp: true } : undefined,
+      stly: sdlyAvgDta > 0 ? `${Math.round(sdlyAvgDta)}d` : undefined,
       footnote: 'higher = more lead time to resell' },
   ];
 
