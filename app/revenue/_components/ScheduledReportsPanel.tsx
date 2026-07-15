@@ -23,10 +23,12 @@ interface Props {
   initialRecipients?: Recipient[];
 }
 
+// PBS 2026-07-16: header labels renamed. Daily → "Daily Pickup Report" (matches
+// the edge fn CADENCE_LABEL + email subject). Weekly / Monthly stay compact.
 const CADENCE: Record<TemplateKey, { label: string; cadence: string }> = {
-  daily:   { label: 'Daily',   cadence: 'Every day at 08:00 UTC' },
-  weekly:  { label: 'Weekly',  cadence: 'Every Monday at 08:00 UTC' },
-  monthly: { label: 'Monthly', cadence: '1st of month at 08:00 UTC' },
+  daily:   { label: 'Daily Pickup Report', cadence: 'Every day at 08:00 UTC' },
+  weekly:  { label: 'Weekly Report',       cadence: 'Every Monday at 08:00 UTC' },
+  monthly: { label: 'Monthly Report',      cadence: '1st of month at 08:00 UTC' },
 };
 
 const CARD_STYLE: React.CSSProperties = { background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 };
@@ -47,6 +49,9 @@ function ReportCard({ templateKey, propertyId, recipients, onRefresh }: { templa
   const meta = CADENCE[templateKey];
   const [email, setEmail] = useState('');
   const [name, setName]   = useState('');
+  // PBS 2026-07-16: ad-hoc "Send once to" — a separate address that is NOT
+  // added to the recipient list; blasts a one-off through the edge fn.
+  const [adhocEmail, setAdhocEmail] = useState('');
   const [busy, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -81,11 +86,24 @@ function ReportCard({ templateKey, propertyId, recipients, onRefresh }: { templa
       setTimeout(() => setMsg(null), 2400);
     });
   };
+  const sendAdhoc = async () => {
+    const trimmed = adhocEmail.trim();
+    if (!trimmed || !trimmed.includes('@')) return;
+    startTransition(async () => {
+      const res = await fetch('/api/revenue/reports/send-now', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ property_id: propertyId, template_key: templateKey, to: trimmed }),
+      });
+      setMsg(res.ok ? `sent to ${trimmed}` : 'send error');
+      if (res.ok) setAdhocEmail('');
+      setTimeout(() => setMsg(null), 2800);
+    });
+  };
 
   return (
     <div style={CARD_STYLE}>
       <div>
-        <div style={HEADER_STYLE}>{meta.label} report</div>
+        <div style={HEADER_STYLE}>{meta.label}</div>
         <div style={CADENCE_LINE_STYLE}>{meta.cadence}</div>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minHeight: 24 }}>
@@ -101,15 +119,26 @@ function ReportCard({ templateKey, propertyId, recipients, onRefresh }: { templa
         ))}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5 }}>Recipients (scheduled)</div>
         <div style={{ display: 'flex', gap: 6 }}>
           <input style={INPUT_STYLE} type="email" placeholder="email@example.com" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
           <input style={INPUT_STYLE} type="text"  placeholder="Name (optional)"    value={name}  onChange={(e) => setName(e.target.value)}  disabled={busy} />
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button style={BTN_PRIMARY}   onClick={addRecipient} disabled={busy || !email.trim()}>+ Add</button>
-          <button style={BTN_SECONDARY} onClick={sendNow}      disabled={busy || recipients.length === 0}>Send now</button>
+          <button style={BTN_SECONDARY} onClick={sendNow}      disabled={busy || recipients.length === 0} title={recipients.length === 0 ? 'Add a recipient first' : 'Send to all recipients above'}>Send now</button>
           <a href={previewHref(templateKey, propertyId)} style={{ fontSize: 11, color: '#0F4C3A', textDecoration: 'underline', marginLeft: 'auto' }}>Preview →</a>
         </div>
+
+        {/* PBS 2026-07-16: ad-hoc one-off send. Types email, hits Send, no DB row created. */}
+        <div style={{ marginTop: 6, paddingTop: 8, borderTop: '1px dashed #E6DFCC' }}>
+          <div style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Send once (no scheduling)</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input style={INPUT_STYLE} type="email" placeholder="you@example.com" value={adhocEmail} onChange={(e) => setAdhocEmail(e.target.value)} disabled={busy} />
+            <button style={BTN_PRIMARY} onClick={sendAdhoc} disabled={busy || !adhocEmail.trim() || !adhocEmail.includes('@')}>Send</button>
+          </div>
+        </div>
+
         {msg && <div style={{ fontSize: 11, color: msg.startsWith('error') ? '#B00020' : '#0F4C3A' }}>{msg}</div>}
       </div>
     </div>
