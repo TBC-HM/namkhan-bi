@@ -69,27 +69,40 @@ export default function RoomPickerDrawer({ open, onClose, fromDate, toDate, onPi
 
   return (
     <div onClick={onClose} className="proposal-drawer-mask">
-      <aside onClick={e => e.stopPropagation()} className="proposal-drawer">
-        <header className="proposal-drawer-head">
+      <aside
+        onClick={e => e.stopPropagation()}
+        className="proposal-drawer"
+        style={{ background: '#FFFFFF', color: '#1B1B1B' }}
+      >
+        <header
+          className="proposal-drawer-head"
+          style={{ borderBottom: '1px solid #E6DFCC' }}
+        >
           <div>
-            <div className="t-eyebrow">Rooms · {fmtIsoDate(fromDate)} → {fmtIsoDate(toDate)}</div>
-            <h3 className="proposal-drawer-title">
-              Pick your <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>room</em>
+            <div className="t-eyebrow" style={{ color: '#5A5A5A' }}>Rooms · {fmtIsoDate(fromDate)} → {fmtIsoDate(toDate)}</div>
+            <h3 className="proposal-drawer-title" style={{ color: '#1B1B1B' }}>
+              Pick your <em style={{ color: '#084838', fontStyle: 'italic' }}>room</em>
             </h3>
           </div>
           <button className="btn" onClick={onClose}>Close ✕</button>
         </header>
 
         {staleMin != null && staleMin > 60 && (
-          <div className="proposal-drawer-warn">
+          <div
+            className="proposal-drawer-warn"
+            style={{ background: '#FEF3C7', border: '1px solid #F3D57A', color: '#5A3D0A' }}
+          >
             <strong>Rates stale</strong> — last sync {staleMin} min ago. Refresh from PMS before sending.
           </div>
         )}
 
         <div className="proposal-drawer-body">
-          {loading && <p style={{ color: 'var(--ink-mute)' }}>Loading availability…</p>}
+          {loading && <p style={{ color: '#8A8A8A' }}>Loading availability…</p>}
           {!loading && rooms.length === 0 && (
-            <div className="panel dashed" style={{ padding: 24, color: 'var(--ink-mute)' }}>
+            <div
+              className="panel dashed"
+              style={{ padding: 24, color: '#8A8A8A', background: '#FAFAF7', border: '1px dashed #E6DFCC' }}
+            >
               No rooms available for the full date range. Try different dates, or check PMS for stop-sell flags.
             </div>
           )}
