@@ -86,34 +86,71 @@ export default function MailsClientActions(props: Props) {
     }
   }, [aliasByMailboxId, rowBusyThreadId, showToast]);
 
+  // PBS 2026-07-16 — per-row X dismiss (just hides from list; no Gmail write).
+  const dismissRow = useCallback(async (t: Thread) => {
+    if (rowBusyThreadId) return;
+    const alias = aliasByMailboxId[t.mailbox_id] ?? null;
+    setRowBusyThreadId(t.threadId);
+    try {
+      const r = await fetch('/api/sales/mails/dismiss', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ thread_ids: [t.threadId], mailbox_alias_by_id: alias ? { [t.threadId]: alias } : {} }),
+      });
+      if (!r.ok) { showToast('Dismiss failed'); return; }
+      setDismissed((prev) => { const next = new Set(prev); next.add(t.threadId); return next; });
+    } finally {
+      setRowBusyThreadId(null);
+    }
+  }, [aliasByMailboxId, rowBusyThreadId, showToast]);
+
   const renderRowActions = useCallback((t: Thread) => {
     // The primitive itself renders the "→ Lead #N" and "Dismissed" chips
     // via its linkedLeads / dismissedThreadIds props. We only render the
-    // Convert chip when neither applies.
+    // Convert chip when neither applies + the X dismiss on every non-linked row.
     if (linkedLeads[t.threadId]) return null;
     if (dismissed.has(t.threadId)) return null;
     const busy = rowBusyThreadId === t.threadId;
     return (
-      <button
-        type="button"
-        onClick={() => void convertRow(t)}
-        disabled={busy}
-        title="Convert this thread to a Lead"
-        style={{
-          background: T.CHIP,
-          color: T.INK,
-          border: '1px solid ' + T.HAIR,
-          borderRadius: 4,
-          padding: '4px 8px',
-          fontSize: 11,
-          fontWeight: 600,
-          cursor: busy ? 'wait' : 'pointer',
-          whiteSpace: 'nowrap',
-          opacity: busy ? 0.6 : 1,
-        }}
-      >{busy ? 'Converting…' : '+ Convert'}</button>
+      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={() => void convertRow(t)}
+          disabled={busy}
+          title="Convert this thread to a Lead"
+          style={{
+            background: T.CHIP,
+            color: T.INK,
+            border: '1px solid ' + T.HAIR,
+            borderRadius: 4,
+            padding: '4px 8px',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: busy ? 'wait' : 'pointer',
+            whiteSpace: 'nowrap',
+            opacity: busy ? 0.6 : 1,
+          }}
+        >{busy ? 'Converting…' : '+ Convert'}</button>
+        <button
+          type="button"
+          onClick={() => void dismissRow(t)}
+          disabled={busy}
+          title="Dismiss this thread from the inbox (no Gmail write)"
+          style={{
+            background: '#FFFFFF',
+            color: '#B04A2F',
+            border: '1px solid ' + T.HAIR,
+            borderRadius: 4,
+            padding: '3px 7px',
+            fontSize: 13,
+            lineHeight: 1,
+            cursor: busy ? 'wait' : 'pointer',
+            opacity: busy ? 0.5 : 1,
+          }}
+        >×</button>
+      </span>
     );
-  }, [linkedLeads, dismissed, rowBusyThreadId, convertRow]);
+  }, [linkedLeads, dismissed, rowBusyThreadId, convertRow, dismissRow]);
 
   const onBulkPrimary = useCallback(async (threads: Thread[]) => {
     let converted = 0;
