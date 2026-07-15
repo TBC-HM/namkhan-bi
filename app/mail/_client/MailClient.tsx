@@ -8,7 +8,8 @@
 // PBS 2026-07-14 "professional full-screen mailbox, not the popup".
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ComposeModal from '@/app/_components/ComposeModal';
+import { useSearchParams } from 'next/navigation';
+import ComposeModal, { type ComposePrefill } from '@/app/_components/ComposeModal';
 
 // ---- design tokens ------------------------------------------------------
 const T = {
@@ -133,6 +134,10 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   const [attachFilter, setAttachFilter] = useState<boolean>(false);
   const [newslettersOnly, setNewslettersOnly] = useState<boolean>(false);
   const [showCompose, setShowCompose] = useState<boolean>(false);
+  // PBS 2026-07-16: cross-page deep-link compose (e.g. /mail?compose=1&to=x@y&subject=Z).
+  // Lets any page (Leads, Contacts, etc.) trigger in-app compose pre-filled — replaces mailto:.
+  const [composePrefill, setComposePrefill] = useState<ComposePrefill | undefined>(undefined);
+  const searchParams = useSearchParams();
   const [replyOpen, setReplyOpen] = useState<boolean>(false);
   const [replyBody, setReplyBody] = useState<string>('');
   const [replySending, setReplySending] = useState<boolean>(false);
@@ -279,6 +284,22 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     }, 60_000);
     return () => clearInterval(iv);
   }, [loadList]);
+
+  // ---- PBS 2026-07-16: deep-link compose -------------------------------
+  // /mail?compose=1&to=x@y&subject=Z opens the composer pre-filled. Used by
+  // Leads ✉ button, contact records, any page that wants in-app compose.
+  useEffect(() => {
+    if (!searchParams) return;
+    if (searchParams.get('compose') !== '1') return;
+    const to = searchParams.get('to') ?? '';
+    const subject = searchParams.get('subject') ?? '';
+    if (!to && !subject) return;
+    setComposePrefill({ to: to || undefined, subject: subject || undefined });
+    setShowCompose(true);
+    // Only fire once per navigation — no reset on refresh needed since query
+    // stays set and the user can close the modal to dismiss.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---- IntersectionObserver for infinite scroll -------------------------
   useEffect(() => {
@@ -671,7 +692,11 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
       </section>
 
       {showCompose && (
-        <ComposeModal onClose={() => setShowCompose(false)} onSent={() => { setShowCompose(false); void loadList(); }} />
+        <ComposeModal
+          prefill={composePrefill}
+          onClose={() => { setShowCompose(false); setComposePrefill(undefined); }}
+          onSent={() => { setShowCompose(false); setComposePrefill(undefined); void loadList(); }}
+        />
       )}
 
       {lastError && (
