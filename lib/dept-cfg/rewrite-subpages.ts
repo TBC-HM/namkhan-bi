@@ -25,6 +25,7 @@ const PROPERTY_SCOPED_HREFS: ReadonlySet<string> = new Set([
   // /operations/catalog-cleanup once those pages are property-scoped.
   '/guest',                  // shim exists
   '/revenue',                // (snapshot, no detail pages yet)
+  '/revenue/briefing',       // PBS 2026-07-15 — guardrail inbox · property-scoped mount below
   '/revenue/pickup',         // pickup matrix · property-aware
   '/revenue/rooms',          // rooms intelligence · registry-driven
   '/finance',
