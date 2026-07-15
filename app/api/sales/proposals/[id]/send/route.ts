@@ -2,6 +2,10 @@
 // Pre-send gate: re-check rate_inventory for every room block.
 // Returns 409 with the ProposalCheck details if any room is unavailable
 // (status === 'red'). Yellow / green proceed.
+//
+// PBS 2026-07-16 update: also render newsletter-quality HTML and attach it
+// to the Make webhook payload as `email_html` — so outbound sends can go
+// straight through Make → Resend/Gmail without a second render round-trip.
 
 import { NextResponse } from 'next/server';
 import { markProposalSent, getProposalWithBlocks, getInquiry, checkProposalRoomsAvail } from '@/lib/sales';
@@ -41,6 +45,23 @@ export async function POST(req: Request, { params }: Ctx) {
   const host = process.env.VERCEL_URL ?? 'localhost:3000';
   const publicUrl = `${proto}://${host}/p/${sent.token}`;
 
+  // Render the newsletter-quality HTML server-side.
+  // Prefer an internal fetch to reuse the exact preview route logic (single source of truth).
+  let emailHtml: string | null = null;
+  let emailSubject: string | null = email?.subject ?? null;
+  try {
+    const r = await fetch(`${proto}://${host}/api/sales/proposals/${params.id}/email/preview?format=json`, {
+      cache: 'no-store',
+    });
+    if (r.ok) {
+      const j = await r.json();
+      emailHtml = j.html ?? null;
+      emailSubject = j.subject ?? emailSubject;
+    }
+  } catch (_) {
+    // Non-fatal — Make can still deliver from the plain intro/outro fields.
+  }
+
   await fireMakeWebhook('proposal_sent', {
     proposal_id: params.id,
     public_token: sent.token,
@@ -53,11 +74,12 @@ export async function POST(req: Request, { params }: Ctx) {
     total_lak: totalLak,
     avail_check_status: check.status,
     avail_check_message: check.message,
-    email_subject: email?.subject ?? null,
+    email_subject: emailSubject,
     email_intro_md: email?.intro_md ?? null,
     email_outro_md: email?.outro_md ?? null,
     email_ps_md: email?.ps_md ?? null,
-    blocks: blocks.map(b => ({ label: b.label, type: b.block_type, qty: b.qty, nights: b.nights, total_lak: b.total_lak })),
+    email_html: emailHtml,
+    blocks: blocks.map(b => ({ label: b.label, type: b.block_type, qty: b.qty, nights: b.nights, total_lak: b.total_lak, hero_asset_id: b.hero_asset_id })),
   });
 
   return NextResponse.json({
@@ -65,5 +87,6 @@ export async function POST(req: Request, { params }: Ctx) {
     public_url: publicUrl,
     avail_check: check,
     forced: force,
+    email_html_ready: !!emailHtml,
   });
 }
