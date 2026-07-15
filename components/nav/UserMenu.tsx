@@ -8,6 +8,11 @@ import { roleLabel } from '@/lib/currentUser';
 export default function UserMenu({ user }: { user: CurrentUser }) {
   const [open, setOpen] = useState(false);
   const [gmailConnected, setGmailConnected] = useState<{ connected: boolean; address?: string } | null>(null);
+  // PBS 2026-07-16: pull unread count into the User dropdown so the mailbox
+  // pill lives beside Settings/Notifications/Sign-out, not floating loose in
+  // the topbar. GmailNavDropdown stays mounted globally (for the drawer), but
+  // its visible chip belongs here.
+  const [unread, setUnread] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,6 +42,19 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
     return () => { cancelled = true; };
   }, [open, gmailConnected]);
 
+  // PBS 2026-07-16: unread mail count lives in the User dropdown now.
+  // Uses the same /api/mail/messages backend that GmailNavDropdown reads;
+  // we just need a headcount, not the payload.
+  useEffect(() => {
+    if (!open || unread !== null) return;
+    let cancelled = false;
+    fetch('/api/mail/messages?labelIds=UNREAD&maxResults=1', { cache: 'no-store' })
+      .then((r) => r.ok ? r.json() : { resultSizeEstimate: 0 })
+      .then((j) => { if (!cancelled) setUnread(Number(j?.resultSizeEstimate ?? 0)); })
+      .catch(() => { if (!cancelled) setUnread(0); });
+    return () => { cancelled = true; };
+  }, [open, unread]);
+
   return (
     <div className="user-menu" ref={ref}>
       <button
@@ -65,6 +83,15 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
             </div>
           </div>
           <div className="user-dropdown-divider" />
+          <TenantLink href="/mail" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
+            <span className="user-dropdown-icon">📥</span>
+            Inbox
+            {unread != null && unread > 0 && (
+              <span className="user-dropdown-coming" style={{ background: '#084838', color: '#FFFFFF', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
+          </TenantLink>
           <TenantLink href="/settings" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
             <span className="user-dropdown-icon">⚙</span>Settings
           </TenantLink>
