@@ -65,6 +65,11 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const addDaysIsoLocal = (iso: string, n: number): string => { const d = new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0, 10); };
   const todayIso = isoInTz(new Date(), PROPERTY_TZ);
   const yesterdayIso = addDaysIsoLocal(todayIso, -1);
+  // PBS 2026-07-15: for booking/cancel activity + snapshot-delta pickup, use UTC anchor to
+  // match the pickup matrix (fn_pickup_otb_at uses booking_date::date in UTC). That way the
+  // HoD Pickup tile = the "Pickup Yesterday" column on /revenue/pickup = Cloudbeds pickup.
+  const todayUtcIso = new Date().toISOString().slice(0, 10);
+  const yesterdayUtcIso = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
   const in90Iso = new Date(Date.now() + 90 * 86400_000).toISOString().slice(0, 10);
   const in30Iso = new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10);
   const in14Iso = new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10);
@@ -77,7 +82,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const sbAdmin = getSupabaseAdmin();
 
   const [
-    pickupToday, cancellationsToday, pickupYesterday, cancellationsYesterday, bugsRes, dueTasksRes,
+    pickupToday, cancellationsToday, pickupYesterday, cancellationsYesterday, hodActTodayRes, hodActYestRes, bugsRes, dueTasksRes,
     todayKpiRes, yesterdayKpiRes, guardrailsRes,
     paceRes, stlyRes,
     l14PickupRes, l14LyPickupRes,
@@ -97,6 +102,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayPickup(pid, yesterdayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, yesterdayIso).catch(() => [] as Array<unknown>),
+    // PBS 2026-07-15: Cloudbeds-aligned tile inputs — gross bookings (incl. cancelled-today), cancellations (with original_amount), pickup net (snapshot delta).
+    supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: todayUtcIso }),
+    supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: yesterdayUtcIso }),
     supabase.from('cockpit_bugs').select('id, body, status, created_at, page_url').not('status','in','(closed,resolved,wontfix,done)').order('created_at', { ascending: false }).limit(5),
     supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true }).eq('dept_slug', 'revenue').eq('property_id', pid).eq('is_due', true),
     supabase.rpc('fn_revenue_hod_today_kpi', { p_property_id: pid }),
@@ -141,12 +149,37 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const dueTasksCount = dueTasksRes.count ?? 0;
   const symToday = pid === 1000001 ? '€' : '$';
 
+  // PBS 2026-07-15: CLOUDBEDS-ALIGNED activity tiles — fed by fn_hod_day_activity RPC.
+  // Gross = all reservations with booking_date UTC = anchor (cancelled or not), rev via COALESCE(total, original_amount).
+  // Cancels = reservations with cancellation_date UTC = anchor, rev = original_amount (recovered from raw->detailedRates).
+  // Pickup = snapshot delta OTB(anchor) − OTB(anchor − 1) — matches the pickup matrix's "Pickup Yesterday" column.
+  type HodAct = { gross_bookings_count: number; gross_bookings_rn: number|string; gross_bookings_rev: number|string; cancellations_count: number; cancellations_rn: number|string; cancellations_rev: number|string; pickup_net_rn: number|string; pickup_net_rev: number|string };
+  const hodActT = (((hodActTodayRes.data ?? [])[0] ?? null) as HodAct | null);
+  const hodActY = (((hodActYestRes.data  ?? [])[0] ?? null) as HodAct | null);
+
+  const grossBkCount    = Number(hodActT?.gross_bookings_count ?? 0);
+  const grossBkRn       = Number(hodActT?.gross_bookings_rn ?? 0);
+  const grossBkRev      = Number(hodActT?.gross_bookings_rev ?? 0);
+  const cancelBkCount   = Number(hodActT?.cancellations_count ?? 0);
+  const cancelBkRn      = Number(hodActT?.cancellations_rn ?? 0);
+  const cancelBkRev     = Number(hodActT?.cancellations_rev ?? 0);
+  const pickupNetRn     = Number(hodActT?.pickup_net_rn ?? 0);
+  const pickupNetRev    = Number(hodActT?.pickup_net_rev ?? 0);
+
+  const grossBkCountY   = Number(hodActY?.gross_bookings_count ?? 0);
+  const grossBkRnY      = Number(hodActY?.gross_bookings_rn ?? 0);
+  const grossBkRevY     = Number(hodActY?.gross_bookings_rev ?? 0);
+  const cancelBkCountY  = Number(hodActY?.cancellations_count ?? 0);
+  const cancelBkRnY     = Number(hodActY?.cancellations_rn ?? 0);
+  const cancelBkRevY    = Number(hodActY?.cancellations_rev ?? 0);
+  const pickupNetRnY    = Number(hodActY?.pickup_net_rn ?? 0);
+  const pickupNetRevY   = Number(hodActY?.pickup_net_rev ?? 0);
+
+  // Legacy vars kept for downstream consumers (rules engine, mail panel, etc.) — same source, unchanged.
   const pickupCount = pickupToday.length;
   const cancelCount = cancellationsToday.length;
   const pickupValue = (pickupToday as Array<{ value?: number | null }>).reduce((s, r) => s + (Number(r.value) || 0), 0);
   const cancelValue = (cancellationsToday as Array<{ value?: number | null }>).reduce((s, r) => s + (Number(r.value) || 0), 0);
-
-  // PBS 2026-07-15: yesterday parallels (Vientiane calendar day) — feed the second headline stripe.
   const pickupCountY = pickupYesterday.length;
   const cancelCountY = cancellationsYesterday.length;
 
@@ -435,23 +468,20 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     { label: 'Revenue tonight', value: `${symToday}${netRevenueTonight.toLocaleString('en-US')}`, size: 'sm',
       footnote: `${todayKpi?.rn_tonight ?? 0} rooms × ADR · net`,
       status: netRevenueTonight > 0 ? 'green' : 'grey' },
-    // PBS 2026-07-15: relabeled to be honest — this tile shows NEW bookings only (gross),
-    // not net pickup. Real pickup net tile added below. Yesterday parallel strip lives
-    // in its own Container beneath the Today Headline.
-    { label: 'New bookings today · room nights', value: pickupNightsSum, size: 'sm',
-      footnote: pickupCount === 0
+    // PBS 2026-07-15: CLOUDBEDS-ALIGNED — gross bookings incl. cancelled-today, cancels with original_amount, pickup = snapshot delta (matches pickup matrix).
+    { label: 'New bookings today · room nights', value: grossBkRn, size: 'sm',
+      footnote: grossBkCount === 0
         ? 'no new bookings today'
-        : `${pickupCount} ${pickupCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(pickupRevenueSum).toLocaleString('en-US')} · booked today`,
-      status: pickupNightsSum > 0 ? 'green' : 'grey' },
-    { label: 'Cancellations today · room nights', value: cancelNightsSum, size: 'sm',
-      footnote: cancelCount === 0
+        : `${grossBkCount} ${grossBkCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(grossBkRev).toLocaleString('en-US')} · gross booked today`,
+      status: grossBkRn > 0 ? 'green' : 'grey' },
+    { label: 'Cancellations today · room nights', value: cancelBkRn, size: 'sm',
+      footnote: cancelBkCount === 0
         ? 'no cancellations today'
-        : `${cancelCount} ${cancelCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelRevenueSum).toLocaleString('en-US')} · lost today`,
-      status: cancelCount === 0 ? 'green' : 'amber' },
-    { label: 'Pickup today · net RN', value: (pickupNightsSum - cancelNightsSum), size: 'sm',
-      footnote: `${pickupNightsSum} booked − ${cancelNightsSum} lost · ${symToday}${Math.round(pickupRevenueSum - cancelRevenueSum).toLocaleString('en-US')} net today`,
-      status: (pickupNightsSum - cancelNightsSum) > 0 ? 'green' : (pickupNightsSum - cancelNightsSum) < 0 ? 'amber' : 'grey' },
-    // PBS 2026-07-15: Soft-nights (next 30d) pace tile removed per request — this stripe is Today snapshot only.
+        : `${cancelBkCount} ${cancelBkCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelBkRev).toLocaleString('en-US')} · value lost today`,
+      status: cancelBkCount === 0 ? 'green' : 'amber' },
+    { label: 'Pickup today · net RN', value: pickupNetRn, size: 'sm',
+      footnote: `${grossBkRn} booked − ${cancelBkRn} lost · ${symToday}${Math.round(pickupNetRev).toLocaleString('en-US')} net · matches pickup matrix`,
+      status: pickupNetRn > 0 ? 'green' : pickupNetRn < 0 ? 'amber' : 'grey' },
   ];
 
   // PBS 2026-07-15: yesterday mirror stripe — exactly the same tiles as Today, sourced from actualized v_kpi_daily_property.
@@ -469,19 +499,19 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     { label: 'Revenue yesterday', value: `${symToday}${netRevenueYesterday.toLocaleString('en-US')}`, size: 'sm',
       footnote: `${yesterdayKpi?.rooms_sold ?? 0} rooms sold · net`,
       status: netRevenueYesterday > 0 ? 'green' : 'grey' },
-    { label: 'New bookings yesterday · room nights', value: pickupNightsSumY, size: 'sm',
-      footnote: pickupCountY === 0
+    { label: 'New bookings yesterday · room nights', value: grossBkRnY, size: 'sm',
+      footnote: grossBkCountY === 0
         ? 'no new bookings yesterday'
-        : `${pickupCountY} ${pickupCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(pickupRevenueSumY).toLocaleString('en-US')} · booked yesterday`,
-      status: pickupNightsSumY > 0 ? 'green' : 'grey' },
-    { label: 'Cancellations yesterday · room nights', value: cancelNightsSumY, size: 'sm',
-      footnote: cancelCountY === 0
+        : `${grossBkCountY} ${grossBkCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(grossBkRevY).toLocaleString('en-US')} · gross booked yesterday`,
+      status: grossBkRnY > 0 ? 'green' : 'grey' },
+    { label: 'Cancellations yesterday · room nights', value: cancelBkRnY, size: 'sm',
+      footnote: cancelBkCountY === 0
         ? 'no cancellations yesterday'
-        : `${cancelCountY} ${cancelCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelRevenueSumY).toLocaleString('en-US')} · lost yesterday`,
-      status: cancelCountY === 0 ? 'green' : 'amber' },
-    { label: 'Pickup yesterday · net RN', value: (pickupNightsSumY - cancelNightsSumY), size: 'sm',
-      footnote: `${pickupNightsSumY} booked − ${cancelNightsSumY} lost · ${symToday}${Math.round(pickupRevenueSumY - cancelRevenueSumY).toLocaleString('en-US')} net yesterday`,
-      status: (pickupNightsSumY - cancelNightsSumY) > 0 ? 'green' : (pickupNightsSumY - cancelNightsSumY) < 0 ? 'amber' : 'grey' },
+        : `${cancelBkCountY} ${cancelBkCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelBkRevY).toLocaleString('en-US')} · value lost yesterday`,
+      status: cancelBkCountY === 0 ? 'green' : 'amber' },
+    { label: 'Pickup yesterday · net RN', value: pickupNetRnY, size: 'sm',
+      footnote: `${grossBkRnY} booked − ${cancelBkRnY} lost · ${symToday}${Math.round(pickupNetRevY).toLocaleString('en-US')} net · matches pickup matrix`,
+      status: pickupNetRnY > 0 ? 'green' : pickupNetRnY < 0 ? 'amber' : 'grey' },
   ];
 
   // PBS 2026-07-08 #204/attention — DB rows first, seed fallback for dev only.
