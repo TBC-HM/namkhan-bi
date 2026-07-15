@@ -127,12 +127,23 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   const [committedQuery, setCommittedQuery] = useState<string>('');
   const [unreadFilter, setUnreadFilter] = useState<boolean>(false);
   const [starredFilter, setStarredFilter] = useState<boolean>(false);
+  const [directFilter, setDirectFilter] = useState<boolean>(false);
+  const [todayFilter, setTodayFilter] = useState<boolean>(false);
+  const [weekFilter, setWeekFilter] = useState<boolean>(false);
+  const [attachFilter, setAttachFilter] = useState<boolean>(false);
+  const [newslettersOnly, setNewslettersOnly] = useState<boolean>(false);
   const [showCompose, setShowCompose] = useState<boolean>(false);
   const [replyOpen, setReplyOpen] = useState<boolean>(false);
   const [replyBody, setReplyBody] = useState<string>('');
   const [replySending, setReplySending] = useState<boolean>(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [expandedMap, setExpandedMap] = useState<Record<string, boolean>>({});
+  // Summary popover (calls /api/inbox/summary).
+  const [summaryOpen, setSummaryOpen] = useState<boolean>(false);
+  const [summaryLoading, setSummaryLoading] = useState<boolean>(false);
+  const [summaryText, setSummaryText] = useState<string>('');
+  // Poller freshness banner (Gmail sync pipeline last-run age in days).
+  const [pollerDaysAgo, setPollerDaysAgo] = useState<number | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -150,6 +161,56 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     })();
   }, []);
 
+  // ---- poller freshness (Gmail-side ingest pipeline is separate) --------
+  // Mirrors the /mail/analytics staleness banner. Shows only when > 2 days.
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch('/api/inbox/summary', { cache: 'no-store' });
+        const j = await r.json() as { poller_minutes_since?: number | null };
+        const mins = j?.poller_minutes_since ?? null;
+        if (mins != null && Number.isFinite(mins)) {
+          setPollerDaysAgo(Math.floor(mins / 1440));
+        }
+      } catch { /* silent */ }
+    })();
+  }, []);
+
+  // ---- summary today ----------------------------------------------------
+  const openSummary = useCallback(async () => {
+    setSummaryOpen(true);
+    setSummaryLoading(true);
+    setSummaryText('');
+    try {
+      const r = await fetch('/api/inbox/summary', { cache: 'no-store' });
+      const j = await r.json() as {
+        inbound_24h?: number; outbound_24h?: number; unanswered?: number;
+        unread?: number; top_senders_24h?: Array<{ email: string; name?: string | null; inbound_24h: number }>;
+      };
+      const inbound  = j.inbound_24h  ?? 0;
+      const outbound = j.outbound_24h ?? 0;
+      const unread   = j.unread       ?? 0;
+      const unans    = j.unanswered   ?? 0;
+      const top = (j.top_senders_24h ?? []).slice(0, 3)
+        .map((s) => (s.name?.trim() || s.email))
+        .filter(Boolean);
+      const s1 = `Last 24h: ${inbound} in / ${outbound} out · ${unread} unread · ${unans} unanswered.`;
+      const s2 = top.length
+        ? `Top senders: ${top.join(', ')}.`
+        : 'No standout senders in the last 24h.';
+      const s3 = unans > 5
+        ? `Focus first on the ${unans} unanswered threads — filter Unread + Direct-to-me to shortlist them.`
+        : (unread > 0
+            ? `Only ${unread} unread — you can clear the inbox in one pass.`
+            : 'Inbox is clean. Ship the day.');
+      setSummaryText([s1, s2, s3].join(' '));
+    } catch (e) {
+      setSummaryText(e instanceof Error ? ('Summary failed: ' + e.message) : 'Summary failed.');
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
+
   // ---- query debounce ---------------------------------------------------
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -158,13 +219,24 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   }, [query]);
 
   // ---- computed final query (label filters -> Gmail query) --------------
+  // Uses Gmail's native search operators so filtering happens server-side.
+  //   direct: excludes CC/BCC — Gmail supports  `to:me -cc:me -bcc:me`
+  //   today / week: `newer_than:1d` / `newer_than:7d`
+  //   attach: `has:attachment`
+  //   newslettersOnly: rely on the "unsubscribe" text OR List-Unsubscribe
+  //     header — Gmail exposes `list:` operator for List-Id.
   const finalQ = useMemo(() => {
     const parts: string[] = [];
     if (committedQuery) parts.push(committedQuery);
     if (unreadFilter) parts.push('is:unread');
     if (starredFilter) parts.push('is:starred');
+    if (directFilter)  parts.push('to:me -cc:me -bcc:me');
+    if (todayFilter)   parts.push('newer_than:1d');
+    if (weekFilter)    parts.push('newer_than:7d');
+    if (attachFilter)  parts.push('has:attachment');
+    if (newslettersOnly) parts.push('(unsubscribe OR "List-Unsubscribe")');
     return parts.join(' ');
-  }, [committedQuery, unreadFilter, starredFilter]);
+  }, [committedQuery, unreadFilter, starredFilter, directFilter, todayFilter, weekFilter, attachFilter, newslettersOnly]);
 
   // ---- load current label list -----------------------------------------
   const loadList = useCallback(async (append?: string) => {
@@ -371,12 +443,14 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
 
   // ---- render -----------------------------------------------------------
   const userLabels = labels.filter((l) => l.type === 'user');
+  const newsletterLabels = userLabels.filter((l) => /news\s*letter|digest|weekly/i.test(l.name));
+  const otherUserLabels = userLabels.filter((l) => !newsletterLabels.includes(l));
 
   return (
     <div style={{ height: '100vh', display: 'grid', gridTemplateColumns: '240px 380px 1fr', color: T.INK, fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif", background: T.WHITE }}>
       {/* LEFT RAIL */}
       <aside style={{ background: T.RAIL_BG, borderRight: '1px solid ' + T.HAIR, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: 14, borderBottom: '1px solid ' + T.HAIR }}>
+        <div style={{ padding: 14, borderBottom: '1px solid ' + T.HAIR, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <button
             type="button"
             onClick={() => setShowCompose(true)}
@@ -386,7 +460,39 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
               cursor: 'pointer', letterSpacing: '.02em',
             }}
           >Compose</button>
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search mail"
+            style={{
+              width: '100%', border: '1px solid ' + T.HAIR, borderRadius: 6,
+              padding: '7px 10px', fontSize: 12, background: T.WHITE, color: T.INK,
+              outline: 'none',
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => void openSummary()}
+            style={{
+              width: '100%', background: T.WHITE, color: T.FOREST,
+              border: '1px solid ' + T.FOREST, borderRadius: 6,
+              padding: '8px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >Summary today</button>
         </div>
+
+        {/* Sticky filter chips (multi-select). */}
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid ' + T.HAIR, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          <FilterChip label="Direct" active={directFilter} onClick={() => setDirectFilter((v) => !v)} />
+          <FilterChip label="Unread" active={unreadFilter} onClick={() => setUnreadFilter((v) => !v)} />
+          <FilterChip label="Starred" active={starredFilter} onClick={() => setStarredFilter((v) => !v)} />
+          <FilterChip label="Today" active={todayFilter} onClick={() => { setTodayFilter((v) => !v); if (!todayFilter) setWeekFilter(false); }} />
+          <FilterChip label="Week" active={weekFilter} onClick={() => { setWeekFilter((v) => !v); if (!weekFilter) setTodayFilter(false); }} />
+          <FilterChip label="Attach" active={attachFilter} onClick={() => setAttachFilter((v) => !v)} />
+        </div>
+
         <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
           {SYSTEM_ORDER.map((s) => {
             const lbl = labels.find((l) => l.id === s.id);
@@ -401,10 +507,30 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
               />
             );
           })}
-          {userLabels.length > 0 && (
+
+          {/* Newsletters section — user labels whose name contains "newsletter"
+              OR the Gmail toggle that filters by List-Unsubscribe header. */}
+          <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Newsletters</div>
+          <RailItem
+            label="All newsletters"
+            unread={0}
+            active={newslettersOnly}
+            onClick={() => setNewslettersOnly((v) => !v)}
+          />
+          {newsletterLabels.map((l) => (
+            <RailItem
+              key={l.id}
+              label={l.name}
+              unread={l.messagesUnread}
+              active={currentLabel === l.id}
+              onClick={() => setCurrentLabel(l.id)}
+            />
+          ))}
+
+          {otherUserLabels.length > 0 && (
             <>
               <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Labels</div>
-              {userLabels.map((l) => (
+              {otherUserLabels.map((l) => (
                 <RailItem
                   key={l.id}
                   label={l.name}
@@ -415,7 +541,14 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
               ))}
             </>
           )}
+
+          {/* Settings-style link section */}
+          <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Settings</div>
+          <a href="/mail/automations" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Automations</a>
+          <a href="/mail/autoresponder" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Auto-responder</a>
+          <a href="/mail/analytics" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Analytics</a>
         </nav>
+
         <div style={{ padding: '10px 14px', borderTop: '1px solid ' + T.HAIR, fontSize: 11, color: T.INK_M, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span title={userEmail} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 170 }}>{userEmail}</span>
           <button type="button" onClick={() => void loadList()} title="Refresh" style={{ background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 4, padding: '3px 8px', color: T.INK_S, fontSize: 12, cursor: 'pointer' }}>↻</button>
@@ -425,24 +558,24 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
       {/* MIDDLE THREAD LIST */}
       <section ref={listRef} style={{ borderRight: '1px solid ' + T.HAIR, background: T.WHITE, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: 10, borderBottom: '1px solid ' + T.HAIR, position: 'sticky', top: 0, background: T.WHITE, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input
-              ref={searchRef}
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="search: from:hoster label:booking after:2026/07/01"
-              style={{
-                flex: 1, border: '1px solid ' + T.HAIR, borderRadius: 6,
-                padding: '7px 10px', fontSize: 12, background: T.WHITE, color: T.INK,
-                outline: 'none',
-              }}
-            />
-            <button type="button" onClick={() => void loadList()} title="Reload" style={{ background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 4, padding: '6px 8px', color: T.INK_S, fontSize: 12, cursor: 'pointer' }}>↻</button>
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <FilterChip label="Unread" active={unreadFilter} onClick={() => setUnreadFilter((v) => !v)} />
-            <FilterChip label="Starred" active={starredFilter} onClick={() => setStarredFilter((v) => !v)} />
+          {pollerDaysAgo != null && pollerDaysAgo > 2 && (
+            <div style={{ background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 4, padding: '6px 10px', fontSize: 11, color: T.INK_S }}>
+              Gmail sync poller last ran {pollerDaysAgo}d ago — some analytics may lag. Live inbox unaffected.
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.INK, textTransform: 'capitalize' }}>
+              {(SYSTEM_ORDER.find((s) => s.id === currentLabel)?.label ?? labels.find((l) => l.id === currentLabel)?.name ?? currentLabel).toLowerCase()}
+              {finalQ && (
+                <span style={{ marginLeft: 6, fontSize: 11, color: T.INK_M, fontWeight: 400 }}>· filtered</span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadList()}
+              title="Reload"
+              style={{ background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 4, padding: '4px 8px', color: T.INK_S, fontSize: 12, cursor: 'pointer' }}
+            >↻</button>
           </div>
         </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -544,6 +677,29 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
       {lastError && (
         <div style={{ position: 'fixed', bottom: 12, right: 12, background: T.RED, color: T.WHITE, padding: '8px 12px', borderRadius: 4, fontSize: 11, zIndex: 3000 }} onClick={() => setLastError(null)}>{lastError}</div>
       )}
+
+      {summaryOpen && (
+        <div
+          onClick={() => setSummaryOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 2500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: 520, maxWidth: '100%', background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 8, padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: T.INK }}>Summary today</div>
+              <button type="button" onClick={() => setSummaryOpen(false)} style={{ background: 'transparent', border: 'none', color: T.INK_M, cursor: 'pointer', fontSize: 16 }} aria-label="Close">×</button>
+            </div>
+            {summaryLoading ? (
+              <div style={{ fontSize: 13, color: T.INK_M }}>Generating…</div>
+            ) : (
+              <div style={{ fontSize: 13, color: T.INK, lineHeight: 1.6 }}>{summaryText || 'No summary available.'}</div>
+            )}
+            <div style={{ fontSize: 11, color: T.INK_M }}>Source: /api/inbox/summary · live per-mailbox stats</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -604,6 +760,32 @@ function SkeletonList() {
   );
 }
 
+// Deterministic small colour palette for avatar backgrounds (paper-white
+// tenant only uses inks/hairlines, so we lean on a muted saturation set).
+const AVATAR_PALETTE = ['#084838', '#8B5A2B', '#5A5A5A', '#3A5A6B', '#7A4A5A', '#4A6B4A', '#8B6A2B'];
+
+function Avatar({ name, email }: { name: string; email: string }) {
+  const seed = (name || email || '?').trim();
+  const initials = (() => {
+    const parts = seed.replace(/["<>]/g, '').split(/[\s@._-]+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  })();
+  const hash = (() => {
+    let h = 0; for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+    return h;
+  })();
+  const bg = AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+  return (
+    <div style={{
+      width: 28, height: 28, borderRadius: 14, background: bg, color: T.WHITE,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 11, fontWeight: 700, letterSpacing: '.02em', flexShrink: 0,
+    }} aria-hidden>{initials}</div>
+  );
+}
+
 function ThreadRow({ row, selected, onClick, onToggleStar }: { row: ListRow; selected: boolean; onClick: () => void; onToggleStar: (e: React.MouseEvent) => void }) {
   const [hover, setHover] = useState(false);
   const bg = selected ? T.SELECT : hover ? T.HOVER : T.WHITE;
@@ -620,9 +802,10 @@ function ThreadRow({ row, selected, onClick, onToggleStar }: { row: ListRow; sel
         background: bg, cursor: 'pointer',
       }}
     >
-      <div style={{ width: 10, display: 'flex', justifyContent: 'center' }}>
-        {row.unread && <span style={{ width: 8, height: 8, borderRadius: 4, background: T.UNREAD_DOT, display: 'inline-block' }} />}
+      <div style={{ width: 8, display: 'flex', justifyContent: 'center' }}>
+        {row.unread && <span style={{ width: 6, height: 6, borderRadius: 3, background: T.UNREAD_DOT, display: 'inline-block' }} />}
       </div>
+      <Avatar name={senderName} email={parsed.email} />
       <button type="button" onClick={onToggleStar} title={row.starred ? 'Unstar' : 'Star'} style={{ background: 'transparent', border: 'none', color: row.starred ? T.STAR : T.INK_M, cursor: 'pointer', fontSize: 14, padding: 0, lineHeight: 1 }}>★</button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
