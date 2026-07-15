@@ -5,10 +5,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import RoomPickerDrawer from './RoomPickerDrawer';
 import ActivityCatalogDrawer from './ActivityCatalogDrawer';
+import PhotoPickerDrawer, { type BlockContext, type PhotoRow } from './PhotoPickerDrawer';
 import EmailEditor from './EmailEditor';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, FX_LAK_PER_USD } from '@/lib/format';
 import type { ProposalBlock } from '@/lib/sales';
+
+// Namkhan is the only property currently using the composer.
+// Prior sub-agents hard-coded 260955 in cfl_route; keep the same anchor here.
+const PROPERTY_ID = 260955;
 
 interface Props {
   proposalId: string;
@@ -35,8 +40,10 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
   const [blocks, setBlocks] = useState<ProposalBlock[]>(initialBlocks);
   const [showRooms, setShowRooms] = useState(false);
   const [showActivities, setShowActivities] = useState(false);
+  const [photoPickerFor, setPhotoPickerFor] = useState<{ block: ProposalBlock } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [sentToken, setSentToken] = useState<string | null>(proposal.public_token);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
 
   // Pre-send availability gate state.
   // status: 'green' (fresh + buffer) | 'yellow' (tight or stale) | 'red' (sold out / under-qty) | null (loading)
@@ -94,6 +101,40 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
     setBusy(id);
     setBlocks(b => b.filter(x => x.id !== id));
     await fetch(`/api/sales/proposals/${proposalId}/blocks?block_id=${id}`, { method: 'DELETE' });
+    setBusy(null);
+  }
+
+  async function fillFromSettings(b: ProposalBlock) {
+    setBusy(b.id);
+    try {
+      const r = await fetch(`/api/sales/proposals/${proposalId}/blocks/fill`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ block_id: b.id, block_type: b.block_type, ref_id: b.ref_id }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        setBlocks(prev => prev.map(x => x.id === b.id ? {
+          ...x,
+          label: (j.patch?.label as string) ?? x.label,
+          note:  (j.patch?.note  as string) ?? x.note,
+          hero_asset_id: (j.hero_asset_id as string) ?? x.hero_asset_id,
+        } : x));
+      }
+    } catch { /* swallow */ }
+    setBusy(null);
+  }
+
+  function pickPhotoFor(b: ProposalBlock) { setPhotoPickerFor({ block: b }); }
+
+  async function attachPhoto(blockId: string, asset: PhotoRow) {
+    setBusy(blockId);
+    setBlocks(prev => prev.map(x => x.id === blockId ? { ...x, hero_asset_id: asset.asset_id } : x));
+    await fetch(`/api/sales/proposals/${proposalId}/blocks`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ block_id: blockId, hero_asset_id: asset.asset_id }),
+    });
     setBusy(null);
   }
 
@@ -218,49 +259,61 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
             )}
 
             {blocks.map(b => (
-              <div key={b.id} className="composer-block-row" style={{ borderBottom: '1px solid #E6DFCC' }}>
-                <div className="composer-block-label" style={{ color: '#1B1B1B' }}>
-                  {b.label}
-                  <div className="composer-block-meta" style={{ color: '#8A8A8A' }}>
-                    {b.block_type}{b.note ? ` · ${b.note}` : ''}
+              <div key={b.id} style={{ borderBottom: '1px solid #E6DFCC', padding: '10px 0' }}>
+                <div className="composer-block-row">
+                  <div className="composer-block-label" style={{ color: '#1B1B1B', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    {b.hero_asset_id && (
+                      // Hero thumbnail (48px). Uses /api/marketing/media/preview (v5 download-through).
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/api/marketing/media/preview?asset_id=${b.hero_asset_id}`}
+                        alt=""
+                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, border: '1px solid #E6DFCC', flexShrink: 0 }}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    )}
+                    <div style={{ minWidth: 0 }}>
+                      <div>{b.label}</div>
+                      <div className="composer-block-meta" style={{ color: '#8A8A8A' }}>
+                        {b.block_type}{b.note ? ` · ${b.note}` : ''}
+                      </div>
+                    </div>
                   </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input type="number" min={0} value={b.qty}
+                      onChange={e => patchBlock(b.id, { qty: Math.max(0, parseInt(e.target.value || '0', 10)) })}
+                      className="composer-num-input"
+                      style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+                    <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>×</span>
+                    <input type="number" min={1} value={b.nights}
+                      onChange={e => patchBlock(b.id, { nights: Math.max(1, parseInt(e.target.value || '1', 10)) })}
+                      className="composer-num-input"
+                      style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+                    <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>nt @</span>
+                    <input type="number" min={0} step={1000} value={b.unit_price_lak}
+                      onChange={e => patchBlock(b.id, { unit_price_lak: parseFloat(e.target.value || '0') })}
+                      className="composer-num-input" style={{ width: 90, background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+                    <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>₭</span>
+                  </div>
+                  <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 500, fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', color: '#1B1B1B' }}>
+                    {fmtTableUsd(Number(b.total_lak) / FX_LAK_PER_USD)}
+                  </div>
+                  <button onClick={() => removeBlock(b.id)} disabled={busy === b.id} className="btn"
+                    style={{ color: '#B04A2F', padding: '4px 8px' }}>×</button>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <input type="number" min={0} value={b.qty}
-                    onChange={e => patchBlock(b.id, { qty: Math.max(0, parseInt(e.target.value || '0', 10)) })}
-                    className="composer-num-input"
-                    style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
-                  <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>×</span>
-                  <input type="number" min={1} value={b.nights}
-                    onChange={e => patchBlock(b.id, { nights: Math.max(1, parseInt(e.target.value || '1', 10)) })}
-                    className="composer-num-input"
-                    style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
-                  <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>nt @</span>
-                  <input type="number" min={0} step={1000} value={b.unit_price_lak}
-                    onChange={e => patchBlock(b.id, { unit_price_lak: parseFloat(e.target.value || '0') })}
-                    className="composer-num-input" style={{ width: 90, background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
-                  <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>₭</span>
+                {/* Per-block content actions — photo picker + fill-from-settings.
+                    Placed under the row so they don't compete with qty/nights inputs
+                    but stay adjacent to the block they act on. */}
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, marginLeft: b.hero_asset_id ? 58 : 0, fontSize: 'var(--t-xs)' }}>
+                  <button onClick={() => pickPhotoFor(b)} disabled={busy === b.id} className="btn" style={{ padding: '3px 8px', fontSize: 11 }}>
+                    {b.hero_asset_id ? 'Change photo' : 'Choose photo'}
+                  </button>
+                  <button onClick={() => fillFromSettings(b)} disabled={busy === b.id} className="btn" style={{ padding: '3px 8px', fontSize: 11 }}>
+                    {busy === b.id ? 'Filling…' : 'Fill from Property Settings'}
+                  </button>
                 </div>
-                <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 500, fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', color: '#1B1B1B' }}>
-                  {fmtTableUsd(Number(b.total_lak) / FX_LAK_PER_USD)}
-                </div>
-                <button onClick={() => removeBlock(b.id)} disabled={busy === b.id} className="btn"
-                  style={{ color: '#B04A2F', padding: '4px 8px' }}>×</button>
               </div>
             ))}
-
-            {/* TODO 2026-07-15 (proposal photos) — insert PhotoPicker here per block context.
-                Fetch: v_media_library or public.v_media_assets filtered by
-                  target_usage_tiers && ARRAY['ota','website']::text[]
-                and matched by block context:
-                  block_type='room'     → room_type_id.eq.{b.ref_id}
-                  block_type='activity' → activity_id.eq.{b.ref_id} OR property_area.eq.'activity'
-                  block_type='facility' → property_area.eq.'facility'
-                Fill-from-Property-Settings source views (all reads via public bridge):
-                  content.room_type_content   → room description, size, bed config
-                  content.activities_catalog  → activity description, duration, price
-                  marketing.v_room_reality    → live rate + inventory sanity
-                No picker/hero-image UI exists today (hero_asset_id column is dormant). */}
 
             <div className="composer-total-row" style={{ borderTop: '2px solid #084838' }}>
               <span className="composer-total-label" style={{ color: '#8A8A8A' }}>Total</span>
@@ -363,6 +416,41 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
           });
         }}
       />
+
+      <PhotoPickerDrawer
+        open={!!photoPickerFor}
+        onClose={() => setPhotoPickerFor(null)}
+        propertyId={PROPERTY_ID}
+        block={photoPickerFor?.block ? ({
+          block_type: photoPickerFor.block.block_type as BlockContext['block_type'],
+          ref_id: photoPickerFor.block.ref_id ?? null,
+          label: photoPickerFor.block.label,
+        }) : null}
+        currentAssetId={photoPickerFor?.block.hero_asset_id ?? null}
+        onPick={(asset) => {
+          if (photoPickerFor?.block) attachPhoto(photoPickerFor.block.id, asset);
+        }}
+      />
+
+      {tab === 'email' && showEmailPreview && (
+        // Full-screen newsletter-quality preview iframe. Hits the /email/preview route
+        // that renders lib/proposalEmailTemplate.ts — same HTML that goes on the wire.
+        <div onClick={() => setShowEmailPreview(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(27,27,27,0.4)', zIndex: 70, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(720px, 96vw)', height: '92vh', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <header style={{ padding: '10px 14px', borderBottom: '1px solid #E6DFCC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5A5A5A' }}>Newsletter-quality preview</span>
+              <button onClick={() => setShowEmailPreview(false)} className="btn">×</button>
+            </header>
+            <iframe title="proposal email preview" src={`/api/sales/proposals/${proposalId}/email/preview`} style={{ flex: 1, border: 0, background: '#F5F0E1' }} />
+          </div>
+        </div>
+      )}
+
+      {tab === 'email' && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          <button onClick={() => setShowEmailPreview(true)} className="btn">Full-screen newsletter preview →</button>
+        </div>
+      )}
     </>
   );
 }
