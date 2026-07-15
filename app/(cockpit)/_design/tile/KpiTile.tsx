@@ -33,7 +33,7 @@ function valueFontSizeFor(value: KpiTileProps['value'], base: number): number {
 
 export default function KpiTile(props: KpiTileProps) {
   const {
-    label, value, unit, currency, delta, compare, status, footnote,
+    label, value, unit, currency, delta, compare, status, footnote, stly,
     size = 'md', loading, onClick, comparisonsExpandable = true,
   } = props;
   const [tipOpen, setTipOpen] = useState(false);
@@ -164,7 +164,19 @@ export default function KpiTile(props: KpiTileProps) {
         </div>
       )}
 
-      {footnote && <div style={S.footnote}>{footnote}</div>}
+      {footnote && (
+        <div style={{ ...S.footnote, paddingRight: stly ? 56 : 0 }}>{footnote}</div>
+      )}
+
+      {stly && (
+        <span
+          style={S.stlyBadge}
+          title="Same time last year"
+          aria-label={`Same time last year: ${stly}`}
+        >
+          <span style={S.stlyPrefix}>LY</span> {stly}
+        </span>
+      )}
     </div>
   );
 }
@@ -224,4 +236,33 @@ const S: Record<string, CSSProperties> = {
     gap: 2,
   },
   footnote: { fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', marginTop: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' },
+  // PBS 2026-07-15: compact "LY 22%" pill · bottom-right corner · never overlaps footnote
+  // (footnote reserves paddingRight: 56 when stly is set).
+  stlyBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    padding: '2px 6px',
+    borderRadius: 4,
+    background: 'var(--paper-soft, #FAFAF7)',
+    border: '1px solid var(--hairline, #E6DFCC)',
+    color: 'var(--ink, #1B1B1B)',
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: '0.02em',
+    lineHeight: 1.2,
+    fontVariantNumeric: 'tabular-nums',
+    pointerEvents: 'none',
+    whiteSpace: 'nowrap',
+    maxWidth: 90,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  stlyPrefix: {
+    color: 'var(--ink-soft, #5A5A5A)',
+    fontWeight: 500,
+    fontSize: 9,
+    letterSpacing: '0.06em',
+    marginRight: 2,
+  },
 };
