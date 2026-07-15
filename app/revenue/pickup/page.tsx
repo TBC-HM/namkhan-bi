@@ -106,6 +106,9 @@ export default async function PickupPage({ propertyId }: Props = {}) {
   });
   const sumTodayRooms = next60Rows.reduce((s, r) => s + Number(r.otb_today_rooms ?? 0), 0);
   const sumStlyRooms  = next60Rows.reduce((s, r) => s + Number(r.otb_stly_rooms ?? 0), 0);
+  // PBS 2026-07-15 · pickup rollout — sum STLY revenue over the same next-60d window
+  // for the Revenue OTB tile's stly corner badge (mirrors sumStlyRooms above).
+  const sumStlyRev    = next60Rows.reduce((s, r) => s + Number(r.otb_stly_revenue ?? 0), 0);
   const yoyRoomsPct = sumStlyRooms > 0
     ? ((sumTodayRooms - sumStlyRooms) / sumStlyRooms) * 100
     : (sumTodayRooms > 0 ? 100 : 0);
@@ -126,11 +129,18 @@ export default async function PickupPage({ propertyId }: Props = {}) {
   //         Stay window = when the guest arrives / stays.
   const monthLabelShort = today.toLocaleString('en-US', { month: 'short' });
   const strip: KpiTileProps[] = [
+    // PBS 2026-07-15 · rollout brief: stly corner badge on OTB-forward tiles.
+    // STLY value = last-year's OTB over the next-60d window (from v_chart_pace_comparison).
+    // Different span than the tile's forward window (all future nights) — the badge
+    // reads as a "same-time-last-year OTB shape" indicator, not an apples-to-apples
+    // comparison of every future night (which would require a per-night ly shift).
     { label: 'Rooms OTB · forward',
       value: intFmt(otbRoomsFwd),   size: 'sm',
+      stly: sumStlyRooms > 0 ? intFmt(sumStlyRooms) : undefined,
       footnote: `stays today → ${otbPace.length}d out · confirmed on the books` },
     { label: 'Revenue OTB · forward',
       value: moneyFmt(otbRevenueFwd), size: 'sm',
+      stly: sumStlyRev > 0 ? moneyFmt(sumStlyRev) : undefined,
       footnote: `stays today → ${otbPace.length}d out · all confirmed future revenue` },
     { label: 'Pickup · last 7d',
       value: intFmt(pickup7dRooms),  size: 'sm',
