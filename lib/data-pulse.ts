@@ -229,22 +229,13 @@ export async function getPulseTodayPickup(
   propertyId: number,
   asOf: string,
 ): Promise<PulsePickupRow[]> {
-  // PBS 2026-05-23 (#104 FULL fix): return per-reservation rows so the page
-  // can show Name · Reservation ID · ADR · Value per row + Total footer
-  // (task #101). Previous aggregator pivoted by source × room_type which
-  // dropped guest/reservation_id/adr/value at the granularity needed.
-  const startIso = asOf + 'T00:00:00';
-  const endIso = asOf + 'T23:59:59';
-
+  // PBS 2026-07-15: switched to public.fn_pulse_day_pickup RPC — same shape as
+  // fn_pulse_day_cancellations, filters booking_date in the property's
+  // timezone (Namkhan = Asia/Vientiane, Donna = Europe/Madrid) instead of UTC.
+  // Old inline filter treated `asOf + 'T00:00:00'` as UTC, which mis-bucketed
+  // bookings created 17:00-23:59 UTC (= early Vientiane morning next day).
   const { data, error } = await supabase
-    .from('v_reservations_unified')
-    .select('reservation_id, source_name, room_type_name, guest_name, check_in_date, booking_date, nights, total_amount')
-    .eq('property_id', propertyId)
-    .eq('is_cancelled', false)
-    .gte('booking_date', startIso)
-    .lte('booking_date', endIso)
-    .order('booking_date', { ascending: false })
-    .limit(100);
+    .rpc('fn_pulse_day_pickup', { p_property_id: propertyId, p_as_of: asOf });
 
   if (error || !data) return [];
 
