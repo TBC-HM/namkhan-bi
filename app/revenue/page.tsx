@@ -503,24 +503,17 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       status: pickupNetRn > 0 ? 'green' : pickupNetRn < 0 ? 'amber' : 'grey' },
   ];
 
-  // PBS 2026-07-15: yesterday mirror stripe — exactly the same tiles as Today, sourced from actualized v_kpi_daily_property.
-  const yesterdayBaseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
+  // PBS 2026-07-15: yesterday mirror stripe — sourced from actualized v_kpi_daily_property.
+  // PACE tile is dropped from yesterday stripe: it's a forward-looking metric ("current OTB
+  // for next 30d vs LY actual") — showing a snapshot from yesterday would need historical
+  // OTB, and would be identical to today ± last-24h pickup. Yesterday stripe = closed day.
+  const yesterdayBaseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).filter((k) => k.k !== 'PACE').map((k) => {
     if (yesterdayKpi) {
       const occY = Math.round(Number(yesterdayKpi.occupancy_pct ?? 0));
       if (k.k === 'OCC')    return { label: 'OCC',    value: `${occY}%`, size: 'sm', footnote: `${yesterdayKpi.rooms_sold ?? 0} of ${yesterdayKpi.rooms_available ?? 0} rooms` } as KpiTileProps;
       if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdrY.toLocaleString('en-US')}`,    size: 'sm', footnote: 'yesterday · in-house · net' } as KpiTileProps;
       if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevparY.toLocaleString('en-US')}`, size: 'sm', footnote: 'yesterday · vs capacity · net' } as KpiTileProps;
     }
-    // PBS 2026-07-15: PACE is a forward-looking metric — same value on both stripes.
-    if (k.k === 'PACE') return {
-      label: 'PACE · next 30d',
-      value: `${paceSign}${paceAbsDelta} RN`,
-      size: 'sm',
-      footnote: pacePctDelta === null
-        ? `${paceTyRn} OTB next 30d · no LY baseline`
-        : `${paceSign}${pacePctDelta}% vs LY · ${paceTyRn} OTB TY · ${paceLyRn} actual LY`,
-      status: paceStatus,
-    } as KpiTileProps;
     return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
   });
   const yesterdayTiles: KpiTileProps[] = [
