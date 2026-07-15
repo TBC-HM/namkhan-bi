@@ -1,63 +1,68 @@
 // app/(cockpit)/_design/BookingActivity.tsx
 //
-// Today's bookings + cancellations table for a property, with a 1-7 day
-// dropdown. Reads from public.v_reservations_unified (cross-property
-// bridge view). Property-aware. Columns: Booked at · Source · Room · Rate
-// plan · LOS · ADR · Revenue. Cancellations rendered in a second sub-table
-// below the bookings. Task #82 · 2026-05-22.
+// PBS 2026-07-15: ongoing "Bookings & cancellations" activity feed.
+// Was: Today / Last-N-days table with two sub-sections (bookings, cancels).
+// Now: single merged feed of the last N events sorted by timestamp DESC,
+// collapsed to 10 rows by default with an expand toggle. Day-scoped totals
+// (Today / Yesterday, in Asia/Vientiane time) live in the Revenue HoD
+// headline strip instead — this container is the rolling audit trail.
+//
+// Data source: public.fn_pulse_recent_activity(p_property_id, p_limit) —
+// unions bookings + cancellations from v_reservations_unified, sorted
+// event_at DESC.
 
 import Container from './layout/Container';
-import BookingActivityDays from './BookingActivityDays';
+import BookingActivityExpand from './BookingActivityExpand';
 import { supabase } from '@/lib/supabase';
 
 interface Props {
   propertyId: number;
   searchParams?: Record<string, string | string[] | undefined>;
-  /** URL search-param key for the day picker. Defaults to "activityDays".
-   *  Override when stacking multiple BookingActivity blocks on one page. */
   paramKey?: string;
 }
 
 interface Row {
   reservation_id: string;
+  event_kind: 'booking' | 'cancel';
+  event_at: string;
   source_name: string | null;
   room_type_name: string | null;
   rate_plan: string | null;
+  check_in_date: string | null;
   nights: number | null;
   total_amount: number | null;
-  booking_date: string | null;
-  cancellation_date: string | null;
-  check_in_date: string | null;
-  is_cancelled: boolean | null;
   currency: string | null;
+}
+
+const COLLAPSED_ROWS = 10;
+const MAX_ROWS = 200;
+
+function tzForProperty(pid: number): string {
+  if (pid === 260955) return 'Asia/Vientiane';
+  if (pid === 1000001) return 'Europe/Madrid';
+  return 'UTC';
 }
 
 function fmtMoney(n: number, sym: string): string {
   return `${sym}${Math.round(n).toLocaleString('en-US')}`;
 }
 
-function relTime(iso: string | null): string {
+function fmtEventTime(iso: string | null, tz: string): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const days = Math.floor(h / 24);
-  return `${days}d ago`;
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    day: '2-digit', month: 'short',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d);
 }
 
 export default async function BookingActivity({
-  propertyId, searchParams, paramKey = 'activityDays',
+  propertyId, searchParams, paramKey = 'activityExpanded',
 }: Props) {
-  const rawDays = Number(searchParams?.[paramKey]);
-  const days = Number.isFinite(rawDays) && rawDays >= 1 && rawDays <= 7 ? rawDays : 1;
-  const cutoffIso = new Date(Date.now() - days * 86_400_000).toISOString();
-  const cutoffDate = cutoffIso.slice(0, 10);
+  const expanded = String(searchParams?.[paramKey] ?? '') === '1';
+  const tz = tzForProperty(propertyId);
 
-  // Currency symbol from property display (defaults USD)
   const { data: prop } = await supabase
     .from('v_property_display')
     .select('display_symbol')
@@ -65,73 +70,44 @@ export default async function BookingActivity({
     .maybeSingle();
   const sym = String((prop as { display_symbol?: string } | null)?.display_symbol ?? '$');
 
-  // Two parallel queries: new bookings + cancellations in the window
-  const [bookingsRes, cancelsRes] = await Promise.all([
-    supabase.from('v_reservations_unified')
-      .select('reservation_id, source_name, room_type_name, rate_plan, nights, total_amount, booking_date, cancellation_date, check_in_date, is_cancelled, currency')
-      .eq('property_id', propertyId)
-      .eq('is_cancelled', false)
-      .gte('booking_date', cutoffIso)
-      .order('booking_date', { ascending: false })
-      .limit(100),
-    supabase.from('v_reservations_unified')
-      .select('reservation_id, source_name, room_type_name, rate_plan, nights, total_amount, booking_date, cancellation_date, check_in_date, is_cancelled, currency')
-      .eq('property_id', propertyId)
-      .eq('is_cancelled', true)
-      .gte('cancellation_date', cutoffDate)
-      .order('cancellation_date', { ascending: false })
-      .limit(100),
-  ]);
+  const { data } = await supabase.rpc('fn_pulse_recent_activity', {
+    p_property_id: propertyId,
+    p_limit: MAX_ROWS,
+  });
+  const rows = (data ?? []) as Row[];
+  const shown = expanded ? rows : rows.slice(0, COLLAPSED_ROWS);
 
-  const bookings = (bookingsRes.data ?? []) as Row[];
-  const cancels  = (cancelsRes.data  ?? []) as Row[];
-
-  const subtitle = `${bookings.length} new booking${bookings.length === 1 ? '' : 's'} · ${cancels.length} cancellation${cancels.length === 1 ? '' : 's'} · last ${days === 1 ? '24 hours' : `${days} days`}`;
+  const bookingCount = rows.filter((r) => r.event_kind === 'booking').length;
+  const cancelCount  = rows.filter((r) => r.event_kind === 'cancel').length;
+  const subtitle = `${bookingCount} new booking${bookingCount === 1 ? '' : 's'} · ${cancelCount} cancellation${cancelCount === 1 ? '' : 's'} · showing ${shown.length} of ${rows.length} (${tz})`;
 
   return (
     <Container
-      title="Bookings & cancellations"
+      title="Bookings & cancellations · feed"
       subtitle={subtitle}
       density="compact"
-      action={<BookingActivityDays paramKey={paramKey} current={days} />}
+      action={
+        <BookingActivityExpand
+          paramKey={paramKey}
+          expanded={expanded}
+          totalRows={rows.length}
+          shownRows={shown.length}
+        />
+      }
     >
-      <Section title={`New bookings (${bookings.length})`} rows={bookings} sym={sym} kind="booking" />
-      <div style={{ height: 12 }} />
-      <Section title={`Cancellations (${cancels.length})`} rows={cancels} sym={sym} kind="cancel" />
-    </Container>
-  );
-}
-
-interface SectionProps {
-  title: string;
-  rows: Row[];
-  sym: string;
-  kind: 'booking' | 'cancel';
-}
-
-function Section({ title, rows, sym, kind }: SectionProps) {
-  return (
-    <div>
-      <div style={{
-        fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
-        textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)',
-        marginBottom: 6,
-      }}>
-        {title}
-      </div>
-      {rows.length === 0 ? (
+      {shown.length === 0 ? (
         <div style={{
-          padding: 12, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)',
+          padding: 12, fontSize: 12,
+          color: 'var(--ink-soft, #5A5A5A)',
           fontStyle: 'italic',
-        }}>
-          {kind === 'booking' ? 'No new bookings in the window.' : 'No cancellations in the window.'}
-        </div>
+        }}>No activity yet.</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#FFFFFF', borderBottom: '1px solid #E6DFCC' }}>
-                <th style={th}>{kind === 'booking' ? 'Booked' : 'Cancelled'}</th>
+                <th style={th}>When ({tz})</th>
+                <th style={th}>Event</th>
                 <th style={th}>Check-in</th>
                 <th style={th}>Source</th>
                 <th style={th}>Room</th>
@@ -142,14 +118,24 @@ function Section({ title, rows, sym, kind }: SectionProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {shown.map((r, i) => {
                 const nights = Number(r.nights ?? 0);
                 const total = Number(r.total_amount ?? 0);
                 const adr = nights > 0 ? total / nights : 0;
-                const ts = kind === 'booking' ? r.booking_date : r.cancellation_date;
+                const isCancel = r.event_kind === 'cancel';
+                const kindPill: React.CSSProperties = {
+                  display: 'inline-block',
+                  padding: '2px 8px', fontSize: 10, fontWeight: 700,
+                  borderRadius: 3, textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  background: isCancel ? '#FBEAEA' : '#E8F2E4',
+                  color: isCancel ? '#B04A2F' : '#1F5C2C',
+                };
+                const key = `${r.reservation_id}-${r.event_kind}-${i}`;
                 return (
-                  <tr key={r.reservation_id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
-                    <td style={tdLeft} title={ts ?? ''}>{relTime(ts)}</td>
+                  <tr key={key} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                    <td style={tdLeft} title={r.event_at ?? ''}>{fmtEventTime(r.event_at, tz)}</td>
+                    <td style={tdLeft}><span style={kindPill}>{isCancel ? 'Cancel' : 'Booking'}</span></td>
                     <td style={tdLeft} title={r.check_in_date ?? ''}>{r.check_in_date ? r.check_in_date.slice(0, 10) : '—'}</td>
                     <td style={tdLeft}>{r.source_name ?? '—'}</td>
                     <td style={tdLeft}>{r.room_type_name ?? '—'}</td>
@@ -164,19 +150,23 @@ function Section({ title, rows, sym, kind }: SectionProps) {
           </table>
         </div>
       )}
-    </div>
+    </Container>
   );
 }
 
 const th: React.CSSProperties = {
-  padding: '7px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-  textTransform: 'uppercase', color: '#000', textAlign: 'left',
+  padding: '7px 12px', fontSize: 10, fontWeight: 600,
+  letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: '#000', textAlign: 'left',
 };
 const tdLeft: React.CSSProperties = {
-  padding: '6px 12px', fontSize: 12, color: 'var(--ink, #1B1B1B)',
-  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220,
+  padding: '6px 12px', fontSize: 12,
+  color: 'var(--ink, #1B1B1B)',
+  whiteSpace: 'nowrap', overflow: 'hidden',
+  textOverflow: 'ellipsis', maxWidth: 220,
 };
 const tdRight: React.CSSProperties = {
   padding: '6px 12px', fontSize: 12, textAlign: 'right',
-  fontVariantNumeric: 'tabular-nums', color: 'var(--ink, #1B1B1B)',
+  fontVariantNumeric: 'tabular-nums',
+  color: 'var(--ink, #1B1B1B)',
 };
