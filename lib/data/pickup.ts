@@ -80,6 +80,10 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
   const sdlyYear = stayYear - 1;
 
   const yesterday = new Date(asOf); yesterday.setDate(asOf.getDate() - 1);
+  // PBS 2026-07-15: DBY snapshot added so "Pickup Yesterday" col = snapshot(yesterday) - snapshot(dby)
+  // = actual calendar day yesterday activity (not "since yesterday snapshot" last-24h).
+  // Now: matrix "Pickup Yesterday" = HoD tile "Pickup yesterday · net RN" = same number, everywhere.
+  const dby = new Date(asOf); dby.setDate(asOf.getDate() - 2);
   const lastMonday = new Date(asOf);
   { const dow = lastMonday.getDay() || 7; lastMonday.setDate(lastMonday.getDate() - (dow - 1) - 7); }
   const monthStart = new Date(asOf.getFullYear(), asOf.getMonth(), 1);
@@ -93,9 +97,10 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
         .then((r) => (r.data ?? []) as OtbRow[]),
     );
 
-  const [sToday, sYest, sMon, sMonth, sSdly, sY2, sY3] = await Promise.all([
+  const [sToday, sYest, sDby, sMon, sMonth, sSdly, sY2, sY3] = await Promise.all([
     snap(asOf).catch(() => [] as OtbRow[]),
     snap(yesterday).catch(() => [] as OtbRow[]),
+    snap(dby).catch(() => [] as OtbRow[]),
     snap(lastMonday).catch(() => [] as OtbRow[]),
     snap(monthStart).catch(() => [] as OtbRow[]),
     snap(sdly).catch(() => [] as OtbRow[]),
@@ -105,6 +110,7 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
 
   const otbToday = bucket(sToday, stayYear);
   const otbYest  = bucket(sYest, stayYear);
+  const otbDby   = bucket(sDby, stayYear);
   const otbMon   = bucket(sMon, stayYear);
   const otbMonth = bucket(sMonth, stayYear);
   const sdlyB    = bucket(sSdly, sdlyYear);
@@ -141,6 +147,7 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
     const tMonthly = valueOf(otbMonth[mo] ?? null, metric);
     const tMonday  = valueOf(otbMon[mo] ?? null, metric);
     const tYest    = valueOf(otbYest[mo] ?? null, metric);
+    const tDby     = valueOf(otbDby[mo] ?? null, metric);
     const tToday   = tAll;
     const sdlyValue = valueOf(sdlyB[mo] ?? null, metric);
     const suppress = isStale;
@@ -153,7 +160,8 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
       otbAll: tAll, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday,
       pickupMonthly:   suppress ? { abs: null, pct: null } : delta(tToday, tMonthly),
       pickupWeekly:    suppress ? { abs: null, pct: null } : delta(tToday, tMonday),
-      pickupYesterday: suppress ? { abs: null, pct: null } : delta(tToday, tYest),
+      // PBS 2026-07-15: yesterday's activity = snapshot(yesterday) - snapshot(dby). Was today-vs-yesterday (last-24h).
+      pickupYesterday: suppress ? { abs: null, pct: null } : delta(tYest, tDby),
       vsBudget: { abs: null, pct: null },
       vsLy: delta(tToday, sdlyValue),
       sdly: sdlyValue,
@@ -172,7 +180,7 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
 
   const tot = {
     today: sumBucket(otbToday), monthly: sumBucket(otbMonth), monday: sumBucket(otbMon),
-    yest: sumBucket(otbYest), sdly: sumBucket(sdlyB),
+    yest: sumBucket(otbYest), dby: sumBucket(otbDby), sdly: sumBucket(sdlyB),
     b23: sumBucket(baseline[stayYear - 3] ?? {}), b24: sumBucket(baseline[stayYear - 2] ?? {}), b25: sumBucket(baseline[stayYear - 1] ?? {}),
   };
   function totalRow(metric: PickupMetric): PickupMatrixRow {
@@ -180,6 +188,7 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
     const tMonthly = valueOf(Object.keys(otbMonth).length ? tot.monthly : null, metric);
     const tMonday = valueOf(Object.keys(otbMon).length ? tot.monday : null, metric);
     const tYest = valueOf(Object.keys(otbYest).length ? tot.yest : null, metric);
+    const tDby  = valueOf(Object.keys(otbDby).length  ? tot.dby  : null, metric);
     const sdlyValue = valueOf(Object.keys(sdlyB).length ? tot.sdly : null, metric);
     const suppress = isStale;
     return {
@@ -191,7 +200,8 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
       otbAll: tToday, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday,
       pickupMonthly:   suppress ? { abs: null, pct: null } : delta(tToday, tMonthly),
       pickupWeekly:    suppress ? { abs: null, pct: null } : delta(tToday, tMonday),
-      pickupYesterday: suppress ? { abs: null, pct: null } : delta(tToday, tYest),
+      // PBS 2026-07-15: same yesterday-calendar-day fix as buildRow.
+      pickupYesterday: suppress ? { abs: null, pct: null } : delta(tYest, tDby),
       vsBudget: { abs: null, pct: null },
       vsLy: delta(tToday, sdlyValue),
       sdly: sdlyValue,
