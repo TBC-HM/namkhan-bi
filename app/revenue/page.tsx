@@ -81,7 +81,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const sbAdmin = getSupabaseAdmin();
 
   const [
-    pickupToday, cancellationsToday, pickupYesterday, cancellationsYesterday, hodActTodayRes, hodActYestRes, bugsRes, dueTasksRes,
+    pickupToday, cancellationsToday, pickupYesterday, cancellationsYesterday, hodActTodayRes, hodActYestRes, hodActLyTodayRes, hodActLyYestRes, bugsRes, dueTasksRes,
     todayKpiRes, yesterdayKpiRes, lyTodayKpiRes, lyYestKpiRes, guardrailsRes,
     paceRes, stlyRes,
     l14PickupRes, l14LyPickupRes,
@@ -104,6 +104,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     // PBS 2026-07-15: Cloudbeds-aligned tile inputs — gross bookings (incl. cancelled-today), cancellations (with original_amount), pickup net (snapshot delta).
     supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: todayIso }),
     supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: yesterdayIso }),
+    // PBS 2026-07-15: LY same-date activity for STLY badges on New bookings / Cancellations / Pickup tiles.
+    supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: shiftYear(todayIso, -1) }),
+    supabase.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: shiftYear(yesterdayIso, -1) }),
     supabase.from('cockpit_bugs').select('id, body, status, created_at, page_url').not('status','in','(closed,resolved,wontfix,done)').order('created_at', { ascending: false }).limit(5),
     supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true }).eq('dept_slug', 'revenue').eq('property_id', pid).eq('is_due', true),
     supabase.rpc('fn_revenue_hod_today_kpi', { p_property_id: pid }),
@@ -164,8 +167,10 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // Cancels = reservations with cancellation_date UTC = anchor, rev = original_amount (recovered from raw->detailedRates).
   // Pickup = snapshot delta OTB(anchor) − OTB(anchor − 1) — matches the pickup matrix's "Pickup Yesterday" column.
   type HodAct = { gross_bookings_count: number; gross_bookings_rn: number|string; gross_bookings_rev: number|string; cancellations_count: number; cancellations_rn: number|string; cancellations_rev: number|string; pickup_net_rn: number|string; pickup_net_rev: number|string };
-  const hodActT = (((hodActTodayRes.data ?? [])[0] ?? null) as HodAct | null);
-  const hodActY = (((hodActYestRes.data  ?? [])[0] ?? null) as HodAct | null);
+  const hodActT   = (((hodActTodayRes.data  ?? [])[0] ?? null) as HodAct | null);
+  const hodActY   = (((hodActYestRes.data   ?? [])[0] ?? null) as HodAct | null);
+  const hodActLyT = (((hodActLyTodayRes.data ?? [])[0] ?? null) as HodAct | null);
+  const hodActLyY = (((hodActLyYestRes.data  ?? [])[0] ?? null) as HodAct | null);
 
   const grossBkCount    = Number(hodActT?.gross_bookings_count ?? 0);
   const grossBkRn       = Number(hodActT?.gross_bookings_rn ?? 0);
@@ -447,7 +452,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // The seed config's `PACE = −14%` string was a hardcoded placeholder — never wired.
   const paceNext30      = paceNext90.filter((n) => n.daysOut >= 1 && n.daysOut <= 30);
   const paceTyRn        = paceNext30.reduce((s, n) => s + Number(n.confirmedRooms ?? 0), 0);
-  const paceLyRn        = paceNext30.reduce((s, n) => s + Number(n.stlyRooms ?? 0), 0);
+  const paceLyRn        = paceNext30.reduce((s, n) => s + Number(n.stly ?? 0), 0);
   const paceAbsDelta    = paceTyRn - paceLyRn;
   const pacePctDelta    = paceLyRn > 0 ? Math.round((paceAbsDelta / paceLyRn) * 100) : null;
   const paceSign        = paceAbsDelta > 0 ? '+' : '';
@@ -504,15 +509,18 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       footnote: grossBkCount === 0
         ? 'no new bookings today'
         : `${grossBkCount} ${grossBkCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(grossBkRev).toLocaleString('en-US')} · gross booked today`,
-      status: grossBkRn > 0 ? 'green' : 'grey' },
+      status: grossBkRn > 0 ? 'green' : 'grey',
+      stly: fmtSlyRn(Number(hodActLyT?.gross_bookings_rn ?? 0)) },
     { label: 'Cancellations today · room nights', value: cancelBkRn, size: 'sm',
       footnote: cancelBkCount === 0
         ? 'no cancellations today'
         : `${cancelBkCount} ${cancelBkCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelBkRev).toLocaleString('en-US')} · value lost today`,
-      status: cancelBkCount === 0 ? 'green' : 'amber' },
+      status: cancelBkCount === 0 ? 'green' : 'amber',
+      stly: fmtSlyRn(Number(hodActLyT?.cancellations_rn ?? 0)) },
     { label: 'Pickup today · net RN', value: pickupNetRn, size: 'sm',
       footnote: `${grossBkRn} booked − ${cancelBkRn} lost · ${symToday}${Math.round(pickupNetRev).toLocaleString('en-US')} net · matches pickup matrix`,
-      status: pickupNetRn > 0 ? 'green' : pickupNetRn < 0 ? 'amber' : 'grey' },
+      status: pickupNetRn > 0 ? 'green' : pickupNetRn < 0 ? 'amber' : 'grey',
+      stly: fmtSlyRn(Number(hodActLyT?.pickup_net_rn ?? 0)) },
   ];
 
   // PBS 2026-07-15: yesterday mirror stripe — sourced from actualized v_kpi_daily_property.
@@ -538,15 +546,18 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       footnote: grossBkCountY === 0
         ? 'no new bookings yesterday'
         : `${grossBkCountY} ${grossBkCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(grossBkRevY).toLocaleString('en-US')} · gross booked yesterday`,
-      status: grossBkRnY > 0 ? 'green' : 'grey' },
+      status: grossBkRnY > 0 ? 'green' : 'grey',
+      stly: fmtSlyRn(Number(hodActLyY?.gross_bookings_rn ?? 0)) },
     { label: 'Cancellations yesterday · room nights', value: cancelBkRnY, size: 'sm',
       footnote: cancelBkCountY === 0
         ? 'no cancellations yesterday'
         : `${cancelBkCountY} ${cancelBkCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelBkRevY).toLocaleString('en-US')} · value lost yesterday`,
-      status: cancelBkCountY === 0 ? 'green' : 'amber' },
+      status: cancelBkCountY === 0 ? 'green' : 'amber',
+      stly: fmtSlyRn(Number(hodActLyY?.cancellations_rn ?? 0)) },
     { label: 'Pickup yesterday · net RN', value: pickupNetRnY, size: 'sm',
       footnote: `${grossBkRnY} booked − ${cancelBkRnY} lost · ${symToday}${Math.round(pickupNetRevY).toLocaleString('en-US')} net · matches pickup matrix`,
-      status: pickupNetRnY > 0 ? 'green' : pickupNetRnY < 0 ? 'amber' : 'grey' },
+      status: pickupNetRnY > 0 ? 'green' : pickupNetRnY < 0 ? 'amber' : 'grey',
+      stly: fmtSlyRn(Number(hodActLyY?.pickup_net_rn ?? 0)) },
   ];
 
   // PBS 2026-07-08 #204/attention — DB rows first, seed fallback for dev only.
