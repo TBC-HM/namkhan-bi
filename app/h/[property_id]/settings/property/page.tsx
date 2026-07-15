@@ -4,6 +4,10 @@
 //
 // 2026-07-07 (PBS): sticky-strip tabs added so operators can flip between
 // Property and Guardrails inside the property-scoped settings shell.
+//
+// 2026-07-15 (item 4): Team tab is now a read-only mirror of HR. Fetch from
+// public.v_team_directory (bridge over v_staff_register_extended + hr.employees).
+// Old source tenancy.property_users retained no longer — HR is source of truth.
 
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
@@ -32,12 +36,14 @@ async function getPropertyData(propertyId: number) {
     supabase.schema('property').from('certifications').select('*').eq('property_id', propertyId).order('certification_name'),
     supabase.schema('property').from('contacts').select('*').eq('property_id', propertyId).order('purpose'),
     supabase.schema('property').from('social').select('*').eq('property_id', propertyId).order('platform'),
-    supabase.schema('tenancy').from('property_users')
-      .select('full_name, email, role, department, status')
+    // PBS 2026-07-15 (item 4): Team panel now READS from HR (source of truth).
+    // Bridge view scoped by property_id. No salary, no writes.
+    supabase
+      .from('v_team_directory')
+      .select('staff_id, emp_id, full_name, dept_code, dept_name, position_title, notes, skills, phone, email, primary_language, english_proficiency, hire_date, tenure_years, employment_type')
       .eq('property_id', propertyId)
-      .eq('status', 'active')
-      .order('role', { ascending: true })
-      .order('department', { ascending: true }),
+      .order('dept_name', { ascending: true, nullsFirst: false })
+      .order('full_name', { ascending: true }),
     // PBS 2026-07-03: owner entity (Namkhan Group Ltd etc.)
     supabase.schema('property').from('owner_entity').select('*').eq('property_id', propertyId).maybeSingle(),
     // PBS 2026-07-03: unit counts for the Rooms tab — public view over PMS silver.
