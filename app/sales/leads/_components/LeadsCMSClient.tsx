@@ -75,6 +75,21 @@ export interface StageRow {
   is_won: boolean;
   is_lost: boolean;
 }
+// PBS 2026-07-15 — Proposal template row (public.v_sales_proposal_templates).
+export interface ProposalTemplateRow {
+  id: string;
+  property_id: number;
+  kind: string;
+  name: string;
+  slug: string;
+  brand_voice_lang: string | null;
+  is_active: boolean;
+}
+// PBS 2026-07-15 — per-lead proposal count (public.v_lead_proposal_counts).
+export interface LeadProposalCountRow {
+  lead_id: number;
+  proposal_count: number;
+}
 interface TimelineEntry {
   lead_id: number;
   at: string;
@@ -88,6 +103,9 @@ interface Props {
   stages: StageRow[];
   propertyId: number;
   highlightId: number | null;
+  // PBS 2026-07-15 — proposals wiring (both optional so older mounts still compile).
+  templates?: ProposalTemplateRow[];
+  proposalCounts?: LeadProposalCountRow[];
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────
@@ -129,13 +147,24 @@ function priorityColor(p: string | null): string {
 }
 
 // ─── component ────────────────────────────────────────────────────────────
-export default function LeadsCMSClient({ initialLeads, stages, propertyId, highlightId }: Props) {
+export default function LeadsCMSClient({
+  initialLeads, stages, propertyId, highlightId,
+  templates = [], proposalCounts = [],
+}: Props) {
   const [leads, setLeads] = useState<LeadRow[]>(initialLeads);
   const [selectedId, setSelectedId] = useState<number | null>(highlightId ?? null);
   const [createMode, setCreateMode] = useState<boolean>(false);
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [search, setSearch] = useState<string>('');
+
+  // PBS 2026-07-15 — proposal wiring.
+  const [proposalLeadId, setProposalLeadId] = useState<number | null>(null);   // opens template picker
+  const proposalCountMap = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const r of proposalCounts) m.set(r.lead_id, r.proposal_count);
+    return m;
+  }, [proposalCounts]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -227,17 +256,19 @@ export default function LeadsCMSClient({ initialLeads, stages, propertyId, highl
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: T.INK }}>
           <thead>
             <tr style={{ background: T.CREAM }}>
-              {['Company','Contact','Email','Country','Stage','Priority','Changed','Next touch'].map((h) => (
+              {['Company','Contact','Email','Country','Stage','Priority','Changed','Next touch','Actions'].map((h) => (
                 <th key={h} style={thStyle()}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: T.INK_M }}>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: 'center', color: T.INK_M }}>
                 No leads match the current filter.
               </td></tr>
-            ) : filtered.map((l) => (
+            ) : filtered.map((l) => {
+              const proposalCount = proposalCountMap.get(l.id) ?? 0;
+              return (
               <tr key={l.id} onClick={() => openLead(l.id)} style={{ cursor: 'pointer', background: selectedId === l.id ? T.CREAM : T.WHITE }}>
                 <td style={tdStyle()}><span style={{ fontWeight: 600 }}>{l.company_name ?? '—'}</span></td>
                 <td style={tdStyle()}>{l.decision_maker_name ?? ''}<span style={{ color: T.INK_M }}>{l.decision_maker_role ? ' · ' + l.decision_maker_role : ''}</span></td>
@@ -251,8 +282,32 @@ export default function LeadsCMSClient({ initialLeads, stages, propertyId, highl
                 </td>
                 <td style={{ ...tdStyle(), color: T.INK_M, whiteSpace: 'nowrap' }}>{relTime(l.stage_changed_at)}</td>
                 <td style={{ ...tdStyle(), color: T.INK_M, whiteSpace: 'nowrap' }}>{l.next_touch_at ? new Date(l.next_touch_at).toLocaleDateString() : ''}</td>
+                {/* PBS 2026-07-15 — Create proposal + jump-to-proposals cell. */}
+                <td style={{ ...tdStyle(), whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <button type="button"
+                      onClick={() => setProposalLeadId(l.id)}
+                      title="Create a proposal pre-filled from this lead"
+                      style={rowActionBtn()}>
+                      + Proposal
+                    </button>
+                    {proposalCount > 0 && (
+                      <a href={'/sales/proposals?lead_id=' + l.id}
+                        onClick={(e) => e.stopPropagation()}
+                        title={proposalCount + ' existing proposal' + (proposalCount === 1 ? '' : 's')}
+                        style={{
+                          fontSize: 10, padding: '2px 8px', borderRadius: 999,
+                          background: T.CREAM, color: T.FOREST, textDecoration: 'none',
+                          border: '1px solid ' + T.HAIR, fontWeight: 600,
+                        }}>
+                        → {proposalCount}
+                      </a>
+                    )}
+                  </div>
+                </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -263,13 +318,130 @@ export default function LeadsCMSClient({ initialLeads, stages, propertyId, highl
           lead={createMode ? null : activeLead}
           stages={stages}
           propertyId={propertyId}
+          templates={templates}
           onClose={closeDrawer}
           onSaved={async (id) => { await refresh(); setCreateMode(false); setSelectedId(id); }}
           onDeleted={async () => { await refresh(); closeDrawer(); }}
           onStageChanged={refresh}
+          onCreateProposal={(id) => setProposalLeadId(id)}
+        />
+      )}
+
+      {/* PBS 2026-07-15 — proposal template picker modal. */}
+      {proposalLeadId != null && (
+        <CreateProposalModal
+          leadId={proposalLeadId}
+          lead={leads.find((l) => l.id === proposalLeadId) ?? null}
+          templates={templates}
+          onClose={() => setProposalLeadId(null)}
         />
       )}
     </div>
+  );
+}
+
+// ─── proposal template picker modal ─────────────────────────────────────
+// PBS 2026-07-15. Small, focused: pick a template + confirm dates, POST to
+// /api/sales/proposals/create-from-lead, navigate to the composer on success.
+function CreateProposalModal({ leadId, lead, templates, onClose }: {
+  leadId: number;
+  lead: LeadRow | null;
+  templates: ProposalTemplateRow[];
+  onClose: () => void;
+}) {
+  const [templateId, setTemplateId] = useState<string>(templates[0]?.id ?? '');
+  const [dateIn, setDateIn] = useState<string>('');
+  const [dateOut, setDateOut] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    if (!templateId) { setErr('Pick a template first.'); return; }
+    setSubmitting(true); setErr(null);
+    try {
+      const r = await fetch('/api/sales/proposals/create-from-lead', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          lead_id:  leadId,
+          template_id: templateId,
+          date_in:  dateIn  || null,
+          date_out: dateOut || null,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.id) throw new Error(j.error || 'create_failed');
+      window.location.href = '/sales/proposals/' + j.id + '/edit';
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.42)', zIndex: 60, cursor: 'pointer',
+      }} />
+      <div role="dialog" aria-modal="true" style={{
+        position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+        width: 460, maxWidth: '92vw', background: T.WHITE, border: '1px solid ' + T.HAIR,
+        borderRadius: 6, boxShadow: '0 24px 48px rgba(0,0,0,0.28)', zIndex: 61,
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{
+          padding: '12px 16px', borderBottom: '1px solid ' + T.HAIR,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: T.INK }}>
+            Create proposal · {lead?.company_name ?? 'lead #' + leadId}
+          </div>
+          <button type="button" onClick={onClose} style={btnStyleGhost()}>✕</button>
+        </div>
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: 10, color: T.INK_M, textTransform: 'uppercase', letterSpacing: 0.5 }}>Template</span>
+            {templates.length === 0 ? (
+              <div style={{ padding: '10px 12px', fontSize: 12, color: T.RED, background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 3 }}>
+                No active templates for this property. Seed some in sales.proposal_templates.
+              </div>
+            ) : (
+              <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}
+                style={{
+                  padding: '8px 10px', fontSize: 13, background: T.WHITE,
+                  border: '1px solid ' + T.HAIR, borderRadius: 3, color: T.INK,
+                }}>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} · {t.kind}</option>
+                ))}
+              </select>
+            )}
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 10, color: T.INK_M, textTransform: 'uppercase', letterSpacing: 0.5 }}>Date in (optional)</span>
+              <input type="date" value={dateIn} onChange={(e) => setDateIn(e.target.value)}
+                style={{ padding: '6px 8px', fontSize: 12, background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 3, color: T.INK }} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 10, color: T.INK_M, textTransform: 'uppercase', letterSpacing: 0.5 }}>Date out (optional)</span>
+              <input type="date" value={dateOut} onChange={(e) => setDateOut(e.target.value)}
+                style={{ padding: '6px 8px', fontSize: 12, background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 3, color: T.INK }} />
+            </label>
+          </div>
+          <div style={{ fontSize: 11, color: T.INK_M }}>
+            The composer will open with the lead's guest name pre-filled. Dates can be edited later.
+          </div>
+          {err && <div style={{ color: T.RED, fontSize: 12 }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+            <button type="button" onClick={onClose} style={btnStyleGhost()}>Cancel</button>
+            <button type="button" onClick={submit} disabled={submitting || templates.length === 0}
+              style={btnStylePrimary()}>
+              {submitting ? 'Creating…' : 'Create + open composer →'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -278,13 +450,18 @@ interface DrawerProps {
   lead: LeadRow | null;
   stages: StageRow[];
   propertyId: number;
+  templates: ProposalTemplateRow[];        // PBS 2026-07-15
   onClose: () => void;
   onSaved: (id: number) => void | Promise<void>;
   onDeleted: () => void | Promise<void>;
   onStageChanged: () => void | Promise<void>;
+  onCreateProposal: (leadId: number) => void;  // PBS 2026-07-15
 }
 
-function LeadProfileDrawer({ lead, stages, propertyId, onClose, onSaved, onDeleted, onStageChanged }: DrawerProps) {
+function LeadProfileDrawer({
+  lead, stages, propertyId, templates,
+  onClose, onSaved, onDeleted, onStageChanged, onCreateProposal,
+}: DrawerProps) {
   const [tab, setTab] = useState<'overview' | 'timeline' | 'emails' | 'notes'>('overview');
   const [form, setForm] = useState<Record<string, string>>(() => ({
     company_name: lead?.company_name ?? '',
@@ -391,6 +568,14 @@ function LeadProfileDrawer({ lead, stages, propertyId, onClose, onSaved, onDelet
               {!isCreate && (
                 <>
                   <span style={pillStyle(stageColor(lead?.stage ?? null))}>{lead?.stage_display_name ?? lead?.stage ?? '—'}</span>
+                  {/* PBS 2026-07-15 — jump to the template-picker modal from within the drawer. */}
+                  <button type="button"
+                    onClick={() => lead && onCreateProposal(lead.id)}
+                    disabled={templates.length === 0}
+                    title={templates.length === 0 ? 'No active proposal templates for this property.' : 'Create a proposal pre-filled from this lead'}
+                    style={{ ...btnStyleGhost(), borderColor: T.FOREST, color: T.FOREST, fontWeight: 600 }}>
+                    + Proposal
+                  </button>
                   <button type="button" onClick={advance} style={btnStyleGhost()}>Advance →</button>
                   <button type="button" onClick={del} style={{ ...btnStyleGhost(), color: T.RED, borderColor: T.RED }}>Delete</button>
                 </>
@@ -580,6 +765,11 @@ function btnStylePrimary(): React.CSSProperties {
 function btnStyleGhost(): React.CSSProperties {
   return { padding: '6px 12px', fontSize: 12, borderRadius: 4, border: '1px solid ' + T.HAIR,
     background: T.WHITE, color: T.INK, cursor: 'pointer' };
+}
+// PBS 2026-07-15 — compact row-action button (Create Proposal in the leads table).
+function rowActionBtn(): React.CSSProperties {
+  return { padding: '3px 8px', fontSize: 10, borderRadius: 3, border: '1px solid ' + T.FOREST,
+    background: T.WHITE, color: T.FOREST, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' };
 }
 function tabBtnStyle(on: boolean): React.CSSProperties {
   return { padding: '4px 10px', fontSize: 11, borderRadius: 4, border: '1px solid ' + (on ? T.FOREST : 'transparent'),
