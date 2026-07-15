@@ -14,7 +14,7 @@ export interface BriefingRow {
   property_id: number;
   source_area: string;
   source_key: string | null;
-  severity: 'critical' | 'warn' | 'info';
+  severity: 'critical' | 'warn' | 'info' | 'opportunity';
   headline: string;
   body: string | null;
   cta_kind: 'accept' | 'dismiss' | 'edit' | 'investigate' | 'snooze' | 'link';
@@ -32,11 +32,14 @@ export interface BriefingRow {
 
 interface Props { initial: BriefingRow[]; }
 
-const SEVERITY_RANK: Record<BriefingRow['severity'], number> = { critical: 0, warn: 1, info: 2 };
+// PBS 2026-07-16: opportunity ranked above info — it's actionable upside, not noise.
+// Sort order: critical → warn → opportunity → info.
+const SEVERITY_RANK: Record<BriefingRow['severity'], number> = { critical: 0, warn: 1, opportunity: 2, info: 3 };
 const SEVERITY_STYLE: Record<BriefingRow['severity'], { bg: string; ink: string; label: string }> = {
-  critical: { bg: '#FEE4E2', ink: '#912018', label: 'CRITICAL' },
-  warn:     { bg: '#FEF0C7', ink: '#93370D', label: 'WARN'     },
-  info:     { bg: '#DCFAE6', ink: '#054F31', label: 'INFO'     },
+  critical:    { bg: '#FEE4E2', ink: '#912018', label: 'CRITICAL'    },
+  warn:        { bg: '#FEF0C7', ink: '#93370D', label: 'WARN'        },
+  opportunity: { bg: '#D1FADF', ink: '#054F31', label: 'OPPORTUNITY' },
+  info:        { bg: '#EFF4FF', ink: '#1D2939', label: 'INFO'        },
 };
 
 const AREAS = [
@@ -51,10 +54,11 @@ const AREAS = [
 ] as const;
 
 const SEVERITIES = [
-  { key: 'all',      label: 'All' },
-  { key: 'critical', label: 'Critical' },
-  { key: 'warn',     label: 'Warn' },
-  { key: 'info',     label: 'Info' },
+  { key: 'all',         label: 'All' },
+  { key: 'critical',    label: 'Critical' },
+  { key: 'warn',        label: 'Warn' },
+  { key: 'opportunity', label: 'Opportunity' },
+  { key: 'info',        label: 'Info' },
 ] as const;
 
 const STATUSES = [
