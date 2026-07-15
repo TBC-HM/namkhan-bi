@@ -128,9 +128,9 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
         gap: 16, flexWrap: 'wrap',
       }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="t-eyebrow" style={{ marginBottom: 2 }}>
-            <strong style={{ color: 'var(--ink-soft)' }}>Sales</strong>
-            <span style={{ margin: '0 6px', color: 'var(--ink-faint)' }}>›</span>
+          <div className="t-eyebrow" style={{ marginBottom: 2, color: '#5A5A5A' }}>
+            <strong style={{ color: '#5A5A5A' }}>Sales</strong>
+            <span style={{ margin: '0 6px', color: '#8A8A8A' }}>›</span>
             Composer · {proposalId.slice(0, 8)}
           </div>
           <h1 style={{
@@ -140,14 +140,15 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
             letterSpacing: 'var(--ls-tight)',
             lineHeight: 1.1,
             fontVariationSettings: '"opsz" 144',
+            color: '#1B1B1B',
           }}>
-            {proposal.guest_name} <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>· stay</em>
+            {proposal.guest_name} <em style={{ color: '#084838', fontStyle: 'italic' }}>· stay</em>
           </h1>
-          <div style={{ fontSize: 'var(--t-base)', color: 'var(--ink-soft)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ fontSize: 'var(--t-base)', color: '#5A5A5A', marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
             {fmtIsoDate(proposal.date_in)} → {fmtIsoDate(proposal.date_out)} · {nights} {nights === 1 ? 'night' : 'nights'}
             <StatusPill tone={status.tone}>{status.label}</StatusPill>
             {sentToken && (
-              <a href={`/p/${sentToken}`} target="_blank" rel="noopener" style={{ color: 'var(--brass)', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-loose)', textTransform: 'uppercase' }}>
+              <a href={`/p/${sentToken}`} target="_blank" rel="noopener" style={{ color: '#084838', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-loose)', textTransform: 'uppercase' }}>
                 Open public link →
               </a>
             )}
@@ -201,54 +202,69 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
 
       {tab === 'blocks' && (
         <div className="composer-grid">
-          <section className="panel">
+          <section className="panel" style={{ background: '#FFFFFF', color: '#1B1B1B', border: '1px solid #E6DFCC' }}>
             <div className="panel-head">
-              <span className="panel-head-title">Stay <em>blocks</em></span>
-              <span className="panel-head-meta" style={{ display: 'flex', gap: 6 }}>
+              <span className="panel-head-title" style={{ color: '#1B1B1B' }}>Stay <em style={{ color: '#084838' }}>blocks</em></span>
+              <span className="panel-head-meta" style={{ display: 'flex', gap: 6, color: '#5A5A5A' }}>
                 <button onClick={() => setShowRooms(true)} className="btn">+ Rooms</button>
                 <button onClick={() => setShowActivities(true)} className="btn">+ Activities</button>
               </span>
             </div>
 
             {blocks.length === 0 && (
-              <p style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-md)', padding: '32px 0', textAlign: 'center' }}>
+              <p style={{ color: '#8A8A8A', fontSize: 'var(--t-md)', padding: '32px 0', textAlign: 'center' }}>
                 No blocks yet. Use the buttons above to add rooms and activities.
               </p>
             )}
 
             {blocks.map(b => (
-              <div key={b.id} className="composer-block-row">
-                <div className="composer-block-label">
+              <div key={b.id} className="composer-block-row" style={{ borderBottom: '1px solid #E6DFCC' }}>
+                <div className="composer-block-label" style={{ color: '#1B1B1B' }}>
                   {b.label}
-                  <div className="composer-block-meta">
+                  <div className="composer-block-meta" style={{ color: '#8A8A8A' }}>
                     {b.block_type}{b.note ? ` · ${b.note}` : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <input type="number" min={0} value={b.qty}
                     onChange={e => patchBlock(b.id, { qty: Math.max(0, parseInt(e.target.value || '0', 10)) })}
-                    className="composer-num-input" />
-                  <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>×</span>
+                    className="composer-num-input"
+                    style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+                  <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>×</span>
                   <input type="number" min={1} value={b.nights}
                     onChange={e => patchBlock(b.id, { nights: Math.max(1, parseInt(e.target.value || '1', 10)) })}
-                    className="composer-num-input" />
-                  <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>nt @</span>
+                    className="composer-num-input"
+                    style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+                  <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>nt @</span>
                   <input type="number" min={0} step={1000} value={b.unit_price_lak}
                     onChange={e => patchBlock(b.id, { unit_price_lak: parseFloat(e.target.value || '0') })}
-                    className="composer-num-input" style={{ width: 90 }} />
-                  <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>₭</span>
+                    className="composer-num-input" style={{ width: 90, background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+                  <span style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A' }}>₭</span>
                 </div>
-                <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 500, fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)' }}>
+                <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 500, fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', color: '#1B1B1B' }}>
                   {fmtTableUsd(Number(b.total_lak) / FX_LAK_PER_USD)}
                 </div>
                 <button onClick={() => removeBlock(b.id)} disabled={busy === b.id} className="btn"
-                  style={{ color: 'var(--st-bad)', padding: '4px 8px' }}>×</button>
+                  style={{ color: '#B04A2F', padding: '4px 8px' }}>×</button>
               </div>
             ))}
 
-            <div className="composer-total-row">
-              <span className="composer-total-label">Total</span>
-              <span className="composer-total-value">{fmtTableUsd(totalUsd)}</span>
+            {/* TODO 2026-07-15 (proposal photos) — insert PhotoPicker here per block context.
+                Fetch: v_media_library or public.v_media_assets filtered by
+                  target_usage_tiers && ARRAY['ota','website']::text[]
+                and matched by block context:
+                  block_type='room'     → room_type_id.eq.{b.ref_id}
+                  block_type='activity' → activity_id.eq.{b.ref_id} OR property_area.eq.'activity'
+                  block_type='facility' → property_area.eq.'facility'
+                Fill-from-Property-Settings source views (all reads via public bridge):
+                  content.room_type_content   → room description, size, bed config
+                  content.activities_catalog  → activity description, duration, price
+                  marketing.v_room_reality    → live rate + inventory sanity
+                No picker/hero-image UI exists today (hero_asset_id column is dormant). */}
+
+            <div className="composer-total-row" style={{ borderTop: '2px solid #084838' }}>
+              <span className="composer-total-label" style={{ color: '#8A8A8A' }}>Total</span>
+              <span className="composer-total-value" style={{ color: '#084838' }}>{fmtTableUsd(totalUsd)}</span>
             </div>
           </section>
 
