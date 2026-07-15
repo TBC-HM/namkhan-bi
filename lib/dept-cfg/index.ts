@@ -468,6 +468,10 @@ const SALES_CFG: DeptCfg = {
     // PBS 2026-07-14: nav rename "Create New" → "Leads" (points at the new CRM at /sales/leads).
     // /sales/new route stays live; the CreateLead client is still accessible from within the Leads CMS drawer.
     { label: 'Leads',         href: '/sales/leads'    },
+    // PBS 2026-07-15: Proposals index tab. New page at /sales/proposals lists
+    // every sales.proposals row; individual composer stays at /sales/proposals/[id]/edit.
+    // Entry point for the "Create proposal" flow from a lead row (see LeadsCMSClient).
+    { label: 'Proposals',     href: '/sales/proposals' },
     { label: 'Pipeline',      href: '/sales/pipeline'  },
     { label: 'Accounts',      href: '/sales/accounts'  },
     { label: 'ICP Segments',  href: '/sales/icp'       },
