@@ -18,7 +18,8 @@ import Script from 'next/script';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import './../styles/globals.css';
 import NDropdown from '@/components/nav/NDropdown';
-import GmailNavDropdown from '@/app/_components/GmailNavDropdown';
+// PBS 2026-07-16: GmailNavDropdown removed from topbar — mailbox now lives
+// as "📥 Inbox" row inside UserMenu dropdown (single home for mail actions).
 import CapacityResetOnPillarChange from '@/components/nav/CapacityResetOnPillarChange';
 import AgentEditModal from '@/components/agents/AgentEditModal';
 import BugWidget from '@/components/cockpit/BugWidget';
@@ -71,7 +72,6 @@ document.documentElement.setAttribute('data-property',v);}catch(e){}})();
         <PropertyThemeWatcher />
         <CapacityResetOnPillarChange />
         <NDropdown />
-        <GmailNavDropdown />
         <TopDeptStrip />
         <div className="site-paper-scope">
           {children}
