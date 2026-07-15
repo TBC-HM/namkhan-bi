@@ -388,6 +388,10 @@ const REVENUE_CFG: DeptCfg = {
     // page is no longer used). Sub-strip on Pulse shows Calendar (sibling filter
     // hides Pulse itself).
     { label: 'HoD',             href: '/revenue'          },
+    // PBS 2026-07-15: Briefing = revenue-area guardrail inbox with accept/
+    // dismiss/snooze CTAs and a learning loop that scores whether accepts
+    // actually moved the KPI. See app/revenue/briefing/page.tsx.
+    { label: 'Briefing',        href: '/revenue/briefing' },
     { label: 'Overview',        href: '/revenue/pulse'    },
     { label: 'Demand & Pace',   href: '/revenue/demand'   },
     { label: 'Performance',     href: '/revenue/rooms'    },
