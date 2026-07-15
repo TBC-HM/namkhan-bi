@@ -232,17 +232,28 @@ export default async function PacePage({
   const tileOcc  = capacityRn > 0 ? (tileRns / capacityRn) * 100 : 0;
   const tileStlyOcc = capacityRn > 0 ? (tileStly / capacityRn) * 100 : 0;
   const tileStlyPct = tileStly > 0 ? (tileRns / tileStly) * 100 : 0;
+  // PBS 2026-07-15 · rollout brief: KpiTile.stly corner badge on Forward OTB tiles.
+  // Uses tileStly / tileStlyRev / tileStlyOcc (already summed above).
+  const fmtSlyMoney = (v: number | null | undefined): string =>
+    v == null || !Number.isFinite(Number(v)) || Number(v) <= 0 ? '—' : `${sym}${Math.round(Number(v)).toLocaleString('en-US')}`;
+  const fmtSlyInt = (v: number | null | undefined): string =>
+    v == null || !Number.isFinite(Number(v)) || Number(v) <= 0 ? '—' : Math.round(Number(v)).toLocaleString('en-US');
+  const fmtSlyPct = (v: number | null | undefined): string =>
+    v == null || !Number.isFinite(Number(v)) || Number(v) <= 0 ? '—' : `${Number(v).toFixed(1)}%`;
+
   const tiles: KpiTileProps[] = [
     {
       label: 'OTB Room Nights', value: tileRns, size: 'sm',
       delta: cmpActive && tileStly > 0 ? { value: pctChange(tileRns, tileStly), period: cmpLabel,
         direction: tileRns >= tileStly ? 'up' : 'down' } : undefined,
+      stly: fmtSlyInt(tileStly),
       footnote: period.label,
     },
     {
       label: 'OTB Revenue', value: tileRev, currency: moneyCurrency, size: 'sm',
       delta: cmpActive && tileStlyRev > 0 ? { value: pctChange(tileRev, tileStlyRev), period: cmpLabel,
         direction: tileRev >= tileStlyRev ? 'up' : 'down' } : undefined,
+      stly: fmtSlyMoney(tileStlyRev),
       footnote: period.label,
     },
     {
@@ -254,6 +265,7 @@ export default async function PacePage({
       label: 'OTB Occupancy', value: `${tileOcc.toFixed(1)}%`, size: 'sm',
       delta: cmpActive && tileStly > 0 ? { value: tileOcc - tileStlyOcc, period: cmpLabel,
         direction: tileOcc >= tileStlyOcc ? 'up' : 'down' } : undefined,
+      stly: fmtSlyPct(tileStlyOcc),
     },
     { label: 'Cancel Rate', value: `${cxlRate.toFixed(1)}%`, size: 'sm', footnote: 'cancelled / total reservations' },
     { label: 'vs STLY', value: `${tileStlyPct.toFixed(0)}%`, size: 'sm', status: tileStlyPct >= 100 ? 'green' : tileStlyPct >= 80 ? 'amber' : 'red' },
