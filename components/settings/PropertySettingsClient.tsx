@@ -1,6 +1,9 @@
 // components/settings/PropertySettingsClient.tsx
 // PBS 2026-07-03: paper-white + hairline redesign.
 // PBS 2026-07-13: added "Media QA" tab between "Brand & Reality" and "Policies".
+// PBS 2026-07-15 (Item 6): added "Licenses" tab after "Policies" (regulatory
+// docs · renewal-date awareness). Panel fetches its own data client-side from
+// public.v_property_licenses so page.tsx loader is untouched.
 
 'use client';
 
@@ -11,6 +14,7 @@ import BrandPanel from './panels/BrandPanel';
 import BrandRealityPanel from './panels/BrandRealityPanel';
 import MediaQaPanel from './panels/MediaQaPanel';
 import PoliciesPanel from './panels/PoliciesPanel';
+import LicensesPanel from './panels/LicensesPanel';
 import RoomsPanel from './panels/RoomsPanel';
 import FacilitiesPanel from './panels/FacilitiesPanel';
 import ActivitiesPanel from './panels/ActivitiesPanel';
@@ -25,7 +29,7 @@ import ImekongPanel from './panels/ImekongPanel';
 import MeetingSpacesPanel from './panels/MeetingSpacesPanel';
 
 type Tab =
-  | 'identity' | 'owner' | 'location' | 'brand' | 'reality' | 'media_qa' | 'policies'
+  | 'identity' | 'owner' | 'location' | 'brand' | 'reality' | 'media_qa' | 'policies' | 'licenses'
   | 'rooms' | 'facilities' | 'activities' | 'seasons'
   | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces';
 
@@ -37,6 +41,7 @@ const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => numb
   { key: 'reality',        label: 'Brand & Reality', subtitle: 'AI grounding · vibe · palette · forbidden', count: () => null },
   { key: 'media_qa',       label: 'Media QA',        subtitle: 'Naming rules · backfill scoring', count: () => null },
   { key: 'policies',       label: 'Policies',       subtitle: 'Bookings & terms',             count: () => null },
+  { key: 'licenses',       label: 'Licenses',       subtitle: 'Regulatory · insurance · renewals', count: () => null },
   { key: 'rooms',          label: 'Rooms',          subtitle: 'Room type catalog',            count: (d) => d.rooms.length },
   { key: 'facilities',     label: 'Facilities',     subtitle: 'Pool · spa · dining',          count: (d) => d.facilities.length },
   { key: 'activities',     label: 'Activities',     subtitle: 'Wellness · culture · adventure', count: (d) => d.activities.length },
@@ -156,6 +161,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'reality'        && <BrandRealityPanel   data={data.brandReality}   propertyId={propertyId} />}
           {active === 'media_qa'       && <MediaQaPanel        propertyId={propertyId} />}
           {active === 'policies'       && <PoliciesPanel       data={data.policies}       propertyId={propertyId} />}
+          {active === 'licenses'       && <LicensesPanel       propertyId={propertyId} />}
           {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} propertyId={propertyId} />}
           {active === 'facilities'     && <FacilitiesPanel     data={data.facilities}     propertyId={propertyId} />}
           {active === 'activities'     && <ActivitiesPanel     data={data.activities}     propertyId={propertyId} />}
