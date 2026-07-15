@@ -303,6 +303,38 @@ export default function LeadsCMSClient({
                         → {proposalCount}
                       </a>
                     )}
+                    {/* PBS 2026-07-16 — icon CTAs. Email opens compose, Archive sets status=archived, Delete soft-deletes. */}
+                    {l.email && (
+                      <a href={'mailto:' + l.email}
+                        onClick={(e) => e.stopPropagation()}
+                        title={'Email ' + l.email}
+                        style={iconBtnStyle()}>
+                        ✉
+                      </a>
+                    )}
+                    <button type="button"
+                      onClick={async () => {
+                        if (!confirm('Archive lead "' + (l.company_name || l.email || 'this') + '"?')) return;
+                        const r = await fetch('/api/sales/leads/' + l.id, {
+                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'archived' }),
+                        });
+                        if (r.ok) refresh(); else alert('Archive failed');
+                      }}
+                      title="Archive lead (hide from active pipeline)"
+                      style={iconBtnStyle()}>
+                      📦
+                    </button>
+                    <button type="button"
+                      onClick={async () => {
+                        if (!confirm('Delete lead "' + (l.company_name || l.email || 'this') + '"? (soft delete — recoverable)')) return;
+                        const r = await fetch('/api/sales/leads/' + l.id, { method: 'DELETE' });
+                        if (r.ok) refresh(); else alert('Delete failed');
+                      }}
+                      title="Delete lead (soft delete — status='deleted')"
+                      style={{ ...iconBtnStyle(), color: '#B04A2F' }}>
+                      🗑
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -770,6 +802,12 @@ function btnStyleGhost(): React.CSSProperties {
 function rowActionBtn(): React.CSSProperties {
   return { padding: '3px 8px', fontSize: 10, borderRadius: 3, border: '1px solid ' + T.FOREST,
     background: T.WHITE, color: T.FOREST, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' };
+}
+// PBS 2026-07-16 — square icon-only row action (email · archive · delete).
+function iconBtnStyle(): React.CSSProperties {
+  return { padding: '3px 6px', fontSize: 13, lineHeight: 1, borderRadius: 3, border: '1px solid ' + T.HAIR,
+    background: T.WHITE, color: T.INK, cursor: 'pointer', fontWeight: 500, textDecoration: 'none',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 }
 function tabBtnStyle(on: boolean): React.CSSProperties {
   return { padding: '4px 10px', fontSize: 11, borderRadius: 4, border: '1px solid ' + (on ? T.FOREST : 'transparent'),
