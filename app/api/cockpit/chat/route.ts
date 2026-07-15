@@ -934,9 +934,31 @@ export async function POST(req: Request) {
       ].join('\n');
 
       // Build messages array from prior history.
-      const priorTurns = (conversation_history ?? []).slice(-12);
+      // PBS 2026-07-16: defensive normalizer. If a prior ticket is missing its
+      // assistant reply (parsed_summary lacks **Response** framing), the
+      // frontend history contains consecutive user turns → Anthropic rejects
+      // with "roles must alternate". Symptom: chat "stops after the 2nd
+      // message". Fix: collapse consecutive same-role turns (keep the LATEST
+      // content), then guarantee the final turn is our new user message.
+      const rawPrior = (conversation_history ?? []).slice(-12);
+      const collapsed: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+      for (const t of rawPrior) {
+        if (t.role !== 'user' && t.role !== 'assistant') continue;
+        if (!t.content || !t.content.trim()) continue;
+        const last = collapsed[collapsed.length - 1];
+        if (last && last.role === t.role) {
+          // Same role twice → keep the newer content, drop the earlier.
+          last.content = t.content;
+        } else {
+          collapsed.push({ role: t.role, content: t.content });
+        }
+      }
+      // If the last collapsed turn is a user turn, drop it (our new message replaces it).
+      if (collapsed.length && collapsed[collapsed.length - 1].role === 'user') collapsed.pop();
+      // Anthropic requires the first message to be role=user. Drop any leading assistant.
+      while (collapsed.length && collapsed[0].role === 'assistant') collapsed.shift();
       const messages = [
-        ...priorTurns.map((t) => ({ role: t.role, content: t.content })),
+        ...collapsed,
         { role: "user" as const, content: message },
       ];
 
