@@ -252,9 +252,9 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
             </div>
           </section>
 
-          <aside className="panel" style={{ background: 'var(--ink)', color: 'var(--paper)' }}>
+          <aside className="panel" style={{ background: '#FFFFFF', color: '#1B1B1B', border: '1px solid #E6DFCC' }}>
             <div className="panel-head">
-              <span className="panel-head-title" style={{ color: 'var(--paper-deep)' }}>
+              <span className="panel-head-title" style={{ color: '#1B1B1B' }}>
                 Live <em>preview</em>
               </span>
             </div>
@@ -262,22 +262,22 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
               fontFamily: 'var(--serif)', fontStyle: 'italic',
               fontSize: 'var(--t-xl)',
               margin: '8px 0 14px',
-              color: 'var(--paper)',
+              color: '#1B1B1B',
               fontVariationSettings: '"opsz" 144',
             }}>
               {proposal.guest_name} · {fmtIsoDate(proposal.date_in)} → {fmtIsoDate(proposal.date_out)}
             </h2>
-            {blocks.length === 0 && <p style={{ color: 'var(--ink-faint)', fontSize: 'var(--t-sm)' }}>Add blocks to see the preview.</p>}
+            {blocks.length === 0 && <p style={{ color: '#8A8A8A', fontSize: 'var(--t-sm)' }}>Add blocks to see the preview.</p>}
             {blocks.map(b => (
               <div key={b.id} style={{
                 marginBottom: 10,
                 paddingBottom: 10,
-                borderBottom: '1px solid rgba(216,204,168,0.15)',
+                borderBottom: '1px solid #E6DFCC',
               }}>
-                <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-md)', color: 'var(--paper)' }}>{b.label}</div>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-md)', color: '#1B1B1B' }}>{b.label}</div>
                 <div style={{
                   fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                  color: 'var(--paper-deep)',
+                  color: '#5A5A5A',
                   letterSpacing: 'var(--ls-loose)',
                   textTransform: 'uppercase',
                   marginTop: 2,
@@ -289,13 +289,13 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
             {blocks.length > 0 && (
               <div style={{
                 marginTop: 18, paddingTop: 14,
-                borderTop: '2px solid var(--moss)',
+                borderTop: '2px solid #084838',
               }}>
-                <div className="t-eyebrow" style={{ color: 'var(--paper-deep)' }}>Total</div>
+                <div className="t-eyebrow" style={{ color: '#5A5A5A' }}>Total</div>
                 <div style={{
                   fontFamily: 'var(--serif)', fontStyle: 'italic',
                   fontSize: 'var(--t-2xl)',
-                  color: 'var(--brass)',
+                  color: '#084838',
                   fontVariationSettings: '"opsz" 144',
                 }}>
                   {fmtTableUsd(totalUsd)}
