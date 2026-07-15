@@ -432,6 +432,16 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
 
   const activeTargets = Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults';
   // PBS 2026-07-15: softNightsNext30 declaration removed alongside the Soft-nights tile.
+  // PBS 2026-07-15: real PACE metric — TY OTB next 30 nights vs LY actuals same 30 nights.
+  // Feeds baseTiles PACE override (Option C: abs RN as headline value, % in footnote).
+  // The seed config's `PACE = −14%` string was a hardcoded placeholder — never wired.
+  const paceNext30      = paceNext90.filter((n) => n.daysOut >= 1 && n.daysOut <= 30);
+  const paceTyRn        = paceNext30.reduce((s, n) => s + Number(n.confirmedRooms ?? 0), 0);
+  const paceLyRn        = paceNext30.reduce((s, n) => s + Number(n.stly ?? 0), 0);
+  const paceAbsDelta    = paceTyRn - paceLyRn;
+  const pacePctDelta    = paceLyRn > 0 ? Math.round((paceAbsDelta / paceLyRn) * 100) : null;
+  const paceSign        = paceAbsDelta > 0 ? '+' : '';
+  const paceStatus: 'green' | 'amber' | 'grey' = paceAbsDelta > 0 ? 'green' : paceAbsDelta < 0 ? 'amber' : 'grey';
   // Total room nights + revenue booked TODAY across all new reservations.
   // PBS 2026-07-08: revenue added alongside nights so the tile shows the value delta.
   const pickupNightsSum = (pickupToday as Array<{ nights?: number | null }>).reduce((s, r) => s + (Number(r.nights) || 0), 0);
@@ -461,6 +471,16 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdr.toLocaleString('en-US')}`,    size: 'sm', footnote: 'today · in-house · net' } as KpiTileProps;
       if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevpar.toLocaleString('en-US')}`, size: 'sm', footnote: 'today · vs capacity · net' } as KpiTileProps;
     }
+    // PBS 2026-07-15: PACE wired to real data — abs RN vs LY (headline) + % in footnote.
+    if (k.k === 'PACE') return {
+      label: 'PACE · next 30d',
+      value: `${paceSign}${paceAbsDelta} RN`,
+      size: 'sm',
+      footnote: pacePctDelta === null
+        ? `${paceTyRn} OTB next 30d · no LY baseline`
+        : `${paceSign}${pacePctDelta}% vs LY · ${paceTyRn} OTB TY · ${paceLyRn} actual LY`,
+      status: paceStatus,
+    } as KpiTileProps;
     return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
   });
   const tiles: KpiTileProps[] = [
@@ -492,6 +512,16 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdrY.toLocaleString('en-US')}`,    size: 'sm', footnote: 'yesterday · in-house · net' } as KpiTileProps;
       if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevparY.toLocaleString('en-US')}`, size: 'sm', footnote: 'yesterday · vs capacity · net' } as KpiTileProps;
     }
+    // PBS 2026-07-15: PACE is a forward-looking metric — same value on both stripes.
+    if (k.k === 'PACE') return {
+      label: 'PACE · next 30d',
+      value: `${paceSign}${paceAbsDelta} RN`,
+      size: 'sm',
+      footnote: pacePctDelta === null
+        ? `${paceTyRn} OTB next 30d · no LY baseline`
+        : `${paceSign}${pacePctDelta}% vs LY · ${paceTyRn} OTB TY · ${paceLyRn} actual LY`,
+      status: paceStatus,
+    } as KpiTileProps;
     return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
   });
   const yesterdayTiles: KpiTileProps[] = [
