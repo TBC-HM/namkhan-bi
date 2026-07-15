@@ -62,7 +62,7 @@ export default function ActivityCatalogDrawer({ open, onClose, onPick }: Props) 
               <StatusPill tone="info">SIG</StatusPill>
             </span>
           )}
-          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginTop: 2 }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: '#8A8A8A', marginTop: 2 }}>
             {a.short_summary ?? EMPTY}
           </div>
         </span>
@@ -113,14 +113,23 @@ export default function ActivityCatalogDrawer({ open, onClose, onPick }: Props) 
     },
   ];
 
+  const inputStyle = { background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' };
+
   return (
     <div onClick={onClose} className="proposal-drawer-mask">
-      <aside onClick={e => e.stopPropagation()} className="proposal-drawer wide">
-        <header className="proposal-drawer-head">
+      <aside
+        onClick={e => e.stopPropagation()}
+        className="proposal-drawer wide"
+        style={{ background: '#FFFFFF', color: '#1B1B1B' }}
+      >
+        <header
+          className="proposal-drawer-head"
+          style={{ borderBottom: '1px solid #E6DFCC' }}
+        >
           <div>
-            <div className="t-eyebrow">Activity catalog · Luang Prabang</div>
-            <h3 className="proposal-drawer-title">
-              Pick your <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>add-ons</em>
+            <div className="t-eyebrow" style={{ color: '#5A5A5A' }}>Activity catalog · Luang Prabang</div>
+            <h3 className="proposal-drawer-title" style={{ color: '#1B1B1B' }}>
+              Pick your <em style={{ color: '#084838', fontStyle: 'italic' }}>add-ons</em>
             </h3>
           </div>
           <button className="btn" onClick={onClose}>Close ✕</button>
@@ -141,9 +150,22 @@ export default function ActivityCatalogDrawer({ open, onClose, onPick }: Props) 
 
           {/* Category chips */}
           <div className="proposal-drawer-chips">
-            <button onClick={() => setCat('all')} className={`chip${cat === 'all' ? ' on' : ''}`}>All</button>
+            <button
+              onClick={() => setCat('all')}
+              className={`chip${cat === 'all' ? ' on' : ''}`}
+              style={cat === 'all'
+                ? { background: '#084838', color: '#FFFFFF', border: '1px solid #084838' }
+                : { background: '#FAFAF7', color: '#5A5A5A', border: '1px solid #E6DFCC' }}
+            >All</button>
             {categories.map(c => (
-              <button key={c.slug} onClick={() => setCat(c.slug)} className={`chip${cat === c.slug ? ' on' : ''}`}>{c.name}</button>
+              <button
+                key={c.slug}
+                onClick={() => setCat(c.slug)}
+                className={`chip${cat === c.slug ? ' on' : ''}`}
+                style={cat === c.slug
+                  ? { background: '#084838', color: '#FFFFFF', border: '1px solid #084838' }
+                  : { background: '#FAFAF7', color: '#5A5A5A', border: '1px solid #E6DFCC' }}
+              >{c.name}</button>
             ))}
           </div>
 
@@ -154,8 +176,9 @@ export default function ActivityCatalogDrawer({ open, onClose, onPick }: Props) 
               onChange={e => setQ(e.target.value)}
               placeholder="Search title or summary…"
               className="proposal-input"
+              style={inputStyle}
             />
-            <select value={sort} onChange={e => setSort(e.target.value as Sort)} className="proposal-input">
+            <select value={sort} onChange={e => setSort(e.target.value as Sort)} className="proposal-input" style={inputStyle}>
               <option value="popularity">Popularity</option>
               <option value="az">A → Z</option>
               <option value="price">Price low → high</option>
@@ -163,7 +186,7 @@ export default function ActivityCatalogDrawer({ open, onClose, onPick }: Props) 
             </select>
           </div>
 
-          {loading && <p style={{ color: 'var(--ink-mute)' }}>Loading catalog…</p>}
+          {loading && <p style={{ color: '#8A8A8A' }}>Loading catalog…</p>}
 
           {!loading && (
             <DataTable<Activity>
