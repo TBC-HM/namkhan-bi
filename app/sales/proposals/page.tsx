@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { SALES_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import DeleteProposalButton from './_components/DeleteProposalButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -123,11 +124,12 @@ export default async function SalesProposalsIndexPage({ propertyId }: PageProps 
                     <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, color: T.INK_M, whiteSpace: 'nowrap' }}>
                       {new Date(p.created_at).toLocaleDateString()}
                     </td>
-                    <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, textAlign: 'right' }}>
+                    <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <Link href={'/sales/proposals/' + p.id + '/edit'} style={{
                         padding: '4px 10px', fontSize: 11, borderRadius: 4, border: '1px solid ' + T.FOREST,
                         color: T.FOREST, textDecoration: 'none', fontWeight: 600,
                       }}>Open →</Link>
+                      <DeleteProposalButton proposalId={p.id} label={p.guest_name_snapshot ?? undefined} />
                     </td>
                   </tr>
                 );
