@@ -106,7 +106,10 @@ export default function TeamPanel({
 }) {
   const members = data ?? [];
   const hrBase = hrBasePath(propertyId);
-  const addHref = `${hrBase}?add=1`;
+  // PBS 2026-07-16: land directly on Onboarding where the new-hire flow lives,
+  // instead of the HR overview (which doesn't handle ?add=1). Same query still
+  // sent — Onboarding page can auto-open the create form if it wants to.
+  const addHref = `${hrBase}/onboarding?add=1`;
 
   const addButton = (
     <Link
