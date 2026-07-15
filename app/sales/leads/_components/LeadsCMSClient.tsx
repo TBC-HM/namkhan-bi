@@ -303,11 +303,11 @@ export default function LeadsCMSClient({
                         → {proposalCount}
                       </a>
                     )}
-                    {/* PBS 2026-07-16 — icon CTAs. Email opens compose, Archive sets status=archived, Delete soft-deletes. */}
+                    {/* PBS 2026-07-16 — icon CTAs. Email opens in-app compose at /mail, Archive sets status=archived, Delete soft-deletes. */}
                     {l.email && (
-                      <a href={'mailto:' + l.email}
+                      <a href={'/mail?compose=1&to=' + encodeURIComponent(l.email) + (l.company_name ? '&subject=' + encodeURIComponent('The Namkhan · ' + l.company_name) : '')}
                         onClick={(e) => e.stopPropagation()}
-                        title={'Email ' + l.email}
+                        title={'Compose to ' + l.email + ' (opens /mail)'}
                         style={iconBtnStyle()}>
                         ✉
                       </a>
