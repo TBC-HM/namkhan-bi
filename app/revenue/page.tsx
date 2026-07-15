@@ -78,7 +78,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
 
   const [
     pickupToday, cancellationsToday, pickupYesterday, cancellationsYesterday, bugsRes, dueTasksRes,
-    todayKpiRes, guardrailsRes,
+    todayKpiRes, yesterdayKpiRes, guardrailsRes,
     paceRes, stlyRes,
     l14PickupRes, l14LyPickupRes,
     next30ArrivalsRes,
@@ -100,6 +100,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     supabase.from('cockpit_bugs').select('id, body, status, created_at, page_url').not('status','in','(closed,resolved,wontfix,done)').order('created_at', { ascending: false }).limit(5),
     supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true }).eq('dept_slug', 'revenue').eq('property_id', pid).eq('is_due', true),
     supabase.rpc('fn_revenue_hod_today_kpi', { p_property_id: pid }),
+    // PBS 2026-07-15: yesterday KPI snapshot (actualized) — feeds the Yesterday headline stripe.
+    supabase.from('v_kpi_daily_property').select('rooms_available, rooms_sold, rooms_revenue, ancillary_revenue, total_revenue, occupancy_pct, adr, revpar').eq('property_id', pid).eq('night_date', yesterdayIso).maybeSingle(),
     sbAdmin.from('guardrails').select('rule_key, threshold_val').eq('property_id', pid).eq('domain', 'revenue').eq('active', true),
     supabase.from('v_otb_pace').select('night_date, confirmed_rooms').eq('property_id', pid).gte('night_date', todayIso).lte('night_date', in90Iso).order('night_date'),
     supabase.from('mv_kpi_daily').select('night_date, rooms_sold').eq('property_id', pid).gte('night_date', lyFromIso).lte('night_date', lyToIso),
@@ -133,6 +135,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const externalLinks = allShortcuts.filter((s) => s.kind === 'external') as ExternalLink[];
 
   const todayKpi = ((todayKpiRes.data ?? [])[0] ?? null) as { rn_tonight: number; capacity: number; occ_pct: number; adr_today: number; revpar_today: number } | null;
+  // PBS 2026-07-15: yesterday actualized KPI (from v_kpi_daily_property).
+  const yesterdayKpi = (yesterdayKpiRes.data ?? null) as { rooms_available: number | null; rooms_sold: number | null; rooms_revenue: number | string | null; ancillary_revenue: number | string | null; total_revenue: number | string | null; occupancy_pct: number | string | null; adr: number | string | null; revpar: number | string | null } | null;
   const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
   const dueTasksCount = dueTasksRes.count ?? 0;
   const symToday = pid === 1000001 ? '€' : '$';
@@ -394,11 +398,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const revenueInsights = [...parityInsights, ...ratePlanInsights, ...evaluateRevenueRules(revenueCtx)];
 
   const activeTargets = Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults';
-  // Next 30 nights = tomorrow through 30 days out (excludes today so it's a clean 30-night window).
-  const softNightsNext30 = Math.min(
-    30,
-    paceNext90.filter(n => n.daysOut >= 1 && n.daysOut <= 30 && n.occPct < 50).length,
-  );
+  // PBS 2026-07-15: softNightsNext30 declaration removed alongside the Soft-nights tile.
   // Total room nights + revenue booked TODAY across all new reservations.
   // PBS 2026-07-08: revenue added alongside nights so the tile shows the value delta.
   const pickupNightsSum = (pickupToday as Array<{ nights?: number | null }>).reduce((s, r) => s + (Number(r.nights) || 0), 0);
@@ -416,6 +416,10 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const netAdr    = Math.round(Number(todayKpi?.adr_today ?? 0)    / TAX_SERVICE);
   const netRevpar = Math.round(Number(todayKpi?.revpar_today ?? 0) / TAX_SERVICE);
   const netRevenueTonight = Math.round(Number(todayKpi?.rn_tonight ?? 0) * netAdr);
+  // PBS 2026-07-15: yesterday NET equivalents for the mirrored headline stripe.
+  const netAdrY    = Math.round(Number(yesterdayKpi?.adr ?? 0)    / TAX_SERVICE);
+  const netRevparY = Math.round(Number(yesterdayKpi?.revpar ?? 0) / TAX_SERVICE);
+  const netRevenueYesterday = Math.round(Number(yesterdayKpi?.rooms_revenue ?? 0) / TAX_SERVICE);
 
   // KPI tiles (same as before + one forward-looking tile)
   const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
@@ -447,9 +451,37 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     { label: 'Pickup today · net RN', value: (pickupNightsSum - cancelNightsSum), size: 'sm',
       footnote: `${pickupNightsSum} booked − ${cancelNightsSum} lost · ${symToday}${Math.round(pickupRevenueSum - cancelRevenueSum).toLocaleString('en-US')} net today`,
       status: (pickupNightsSum - cancelNightsSum) > 0 ? 'green' : (pickupNightsSum - cancelNightsSum) < 0 ? 'amber' : 'grey' },
-    { label: 'Soft nights (next 30d)', value: softNightsNext30, size: 'sm',
-      footnote: '< 50% OCC · window still open',
-      status: softNightsNext30 === 0 ? 'green' : softNightsNext30 > 8 ? 'amber' : 'grey' },
+    // PBS 2026-07-15: Soft-nights (next 30d) pace tile removed per request — this stripe is Today snapshot only.
+  ];
+
+  // PBS 2026-07-15: yesterday mirror stripe — exactly the same tiles as Today, sourced from actualized v_kpi_daily_property.
+  const yesterdayBaseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
+    if (yesterdayKpi) {
+      const occY = Math.round(Number(yesterdayKpi.occupancy_pct ?? 0));
+      if (k.k === 'OCC')    return { label: 'OCC',    value: `${occY}%`, size: 'sm', footnote: `${yesterdayKpi.rooms_sold ?? 0} of ${yesterdayKpi.rooms_available ?? 0} rooms` } as KpiTileProps;
+      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdrY.toLocaleString('en-US')}`,    size: 'sm', footnote: 'yesterday · in-house · net' } as KpiTileProps;
+      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevparY.toLocaleString('en-US')}`, size: 'sm', footnote: 'yesterday · vs capacity · net' } as KpiTileProps;
+    }
+    return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
+  });
+  const yesterdayTiles: KpiTileProps[] = [
+    ...yesterdayBaseTiles,
+    { label: 'Revenue yesterday', value: `${symToday}${netRevenueYesterday.toLocaleString('en-US')}`, size: 'sm',
+      footnote: `${yesterdayKpi?.rooms_sold ?? 0} rooms sold · net`,
+      status: netRevenueYesterday > 0 ? 'green' : 'grey' },
+    { label: 'New bookings yesterday · room nights', value: pickupNightsSumY, size: 'sm',
+      footnote: pickupCountY === 0
+        ? 'no new bookings yesterday'
+        : `${pickupCountY} ${pickupCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(pickupRevenueSumY).toLocaleString('en-US')} · booked yesterday`,
+      status: pickupNightsSumY > 0 ? 'green' : 'grey' },
+    { label: 'Cancellations yesterday · room nights', value: cancelNightsSumY, size: 'sm',
+      footnote: cancelCountY === 0
+        ? 'no cancellations yesterday'
+        : `${cancelCountY} ${cancelCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelRevenueSumY).toLocaleString('en-US')} · lost yesterday`,
+      status: cancelCountY === 0 ? 'green' : 'amber' },
+    { label: 'Pickup yesterday · net RN', value: (pickupNightsSumY - cancelNightsSumY), size: 'sm',
+      footnote: `${pickupNightsSumY} booked − ${cancelNightsSumY} lost · ${symToday}${Math.round(pickupRevenueSumY - cancelRevenueSumY).toLocaleString('en-US')} net yesterday`,
+      status: (pickupNightsSumY - cancelNightsSumY) > 0 ? 'green' : (pickupNightsSumY - cancelNightsSumY) < 0 ? 'amber' : 'grey' },
   ];
 
   // PBS 2026-07-08 #204/attention — DB rows first, seed fallback for dev only.
@@ -501,38 +533,16 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </div>
       )}
 
-      {/* PBS 2026-07-15: Yesterday parallel stripe — same 3 activity tiles for the Vientiane calendar day just closed. */}
-      <div style={fullRow}>
-        <Container title="Headline · Yesterday" subtitle={`${yesterdayIso} (${PROPERTY_TZ}) · booking activity summary from the calendar day just closed`} density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-            <KpiTile
-              label="New bookings yesterday · room nights"
-              value={pickupNightsSumY}
-              size="sm"
-              footnote={pickupCountY === 0
-                ? 'no new bookings yesterday'
-                : `${pickupCountY} ${pickupCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(pickupRevenueSumY).toLocaleString('en-US')} · booked yesterday`}
-              status={pickupNightsSumY > 0 ? 'green' : 'grey'}
-            />
-            <KpiTile
-              label="Cancellations yesterday · room nights"
-              value={cancelNightsSumY}
-              size="sm"
-              footnote={cancelCountY === 0
-                ? 'no cancellations yesterday'
-                : `${cancelCountY} ${cancelCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelRevenueSumY).toLocaleString('en-US')} · lost yesterday`}
-              status={cancelCountY === 0 ? 'green' : 'amber'}
-            />
-            <KpiTile
-              label="Pickup yesterday · net RN"
-              value={pickupNightsSumY - cancelNightsSumY}
-              size="sm"
-              footnote={`${pickupNightsSumY} booked − ${cancelNightsSumY} lost · ${symToday}${Math.round(pickupRevenueSumY - cancelRevenueSumY).toLocaleString('en-US')} net yesterday`}
-              status={(pickupNightsSumY - cancelNightsSumY) > 0 ? 'green' : (pickupNightsSumY - cancelNightsSumY) < 0 ? 'amber' : 'grey'}
-            />
-          </div>
-        </Container>
-      </div>
+      {/* PBS 2026-07-15: Yesterday parallel stripe — mirrors the Today stripe exactly (OCC · ADR · RevPAR · Revenue · New bookings · Cancellations · Pickup net). */}
+      {yesterdayTiles.length > 0 && (
+        <div style={fullRow}>
+          <Container title="Headline · Yesterday" subtitle={`${yesterdayIso} (${PROPERTY_TZ}) · money tiles NET (excl. 10% VAT + 10% service charge) · calendar day just closed`} density="compact">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+              {yesterdayTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+            </div>
+          </Container>
+        </div>
+      )}
 
       {/* PBS 2026-07-08 (final): grid tightened to 4 tiles — Attention · My Reports (self-sends) · My Tasks · Bugs.
           Scheduled + Send log get their own full-width containers below. */}
