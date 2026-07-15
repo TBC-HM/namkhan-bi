@@ -4,6 +4,11 @@
 // PBS 2026-07-15 (Item 6): added "Licenses" tab after "Policies" (regulatory
 // docs · renewal-date awareness). Panel fetches its own data client-side from
 // public.v_property_licenses so page.tsx loader is untouched.
+// PBS 2026-07-15 (Send Logs): added "Send Logs" tab at the end — every send
+// that went out for this property across all Namkhan-BI areas (revenue
+// reports, guest newsletters, sales outbound, marketing campaigns, reputation
+// digests). Panel fetches from public.v_all_sends_unified. Moved out of the
+// Revenue HoD landing where it was noise.
 
 'use client';
 
@@ -27,11 +32,13 @@ import OwnerPanel from './panels/OwnerPanel';
 import TransportPanel from './panels/TransportPanel';
 import ImekongPanel from './panels/ImekongPanel';
 import MeetingSpacesPanel from './panels/MeetingSpacesPanel';
+import SendLogsPanel from './panels/SendLogsPanel';
 
 type Tab =
   | 'identity' | 'owner' | 'location' | 'brand' | 'reality' | 'media_qa' | 'policies' | 'licenses'
   | 'rooms' | 'facilities' | 'activities' | 'seasons'
-  | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces';
+  | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces'
+  | 'send_logs';
 
 const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => number | null }[] = [
   { key: 'identity',       label: 'Identity',       subtitle: 'Legal & licensing',            count: () => null },
@@ -53,6 +60,7 @@ const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => numb
   { key: 'contacts',       label: 'Contacts',       subtitle: 'Reservations · GM · owner',    count: (d) => d.contacts.length },
   { key: 'social',         label: 'Social',         subtitle: 'IG · FB · TripAdvisor',        count: (d) => d.social.length },
   { key: 'team',           label: 'Team',           subtitle: 'GM & department heads',        count: (d) => d.team?.length ?? 0 },
+  { key: 'send_logs',      label: 'Send Logs',      subtitle: 'Every send out · all areas',   count: () => null },
 ];
 
 export default function PropertySettingsClient({ data, propertyId }: { data: any; propertyId: number }) {
@@ -173,6 +181,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'contacts'       && <ContactsPanel       data={data.contacts}       propertyId={propertyId} />}
           {active === 'social'         && <SocialPanel         data={data.social}         propertyId={propertyId} />}
           {active === 'team'           && <TeamPanel           data={data.team ?? []} propertyId={propertyId} />}
+          {active === 'send_logs'      && <SendLogsPanel       propertyId={propertyId} />}
         </div>
       </main>
     </div>
