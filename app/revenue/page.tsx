@@ -82,7 +82,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
 
   const [
     pickupToday, cancellationsToday, pickupYesterday, cancellationsYesterday, hodActTodayRes, hodActYestRes, bugsRes, dueTasksRes,
-    todayKpiRes, yesterdayKpiRes, guardrailsRes,
+    todayKpiRes, yesterdayKpiRes, lyTodayKpiRes, lyYestKpiRes, guardrailsRes,
     paceRes, stlyRes,
     l14PickupRes, l14LyPickupRes,
     next30ArrivalsRes,
@@ -109,6 +109,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     supabase.rpc('fn_revenue_hod_today_kpi', { p_property_id: pid }),
     // PBS 2026-07-15: yesterday KPI snapshot (actualized) — feeds the Yesterday headline stripe.
     supabase.from('v_kpi_daily_property').select('rooms_available, rooms_sold, rooms_revenue, ancillary_revenue, total_revenue, occupancy_pct, adr, revpar').eq('property_id', pid).eq('night_date', yesterdayIso).maybeSingle(),
+    // PBS 2026-07-15: STLY snapshots for corner "LY" pill on today + yesterday tiles.
+    supabase.from('v_kpi_daily_property').select('rooms_sold, rooms_available, rooms_revenue, occupancy_pct, adr, revpar').eq('property_id', pid).eq('night_date', shiftYear(todayIso, -1)).maybeSingle(),
+    supabase.from('v_kpi_daily_property').select('rooms_sold, rooms_available, rooms_revenue, occupancy_pct, adr, revpar').eq('property_id', pid).eq('night_date', shiftYear(yesterdayIso, -1)).maybeSingle(),
     sbAdmin.from('guardrails').select('rule_key, threshold_val').eq('property_id', pid).eq('domain', 'revenue').eq('active', true),
     supabase.from('v_otb_pace').select('night_date, confirmed_rooms').eq('property_id', pid).gte('night_date', todayIso).lte('night_date', in90Iso).order('night_date'),
     supabase.from('mv_kpi_daily').select('night_date, rooms_sold').eq('property_id', pid).gte('night_date', lyFromIso).lte('night_date', lyToIso),
@@ -144,6 +147,14 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const todayKpi = ((todayKpiRes.data ?? [])[0] ?? null) as { rn_tonight: number; capacity: number; occ_pct: number; adr_today: number; revpar_today: number } | null;
   // PBS 2026-07-15: yesterday actualized KPI (from v_kpi_daily_property).
   const yesterdayKpi = (yesterdayKpiRes.data ?? null) as { rooms_available: number | null; rooms_sold: number | null; rooms_revenue: number | string | null; ancillary_revenue: number | string | null; total_revenue: number | string | null; occupancy_pct: number | string | null; adr: number | string | null; revpar: number | string | null } | null;
+  // PBS 2026-07-15: LY same-date snapshots for STLY badges.
+  type LyKpi = { rooms_sold: number | null; rooms_available: number | null; rooms_revenue: number | string | null; occupancy_pct: number | string | null; adr: number | string | null; revpar: number | string | null } | null;
+  const lyTodayKpi = (lyTodayKpiRes.data ?? null) as LyKpi;
+  const lyYestKpi  = (lyYestKpiRes.data  ?? null) as LyKpi;
+  const TAX_SERVICE_LY = 1.21;
+  const fmtSlyPct = (v: number | string | null | undefined) => v == null ? '—' : `${Math.round(Number(v))}%`;
+  const fmtSlyMoney = (v: number | string | null | undefined, sym: string, tax = 1) => v == null ? '—' : `${sym}${Math.round(Number(v) / tax).toLocaleString('en-US')}`;
+  const fmtSlyRn = (v: number | null | undefined) => v == null ? '—' : `${v} RN`;
   const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
   const dueTasksCount = dueTasksRes.count ?? 0;
   const symToday = pid === 1000001 ? '€' : '$';
@@ -466,9 +477,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // KPI tiles (same as before + one forward-looking tile)
   const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
     if (todayKpi) {
-      if (k.k === 'OCC')    return { label: 'OCC',    value: `${todayKpi.occ_pct ?? 0}%`, size: 'sm', footnote: `${todayKpi.rn_tonight ?? 0} of ${todayKpi.capacity ?? 0} rooms tonight` } as KpiTileProps;
-      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdr.toLocaleString('en-US')}`,    size: 'sm', footnote: 'today · in-house · net' } as KpiTileProps;
-      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevpar.toLocaleString('en-US')}`, size: 'sm', footnote: 'today · vs capacity · net' } as KpiTileProps;
+      if (k.k === 'OCC')    return { label: 'OCC',    value: `${todayKpi.occ_pct ?? 0}%`, size: 'sm', footnote: `${todayKpi.rn_tonight ?? 0} of ${todayKpi.capacity ?? 0} rooms tonight`, stly: fmtSlyPct(lyTodayKpi?.occupancy_pct) } as KpiTileProps;
+      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdr.toLocaleString('en-US')}`,    size: 'sm', footnote: 'today · in-house · net', stly: fmtSlyMoney(lyTodayKpi?.adr, symToday, TAX_SERVICE_LY) } as KpiTileProps;
+      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevpar.toLocaleString('en-US')}`, size: 'sm', footnote: 'today · vs capacity · net', stly: fmtSlyMoney(lyTodayKpi?.revpar, symToday, TAX_SERVICE_LY) } as KpiTileProps;
     }
     // PBS 2026-07-15: PACE wired to real data — abs RN vs LY (headline) + % in footnote.
     if (k.k === 'PACE') return {
@@ -486,7 +497,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     ...baseTiles,
     { label: 'Revenue tonight', value: `${symToday}${netRevenueTonight.toLocaleString('en-US')}`, size: 'sm',
       footnote: `${todayKpi?.rn_tonight ?? 0} rooms × ADR · net`,
-      status: netRevenueTonight > 0 ? 'green' : 'grey' },
+      status: netRevenueTonight > 0 ? 'green' : 'grey',
+      stly: fmtSlyMoney(lyTodayKpi?.rooms_revenue, symToday, TAX_SERVICE_LY) },
     // PBS 2026-07-15: CLOUDBEDS-ALIGNED — gross bookings incl. cancelled-today, cancels with original_amount, pickup = snapshot delta (matches pickup matrix).
     { label: 'New bookings today · room nights', value: grossBkRn, size: 'sm',
       footnote: grossBkCount === 0
@@ -510,9 +522,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const yesterdayBaseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).filter((k) => k.k !== 'PACE').map((k) => {
     if (yesterdayKpi) {
       const occY = Math.round(Number(yesterdayKpi.occupancy_pct ?? 0));
-      if (k.k === 'OCC')    return { label: 'OCC',    value: `${occY}%`, size: 'sm', footnote: `${yesterdayKpi.rooms_sold ?? 0} of ${yesterdayKpi.rooms_available ?? 0} rooms` } as KpiTileProps;
-      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdrY.toLocaleString('en-US')}`,    size: 'sm', footnote: 'yesterday · in-house · net' } as KpiTileProps;
-      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevparY.toLocaleString('en-US')}`, size: 'sm', footnote: 'yesterday · vs capacity · net' } as KpiTileProps;
+      if (k.k === 'OCC')    return { label: 'OCC',    value: `${occY}%`, size: 'sm', footnote: `${yesterdayKpi.rooms_sold ?? 0} of ${yesterdayKpi.rooms_available ?? 0} rooms`, stly: fmtSlyPct(lyYestKpi?.occupancy_pct) } as KpiTileProps;
+      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdrY.toLocaleString('en-US')}`,    size: 'sm', footnote: 'yesterday · in-house · net', stly: fmtSlyMoney(lyYestKpi?.adr, symToday, TAX_SERVICE_LY) } as KpiTileProps;
+      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevparY.toLocaleString('en-US')}`, size: 'sm', footnote: 'yesterday · vs capacity · net', stly: fmtSlyMoney(lyYestKpi?.revpar, symToday, TAX_SERVICE_LY) } as KpiTileProps;
     }
     return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
   });
@@ -520,7 +532,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     ...yesterdayBaseTiles,
     { label: 'Revenue yesterday', value: `${symToday}${netRevenueYesterday.toLocaleString('en-US')}`, size: 'sm',
       footnote: `${yesterdayKpi?.rooms_sold ?? 0} rooms sold · net`,
-      status: netRevenueYesterday > 0 ? 'green' : 'grey' },
+      status: netRevenueYesterday > 0 ? 'green' : 'grey',
+      stly: fmtSlyMoney(lyYestKpi?.rooms_revenue, symToday, TAX_SERVICE_LY) },
     { label: 'New bookings yesterday · room nights', value: grossBkRnY, size: 'sm',
       footnote: grossBkCountY === 0
         ? 'no new bookings yesterday'
