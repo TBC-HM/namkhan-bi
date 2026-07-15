@@ -80,14 +80,14 @@ function md(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/```([\s\S]*?)```/g, '<pre style="background:#0a0a0b;border:1px solid #25252d;border-radius:6px;padding:10px;overflow:auto;font-size:12px"><code>$1</code></pre>')
-    .replace(/`([^`]+)`/g, '<code style="background:#1a1a20;padding:2px 5px;border-radius:3px;font-size:13px">$1</code>')
-    .replace(/^### (.+)$/gm, '<h3 style="font-family:\'Cooper\',Georgia,serif;font-size:18px;margin:14px 0 6px;color:#ededf0;font-weight:400">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="font-family:\'Cooper\',Georgia,serif;font-size:22px;margin:16px 0 8px;color:#ededf0;font-weight:400">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 style="font-family:\'Cooper\',Georgia,serif;font-size:26px;margin:18px 0 10px;color:#ededf0;font-weight:400">$1</h1>')
+    .replace(/```([\s\S]*?)```/g, '<pre style="background:#F5F1E4;border:1px solid #E6DFCC;border-radius:6px;padding:10px;overflow:auto;font-size:12px"><code>$1</code></pre>')
+    .replace(/`([^`]+)`/g, '<code style="background:#F5F1E4;padding:2px 5px;border-radius:3px;font-size:13px">$1</code>')
+    .replace(/^### (.+)$/gm, '<h3 style="font-family:\'Cooper\',Georgia,serif;font-size:18px;margin:14px 0 6px;color:#1B1B1B;font-weight:400">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="font-family:\'Cooper\',Georgia,serif;font-size:22px;margin:16px 0 8px;color:#1B1B1B;font-weight:400">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 style="font-family:\'Cooper\',Georgia,serif;font-size:26px;margin:18px 0 10px;color:#1B1B1B;font-weight:400">$1</h1>')
     .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
     .replace(/\*([^*]+)\*/g, '<i>$1</i>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer" style="color:#c79a6b;text-decoration:underline">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer" style="color:#084838;text-decoration:underline">$1</a>')
     .replace(/^- (.+)$/gm, '<li style="margin-left:20px;list-style:disc">$1</li>')
     .replace(/^(\d+)\. (.+)$/gm, '<li style="margin-left:20px;list-style:decimal">$2</li>');
   h = h.replace(/(<li[^>]*>[^<]*(?:<\/li>\s*)+)/g, '<ul style="margin:6px 0">$1</ul>');
@@ -327,11 +327,11 @@ export default function ChatShell({
         <div style={S.logo}>
           {/* The brass N globally lives in NDropdown — top-left of the page. */}
           <span style={{ marginLeft: 60 }}>
-            Chat with <b>{displayName}</b>{dept ? <span style={{ color: '#6b6b75' }}> · {dept}</span> : null}
+            Chat with <b>{displayName}</b>{dept ? <span style={{ color: '#5A5A5A' }}> · {dept}</span> : null}
           </span>
         </div>
         <div style={S.topbarRight}>
-          <button onClick={startNewChat} style={{ ...S.topBtn, background: '#c79a6b', color: '#0a0a0b', border: 0, fontWeight: 600, cursor: 'pointer' }}>＋ New chat</button>
+          <button onClick={startNewChat} style={{ ...S.topBtn, background: '#084838', color: '#FFFFFF', border: 0, fontWeight: 600, cursor: 'pointer' }}>＋ New chat</button>
           {/* "+ Create task" button removed 2026-05-14 (PBS request). */}
           {/* Add conversation to project (PBS 2026-05-08).
             * Uses projectList fetched on mount; tags the most-recent ticket
@@ -353,12 +353,12 @@ export default function ChatShell({
             {attachOpen && (
               <div style={{
                 position: 'absolute', right: 0, top: 36, zIndex: 80,
-                background: '#0e0e0c', border: '1px solid #25252d', borderRadius: 6,
+                background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6,
                 padding: 4, minWidth: 240, maxHeight: 320, overflowY: 'auto',
                 boxShadow: '0 12px 28px rgba(0,0,0,0.55)',
               }}>
                 {projectList.length === 0 && (
-                  <div style={{ padding: '8px 10px', fontSize: 11, color: '#7d7565', fontStyle: 'italic' }}>
+                  <div style={{ padding: '8px 10px', fontSize: 11, color: '#5A5A5A', fontStyle: 'italic' }}>
                     No active projects yet. Create one from a dept landing page.
                   </div>
                 )}
@@ -369,7 +369,7 @@ export default function ChatShell({
                     style={{
                       width: '100%', textAlign: 'left',
                       background: 'transparent', border: 'none', cursor: 'pointer',
-                      color: 'var(--paper-deep)', padding: '7px 10px', fontSize: 13, borderRadius: 4,
+                      color: '#1B1B1B', padding: '7px 10px', fontSize: 13, borderRadius: 4,
                     }}
                   >{p.name}</button>
                 ))}
@@ -384,8 +384,8 @@ export default function ChatShell({
               href="/cockpit"
               style={{
                 ...S.topBtn,
-                background: '#c79a6b',
-                color: '#0a0a0b',
+                background: '#084838',
+                color: '#FFFFFF',
                 border: 0,
                 fontWeight: 600,
               }}
@@ -397,10 +397,10 @@ export default function ChatShell({
       <div style={S.thread}>
         {tickets.length === 0 && (
           <div style={S.welcome}>
-            <div style={{ fontFamily: "'Cooper',Georgia,serif", fontSize: 32, color: 'var(--paper-deep)', marginBottom: 8, fontStyle: 'italic' }}>
+            <div style={{ fontFamily: "'Cooper',Georgia,serif", fontSize: 32, color: '#1B1B1B', marginBottom: 8, fontStyle: 'italic' }}>
               Hallo Paul
             </div>
-            <div style={{ color: '#a1a1aa', fontSize: 14, lineHeight: 1.6, maxWidth: 540, margin: '0 auto' }}>
+            <div style={{ color: '#5A5A5A', fontSize: 14, lineHeight: 1.6, maxWidth: 540, margin: '0 auto' }}>
               {dept
                 ? <>I&apos;m <b>{displayName}</b>, your <b>{dept}</b> head. Just write what you need — I&apos;ll handle it autonomously.</>
                 : <>Just write what you need — I&apos;ll handle it autonomously. Repair, build, investigate, decide.</>}
@@ -426,7 +426,7 @@ export default function ChatShell({
                     {isPending ? (
                       <div style={S.thinking}>
                         <span style={S.dot} /><span style={{ ...S.dot, animationDelay: '0.2s' }} /><span style={{ ...S.dot, animationDelay: '0.4s' }} />
-                        <span style={{ marginLeft: 10, color: '#6b6b75' }}>thinking...</span>
+                        <span style={{ marginLeft: 10, color: '#5A5A5A' }}>thinking...</span>
                       </div>
                     ) : (
                       <div dangerouslySetInnerHTML={{ __html: md(split.agent) }} />
@@ -445,7 +445,7 @@ export default function ChatShell({
           <div style={S.attachStrip}>
             {attachments.map((a, i) => (
               <div key={i} style={S.attachChip}>
-                📎 {a.name} <span style={{ color: '#6b6b75' }}>· {(a.size / 1024).toFixed(0)} KB</span>
+                📎 {a.name} <span style={{ color: '#5A5A5A' }}>· {(a.size / 1024).toFixed(0)} KB</span>
                 <button onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))} style={S.attachX}>×</button>
               </div>
             ))}
@@ -475,8 +475,8 @@ export default function ChatShell({
       {attachToast && (
         <div style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 300,
-          background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
-          padding: '10px 14px', fontSize: 12, color: 'var(--line-soft)',
+          background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 8,
+          padding: '10px 14px', fontSize: 12, color: '#1B1B1B',
           boxShadow: '0 12px 28px rgba(0,0,0,0.5)',
         }}>
           📁 {attachToast}
@@ -485,36 +485,36 @@ export default function ChatShell({
 
       <style jsx global>{`
         @keyframes blink { 0%,80%,100% { opacity: 0.3 } 40% { opacity: 1 } }
-        body { margin: 0; background: #0a0a0b; }
+        body { margin: 0; background: #FFFFFF; }
       `}</style>
     </div>
   );
 }
 
 const S: Record<string, React.CSSProperties> = {
-  body: { background: '#0a0a0b', color: 'var(--paper-deep)', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif', fontSize: 14 },
-  topbar: { height: 54, padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1a1a20' },
-  logo: { fontWeight: 500, fontSize: 14, display: 'flex', alignItems: 'center', gap: 10, color: '#a1a1aa' },
+  body: { background: '#FFFFFF', color: '#1B1B1B', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif', fontSize: 14 },
+  topbar: { height: 54, padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #E6DFCC' },
+  logo: { fontWeight: 500, fontSize: 14, display: 'flex', alignItems: 'center', gap: 10, color: '#5A5A5A' },
   topbarRight: { display: 'flex', gap: 8 },
-  topBtn: { padding: '6px 12px', borderRadius: 6, color: '#a1a1aa', fontSize: 12, textDecoration: 'none', border: '1px solid #25252d' },
+  topBtn: { padding: '6px 12px', borderRadius: 6, color: '#5A5A5A', fontSize: 12, textDecoration: 'none', border: '1px solid #E6DFCC' },
   thread: { flex: 1, overflowY: 'auto', padding: '32px 24px 120px', maxWidth: 820, width: '100%', margin: '0 auto' },
   welcome: { textAlign: 'center', padding: '80px 0' },
   exchange: { marginBottom: 28 },
   userRow: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 14 },
-  userBubble: { background: '#c79a6b', color: '#0a0a0b', padding: '10px 14px', borderRadius: '14px 14px 4px 14px', maxWidth: '75%', fontSize: 14, lineHeight: 1.5 },
-  userAvatar: { width: 28, height: 28, borderRadius: '50%', background: '#15151a', border: '1px solid #25252d', color: '#a1a1aa', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, flexShrink: 0 },
+  userBubble: { background: '#084838', color: '#FFFFFF', padding: '10px 14px', borderRadius: '14px 14px 4px 14px', maxWidth: '75%', fontSize: 14, lineHeight: 1.5 },
+  userAvatar: { width: 28, height: 28, borderRadius: '50%', background: '#FAFAF7', border: '1px solid #E6DFCC', color: '#5A5A5A', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, flexShrink: 0 },
   agentRow: { display: 'flex', gap: 10, alignItems: 'flex-start' },
-  agentAvatar: { width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #c79a6b, #b88556)', color: '#0a0a0b', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  agentBubble: { background: '#15151a', padding: '12px 16px', borderRadius: '14px 14px 14px 4px', maxWidth: 'calc(100% - 50px)', fontSize: 14, lineHeight: 1.6, color: 'var(--paper-deep)' },
+  agentAvatar: { width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #084838, #0F5A48)', color: '#FFFFFF', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  agentBubble: { background: '#FAFAF7', padding: '12px 16px', borderRadius: '14px 14px 14px 4px', maxWidth: 'calc(100% - 50px)', fontSize: 14, lineHeight: 1.6, color: '#1B1B1B' },
   thinking: { display: 'flex', alignItems: 'center' },
-  dot: { width: 6, height: 6, borderRadius: '50%', background: '#c79a6b', margin: '0 2px', animation: 'blink 1.2s infinite' },
-  composer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 24px 16px', background: 'linear-gradient(to top, #0a0a0b 80%, transparent)', borderTop: '1px solid #1a1a20' },
+  dot: { width: 6, height: 6, borderRadius: '50%', background: '#084838', margin: '0 2px', animation: 'blink 1.2s infinite' },
+  composer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 24px 16px', background: 'linear-gradient(to top, #FFFFFF 80%, transparent)', borderTop: '1px solid #E6DFCC' },
   attachStrip: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8, maxWidth: 820, margin: '0 auto 8px' },
-  attachChip: { background: '#15151a', border: '1px solid #25252d', padding: '4px 10px', borderRadius: 14, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 },
-  attachX: { background: 'transparent', border: 0, color: '#6b6b75', cursor: 'pointer', marginLeft: 4 },
+  attachChip: { background: '#FAFAF7', border: '1px solid #E6DFCC', padding: '4px 10px', borderRadius: 14, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 },
+  attachX: { background: 'transparent', border: 0, color: '#5A5A5A', cursor: 'pointer', marginLeft: 4 },
   inputRow: { display: 'flex', gap: 8, alignItems: 'flex-end', maxWidth: 820, margin: '0 auto' },
-  attachBtn: { background: '#15151a', border: '1px solid #25252d', color: '#a1a1aa', padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 16 },
-  textarea: { flex: 1, background: '#15151a', border: '1px solid #25252d', color: 'var(--paper-deep)', padding: '12px 14px', borderRadius: 12, fontSize: 14, fontFamily: 'inherit', resize: 'none', minHeight: 22, maxHeight: 200 },
-  sendBtn: { background: '#c79a6b', color: '#0a0a0b', border: 0, borderRadius: 8, padding: '12px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 16, minWidth: 50 },
-  hint: { fontSize: 10, color: '#3d3d45', textAlign: 'center', marginTop: 6, maxWidth: 820, margin: '6px auto 0' },
+  attachBtn: { background: '#FAFAF7', border: '1px solid #E6DFCC', color: '#5A5A5A', padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 16 },
+  textarea: { flex: 1, background: '#FAFAF7', border: '1px solid #E6DFCC', color: '#1B1B1B', padding: '12px 14px', borderRadius: 12, fontSize: 14, fontFamily: 'inherit', resize: 'none', minHeight: 22, maxHeight: 200 },
+  sendBtn: { background: '#084838', color: '#FFFFFF', border: 0, borderRadius: 8, padding: '12px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 16, minWidth: 50 },
+  hint: { fontSize: 10, color: '#8A8A8A', textAlign: 'center', marginTop: 6, maxWidth: 820, margin: '6px auto 0' },
 };
