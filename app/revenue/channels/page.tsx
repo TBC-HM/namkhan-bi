@@ -259,6 +259,16 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   const sumRev = (rows: typeof channels) => rows.reduce((s, c) => s + Number(c.gross_revenue || 0), 0);
   const mixPct = (rows: typeof channels) => (totalRev ? (sumRev(rows) / totalRev) * 100 : 0);
 
+  // PBS 2026-07-15 · rollout brief: KpiTile.stly corner badge on Revenue tile.
+  // channelsCmp is loaded above when the URL has ?cmp=STLY (period.cmp active) —
+  // it holds the same channels breakdown for the equivalent window a year ago.
+  // Mix% tiles are structurally not comparable via SDLY (they're a share of total
+  // in the CURRENT window), so only the Revenue absolute gets a badge.
+  const totalRevCmp = (channelsCmp as Array<Record<string, unknown>>).reduce((s, c) => s + Number(c.gross_revenue || 0), 0);
+  const stlyRevText = totalRevCmp > 0
+    ? `${sym}${Math.round(totalRevCmp).toLocaleString('en-US')}`
+    : undefined;
+
   const pageMixTiles: KpiTileProps[] = [
     { label: 'Direct mix',  value: `${mixPct(byCat.direct).toFixed(1)}%`, size: 'sm', footnote: `${byCat.direct.length} sources · target ≥ 30%`, status: mixPct(byCat.direct) >= 30 ? 'green' : 'amber' },
     { label: 'OTA mix',     value: `${mixPct(byCat.ota).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.ota.length} sources · lower = less commission drag`, status: 'amber' },
@@ -266,7 +276,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     { label: 'Bedbank mix', value: `${mixPct(byCat.bedbank).toFixed(1)}%`,size: 'sm', footnote: `${byCat.bedbank.length} sources · net-rate exposure`, status: byCat.bedbank.length > 0 ? 'amber' : 'grey' },
     // PBS 2026-05-29 #53: Group mix tile — share of period revenue (matches Direct/OTA/DMC/Bedbank mix pattern)
     { label: 'Group mix',   value: `${mixPct(byCat.group).toFixed(1)}%`, size: 'sm', footnote: `${byCat.group.length} sources · MICE · retreats · weddings`, status: mixPct(byCat.group) >= 15 ? 'green' : byCat.group.length > 0 ? 'amber' : 'grey' },
-    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: moneyCurrency, size: 'sm', footnote: `${channels.length} active sources` },
+    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: moneyCurrency, size: 'sm', stly: stlyRevText, footnote: `${channels.length} active sources` },
   ];
 
   // Page-level watch chips (cross-cutting)
