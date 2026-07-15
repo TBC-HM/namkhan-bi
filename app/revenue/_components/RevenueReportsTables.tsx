@@ -199,6 +199,52 @@ export function AddRecipientForm({ propertyId, reportOptions }: { propertyId: nu
   );
 }
 
+// ─── Send once (no scheduling) — PBS 2026-07-16 ──────────────────
+// Ad-hoc blast: pick a report, type an address, hit Send. Bypasses
+// v_revenue_report_recipients — no schedule row is created.
+export function SendOnceForm({ propertyId, reportOptions }: { propertyId: number; reportOptions: ReportOption[] }) {
+  // Only the 3 built-in reports (daily / weekly / monthly) are renderable via
+  // the render-revenue-report edge fn. Filter out dept-cfg-only options.
+  const canSend = reportOptions.filter((o) => ['daily','weekly','monthly'].includes(o.value));
+  const [template, setTemplate] = useState<string>(canSend[0]?.value ?? 'daily');
+  const [email, setEmail] = useState('');
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  const submit = () => {
+    const trimmed = email.trim();
+    if (!trimmed || !trimmed.includes('@')) return;
+    startTransition(async () => {
+      try {
+        const r = await fetch('/api/revenue/reports/send-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ property_id: propertyId, template_key: template, to: trimmed }),
+        });
+        if (!r.ok) throw new Error(`send failed (${r.status})`);
+        setMsg(`✓ sent to ${trimmed}`);
+        setEmail('');
+        setTimeout(() => setMsg(null), 3200);
+      } catch (e) {
+        setMsg(`✗ ${(e as Error).message}`);
+      }
+    });
+  };
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8, padding: '8px 10px', background: '#FAFAF7', border: '1px dashed #E6DFCC', borderRadius: 4 }}>
+      <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A', marginRight: 4 }}>Send once</label>
+      <select value={template} onChange={(e) => setTemplate(e.target.value)} style={{ ...inputStyle, minWidth: 200 }}>
+        {canSend.map((r) => (<option key={r.value} value={r.value}>{r.label}</option>))}
+      </select>
+      <input placeholder="email@example.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...inputStyle, minWidth: 240 }} type="email" />
+      <button type="button" onClick={submit} disabled={pending || !email.trim() || !email.includes('@')} style={primaryBtn}>
+        {pending ? '…' : 'Send now'}
+      </button>
+      <span style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic' }}>one-off blast · no schedule row created</span>
+      {msg && <span style={{ fontSize: 11, color: msg.startsWith('✓') ? '#1F5C2C' : '#B04A2F', marginLeft: 6 }}>{msg}</span>}
+    </div>
+  );
+}
+
 // ─── Scheduled reports table (recipients + dismiss) ────────────────
 
 export interface ScheduledRow {
