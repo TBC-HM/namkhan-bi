@@ -201,6 +201,7 @@ export default function MailsClientActions(props: Props) {
         mailboxes={mailboxes}
         linkedLeads={linkedLeads}
         dismissedThreadIds={dismissedList}
+        hideDismissed={true}
         enableMultiSelect={true}
         bulkActionLabel="Convert to Leads"
         bulkSecondaryLabel="Dismiss"
