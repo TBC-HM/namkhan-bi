@@ -229,15 +229,19 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   const trendY1 = trend ? trend.m * trendX1 + trend.b : null;
   const trendY2 = trend ? trend.m * trendX2 + trend.b : null;
 
+  // PBS 2026-07-15 · rollout brief: KpiTile.stly corner badge on OTB tiles.
+  // total.stly / total.stlyRev already summed from getPaceOtb window.
   const tiles: KpiTileProps[] = [
     { label: 'OTB Roomnights', value: fmtInt(total.otb), size: 'sm',
       delta: total.stly > 0 ? { value: paceDeltaRnPct, period: 'STLY',
         direction: paceDeltaRn >= 0 ? 'up' : 'down' } : undefined,
+      stly: total.stly > 0 ? fmtInt(total.stly) : undefined,
       footnote: period.label,
       status: paceDeltaRn >= 0 ? 'green' : 'red' },
     { label: 'OTB Revenue', value: Math.round(total.rev), currency: moneyCurrency, size: 'sm',
       delta: total.stlyRev > 0 ? { value: revDeltaPct, period: 'STLY',
         direction: revDelta >= 0 ? 'up' : 'down' } : undefined,
+      stly: total.stlyRev > 0 ? `${sym}${Math.round(total.stlyRev).toLocaleString('en-US')}` : undefined,
       footnote: period.label,
       status: revDelta >= 0 ? 'green' : 'red' },
     { label: 'OTB ADR (fwd)', value: total.otb > 0 ? Math.round(total.rev / total.otb) : 0, currency: moneyCurrency, size: 'sm',
