@@ -15,7 +15,7 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { ScheduledReportsTable, SendLogTable, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
+import { ScheduledReportsTable, SendLogTable, SendOnceForm, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
 import ShortcutsPanel, { type Shortcut } from './_components/ShortcutsPanel';
 import ExternalLinksPanel, { type ExternalLink } from './_components/ExternalLinksPanel';
 import HodTasksList from './_components/HodTasksList';
@@ -709,6 +709,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
             <div style={{ fontSize: 11, color: '#5A5A5A', marginBottom: 8 }}>
               Pick any report · pick a cadence · fires at 08:00 UTC · sort any column · Preview to open · × to dismiss a single row · check rows for bulk delete
             </div>
+            {/* PBS 2026-07-16: ad-hoc one-off send — no schedule row created. Sits above the scheduled table. */}
+            <SendOnceForm propertyId={pid} reportOptions={reportOptions} />
             <ScheduledReportsTable rows={scheduledRows} propertyId={pid} reportOptions={reportOptions} />
           </div>
         </details>
