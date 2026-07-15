@@ -2,6 +2,8 @@
 // URL: /revenue/reports/scheduled/{daily|weekly|monthly}/preview?property_id=260955
 // 2026-07-15 PBS · duplicate-title fix: outer wrapper now only carries the Download
 // button; the iframe body already renders the canonical title/date/author strip.
+// 2026-07-15 PBS · widen outer container 1240 → 1680 to match edge fn v12 shell 1600
+// so pickup matrix + 7-tile stripe render without horizontal scroll in the preview.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
@@ -47,7 +49,7 @@ export default async function RevenueReportPreviewPage({ params, searchParams }:
 
   return (
     <div style={{ padding: '16px', background: '#FFFFFF', color: '#1B1B1B', fontFamily: '-apple-system, Helvetica, Arial, sans-serif' }}>
-      <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1680, margin: '0 auto' }}>
         {/* Compact toolbar — the iframe body already carries the report title/date/author. */}
         {downloadHref && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
