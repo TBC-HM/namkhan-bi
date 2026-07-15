@@ -67,6 +67,9 @@ export interface UnifiedMailInboxProps {
   renderRowActions?: (thread: Thread) => ReactNode;
   linkedLeads?: Record<string, number>;
   dismissedThreadIds?: string[] | Set<string>;
+  /** PBS 2026-07-16: when true, dismissed threads DISAPPEAR from the list
+   *  (default false = they stay with a "Dismissed" chip). */
+  hideDismissed?: boolean;
   enableMultiSelect?: boolean;
   bulkActionLabel?: string;
   bulkSecondaryLabel?: string;
@@ -115,6 +118,7 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
     renderRowActions,
     linkedLeads,
     dismissedThreadIds,
+    hideDismissed,
     enableMultiSelect,
     bulkActionLabel,
     bulkSecondaryLabel,
@@ -387,11 +391,11 @@ export default function UnifiedMailInbox(props: UnifiedMailInboxProps) {
           <div style={{ ...S.th, width: 240, textAlign: 'right' }}>Actions</div>
         </div>
 
-        {threads.length === 0 ? (
+        {(hideDismissed ? threads.filter((t) => !dismissedSet.has(t.id)) : threads).length === 0 ? (
           <div style={S.emptyState}>
             {refreshing ? 'Loading…' : 'No messages match.'}
           </div>
-        ) : threads.map((t) => (
+        ) : (hideDismissed ? threads.filter((t) => !dismissedSet.has(t.id)) : threads).map((t) => (
           <MailRow
             key={t.mailbox_id + ':' + t.id}
             t={t}
