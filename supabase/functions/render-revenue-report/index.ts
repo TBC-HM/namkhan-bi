@@ -1,7 +1,10 @@
-// render-revenue-report v8 · PBS 2026-07-15
-// v8: remove footer (Scheduled via Namkhan cockpit… reply to unsubscribe)
-//     · replace 'Author: Namkhan BI cockpit (automated)' with 'Delivered by TBC Revenue Management'
-//     · remove daily 'Pickup velocity · last 15 days' section.
+// render-revenue-report v9 · PBS 2026-07-15
+// v9: LINK-FIRST EMAIL. Preview returns full HTML (unchanged). Send path sends a
+//     tiny "open the report" email with a link to the preview page + zero attachments.
+//     Rationale: v6-v8 HTML was ~1.6 MB → Gmail clipped at 102 KB. Users only saw
+//     a truncated report. Now email is <2 KB, always renders fully; recipients
+//     click through to the preview page and can download HTML there.
+// v8: remove footer · replace author line · drop daily Pickup velocity 15d.
 // v7: rename 'scrape' -> 'last feed' in parity integrity strip (3 sites).
 // v6 · PBS 2026-07-14
 // Daily preview page overhaul:
@@ -421,6 +424,10 @@ async function buildMonthlyBundle(admin: SB, ctx: ReportContext): Promise<Bundle
 
 function renderShell(ctx: ReportContext, cadenceLabel: string, subject: string, body: string): string { return `<!doctype html><html><head><meta charset="utf-8"><title>${subject}</title></head><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:840px;margin:0 auto;background:${PAPER}"><tr><td style="padding:28px 32px 14px 32px;border-bottom:1px solid ${HAIRLINE}"><div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">${cadenceLabel}</div><div style="font-size:22px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em">${ctx.propertyName}</div><div style="font-size:12px;color:${INK_SOFT};margin-top:2px">Report date: <strong style=\"color:${INK}\">${ctx.reportDate}</strong> · Hotel local time (${ctx.tz}) · Delivered by TBC Revenue Management</div></td></tr>${body}</table></body></html>`; }
 
+function renderLinkOnly(ctx: ReportContext, cadenceLabel: string, subject: string, previewUrl: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${subject}</title></head><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:32px auto;background:${PAPER};border:1px solid ${HAIRLINE};border-radius:8px"><tr><td style="padding:28px 32px"><div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:6px">${cadenceLabel}</div><div style="font-size:20px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em;margin-bottom:4px">${ctx.propertyName}</div><div style="font-size:12px;color:${INK_SOFT};margin-bottom:20px">Report date: <strong style=\"color:${INK}\">${ctx.reportDate}</strong> · Hotel local time (${ctx.tz}) · Delivered by TBC Revenue Management</div><div style="font-size:13px;color:${INK};margin-bottom:20px;line-height:1.5">Your ${cadenceLabel.toLowerCase()} is ready. Full charts, tables and HTML download live on the report page.</div><div style="margin:24px 0"><a href="${previewUrl}" style="display:inline-block;padding:12px 22px;background:${PRIMARY};color:#FFFFFF;font-size:13px;font-weight:600;letter-spacing:0.03em;border-radius:5px;text-decoration:none">Open the report →</a></div><div style="font-size:11px;color:${INK_SOFT};line-height:1.5">Or paste this into your browser:<br/><a href="${previewUrl}" style="color:${PRIMARY};text-decoration:underline;word-break:break-all">${previewUrl}</a></div></td></tr></table></body></html>`;
+}
+
 async function sendViaResend(opts: { to: string; name?: string | null; subject: string; html: string; attachments?: Array<{ filename: string; content: string; content_type?: string }>; meta?: unknown }): Promise<{ status: string; error?: string }> {
   try {
     const url = `${SUPABASE_URL}/functions/v1/send-report-email`;
@@ -450,17 +457,19 @@ Deno.serve(async (req: Request) => {
     else bundle = await buildMonthlyBundle(admin, ctx);
     const cadenceLabel = CADENCE_LABEL[templateKey];
     const subject = `Revenue · ${cadenceLabel} · ${propertyName} · ${reportDate}`;
-    const html = renderShell(ctx, cadenceLabel, subject, bundle.html);
-    if (!send) return new Response(JSON.stringify({ subject, html, property_name: propertyName, report_date: reportDate, attachment_count: bundle.attachments.length }), { headers: { 'Content-Type': 'application/json' } });
+    const previewHtml = renderShell(ctx, cadenceLabel, subject, bundle.html);
+    const previewUrl = `https://namkhan-bi.vercel.app/revenue/reports/scheduled/${templateKey}/preview?property_id=${propertyId}`;
+    const emailHtml = renderLinkOnly(ctx, cadenceLabel, subject, previewUrl);
+    if (!send) return new Response(JSON.stringify({ subject, html: previewHtml, property_name: propertyName, report_date: reportDate, attachment_count: 0, preview_url: previewUrl }), { headers: { 'Content-Type': 'application/json' } });
     const { data: recips, error: recipErr } = await admin.from('v_revenue_report_recipients').select('id,email,name,active,property_id,template_key').eq('property_id', propertyId).eq('template_key', templateKey).eq('active', true);
     if (recipErr) throw recipErr;
     const sent: Array<{ recipient_email: string; status: string; send_id?: number; error?: string }> = [];
     for (const r of (recips ?? [])) {
       const rec = r as { id: number; email: string; name: string | null };
-      const { data: ins, error: insErr } = await admin.schema('documentation').from('revenue_report_sends').insert({ property_id: propertyId, template_key: templateKey, recipient_email: rec.email, subject, html_snapshot: html, status: 'queued' }).select('id').single();
+      const { data: ins, error: insErr } = await admin.schema('documentation').from('revenue_report_sends').insert({ property_id: propertyId, template_key: templateKey, recipient_email: rec.email, subject, html_snapshot: emailHtml, status: 'queued' }).select('id').single();
       const sendId = (ins as { id: number } | null)?.id;
       if (insErr) { sent.push({ recipient_email: rec.email, status: 'error', error: insErr.message }); continue; }
-      const result = await sendViaResend({ to: rec.email, name: rec.name, subject, html, attachments: bundle.attachments, meta: { property_id: propertyId, template_key: templateKey, send_id: sendId } });
+      const result = await sendViaResend({ to: rec.email, name: rec.name, subject, html: emailHtml, attachments: [], meta: { property_id: propertyId, template_key: templateKey, send_id: sendId } });
       if (sendId) await admin.schema('documentation').from('revenue_report_sends').update({ status: result.status, error: result.error ?? null }).eq('id', sendId);
       sent.push({ recipient_email: rec.email, status: result.status, send_id: sendId, error: result.error });
     }
