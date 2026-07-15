@@ -50,12 +50,12 @@ export default function EmailEditor({ proposalId, initialEmail, blocks, totalUsd
 
   return (
     <div className="composer-grid">
-      <section className="panel">
+      <section className="panel" style={{ background: '#FFFFFF', color: '#1B1B1B', border: '1px solid #E6DFCC' }}>
         <div className="panel-head">
-          <span className="panel-head-title">
-            Email <em>copy</em>
+          <span className="panel-head-title" style={{ color: '#1B1B1B' }}>
+            Email <em style={{ color: '#084838' }}>copy</em>
           </span>
-          <span className="panel-head-meta" style={{ display: 'flex', gap: 6 }}>
+          <span className="panel-head-meta" style={{ display: 'flex', gap: 6, color: '#5A5A5A' }}>
             <button className="btn" onClick={regenerate} disabled={busy}>
               {busy ? '…' : '↻ Re-draft with AI'}
             </button>
@@ -67,7 +67,7 @@ export default function EmailEditor({ proposalId, initialEmail, blocks, totalUsd
         {aiSource && (
           <div style={{
             fontSize: 'var(--t-xs)',
-            color: aiSource === 'stub' ? 'var(--brass)' : 'var(--moss-glow)',
+            color: aiSource === 'stub' ? '#B04A2F' : '#084838',
             marginBottom: 8,
             fontFamily: 'var(--mono)',
             letterSpacing: 'var(--ls-loose)',
@@ -79,74 +79,81 @@ export default function EmailEditor({ proposalId, initialEmail, blocks, totalUsd
         {savedAt && (
           <div style={{
             fontSize: 'var(--t-xs)',
-            color: 'var(--moss-glow)',
+            color: '#084838',
             marginBottom: 8,
             fontFamily: 'var(--mono)',
             letterSpacing: 'var(--ls-loose)',
             textTransform: 'uppercase',
           }}>Saved at {savedAt}</div>
         )}
-        <label className="email-editor-label">Subject</label>
-        <input className="email-editor-input" value={subject} onChange={e => setSubject(e.target.value)} />
-        <label className="email-editor-label">Intro</label>
-        <textarea className="email-editor-textarea" value={intro} onChange={e => setIntro(e.target.value)} rows={6} />
-        <label className="email-editor-label">Outro</label>
-        <textarea className="email-editor-textarea" value={outro} onChange={e => setOutro(e.target.value)} rows={4} />
-        <label className="email-editor-label">PS</label>
-        <textarea className="email-editor-textarea" value={ps} onChange={e => setPs(e.target.value)} rows={2} />
+        <label className="email-editor-label" style={{ color: '#5A5A5A' }}>Subject</label>
+        <input className="email-editor-input" value={subject} onChange={e => setSubject(e.target.value)}
+          style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+        <label className="email-editor-label" style={{ color: '#5A5A5A' }}>Intro</label>
+        <textarea className="email-editor-textarea" value={intro} onChange={e => setIntro(e.target.value)} rows={6}
+          style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+        <label className="email-editor-label" style={{ color: '#5A5A5A' }}>Outro</label>
+        <textarea className="email-editor-textarea" value={outro} onChange={e => setOutro(e.target.value)} rows={4}
+          style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
+        <label className="email-editor-label" style={{ color: '#5A5A5A' }}>PS</label>
+        <textarea className="email-editor-textarea" value={ps} onChange={e => setPs(e.target.value)} rows={2}
+          style={{ background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC' }} />
       </section>
 
-      <aside className="panel" style={{ background: 'var(--ink)', color: 'var(--paper)' }}>
+      <aside className="panel" style={{ background: '#FFFFFF', color: '#1B1B1B', border: '1px solid #E6DFCC' }}>
         <div className="panel-head">
-          <span className="panel-head-title" style={{ color: 'var(--paper-deep)' }}>
-            Live <em>preview</em>
+          <span className="panel-head-title" style={{ color: '#1B1B1B' }}>
+            Live <em style={{ color: '#084838' }}>preview</em>
           </span>
         </div>
-        <div style={{ background: 'var(--paper)', color: 'var(--ink)', padding: 18, borderRadius: 4, marginTop: 8 }}>
+        <div style={{ background: '#FAFAF7', color: '#1B1B1B', padding: 18, borderRadius: 4, marginTop: 8, border: '1px solid #E6DFCC' }}>
           <div style={{
             fontSize: 'var(--t-xs)',
-            color: 'var(--ink-mute)',
-            borderBottom: '1px solid var(--line-soft)',
+            color: '#5A5A5A',
+            borderBottom: '1px solid #E6DFCC',
             paddingBottom: 6, marginBottom: 12,
             fontFamily: 'var(--mono)',
             letterSpacing: 'var(--ls-loose)',
           }}>
             From: Sebastian — The Namkhan<br />
             To: {proposal.guest_name}<br />
-            Subject: <strong style={{ color: 'var(--ink)' }}>{subject}</strong>
+            Subject: <strong style={{ color: '#1B1B1B' }}>{subject}</strong>
           </div>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-md)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{intro}</div>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-md)', lineHeight: 1.65, whiteSpace: 'pre-wrap', color: '#1B1B1B' }}>{intro}</div>
           <div style={{
             margin: '16px 0',
             padding: 14,
-            background: 'var(--paper-warm)',
+            background: '#F5F1E4',
             borderRadius: 4,
+            border: '1px solid #E6DFCC',
           }}>
-            <div className="t-eyebrow">Your stay</div>
+            <div className="t-eyebrow" style={{ color: '#5A5A5A' }}>Your stay</div>
             {blocks.map(b => (
               <div key={b.id} style={{
                 padding: '6px 0',
-                borderBottom: '1px solid var(--line-soft)',
+                borderBottom: '1px solid #E6DFCC',
                 fontSize: 'var(--t-sm)',
                 display: 'flex', justifyContent: 'space-between',
+                color: '#1B1B1B',
               }}>
-                <span>{b.label} <span style={{ color: 'var(--ink-mute)' }}>· {b.qty} × {b.nights} {b.nights === 1 ? 'nt' : 'nts'}</span></span>
+                <span>{b.label} <span style={{ color: '#8A8A8A' }}>· {b.qty} × {b.nights} {b.nights === 1 ? 'nt' : 'nts'}</span></span>
                 <strong>{fmtTableUsd(Number(b.total_lak) / FX_LAK_PER_USD)}</strong>
               </div>
             ))}
             <div style={{
               display: 'flex', justifyContent: 'space-between',
               marginTop: 10, paddingTop: 10,
-              borderTop: '2px solid var(--moss)',
+              borderTop: '2px solid #084838',
               fontSize: 'var(--t-lg)',
+              color: '#1B1B1B',
             }}>
               <strong>Total</strong>
-              <strong style={{ color: 'var(--brass)' }}>{fmtTableUsd(totalUsd)}</strong>
+              <strong style={{ color: '#084838' }}>{fmtTableUsd(totalUsd)}</strong>
             </div>
           </div>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-md)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{outro}</div>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-md)', lineHeight: 1.65, whiteSpace: 'pre-wrap', color: '#1B1B1B' }}>{outro}</div>
           {ps && (
-            <div style={{ marginTop: 12, fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>{ps}</div>
+            <div style={{ marginTop: 12, fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-sm)', color: '#5A5A5A' }}>{ps}</div>
           )}
         </div>
       </aside>
