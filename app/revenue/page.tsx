@@ -15,7 +15,11 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { ScheduledReportsTable, SendLogTable, SendOnceForm, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
+// PBS 2026-07-15: dropped SendLogTable — the "Reports · send log" container
+// moved to Property Settings → "Send Logs" tab (unified across all areas).
+// SendLogRow type is still needed for the "My Reports" box, which continues
+// to fetch reports sent to the current user from v_revenue_report_sends.
+import { ScheduledReportsTable, SendOnceForm, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
 import ShortcutsPanel, { type Shortcut } from './_components/ShortcutsPanel';
 import ExternalLinksPanel, { type ExternalLink } from './_components/ExternalLinksPanel';
 import HodTasksList from './_components/HodTasksList';
@@ -92,7 +96,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     next30ArrivalsRes,
     attnRes,
     scheduledRes,
-    sendsRes,
+    // PBS 2026-07-15: sendsRes dropped — full send log moved to Property
+    // Settings → Send Logs tab (unified across all areas). Only myReportsRes
+    // is still fetched here to feed the "My Reports" box.
     myReportsRes,
     shortcutsRes,
     integrityRes,
@@ -127,9 +133,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     supabase.from('v_reservations_unified').select('reservation_id, check_in_date, check_out_date').eq('property_id', pid).eq('is_cancelled', false).gte('check_in_date', todayIso).lte('check_in_date', in30Iso),
     // PBS 2026-07-08 #204/attention — attention flags come from cockpit.attention_flags via SECURITY DEFINER RPC.
     supabase.rpc('fn_attention_list', { p_property_id: pid, p_dept: 'revenue', p_user_email: 'pbsbase@gmail.com' }),
-    // PBS 2026-07-08 (final Reports UX): scheduled recipients + full send log + "sent to me" list for My Reports box
+    // PBS 2026-07-08 (final Reports UX): scheduled recipients + "sent to me" list for My Reports box.
+    // PBS 2026-07-15: removed the full-send-log query — that container moved to Property Settings.
     supabase.from('v_revenue_report_recipients').select('id, property_id, template_key, cadence, email, name, next_fire_at, created_at').eq('property_id', pid).order('next_fire_at', { ascending: true }).limit(500),
-    supabase.from('v_revenue_report_sends').select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status').eq('property_id', pid).limit(200),
     supabase.from('v_revenue_report_sends').select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status').eq('property_id', pid).eq('recipient_email', 'pbsbase@gmail.com').order('sent_at', { ascending: false }).limit(20),
     supabase.from('v_hod_shortcuts').select('id, label, href, kind').eq('property_id', pid).eq('dept_slug', 'revenue').eq('user_email', 'pbsbase@gmail.com').order('sort_order').limit(100),
     // PBS 2026-07-09: Own-OTA rate integrity — for parity guardrail conclusions.
@@ -145,7 +151,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     sbAdmin.from('v_rate_plan_hygiene').select('active_plans_total, sleeping_total, sleeping_over_2y, sleeping_1_2y, sleeping_180d_1y, never_booked, never_booked_pct, orphan_count, ytd_revenue_total, nrr_locked_share_pct, flex_share_pct, early_bird_share_pct').eq('property_id', pid).maybeSingle().then((r) => r, () => ({ data: null, error: null })),
   ]);
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
-  const sendLogRows   = (sendsRes.data ?? []) as SendLogRow[];
   const myReportRows  = (myReportsRes.data ?? []) as SendLogRow[];
   const allShortcuts  = (shortcutsRes.data ?? []) as Array<Shortcut & { kind?: string }>;
   const shortcuts     = allShortcuts.filter((s) => (s.kind ?? 'internal') === 'internal');
@@ -699,10 +704,13 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         <RmMailPanel />
       </div>
 
-      {/* PBS 2026-07-08: Scheduled reports + Send log moved to the BOTTOM of the
-          HoD landing so they don't push the daily brief below the fold.
-          2026-07-09 pm: both wrapped in <details> so PBS can collapse them to a
-          single-line header when he wants more brief real estate. */}
+      {/* PBS 2026-07-08: Scheduled reports moved to the BOTTOM of the HoD
+          landing so it doesn't push the daily brief below the fold.
+          2026-07-09 pm: wrapped in <details> so PBS can collapse it.
+          PBS 2026-07-15: the sibling "Reports · send log" container was
+          removed — the full send log lives in Property Settings → Send Logs
+          tab now (unified across all areas: revenue, guest, sales,
+          marketing, reputation). */}
       <div style={fullRow}>
         <details open style={{ border: '1px solid #E6DFCC', borderRadius: 4, background: '#FFFFFF' }}>
           <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1B1B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1EBD9' }}>
@@ -716,21 +724,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
             {/* PBS 2026-07-16: ad-hoc one-off send — no schedule row created. Sits above the scheduled table. */}
             <SendOnceForm propertyId={pid} reportOptions={reportOptions} />
             <ScheduledReportsTable rows={scheduledRows} propertyId={pid} reportOptions={reportOptions} />
-          </div>
-        </details>
-      </div>
-
-      <div style={fullRow}>
-        <details open style={{ border: '1px solid #E6DFCC', borderRadius: 4, background: '#FFFFFF' }}>
-          <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1B1B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1EBD9' }}>
-            <span>Reports · send log <span style={{ fontSize: 11, color: '#5A5A5A', fontWeight: 500 }}>· {sendLogRows.length}</span></span>
-            <span style={{ fontSize: 11, color: '#5A5A5A', fontWeight: 500 }}>click to collapse</span>
-          </summary>
-          <div style={{ padding: 12 }}>
-            <div style={{ fontSize: 11, color: '#5A5A5A', marginBottom: 8 }}>
-              Every report ever sent · sort any column · bulk-delete with checkboxes
-            </div>
-            <SendLogTable rows={sendLogRows} />
           </div>
         </details>
       </div>
