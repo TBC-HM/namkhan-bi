@@ -1,6 +1,7 @@
 // Preview page for the scaffolded Revenue HoD scheduled reports.
 // URL: /revenue/reports/scheduled/{daily|weekly|monthly}/preview?property_id=260955
-// 2026-07-15 PBS · title + header cleanup · full-width iframe · Download HTML action.
+// 2026-07-15 PBS · duplicate-title fix: outer wrapper now only carries the Download
+// button; the iframe body already renders the canonical title/date/author strip.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
@@ -29,12 +30,6 @@ async function renderReport(propertyId: number, templateKey: string) {
   };
 }
 
-const CADENCE_TITLE: Record<string, string> = {
-  daily:   'Daily Revenue Report',
-  weekly:  'Weekly Revenue Report',
-  monthly: 'Monthly Revenue Report',
-};
-
 export default async function RevenueReportPreviewPage({ params, searchParams }: Props) {
   const p  = await params;
   const sp = (await searchParams) ?? {};
@@ -46,34 +41,23 @@ export default async function RevenueReportPreviewPage({ params, searchParams }:
   if (!Number.isFinite(propertyId)) notFound();
 
   const { html, propertyName, reportDate, error } = await renderReport(propertyId, template);
-  const title = CADENCE_TITLE[template] ?? 'Revenue Report';
 
-  // Data-URI download link — client-side rendered anchor picks up the html string.
-  const downloadHref = html
-    ? 'data:text/html;charset=utf-8,' + encodeURIComponent(html)
-    : null;
+  const downloadHref = html ? 'data:text/html;charset=utf-8,' + encodeURIComponent(html) : null;
   const downloadName = `revenue-${template}-${propertyName ?? propertyId}-${reportDate ?? ''}.html`.replace(/\s+/g, '_');
 
   return (
-    <div style={{ padding: '24px 16px', background: '#FFFFFF', color: '#1B1B1B', fontFamily: '-apple-system, Helvetica, Arial, sans-serif' }}>
+    <div style={{ padding: '16px', background: '#FFFFFF', color: '#1B1B1B', fontFamily: '-apple-system, Helvetica, Arial, sans-serif' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ borderBottom: '1px solid #E6DFCC', paddingBottom: 12, marginBottom: 16, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#0F4C3A', letterSpacing: '-0.01em' }}>{title}</div>
-            <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-              Property: <strong>{propertyName ?? propertyId}</strong>
-              {reportDate ? <> · Date: <strong>{reportDate}</strong></> : null}
-              {' · Delivered by TBC Revenue Management'}
-            </div>
-          </div>
-          {downloadHref && (
+        {/* Compact toolbar — the iframe body already carries the report title/date/author. */}
+        {downloadHref && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             <a href={downloadHref} download={downloadName} style={{
               padding: '8px 14px', fontSize: 12, fontWeight: 600, letterSpacing: '0.05em',
               background: '#084838', color: '#FFFFFF', border: 'none', borderRadius: 4,
               textDecoration: 'none', whiteSpace: 'nowrap',
             }}>⬇ Download HTML</a>
-          )}
-        </div>
+          </div>
+        )}
         {error && <div style={{ color: '#B00020', border: '1px solid #E6DFCC', padding: 12 }}>Render error: {error}</div>}
         {html && (
           <div style={{ border: '1px solid #E6DFCC', borderRadius: 8, overflow: 'hidden', background: '#FFFFFF' }}>
