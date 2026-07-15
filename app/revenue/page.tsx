@@ -33,7 +33,11 @@ import { evaluateParityRules, type ParityContext, type ParityTargets } from '@/l
 import { runRatePlanRules, type RatePlanContext, type RatePlanTargets } from '@/lib/rules/rateplans';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+// PBS 2026-07-16: `revalidate = 60` was fighting force-dynamic and caching the
+// page for 60 s. Add/dismiss recipient → window.location.reload() hit the cache
+// so only the FIRST change stuck; the second-and-onwards silently vanished on
+// refresh. force-dynamic alone gives us fresh data on every request.
+export const revalidate = 0;
 
 interface Props {
   propertyId?: number;
