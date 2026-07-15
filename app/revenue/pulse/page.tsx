@@ -136,20 +136,34 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const rnsΔ    = pctChange(headline.roomsSold,    headline.stlyRoomsSold);
   const adrΔ    = pctChange(headline.adr,          headline.stlyAdr);
 
+  // PBS 2026-07-15 · rollout brief: KpiTile.stly corner badge on every headline tile.
+  // Values come from getPulseHeadlineKpis (already loaded STLY snapshot from mv_kpi_daily).
+  // Formatters mirror the tile's own value formatter so the pill reads consistently.
+  const fmtSlyMoney = (v: number | null | undefined): string =>
+    v == null || !Number.isFinite(Number(v)) ? '—' : `${sym}${Math.round(Number(v)).toLocaleString('en-US')}`;
+  const fmtSlyInt = (v: number | null | undefined): string =>
+    v == null || !Number.isFinite(Number(v)) ? '—' : Math.round(Number(v)).toLocaleString('en-US');
+  const fmtSlyPct = (v: number | null | undefined): string =>
+    v == null || !Number.isFinite(Number(v)) ? '—' : `${Math.round(Number(v))}%`;
+
   const headlineTiles: KpiTileProps[] = [
     // PBS 2026-07-08: read yesterday's OCC from the same mv_kpi_daily aggregate used by
     // the Performance vs STLY container, so the two boxes always report the same number.
     { label: 'Occ · yesterday', value: `${Math.round(summary.yesterday.occupancyPct ?? 0)}%`, size: 'sm',
       delta: occΔ != null ? { value: occΔ, period: 'STLY', direction: occΔ >= 0 ? 'up' : 'down' } : undefined,
+      stly: fmtSlyPct(headline.stlyOccupancyPct),
       status: occΔ != null && occΔ >= 0 ? 'green' : occΔ != null ? 'red' : 'grey' },
     { label: 'RevPAR', value: Math.round(headline.revpar ?? 0), currency: moneyCurrency, size: 'sm',
       delta: revparΔ != null ? { value: revparΔ, period: 'STLY', direction: revparΔ >= 0 ? 'up' : 'down' } : undefined,
+      stly: fmtSlyMoney(headline.stlyRevpar),
       footnote: 'yesterday', status: revparΔ != null && revparΔ >= 0 ? 'green' : revparΔ != null ? 'red' : 'grey' },
     { label: 'Room Nights Sold', value: fmtInt(headline.roomsSold), size: 'sm',
       delta: rnsΔ != null ? { value: rnsΔ, period: 'STLY', direction: rnsΔ >= 0 ? 'up' : 'down' } : undefined,
+      stly: fmtSlyInt(headline.stlyRoomsSold),
       footnote: 'yesterday', status: rnsΔ != null && rnsΔ >= 0 ? 'green' : rnsΔ != null ? 'red' : 'grey' },
     { label: 'ADR', value: Math.round(headline.adr ?? 0), currency: moneyCurrency, size: 'sm',
       delta: adrΔ != null ? { value: adrΔ, period: 'STLY', direction: adrΔ >= 0 ? 'up' : 'down' } : undefined,
+      stly: fmtSlyMoney(headline.stlyAdr),
       footnote: 'yesterday', status: adrΔ != null && adrΔ >= 0 ? 'green' : adrΔ != null ? 'red' : 'grey' },
   ];
 
