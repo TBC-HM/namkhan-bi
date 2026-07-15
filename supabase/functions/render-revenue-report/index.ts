@@ -1,4 +1,7 @@
-// render-revenue-report v7 · PBS 2026-07-15
+// render-revenue-report v8 · PBS 2026-07-15
+// v8: remove footer (Scheduled via Namkhan cockpit… reply to unsubscribe)
+//     · replace 'Author: Namkhan BI cockpit (automated)' with 'Delivered by TBC Revenue Management'
+//     · remove daily 'Pickup velocity · last 15 days' section.
 // v7: rename 'scrape' -> 'last feed' in parity integrity strip (3 sites).
 // v6 · PBS 2026-07-14
 // Daily preview page overhaul:
@@ -360,7 +363,7 @@ async function buildDailyBundle(admin: SB, ctx: ReportContext): Promise<Bundle> 
   const body =
     section('Yesterday — actualised', `Money tiles NET (excl. tax & service charge) · anchor ${yesterday} (${ctx.tz})`, yesterdayInner) +
     section('Today', '', kpiStripe('Today', todayK, ctx.ccy)) +
-    section('Pickup velocity · last 15 days', '', `<div style="border:1px solid ${HAIRLINE};border-radius:6px;background:${PAPER};padding:6px">${velChart}</div>`) +
+
     section('OTB · Pickup · Comparison · SDLY', pickupMatrix ? (pickupMatrix.stalenessNote ?? `as of ${pickupMatrix.todaySnapshotLabel}`) : 'awaiting pickup data', pickupMatrixInner) +
     section('Forward outlook by night', `${paceForward.length} nights from today · monthly totals inline · real −1d and −7d pickup from booking_date`, forwardInner) +
     section('Own-OTA rate integrity · parity', integrity[0] ? `last feed ${fmtDmy(integrity[0].shop_date)} · ${integrity.length} stay-dates · lowest available rate without fees & VAT` : 'no integrity feed yet', parityInner);
@@ -416,7 +419,7 @@ async function buildMonthlyBundle(admin: SB, ctx: ReportContext): Promise<Bundle
   return { html: body, attachments: [{ filename: `monthly-pickup-${propertyTag}-${ctx.reportDate}.csv`, content: b64(buildMonthlyCsv(monthly24, ctx.propertyName, ctx.reportDate)), content_type: 'text/csv' }, { filename: `daily-pickup-${propertyTag}-${ctx.reportDate}.csv`, content: b64(buildDailyCsv(day60, ctx.propertyName, ctx.reportDate)), content_type: 'text/csv' }] };
 }
 
-function renderShell(ctx: ReportContext, cadenceLabel: string, subject: string, body: string): string { return `<!doctype html><html><head><meta charset="utf-8"><title>${subject}</title></head><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:840px;margin:0 auto;background:${PAPER}"><tr><td style="padding:28px 32px 14px 32px;border-bottom:1px solid ${HAIRLINE}"><div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">${cadenceLabel}</div><div style="font-size:22px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em">${ctx.propertyName}</div><div style="font-size:12px;color:${INK_SOFT};margin-top:2px">Report date: <strong style=\"color:${INK}\">${ctx.reportDate}</strong> · Hotel local time (${ctx.tz}) · Author: Namkhan BI cockpit (automated)</div></td></tr>${body}<tr><td style="padding:20px 32px 24px 32px;border-top:1px solid ${HAIRLINE};font-size:11px;color:${INK_SOFT}">Scheduled via Namkhan cockpit · <a href=\"https://namkhan-bi.vercel.app/h/${ctx.propertyId}/revenue\" style=\"color:${PRIMARY};text-decoration:none\">Open Revenue HoD</a> · reply to unsubscribe.</td></tr></table></body></html>`; }
+function renderShell(ctx: ReportContext, cadenceLabel: string, subject: string, body: string): string { return `<!doctype html><html><head><meta charset="utf-8"><title>${subject}</title></head><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:840px;margin:0 auto;background:${PAPER}"><tr><td style="padding:28px 32px 14px 32px;border-bottom:1px solid ${HAIRLINE}"><div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">${cadenceLabel}</div><div style="font-size:22px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em">${ctx.propertyName}</div><div style="font-size:12px;color:${INK_SOFT};margin-top:2px">Report date: <strong style=\"color:${INK}\">${ctx.reportDate}</strong> · Hotel local time (${ctx.tz}) · Delivered by TBC Revenue Management</div></td></tr>${body}</table></body></html>`; }
 
 async function sendViaResend(opts: { to: string; name?: string | null; subject: string; html: string; attachments?: Array<{ filename: string; content: string; content_type?: string }>; meta?: unknown }): Promise<{ status: string; error?: string }> {
   try {
