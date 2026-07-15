@@ -41,6 +41,10 @@ export interface KpiTileProps {
   loading?: boolean;
   onClick?: () => void;
   comparisonsExpandable?: boolean;
+  /** PBS 2026-07-15: compact "LY" pill in the bottom-right corner
+   * (e.g. "LY 22%" / "LY $150"). Pre-formatted. Footnote reserves right
+   * padding when this is set so text never overlaps the badge. */
+  stly?: string;
 }
 
 // ─── Chart ────────────────────────────────────────────────────────────────
