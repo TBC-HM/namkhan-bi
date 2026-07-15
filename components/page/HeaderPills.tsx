@@ -404,44 +404,9 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
       </div>
       )}
 
-      {/* INBOX — control-center pill (PBS 2026-05-09 repair-list #6).
-          Click → /inbox. Hover → popover with unread/unanswered/spam,
-          top senders 24h with drill-down counts. */}
-      <div
-        style={S.pillWrap}
-        onMouseEnter={() => {
-          clearTimer(inboxTimer);
-          setInboxOpen(true); setTempOpen(false); setAirOpen(false); setUserOpen(false);
-        }}
-        onMouseLeave={() => scheduleClose(inboxTimer, setInboxOpen)}
-      >
-        <a
-          href="/h/260955/inbox"
-          title={`Inbox · ${inbox.unread} unread · ${inbox.unanswered} unanswered`}
-          aria-label="Inbox"
-          style={S.inboxChip}
-        >
-          <svg
-            width="13" height="13" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M4 6h16v12H4z" />
-            <polyline points="4,7 12,13 20,7" />
-          </svg>
-          <span style={S.chipText}>{inbox.unread}</span>
-          {inbox.unread > 0 && <span style={S.inboxBubble}>{inbox.unread > 99 ? '99+' : inbox.unread}</span>}
-        </a>
-        {inboxOpen && (
-          <div
-            style={S.popoverHost}
-            onMouseEnter={() => clearTimer(inboxTimer)}
-            onMouseLeave={() => scheduleClose(inboxTimer, setInboxOpen)}
-          >
-            <InboxPopover summary={inbox} onClose={() => setInboxOpen(false)} />
-          </div>
-        )}
-      </div>
+      {/* INBOX pill removed 2026-07-15 — moved into user dropdown as a row.
+          State (inbox / setInbox / inboxTimer / poller effect / InboxPopover)
+          retained: badge in dropdown row still consumes inbox.unread. */}
 
       {/* DATE — hover → KPI tiles + window/compare quick-jumps. */}
       <div
@@ -513,6 +478,20 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
                 - Front office removed (not needed at the top level).
                 - Email categories + Users & roles gated to isAdmin (holding_role owner/admin).
                 */}
+            {/* PBS 2026-07-15: Inbox moved off the pills row into this dropdown.
+                Same unread badge (99+ style) sits on the right of the row. */}
+            <a
+              href="/mail"
+              onClick={() => setUserOpen(false)}
+              style={{ ...S.link, display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <span>📥 Inbox</span>
+              {inbox.unread > 0 && (
+                <span style={{ marginLeft: 'auto', background: '#084838', color: '#FFFFFF', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700 }}>
+                  {inbox.unread > 99 ? '99+' : inbox.unread}
+                </span>
+              )}
+            </a>
             <a href="/account"                   onClick={() => setUserOpen(false)} style={S.link}>Account</a>
             <a href="/account/password"          onClick={() => setUserOpen(false)} style={S.link}>Change password</a>
             <div style={S.menuDivider}>
