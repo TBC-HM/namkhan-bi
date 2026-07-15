@@ -166,7 +166,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'certifications' && <CertificationsPanel data={data.certifications} propertyId={propertyId} />}
           {active === 'contacts'       && <ContactsPanel       data={data.contacts}       propertyId={propertyId} />}
           {active === 'social'         && <SocialPanel         data={data.social}         propertyId={propertyId} />}
-          {active === 'team'           && <TeamPanel           data={data.team ?? []} />}
+          {active === 'team'           && <TeamPanel           data={data.team ?? []} propertyId={propertyId} />}
         </div>
       </main>
     </div>
