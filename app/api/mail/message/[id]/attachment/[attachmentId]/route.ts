@@ -26,7 +26,10 @@ export async function GET(
     const { data, mimeType, filename } = await getAttachmentBytes(user.id, id, attachmentId);
     const safe = filename.replace(/[^\w\.\-]+/g, '_');
     const enc = encodeURIComponent(filename);
-    return new NextResponse(data, {
+    // PBS 2026-07-16 (tsc fix): Node Buffer generic no longer satisfies BodyInit
+    // under TS 5.6 lib.dom types — wrap in Uint8Array (same bytes, valid BodyInit).
+    const bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    return new NextResponse(bytes, {
       status: 200,
       headers: {
         'content-type': mimeType,
