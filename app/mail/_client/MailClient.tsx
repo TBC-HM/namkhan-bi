@@ -169,7 +169,15 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   const [attachFilter, setAttachFilter] = useState<boolean>(false);
   const [newslettersOnly, setNewslettersOnly] = useState<boolean>(false);
   // PBS 2026-07-15 §1 · auto-folder. Defaults to 'to_me' (excludes list mail).
-  const [activeFolder, setActiveFolder] = useState<AutoFolder>('to_me');
+  // PBS 2026-07-17 BUG-1 FIX: default to null so Gmail label clicks aren't
+  // silently filtered down to 0 by `to:me -cc:me -bcc:me`. That query hides
+  // ~all SPAM / TRASH / SENT / newsletter labels (they aren't addressed to me
+  // directly), which was the "Spam (38) → 0" symptom.
+  const [activeFolder, setActiveFolder] = useState<AutoFolder>(null);
+  // PBS 2026-07-17 BUG-2 FIX · forwardedAlias state (extracted so mutex works).
+  const [forwardedAlias, setForwardedAlias] = useState<string | null>(null);
+  // PBS 2026-07-17 · saved-important pseudo-folder (Feature 7).
+  const [importantOnly, setImportantOnly] = useState<boolean>(false);
   // PBS 2026-07-15 §2 · headline stripe overdue chip.
   const [overdueFilter, setOverdueFilter] = useState<boolean>(false);
   const [showCompose, setShowCompose] = useState<boolean>(false);
@@ -196,6 +204,17 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   const [aiActionErr, setAiActionErr] = useState<string | null>(null);
   const [aiProposeLoading, setAiProposeLoading] = useState<boolean>(false);
   const [aiPolishLoading, setAiPolishLoading] = useState<boolean>(false);
+  // PBS 2026-07-17 · summary refinements / translate / save toolbar (Feature 6).
+  const [aiSummaryRefining, setAiSummaryRefining] = useState<string | null>(null);
+  const [translateOpen, setTranslateOpen] = useState<boolean>(false);
+  const [translating, setTranslating] = useState<string | null>(null);
+  const [savedToImportant, setSavedToImportant] = useState<boolean>(false);
+  const [savingImportant, setSavingImportant] = useState<boolean>(false);
+  // PBS 2026-07-17 Feature 7 · saved-important list.
+  const [importantMails, setImportantMails] = useState<Array<{
+    id: number; thread_id: string; subject: string | null; from_email: string | null;
+    from_name: string | null; summary: string | null; saved_at: string;
+  }>>([]);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -270,6 +289,73 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
 
+  // ---- BUG 2 · mutual-exclusion helpers (PBS 2026-07-17) --------------
+  // Clicking any Gmail label / smart-folder / alias must clear the OTHER
+  // scope states so the new selection is a clean slate (chips stack; scope
+  // slots don't). "All mail reset" nukes everything and returns to INBOX.
+  const clearScopeStates = useCallback(() => {
+    setActiveFolder(null);
+    setNewslettersOnly(false);
+    setForwardedAlias(null);
+    setImportantOnly(false);
+  }, []);
+
+  const pickSystemLabel = useCallback((id: string) => {
+    clearScopeStates();
+    setCurrentLabel(id);
+  }, [clearScopeStates]);
+
+  const pickUserLabel = useCallback((id: string) => {
+    clearScopeStates();
+    setCurrentLabel(id);
+  }, [clearScopeStates]);
+
+  const pickFolder = useCallback((f: Exclude<AutoFolder, null>) => {
+    setImportantOnly(false);
+    setNewslettersOnly(false);
+    setForwardedAlias(null);
+    setCurrentLabel('INBOX');
+    setActiveFolder((prev) => (prev === f ? null : f));
+  }, []);
+
+  const pickNewsletters = useCallback(() => {
+    setImportantOnly(false);
+    setActiveFolder(null);
+    setForwardedAlias(null);
+    setCurrentLabel('INBOX');
+    setNewslettersOnly((v) => !v);
+  }, []);
+
+  const pickForwardedAlias = useCallback((alias: string) => {
+    setImportantOnly(false);
+    setActiveFolder(null);
+    setNewslettersOnly(false);
+    setCurrentLabel('INBOX');
+    setForwardedAlias((prev) => (prev === alias ? null : alias));
+  }, []);
+
+  const pickImportant = useCallback(() => {
+    setActiveFolder(null);
+    setNewslettersOnly(false);
+    setForwardedAlias(null);
+    setImportantOnly(true);
+    setCurrentLabel('INBOX');
+  }, []);
+
+  const resetAllMail = useCallback(() => {
+    clearScopeStates();
+    setCurrentLabel('INBOX');
+    setUnreadFilter(false);
+    setStarredFilter(false);
+    setDirectFilter(false);
+    setTodayFilter(false);
+    setWeekFilter(false);
+    setAttachFilter(false);
+    setOverdueFilter(false);
+    setQuery('');
+    setCommittedQuery('');
+  }, [clearScopeStates]);
+
   // ---- computed final query (label filters + folder + chips -> Gmail) ---
   // Uses Gmail's native search operators so filtering happens server-side.
   //   activeFolder: injects the folder operator (mutually exclusive with the
@@ -283,6 +369,7 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     const parts: string[] = [];
     if (committedQuery) parts.push(committedQuery);
     if (activeFolder) parts.push(FOLDER_Q[activeFolder]);
+    if (forwardedAlias) parts.push('to:' + forwardedAlias);
     if (unreadFilter) parts.push('is:unread');
     if (starredFilter) parts.push('is:starred');
     if (directFilter)  parts.push('to:me -cc:me -bcc:me');
@@ -292,13 +379,49 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     if (overdueFilter) parts.push('is:unread older_than:2d newer_than:14d');
     if (newslettersOnly) parts.push('(unsubscribe OR "List-Unsubscribe")');
     return parts.join(' ');
-  }, [committedQuery, activeFolder, unreadFilter, starredFilter, directFilter, todayFilter, weekFilter, attachFilter, overdueFilter, newslettersOnly]);
+  }, [committedQuery, activeFolder, forwardedAlias, unreadFilter, starredFilter, directFilter, todayFilter, weekFilter, attachFilter, overdueFilter, newslettersOnly]);
 
   // ---- load current label list -----------------------------------------
+  // PBS 2026-07-17 Feature 7 · when importantOnly is on, we bypass Gmail and
+  // pull from /api/mail/save-important (backed by public.v_important_mails).
   const loadList = useCallback(async (append?: string) => {
     setLoadingList(true);
     setLastError(null);
     try {
+      if (importantOnly) {
+        const r = await fetch('/api/mail/save-important', { cache: 'no-store' });
+        const j = await r.json() as { ok: boolean; mails?: Array<{
+          id: number; thread_id: string; message_id: string | null; subject: string | null;
+          from_email: string | null; from_name: string | null; summary: string | null;
+          saved_at: string;
+        }> };
+        if (!j.ok || !j.mails) {
+          setLastError('important_load_failed');
+          setRows([]); setNextPageToken(null);
+          return;
+        }
+        setImportantMails(j.mails.map((m) => ({
+          id: m.id, thread_id: m.thread_id, subject: m.subject,
+          from_email: m.from_email, from_name: m.from_name,
+          summary: m.summary, saved_at: m.saved_at,
+        })));
+        // Adapt to ListRow shape for the middle pane.
+        const nowMs = Date.now();
+        setRows(j.mails.map((m) => ({
+          id: m.message_id || m.thread_id,
+          threadId: m.thread_id,
+          subject: m.subject || '(no subject)',
+          from: (m.from_name ? m.from_name + ' ' : '') + '<' + (m.from_email || 'unknown') + '>',
+          to: '',
+          date: m.saved_at,
+          dateMs: Date.parse(m.saved_at) || nowMs,
+          snippet: (m.summary || '').slice(0, 200),
+          unread: false, starred: true, hasAttachment: false,
+          labelIds: ['STARRED'],
+        })));
+        setNextPageToken(null);
+        return;
+      }
       const params = new URLSearchParams();
       params.set('label', currentLabel);
       if (finalQ) params.set('q', finalQ);
@@ -319,7 +442,7 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     } finally {
       setLoadingList(false);
     }
-  }, [currentLabel, finalQ]);
+  }, [currentLabel, finalQ, importantOnly]);
 
   useEffect(() => {
     setRows([]);
@@ -565,6 +688,86 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     }
   }, [threadMessages]);
 
+  // PBS 2026-07-17 Feature 6 · summary refinement chips.
+  const aiSummarizeRefine = useCallback(async (refine: 'shorten' | 'actionable' | 'focus_rate' | 'focus_dates') => {
+    if (threadMessages.length === 0) return;
+    const tid = threadMessages[0].threadId;
+    setAiSummaryRefining(refine);
+    setAiActionErr(null);
+    try {
+      const r = await fetch('/api/mail/ai/summarize', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ thread_id: tid, refine_mode: refine }),
+      });
+      const j = await r.json() as { ok: boolean; summary?: string; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error || 'refine_failed');
+      setAiSummary(j.summary || '');
+    } catch (e) {
+      setAiActionErr(e instanceof Error ? e.message : 'refine_failed');
+    } finally {
+      setAiSummaryRefining(null);
+    }
+  }, [threadMessages]);
+
+  // PBS 2026-07-17 Feature 6 · translate summary to target language.
+  const aiTranslate = useCallback(async (lang: string) => {
+    if (!aiSummary.trim()) return;
+    setTranslating(lang);
+    setTranslateOpen(false);
+    setAiActionErr(null);
+    try {
+      const r = await fetch('/api/mail/ai/translate', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: aiSummary, target_lang: lang }),
+      });
+      const j = await r.json() as { ok: boolean; translated?: string; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error || 'translate_failed');
+      setAiSummary(j.translated || aiSummary);
+    } catch (e) {
+      setAiActionErr(e instanceof Error ? e.message : 'translate_failed');
+    } finally {
+      setTranslating(null);
+    }
+  }, [aiSummary]);
+
+  // PBS 2026-07-17 Feature 6 · save summary + thread to important_mails.
+  const saveImportant = useCallback(async () => {
+    if (threadMessages.length === 0) return;
+    const newest = threadMessages[threadMessages.length - 1];
+    setSavingImportant(true);
+    setAiActionErr(null);
+    try {
+      const parsed = parseFrom(newest.from);
+      const r = await fetch('/api/mail/save-important', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          thread_id: newest.threadId,
+          message_id: newest.id,
+          subject:    newest.subject,
+          from_email: parsed.email,
+          from_name:  parsed.name || null,
+          summary:    aiSummary || null,
+        }),
+      });
+      const j = await r.json() as { ok: boolean; id?: number; error?: string };
+      if (!r.ok || !j.ok) throw new Error(j.error || 'save_failed');
+      setSavedToImportant(true);
+      setTimeout(() => setSavedToImportant(false), 3000);
+    } catch (e) {
+      setAiActionErr(e instanceof Error ? e.message : 'save_failed');
+    } finally {
+      setSavingImportant(false);
+    }
+  }, [threadMessages, aiSummary]);
+
+  // PBS 2026-07-17 Feature 6 · pre-fill reply composer from summary.
+  const proposeFromSummary = useCallback(() => {
+    if (!aiSummary.trim() || threadMessages.length === 0) return;
+    const draft = 'Based on our thread:\n\n' + aiSummary + '\n\n[Draft your response above — the summary is here to anchor your reply.]';
+    setReplyBody(draft);
+    setReplyOpen(true);
+  }, [aiSummary, threadMessages]);
+
   const aiPolish = useCallback(async () => {
     if (!replyBody.trim()) return;
     setAiPolishLoading(true);
@@ -704,19 +907,40 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
         </div>
 
         <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+          {/* PBS 2026-07-17 · All-mail reset. Clears every scope + filter. */}
+          <div
+            onClick={resetAllMail}
+            style={{
+              margin: '4px 12px 8px', padding: '6px 10px', borderRadius: 4,
+              border: '1px solid ' + T.HAIR, background: T.WHITE,
+              fontSize: 11, color: T.INK_S, fontWeight: 600, cursor: 'pointer',
+              textAlign: 'center',
+            }}
+            title="Clear every scope + filter"
+          >← All mail (reset)</div>
           {SYSTEM_ORDER.map((s) => {
             const lbl = labels.find((l) => l.id === s.id);
             const unread = lbl?.messagesUnread ?? 0;
+            const active = currentLabel === s.id && !importantOnly && !newslettersOnly && !forwardedAlias && !activeFolder;
             return (
               <RailItem
                 key={s.id}
                 label={s.label}
                 unread={unread}
-                active={currentLabel === s.id}
-                onClick={() => setCurrentLabel(s.id)}
+                active={active}
+                onClick={() => pickSystemLabel(s.id)}
               />
             );
           })}
+
+          {/* PBS 2026-07-17 Feature 7 · Important (saved). */}
+          <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Saved</div>
+          <RailItem
+            label="⭐ Important"
+            unread={importantMails.length}
+            active={importantOnly}
+            onClick={pickImportant}
+          />
 
           {/* Newsletters section — user labels whose name contains "newsletter"
               OR the Gmail toggle that filters by List-Unsubscribe header. */}
@@ -724,16 +948,16 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
           <RailItem
             label="All newsletters"
             unread={0}
-            active={newslettersOnly}
-            onClick={() => setNewslettersOnly((v) => !v)}
+            active={newslettersOnly && !currentLabel.startsWith('Label_')}
+            onClick={pickNewsletters}
           />
           {newsletterLabels.map((l) => (
             <RailItem
               key={l.id}
               label={l.name}
               unread={l.messagesUnread}
-              active={currentLabel === l.id}
-              onClick={() => setCurrentLabel(l.id)}
+              active={currentLabel === l.id && !newslettersOnly && !importantOnly && !forwardedAlias && !activeFolder}
+              onClick={() => pickUserLabel(l.id)}
             />
           ))}
 
@@ -746,8 +970,8 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                   key={l.id}
                   label={l.name}
                   unread={l.messagesUnread}
-                  active={currentLabel === l.id}
-                  onClick={() => setCurrentLabel(l.id)}
+                  active={currentLabel === l.id && !importantOnly && !forwardedAlias && !newslettersOnly && !activeFolder}
+                  onClick={() => pickUserLabel(l.id)}
                 />
               ))}
             </>
@@ -760,8 +984,8 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
               key={f}
               label={FOLDER_ICON[f] + ' ' + FOLDER_LABEL[f]}
               unread={0}
-              active={activeFolder === f}
-              onClick={() => setActiveFolder((prev) => (prev === f ? null : f))}
+              active={activeFolder === f && !importantOnly}
+              onClick={() => pickFolder(f)}
             />
           ))}
 
@@ -773,8 +997,8 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                   key={l.id}
                   label={l.name}
                   unread={l.messagesUnread}
-                  active={currentLabel === l.id}
-                  onClick={() => setCurrentLabel(l.id)}
+                  active={currentLabel === l.id && !importantOnly && !newslettersOnly && !forwardedAlias && !activeFolder}
+                  onClick={() => pickUserLabel(l.id)}
                 />
               ))}
             </>
@@ -799,7 +1023,7 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
           {/* PBS 2026-07-15 §2 · Headline stripe. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
             <StripeTile label="Unread" value={stripeCounts.unread} onClick={() => setUnreadFilter((v) => !v)} active={unreadFilter} />
-            <StripeTile label="Answer" value={stripeCounts.answer} onClick={() => setActiveFolder((prev) => (prev === 'answer_expected' ? null : 'answer_expected'))} active={activeFolder === 'answer_expected'} />
+            <StripeTile label="Answer" value={stripeCounts.answer} onClick={() => pickFolder('answer_expected')} active={activeFolder === 'answer_expected'} />
             <StripeTile label="Today"  value={stripeCounts.today}  onClick={() => setTodayFilter((v) => !v)} active={todayFilter} />
             <StripeTile label="Overdue" value={stripeCounts.overdue} onClick={() => setOverdueFilter((v) => !v)} active={overdueFilter} />
             <StripeTile label="Reply 7d" value={stripeCounts.replyRate7d == null ? '—' : (stripeCounts.replyRate7d + '%')} onClick={undefined} active={false} />
@@ -871,6 +1095,11 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
               onStar={() => selectedId && void toggleStar(selectedId)}
               onMarkUnread={() => selectedId && void markUnread(selectedId)}
               starred={rows.find((x) => x.id === selectedId)?.starred ?? false}
+              onDelete={() => {
+                if (!selectedId) return;
+                if (!confirm('Move this thread to Trash in Gmail? This can be undone from Gmail within 30 days.')) return;
+                void trashRow(selectedId);
+              }}
             />
             {/* PBS 2026-07-15 §3 · AI actions row + inline summary. */}
             <div style={{ padding: '10px 24px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -883,9 +1112,31 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                 <div style={{ fontSize: 11, color: T.RED }}>AI error: {aiActionErr}</div>
               )}
               {aiSummary && (
-                <div style={{ background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 6, padding: '10px 14px', fontSize: 12, color: T.INK, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-                  <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M, marginBottom: 6, fontWeight: 600 }}>Vector summary</div>
-                  {aiSummary}
+                <div style={{ background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 6, padding: '10px 14px', fontSize: 12, color: T.INK, lineHeight: 1.55 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M, fontWeight: 600 }}>Vector summary</div>
+                    <button type="button" onClick={() => setAiSummary('')} style={{ background: 'transparent', border: 'none', color: T.INK_M, cursor: 'pointer', fontSize: 14 }} aria-label="Clear">×</button>
+                  </div>
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{aiSummary}</div>
+                  {/* PBS 2026-07-17 · refine + translate + save toolbar. */}
+                  <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4, position: 'relative' }}>
+                    <SumChip onClick={() => void aiSummarizeRefine('shorten')}     loading={aiSummaryRefining === 'shorten'}     label="Shorten" />
+                    <SumChip onClick={() => void aiSummarizeRefine('actionable')}  loading={aiSummaryRefining === 'actionable'}  label="Actionable" />
+                    <SumChip onClick={() => void aiSummarizeRefine('focus_rate')}  loading={aiSummaryRefining === 'focus_rate'}  label="Focus on rate" />
+                    <SumChip onClick={() => void aiSummarizeRefine('focus_dates')} loading={aiSummaryRefining === 'focus_dates'} label="Focus on dates" />
+                    <div style={{ position: 'relative' }}>
+                      <SumChip onClick={() => setTranslateOpen((v) => !v)} loading={!!translating} label={translating ? 'Translating…' : '🌐 Translate ▾'} />
+                      {translateOpen && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 30, marginTop: 4, background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,.1)', minWidth: 140 }}>
+                          {['EN','FR','DE','ES','TH','LO','JA','ZH'].map((lg) => (
+                            <div key={lg} onClick={() => void aiTranslate(lg)} style={{ padding: '6px 10px', fontSize: 11, color: T.INK, cursor: 'pointer' }}>{lg}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <SumChip onClick={() => void saveImportant()} loading={savingImportant} label={savedToImportant ? '✓ Saved' : '💾 Save to important'} />
+                    <SumChip onClick={proposeFromSummary}         loading={false}          label="✍ Propose reply from this" />
+                  </div>
                 </div>
               )}
             </div>
@@ -1042,6 +1293,23 @@ function StripeTile({ label, value, onClick, active }: { label: string; value: n
   );
 }
 
+// PBS 2026-07-17 · summary refine/translate/save chip.
+function SumChip({ label, onClick, loading }: { label: string; onClick: () => void; loading: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      style={{
+        background: T.WHITE, color: T.FOREST, border: '1px solid ' + T.HAIR,
+        borderRadius: 12, padding: '3px 10px', fontSize: 10.5, fontWeight: 600,
+        cursor: loading ? 'wait' : 'pointer',
+        opacity: loading ? 0.7 : 1,
+      }}
+    >{loading ? '…' : label}</button>
+  );
+}
+
 // PBS 2026-07-15 §3 · AI action button.
 function AiBtn({ children, onClick, disabled, loading }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; loading?: boolean }) {
   return (
@@ -1138,7 +1406,7 @@ function ThreadRow({ row, selected, onClick, onToggleStar }: { row: ListRow; sel
   );
 }
 
-function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starred }: { subject: string; onArchive: () => void; onTrash: () => void; onStar: () => void; onMarkUnread: () => void; starred: boolean }) {
+function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starred, onDelete }: { subject: string; onArchive: () => void; onTrash: () => void; onStar: () => void; onMarkUnread: () => void; starred: boolean; onDelete: () => void }) {
   return (
     <div style={{ padding: '14px 24px 12px', borderBottom: '1px solid ' + T.HAIR, background: T.WHITE, position: 'sticky', top: 0, zIndex: 2 }}>
       <div style={{ fontSize: 18, fontWeight: 600, color: T.INK, marginBottom: 10, wordBreak: 'break-word' }}>{subject}</div>
@@ -1147,6 +1415,8 @@ function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starr
         <HeaderBtn onClick={onTrash}>Trash</HeaderBtn>
         <HeaderBtn onClick={onStar}><span style={{ color: starred ? T.STAR : T.INK_S }}>★</span> {starred ? 'Unstar' : 'Star'}</HeaderBtn>
         <HeaderBtn onClick={onMarkUnread}>Mark unread</HeaderBtn>
+        {/* PBS 2026-07-17 Feature 6 · Delete = confirm + Gmail TRASH + local remove. */}
+        <HeaderBtn onClick={onDelete}><span style={{ color: T.RED }}>🗑 Delete</span></HeaderBtn>
       </div>
     </div>
   );
