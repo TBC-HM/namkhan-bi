@@ -159,7 +159,38 @@ export default function LeadsCMSClient({
   const [search, setSearch] = useState<string>('');
 
   // PBS 2026-07-15 — proposal wiring.
-  const [proposalLeadId, setProposalLeadId] = useState<number | null>(null);   // opens template picker
+  const [proposalLeadId, setProposalLeadId] = useState<number | null>(null);   // (deprecated; kept for template picker if ever needed)
+  const [creatingLeadId, setCreatingLeadId] = useState<number | null>(null);   // PBS 2026-07-17 — direct create, skip modal
+  const [createErr, setCreateErr] = useState<string | null>(null);
+
+  // PBS 2026-07-17 — kill the "in-between" template-picker modal: on click,
+  // POST create-from-lead with the default (first) template + lead's dates,
+  // navigate straight to /sales/proposals/{id}/edit. Modal component stays in
+  // the file for callers that still want to pick a template explicitly.
+  async function createProposalDirect(leadId: number) {
+    if (creatingLeadId) return;
+    setCreatingLeadId(leadId);
+    setCreateErr(null);
+    try {
+      const defaultTemplateId = templates[0]?.id ?? '';
+      const r = await fetch('/api/sales/proposals/create-from-lead', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          lead_id: leadId,
+          template_id: defaultTemplateId || null,
+          date_in: null,
+          date_out: null,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.id) throw new Error(j.error || 'create_failed');
+      window.location.href = '/sales/proposals/' + j.id + '/edit';
+    } catch (e) {
+      setCreateErr(e instanceof Error ? e.message : String(e));
+      setCreatingLeadId(null);
+    }
+  }
   const proposalCountMap = useMemo(() => {
     const m = new Map<number, number>();
     for (const r of proposalCounts) m.set(r.lead_id, r.proposal_count);
@@ -286,10 +317,11 @@ export default function LeadsCMSClient({
                 <td style={{ ...tdStyle(), whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <button type="button"
-                      onClick={() => setProposalLeadId(l.id)}
-                      title="Create a proposal pre-filled from this lead"
+                      onClick={() => void createProposalDirect(l.id)}
+                      disabled={creatingLeadId === l.id}
+                      title="Create a proposal pre-filled from this lead — jumps straight to the composer"
                       style={rowActionBtn()}>
-                      + Proposal
+                      {creatingLeadId === l.id ? '…' : '+ Proposal'}
                     </button>
                     {proposalCount > 0 && (
                       <a href={'/sales/proposals?lead_id=' + l.id}
