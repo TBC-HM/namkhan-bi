@@ -131,7 +131,7 @@ const FOLDER_Q: Record<Exclude<AutoFolder, null>, string> = {
 // PBS 2026-07-15 · Forwarded aliases — the shared inboxes that get forwarded
 // to a personal Gmail. Adding a rail sub-folder per alias so any user (PBS,
 // Xiscas, etc.) can drill into each queue with a friendly name.
-// PBS 2026-07-16 · added pann@thenamkhan.com (Pann Office) at Xiscas's request.
+// PBS 2026-07-16 · pann@ (Pann Office) + fc@ (F&B) added as forwarded aliases.
 const FORWARDED_ALIASES: string[] = [
   'book@thenamkhan.com',
   'gm@thenamkhan.com',
@@ -139,6 +139,7 @@ const FORWARDED_ALIASES: string[] = [
   'pann@thenamkhan.com',
   'rom@thenamkhan.com',
   'wm@thenamkhan.com',
+  'fc@thenamkhan.com',
   'hr@thenamkhan.com',
   'xl@thenamkhan.com',
 ];
@@ -152,6 +153,7 @@ const FORWARDED_ALIAS_LABEL: Record<string, string> = {
   'pann@thenamkhan.com':         'Pann Office',
   'rom@thenamkhan.com':          'Rom Office',
   'wm@thenamkhan.com':           'Wellness Manager',
+  'fc@thenamkhan.com':           'F&B',
   'hr@thenamkhan.com':           'HR',
   'xl@thenamkhan.com':           'Xiscas',
 };
