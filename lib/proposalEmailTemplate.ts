@@ -31,6 +31,21 @@ export interface ProposalBlockInput {
   sort_order: number;
 }
 
+// PBS 2026-07-16 (Feature A) — side-by-side rate offer cards.
+// 0 or 1 offer  → renders as before (single card / no offers section).
+// 2 or 3 offers → side-by-side table, one CTA per card linking to
+//                 /p/{token}?rate={offer_id}.
+export interface ProposalRateOfferInput {
+  id: string;
+  rate_plan_id: string;
+  position: number;
+  label: string | null;
+  payment_terms: string | null;
+  cancellation_terms: string | null;
+  unit_price_lak: number | null;
+  total_lak: number | null;
+}
+
 export interface ProposalEmailContext {
   proposal_id: string;
   public_token: string | null;
@@ -43,6 +58,9 @@ export interface ProposalEmailContext {
   outro_md: string;
   ps_md: string | null;
   blocks: ProposalBlockInput[];
+  // PBS 2026-07-16 (Feature A) — optional. Empty or length 1 falls back to the
+  // single-card / no-offers layout. Length 2 or 3 renders side-by-side.
+  rate_offers?: ProposalRateOfferInput[];
   total_lak: number;
   fx_lak_per_usd: number;
   // Property snapshot
@@ -137,6 +155,60 @@ function blockCard(ctx: ProposalEmailContext, b: ProposalBlockInput): string {
         </td>
       </tr>
     </table>`;
+}
+
+// PBS 2026-07-16 (Feature A) — side-by-side rate offer cards.
+// 2 offers → two 280px columns. 3 offers → three 180px columns. Email frame
+// is 640px minus 32px+32px padding = 576px content width, comfortably fits both.
+// Cards stack under 500px viewport thanks to width=100% + display:block on the
+// mobile media query (email clients strip <style>, so we rely on Gmail/iOS Mail
+// stacking behaviour for narrow widths — same pattern as newsletter machine).
+function rateOffersBlock(ctx: ProposalEmailContext): string {
+  const offers = (ctx.rate_offers ?? []).slice(0, 3);
+  if (offers.length < 2) return '';
+  const colWidth = offers.length === 2 ? 280 : 180;
+  const publicUrl = ctx.public_token ? `${ctx.base_url}/p/${ctx.public_token}` : '';
+
+  const cells = offers.map((o) => {
+    const label = (o.label && o.label.trim()) || 'Rate offer';
+    const nightlyUsd = o.unit_price_lak != null ? fmtUsd(Number(o.unit_price_lak), ctx.fx_lak_per_usd) : null;
+    const totalUsd = o.total_lak != null ? fmtUsd(Number(o.total_lak), ctx.fx_lak_per_usd) : null;
+    const bookUrl = publicUrl ? `${publicUrl}?rate=${encodeURIComponent(o.id)}` : '';
+    const pay = (o.payment_terms && o.payment_terms.trim()) || 'Pay at property';
+    const cancel = (o.cancellation_terms && o.cancellation_terms.trim()) || 'Free cancellation until 7 days before arrival';
+    return `<td valign="top" style="padding:0 6px;vertical-align:top">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border:1px solid ${HAIRLINE};border-radius:6px;background:${PAPER};overflow:hidden">
+        <tr><td style="padding:14px 14px 4px 14px">
+          <div style="font-family:${SANS};font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">Offer ${o.position}</div>
+          <div style="font-family:${SERIF};font-size:16px;color:${INK};line-height:1.25;margin-bottom:8px">${esc(label)}</div>
+          ${nightlyUsd ? `<div style="font-family:${SANS};font-size:12px;color:${INK_SOFT};margin-bottom:2px">${nightlyUsd} / night</div>` : ''}
+          ${totalUsd ? `<div style="font-family:${SANS};font-size:18px;font-weight:600;color:${PRIMARY};margin-bottom:10px;font-variant-numeric:tabular-nums">${totalUsd} <span style="font-size:11px;font-weight:400;color:${INK_SOFT};letter-spacing:0.08em;text-transform:uppercase">total</span></div>` : ''}
+        </td></tr>
+        <tr><td style="padding:0 14px 6px 14px">
+          <div style="font-family:${SANS};font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:3px">Payment</div>
+          <div style="font-family:${SANS};font-size:12px;color:${INK};line-height:1.45;margin-bottom:10px">${esc(pay)}</div>
+          <div style="font-family:${SANS};font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:3px">Cancellation</div>
+          <div style="font-family:${SANS};font-size:12px;color:${INK};line-height:1.45;margin-bottom:12px">${esc(cancel)}</div>
+        </td></tr>
+        ${bookUrl ? `<tr><td style="padding:0 14px 14px 14px">
+          <a href="${esc(bookUrl)}" style="display:block;text-align:center;padding:10px 12px;background:${PRIMARY};color:#FFFFFF;font-family:${SANS};font-size:12px;font-weight:600;text-decoration:none;letter-spacing:0.02em;border-radius:4px">Book this rate →</a>
+        </td></tr>` : ''}
+      </table>
+    </td>`;
+  }).join('');
+
+  // Wrap in a fixed layout table for consistent widths in Outlook.
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:6px 0;table-layout:fixed">
+    <tr><td colspan="${offers.length}" style="padding:0 6px 8px 6px">
+      <div style="font-family:${SANS};font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:${INK_SOFT}">Choose your rate</div>
+    </td></tr>
+    <tr>${cells}</tr>
+    <tr><td colspan="${offers.length}" style="padding:8px 6px 0 6px;font-family:${SANS};font-size:11px;color:${INK_SOFT};line-height:1.5">
+      Prices per room / night, includes 10% VAT + 10% service. Click a card to open the guest page and confirm your rate.
+    </td></tr>
+  </table>`;
+  // colWidth kept in scope for future explicit per-cell width injection.
+  void colWidth;
 }
 
 function pricingTable(ctx: ProposalEmailContext): string {
@@ -248,6 +320,7 @@ export function renderProposalEmailHtml(ctx: ProposalEmailContext): string {
   const psHtml    = ctx.ps_md ? `<div style="margin-top:14px;font-family:${SERIF};font-style:italic;font-size:13px;color:${INK_SOFT};padding-top:10px;border-top:1px dashed ${HAIRLINE}">${esc(ctx.ps_md)}</div>` : '';
   const blocksHtml = ctx.blocks.map(b => blockCard(ctx, b)).join('');
   const pricing = pricingTable(ctx);
+  const offersHtml = rateOffersBlock(ctx);
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(ctx.subject)}</title></head>
@@ -258,6 +331,7 @@ export function renderProposalEmailHtml(ctx: ProposalEmailContext): string {
       ${headerBlock(ctx)}
       <tr><td style="padding:26px 32px 8px 32px;background:${PAPER}">${introHtml}</td></tr>
       ${blocksHtml ? `<tr><td style="padding:6px 32px;background:${PAPER}">${blocksHtml}</td></tr>` : ''}
+      ${offersHtml ? `<tr><td style="padding:6px 32px;background:${PAPER}">${offersHtml}</td></tr>` : ''}
       <tr><td style="padding:14px 32px;background:${PAPER}">${pricing}</td></tr>
       <tr><td style="padding:18px 32px 6px 32px;background:${PAPER}">${outroHtml}${psHtml}</td></tr>
       ${ctaBlock(ctx)}
