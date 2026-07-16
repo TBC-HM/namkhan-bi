@@ -303,5 +303,19 @@ export async function GET(req: Request, { params }: Ctx) {
 
   const html = renderProposalEmailHtml(ctx);
   if (format === 'json') return NextResponse.json({ subject: ctx.subject, html, base_url: base });
-  return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+  // PBS 2026-07-16 — aggressive no-cache; browser + service worker were serving
+  // stale preview responses even though the client bumped the ?v= param.
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'Content-Type':  'text/html; charset=utf-8',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0, private',
+      'Pragma':        'no-cache',
+      'Expires':       '0',
+      'X-Preview-Rendered-At': new Date().toISOString(),
+      'Surrogate-Control':     'no-store',
+      'CDN-Cache-Control':     'no-store',
+      'Vercel-CDN-Cache-Control': 'no-store',
+    },
+  });
 }
