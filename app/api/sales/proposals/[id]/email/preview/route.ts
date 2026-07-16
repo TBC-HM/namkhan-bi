@@ -60,9 +60,20 @@ async function loadPropertySnapshot(propertyId: number) {
   };
 }
 
+async function loadFactsheet(sb: ReturnType<typeof getSupabaseAdmin>, factsheetId: string) {
+  // PBS 2026-07-16 (item 5) — fetch factsheet metadata for footer chip.
+  if (!factsheetId) return null;
+  const { data } = await sb.from('v_marketing_factsheets').select('doc_id,title,file_name,external_url').eq('doc_id', factsheetId).maybeSingle();
+  return data as { doc_id: string; title: string; file_name: string | null; external_url: string | null } | null;
+}
+
 export async function GET(req: Request, { params }: Ctx) {
   const url = new URL(req.url);
   const format = (url.searchParams.get('format') ?? 'html').toLowerCase();
+  // PBS 2026-07-16 (item 4) — with_photos=0 strips hero_asset_id from every block
+  // so PBS can send a text-only proposal without editing each block by hand.
+  const withPhotos = url.searchParams.get('with_photos') !== '0';
+  const factsheetId = url.searchParams.get('factsheet_id') ?? '';
 
   const { proposal, blocks, email } = await getProposalWithBlocks(params.id);
   if (!proposal) return NextResponse.json({ error: 'proposal_not_found' }, { status: 404 });
@@ -74,11 +85,13 @@ export async function GET(req: Request, { params }: Ctx) {
   const totalLak = blocks.reduce((s, b) => s + Number(b.total_lak ?? 0), 0);
 
   const propSnap = await loadPropertySnapshot(Number(proposal.property_id));
+  const sb = getSupabaseAdmin();
+  const factsheet = await loadFactsheet(sb, factsheetId);
   const proto = process.env.VERCEL_URL ? 'https' : 'http';
   const host = process.env.VERCEL_URL ?? url.host;
   const base = `${proto}://${host}`;
 
-  const ctx: ProposalEmailContext = {
+  const ctx: ProposalEmailContext & { factsheet?: { doc_id: string; title: string; url: string | null } | null } = {
     proposal_id: params.id,
     public_token: proposal.public_token ?? null,
     guest_name: (proposal.guest_name_snapshot ?? inq?.guest_name ?? 'guest') as string,
@@ -94,16 +107,22 @@ export async function GET(req: Request, { params }: Ctx) {
       note: b.note, qty: b.qty, nights: b.nights,
       unit_price_lak: Number(b.unit_price_lak ?? 0),
       total_lak: Number(b.total_lak ?? 0),
-      hero_asset_id: b.hero_asset_id ?? null,
+      // PBS 2026-07-16 (item 4) — honour master photo toggle.
+      hero_asset_id: withPhotos ? (b.hero_asset_id ?? null) : null,
       sort_order: b.sort_order ?? 100,
     })).sort((a, b) => a.sort_order - b.sort_order),
     total_lak: totalLak,
     fx_lak_per_usd: FX_LAK_PER_USD ?? 21800,
     property: propSnap,
     base_url: base,
+    factsheet: factsheet ? {
+      doc_id: factsheet.doc_id,
+      title: factsheet.title,
+      url: factsheet.external_url ?? (base + '/documents/' + factsheet.doc_id),
+    } : null,
   };
 
-  const html = renderProposalEmailHtml(ctx);
+  const html = renderProposalEmailHtml(ctx as ProposalEmailContext);
   if (format === 'json') return NextResponse.json({ subject: ctx.subject, html, base_url: base });
   return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
