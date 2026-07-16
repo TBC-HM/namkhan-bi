@@ -211,7 +211,25 @@ function rateOffersBlock(ctx: ProposalEmailContext): string {
   void colWidth;
 }
 
+// PBS 2026-07-16 — DEPRECATED itemized table (killed per "dont duble list the costs").
+// Kept only as a fallback for legacy templates; the new default is a single grand-total line.
 function pricingTable(ctx: ProposalEmailContext): string {
+  const totalUsd = fmtUsd(Number(ctx.total_lak), ctx.fx_lak_per_usd);
+  const rowsHidden: string[] = ctx.blocks.map(b => {
+    const t = fmtUsd(Number(b.total_lak), ctx.fx_lak_per_usd);
+    return `<!-- ${esc(b.label)} ${b.qty} × ${b.nights} = ${t} -->`;
+  });
+  return `${rowsHidden.join('')}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:14px 0 4px 0">
+    <tr>
+      <td style="padding:14px 10px;font-family:${SERIF};font-size:16px;color:${INK};border-top:2px solid ${PRIMARY}">Stay total · ${ctx.nights} ${ctx.nights === 1 ? 'night' : 'nights'}</td>
+      <td align="right" style="padding:14px 10px;font-family:${SERIF};font-size:20px;font-weight:600;color:${PRIMARY};border-top:2px solid ${PRIMARY};font-variant-numeric:tabular-nums">${totalUsd}</td>
+    </tr>
+  </table>`;
+}
+
+// PBS 2026-07-16 — old itemized table body left inline for historical diff, never called.
+function pricingTable_legacy(ctx: ProposalEmailContext): string {
   const rows = ctx.blocks.map(b => {
     const totalUsd = fmtUsd(Number(b.total_lak), ctx.fx_lak_per_usd);
     return `<tr>
