@@ -1052,6 +1052,7 @@ const HOLDING_IT_CFG: DeptCfg = {
   // PBS 2026-07-09 pm: IT gets a proper sub-strip — Tasks + Cockpit + Agent Fleet + Docs.
   subPages: [
     { label: 'HoD',         href: '/holding/it'               },
+    { label: 'Bugs',        href: '/holding/bugs'             }, // PBS 2026-07-16 · site-wide bug widget list + CTAs + agent-payload
     { label: 'Tasks',       href: '/cockpit/tasks'            },
     { label: 'Cockpit',     href: '/cockpit-v2'               },
     { label: 'Agent Fleet', href: '/cockpit-v2?tab=team'      },
