@@ -65,6 +65,9 @@ export interface ProposalBlock {
   ics_url: string | null;
   hero_asset_id: string | null;
   sort_order: number;
+  // PBS 2026-07-16 item 5 — extra discount % applied on top of unit_price_lak
+  // for guest-facing activity chips. 0 = no discount. Numeric 0..100.
+  additional_discount_pct?: number | null;
 }
 
 export interface Activity {
