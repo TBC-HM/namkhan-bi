@@ -26,10 +26,11 @@ export async function GET(
     const { data, mimeType, filename } = await getAttachmentBytes(user.id, id, attachmentId);
     const safe = filename.replace(/[^\w\.\-]+/g, '_');
     const enc = encodeURIComponent(filename);
-    // PBS 2026-07-16 (tsc fix): TS 5.6 lib.dom BodyInit no longer accepts Node
-    // Buffer / Uint8Array. Wrap in a Blob (identical bytes, matches BodyInit).
-    const blob = new Blob([new Uint8Array(data.buffer, data.byteOffset, data.byteLength)], { type: mimeType });
-    return new NextResponse(blob, {
+    // PBS 2026-07-16 (tsc fix): TS 5.6 dom types tightened BodyInit. Copy the
+    // Buffer bytes into a fresh ArrayBuffer (widely accepted BodyInit shape).
+    const ab = new ArrayBuffer(data.byteLength);
+    new Uint8Array(ab).set(data);
+    return new NextResponse(ab, {
       status: 200,
       headers: {
         'content-type': mimeType,
