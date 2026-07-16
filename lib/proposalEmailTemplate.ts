@@ -59,6 +59,8 @@ export interface ProposalEmailContext {
     socials: Array<{ platform: string; url: string }>;
   };
   base_url: string;               // e.g. https://namkhan-bi.vercel.app
+  // PBS 2026-07-16 (item 5) — optional factsheet chip in footer.
+  factsheet?: { doc_id: string; title: string; url: string | null } | null;
 }
 
 function esc(s: string): string {
@@ -154,6 +156,17 @@ function ctaBlock(ctx: ProposalEmailContext): string {
   </td></tr>`;
 }
 
+function factsheetChip(ctx: ProposalEmailContext): string {
+  // PBS 2026-07-16 (item 5) — footer chip if a marketing factsheet is attached.
+  if (!ctx.factsheet) return '';
+  const url = ctx.factsheet.url ?? '#';
+  return `<tr><td style="padding:14px 32px 0 32px;background:${PAPER}">
+    <a href="${esc(url)}" style="display:inline-block;padding:10px 14px;font-family:${SANS};font-size:12px;color:${INK};background:${PAPER_WARM};border:1px solid ${HAIRLINE};border-radius:4px;text-decoration:none">
+      <span style="font-family:${SANS};font-size:10px;color:${INK_SOFT};letter-spacing:0.14em;text-transform:uppercase;margin-right:8px">Factsheet</span>${esc(ctx.factsheet.title)} <span style="color:${PRIMARY};margin-left:6px">↗</span>
+    </a>
+  </td></tr>`;
+}
+
 function footerBlock(ctx: ProposalEmailContext): string {
   const addr = ctx.property.address_lines.filter(Boolean).join(' · ');
   const socials = ctx.property.socials.slice(0, 6).map(s => `<a href="${esc(s.url)}" style="color:${PRIMARY};text-decoration:none;margin-right:10px;font-family:${SANS};font-size:11px;letter-spacing:0.08em;text-transform:uppercase">${esc(s.platform)}</a>`).join('');
@@ -192,6 +205,7 @@ export function renderProposalEmailHtml(ctx: ProposalEmailContext): string {
       <tr><td style="padding:14px 32px;background:${PAPER}">${pricing}</td></tr>
       <tr><td style="padding:18px 32px 6px 32px;background:${PAPER}">${outroHtml}${psHtml}</td></tr>
       ${ctaBlock(ctx)}
+      ${factsheetChip(ctx)}
       ${footerBlock(ctx)}
     </table>
     <div style="font-family:${SANS};font-size:10px;color:${INK_SOFT};max-width:640px;padding:12px 24px">You are receiving this because you enquired with ${esc(ctx.property.name)}. To stop receiving proposals, reply "unsubscribe" and we will remove you.</div>
