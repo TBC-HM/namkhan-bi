@@ -61,6 +61,15 @@ export interface ProposalEmailContext {
   base_url: string;               // e.g. https://namkhan-bi.vercel.app
   // PBS 2026-07-16 (item 5) — optional factsheet chip in footer.
   factsheet?: { doc_id: string; title: string; url: string | null } | null;
+  // PBS 2026-07-16 (item 10) — sender signature block above the disclosure line.
+  // Falls back to "Namkhan Reservations · Guest Services · book@thenamkhan.com"
+  // when the proposal has no assigned owner.
+  sender?: {
+    name: string;
+    role: string;
+    email: string;
+    phone?: string | null;
+  } | null;
 }
 
 function esc(s: string): string {
@@ -92,11 +101,26 @@ function heroImgSrc(ctx: ProposalEmailContext, assetId: string | null | undefine
   return `${ctx.base_url}/api/marketing/media/preview?asset_id=${assetId}`;
 }
 
+// PBS 2026-07-16 (items 7 + 8):
+//   item 7 → drop "ROOM " prefix in the block header; use "Accommodation" eyebrow instead.
+//   item 8 → "activity" block_type surfaces as "Experience" (server-side block_type stays 'activity').
+// Anything else falls back to a title-cased version of the block_type.
+const BLOCK_TYPE_LABEL: Record<string, string> = {
+  room: 'Accommodation',
+  activity: 'Experience',
+  fnb: 'Dining',
+  spa: 'Spa',
+  transfer: 'Transfer',
+  note: 'Note',
+};
+
 function blockCard(ctx: ProposalEmailContext, b: ProposalBlockInput): string {
   const heroUrl = heroImgSrc(ctx, b.hero_asset_id);
   const totalUsd = fmtUsd(Number(b.total_lak), ctx.fx_lak_per_usd);
   const meta = `${b.qty} × ${b.nights} ${b.nights === 1 ? 'night' : 'nights'}`;
-  const kind = b.block_type.toUpperCase();
+  // PBS 2026-07-16 item 7 — never emit the raw block_type; use the friendly map so
+  // "ROOM EXPLORER TENT" becomes eyebrow "ACCOMMODATION" + title "Explorer Tent".
+  const kind = (BLOCK_TYPE_LABEL[b.block_type] ?? b.block_type).toUpperCase();
   const heroCell = heroUrl ? `<td style="width:200px;padding:0;vertical-align:top"><img src="${heroUrl}" alt="${esc(b.label)}" width="200" style="display:block;width:200px;height:150px;object-fit:cover;border-radius:4px 0 0 4px;border:0"/></td>` : '';
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0;border-collapse:separate;border:1px solid ${HAIRLINE};border-radius:6px;background:${PAPER};overflow:hidden">
@@ -167,6 +191,34 @@ function factsheetChip(ctx: ProposalEmailContext): string {
   </td></tr>`;
 }
 
+// PBS 2026-07-16 item 10 — sender signature block sits at the very end of the
+// body, above the disclosure footer. Resolved server-side from the proposal's
+// created_by user, or falls back to the property Reservations desk.
+function signatureBlock(ctx: ProposalEmailContext): string {
+  const s = ctx.sender ?? {
+    name: 'Namkhan Reservations',
+    role: 'Guest Services',
+    email: 'book@thenamkhan.com',
+    phone: null,
+  };
+  const phone = s.phone ?? ctx.property.phone ?? '+856 20 5 555 5555';
+  const website = (ctx.property.website ?? 'https://thenamkhan.com').replace(/^https?:\/\//, '');
+  return `<tr><td style="padding:20px 32px 26px 32px;background:${PAPER};border-top:1px dashed ${HAIRLINE}">
+    <div style="font-family:${SERIF};font-size:14px;color:${INK};margin-bottom:14px;font-style:italic">Warm regards,</div>
+    <div style="font-family:${SANS};font-size:12px;color:${INK};line-height:1.6">
+      <div style="font-weight:600;color:${INK}">${esc(s.name)}</div>
+      <div style="color:${INK}">${esc(s.role)}</div>
+      <div style="color:${INK}">The Namkhan · Luang Prabang</div>
+      <div style="color:${INK}">
+        <a href="mailto:${esc(s.email)}" style="color:${INK};text-decoration:none">${esc(s.email)}</a>
+        <span style="color:${INK_SOFT}"> · </span>
+        <a href="tel:${esc(phone.replace(/[^+0-9]/g,''))}" style="color:${INK};text-decoration:none">${esc(phone)}</a>
+      </div>
+      <div><a href="https://${esc(website)}" style="color:${PRIMARY};text-decoration:none">${esc(website)}</a></div>
+    </div>
+  </td></tr>`;
+}
+
 function footerBlock(ctx: ProposalEmailContext): string {
   const addr = ctx.property.address_lines.filter(Boolean).join(' · ');
   const socials = ctx.property.socials.slice(0, 6).map(s => `<a href="${esc(s.url)}" style="color:${PRIMARY};text-decoration:none;margin-right:10px;font-family:${SANS};font-size:11px;letter-spacing:0.08em;text-transform:uppercase">${esc(s.platform)}</a>`).join('');
@@ -180,8 +232,12 @@ function footerBlock(ctx: ProposalEmailContext): string {
       ${ctx.property.website ? ` · <a href="${esc(ctx.property.website)}" style="color:${INK};text-decoration:none">${esc(ctx.property.website.replace(/^https?:\/\//,''))}</a>` : ''}
     </div>
     ${socials ? `<div style="margin-top:8px;margin-bottom:14px">${socials}</div>` : ''}
+    <!-- PBS 2026-07-16 item 9 — VAT + service disclosure on every proposal. -->
+    <div style="font-family:${SANS};font-size:11px;color:${INK_SOFT};font-style:italic;margin-bottom:10px">
+      All our prices include 10% Lao VAT and 10% service charge.
+    </div>
     <div style="font-family:${SANS};font-size:10px;color:${INK_SOFT};line-height:1.5;border-top:1px dashed ${HAIRLINE};padding-top:10px">
-      Rates in USD (converted from LAK at internal FX). Prices include applicable Lao VAT + service unless stated otherwise. Cancellation follows the terms shown on your proposal page. Reply to this email to adjust anything.
+      Rates in USD (converted from LAK at internal FX). Cancellation follows the terms shown on your proposal page. Reply to this email to adjust anything.
     </div>
   </td></tr>`;
 }
@@ -206,6 +262,7 @@ export function renderProposalEmailHtml(ctx: ProposalEmailContext): string {
       <tr><td style="padding:18px 32px 6px 32px;background:${PAPER}">${outroHtml}${psHtml}</td></tr>
       ${ctaBlock(ctx)}
       ${factsheetChip(ctx)}
+      ${signatureBlock(ctx)}
       ${footerBlock(ctx)}
     </table>
     <div style="font-family:${SANS};font-size:10px;color:${INK_SOFT};max-width:640px;padding:12px 24px">You are receiving this because you enquired with ${esc(ctx.property.name)}. To stop receiving proposals, reply "unsubscribe" and we will remove you.</div>
