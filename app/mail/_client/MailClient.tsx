@@ -2224,26 +2224,13 @@ function MessageCard({ msg, expanded, isNewest, onToggle }: { msg: FullMessage; 
               )}
             </>
           )}
-          {/* PBS 2026-07-16 · Item 7 — attachment chips at bottom of message body. */}
+          {/* PBS 2026-07-16 · Item 7 — attachment chips at bottom of message body.
+             · Item 6 — each chip now has a companion 📁 button that saves the
+             attachment straight into dms.documents (doc registry). */}
           {msg.attachments && msg.attachments.length > 0 && (
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid ' + T.HAIR, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {msg.attachments.map((a) => (
-                <a
-                  key={a.attachmentId}
-                  href={'/api/mail/message/' + encodeURIComponent(msg.id) + '/attachment/' + encodeURIComponent(a.attachmentId)}
-                  download={a.filename}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                    padding: '6px 10px', border: '1px solid ' + T.HAIR, borderRadius: 6,
-                    background: T.WHITE, color: T.INK, fontSize: 12, textDecoration: 'none',
-                    maxWidth: 320, overflow: 'hidden',
-                  }}
-                  title={a.filename + ' · ' + a.mimeType + ' · ' + Math.round(a.size / 1024) + ' KB'}
-                >
-                  <span style={{ fontSize: 14 }}>📎</span>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.filename}</span>
-                  <span style={{ color: T.INK_M, fontSize: 11 }}>{formatSize(a.size)}</span>
-                </a>
+                <AttachmentChip key={a.attachmentId} msgId={msg.id} a={a} />
               ))}
             </div>
           )}
@@ -2259,6 +2246,138 @@ function formatSize(n: number): string {
   if (n < 1024) return n + ' B';
   if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
   return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// PBS 2026-07-16 · Item 6 — attachment chip with download + save-to-docs.
+// Save flow: opens a mini form (title / doc_type / tags), POSTs to
+// /api/mail/message/[id]/attachment/[aid]/save-to-docs which streams the bytes
+// into Supabase Storage (dms-uploads bucket) + INSERTs a dms.documents row.
+function AttachmentChip({ msgId, a }: {
+  msgId: string;
+  a: { filename: string; mimeType: string; size: number; attachmentId: string; partId?: string };
+}) {
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ doc_id: string } | null>(null);
+  const [title, setTitle] = useState(a.filename);
+  const [docType, setDocType] = useState('other');
+  const [tags, setTags] = useState('');
+
+  const dlUrl = '/api/mail/message/' + encodeURIComponent(msgId) + '/attachment/' + encodeURIComponent(a.attachmentId);
+
+  async function save() {
+    setSaving(true); setSaveErr(null);
+    try {
+      const r = await fetch(dlUrl + '/save-to-docs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          doc_type: docType,
+          tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
+          filename: a.filename,
+          mime: a.mimeType,
+          size: a.size,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'save_failed');
+      setSaved({ doc_id: j.doc_id });
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'stretch', border: '1px solid ' + T.HAIR, borderRadius: 6, overflow: 'hidden' }}>
+      <a
+        href={dlUrl}
+        download={a.filename}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '6px 10px',
+          background: T.WHITE, color: T.INK, fontSize: 12, textDecoration: 'none',
+          maxWidth: 320, overflow: 'hidden',
+        }}
+        title={a.filename + ' · ' + a.mimeType + ' · ' + Math.round(a.size / 1024) + ' KB'}
+      >
+        <span style={{ fontSize: 14 }}>📎</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.filename}</span>
+        <span style={{ color: T.INK_M, fontSize: 11 }}>{formatSize(a.size)}</span>
+      </a>
+      <button
+        type="button"
+        onClick={() => setShowModal(true)}
+        title="Save to Documents"
+        style={{
+          borderLeft: '1px solid ' + T.HAIR, background: T.WHITE, color: T.INK,
+          padding: '0 10px', fontSize: 14, cursor: 'pointer', border: 'none',
+        }}
+      >
+        📁
+      </button>
+
+      {showModal && (
+        <>
+          <div onClick={() => setShowModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100 }} />
+          <div role="dialog" style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: 440, maxWidth: '92vw', background: T.WHITE, border: '1px solid ' + T.HAIR,
+            borderRadius: 6, zIndex: 101, padding: 16, boxShadow: '0 24px 48px rgba(0,0,0,0.28)',
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.INK, marginBottom: 4 }}>Save to Documents</div>
+            {saved ? (
+              <>
+                <div style={{ fontSize: 12, color: T.INK, background: '#F0F7F0', border: '1px solid #7A9F7A', padding: 10, borderRadius: 4 }}>
+                  Saved · <a href={'/documents/' + saved.doc_id} style={{ color: T.FOREST, fontWeight: 600 }}>Open →</a>
+                </div>
+                <button type="button" onClick={() => { setShowModal(false); setSaved(null); }} style={{ padding: '6px 12px', border: '1px solid ' + T.HAIR, background: T.WHITE, borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Close</button>
+              </>
+            ) : (
+              <>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span style={{ fontSize: 10, color: T.INK_M, textTransform: 'uppercase' }}>Title</span>
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ padding: '6px 8px', fontSize: 12, border: '1px solid ' + T.HAIR, borderRadius: 3 }} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span style={{ fontSize: 10, color: T.INK_M, textTransform: 'uppercase' }}>Doc type</span>
+                  <select value={docType} onChange={(e) => setDocType(e.target.value)} style={{ padding: '6px 8px', fontSize: 12, border: '1px solid ' + T.HAIR, borderRadius: 3 }}>
+                    <option value="other">Other</option>
+                    <option value="contract">Contract</option>
+                    <option value="invoice">Invoice</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="hr">HR</option>
+                    <option value="legal">Legal</option>
+                    <option value="ops">Ops</option>
+                    <option value="finance">Finance</option>
+                  </select>
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span style={{ fontSize: 10, color: T.INK_M, textTransform: 'uppercase' }}>Tags (comma-separated)</span>
+                  <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="e.g. mail-import, 2026" style={{ padding: '6px 8px', fontSize: 12, border: '1px solid ' + T.HAIR, borderRadius: 3 }} />
+                </label>
+                {saveErr && (
+                  <div style={{ fontSize: 11, color: T.RED, padding: '6px 8px', background: '#FBEEE8', border: '1px solid ' + T.RED, borderRadius: 3 }}>
+                    {saveErr}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 4 }}>
+                  <button type="button" onClick={() => setShowModal(false)} disabled={saving} style={{ padding: '6px 12px', border: '1px solid ' + T.HAIR, background: T.WHITE, borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                  <button type="button" onClick={save} disabled={saving || !title.trim()} style={{ padding: '6px 14px', border: '1px solid ' + T.FOREST, background: T.FOREST, color: T.WHITE, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 // Stack of parsed forwarded messages, most-recent-first, older collapsed.
