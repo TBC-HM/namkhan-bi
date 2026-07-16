@@ -96,12 +96,45 @@ const FOLDER_ICON: Record<Exclude<AutoFolder, null>, string> = {
   lighthouse:      '💡',
   answer_expected: '✋',
 };
+// PBS 2026-07-15 §5 · Direct = strict inbox. Adds no-reply/list-unsub exclusions.
+// The /api/mail/messages route also folds in user-defined routing rules with
+// route_to in ('newsletter','spam','hide','cloudbeds','lighthouse') as
+// additional -from: exclusions on top of this base query.
 const FOLDER_Q: Record<Exclude<AutoFolder, null>, string> = {
-  to_me:           'to:me -cc:me -bcc:me',
+  to_me:           'to:me -cc:me -bcc:me -"list-unsubscribe" -from:(no-reply OR noreply OR notifications OR automated OR mailer-daemon OR postmaster) -in:spam -in:trash',
   cloudbeds:       'from:(cloudbeds.com OR no-reply@cloudbeds.com OR notifications@cloudbeds.com)',
   lighthouse:      'from:(lighthouse-hotels.com OR lighthouse.com OR notifications@lighthouse)',
   answer_expected: 'is:unread from:(-cloudbeds.com -lighthouse-hotels.com -noreply -no-reply) -"list-unsubscribe" newer_than:30d',
 };
+
+// PBS 2026-07-15 · Forwarded aliases — the 7 shared inboxes that get forwarded
+// to a personal Gmail. Adding a rail sub-folder per alias so PBS can drill into
+// each queue. See item #3 · regression re-add.
+const FORWARDED_ALIASES: string[] = [
+  'book@thenamkhan.com',
+  'gm@thenamkhan.com',
+  'reservations@thenamkhan.com',
+  'rom@thenamkhan.com',
+  'xl@thenamkhan.com',
+  'wm@thenamkhan.com',
+  'hr@thenamkhan.com',
+];
+
+// PBS 2026-07-15 · Item 2 — Sent-from addresses (from sales.email_messages
+// direction=outbound). Sub-folders under Sent scope by from:<alias>.
+const SENT_FROM_ALIASES: string[] = [
+  'rom@thenamkhan.com',
+  'wm@thenamkhan.com',
+  'pb@thenamkhan.com',
+  'xl@thenamkhan.com',
+  'pann@thenamkhan.com',
+  'fc@thenamkhan.com',
+  'rm@thenamkhan.com',
+  'hr@thenamkhan.com',
+  'book@thenamkhan.com',
+  'purchasing@thenamkhan.com',
+  'pbsbase@gmail.com',
+];
 
 // ---- helpers ------------------------------------------------------------
 const SYSTEM_ORDER: Array<{ id: string; label: string }> = [
@@ -119,6 +152,11 @@ function parseFrom(raw: string): { name: string; email: string } {
   const m = raw.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
   if (m) return { name: m[1].trim(), email: m[2].trim() };
   return { name: '', email: raw.trim() };
+}
+
+// PBS 2026-07-15 · Item 4 — sender-email extractor for routing rule creation.
+function extractSender(raw: string): string {
+  return parseFrom(raw).email.toLowerCase();
 }
 
 function relTime(ms: number): string {
@@ -176,6 +214,19 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   const [activeFolder, setActiveFolder] = useState<AutoFolder>(null);
   // PBS 2026-07-17 BUG-2 FIX · forwardedAlias state (extracted so mutex works).
   const [forwardedAlias, setForwardedAlias] = useState<string | null>(null);
+  // PBS 2026-07-15 · Item 2 — Sent sub-folder scope by from:<alias>.
+  const [sentAlias, setSentAlias] = useState<string | null>(null);
+  // PBS 2026-07-15 · Item 4 — user-defined custom smart folder scope.
+  const [customFolder, setCustomFolder] = useState<string | null>(null);
+  // PBS 2026-07-15 · Item 4 — routing rules for the current user (drives
+  // custom-folder rail rendering + 3-dot menu badge).
+  const [routingRules, setRoutingRules] = useState<Array<{ id: number; match_type: string; match_value: string; route_to: string; custom_folder: string | null }>>([]);
+  // PBS 2026-07-15 · Item 1 — bulk-mark-read in-flight flag + toast.
+  const [bulkReadLoading, setBulkReadLoading] = useState<boolean>(false);
+  const [bulkReadToast, setBulkReadToast] = useState<string | null>(null);
+  // PBS 2026-07-15 · Item 4+6 — per-row 3-dot open state + sender action toast.
+  const [rowMenuFor, setRowMenuFor] = useState<string | null>(null);
+  const [senderActionToast, setSenderActionToast] = useState<string | null>(null);
   // PBS 2026-07-17 · saved-important pseudo-folder (Feature 7).
   const [importantOnly, setImportantOnly] = useState<boolean>(false);
   // PBS 2026-07-15 §2 · headline stripe overdue chip.
@@ -231,6 +282,112 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
       } catch { /* silent */ }
     })();
   }, []);
+
+  // ---- load routing rules (drives custom-folder rail + finalQ) ----------
+  // PBS 2026-07-15 · Item 4+7.
+  const loadRoutingRules = useCallback(async () => {
+    try {
+      const r = await fetch('/api/mail/routing-rules', { cache: 'no-store' });
+      const j = await r.json() as { ok: boolean; rules?: Array<{ id: number; match_type: string; match_value: string; route_to: string; custom_folder: string | null }> };
+      if (j.ok && j.rules) setRoutingRules(j.rules);
+    } catch { /* silent */ }
+  }, []);
+  useEffect(() => { void loadRoutingRules(); }, [loadRoutingRules]);
+
+  // ---- bulk mark-read (Forwarded rail button) ---------------------------
+  // PBS 2026-07-15 · Item 1. Uses the active forwardedAlias if one is picked;
+  // otherwise runs across every forwarded queue.
+  const bulkMarkForwardedRead = useCallback(async () => {
+    setBulkReadLoading(true);
+    setBulkReadToast(null);
+    try {
+      const to = forwardedAlias
+        ? 'to:' + forwardedAlias
+        : '(to:' + FORWARDED_ALIASES.join(' OR to:') + ')';
+      const q = '(subject:Fwd OR subject:FW) is:unread ' + to;
+      const r = await fetch('/api/mail/bulk-mark-read', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      });
+      const j = await r.json() as { ok: boolean; count?: number; error?: string };
+      if (j.ok) setBulkReadToast('Marked ' + (j.count ?? 0) + ' forwarded mail(s) as read.');
+      else setBulkReadToast('Failed: ' + (j.error || 'unknown'));
+      void loadList();
+    } catch (e) {
+      setBulkReadToast('Failed: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBulkReadLoading(false);
+      setTimeout(() => setBulkReadToast(null), 4000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forwardedAlias]);
+
+  // ---- sender-action helpers (3-dot menu · Items 4 + 6) -----------------
+  const routeSender = useCallback(async (senderEmail: string, route: 'newsletter' | 'spam' | 'cloudbeds' | 'lighthouse' | 'hide' | 'custom', customFolderName?: string) => {
+    if (!senderEmail) return;
+    try {
+      const r = await fetch('/api/mail/routing-rules', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ match_type: 'from_email', match_value: senderEmail, route_to: route, custom_folder: customFolderName || null }),
+      });
+      const j = await r.json() as { ok: boolean; error?: string };
+      if (j.ok) {
+        setSenderActionToast('Routing ' + senderEmail + ' → ' + (route === 'custom' ? customFolderName : route));
+        void loadRoutingRules();
+        // Optimistically hide the row locally.
+        setRows((prev) => prev.filter((row) => !row.from.toLowerCase().includes(senderEmail.toLowerCase())));
+      } else setSenderActionToast('Failed: ' + (j.error || 'unknown'));
+    } catch (e) {
+      setSenderActionToast('Failed: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setTimeout(() => setSenderActionToast(null), 3500);
+    }
+  }, [loadRoutingRules]);
+
+  const unsubscribeSender = useCallback(async (messageId: string, senderEmail: string) => {
+    try {
+      const r = await fetch('/api/mail/unsubscribe', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ messageId, sender: senderEmail }),
+      });
+      const j = await r.json() as { ok: boolean; method?: string; had_header?: boolean; warn?: string | null };
+      if (j.ok) setSenderActionToast('Unsubscribed (' + (j.method || (j.had_header ? 'header' : 'no header')) + ') · routing rule added.');
+      else setSenderActionToast('Unsubscribe issue: ' + (j.warn || 'unknown'));
+      void loadRoutingRules();
+    } catch (e) {
+      setSenderActionToast('Failed: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setTimeout(() => setSenderActionToast(null), 4500);
+    }
+  }, [loadRoutingRules]);
+
+  const markSpamAndBlock = useCallback(async (messageId: string, senderEmail: string) => {
+    try {
+      // 1. Move to SPAM via Gmail modify-labels (INBOX out, SPAM in).
+      await fetch('/api/mail/modify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ messageId, add: ['SPAM'], remove: ['INBOX', 'UNREAD'] }),
+      }).catch(() => null);
+      // 2. Add routing rule route_to=spam so future mail is filtered from Direct.
+      await routeSender(senderEmail, 'spam');
+      // 3. Best-effort unsubscribe (many spam senders honour List-Unsubscribe).
+      await unsubscribeSender(messageId, senderEmail);
+      setSenderActionToast('Spam · unsubscribed · sender blocked.');
+      setTimeout(() => setSenderActionToast(null), 4500);
+    } catch (e) {
+      setSenderActionToast('Failed: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  }, [routeSender, unsubscribeSender]);
+
+  const createCustomFolderFromSender = useCallback(async (senderEmail: string) => {
+    const name = prompt('Name the new smart folder (e.g. "OTAs", "Partners"):');
+    if (!name || !name.trim()) return;
+    await routeSender(senderEmail, 'custom', name.trim());
+  }, [routeSender]);
 
   // ---- poller freshness (Gmail-side ingest pipeline is separate) --------
   // Mirrors the /mail/analytics staleness banner. Shows only when > 2 days.
@@ -297,6 +454,8 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     setActiveFolder(null);
     setNewslettersOnly(false);
     setForwardedAlias(null);
+    setSentAlias(null);
+    setCustomFolder(null);
     setImportantOnly(false);
   }, []);
 
@@ -330,8 +489,32 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     setImportantOnly(false);
     setActiveFolder(null);
     setNewslettersOnly(false);
+    setSentAlias(null);
+    setCustomFolder(null);
     setCurrentLabel('INBOX');
     setForwardedAlias((prev) => (prev === alias ? null : alias));
+  }, []);
+
+  // PBS 2026-07-15 · Item 2 — Sent sub-folder scope helper (clears others).
+  const pickSentAlias = useCallback((alias: string) => {
+    setImportantOnly(false);
+    setActiveFolder(null);
+    setNewslettersOnly(false);
+    setForwardedAlias(null);
+    setCustomFolder(null);
+    setCurrentLabel('SENT');
+    setSentAlias((prev) => (prev === alias ? null : alias));
+  }, []);
+
+  // PBS 2026-07-15 · Item 4 — custom folder scope helper.
+  const pickCustomFolder = useCallback((name: string) => {
+    setImportantOnly(false);
+    setActiveFolder(null);
+    setNewslettersOnly(false);
+    setForwardedAlias(null);
+    setSentAlias(null);
+    setCurrentLabel('INBOX');
+    setCustomFolder((prev) => (prev === name ? null : name));
   }, []);
 
   const pickImportant = useCallback(() => {
@@ -344,6 +527,8 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
 
   const resetAllMail = useCallback(() => {
     clearScopeStates();
+    setSentAlias(null);
+    setCustomFolder(null);
     setCurrentLabel('INBOX');
     setUnreadFilter(false);
     setStarredFilter(false);
@@ -370,6 +555,16 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     if (committedQuery) parts.push(committedQuery);
     if (activeFolder) parts.push(FOLDER_Q[activeFolder]);
     if (forwardedAlias) parts.push('to:' + forwardedAlias);
+    // PBS 2026-07-15 · Item 2 — Sent sub-folder scope (server-side).
+    if (sentAlias) parts.push('from:' + sentAlias);
+    // PBS 2026-07-15 · Item 4 — custom folder scope (folds all matching rules
+    // for this folder name into a single Gmail OR-list of from: operators).
+    if (customFolder) {
+      const froms = routingRules
+        .filter((r) => r.route_to === 'custom' && (r.custom_folder || '').toLowerCase() === customFolder.toLowerCase() && (r.match_type === 'from_email' || r.match_type === 'from_domain'))
+        .map((r) => r.match_value);
+      if (froms.length) parts.push('from:(' + froms.join(' OR ') + ')');
+    }
     if (unreadFilter) parts.push('is:unread');
     if (starredFilter) parts.push('is:starred');
     if (directFilter)  parts.push('to:me -cc:me -bcc:me');
@@ -379,7 +574,7 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     if (overdueFilter) parts.push('is:unread older_than:2d newer_than:14d');
     if (newslettersOnly) parts.push('(unsubscribe OR "List-Unsubscribe")');
     return parts.join(' ');
-  }, [committedQuery, activeFolder, forwardedAlias, unreadFilter, starredFilter, directFilter, todayFilter, weekFilter, attachFilter, overdueFilter, newslettersOnly]);
+  }, [committedQuery, activeFolder, forwardedAlias, sentAlias, customFolder, routingRules, unreadFilter, starredFilter, directFilter, todayFilter, weekFilter, attachFilter, overdueFilter, newslettersOnly]);
 
   // ---- load current label list -----------------------------------------
   // PBS 2026-07-17 Feature 7 · when importantOnly is on, we bypass Gmail and
@@ -427,6 +622,9 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
       if (finalQ) params.set('q', finalQ);
       if (append) params.set('pageToken', append);
       params.set('max', '50');
+      // PBS 2026-07-15 · Item 5 — pass the active folder so /api/mail/messages
+      // can fold in the user's routing-rule exclusions when Direct is active.
+      if (activeFolder) params.set('folder', activeFolder);
       const r = await fetch('/api/mail/messages?' + params.toString(), { cache: 'no-store' });
       const j = (await r.json()) as Api<{ messages: ListRow[]; nextPageToken: string | null }>;
       if (j.ok === false) {
@@ -442,7 +640,7 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     } finally {
       setLoadingList(false);
     }
-  }, [currentLabel, finalQ, importantOnly]);
+  }, [currentLabel, finalQ, importantOnly, activeFolder]);
 
   useEffect(() => {
     setRows([]);
@@ -921,15 +1119,30 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
           {SYSTEM_ORDER.map((s) => {
             const lbl = labels.find((l) => l.id === s.id);
             const unread = lbl?.messagesUnread ?? 0;
-            const active = currentLabel === s.id && !importantOnly && !newslettersOnly && !forwardedAlias && !activeFolder;
+            const active = currentLabel === s.id && !importantOnly && !newslettersOnly && !forwardedAlias && !sentAlias && !customFolder && !activeFolder;
             return (
-              <RailItem
-                key={s.id}
-                label={s.label}
-                unread={unread}
-                active={active}
-                onClick={() => pickSystemLabel(s.id)}
-              />
+              <div key={s.id}>
+                <RailItem
+                  label={s.label}
+                  unread={unread}
+                  active={active}
+                  onClick={() => pickSystemLabel(s.id)}
+                />
+                {/* PBS 2026-07-15 · Item 2 — Sent sub-folders scoped by from:<alias>. */}
+                {s.id === 'SENT' && currentLabel === 'SENT' && (
+                  <div style={{ paddingLeft: 12 }}>
+                    {SENT_FROM_ALIASES.map((alias) => (
+                      <RailItem
+                        key={alias}
+                        label={'· ' + alias.split('@')[0]}
+                        unread={0}
+                        active={sentAlias === alias}
+                        onClick={() => pickSentAlias(alias)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
 
@@ -961,21 +1174,42 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
             />
           ))}
 
-          {/* Forwarded section (user labels containing "forward"). */}
-          {forwardedLabels.length > 0 && (
-            <>
-              <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Forwarded</div>
-              {forwardedLabels.map((l) => (
-                <RailItem
-                  key={l.id}
-                  label={l.name}
-                  unread={l.messagesUnread}
-                  active={currentLabel === l.id && !importantOnly && !forwardedAlias && !newslettersOnly && !activeFolder}
-                  onClick={() => pickUserLabel(l.id)}
-                />
-              ))}
-            </>
-          )}
+          {/* Forwarded section — user labels containing "forward" AND the 7
+              alias sub-folders (PBS 2026-07-15 · Item 3 regression re-add). */}
+          <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Forwarded</span>
+            <button
+              type="button"
+              onClick={() => void bulkMarkForwardedRead()}
+              disabled={bulkReadLoading}
+              title={forwardedAlias ? 'Mark all Fwd: unread in ' + forwardedAlias : 'Mark ALL forwarded unread as read across the 7 aliases'}
+              style={{
+                background: T.WHITE, color: T.FOREST,
+                border: '1px solid ' + T.HAIR, borderRadius: 4,
+                padding: '2px 6px', fontSize: 9.5, fontWeight: 600,
+                cursor: bulkReadLoading ? 'wait' : 'pointer', opacity: bulkReadLoading ? 0.6 : 1,
+                textTransform: 'none', letterSpacing: 0,
+              }}
+            >{bulkReadLoading ? '…' : '✓ read'}</button>
+          </div>
+          {FORWARDED_ALIASES.map((alias) => (
+            <RailItem
+              key={alias}
+              label={'· ' + alias.split('@')[0]}
+              unread={0}
+              active={forwardedAlias === alias}
+              onClick={() => pickForwardedAlias(alias)}
+            />
+          ))}
+          {forwardedLabels.map((l) => (
+            <RailItem
+              key={l.id}
+              label={l.name}
+              unread={l.messagesUnread}
+              active={currentLabel === l.id && !importantOnly && !forwardedAlias && !sentAlias && !customFolder && !newslettersOnly && !activeFolder}
+              onClick={() => pickUserLabel(l.id)}
+            />
+          ))}
 
           {/* PBS 2026-07-15 §1 · Auto-folders (mutually exclusive). */}
           <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Smart folders</div>
@@ -989,6 +1223,30 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
             />
           ))}
 
+          {/* PBS 2026-07-15 · Item 4 — Custom smart folders (user routing rules). */}
+          {(() => {
+            const folders = Array.from(new Set(
+              routingRules
+                .filter((r) => r.route_to === 'custom' && r.custom_folder)
+                .map((r) => r.custom_folder as string)
+            )).sort();
+            if (folders.length === 0) return null;
+            return (
+              <>
+                <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Custom folders</div>
+                {folders.map((name) => (
+                  <RailItem
+                    key={name}
+                    label={'★ ' + name}
+                    unread={0}
+                    active={customFolder === name}
+                    onClick={() => pickCustomFolder(name)}
+                  />
+                ))}
+              </>
+            );
+          })()}
+
           {otherUserLabels.length > 0 && (
             <>
               <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Labels</div>
@@ -997,7 +1255,7 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                   key={l.id}
                   label={l.name}
                   unread={l.messagesUnread}
-                  active={currentLabel === l.id && !importantOnly && !newslettersOnly && !forwardedAlias && !activeFolder}
+                  active={currentLabel === l.id && !importantOnly && !newslettersOnly && !forwardedAlias && !sentAlias && !customFolder && !activeFolder}
                   onClick={() => pickUserLabel(l.id)}
                 />
               ))}
@@ -1009,6 +1267,8 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
           <a href="/mail/automations" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Automations</a>
           <a href="/mail/autoresponder" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Auto-responder</a>
           <a href="/mail/analytics" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Analytics</a>
+          {/* PBS 2026-07-15 · Item 7 — routing rules editor. */}
+          <a href="/mail/rules" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Routing rules</a>
         </nav>
 
         <div style={{ padding: '10px 14px', borderTop: '1px solid ' + T.HAIR, fontSize: 11, color: T.INK_M, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1065,6 +1325,11 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                   selected={r.id === selectedId}
                   onClick={() => void selectRow(r)}
                   onToggleStar={(e) => { e.stopPropagation(); void toggleStar(r.id); }}
+                  menuOpen={rowMenuFor === r.id}
+                  onMenuToggle={(e) => { e.stopPropagation(); setRowMenuFor((prev) => prev === r.id ? null : r.id); }}
+                  onMenuClose={() => setRowMenuFor(null)}
+                  onRouteSender={(route, custom) => { const email = extractSender(r.from); void routeSender(email, route, custom); setRowMenuFor(null); }}
+                  onCustomFolderFromSender={() => { const email = extractSender(r.from); void createCustomFolderFromSender(email); setRowMenuFor(null); }}
                 />
               ))}
               {nextPageToken && (
@@ -1099,6 +1364,32 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                 if (!selectedId) return;
                 if (!confirm('Move this thread to Trash in Gmail? This can be undone from Gmail within 30 days.')) return;
                 void trashRow(selectedId);
+              }}
+              /* PBS 2026-07-15 · Item 6 — Unsubscribe + Spam + Route from
+                 message pane. Sender is the FROM of the newest (=latest) msg. */
+              onUnsubscribe={() => {
+                if (!selectedId) return;
+                const newest = threadMessages[threadMessages.length - 1] || threadMessages[0];
+                const sender = extractSender(newest?.from || '');
+                if (!newest?.id) return;
+                void unsubscribeSender(newest.id, sender);
+              }}
+              onSpam={() => {
+                if (!selectedId) return;
+                const newest = threadMessages[threadMessages.length - 1] || threadMessages[0];
+                const sender = extractSender(newest?.from || '');
+                if (!newest?.id) return;
+                if (!confirm('Move to Spam + block sender + attempt unsubscribe?')) return;
+                void markSpamAndBlock(newest.id, sender);
+              }}
+              onRouteSender={(route) => {
+                const newest = threadMessages[threadMessages.length - 1] || threadMessages[0];
+                const sender = extractSender(newest?.from || '');
+                if (route === 'custom') {
+                  void createCustomFolderFromSender(sender);
+                } else {
+                  void routeSender(sender, route);
+                }
               }}
             />
             {/* PBS 2026-07-15 §3 · AI actions row + inline summary. */}
@@ -1203,6 +1494,13 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
 
       {lastError && (
         <div style={{ position: 'fixed', bottom: 12, right: 12, background: T.RED, color: T.WHITE, padding: '8px 12px', borderRadius: 4, fontSize: 11, zIndex: 3000 }} onClick={() => setLastError(null)}>{lastError}</div>
+      )}
+      {/* PBS 2026-07-15 · Item 1 + 4 + 6 toasts. */}
+      {bulkReadToast && (
+        <div style={{ position: 'fixed', bottom: 12, left: 12, background: T.FOREST, color: T.WHITE, padding: '8px 12px', borderRadius: 4, fontSize: 11, zIndex: 3000 }}>{bulkReadToast}</div>
+      )}
+      {senderActionToast && (
+        <div style={{ position: 'fixed', bottom: 40, left: 12, background: T.INK, color: T.WHITE, padding: '8px 12px', borderRadius: 4, fontSize: 11, zIndex: 3000 }}>{senderActionToast}</div>
       )}
 
       {summaryOpen && (
@@ -1367,7 +1665,17 @@ function Avatar({ name, email }: { name: string; email: string }) {
   );
 }
 
-function ThreadRow({ row, selected, onClick, onToggleStar }: { row: ListRow; selected: boolean; onClick: () => void; onToggleStar: (e: React.MouseEvent) => void }) {
+function ThreadRow({ row, selected, onClick, onToggleStar, menuOpen, onMenuToggle, onMenuClose, onRouteSender, onCustomFolderFromSender }: {
+  row: ListRow;
+  selected: boolean;
+  onClick: () => void;
+  onToggleStar: (e: React.MouseEvent) => void;
+  menuOpen?: boolean;
+  onMenuToggle?: (e: React.MouseEvent) => void;
+  onMenuClose?: () => void;
+  onRouteSender?: (route: 'newsletter' | 'spam' | 'cloudbeds' | 'lighthouse' | 'hide', customFolder?: string) => void;
+  onCustomFolderFromSender?: () => void;
+}) {
   const [hover, setHover] = useState(false);
   const bg = selected ? T.SELECT : hover ? T.HOVER : T.WHITE;
   const parsed = parseFrom(row.from);
@@ -1380,7 +1688,7 @@ function ThreadRow({ row, selected, onClick, onToggleStar }: { row: ListRow; sel
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '10px 12px', borderBottom: '1px solid ' + T.HAIR,
-        background: bg, cursor: 'pointer',
+        background: bg, cursor: 'pointer', position: 'relative',
       }}
     >
       <div style={{ width: 8, display: 'flex', justifyContent: 'center' }}>
@@ -1402,21 +1710,98 @@ function ThreadRow({ row, selected, onClick, onToggleStar }: { row: ListRow; sel
           {row.snippet}
         </div>
       </div>
+      {/* PBS 2026-07-15 · Item 4 — per-row 3-dot menu for sender routing. */}
+      {onMenuToggle && (
+        <button
+          type="button"
+          onClick={onMenuToggle}
+          title="Route this sender…"
+          style={{ background: 'transparent', border: 'none', color: T.INK_M, cursor: 'pointer', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+        >⋯</button>
+      )}
+      {menuOpen && onRouteSender && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute', top: 42, right: 8, zIndex: 50,
+            background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 4,
+            boxShadow: '0 4px 12px rgba(0,0,0,.12)', minWidth: 220, padding: 4,
+          }}
+        >
+          <div style={{ padding: '4px 8px', fontSize: 10, textTransform: 'uppercase', color: T.INK_M, letterSpacing: '.06em' }}>Route {parsed.email} →</div>
+          <MenuItem onClick={() => onRouteSender('newsletter')}>📰 Newsletters</MenuItem>
+          <MenuItem onClick={() => onRouteSender('cloudbeds')}>📊 Cloudbeds</MenuItem>
+          <MenuItem onClick={() => onRouteSender('lighthouse')}>💡 Lighthouse</MenuItem>
+          <MenuItem onClick={() => onRouteSender('spam')}>🚫 Spam</MenuItem>
+          <MenuItem onClick={() => onRouteSender('hide')}>🙈 Hide from Direct</MenuItem>
+          {onCustomFolderFromSender && (
+            <MenuItem onClick={onCustomFolderFromSender}>➕ Create custom folder…</MenuItem>
+          )}
+          <div style={{ borderTop: '1px solid ' + T.HAIR, marginTop: 4, padding: 4 }}>
+            <MenuItem onClick={() => onMenuClose && onMenuClose()}>Cancel</MenuItem>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starred, onDelete }: { subject: string; onArchive: () => void; onTrash: () => void; onStar: () => void; onMarkUnread: () => void; starred: boolean; onDelete: () => void }) {
+function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ padding: '7px 10px', fontSize: 12, color: T.INK, background: hover ? T.HOVER : 'transparent', cursor: 'pointer', borderRadius: 3 }}
+    >{children}</div>
+  );
+}
+
+function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starred, onDelete, onUnsubscribe, onSpam, onRouteSender }: {
+  subject: string;
+  onArchive: () => void;
+  onTrash: () => void;
+  onStar: () => void;
+  onMarkUnread: () => void;
+  starred: boolean;
+  onDelete: () => void;
+  onUnsubscribe?: () => void;
+  onSpam?: () => void;
+  onRouteSender?: (route: 'newsletter' | 'cloudbeds' | 'lighthouse' | 'hide' | 'custom') => void;
+}) {
+  const [routeOpen, setRouteOpen] = useState(false);
   return (
     <div style={{ padding: '14px 24px 12px', borderBottom: '1px solid ' + T.HAIR, background: T.WHITE, position: 'sticky', top: 0, zIndex: 2 }}>
       <div style={{ fontSize: 18, fontWeight: 600, color: T.INK, marginBottom: 10, wordBreak: 'break-word' }}>{subject}</div>
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <HeaderBtn onClick={onArchive}>Archive</HeaderBtn>
         <HeaderBtn onClick={onTrash}>Trash</HeaderBtn>
         <HeaderBtn onClick={onStar}><span style={{ color: starred ? T.STAR : T.INK_S }}>★</span> {starred ? 'Unstar' : 'Star'}</HeaderBtn>
         <HeaderBtn onClick={onMarkUnread}>Mark unread</HeaderBtn>
         {/* PBS 2026-07-17 Feature 6 · Delete = confirm + Gmail TRASH + local remove. */}
         <HeaderBtn onClick={onDelete}><span style={{ color: T.RED }}>🗑 Delete</span></HeaderBtn>
+        {/* PBS 2026-07-15 · Item 6 — Unsubscribe / Spam / Route sender. */}
+        {onUnsubscribe && <HeaderBtn onClick={onUnsubscribe}>📵 Unsubscribe</HeaderBtn>}
+        {onSpam && <HeaderBtn onClick={onSpam}><span style={{ color: T.RED }}>🚫 Mark as Spam</span></HeaderBtn>}
+        {onRouteSender && (
+          <div style={{ position: 'relative' }}>
+            <HeaderBtn onClick={() => setRouteOpen((v) => !v)}>⋯ Route sender ▾</HeaderBtn>
+            {routeOpen && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 30,
+                background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 4,
+                boxShadow: '0 4px 12px rgba(0,0,0,.12)', minWidth: 200, padding: 4,
+              }}>
+                <MenuItem onClick={() => { setRouteOpen(false); onRouteSender('newsletter'); }}>📰 Newsletters</MenuItem>
+                <MenuItem onClick={() => { setRouteOpen(false); onRouteSender('cloudbeds'); }}>📊 Cloudbeds</MenuItem>
+                <MenuItem onClick={() => { setRouteOpen(false); onRouteSender('lighthouse'); }}>💡 Lighthouse</MenuItem>
+                <MenuItem onClick={() => { setRouteOpen(false); onRouteSender('hide'); }}>🙈 Hide from Direct</MenuItem>
+                <MenuItem onClick={() => { setRouteOpen(false); onRouteSender('custom'); }}>➕ Custom folder…</MenuItem>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
