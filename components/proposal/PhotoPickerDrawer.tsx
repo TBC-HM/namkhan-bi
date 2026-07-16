@@ -10,9 +10,9 @@
 //   facility block → prefers facility_id  = block.ref_id (fallback property_area='facility')
 //   fallback (no ref)→ all tier-ok photos, ordered by marketing_score DESC.
 //
-// Design: paper white + hairline, green ring on current pick. Empty state links
-// to /marketing/media/library. Uses /api/marketing/media/preview for thumbs (v5
-// download-through pattern) — same wire the Library page uses.
+// PBS 2026-07-16 (redesign) — clean paper-white modern design; drop legacy
+// mono/serif tokens and "Open Media Library →" leave-page link. Empty state now
+// switches scope inline (Context → All property photos) without navigating away.
 
 import { useEffect, useState, useCallback } from 'react';
 
@@ -48,12 +48,17 @@ interface Props {
   onPick: (asset: PhotoRow) => void;
 }
 
-const PAPER = '#FFFFFF';
-const INK = '#1B1B1B';
-const INK_SOFT = '#5A5A5A';
-const HAIRLINE = '#E6DFCC';
-const PRIMARY = '#084838';
-const PAPER_WARM = '#F5F0E1';
+const T = {
+  paper:    '#FFFFFF',
+  hairline: '#E6DFCC',
+  warm:     '#F5F0E1',
+  ink:      '#1B1B1B',
+  inkSoft:  '#5A5A5A',
+  inkMute:  '#8A8A8A',
+  green:    '#084838',
+  greenSoft:'#EAF1EE',
+  sans:     'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+} as const;
 
 export default function PhotoPickerDrawer({ open, onClose, propertyId, block, currentAssetId, onPick }: Props) {
   const [rows, setRows] = useState<PhotoRow[]>([]);
@@ -80,104 +85,154 @@ export default function PhotoPickerDrawer({ open, onClose, propertyId, block, cu
 
   useEffect(() => { load(); }, [load]);
 
+  // Reset scope back to context whenever the drawer reopens for a new block.
+  useEffect(() => { if (open) setScope('context'); }, [open, block?.ref_id]);
+
   if (!open) return null;
 
   return (
     <div
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(27,27,27,0.35)', zIndex: 60, display: 'flex', justifyContent: 'flex-end' }}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(27,27,27,0.4)',
+        zIndex: 60, display: 'flex', justifyContent: 'flex-end',
+        fontFamily: T.sans,
+      }}
     >
       <aside
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 'min(880px, 96vw)', height: '100%', background: PAPER, color: INK,
-          borderLeft: `1px solid ${HAIRLINE}`, overflow: 'auto',
+          width: 'min(920px, 96vw)', height: '100%',
+          background: T.paper, color: T.ink,
+          borderLeft: `1px solid ${T.hairline}`,
+          overflow: 'auto',
           display: 'flex', flexDirection: 'column',
         }}
       >
+        {/* HEADER */}
         <header style={{
-          padding: '18px 22px', borderBottom: `1px solid ${HAIRLINE}`,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16,
-          background: PAPER, position: 'sticky', top: 0, zIndex: 2,
+          padding: '18px 22px',
+          borderBottom: `1px solid ${T.hairline}`,
+          background: T.paper,
+          position: 'sticky', top: 0, zIndex: 2,
+          display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-          <div>
-            <div style={{
-              fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em',
-              textTransform: 'uppercase', color: INK_SOFT, marginBottom: 4,
-            }}>
-              Photo picker · {block?.block_type ?? 'any block'}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 17, fontWeight: 600, color: T.ink, marginBottom: 2 }}>
+                Choose a photo
+                {block?.label ? <span style={{ color: T.inkSoft, fontWeight: 400 }}> · {block.label}</span> : null}
+              </div>
+              <div style={{ fontSize: 12, color: T.inkSoft }}>
+                OTA + Website tier only · {rows.length} match{rows.length === 1 ? '' : 'es'}
+                {scope === 'all' && <span style={{ marginLeft: 8, color: T.green }}>· showing all property photos</span>}
+              </div>
             </div>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: INK }}>
-              Choose <em style={{ color: PRIMARY }}>a photo</em>
-              {block?.label ? <span style={{ color: INK_SOFT, fontStyle: 'normal' }}> — {block.label}</span> : null}
-            </div>
-            <div style={{ fontSize: 12, color: INK_SOFT, marginTop: 4 }}>
-              OTA + Website tier only · {rows.length} match{rows.length === 1 ? '' : 'es'}
-            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                background: 'transparent', border: `1px solid ${T.hairline}`,
+                width: 30, height: 30, borderRadius: 4, cursor: 'pointer',
+                color: T.ink, fontSize: 15, lineHeight: 1,
+              }}
+            >×</button>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 4, background: PAPER_WARM, padding: 3, borderRadius: 4, border: `1px solid ${HAIRLINE}` }}>
-              <button onClick={() => setScope('context')} className="btn" style={{
-                background: scope === 'context' ? PRIMARY : 'transparent',
-                color: scope === 'context' ? '#FFF' : INK,
-                fontSize: 12, padding: '4px 10px',
-              }}>Context</button>
-              <button onClick={() => setScope('all')} className="btn" style={{
-                background: scope === 'all' ? PRIMARY : 'transparent',
-                color: scope === 'all' ? '#FFF' : INK,
-                fontSize: 12, padding: '4px 10px',
-              }}>All tier-ok</button>
-            </div>
-            <button onClick={onClose} className="btn" style={{ padding: '6px 10px' }}>×</button>
+
+          {/* SCOPE TOGGLE */}
+          <div style={{
+            display: 'inline-flex', gap: 0,
+            border: `1px solid ${T.hairline}`, borderRadius: 4,
+            background: T.paper, alignSelf: 'flex-start',
+          }}>
+            <button
+              onClick={() => setScope('context')}
+              style={{
+                background: scope === 'context' ? T.green : 'transparent',
+                color: scope === 'context' ? '#FFF' : T.ink,
+                border: 0, padding: '6px 14px',
+                fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                borderRadius: '3px 0 0 3px',
+              }}
+            >Linked to this block</button>
+            <div style={{ width: 1, background: T.hairline }} />
+            <button
+              onClick={() => setScope('all')}
+              style={{
+                background: scope === 'all' ? T.green : 'transparent',
+                color: scope === 'all' ? '#FFF' : T.ink,
+                border: 0, padding: '6px 14px',
+                fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                borderRadius: '0 3px 3px 0',
+              }}
+            >All property photos</button>
           </div>
         </header>
 
+        {/* BODY */}
         <div style={{ padding: 22, flex: 1 }}>
-          {loading && <p style={{ color: INK_SOFT, fontSize: 13 }}>Loading photos…</p>}
+          {loading && (
+            <p style={{ color: T.inkSoft, fontSize: 13 }}>Loading photos…</p>
+          )}
+
           {!loading && rows.length === 0 && (
             <div style={{
-              padding: '48px 20px', textAlign: 'center', background: PAPER_WARM,
-              border: `1px solid ${HAIRLINE}`, borderRadius: 6, color: INK_SOFT,
+              padding: '48px 20px', textAlign: 'center',
+              background: T.warm, border: `1px solid ${T.hairline}`,
+              borderRadius: 6, color: T.inkSoft,
             }}>
-              <p style={{ fontSize: 14, marginBottom: 8 }}>
-                No tier-ok photos match {block?.block_type ? `this ${block.block_type} block` : 'this filter'} yet.
+              <p style={{ fontSize: 14, marginBottom: 12, color: T.ink }}>
+                {scope === 'context'
+                  ? 'No photos linked to this specific item yet.'
+                  : 'No photos match the current tier filter.'}
               </p>
-              <p style={{ fontSize: 12, marginBottom: 14 }}>
-                Add photos in the Media Library — set tier to OTA or Website and tag by area / room / activity.
-              </p>
-              <a href="/marketing/media/library" target="_blank" rel="noopener" style={{
-                color: PRIMARY, fontFamily: 'var(--mono)', fontSize: 12,
-                letterSpacing: '0.08em', textTransform: 'uppercase',
-                textDecoration: 'underline',
-              }}>
-                Open Media Library →
-              </a>
+              {scope === 'context' ? (
+                <button
+                  onClick={() => setScope('all')}
+                  style={{
+                    background: T.green, color: '#FFF', border: 0,
+                    padding: '9px 18px', borderRadius: 4,
+                    fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Show all property photos →
+                </button>
+              ) : (
+                <p style={{ fontSize: 12, color: T.inkSoft, marginTop: 8 }}>
+                  Add OTA / Website tier photos in the Media Library first.
+                </p>
+              )}
             </div>
           )}
+
           {!loading && rows.length > 0 && (
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
               gap: 12,
             }}>
-              {rows.map(p => {
+              {rows.map((p) => {
                 const isCurrent = currentAssetId === p.asset_id;
                 return (
                   <button
                     key={p.asset_id}
                     onClick={() => { onPick(p); onClose(); }}
+                    title={p.caption ?? p.original_filename ?? ''}
                     style={{
                       display: 'flex', flexDirection: 'column',
                       padding: 0, cursor: 'pointer',
-                      background: PAPER, color: INK,
-                      border: `2px solid ${isCurrent ? PRIMARY : HAIRLINE}`,
+                      background: T.paper, color: T.ink,
+                      border: `2px solid ${isCurrent ? T.green : T.hairline}`,
                       borderRadius: 6, overflow: 'hidden', textAlign: 'left',
                       boxShadow: isCurrent ? '0 0 0 2px rgba(8,72,56,0.15)' : 'none',
+                      transition: 'border-color 120ms',
                     }}
-                    title={p.caption ?? p.original_filename ?? ''}
                   >
+                    {/* THUMB */}
                     <div style={{
-                      width: '100%', aspectRatio: '4/3', background: PAPER_WARM,
+                      position: 'relative',
+                      width: '100%', aspectRatio: '4/3', background: T.warm,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       overflow: 'hidden',
                     }}>
@@ -189,33 +244,42 @@ export default function PhotoPickerDrawer({ open, onClose, propertyId, block, cu
                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       />
+                      {/* Score badge top-right */}
+                      {p.marketing_score != null && (
+                        <span style={{
+                          position: 'absolute', top: 6, right: 6,
+                          background: 'rgba(27,27,27,0.75)', color: '#FFF',
+                          fontSize: 10, fontWeight: 600,
+                          padding: '2px 6px', borderRadius: 3,
+                        }}>{p.marketing_score}</span>
+                      )}
+                      {/* Current pick badge top-left */}
+                      {isCurrent && (
+                        <span style={{
+                          position: 'absolute', top: 6, left: 6,
+                          background: T.green, color: '#FFF',
+                          fontSize: 10, fontWeight: 600,
+                          padding: '2px 6px', borderRadius: 3,
+                        }}>Current</span>
+                      )}
                     </div>
+                    {/* META */}
                     <div style={{ padding: '8px 10px' }}>
                       <div style={{
-                        fontSize: 12, color: INK,
+                        fontSize: 12, color: T.ink,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {p.original_filename ?? 'untitled'}
                       </div>
-                      <div style={{ fontSize: 10, color: INK_SOFT, marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {p.primary_tier && <span style={{
-                          fontFamily: 'var(--mono)', letterSpacing: '0.06em',
-                          textTransform: 'uppercase',
-                        }}>{p.primary_tier.replace('tier_', '')}</span>}
-                        {p.marketing_score != null && (
-                          <span style={{ color: PRIMARY }}>{p.marketing_score}%</span>
+                      <div style={{
+                        fontSize: 10, color: T.inkSoft, marginTop: 3,
+                        display: 'flex', gap: 6, flexWrap: 'wrap',
+                      }}>
+                        {p.primary_tier && (
+                          <span>{p.primary_tier.replace('tier_', '').replace('_', ' ')}</span>
                         )}
                         {p.property_area && <span>· {p.property_area}</span>}
                       </div>
-                      {isCurrent && (
-                        <div style={{
-                          marginTop: 6, fontSize: 10, color: PRIMARY,
-                          fontFamily: 'var(--mono)', letterSpacing: '0.08em',
-                          textTransform: 'uppercase', fontWeight: 700,
-                        }}>
-                          Current pick
-                        </div>
-                      )}
                     </div>
                   </button>
                 );
