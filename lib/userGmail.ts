@@ -479,6 +479,74 @@ export async function trashMessage(userId: string, messageId: string): Promise<v
   if (!r.ok) throw new Error('gmail_trash_failed_' + r.status);
 }
 
+// PBS 2026-07-16 · Item 1 — historical backfill on routing-rule creation.
+// Search + get-or-create label + batchModify wrappers.
+
+export interface SearchOpts {
+  q: string;
+  maxTotal?: number;   // hard cap across pages (default 500)
+  pageSize?: number;   // per-request cap (default 500, Gmail max)
+}
+
+export async function searchAllMessageIds(userId: string, opts: SearchOpts): Promise<string[]> {
+  const { access } = await refreshIfExpired(userId);
+  const max = Math.min(opts.maxTotal ?? 500, 5000);
+  const per = Math.min(opts.pageSize ?? 500, 500);
+  const out: string[] = [];
+  let pageToken: string | undefined;
+  while (out.length < max) {
+    const p = new URLSearchParams();
+    p.set('q', opts.q);
+    p.set('maxResults', String(Math.min(per, max - out.length)));
+    if (pageToken) p.set('pageToken', pageToken);
+    const j = await gapi<{ messages?: Array<{ id: string }>; nextPageToken?: string }>(access, '/users/me/messages?' + p.toString());
+    (j.messages ?? []).forEach((m) => out.push(m.id));
+    if (!j.nextPageToken) break;
+    pageToken = j.nextPageToken;
+  }
+  return out;
+}
+
+export async function getOrCreateLabel(userId: string, name: string): Promise<string> {
+  const { access } = await refreshIfExpired(userId);
+  // List first to avoid duplicate-name 409s.
+  const list = await gapi<{ labels?: Array<{ id: string; name: string }> }>(access, '/users/me/labels');
+  const hit = (list.labels ?? []).find((l) => l.name.toLowerCase() === name.toLowerCase());
+  if (hit) return hit.id;
+  const created = await gapi<{ id: string }>(access, '/users/me/labels', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      labelListVisibility: 'labelShow',
+      messageListVisibility: 'show',
+    }),
+  });
+  return created.id;
+}
+
+export async function batchModifyMessages(
+  userId: string,
+  messageIds: string[],
+  addLabelIds: string[] = [],
+  removeLabelIds: string[] = [],
+): Promise<number> {
+  if (messageIds.length === 0) return 0;
+  const { access } = await refreshIfExpired(userId);
+  let modified = 0;
+  // Gmail batchModify accepts max 1000 ids per call.
+  for (let i = 0; i < messageIds.length; i += 1000) {
+    const slice = messageIds.slice(i, i + 1000);
+    const r = await fetch(GMAIL_API + '/users/me/messages/batchModify', {
+      method: 'POST',
+      headers: { authorization: 'Bearer ' + access, 'content-type': 'application/json' },
+      body: JSON.stringify({ ids: slice, addLabelIds, removeLabelIds }),
+    });
+    if (r.ok) modified += slice.length;
+    // Don't throw on 4xx here — a partial batch is still worthwhile.
+  }
+  return modified;
+}
+
 export async function starMessage(userId: string, messageId: string, on: boolean): Promise<void> {
   return on
     ? modifyLabelsForUser(userId, messageId, ['STARRED'], [])
