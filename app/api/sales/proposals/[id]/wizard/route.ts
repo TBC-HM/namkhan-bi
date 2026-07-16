@@ -104,6 +104,28 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         { status: 500 },
       );
     }
+
+    // PBS 2026-07-16 — persist the date + pax snapshot on every query so the
+    // availability check (which reads date_in_snapshot / date_out_snapshot from
+    // sales.proposals) never sees NULLs even before a rate plan is picked.
+    // Do NOT set wizard_completed_at here — that still requires an explicit commit.
+    const { error: snapErr } = await sb
+      .schema('sales')
+      .from('proposals')
+      .update({
+        date_in_snapshot: body.date_in,
+        date_out_snapshot: body.date_out,
+        adults_snapshot: adults,
+        children_snapshot: children,
+        rooms_snapshot: rooms,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', proposalId);
+    if (snapErr) {
+      // Don't fail the query — the plans response is still useful. Just log.
+      console.warn('[wizard.query.snapshot]', snapErr.message);
+    }
+
     return NextResponse.json({ plans: Array.isArray(data) ? data : [] });
   }
 
