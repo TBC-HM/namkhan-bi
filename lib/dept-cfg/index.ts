@@ -551,6 +551,8 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Digital',           href: '/marketing/digital'         },
     { label: 'Media',             href: '/marketing/media'           },
     { label: 'Contacts',          href: '/marketing/contacts'        },
+    // PBS 2026-07-16 · opt-in-managed newsletter list (separate from Contacts extract).
+    { label: 'Subscribers',       href: '/marketing/subscribers'     },
   ],
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
