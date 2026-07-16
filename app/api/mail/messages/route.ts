@@ -49,6 +49,45 @@ export async function GET(req: NextRequest) {
 
   try {
     const data = await listMessagesInLabel(user.id, label, q || undefined, pageToken, Number.isFinite(max) ? max : 50);
+
+    // PBS 2026-07-16 · Item 2 — Gmail's `to:me` operator is lax on aliased /
+    // forwarded mail (matches Delivered-To even when the address is in Cc).
+    // Post-filter: for Answer-expected specifically, keep only threads where
+    // the user's connected Gmail address is present in the To: header AND not
+    // in Cc or Bcc. Also drop if the To: is a group alias (no direct match).
+    if (folder === 'answer_expected' && data.messages.length > 0) {
+      try {
+        const sb2 = getSupabaseAdmin();
+        const { data: conn } = await sb2
+          .from('v_user_gmail_connections')
+          .select('gmail_address')
+          .eq('user_id', user.id)
+          .eq('active', true)
+          .maybeSingle();
+        const me = ((conn?.gmail_address ?? user.email) || '').toLowerCase();
+        if (me) {
+          const beforeCount = data.messages.length;
+          data.messages = data.messages.filter((row) => {
+            const to = (row.to || '').toLowerCase();
+            const cc = (row.cc || '').toLowerCase();
+            const bcc = (row.bcc || '').toLowerCase();
+            const dt = (row.deliveredTo || '').toLowerCase();
+            const inTo  = to.includes(me);
+            const inCc  = cc.includes(me);
+            const inBcc = bcc.includes(me);
+            // Strict: must be in To:, not in Cc/Bcc. Delivered-To is a fallback
+            // (some servers rewrite To: on forward), but only accept it when
+            // Cc/Bcc do NOT contain me.
+            if (inTo && !inCc && !inBcc) return true;
+            if (!inTo && !inCc && !inBcc && dt.includes(me)) return true;
+            return false;
+          });
+          // Attach debug counter (non-breaking).
+          (data as { debug?: unknown }).debug = { answer_expected_before: beforeCount, answer_expected_after: data.messages.length };
+        }
+      } catch { /* silent — return the pre-filter list */ }
+    }
+
     return NextResponse.json({ ok: true, data });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'list_failed';
