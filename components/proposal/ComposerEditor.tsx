@@ -244,6 +244,25 @@ interface RatePlan {
   board: string | null;
 }
 
+// PBS 2026-07-16 (Feature A) — one row per offer stored in sales.proposal_rate_offers.
+// Up to 3 per proposal — email renders side-by-side.
+interface RateOfferRow {
+  id: string;
+  proposal_id: string;
+  rate_plan_id: string;
+  position: number | null;
+  label: string | null;
+  payment_terms: string | null;
+  cancellation_terms: string | null;
+  unit_price_lak: number | null;
+  total_lak: number | null;
+  created_at?: string;
+}
+
+const MAX_RATE_OFFERS = 3;
+const DEFAULT_PAYMENT_TERMS = 'Pay at property';
+const DEFAULT_CANCELLATION_TERMS = 'Free cancellation until 7 days before arrival';
+
 interface Props {
   proposalId: string;
   propertyId: number;
@@ -322,6 +341,13 @@ export default function ComposerEditor({
   const [roomTypeId, setRoomTypeId] = useState<string | null>(wizard.room_type_id);
   const [plans, setPlans] = useState<RatePlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
+
+  // PBS 2026-07-16 (Feature A) — multi-rate offers state.
+  // Rendered as up to 3 side-by-side cards in the email preview. Empty list
+  // means "single rate plan flow" — email falls back to the pre-existing
+  // single-card layout.
+  const [rateOffers, setRateOffers] = useState<RateOfferRow[]>([]);
+  const [rateOffersBusy, setRateOffersBusy] = useState<string | null>(null);
 
   // Email copy
   const [subject, setSubject] = useState<string>(initialEmail?.subject ?? `Your stay at The Namkhan · ${proposal.date_in}`);
@@ -489,6 +515,64 @@ export default function ComposerEditor({
     await fetch(`/api/sales/proposals/${proposalId}/blocks?block_id=${id}`, { method: 'DELETE' });
     markSaved();
     setBusy(null);
+  }
+
+  // ---------- rate offer mutations (Feature A · PBS 2026-07-16) ----------
+  const refreshRateOffers = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/sales/proposals/${proposalId}/rate-offers`, { cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json();
+      setRateOffers(Array.isArray(j.rows) ? j.rows : []);
+    } catch { /* swallow */ }
+  }, [proposalId]);
+
+  useEffect(() => { refreshRateOffers(); }, [refreshRateOffers]);
+
+  async function addRateOffer(planId: string) {
+    if (rateOffers.length >= MAX_RATE_OFFERS) return;
+    const plan = plans.find((p) => p.rate_plan_id === planId);
+    if (!plan) return;
+    setRateOffersBusy('add');
+    const nightlyLak = Number(plan.total_lak) / Math.max(1, Number(plan.nights ?? 1));
+    const r = await fetch(`/api/sales/proposals/${proposalId}/rate-offers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        rate_plan_id: planId,
+        label: plan.rate_plan_name + (plan.board ? ` · ${plan.board}` : ''),
+        payment_terms: DEFAULT_PAYMENT_TERMS,
+        cancellation_terms: plan.cancellation_policy ?? DEFAULT_CANCELLATION_TERMS,
+        unit_price_lak: Math.round(nightlyLak),
+        total_lak: Math.round(Number(plan.total_lak)),
+      }),
+    });
+    if (r.ok) {
+      await refreshRateOffers();
+      markSaved();
+    }
+    setRateOffersBusy(null);
+  }
+
+  async function patchRateOffer(id: string, patch: Partial<RateOfferRow>) {
+    setRateOffersBusy(id);
+    // optimistic update
+    setRateOffers((arr) => arr.map((o) => o.id === id ? { ...o, ...patch } : o));
+    await fetch(`/api/sales/proposals/${proposalId}/rate-offers?id=${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    markSaved();
+    setRateOffersBusy(null);
+  }
+
+  async function deleteRateOffer(id: string) {
+    setRateOffersBusy(id);
+    setRateOffers((arr) => arr.filter((o) => o.id !== id));
+    await fetch(`/api/sales/proposals/${proposalId}/rate-offers?id=${id}`, { method: 'DELETE' });
+    markSaved();
+    setRateOffersBusy(null);
   }
 
   async function attachPhoto(blockId: string, asset: PhotoRow) {
@@ -694,6 +778,63 @@ export default function ComposerEditor({
                   ))}
                 </select>
               </FieldLabel>
+            </div>
+          </section>
+
+          {/* PBS 2026-07-16 (Feature A) — Rate offers (up to 3 side-by-side in the email).
+              Falls back to the single-rate-plan flow when this list is empty. */}
+          <section style={S.card}>
+            <div style={S.cardHead}>
+              <span style={S.sectionTitle}>Rate offers</span>
+              <span style={{ fontSize: 11, color: T.inkMute }}>
+                {rateOffers.length === 0
+                  ? 'Optional — add up to 3 for side-by-side cards in the email'
+                  : `${rateOffers.length} of ${MAX_RATE_OFFERS}`}
+              </span>
+            </div>
+            {rateOffers.length === 0 ? (
+              <div style={{ fontSize: 12, color: T.inkSoft, marginBottom: 8, lineHeight: 1.5 }}>
+                Skip this to send with the single rate plan picked above. Add offers to give the guest a choice between (e.g.) Flex, Non-Refundable, and Long-Stay.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 10 }}>
+                {rateOffers.map((o) => (
+                  <RateOfferCard
+                    key={o.id}
+                    offer={o}
+                    plans={plans}
+                    busy={rateOffersBusy === o.id}
+                    onPatch={(patch) => patchRateOffer(o.id, patch)}
+                    onDelete={() => deleteRateOffer(o.id)}
+                  />
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                disabled={rateOffers.length >= MAX_RATE_OFFERS || plansLoading || plans.length === 0 || rateOffersBusy === 'add'}
+                value=""
+                onChange={(e) => { if (e.target.value) addRateOffer(e.target.value); }}
+                style={{ ...S.input, height: 32, flex: '1 1 200px', fontSize: 12 }}
+              >
+                <option value="">
+                  {rateOffers.length >= MAX_RATE_OFFERS
+                    ? `Max ${MAX_RATE_OFFERS} offers reached`
+                    : plans.length === 0
+                      ? '+ Add rate offer (pick dates first)'
+                      : '+ Add rate offer — pick a plan'}
+                </option>
+                {plans.map((p) => (
+                  <option key={p.rate_plan_id} value={p.rate_plan_id}>
+                    {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''} · ${Math.round(p.total_usd).toLocaleString('en-US')}
+                  </option>
+                ))}
+              </select>
+              {rateOffers.length > 0 && (
+                <span style={{ fontSize: 11, color: T.inkSoft }}>
+                  Email will render {rateOffers.length === 1 ? 'a single card' : `${rateOffers.length} side-by-side cards`}.
+                </span>
+              )}
             </div>
           </section>
 
@@ -921,6 +1062,117 @@ export default function ComposerEditor({
 }
 
 // ---------- child components ----------
+
+// PBS 2026-07-16 (Feature A) — one editable rate-offer card (up to 3 per proposal).
+function RateOfferCard({
+  offer, plans, busy, onPatch, onDelete,
+}: {
+  offer: RateOfferRow;
+  plans: RatePlan[];
+  busy: boolean;
+  onPatch: (patch: Partial<RateOfferRow>) => void;
+  onDelete: () => void;
+}) {
+  const plan = plans.find((p) => p.rate_plan_id === offer.rate_plan_id);
+  const nightlyLak = offer.unit_price_lak != null ? Number(offer.unit_price_lak) : (plan ? Number(plan.total_lak) / Math.max(1, Number(plan.nights ?? 1)) : 0);
+  const totalLak = offer.total_lak != null ? Number(offer.total_lak) : (plan ? Number(plan.total_lak) : 0);
+  const nightlyUsd = nightlyLak / FX_LAK_PER_USD;
+  const totalUsd = totalLak / FX_LAK_PER_USD;
+
+  return (
+    <div style={{
+      background: T.paper,
+      border: `1px solid ${T.hairline}`,
+      borderRadius: 8,
+      padding: 12,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, color: T.inkSoft, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>
+            Offer {offer.position ?? 1}
+          </div>
+          <select
+            value={offer.rate_plan_id}
+            onChange={(e) => {
+              const newId = e.target.value;
+              const newPlan = plans.find((p) => p.rate_plan_id === newId);
+              if (!newPlan) return;
+              const nlLak = Number(newPlan.total_lak) / Math.max(1, Number(newPlan.nights ?? 1));
+              onPatch({
+                rate_plan_id: newId,
+                label: (offer.label && offer.label.trim()) ? offer.label : (newPlan.rate_plan_name + (newPlan.board ? ` · ${newPlan.board}` : '')),
+                unit_price_lak: Math.round(nlLak),
+                total_lak: Math.round(Number(newPlan.total_lak)),
+                cancellation_terms: offer.cancellation_terms ?? newPlan.cancellation_policy ?? DEFAULT_CANCELLATION_TERMS,
+              });
+            }}
+            disabled={busy || plans.length === 0}
+            style={{ ...S.input, height: 32, width: '100%', fontSize: 12 }}
+          >
+            {plan ? null : <option value={offer.rate_plan_id}>(unknown plan {offer.rate_plan_id.slice(0, 8)})</option>}
+            {plans.map((p) => (
+              <option key={p.rate_plan_id} value={p.rate_plan_id}>
+                {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={onDelete}
+          disabled={busy}
+          title="Remove offer"
+          style={{ ...S.btnGhost, color: T.red, borderColor: T.red, padding: '4px 8px' }}
+        >
+          × delete
+        </button>
+      </div>
+
+      <FieldLabel label="Guest-facing label">
+        <input
+          type="text"
+          value={offer.label ?? ''}
+          onChange={(e) => onPatch({ label: e.target.value })}
+          placeholder={plan ? plan.rate_plan_name : 'e.g. Flex · Bed & Breakfast'}
+          disabled={busy}
+          style={S.input}
+        />
+      </FieldLabel>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <FieldLabel label="Payment terms">
+          <textarea
+            value={offer.payment_terms ?? ''}
+            onChange={(e) => onPatch({ payment_terms: e.target.value })}
+            placeholder={DEFAULT_PAYMENT_TERMS}
+            rows={2}
+            disabled={busy}
+            style={{ ...S.textarea, minHeight: 52 }}
+          />
+        </FieldLabel>
+        <FieldLabel label="Cancellation terms">
+          <textarea
+            value={offer.cancellation_terms ?? ''}
+            onChange={(e) => onPatch({ cancellation_terms: e.target.value })}
+            placeholder={DEFAULT_CANCELLATION_TERMS}
+            rows={2}
+            disabled={busy}
+            style={{ ...S.textarea, minHeight: 52 }}
+          />
+        </FieldLabel>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, borderTop: `1px dashed ${T.hairline}`, fontSize: 11, color: T.inkSoft }}>
+        <span>{Math.round(nightlyUsd).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} / night</span>
+        <span style={{ fontWeight: 600, color: T.green }}>
+          {Math.round(totalUsd).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} total
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
