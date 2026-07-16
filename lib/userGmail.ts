@@ -300,6 +300,12 @@ export interface GmailListRow {
   subject: string;
   from: string;
   to: string;
+  // PBS 2026-07-16 · Item 2 — expose Cc / Bcc / Delivered-To so the
+  // Answer-expected folder can post-filter Gmail's lax `to:me` operator
+  // (which matches aliased/forwarded mail the user is only CC'd on).
+  cc: string;
+  bcc: string;
+  deliveredTo: string;
   date: string;
   dateMs: number;
   snippet: string;
@@ -529,9 +535,11 @@ export async function listMessagesInLabel(
 
   const detail = await Promise.all(items.map(async (m) => {
     try {
+      // PBS 2026-07-16 · Item 2 — add Cc + Bcc + Delivered-To metadata so the
+      // Answer-expected post-filter can drop threads where user is not in To:.
       const j = await gapi<GmailMessageRaw>(
         access,
-        '/users/me/messages/' + m.id + '?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date',
+        '/users/me/messages/' + m.id + '?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Bcc&metadataHeaders=Delivered-To&metadataHeaders=Subject&metadataHeaders=Date',
       );
       const hmap = headersToMap(j.payload);
       const dateStr = hmap['date'] ?? '';
@@ -551,6 +559,9 @@ export async function listMessagesInLabel(
         subject: hmap['subject'] ?? '',
         from: hmap['from'] ?? '',
         to: hmap['to'] ?? '',
+        cc: hmap['cc'] ?? '',
+        bcc: hmap['bcc'] ?? '',
+        deliveredTo: hmap['delivered-to'] ?? '',
         date: dateStr,
         dateMs,
         snippet: j.snippet ?? '',
