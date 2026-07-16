@@ -15,7 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { getProposalWithBlocks, getInquiry, type ProposalBlock } from '@/lib/sales';
+import { getInquiry, type ProposalBlock } from '@/lib/sales';
 import { FX_LAK_PER_USD } from '@/lib/format';
 import { renderProposalEmailHtml, type ProposalEmailContext, type ProposalBlockInput, type ProposalRateOfferInput } from '@/lib/proposalEmailTemplate';
 
@@ -237,35 +237,47 @@ export async function GET(req: Request, { params }: Ctx) {
   const withPhotos = url.searchParams.get('with_photos') !== '0';
   const factsheetId = url.searchParams.get('factsheet_id') ?? '';
 
-  const { proposal, blocks, email } = await getProposalWithBlocks(params.id);
+  // PBS 2026-07-17 — inline the block fetch so we can log the RAW response
+  // (data + error + status + count) and prove where the helper's 0 comes from.
+  // getProposalWithBlocks uses Promise.all and destructures data-only, hiding
+  // any error or partial-response condition.
+  const sbInline = getSupabaseAdmin();
+  const [proposalR, blocksHelperR, blocksProbeR, blocksSelectStarR, emailR] = await Promise.all([
+    sbInline.schema('sales').from('proposals').select('*').eq('id', params.id).maybeSingle(),
+    // Exact helper query (what getProposalWithBlocks does)
+    sbInline.schema('sales').from('proposal_blocks').select('*').eq('proposal_id', params.id).order('sort_order'),
+    // Count-only probe (worked earlier — returned 1)
+    sbInline.schema('sales').from('proposal_blocks').select('id', { count: 'exact', head: true }).eq('proposal_id', params.id),
+    // Alt: select ONE known column, no order
+    sbInline.schema('sales').from('proposal_blocks').select('id,label,block_type,qty,nights,unit_price_lak,sort_order,additional_discount_pct,hero_asset_id,note,ref_table,ref_id,removable,ics_url,total_lak,created_at,proposal_id').eq('proposal_id', params.id),
+    sbInline.schema('sales').from('proposal_emails').select('*').eq('proposal_id', params.id).order('version', { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const proposal = (proposalR.data as any) ?? null;
   if (!proposal) return NextResponse.json({ error: 'proposal_not_found' }, { status: 404 });
+  const helperErr = blocksHelperR.error ? `${blocksHelperR.error.code ?? ''}:${blocksHelperR.error.message ?? ''}:${(blocksHelperR.error as any).details ?? ''}:${(blocksHelperR.error as any).hint ?? ''}` : null;
+  const helperData = (blocksHelperR.data ?? []) as any[];
+  const altErr = blocksSelectStarR.error ? `${blocksSelectStarR.error.code ?? ''}:${blocksSelectStarR.error.message ?? ''}` : null;
+  const altData = (blocksSelectStarR.data ?? []) as any[];
+  const probeCount = blocksProbeR.count ?? null;
+  const probeErr = blocksProbeR.error ? `${blocksProbeR.error.code ?? ''}:${blocksProbeR.error.message ?? ''}` : null;
+  const email = (emailR.data as any) ?? null;
 
-  // PBS 2026-07-17 — diagnostic: on empty blocks, cross-check via a second
-  // service-role query bypassing supabase-js's helper. Surfaces the divergence
-  // as both a response header and an inline banner so the composer iframe
-  // reveals the real failure mode (schema not exposed / cache / RLS drift).
-  let diagBlockCountFromServiceRole: number | null = null;
-  let diagBlockErr: string | null = null;
-  if (blocks.length === 0) {
-    try {
-      const sbDiag = getSupabaseAdmin();
-      const probe = await sbDiag
-        .schema('sales')
-        .from('proposal_blocks')
-        .select('id', { count: 'exact', head: true })
-        .eq('proposal_id', params.id);
-      diagBlockCountFromServiceRole = probe.count ?? null;
-      diagBlockErr = probe.error ? `${probe.error.code ?? ''}:${probe.error.message ?? ''}` : null;
-      console.error('[preview.diag] blocks empty', {
-        proposal_id: params.id,
-        service_role_count: diagBlockCountFromServiceRole,
-        error: diagBlockErr,
-      });
-    } catch (e) {
-      diagBlockErr = String((e as Error)?.message ?? e);
-      console.error('[preview.diag] probe threw', diagBlockErr);
-    }
-  }
+  // Prefer whichever result actually returned rows (self-heals the render if
+  // the helper misbehaves for reasons we haven't isolated yet).
+  const blocks = (helperData.length > 0 ? helperData : altData) as any[];
+
+  const diagBlockErr = helperErr ?? probeErr ?? altErr;
+  const diagBlockCountFromServiceRole = probeCount;
+  console.error('[preview.diag] block fetch', {
+    proposal_id: params.id,
+    helper_len: helperData.length,
+    helper_err: helperErr,
+    probe_count: probeCount,
+    probe_err: probeErr,
+    alt_len: altData.length,
+    alt_err: altErr,
+    resolved_len: blocks.length,
+  });
 
   const inq = proposal.inquiry_id ? await getInquiry(proposal.inquiry_id) : null;
   const dateIn = (proposal.date_in_snapshot ?? inq?.date_in ?? '') as string;
@@ -349,11 +361,11 @@ export async function GET(req: Request, { params }: Ctx) {
   };
 
   let html = renderProposalEmailHtml(ctx);
-  // PBS 2026-07-17 — prepend an inline red diagnostic banner when the composer
-  // iframe would otherwise render an empty stay ($0, no cards). This makes the
-  // failure mode visible instead of silent.
-  if (blocks.length === 0 && (diagBlockCountFromServiceRole ?? 0) > 0) {
-    const banner = `<div style="padding:12px 18px;background:#8B0000;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em">DIAG · sales.proposal_blocks reports ${diagBlockCountFromServiceRole} row(s) but helper returned 0. err=${(diagBlockErr ?? 'none')} · proposal=${params.id}</div>`;
+  // PBS 2026-07-17 — banner shows the full triad: helper vs probe vs alt.
+  // If helper=0 but alt>0, the failure is in the ordered wildcard select
+  // (probably enum column serialization). If probe=0 too, actually empty.
+  if (helperData.length === 0 && ((probeCount ?? 0) > 0 || altData.length > 0)) {
+    const banner = `<div style="padding:12px 18px;background:#8B0000;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em;line-height:1.5">DIAG · helper(select-*)=${helperData.length} · probe(count)=${probeCount} · alt(select-cols)=${altData.length} · resolved=${blocks.length} · err=${(diagBlockErr ?? 'none')} · proposal=${params.id}</div>`;
     html = banner + html;
   } else if (blocks.length === 0) {
     const banner = `<div style="padding:12px 18px;background:#7a5500;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em">DIAG · No blocks yet for this proposal. Add a room from the composer before previewing.</div>`;
@@ -365,9 +377,13 @@ export async function GET(req: Request, { params }: Ctx) {
     html,
     base_url: base,
     diag: {
-      block_count_helper: blocks.length,
-      block_count_probe: diagBlockCountFromServiceRole,
-      block_probe_err: diagBlockErr,
+      helper_len: helperData.length,
+      helper_err: helperErr,
+      probe_count: probeCount,
+      probe_err: probeErr,
+      alt_len: altData.length,
+      alt_err: altErr,
+      resolved_len: blocks.length,
       email_present: !!email,
     },
   });
@@ -381,9 +397,12 @@ export async function GET(req: Request, { params }: Ctx) {
       'Pragma':        'no-cache',
       'Expires':       '0',
       'X-Preview-Rendered-At': new Date().toISOString(),
-      'X-Block-Count-Helper': String(blocks.length),
-      'X-Block-Count-Probe':  String(diagBlockCountFromServiceRole ?? ''),
-      'X-Block-Probe-Err':    (diagBlockErr ?? '').slice(0, 200),
+      'X-Block-Helper-Len':   String(helperData.length),
+      'X-Block-Helper-Err':   (helperErr ?? '').slice(0, 200),
+      'X-Block-Probe-Count':  String(probeCount ?? ''),
+      'X-Block-Alt-Len':      String(altData.length),
+      'X-Block-Alt-Err':      (altErr ?? '').slice(0, 200),
+      'X-Block-Resolved-Len': String(blocks.length),
       'Surrogate-Control':     'no-store',
       'CDN-Cache-Control':     'no-store',
       'Vercel-CDN-Cache-Control': 'no-store',
