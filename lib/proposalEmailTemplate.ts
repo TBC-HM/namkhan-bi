@@ -199,14 +199,28 @@ function rateOffersBlock(ctx: ProposalEmailContext): string {
     </td>`;
   }).join('');
 
+  // PBS 2026-07-17 — payment/cancellation as flowing prose beneath the cards
+  // (not just card labels). Each offer becomes one sentence guests can read
+  // linearly. Example: "NK Members Flash Sale — pay at property, free
+  // cancellation until 7 days before arrival."
+  const termsProse = offers.map((o) => {
+    const label = (o.label && o.label.trim()) || 'Rate offer';
+    const pay = (o.payment_terms && o.payment_terms.trim()) || 'Pay at property';
+    const cancel = (o.cancellation_terms && o.cancellation_terms.trim()) || 'Free cancellation until 7 days before arrival';
+    return `<strong style="color:${INK}">${esc(label)}</strong> — ${esc(pay.toLowerCase())}, ${esc(cancel.toLowerCase())}.`;
+  }).join('<br/>');
+
   // Wrap in a fixed layout table for consistent widths in Outlook.
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;margin:6px 0;table-layout:fixed">
     <tr><td colspan="${offers.length}" style="padding:0 6px 8px 6px">
       <div style="font-family:${SANS};font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:${INK_SOFT}">Choose your rate</div>
     </td></tr>
     <tr>${cells}</tr>
-    <tr><td colspan="${offers.length}" style="padding:8px 6px 0 6px;font-family:${SANS};font-size:11px;color:${INK_SOFT};line-height:1.5">
-      Prices per room / night, includes 10% VAT + 10% service. Click a card to open the guest page and confirm your rate.
+    <tr><td colspan="${offers.length}" style="padding:12px 6px 4px 6px;font-family:${SERIF};font-size:13px;color:${INK};line-height:1.6">
+      ${termsProse}
+    </td></tr>
+    <tr><td colspan="${offers.length}" style="padding:6px 6px 0 6px;font-family:${SANS};font-size:11px;color:${INK_SOFT};line-height:1.5">
+      Prices per room / night, include 10% Lao VAT and 10% service charge. Click a card to open the guest page and confirm your rate.
     </td></tr>
   </table>`;
   // colWidth kept in scope for future explicit per-cell width injection.
