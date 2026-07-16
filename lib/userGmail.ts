@@ -315,6 +315,14 @@ export interface GmailListRow {
   labelIds: string[];
 }
 
+// PBS 2026-07-16 · Item 7 — attachment descriptor exposed on GmailMessageFull.
+export interface GmailAttachment {
+  filename: string;
+  mimeType: string;
+  size: number;
+  attachmentId: string;
+}
+
 export interface GmailMessageFull {
   id: string;
   threadId: string;
@@ -331,6 +339,7 @@ export interface GmailMessageFull {
   headers: Record<string, string>;
   unread: boolean;
   starred: boolean;
+  attachments: GmailAttachment[];
 }
 
 export interface GmailLabel {
@@ -364,13 +373,24 @@ function decodeB64Url(data: string): string {
   try { return Buffer.from(s + pad, 'base64').toString('utf8'); } catch { return ''; }
 }
 
-interface WalkAcc { html: string; text: string; hasAttachment: boolean }
+interface WalkAcc { html: string; text: string; hasAttachment: boolean; attachments: GmailAttachment[] }
 
 function walkParts(part: GmailPayloadPart | undefined, acc: WalkAcc): void {
   if (!part) return;
   const mime = (part.mimeType || '').toLowerCase();
   const filename = part.filename || '';
-  if (filename && filename.length > 0) acc.hasAttachment = true;
+  if (filename && filename.length > 0) {
+    acc.hasAttachment = true;
+    // PBS 2026-07-16 · Item 7 — capture attachment metadata for the UI.
+    if (part.body?.attachmentId) {
+      acc.attachments.push({
+        filename,
+        mimeType: part.mimeType || 'application/octet-stream',
+        size: part.body.size ?? 0,
+        attachmentId: part.body.attachmentId,
+      });
+    }
+  }
   if (mime === 'text/html' && part.body?.data && !acc.html) {
     acc.html = decodeB64Url(part.body.data);
   } else if (mime === 'text/plain' && part.body?.data && !acc.text) {
@@ -389,7 +409,7 @@ function headersToMap(part: GmailPayloadPart | undefined): Record<string, string
 }
 
 function parseMessage(j: GmailMessageRaw): GmailMessageFull {
-  const acc: WalkAcc = { html: '', text: '', hasAttachment: false };
+  const acc: WalkAcc = { html: '', text: '', hasAttachment: false, attachments: [] };
   walkParts(j.payload, acc);
   const hmap = headersToMap(j.payload);
   const dateStr = hmap['date'] ?? '';
@@ -412,6 +432,36 @@ function parseMessage(j: GmailMessageRaw): GmailMessageFull {
     headers: hmap,
     unread: labelIds.includes('UNREAD'),
     starred: labelIds.includes('STARRED'),
+    attachments: acc.attachments,
+  };
+}
+
+// PBS 2026-07-16 · Item 7 — fetch raw attachment bytes.
+export interface AttachmentBytes { data: Buffer; mimeType: string; filename: string; size: number }
+
+export async function getAttachmentBytes(
+  userId: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<AttachmentBytes> {
+  const { access } = await refreshIfExpired(userId);
+  // 1. Fetch attachment payload (base64url encoded).
+  const j = await gapi<{ data?: string; size?: number }>(
+    access,
+    '/users/me/messages/' + messageId + '/attachments/' + attachmentId,
+  );
+  if (!j.data) throw new Error('attachment_no_data');
+  const b64 = j.data.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  const data = Buffer.from(b64 + pad, 'base64');
+  // 2. Look up filename + mimeType from the message payload.
+  const msg = await getMessage(userId, messageId);
+  const meta = msg.attachments.find((a) => a.attachmentId === attachmentId);
+  return {
+    data,
+    mimeType: meta?.mimeType || 'application/octet-stream',
+    filename: meta?.filename || 'attachment',
+    size: j.size ?? data.length,
   };
 }
 
