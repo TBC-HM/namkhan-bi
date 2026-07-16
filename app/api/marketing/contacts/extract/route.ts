@@ -66,6 +66,21 @@ interface ContactAggregate {
   labels_touched: Set<string>;
 }
 
+// PBS 2026-07-16 — filter out @thenamkhan.com team + noreply/newsletter/notification/ESP addresses
+// so the contacts table only shows people we might actually reach out to. DB trigger
+// marketing.fn_gce_reject_internal_and_newsletters is the second line of defence.
+const NEWSLETTER_LOCAL_RE = /^(no[-_]?reply|noreply|newsletter|marketing|notifications?|automated?|mailer[-_]daemon|postmaster|unsubscribe|do[-_]not[-_]reply|donotreply|list[-_]|bounces?|mailer|notify|alerts?|updates?)@/i;
+const NEWSLETTER_SUBDOMAIN_RE = /@(mail\.|mailer\.|notifications?\.|updates?\.|news\.|newsletter\.|marketing\.|bounces?\.)/i;
+const ESP_DOMAIN_RE = /@(mailchimp|constantcontact|hubspot|activecampaign|substack|beehiiv|sendgrid|sendinblue|klaviyo|mailerlite)\./i;
+function isInternalOrNewsletter(email: string): boolean {
+  const lo = email.toLowerCase();
+  if (lo.endsWith('@thenamkhan.com')) return true;
+  if (NEWSLETTER_LOCAL_RE.test(lo)) return true;
+  if (NEWSLETTER_SUBDOMAIN_RE.test(lo)) return true;
+  if (ESP_DOMAIN_RE.test(lo)) return true;
+  return false;
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -226,6 +241,10 @@ async function extractForConnection(row: ConnRow, maxMessages: number): Promise<
         const parties = [...fromList, ...toList, ...ccList, ...bccList];
         for (const { name, email } of parties) {
           if (!email || email === accountLower) continue;
+          // PBS 2026-07-16 — skip internal Namkhan team + newsletter/notification/ESP senders.
+          // Mirrors the marketing.fn_gce_reject_internal_and_newsletters DB trigger so we avoid
+          // wasted upserts and produce accurate `new_contacts` counts.
+          if (isInternalOrNewsletter(email)) continue;
           const cur = aggregates.get(email);
           if (cur) {
             if (name && !cur.display_name) cur.display_name = name;
