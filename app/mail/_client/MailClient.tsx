@@ -128,18 +128,33 @@ const FOLDER_Q: Record<Exclude<AutoFolder, null>, string> = {
   answer_expected: 'to:me -cc:me -bcc:me is:unread newer_than:14d -"list-unsubscribe" -from:(no-reply OR noreply OR notifications OR automated OR mailer-daemon OR postmaster OR cloudbeds.com OR lighthouse-hotels.com OR googlecommunityteam@ OR github@ OR notify@) -in:spam -in:trash',
 };
 
-// PBS 2026-07-15 · Forwarded aliases — the 7 shared inboxes that get forwarded
-// to a personal Gmail. Adding a rail sub-folder per alias so PBS can drill into
-// each queue. See item #3 · regression re-add.
+// PBS 2026-07-15 · Forwarded aliases — the shared inboxes that get forwarded
+// to a personal Gmail. Adding a rail sub-folder per alias so any user (PBS,
+// Xiscas, etc.) can drill into each queue with a friendly name.
+// PBS 2026-07-16 · added pann@thenamkhan.com (Pann Office) at Xiscas's request.
 const FORWARDED_ALIASES: string[] = [
   'book@thenamkhan.com',
   'gm@thenamkhan.com',
   'reservations@thenamkhan.com',
+  'pann@thenamkhan.com',
   'rom@thenamkhan.com',
-  'xl@thenamkhan.com',
   'wm@thenamkhan.com',
   'hr@thenamkhan.com',
+  'xl@thenamkhan.com',
 ];
+
+// PBS 2026-07-16 · Friendly display names for the Forwarded rail.
+// Falls back to the alias local-part if no entry.
+const FORWARDED_ALIAS_LABEL: Record<string, string> = {
+  'book@thenamkhan.com':         'Booking',
+  'gm@thenamkhan.com':           'GM Office',
+  'reservations@thenamkhan.com': 'Reservations',
+  'pann@thenamkhan.com':         'Pann Office',
+  'rom@thenamkhan.com':          'Rom Office',
+  'wm@thenamkhan.com':           'Wellness Manager',
+  'hr@thenamkhan.com':           'HR',
+  'xl@thenamkhan.com':           'Xiscas',
+};
 
 // PBS 2026-07-15 · Item 2 — Sent-from addresses (from sales.email_messages
 // direction=outbound). Sub-folders under Sent scope by from:<alias>.
@@ -1435,7 +1450,7 @@ export default function MailClient({ userId: _userId, userEmail, currentUser }: 
           {FORWARDED_ALIASES.map((alias) => (
             <RailItem
               key={alias}
-              label={'· ' + alias.split('@')[0]}
+              label={'· ' + (FORWARDED_ALIAS_LABEL[alias] || alias.split('@')[0])}
               unread={0}
               active={forwardedAlias === alias}
               onClick={() => pickForwardedAlias(alias)}
