@@ -1,5 +1,13 @@
 'use client';
 // components/proposal/ProposerWizard.tsx
+//
+// DEPRECATED 2026-07-16 (unify pass, item 3). The composer no longer gates on
+// wizard completion — the same fields (dates/pax/rooms/rate plan) now live at
+// the top of the unified ComposerEditor's left pane. This file is kept only
+// because other routes may still transitively import it, and removing it in
+// the same push would burn a full deploy cycle to catch stragglers. Do NOT
+// route to it. Do NOT extend it. Delete after 2026-07-30 if grep is clean.
+//
 // 4-step entry wizard that gates the composer. On commit it writes the
 // proposal snapshot cols + wizard_completed_at, then router.refresh().
 //
