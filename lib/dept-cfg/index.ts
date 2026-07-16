@@ -550,6 +550,7 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Products & Offers', href: '/marketing/offers'          },
     { label: 'Digital',           href: '/marketing/digital'         },
     { label: 'Media',             href: '/marketing/media'           },
+    { label: 'Contacts',          href: '/marketing/contacts'        },
   ],
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
