@@ -38,6 +38,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/cockpit/docs/backup') || // CI pre-deploy backup
     pathname.startsWith('/api/auth/') || // login / request-access / callback exchange
     pathname.startsWith('/api/marketing/media/preview') || // PBS 2026-07-14
+    pathname.startsWith('/api/marketing/contacts/extract') || // PBS 2026-07-16 · cron+admin gate lives inside the route
     PUBLIC_PATHS.some(p => pathname.startsWith(p))
   ) return NextResponse.next()
 
