@@ -687,17 +687,21 @@ const GUEST_CFG: DeptCfg = {
     // - Findings dropped (all its content lives on HoD conclusions now)
     // - Newsletters moved to just before Reports
     // PBS 2026-07-06 late evening: Prospects URL moved from /marketing/prospects → /guest/prospects.
-    { label: 'HoD',         href: '/guest'             },
-    { label: 'Guests',      href: '/guest/directory'   },
-    { label: 'Reputation',  href: '/guest/reputation'  },
-    { label: 'Behaviour',   href: '/guest/behaviour'   },
-    { label: 'Newsletters', href: '/guest/newsletters' },
+    { label: 'HoD',         href: '/guest'                },
+    { label: 'Guests',      href: '/guest/directory'      },
+    { label: 'Reputation',  href: '/guest/reputation'     },
+    { label: 'Behaviour',   href: '/guest/behaviour'      },
+    { label: 'Subscribers', href: '/marketing/subscribers' }, // PBS 2026-07-16 · surfaced in Contacts sub-nav (page lives under /marketing)
+    { label: 'Contacts',    href: '/marketing/contacts'   }, // PBS 2026-07-16 · Gmail-extracted directory
+    { label: 'Newsletters', href: '/guest/newsletters'    },
   ],
   quickChips: [
-    { label: 'Guests',     href: '/guest/directory'  },
-    { label: 'Reputation', href: '/guest/reputation' },
-    { label: 'Behaviour',  href: '/guest/behaviour'  },
-    { label: 'Newsletters',href: '/guest/newsletters'},
+    { label: 'Guests',      href: '/guest/directory'      },
+    { label: 'Reputation',  href: '/guest/reputation'     },
+    { label: 'Subscribers', href: '/marketing/subscribers'},
+    { label: 'Contacts',    href: '/marketing/contacts'   },
+    { label: 'Behaviour',   href: '/guest/behaviour'      },
+    { label: 'Newsletters', href: '/guest/newsletters'    },
   ],
   defaultAttn: [
     { id: 'l1', label: 'Negative review on TripAdvisor — needs reply', severity: 'high',   kind: 'leakage'     },
