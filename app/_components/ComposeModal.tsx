@@ -21,12 +21,21 @@ const WHITE = '#FFFFFF', HAIR = '#E6DFCC', INK = '#1B1B1B', INK_M = '#5A5A5A',
 
 export interface ComposePrefill {
   to?: string;
+  cc?: string;
+  bcc?: string;
   subject?: string;
   thread_id?: string;
   in_reply_to?: string;
   quoted_from?: string;
   quoted_date?: string;
   quoted_snippet?: string;
+  // PBS 2026-07-15 · Forward support. When set, this string is injected
+  // into the contentEditable as the initial body (HTML-escaped, line-broken).
+  // Used by the [↪ Forward] button in MailClient's ThreadHeader.
+  forwardedBody?: string;
+  // Optional pre-attached files (already uploaded → have public URLs).
+  // Forward re-attaches the original message's attachments here.
+  forwardedAttachments?: Array<{ url: string; name: string; content_type: string; size?: number }>;
 }
 
 interface Props {
@@ -64,9 +73,13 @@ const POLISH_MODES: Array<{ id: PolishMode; label: string; hint: string }> = [
 
 export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId, sharedMailboxLabel }: Props) {
   const [to, setTo] = useState(prefill?.to ?? '');
-  const [cc, setCc] = useState('');
-  const [bcc, setBcc] = useState('');
-  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [cc, setCc] = useState(prefill?.cc ?? '');
+  const [bcc, setBcc] = useState(prefill?.bcc ?? '');
+  // PBS 2026-07-15 · CC/BCC visibility gets its own toggle per row, but we
+  // auto-show either row if the prefill supplies a value for it.
+  const [showCc, setShowCc] = useState<boolean>(!!(prefill?.cc && prefill.cc.trim()));
+  const [showBcc, setShowBcc] = useState<boolean>(!!(prefill?.bcc && prefill.bcc.trim()));
+  const [recipientErr, setRecipientErr] = useState<string | null>(null);
   const [subject, setSubject] = useState(prefill?.subject ?? '');
   const [sending, setSending] = useState(false);
   const [flash, setFlash] = useState<'idle' | 'ok' | 'err'>('idle');
@@ -81,8 +94,13 @@ export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId
   const [suggestLoading, setSuggestLoading] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Attach state.
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // Attach state. PBS 2026-07-15 · seeded from prefill.forwardedAttachments
+  // so [↪ Forward] re-attaches the original message's uploads.
+  const [attachments, setAttachments] = useState<Attachment[]>(
+    (prefill?.forwardedAttachments ?? []).map((a) => ({
+      url: a.url, name: a.name, content_type: a.content_type, size: a.size,
+    }))
+  );
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryAssets, setLibraryAssets] = useState<LibraryAsset[]>([]);
@@ -95,6 +113,24 @@ export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId
   const [polishOpen, setPolishOpen] = useState(false);
   const [polishing, setPolishing] = useState<PolishMode | null>(null);
   const [polishErr, setPolishErr] = useState<string | null>(null);
+
+  // PBS 2026-07-15 · [↪ Forward] · seed the contentEditable with the
+  // forwarded-message block (2 blank lines then the header + quoted body).
+  // Runs once on mount when a forwardedBody prefill is supplied.
+  useEffect(() => {
+    if (!prefill?.forwardedBody || !editorRef.current) return;
+    const esc = (s: string) => s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    // Two blank lines above the fwd block so the sender can type their note.
+    const escaped = esc(prefill.forwardedBody).replace(/\n/g, '<br/>');
+    editorRef.current.innerHTML = '<div><br/></div><div><br/></div><div>' + escaped + '</div>';
+    setChars(editorRef.current.innerText.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     function onEsc(e: KeyboardEvent) {
@@ -114,6 +150,24 @@ export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId
   function maybeDiscard() {
     const dirty = (to.trim() + cc + bcc + subject.trim() + (editorRef.current?.innerText.trim() ?? '') + attachments.length).length > 0;
     if (!dirty || confirm('Discard this message?')) onClose();
+  }
+
+  // PBS 2026-07-15 · Multi-add validation. Splits on comma OR whitespace
+  // (users often paste a list) and validates every token is a valid email
+  // pattern. Empty strings ignored. Returns null on success, error msg on
+  // fail. Also normalises the string back into a comma-separated list so
+  // the send route sees a clean value.
+  function validateRecipients(raw: string): { ok: true; normalised: string } | { ok: false; error: string } {
+    const trimmed = raw.trim();
+    if (!trimmed) return { ok: true, normalised: '' };
+    const tokens = trimmed.split(/[,;\s]+/).map((t) => t.trim()).filter(Boolean);
+    const bad: string[] = [];
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const t of tokens) {
+      if (!re.test(t)) bad.push(t);
+    }
+    if (bad.length) return { ok: false, error: 'Invalid: ' + bad.join(', ') };
+    return { ok: true, normalised: tokens.join(', ') };
   }
 
   function exec(cmd: string, value?: string) {
@@ -298,14 +352,24 @@ export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId
     const html = editorRef.current?.innerHTML ?? '';
     const plain = editorRef.current?.innerText ?? '';
     if (!to.trim() || !subject.trim()) return;
+    // PBS 2026-07-15 · validate To/Cc/Bcc before hitting the send route.
+    // Splits on comma OR whitespace so pasted lists work. Any invalid token
+    // aborts the send with an inline error under the field.
+    setRecipientErr(null);
+    const vTo  = validateRecipients(to);
+    const vCc  = validateRecipients(cc);
+    const vBcc = validateRecipients(bcc);
+    if (!vTo.ok)  { setRecipientErr('To — '  + vTo.error);  return; }
+    if (!vCc.ok)  { setRecipientErr('Cc — '  + vCc.error);  return; }
+    if (!vBcc.ok) { setRecipientErr('Bcc — ' + vBcc.error); return; }
     setSending(true);
     setFlash('idle');
     try {
       const endpoint = sharedMailboxId ? '/api/sales/mails/send' : '/api/user/gmail/send';
       const payload: Record<string, unknown> = {
-        to: to.trim(),
-        cc: cc.trim() || undefined,
-        bcc: bcc.trim() || undefined,
+        to: vTo.normalised,
+        cc: vCc.normalised || undefined,
+        bcc: vBcc.normalised || undefined,
         subject: subject.trim(),
         body_html: html,
         body_plain: plain,
@@ -369,16 +433,33 @@ export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId
 
         <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Field label="To">
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
               <input
                 value={to}
                 onChange={(e) => onToChange(e.target.value)}
                 onKeyDown={onToKeyDown}
                 onFocus={() => { if (suggestions.length > 0) setSuggestOpen(true); }}
-                placeholder="name@example.com"
-                style={inputStyle}
+                placeholder="name@example.com  (comma or space-separated for multi-add)"
+                style={{ ...inputStyle, flex: 1 }}
                 autoComplete="off"
               />
+              {/* PBS 2026-07-15 · inline +Cc / +Bcc toggles, right of the To field. */}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {!showCc && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCc(true)}
+                    style={{ background: 'transparent', border: 'none', color: FOREST, fontSize: 11, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                  >+ Cc</button>
+                )}
+                {!showBcc && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBcc(true)}
+                    style={{ background: 'transparent', border: 'none', color: FOREST, fontSize: 11, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                  >+ Bcc</button>
+                )}
+              </div>
               {suggestOpen && (
                 <div style={{
                   position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
@@ -408,16 +489,24 @@ export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId
               )}
             </div>
           </Field>
-          {!showCcBcc && (
-            <button onClick={() => setShowCcBcc(true)} style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: FOREST, fontSize: 12, cursor: 'pointer', padding: 0 }}>
-              Add CC/BCC
-            </button>
+          {showCc && (
+            <Field label="Cc">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="cc1@x.com, cc2@x.com" style={{ ...inputStyle, flex: 1 }} />
+                <button type="button" onClick={() => { setCc(''); setShowCc(false); }} style={{ background: 'transparent', border: 'none', color: INK_M, fontSize: 14, cursor: 'pointer', padding: 0 }} aria-label="Remove Cc row">×</button>
+              </div>
+            </Field>
           )}
-          {showCcBcc && (
-            <>
-              <Field label="Cc"><input value={cc} onChange={(e) => setCc(e.target.value)} style={inputStyle} /></Field>
-              <Field label="Bcc"><input value={bcc} onChange={(e) => setBcc(e.target.value)} style={inputStyle} /></Field>
-            </>
+          {showBcc && (
+            <Field label="Bcc">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input value={bcc} onChange={(e) => setBcc(e.target.value)} placeholder="bcc1@x.com, bcc2@x.com" style={{ ...inputStyle, flex: 1 }} />
+                <button type="button" onClick={() => { setBcc(''); setShowBcc(false); }} style={{ background: 'transparent', border: 'none', color: INK_M, fontSize: 14, cursor: 'pointer', padding: 0 }} aria-label="Remove Bcc row">×</button>
+              </div>
+            </Field>
+          )}
+          {recipientErr && (
+            <div style={{ fontSize: 11, color: RED, padding: '2px 0' }}>{recipientErr}</div>
           )}
           <Field label="Subject">
             <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" style={inputStyle} />
