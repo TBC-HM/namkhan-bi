@@ -240,6 +240,33 @@ export async function GET(req: Request, { params }: Ctx) {
   const { proposal, blocks, email } = await getProposalWithBlocks(params.id);
   if (!proposal) return NextResponse.json({ error: 'proposal_not_found' }, { status: 404 });
 
+  // PBS 2026-07-17 — diagnostic: on empty blocks, cross-check via a second
+  // service-role query bypassing supabase-js's helper. Surfaces the divergence
+  // as both a response header and an inline banner so the composer iframe
+  // reveals the real failure mode (schema not exposed / cache / RLS drift).
+  let diagBlockCountFromServiceRole: number | null = null;
+  let diagBlockErr: string | null = null;
+  if (blocks.length === 0) {
+    try {
+      const sbDiag = getSupabaseAdmin();
+      const probe = await sbDiag
+        .schema('sales')
+        .from('proposal_blocks')
+        .select('id', { count: 'exact', head: true })
+        .eq('proposal_id', params.id);
+      diagBlockCountFromServiceRole = probe.count ?? null;
+      diagBlockErr = probe.error ? `${probe.error.code ?? ''}:${probe.error.message ?? ''}` : null;
+      console.error('[preview.diag] blocks empty', {
+        proposal_id: params.id,
+        service_role_count: diagBlockCountFromServiceRole,
+        error: diagBlockErr,
+      });
+    } catch (e) {
+      diagBlockErr = String((e as Error)?.message ?? e);
+      console.error('[preview.diag] probe threw', diagBlockErr);
+    }
+  }
+
   const inq = proposal.inquiry_id ? await getInquiry(proposal.inquiry_id) : null;
   const dateIn = (proposal.date_in_snapshot ?? inq?.date_in ?? '') as string;
   const dateOut = (proposal.date_out_snapshot ?? inq?.date_out ?? '') as string;
@@ -321,8 +348,29 @@ export async function GET(req: Request, { params }: Ctx) {
     sender,
   };
 
-  const html = renderProposalEmailHtml(ctx);
-  if (format === 'json') return NextResponse.json({ subject: ctx.subject, html, base_url: base });
+  let html = renderProposalEmailHtml(ctx);
+  // PBS 2026-07-17 — prepend an inline red diagnostic banner when the composer
+  // iframe would otherwise render an empty stay ($0, no cards). This makes the
+  // failure mode visible instead of silent.
+  if (blocks.length === 0 && (diagBlockCountFromServiceRole ?? 0) > 0) {
+    const banner = `<div style="padding:12px 18px;background:#8B0000;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em">DIAG · sales.proposal_blocks reports ${diagBlockCountFromServiceRole} row(s) but helper returned 0. err=${(diagBlockErr ?? 'none')} · proposal=${params.id}</div>`;
+    html = banner + html;
+  } else if (blocks.length === 0) {
+    const banner = `<div style="padding:12px 18px;background:#7a5500;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em">DIAG · No blocks yet for this proposal. Add a room from the composer before previewing.</div>`;
+    html = banner + html;
+  }
+
+  if (format === 'json') return NextResponse.json({
+    subject: ctx.subject,
+    html,
+    base_url: base,
+    diag: {
+      block_count_helper: blocks.length,
+      block_count_probe: diagBlockCountFromServiceRole,
+      block_probe_err: diagBlockErr,
+      email_present: !!email,
+    },
+  });
   // PBS 2026-07-16 — aggressive no-cache; browser + service worker were serving
   // stale preview responses even though the client bumped the ?v= param.
   return new Response(html, {
@@ -333,6 +381,9 @@ export async function GET(req: Request, { params }: Ctx) {
       'Pragma':        'no-cache',
       'Expires':       '0',
       'X-Preview-Rendered-At': new Date().toISOString(),
+      'X-Block-Count-Helper': String(blocks.length),
+      'X-Block-Count-Probe':  String(diagBlockCountFromServiceRole ?? ''),
+      'X-Block-Probe-Err':    (diagBlockErr ?? '').slice(0, 200),
       'Surrogate-Control':     'no-store',
       'CDN-Cache-Control':     'no-store',
       'Vercel-CDN-Cache-Control': 'no-store',
