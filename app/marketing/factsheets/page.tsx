@@ -72,7 +72,7 @@ export default async function FactsheetsPage() {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="All factsheets" meta={rows.length + ' total'}>
+        <Container title={'All factsheets · ' + rows.length + ' total'}>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             <Link
               href="/documents/new?doc_type=marketing&doc_subtype=factsheet"
