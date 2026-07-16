@@ -44,6 +44,14 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
   const [busy, setBusy] = useState<string | null>(null);
   const [sentToken, setSentToken] = useState<string | null>(proposal.public_token);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
+  // PBS 2026-07-16 (item 2/4) — newsletter-optic controls above the composer body.
+  //   withPhotos: master toggle so PBS can send a text-only email without hunting each block.
+  //   factsheets: list of marketing factsheets from public.v_marketing_factsheets,
+  //               attached to the proposal as a footer chip (email template already
+  //               renders a factsheet chip if attachedFactsheetId is passed as a query).
+  const [withPhotos, setWithPhotos] = useState<boolean>(true);
+  const [factsheets, setFactsheets] = useState<Array<{ doc_id: string; title: string; for_deal_types: string[] | null }>>([]);
+  const [attachedFactsheetId, setAttachedFactsheetId] = useState<string>('');
 
   // Pre-send availability gate state.
   // status: 'green' (fresh + buffer) | 'yellow' (tight or stale) | 'red' (sold out / under-qty) | null (loading)
@@ -63,6 +71,13 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
 
   // Run check on mount and after every block change
   useEffect(() => { refreshCheck(); }, [refreshCheck, blocks.length]);
+
+  // PBS 2026-07-16 (item 5) — load factsheets once for the dropdown.
+  useEffect(() => {
+    fetch('/api/marketing/factsheets').then(r => r.ok ? r.json() : { rows: [] }).then((j) => {
+      setFactsheets(Array.isArray(j.rows) ? j.rows : []);
+    }).catch(() => setFactsheets([]));
+  }, []);
 
   const totalLak = blocks.reduce((s, b) => s + Number(b.total_lak ?? 0), 0);
   const totalUsd = totalLak / FX_LAK_PER_USD;
@@ -240,6 +255,40 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
           )}
         </div>
       )}
+
+      {/* PBS 2026-07-16 (item 2 / 5) — newsletter-optic chrome bar */}
+      <div style={{
+        display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
+        padding: '10px 12px', margin: '12px 0',
+        background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6,
+      }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#1B1B1B', cursor: 'pointer' }}>
+          <input type="checkbox" checked={withPhotos} onChange={(e) => setWithPhotos(e.target.checked)} />
+          <span>With photos in preview</span>
+        </label>
+        <span style={{ width: 1, height: 20, background: '#E6DFCC' }} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#1B1B1B' }}>
+          <span>Factsheet:</span>
+          {factsheets.length === 0 ? (
+            <a href="/marketing/factsheets" style={{ color: '#B04A2F', fontSize: 11 }}>
+              None yet — add one →
+            </a>
+          ) : (
+            <select
+              value={attachedFactsheetId}
+              onChange={(e) => setAttachedFactsheetId(e.target.value)}
+              style={{ padding: '4px 8px', fontSize: 12, border: '1px solid #E6DFCC', borderRadius: 3, background: '#FFFFFF', color: '#1B1B1B' }}
+            >
+              <option value="">(none)</option>
+              {factsheets.map((f) => (
+                <option key={f.doc_id} value={f.doc_id}>
+                  {f.title}{f.for_deal_types && f.for_deal_types.length ? ' · ' + f.for_deal_types.join('/') : ''}
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+      </div>
 
       {tab === 'blocks' && (
         <div className="composer-grid">
@@ -441,7 +490,12 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
               <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#5A5A5A' }}>Newsletter-quality preview</span>
               <button onClick={() => setShowEmailPreview(false)} className="btn">×</button>
             </header>
-            <iframe title="proposal email preview" src={`/api/sales/proposals/${proposalId}/email/preview`} style={{ flex: 1, border: 0, background: '#F5F0E1' }} />
+            {/* PBS 2026-07-16 (item 4) — pass photo toggle + factsheet through to preview */}
+            <iframe
+              title="proposal email preview"
+              src={`/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}`}
+              style={{ flex: 1, border: 0, background: '#F5F0E1' }}
+            />
           </div>
         </div>
       )}
