@@ -299,14 +299,32 @@ export async function GET(req: Request, { params }: Ctx) {
   const sender = await loadSender(sb, (proposal as unknown as { created_by: string | null }).created_by);
   // PBS 2026-07-16 (Feature A) — multi-rate offers side-by-side in the email.
   // Empty or length 1 → template falls back to single-card layout automatically.
-  const { data: offerRows } = await sb
-    .schema('sales')
-    .from('proposal_rate_offers')
-    .select('id, rate_plan_id, position, label, payment_terms, cancellation_terms, unit_price_lak, total_lak')
-    .eq('proposal_id', params.id)
-    .order('position', { ascending: true })
-    .order('created_at', { ascending: true });
-  const rateOffers: ProposalRateOfferInput[] = ((offerRows ?? []) as ProposalRateOfferInput[]).map((o) => ({
+  // PBS 2026-07-17 — parallel unordered fallback so we always render every
+  // saved offer even if .order() interacts weirdly with PostgREST schema cache.
+  const [orderedR, fallbackR] = await Promise.all([
+    sb.schema('sales').from('proposal_rate_offers')
+      .select('id, rate_plan_id, position, label, payment_terms, cancellation_terms, unit_price_lak, total_lak, created_at')
+      .eq('proposal_id', params.id)
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true }),
+    sb.schema('sales').from('proposal_rate_offers')
+      .select('id, rate_plan_id, position, label, payment_terms, cancellation_terms, unit_price_lak, total_lak, created_at')
+      .eq('proposal_id', params.id),
+  ]);
+  const orderedRows = (orderedR.data ?? []) as any[];
+  const fallbackRows = (fallbackR.data ?? []) as any[];
+  const offerRows = (orderedRows.length >= fallbackRows.length ? orderedRows : fallbackRows)
+    .slice()
+    .sort((a: any, b: any) => (Number(a.position ?? 0) - Number(b.position ?? 0)) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
+  console.error('[preview.diag] offers fetch', {
+    proposal_id: params.id,
+    ordered_len: orderedRows.length,
+    ordered_err: orderedR.error?.message ?? null,
+    fallback_len: fallbackRows.length,
+    fallback_err: fallbackR.error?.message ?? null,
+    resolved_len: offerRows.length,
+  });
+  const rateOffers: ProposalRateOfferInput[] = (offerRows as ProposalRateOfferInput[]).map((o) => ({
     id: o.id,
     rate_plan_id: o.rate_plan_id,
     position: Number(o.position ?? 1),
