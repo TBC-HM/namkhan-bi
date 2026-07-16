@@ -73,32 +73,61 @@ async function loadFactsheet(sb: ReturnType<typeof getSupabaseAdmin>, factsheetI
   return data as { doc_id: string; title: string; file_name: string | null; external_url: string | null } | null;
 }
 
-// PBS 2026-07-16 (item 6) — for each block that is missing a hero_asset_id,
-// resolve the best marketing-tier candidate from media.media_assets. Ranking:
-//   status='ready' (Namkhan's approved-equivalent)
-//   room_type_id / activity_id match
-//   quality_index DESC NULLS LAST
-// This is preview-only — we do NOT persist the fallback back to sales.proposal_blocks.
+// PBS 2026-07-16 (item 6 + follow-up) — for each block that is missing a
+// hero_asset_id, resolve the best marketing-tier candidate from
+// media.media_assets. Ranking within each candidate set:
+//   status IN ('ready','tagged')     — the Namkhan asset_status enum has no
+//                                       'approved'; 'ready' + 'tagged' are the
+//                                       marketing-approved tiers.
+//   quality_index DESC NULLS LAST → technical_score DESC NULLS LAST → created_at DESC
+//
+// Three block-type paths:
+//   1) block_type='room'      → media_assets.room_type_id = Number(ref_id)
+//   2) block_type='activity'  → if ref_id is a bigint (new content.activities pick),
+//                               join on media_assets.activity_id = Number(ref_id).
+//   3) block_type='activity'  → if ref_id is a UUID (legacy sales.activity_catalog
+//                               pick), fall back to LABEL MATCH on caption /
+//                               alt_text / original_filename / sub_category. This is
+//                               imperfect but "any thumbnail" beats "text-only" for
+//                               the preview iframe.
+//
+// This is preview-only — we do NOT persist the fallback back to
+// sales.proposal_blocks. The composer's explicit photo picker is still the
+// canonical way to set a hero.
 async function autoHeroForBlocks(
   sb: ReturnType<typeof getSupabaseAdmin>,
   blocks: ProposalBlock[],
 ): Promise<Record<string, string>> {
   const roomIds = new Set<number>();
-  const activityIds = new Set<number>();
+  const activityBigints = new Set<number>();
+  const labelLookups: Array<{ blockId: string; label: string }> = [];
+
   for (const b of blocks) {
     if (b.hero_asset_id) continue;
     if (b.block_type === 'room' && b.ref_id) {
       const n = Number(b.ref_id);
       if (Number.isFinite(n)) roomIds.add(n);
+      continue;
     }
-    // Legacy proposal blocks may carry sales.activity_catalog UUIDs in ref_id.
-    // Those cannot be joined directly to media.media_assets.activity_id (bigint),
-    // so we simply skip activity fallback for now — activity blocks show text-only,
-    // and the auto-picker in the composer will attach hero_asset_id explicitly for
-    // any activity added via the new content.activities_catalog picker.
-    if (b.block_type === 'activity' && b.ref_id && /^\d+$/.test(b.ref_id)) {
-      activityIds.add(Number(b.ref_id));
+    if (b.block_type === 'activity' && b.ref_id) {
+      if (/^\d+$/.test(b.ref_id)) {
+        activityBigints.add(Number(b.ref_id));
+      } else if (b.label) {
+        // Legacy sales.activity_catalog UUIDs → fall back to label match.
+        labelLookups.push({ blockId: b.id, label: b.label });
+      }
     }
+  }
+
+  const APPROVED_TIERS = ['ready', 'tagged'];
+
+  // Rank helper — quality_index → technical_score → created_at.
+  function rank(a: any, b: any): number {
+    const qa = Number(a.quality_index ?? 0), qb = Number(b.quality_index ?? 0);
+    if (qa !== qb) return qb - qa;
+    const ta = Number(a.technical_score ?? 0), tb = Number(b.technical_score ?? 0);
+    if (ta !== tb) return tb - ta;
+    return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
   }
 
   const byRoom: Record<number, string> = {};
@@ -106,27 +135,57 @@ async function autoHeroForBlocks(
     const { data } = await sb
       .schema('media')
       .from('media_assets')
-      .select('asset_id, room_type_id, quality_index')
+      .select('asset_id, room_type_id, quality_index, technical_score, created_at')
       .in('room_type_id', Array.from(roomIds))
-      .eq('status', 'ready');
-    const ranked = ((data ?? []) as Array<{ asset_id: string; room_type_id: number; quality_index: number | null }>)
-      .sort((a, b) => Number(b.quality_index ?? 0) - Number(a.quality_index ?? 0));
+      .in('status', APPROVED_TIERS);
+    const ranked = ((data ?? []) as any[]).slice().sort(rank);
     for (const row of ranked) {
-      if (!byRoom[row.room_type_id]) byRoom[row.room_type_id] = row.asset_id;
+      if (!byRoom[row.room_type_id]) byRoom[row.room_type_id] = row.asset_id as string;
     }
   }
+
   const byActivity: Record<number, string> = {};
-  if (activityIds.size > 0) {
+  if (activityBigints.size > 0) {
     const { data } = await sb
       .schema('media')
       .from('media_assets')
-      .select('asset_id, activity_id, quality_index')
-      .in('activity_id', Array.from(activityIds))
-      .eq('status', 'ready');
-    const ranked = ((data ?? []) as Array<{ asset_id: string; activity_id: number; quality_index: number | null }>)
-      .sort((a, b) => Number(b.quality_index ?? 0) - Number(a.quality_index ?? 0));
+      .select('asset_id, activity_id, quality_index, technical_score, created_at')
+      .in('activity_id', Array.from(activityBigints))
+      .in('status', APPROVED_TIERS);
+    const ranked = ((data ?? []) as any[]).slice().sort(rank);
     for (const row of ranked) {
-      if (!byActivity[row.activity_id]) byActivity[row.activity_id] = row.asset_id;
+      if (!byActivity[row.activity_id]) byActivity[row.activity_id] = row.asset_id as string;
+    }
+  }
+
+  // Label match for legacy activity blocks. We build one OR-of-ilike query per
+  // unique label so a single round-trip covers all lookups.
+  const byLabel: Record<string, string> = {};
+  if (labelLookups.length > 0) {
+    for (const { blockId, label } of labelLookups) {
+      const needle = label.trim().toLowerCase();
+      if (!needle) continue;
+      // First try the full label, then split into words ≥4 chars to widen the net
+      // (so "MotoLao countryside ride" also matches "motorbike" via caption text).
+      const words = Array.from(new Set([
+        needle,
+        ...needle.split(/\W+/).filter((w) => w.length >= 4),
+      ]));
+      // Build a supabase-js .or() filter: ilike matches on any of the guest-facing text columns.
+      const cols = ['caption', 'alt_text', 'original_filename', 'sub_category', 'category'];
+      const orExpr = words
+        .flatMap((w) => cols.map((c) => `${c}.ilike.%${w.replace(/[%,()]/g, '')}%`))
+        .join(',');
+      if (!orExpr) continue;
+      const { data } = await sb
+        .schema('media')
+        .from('media_assets')
+        .select('asset_id, quality_index, technical_score, created_at')
+        .in('status', APPROVED_TIERS)
+        .or(orExpr)
+        .limit(25);
+      const ranked = ((data ?? []) as any[]).slice().sort(rank);
+      if (ranked.length > 0) byLabel[blockId] = ranked[0].asset_id as string;
     }
   }
 
@@ -134,12 +193,16 @@ async function autoHeroForBlocks(
   for (const b of blocks) {
     if (b.hero_asset_id) continue;
     if (b.block_type === 'room' && b.ref_id) {
-      const n = Number(b.ref_id);
-      const pick = byRoom[n];
+      const pick = byRoom[Number(b.ref_id)];
       if (pick) out[b.id] = pick;
-    } else if (b.block_type === 'activity' && b.ref_id && /^\d+$/.test(b.ref_id)) {
-      const pick = byActivity[Number(b.ref_id)];
-      if (pick) out[b.id] = pick;
+    } else if (b.block_type === 'activity' && b.ref_id) {
+      if (/^\d+$/.test(b.ref_id)) {
+        const pick = byActivity[Number(b.ref_id)];
+        if (pick) out[b.id] = pick;
+      } else {
+        const pick = byLabel[b.id];
+        if (pick) out[b.id] = pick;
+      }
     }
   }
   return out;
