@@ -104,7 +104,16 @@ const FOLDER_Q: Record<Exclude<AutoFolder, null>, string> = {
   to_me:           'to:me -cc:me -bcc:me -"list-unsubscribe" -from:(no-reply OR noreply OR notifications OR automated OR mailer-daemon OR postmaster) -in:spam -in:trash',
   cloudbeds:       'from:(cloudbeds.com OR no-reply@cloudbeds.com OR notifications@cloudbeds.com)',
   lighthouse:      'from:(lighthouse-hotels.com OR lighthouse.com OR notifications@lighthouse)',
-  answer_expected: 'is:unread from:(-cloudbeds.com -lighthouse-hotels.com -noreply -no-reply) -"list-unsubscribe" newer_than:30d',
+  // PBS 2026-07-15 · BUG · previous query allowed CC'd bulk mail + used
+  // `from:(-x -y)` which Gmail treats as "match everything" (the leading
+  // dash inside the group is not a valid negation). Result: 0 mails in the
+  // folder because everything got wiped by the -"list-unsubscribe" filter
+  // combined with a query that returned too broadly.
+  // Fix: force `to:me -cc:me -bcc:me` scope so we only surface mails PBS
+  // is the primary addressee of, tighten age to 14d, broaden the
+  // auto-notification sender exclusion set with proper per-clause -from:
+  // negations (Gmail requires each excluded sender to be its own -from:).
+  answer_expected: 'to:me -cc:me -bcc:me is:unread newer_than:14d -"list-unsubscribe" -from:(no-reply OR noreply OR notifications OR automated OR mailer-daemon OR postmaster OR cloudbeds.com OR lighthouse-hotels.com OR googlecommunityteam@ OR github@ OR notify@) -in:spam -in:trash',
 };
 
 // PBS 2026-07-15 · Forwarded aliases — the 7 shared inboxes that get forwarded
@@ -157,6 +166,43 @@ function parseFrom(raw: string): { name: string; email: string } {
 // PBS 2026-07-15 · Item 4 — sender-email extractor for routing rule creation.
 function extractSender(raw: string): string {
   return parseFrom(raw).email.toLowerCase();
+}
+
+// PBS 2026-07-15 · [↪ Forward] · strip Fwd:/FW: prefixes so we don't build
+// "Fwd: Fwd: Fwd:" when forwarding an already-forwarded message.
+function stripFwdPrefix(subject: string): string {
+  return subject.replace(/^\s*(?:(?:fwd?|fw)\s*:\s*)+/i, '').trim();
+}
+
+// PBS 2026-07-15 · [↪ Forward] · build the standard "----- Forwarded message -----"
+// block that goes into the composer body. Mirrors Gmail's forward format so
+// downstream clients recognise the chain (and our own parseForwardedThread
+// picks it up on re-open).
+function buildForwardedBody(msg: FullMessage): string {
+  const plain = (msg.textBody && msg.textBody.trim())
+    ? msg.textBody
+    : (msg.htmlBody || '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>');
+  const trimmed = plain.replace(/\n{3,}/g, '\n\n').trim();
+  const lines = [
+    '---------- Forwarded message ----------',
+    'From: ' + (msg.from || 'unknown'),
+    'Date: ' + (msg.date || ''),
+    'Subject: ' + (msg.subject || ''),
+    'To: ' + (msg.to || ''),
+  ];
+  if (msg.cc) lines.push('Cc: ' + msg.cc);
+  lines.push('');
+  lines.push(trimmed);
+  return lines.join('\n');
 }
 
 function relTime(ms: number): string {
@@ -959,6 +1005,27 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     setReplyBody('');
   }, []);
 
+  // PBS 2026-07-15 · [↪ Forward] · open ComposeModal pre-filled with the
+  // newest message in the thread wrapped in the standard "Forwarded message"
+  // block. Recipient is left empty for the sender to pick.
+  // NOTE: attachments are NOT re-attached — the Gmail thread route does not
+  // currently return attachment payloads; the sender must re-attach manually
+  // via the 📎 button. This is called out in the compose modal (message chip).
+  const forwardThread = useCallback(() => {
+    if (threadMessages.length === 0) return;
+    // Prefer the newest message as the forward source (most current context).
+    const src = threadMessages[threadMessages.length - 1];
+    const fwdSubject = 'Fwd: ' + stripFwdPrefix(src.subject || '(no subject)');
+    setComposePrefill({
+      to: '',
+      subject: fwdSubject,
+      forwardedBody: buildForwardedBody(src),
+      // thread_id + in_reply_to intentionally omitted — forward starts a NEW
+      // thread from Gmail's perspective (different topic + different audience).
+    });
+    setShowCompose(true);
+  }, [threadMessages]);
+
   const sendReply = useCallback(async () => {
     if (threadMessages.length === 0 || !replyBody.trim()) return;
     const newest = threadMessages[threadMessages.length - 1];
@@ -1555,6 +1622,8 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
               convertingLead={convertingLead}
               onCreateProposal={() => void createProposalFromThread()}
               creatingProposal={creatingProposal}
+              /* PBS 2026-07-15 · [↪ Forward] · opens ComposeModal pre-filled. */
+              onForward={forwardThread}
             />
             {/* PBS 2026-07-15 · Convert-to-Lead / Create-Proposal toast. */}
             {convertToast && (
@@ -1936,7 +2005,7 @@ function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: (
   );
 }
 
-function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starred, onDelete, onUnsubscribe, onSpam, onRouteSender, onConvertToLead, convertingLead, onCreateProposal, creatingProposal }: {
+function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starred, onDelete, onUnsubscribe, onSpam, onRouteSender, onConvertToLead, convertingLead, onCreateProposal, creatingProposal, onForward }: {
   subject: string;
   onArchive: () => void;
   onTrash: () => void;
@@ -1952,6 +2021,9 @@ function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starr
   convertingLead?: boolean;
   onCreateProposal?: () => void;
   creatingProposal?: boolean;
+  // PBS 2026-07-15 · Forward · opens ComposeModal pre-filled with the newest
+  // message wrapped in the standard "----- Forwarded message -----" block.
+  onForward?: () => void;
 }) {
   const [routeOpen, setRouteOpen] = useState(false);
   return (
@@ -1977,6 +2049,11 @@ function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starr
         <HeaderBtn onClick={onTrash}>Trash</HeaderBtn>
         <HeaderBtn onClick={onStar}><span style={{ color: starred ? T.STAR : T.INK_S }}>★</span> {starred ? 'Unstar' : 'Star'}</HeaderBtn>
         <HeaderBtn onClick={onMarkUnread}>Mark unread</HeaderBtn>
+        {/* PBS 2026-07-15 · [↪ Forward] · opens ComposeModal with the newest
+            message wrapped in "----- Forwarded message -----" block.
+            Attachments are NOT re-attached (Gmail thread route doesn't return
+            them yet); sender must re-attach manually via the 📎 button. */}
+        {onForward && <HeaderBtn onClick={onForward}><span style={{ color: T.FOREST, fontWeight: 700 }}>↪ Forward</span></HeaderBtn>}
         {/* PBS 2026-07-17 Feature 6 · Delete = confirm + Gmail TRASH + local remove. */}
         <HeaderBtn onClick={onDelete}><span style={{ color: T.RED }}>🗑 Delete</span></HeaderBtn>
         {/* PBS 2026-07-15 · Item 6 — Unsubscribe / Spam / Route sender. */}
