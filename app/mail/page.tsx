@@ -3,9 +3,12 @@
 // PBS 2026-07-14: "i want a proffesionalfull screen mailbox not the pop up".
 // Gmail/Superhuman-class 3-pane layout under /mail. If the user has not
 // connected their Gmail yet, we render a centered CTA with the OAuth link.
+// PBS 2026-07-16 · Item 3 — pass CurrentUser so MailClient can mount the
+// top-right UserMenu overlay (Inbox/Settings/Sign-out/Analytics for admins).
 import { redirect } from 'next/navigation';
 import { getCurrentAuthUser, buildUserAuthUrl } from '@/lib/userGmail';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getCurrentUser } from '@/lib/currentUser';
 import MailClient from './_client/MailClient';
 
 export const dynamic = 'force-dynamic';
@@ -65,9 +68,30 @@ export default async function MailPage() {
     );
   }
 
+  // Load CurrentUser (from cockpit_users / app_users) so MailClient can render
+  // the top-right UserMenu overlay. Falls back to a derived shape on miss so
+  // the mailbox never blocks on the lookup.
+  let currentUser;
+  try {
+    currentUser = await getCurrentUser();
+  } catch {
+    const local = (user.email || 'user').split('@')[0];
+    currentUser = {
+      id: user.id,
+      email: user.email,
+      display_name: local,
+      role: 'staff' as const,
+      initials: local.slice(0, 2).toUpperCase(),
+    };
+  }
+
   return (
     <div style={{ height: '100vh', overflow: 'hidden', background: WHITE }}>
-      <MailClient userId={user.id} userEmail={conn.gmail_address ?? user.email} />
+      <MailClient
+        userId={user.id}
+        userEmail={conn.gmail_address ?? user.email}
+        currentUser={currentUser}
+      />
     </div>
   );
 }
