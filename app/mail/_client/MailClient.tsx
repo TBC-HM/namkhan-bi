@@ -2213,7 +2213,7 @@ function MessageCard({ msg, expanded, isNewest, onToggle }: { msg: FullMessage; 
               {msg.attachments.map((a) => (
                 <a
                   key={a.attachmentId}
-                  href={'/api/mail/message/' + msg.id + '/attachment/' + a.attachmentId}
+                  href={'/api/mail/message/' + encodeURIComponent(msg.id) + '/attachment/' + encodeURIComponent(a.attachmentId)}
                   download={a.filename}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 6,
