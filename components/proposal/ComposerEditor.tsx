@@ -592,6 +592,29 @@ export default function ComposerEditor({
         </div>
       </div>
 
+      {/* PBS 2026-07-16 item 6 — prominent date row (MMM dd, yyyy) directly under the top bar. */}
+      <div style={{
+        padding: '10px 24px 12px',
+        borderBottom: `1px solid ${T.hairline}`,
+        background: T.paper,
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 16,
+        flexWrap: 'wrap',
+      }}>
+        <span style={{ fontSize: 16, fontWeight: 600, color: T.ink, letterSpacing: 0 }}>
+          {new Date(dateIn + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+          {' → '}
+          {new Date(dateOut + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+        </span>
+        <span style={{ fontSize: 13, color: T.inkSoft }}>
+          · {nightCount(dateIn, dateOut)} {nightCount(dateIn, dateOut) === 1 ? 'night' : 'nights'}
+          {' · '}{adults} {adults === 1 ? 'adult' : 'adults'}
+          {childrenN > 0 ? `, ${childrenN} ${childrenN === 1 ? 'child' : 'children'}` : ''}
+          {' · '}{rooms} {rooms === 1 ? 'room' : 'rooms'}
+        </span>
+      </div>
+
       {/* Availability banner (kept from prior iteration) */}
       {check && check.status !== 'no_rooms' && check.status !== 'green' && (
         <div style={{
@@ -813,6 +836,7 @@ export default function ComposerEditor({
             </div>
           </header>
           <iframe
+            key={previewV}
             title="proposal email preview"
             src={previewSrc}
             style={{ flex: 1, border: 0, background: T.warm, width: '100%' }}
