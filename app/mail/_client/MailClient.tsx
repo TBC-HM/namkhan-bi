@@ -133,6 +133,11 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   const [weekFilter, setWeekFilter] = useState<boolean>(false);
   const [attachFilter, setAttachFilter] = useState<boolean>(false);
   const [newslettersOnly, setNewslettersOnly] = useState<boolean>(false);
+  // PBS 2026-07-16: Forwarded folder — filter to Fwd:/FW: threads, optionally
+  // scoped to a specific original recipient alias (book@, gm@, reservations@, etc.)
+  // Detects forwarded via subject prefix; sub-folder scopes via `deliveredto:` operator.
+  const [forwardedOnly, setForwardedOnly] = useState<boolean>(false);
+  const [forwardedAlias, setForwardedAlias] = useState<string | null>(null);
   const [showCompose, setShowCompose] = useState<boolean>(false);
   // PBS 2026-07-16: cross-page deep-link compose (e.g. /mail?compose=1&to=x@y&subject=Z).
   // Lets any page (Leads, Contacts, etc.) trigger in-app compose pre-filled — replaces mailto:.
@@ -240,8 +245,11 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     if (weekFilter)    parts.push('newer_than:7d');
     if (attachFilter)  parts.push('has:attachment');
     if (newslettersOnly) parts.push('(unsubscribe OR "List-Unsubscribe")');
+    // PBS 2026-07-16: Forwarded folder + per-alias sub-folder.
+    if (forwardedOnly) parts.push('(subject:Fwd OR subject:FW OR subject:Fwd: OR subject:FW:)');
+    if (forwardedAlias) parts.push('(deliveredto:' + forwardedAlias + ' OR "' + forwardedAlias + '")');
     return parts.join(' ');
-  }, [committedQuery, unreadFilter, starredFilter, directFilter, todayFilter, weekFilter, attachFilter, newslettersOnly]);
+  }, [committedQuery, unreadFilter, starredFilter, directFilter, todayFilter, weekFilter, attachFilter, newslettersOnly, forwardedOnly, forwardedAlias]);
 
   // ---- load current label list -----------------------------------------
   const loadList = useCallback(async (append?: string) => {
@@ -561,6 +569,41 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                 />
               ))}
             </>
+          )}
+
+          {/* PBS 2026-07-16: Forwarded folder + per-alias sub-folders.
+              Detects Fwd:/FW: subject prefix; sub-folder scopes by original
+              recipient alias (Namkhan shared mailboxes forwarded to PBS). */}
+          <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Forwarded</div>
+          <RailItem
+            label="↳ All forwarded"
+            unread={0}
+            active={forwardedOnly && !forwardedAlias}
+            onClick={() => { setForwardedOnly(true); setForwardedAlias(null); }}
+          />
+          {[
+            'book@thenamkhan.com',
+            'gm@thenamkhan.com',
+            'reservations@thenamkhan.com',
+            'rom@thenamkhan.com',
+            'xl@thenamkhan.com',
+            'wm@thenamkhan.com',
+            'hr@thenamkhan.com',
+          ].map((alias) => (
+            <RailItem
+              key={alias}
+              label={'  ' + alias.split('@')[0] + '@'}
+              unread={0}
+              active={forwardedOnly && forwardedAlias === alias}
+              onClick={() => { setForwardedOnly(true); setForwardedAlias(alias); }}
+            />
+          ))}
+          {(forwardedOnly || forwardedAlias) && (
+            <button
+              type="button"
+              onClick={() => { setForwardedOnly(false); setForwardedAlias(null); }}
+              style={{ display: 'block', margin: '4px 16px 8px', padding: '3px 8px', fontSize: 10, background: 'transparent', color: T.INK_M, border: '1px solid ' + T.HAIR, borderRadius: 3, cursor: 'pointer' }}
+            >× Clear Forwarded filter</button>
           )}
 
           {/* Settings-style link section */}
