@@ -14,6 +14,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import ComposeModal, { type ComposePrefill } from '@/app/_components/ComposeModal';
 import { parseForwardedThread, isForwardedSubject, type ParsedMessage } from '@/lib/mail/parse-forwarded-thread';
+// PBS 2026-07-16 · Item 3 — top-right UserMenu overlay for the full-screen /mail page.
+import UserMenu from '@/components/nav/UserMenu';
+import type { CurrentUser } from '@/lib/currentUser';
 
 // ---- design tokens ------------------------------------------------------
 const T = {
@@ -78,7 +81,7 @@ type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error: string };
 type Api<T> = ApiOk<T> | ApiErr;
 
-interface Props { userId: string; userEmail: string }
+interface Props { userId: string; userEmail: string; currentUser?: CurrentUser | null }
 
 // ---- auto-folder definitions -------------------------------------------
 // PBS 2026-07-15 §1 — 4 mutually-exclusive smart folders below Forwarded.
@@ -233,7 +236,7 @@ function looksLikeNlPrompt(q: string): boolean {
 }
 
 // ---- root ---------------------------------------------------------------
-export default function MailClient({ userId: _userId, userEmail }: Props) {
+export default function MailClient({ userId: _userId, userEmail, currentUser }: Props) {
   void _userId; // reserved for future targeted API calls
   const [labels, setLabels] = useState<Label[]>([]);
   const [currentLabel, setCurrentLabel] = useState<string>('INBOX');
@@ -1265,6 +1268,14 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
 
   return (
     <div style={{ height: '100vh', display: 'grid', gridTemplateColumns: layout.railW + 'px 4px ' + layout.listW + 'px 4px 1fr', color: T.INK, fontFamily: "-apple-system, 'SF Pro Text', system-ui, 'Segoe UI', sans-serif", background: T.WHITE }}>
+      {/* PBS 2026-07-16 · Item 3 — top-right UserMenu overlay so the full-screen
+          mailbox has the same avatar / Inbox / Settings / Sign-out dropdown as
+          every other page. Positioned fixed, above the 3-pane grid. */}
+      {currentUser && (
+        <div style={{ position: 'fixed', top: 8, right: 12, zIndex: 100 }}>
+          <UserMenu user={currentUser} />
+        </div>
+      )}
       {/* LEFT RAIL */}
       <aside style={{ background: T.RAIL_BG, borderRight: '1px solid ' + T.HAIR, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: 14, borderBottom: '1px solid ' + T.HAIR, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1486,7 +1497,8 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
           <div style={{ padding: '10px 16px 4px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M }}>Settings</div>
           <a href="/mail/automations" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Automations</a>
           <a href="/mail/autoresponder" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Auto-responder</a>
-          <a href="/mail/analytics" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Analytics</a>
+          {/* PBS 2026-07-16 · Item 5 — Analytics moved out of the mail sidebar into
+              the admin-only UserMenu (accessible via the top-right avatar). */}
           {/* PBS 2026-07-15 · Item 7 — routing rules editor. */}
           <a href="/mail/rules" style={{ display: 'block', padding: '7px 16px', fontSize: 13, color: T.INK, textDecoration: 'none', borderLeft: '3px solid transparent' }}>Routing rules</a>
         </nav>
