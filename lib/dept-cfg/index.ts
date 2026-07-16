@@ -464,7 +464,8 @@ const SALES_CFG: DeptCfg = {
     // PBS 2026-07-11 pm (ADR-147 sales CRM): in-page label rename "Pipeline"→"Leads",
     // ICP Segments added as read-only sub-tab. TOP MENU UNCHANGED.
     { label: 'HoD',           href: '/sales'           },
-    { label: 'Mails',         href: '/sales/mails'     },  // PBS 2026-07-13 shared-mailbox inbox
+    // PBS 2026-07-16 (item 7): 'Mails' tab removed. Shared mailbox now lives under /mail
+    // (full-screen client), and /sales/mails is a permanent redirect stub.
     // PBS 2026-07-14: nav rename "Create New" → "Leads" (points at the new CRM at /sales/leads).
     // /sales/new route stays live; the CreateLead client is still accessible from within the Leads CMS drawer.
     { label: 'Leads',         href: '/sales/leads'    },
