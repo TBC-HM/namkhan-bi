@@ -688,7 +688,8 @@ function LeadProfileDrawer({
                   wordBreak: 'break-word',
                 }}>
                   <strong>Save failed:</strong> {err}
-                </div>}
+                </div>
+              )}
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={onClose} style={btnStyleGhost()}>Cancel</button>
                 <button type="button" onClick={save} disabled={saving} style={btnStylePrimary()}>{saving ? 'Saving…' : (isCreate ? 'Create lead' : 'Save changes')}</button>
