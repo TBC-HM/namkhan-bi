@@ -71,11 +71,19 @@ export async function POST(req: NextRequest) {
     method = 'mailto';
     target = mailto;
     try {
-      const { access } = await refreshIfExpired(user.id);
+      // PBS 2026-07-16 · sendMessage signature is { from, to, subject, body_html, body_plain? }
+      // — the earlier `body: 'unsubscribe'` was a type mismatch that failed tsc.
+      const { access, gmail } = await refreshIfExpired(user.id);
       const to = mailto.replace(/^mailto:/i, '').split('?')[0];
       const qMatch = mailto.match(/subject=([^&]+)/i);
       const subject = qMatch ? decodeURIComponent(qMatch[1]) : 'unsubscribe';
-      await sendMessage(access, { to, subject, body: 'unsubscribe' });
+      await sendMessage(access, {
+        from: gmail,
+        to,
+        subject,
+        body_html: '<p>unsubscribe</p>',
+        body_plain: 'unsubscribe',
+      });
     } catch (e) {
       attemptError = e instanceof Error ? e.message : 'mailto_send_failed';
     }
