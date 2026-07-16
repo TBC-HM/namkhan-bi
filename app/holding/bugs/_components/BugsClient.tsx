@@ -127,6 +127,23 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
     });
   }, [rows, statusFilter, deptFilter, urlQuery]);
 
+  async function del(id: number) {
+    if (!confirm('Delete this bug row permanently?')) return;
+    setBusy(id);
+    try {
+      const r = await fetch(`/api/cockpit/bugs/${id}`, { method: 'DELETE' });
+      if (r.ok) {
+        setRows((prev) => prev.filter((x) => x.id !== id));
+        setFlash(`Deleted #${id}`);
+      } else {
+        setFlash(`Delete failed: ${r.status}`);
+      }
+    } finally {
+      setBusy(null);
+      setTimeout(() => setFlash(null), 2500);
+    }
+  }
+
   async function act(id: number, action: 'acknowledge' | 'start' | 'done' | 'dismiss') {
     setBusy(id);
     try {
@@ -238,6 +255,7 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                       {s === 'acknowledged' && <Btn onClick={() => act(r.id, 'start')} disabled={busy === r.id}>Start</Btn>}
                       {s === 'in_progress' && <Btn onClick={() => act(r.id, 'done')} disabled={busy === r.id} tone="green">Done</Btn>}
                       {s !== 'dismissed' && s !== 'done' && <Btn onClick={() => act(r.id, 'dismiss')} disabled={busy === r.id} tone="red">Dismiss</Btn>}
+                      <Btn onClick={() => del(r.id)} disabled={busy === r.id} tone="red">🗑</Btn>
                       <Btn onClick={() => copyForAgent(r)} tone="ghost">📋 Agent</Btn>
                     </td>
                   </tr>
