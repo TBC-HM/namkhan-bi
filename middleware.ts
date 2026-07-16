@@ -17,7 +17,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 // PBS 2026-07-09: /account/password is public so first-time invitees can
 // reach the activation page with their token before they have a session cookie.
 // The page itself validates the token and refuses if it's missing/expired.
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/account/password', '/p/']
+// PBS 2026-07-16: /subscriber/confirm/[token] is the public newsletter opt-in
+// confirmation landing (single-purpose page; token = only auth surface).
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/account/password', '/p/', '/subscriber/confirm/']
 
 // base64url -> JSON. Edge-safe (no Buffer / no Node crypto).
 function decodeJwtPayload(token: string): Record<string, unknown> {
