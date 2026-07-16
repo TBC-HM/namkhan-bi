@@ -366,6 +366,10 @@ export default function ComposerEditor({
     rooms: Array<{ block_id: string; label: string; status: 'green' | 'yellow' | 'red'; message: string; min_avail_in_range: number; qty: number }>;
   } | null>(null);
 
+  // PBS 2026-07-17 — send outcome banner. Populated when the send API returns
+  // a non-2xx with a message body. Cleared on retry.
+  const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
+
   // Preview iframe cache-buster
   const [previewV, setPreviewV] = useState<number>(() => Date.now());
   const bumpPreview = useCallback(() => setPreviewV(Date.now()), []);
@@ -595,17 +599,29 @@ export default function ComposerEditor({
 
   async function sendProposal(opts: { force?: boolean } = {}) {
     setBusy('send');
+    setSendResult(null);
     const url = opts.force ? `/api/sales/proposals/${proposalId}/send?force=1` : `/api/sales/proposals/${proposalId}/send`;
-    const r = await fetch(url, { method: 'POST' });
-    const j = await r.json();
-    if (r.status === 409) {
-      if (j.check) setCheck(j.check);
-      setBusy(null);
-      return;
-    }
-    if (j.token) {
-      setSentToken(j.token);
-      refreshCheck();
+    let j: any = null;
+    try {
+      const r = await fetch(url, { method: 'POST' });
+      j = await r.json().catch(() => ({}));
+      if (r.status === 409) {
+        if (j.check) setCheck(j.check);
+        setSendResult({ ok: false, message: j.message || j.error || 'Rooms unavailable — availability check failed.' });
+        setBusy(null);
+        return;
+      }
+      if (r.ok && j.token) {
+        setSentToken(j.token);
+        setSendResult({ ok: true, message: `Sent to ${j.recipient_email ?? 'guest'} · gmail_message_id=${j.gmail_message_id ?? '—'}` });
+        refreshCheck();
+      } else {
+        // PBS 2026-07-17 — was silently swallowed. Now shown so the operator
+        // sees the actual reason (no_recipient / gmail_send_failed / etc).
+        setSendResult({ ok: false, message: (j.error ? `${j.error}: ` : '') + (j.message || j.hint || `HTTP ${r.status}`) });
+      }
+    } catch (e) {
+      setSendResult({ ok: false, message: `Network error · ${(e as Error)?.message ?? 'unknown'}` });
     }
     setBusy(null);
   }
@@ -634,15 +650,33 @@ export default function ComposerEditor({
   const nights = nightCount(proposal.date_in, proposal.date_out);
   const status = STATUS_TONE[proposal.status] ?? STATUS_TONE.draft;
 
+  // PBS 2026-07-17 — filter to only WEB + INTERNAL OPEN rate plans.
+  // Excludes complimentary/group/corporate/walk-in/staff/test/comp/dormant/
+  // archived plans that shouldn't be offered directly to guests. Also drops
+  // duplicates from the same rate name+room combination (Cloudbeds emits both
+  // OTA-only and channel-agnostic variants).
+  const RATE_EXCLUDE_RE = /complimentar|group\s|corporate\s|walk.?in|do.?not.?use|test\s|dormant|archived?|staff|comp\s|internal use/i;
+  const filteredPlans = useMemo(() => {
+    const seen = new Set<string>();
+    return plans.filter((p) => {
+      const name = String(p.rate_plan_name ?? '');
+      if (RATE_EXCLUDE_RE.test(name)) return false;
+      const key = `${p.room_type_id}::${name.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [plans]);
+
   const planGroups = useMemo(() => {
     const groups = new Map<string, { label: string; plans: RatePlan[] }>();
-    for (const p of plans) {
+    for (const p of filteredPlans) {
       const g = groups.get(p.room_type_id) ?? { label: p.room_type_name || 'Room', plans: [] };
       g.plans.push(p);
       groups.set(p.room_type_id, g);
     }
     return Array.from(groups.entries());
-  }, [plans]);
+  }, [filteredPlans]);
 
   const previewSrc = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${previewV}`;
   const photosMissing = blocks.filter((b) => !b.hero_asset_id).length;
@@ -681,6 +715,21 @@ export default function ComposerEditor({
           </button>
         </div>
       </div>
+
+      {/* PBS 2026-07-17 — send outcome banner (was silently swallowed). */}
+      {sendResult && (
+        <div style={{
+          padding: '10px 24px', fontSize: 12, lineHeight: 1.5,
+          background: sendResult.ok ? '#EAF6EF' : '#FDECE4',
+          color: sendResult.ok ? '#0F5B34' : '#7A1A00',
+          borderBottom: `1px solid ${sendResult.ok ? '#B9E0C7' : '#E7B4A0'}`,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <strong>{sendResult.ok ? '✓ Sent' : '✗ Send failed'}</strong>
+          <span style={{ flex: 1, minWidth: 0 }}>{sendResult.message}</span>
+          <button onClick={() => setSendResult(null)} style={{ ...S.btnGhost, fontSize: 11, padding: '2px 8px' }}>Dismiss</button>
+        </div>
+      )}
 
       {/* PBS 2026-07-16 item 6 — prominent date row (MMM dd, yyyy) directly under the top bar. */}
       <div style={{
@@ -766,24 +815,8 @@ export default function ComposerEditor({
                 <input type="number" style={S.input} min={0} max={12} value={childrenN}
                   onChange={(e) => setChildrenN(Math.max(0, Math.min(12, parseInt(e.target.value || '0', 10))))} />
               </FieldLabel>
-              <FieldLabel label={plansLoading ? 'Rate plan · loading…' : `Rate plan · ${plans.length} option${plans.length === 1 ? '' : 's'}`}>
-                <select
-                  value={ratePlanId ?? ''}
-                  onChange={(e) => onPickRatePlan(e.target.value)}
-                  style={{ ...S.input, height: 34 }}
-                >
-                  <option value="">— pick a rate plan —</option>
-                  {planGroups.map(([rtId, g]) => (
-                    <optgroup key={rtId} label={g.label}>
-                      {g.plans.map((p) => (
-                        <option key={p.rate_plan_id} value={p.rate_plan_id}>
-                          {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''} · ${Math.round(p.total_usd).toLocaleString('en-US')} ({p.rooms_available_min} avail)
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </FieldLabel>
+              {/* PBS 2026-07-17 — legacy top-level rate plan selector hidden.
+                  Rate offers section below is the single source. */}
             </div>
           </section>
 
@@ -818,7 +851,7 @@ export default function ComposerEditor({
             )}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <select
-                disabled={rateOffers.length >= MAX_RATE_OFFERS || plansLoading || plans.length === 0 || rateOffersBusy === 'add'}
+                disabled={rateOffers.length >= MAX_RATE_OFFERS || plansLoading || filteredPlans.length === 0 || rateOffersBusy === 'add'}
                 value=""
                 onChange={(e) => { if (e.target.value) addRateOffer(e.target.value); }}
                 style={{ ...S.input, height: 32, flex: '1 1 200px', fontSize: 12 }}
@@ -826,14 +859,18 @@ export default function ComposerEditor({
                 <option value="">
                   {rateOffers.length >= MAX_RATE_OFFERS
                     ? `Max ${MAX_RATE_OFFERS} offers reached`
-                    : plans.length === 0
+                    : filteredPlans.length === 0
                       ? '+ Add rate offer (pick dates first)'
-                      : '+ Add rate offer — pick a plan'}
+                      : `+ Add rate offer — pick from ${filteredPlans.length} plan${filteredPlans.length === 1 ? '' : 's'}`}
                 </option>
-                {plans.map((p) => (
-                  <option key={p.rate_plan_id} value={p.rate_plan_id}>
-                    {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''} · ${Math.round(p.total_usd).toLocaleString('en-US')}
-                  </option>
+                {planGroups.map(([rtId, g]) => (
+                  <optgroup key={rtId} label={g.label}>
+                    {g.plans.map((p) => (
+                      <option key={p.rate_plan_id} value={p.rate_plan_id}>
+                        {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''} · ${Math.round(p.total_usd).toLocaleString('en-US')}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               {rateOffers.length > 0 && (
