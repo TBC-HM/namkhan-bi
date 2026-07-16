@@ -2,12 +2,32 @@
 // Shared Anthropic caller — no SDK dep, direct fetch to /v1/messages.
 // PBS 2026-07-15 · powers /api/mail/ai/* routes.
 // PBS 2026-07-17 · polish `mode` param (5 tones) + translate helper.
+// PBS 2026-07-16 · Item 6 — vault fallback for ANTHROPIC_API_KEY (Vercel env
+// missing was breaking Convert-to-Lead + Create-Proposal + all AI polish).
+
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const VECTOR_SYSTEM = 'You are Vector, a warm-professional B2B hospitality voice for The Namkhan boutique retreat. Concise, no fluff, always end with a clear next step.';
 
 const MODEL = 'claude-sonnet-4-6';
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
+
+// PBS 2026-07-16 · Item 6 — read Anthropic key from Supabase vault first,
+// fall back to process.env for local dev. Mirrors userGmail.getGoogleOAuthClient.
+let __cachedAnthropicKey: string | null = null;
+async function getAnthropicKey(): Promise<string> {
+  if (__cachedAnthropicKey) return __cachedAnthropicKey;
+  let key = process.env.ANTHROPIC_API_KEY || '';
+  try {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin.rpc('fn_get_secret', { p_name: 'ANTHROPIC_API_KEY' });
+    if (!error && typeof data === 'string' && data.length > 20) key = data;
+  } catch { /* keep env fallback */ }
+  if (!key) throw new Error('ANTHROPIC_API_KEY missing in vault + env');
+  __cachedAnthropicKey = key;
+  return key;
+}
 
 // PBS 2026-07-17 · 5 polish modes. Each shapes the system prompt so the same
 // draft gets a materially different rewrite.
@@ -52,8 +72,7 @@ interface AnthropicResp {
 }
 
 export async function callAnthropic({ system, prompt, maxTokens = 800 }: CallOpts): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set');
+  const key = await getAnthropicKey();
 
   const r = await fetch(API_URL, {
     method: 'POST',
