@@ -406,7 +406,13 @@ export default function ComposerEditor({
       if (r.ok) setCheck(await r.json());
     } catch { /* swallow */ }
   }, [proposalId]);
-  useEffect(() => { refreshCheck(); }, [refreshCheck, blocks.length]);
+  // PBS 2026-07-16 — also re-run check when dates / pax / rooms change so the
+  // "no dates" banner clears as soon as the wizard snapshot persists (was only
+  // firing on block count change → banner stuck red on empty new proposals).
+  useEffect(() => {
+    const t = setTimeout(() => { void refreshCheck(); }, 700);
+    return () => clearTimeout(t);
+  }, [refreshCheck, blocks.length, dateIn, dateOut, adults, childrenN, rooms]);
 
   // Load factsheet options on mount.
   useEffect(() => {
