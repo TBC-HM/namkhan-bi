@@ -1,10 +1,11 @@
-// Composer screen — server-renders the proposal data.
-// If wizard_completed_at IS NULL, gate entry with ProposerWizard.
-// Otherwise, ComposerEditor handles interactions.
+// Composer screen — unified editor.
+// PBS 2026-07-16 (item 1) — wizard gate REMOVED. Left pane of ComposerEditor now
+// carries the dates/pax/rooms/rate-plan fields inline, so new proposals land on the
+// same page as in-flight ones. Right pane is the live email iframe preview.
+// ProposerWizard.tsx is deprecated (kept only for dependency safety, no longer routed).
 import { notFound } from 'next/navigation';
 import { getProposalWithBlocks, getInquiry } from '@/lib/sales';
 import ComposerEditor from '@/components/proposal/ComposerEditor';
-import ProposerWizard from '@/components/proposal/ProposerWizard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,31 +16,19 @@ export default async function ComposerPage({ params }: { params: { id: string } 
   if (!proposal) return notFound();
   const inq = proposal.inquiry_id ? await getInquiry(proposal.inquiry_id) : null;
 
-  // Gate on wizard completion — new proposals require dates/pax/rooms/rate plan first.
-  const wizardCompletedAt = (proposal as unknown as { wizard_completed_at: string | null })
-    .wizard_completed_at;
-  if (!wizardCompletedAt) {
-    const p = proposal as unknown as {
-      adults_snapshot: number | null;
-      children_snapshot: number | null;
-      rooms_snapshot: number | null;
-    };
-    return (
-      <ProposerWizard
-        proposalId={proposal.id}
-        propertyId={proposal.property_id}
-        initialDateIn={proposal.date_in_snapshot ?? inq?.date_in ?? null}
-        initialDateOut={proposal.date_out_snapshot ?? inq?.date_out ?? null}
-        initialAdults={p.adults_snapshot ?? inq?.party_adults ?? null}
-        initialChildren={p.children_snapshot ?? inq?.party_children ?? null}
-        initialRooms={p.rooms_snapshot ?? null}
-      />
-    );
-  }
+  const p = proposal as unknown as {
+    adults_snapshot: number | null;
+    children_snapshot: number | null;
+    rooms_snapshot: number | null;
+    selected_rate_plan_id: string | null;
+    selected_room_type_id: string | null;
+    wizard_completed_at: string | null;
+  };
 
   return (
     <ComposerEditor
       proposalId={proposal.id}
+      propertyId={proposal.property_id}
       initialBlocks={blocks}
       initialEmail={email}
       proposal={{
@@ -48,6 +37,16 @@ export default async function ComposerPage({ params }: { params: { id: string } 
         date_out: proposal.date_out_snapshot ?? inq?.date_out ?? '',
         status: proposal.status,
         public_token: proposal.public_token,
+      }}
+      wizard={{
+        date_in: proposal.date_in_snapshot ?? inq?.date_in ?? null,
+        date_out: proposal.date_out_snapshot ?? inq?.date_out ?? null,
+        adults: p.adults_snapshot ?? inq?.party_adults ?? null,
+        children: p.children_snapshot ?? inq?.party_children ?? null,
+        rooms: p.rooms_snapshot ?? null,
+        rate_plan_id: p.selected_rate_plan_id ?? null,
+        room_type_id: p.selected_room_type_id ?? null,
+        completed_at: p.wizard_completed_at ?? null,
       }}
     />
   );
