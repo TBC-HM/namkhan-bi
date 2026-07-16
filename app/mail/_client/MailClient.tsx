@@ -271,6 +271,84 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const infiniteSentinel = useRef<HTMLDivElement | null>(null);
 
+  // ---- Convert-to-Lead / Create-Proposal (PBS 2026-07-15 Item 1) --------
+  const [convertingLead, setConvertingLead] = useState<boolean>(false);
+  const [creatingProposal, setCreatingProposal] = useState<boolean>(false);
+  const [convertToast, setConvertToast] = useState<string | null>(null);
+  const [convertToastLink, setConvertToastLink] = useState<string | null>(null);
+
+  // ---- Resizable pane widths (PBS 2026-07-15 Item 3) --------------------
+  // 4 draggable borders: rail | thread-list | (message body / composer +
+  // summary card horizontal splits inside message pane).
+  // Persisted in localStorage under 'mail_layout_v1'.
+  interface LayoutV1 {
+    railW: number;      // 200-400 · left rail width
+    listW: number;      // 300-700 · thread list width
+    composerH: number;  // 80-500 · inline reply composer height
+    summaryH: number;   // 100-400 · AI summary card height
+  }
+  const DEFAULT_LAYOUT: LayoutV1 = { railW: 240, listW: 380, composerH: 180, summaryH: 200 };
+  const [layout, setLayout] = useState<LayoutV1>(DEFAULT_LAYOUT);
+  const dragRef = useRef<{ kind: keyof LayoutV1; startX: number; startY: number; startV: number } | null>(null);
+
+  // Hydrate from localStorage on mount (never during SSR).
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' && window.localStorage.getItem('mail_layout_v1');
+      if (raw) {
+        const p = JSON.parse(raw) as Partial<LayoutV1>;
+        setLayout({
+          railW:     Math.min(400, Math.max(200, p.railW     ?? DEFAULT_LAYOUT.railW)),
+          listW:     Math.min(700, Math.max(300, p.listW     ?? DEFAULT_LAYOUT.listW)),
+          composerH: Math.min(500, Math.max( 80, p.composerH ?? DEFAULT_LAYOUT.composerH)),
+          summaryH:  Math.min(400, Math.max(100, p.summaryH  ?? DEFAULT_LAYOUT.summaryH)),
+        });
+      }
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist layout on change (debounced via microtask — cheap enough).
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') window.localStorage.setItem('mail_layout_v1', JSON.stringify(layout));
+    } catch { /* ignore quota */ }
+  }, [layout]);
+
+  const beginDrag = useCallback((kind: keyof LayoutV1) => (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = { kind, startX: e.clientX, startY: e.clientY, startV: layout[kind] };
+    const isHorizontal = kind === 'railW' || kind === 'listW';
+    document.body.style.cursor = isHorizontal ? 'col-resize' : 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      let delta = isHorizontal ? (ev.clientX - d.startX) : (ev.clientY - d.startY);
+      // Composer handle sits ABOVE the composer, so dragging DOWN shrinks composer.
+      if (d.kind === 'composerH') delta = -delta;
+      // Summary handle sits BELOW the summary — dragging DOWN grows summary.
+      // (default sign is fine.)
+      let next = d.startV + delta;
+      if (d.kind === 'railW')     next = Math.min(400, Math.max(200, next));
+      if (d.kind === 'listW')     next = Math.min(700, Math.max(300, next));
+      if (d.kind === 'composerH') next = Math.min(500, Math.max( 80, next));
+      if (d.kind === 'summaryH')  next = Math.min(400, Math.max(100, next));
+      setLayout((prev) => ({ ...prev, [d.kind]: Math.round(next) }));
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [layout]);
+
   // ---- load labels once + polling ---------------------------------------
   useEffect(() => {
     (async () => {
@@ -388,6 +466,65 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     if (!name || !name.trim()) return;
     await routeSender(senderEmail, 'custom', name.trim());
   }, [routeSender]);
+
+  // PBS 2026-07-15 · Convert current thread to a Lead. Anthropic extracts
+  // structured info from the first message; fn_lead_upsert lands the row.
+  const convertThreadToLead = useCallback(async () => {
+    if (!selectedId) return;
+    if (!confirm('Convert this thread to a Lead? Guest info will be extracted from the message.')) return;
+    setConvertingLead(true);
+    setConvertToast(null);
+    setConvertToastLink(null);
+    try {
+      const r = await fetch('/api/mail/convert-to-lead', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ thread_id: selectedId }),
+      });
+      const j = await r.json() as { ok: boolean; lead_id?: number; error?: string; detail?: string };
+      if (j.ok && j.lead_id) {
+        setConvertToast('Lead #' + j.lead_id + ' created');
+        setConvertToastLink('/sales/leads');
+      } else {
+        setConvertToast('Failed: ' + (j.error || 'unknown') + (j.detail ? ' · ' + j.detail : ''));
+      }
+    } catch (e) {
+      setConvertToast('Failed: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setConvertingLead(false);
+      setTimeout(() => { setConvertToast(null); setConvertToastLink(null); }, 6000);
+    }
+  }, [selectedId]);
+
+  // PBS 2026-07-15 · Create Lead + draft Proposal from current thread → wizard.
+  const createProposalFromThread = useCallback(async () => {
+    if (!selectedId) return;
+    if (!confirm('Create a Lead + draft Proposal from this thread? Guest info will be extracted from the message.')) return;
+    setCreatingProposal(true);
+    setConvertToast(null);
+    setConvertToastLink(null);
+    try {
+      const r = await fetch('/api/mail/create-proposal-from-mail', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ thread_id: selectedId }),
+      });
+      const j = await r.json() as { ok: boolean; lead_id?: number; proposal_id?: string; error?: string; detail?: string };
+      if (j.ok && j.proposal_id) {
+        setConvertToast('Proposal created · opening composer…');
+        // Redirect to the wizard.
+        if (typeof window !== 'undefined') window.location.href = '/sales/proposals/' + j.proposal_id + '/edit';
+      } else {
+        setConvertToast('Failed: ' + (j.error || 'unknown') + (j.detail ? ' · ' + j.detail : ''));
+        setCreatingProposal(false);
+        setTimeout(() => setConvertToast(null), 6000);
+      }
+    } catch (e) {
+      setConvertToast('Failed: ' + (e instanceof Error ? e.message : String(e)));
+      setCreatingProposal(false);
+      setTimeout(() => setConvertToast(null), 6000);
+    }
+  }, [selectedId]);
 
   // ---- poller freshness (Gmail-side ingest pipeline is separate) --------
   // Mirrors the /mail/analytics staleness banner. Shows only when > 2 days.
@@ -572,7 +709,23 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
     if (weekFilter)    parts.push('newer_than:7d');
     if (attachFilter)  parts.push('has:attachment');
     if (overdueFilter) parts.push('is:unread older_than:2d newer_than:14d');
-    if (newslettersOnly) parts.push('(unsubscribe OR "List-Unsubscribe")');
+    if (newslettersOnly) {
+      // PBS 2026-07-15 · Item 2 BUG-FIX — "Move sender to Newsletters" didn't
+      // surface the sender inside the Newsletters view. The 3-dot menu wrote a
+      // routing_rule route_to='newsletter' but the folder used only Gmail's
+      // generic (unsubscribe OR "List-Unsubscribe") heuristic, ignoring the
+      // user's manual pins. Mirror the customFolder pattern: OR-in every
+      // manually routed sender so pinned rows appear alongside the heuristic.
+      const newsletterSenders = routingRules
+        .filter((r) => r.route_to === 'newsletter' && (r.match_type === 'from_email' || r.match_type === 'from_domain'))
+        .map((r) => r.match_value)
+        .filter(Boolean);
+      if (newsletterSenders.length) {
+        parts.push('((unsubscribe OR "List-Unsubscribe") OR from:(' + newsletterSenders.join(' OR ') + '))');
+      } else {
+        parts.push('(unsubscribe OR "List-Unsubscribe")');
+      }
+    }
     return parts.join(' ');
   }, [committedQuery, activeFolder, forwardedAlias, sentAlias, customFolder, routingRules, unreadFilter, starredFilter, directFilter, todayFilter, weekFilter, attachFilter, overdueFilter, newslettersOnly]);
 
@@ -1044,7 +1197,7 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
   const showAiSearchBtn = looksLikeNlPrompt(query);
 
   return (
-    <div style={{ height: '100vh', display: 'grid', gridTemplateColumns: '240px 380px 1fr', color: T.INK, fontFamily: "-apple-system, 'SF Pro Text', system-ui, 'Segoe UI', sans-serif", background: T.WHITE }}>
+    <div style={{ height: '100vh', display: 'grid', gridTemplateColumns: layout.railW + 'px 4px ' + layout.listW + 'px 4px 1fr', color: T.INK, fontFamily: "-apple-system, 'SF Pro Text', system-ui, 'Segoe UI', sans-serif", background: T.WHITE }}>
       {/* LEFT RAIL */}
       <aside style={{ background: T.RAIL_BG, borderRight: '1px solid ' + T.HAIR, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: 14, borderBottom: '1px solid ' + T.HAIR, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1277,6 +1430,9 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
         </div>
       </aside>
 
+      {/* PBS 2026-07-15 · vertical drag handle between rail and thread list. */}
+      <ResizeHandle orientation="col" onMouseDown={beginDrag('railW')} />
+
       {/* MIDDLE THREAD LIST */}
       <section ref={listRef} style={{ borderRight: '1px solid ' + T.HAIR, background: T.WHITE, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: 10, borderBottom: '1px solid ' + T.HAIR, position: 'sticky', top: 0, background: T.WHITE, zIndex: 2, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1342,6 +1498,9 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
         </div>
       </section>
 
+      {/* PBS 2026-07-15 · vertical drag handle between thread list and message pane. */}
+      <ResizeHandle orientation="col" onMouseDown={beginDrag('listW')} />
+
       {/* RIGHT MESSAGE PANE */}
       <section style={{ background: T.WHITE, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {!selectedId ? (
@@ -1391,7 +1550,21 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                   void routeSender(sender, route);
                 }
               }}
+              /* PBS 2026-07-15 · one-click Convert-to-Lead + Draft-Proposal. */
+              onConvertToLead={() => void convertThreadToLead()}
+              convertingLead={convertingLead}
+              onCreateProposal={() => void createProposalFromThread()}
+              creatingProposal={creatingProposal}
             />
+            {/* PBS 2026-07-15 · Convert-to-Lead / Create-Proposal toast. */}
+            {convertToast && (
+              <div style={{ margin: '8px 24px 0', background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 4, padding: '8px 12px', fontSize: 12, color: T.INK, display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span>→ {convertToast}</span>
+                {convertToastLink && (
+                  <a href={convertToastLink} style={{ color: T.FOREST, fontWeight: 600, textDecoration: 'underline' }}>Open in Leads</a>
+                )}
+              </div>
+            )}
             {/* PBS 2026-07-15 §3 · AI actions row + inline summary. */}
             <div style={{ padding: '10px 24px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1403,7 +1576,9 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                 <div style={{ fontSize: 11, color: T.RED }}>AI error: {aiActionErr}</div>
               )}
               {aiSummary && (
-                <div style={{ background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 6, padding: '10px 14px', fontSize: 12, color: T.INK, lineHeight: 1.55 }}>
+                <div style={{ background: T.CREAM, border: '1px solid ' + T.HAIR, borderRadius: 6, padding: '10px 14px', fontSize: 12, color: T.INK, lineHeight: 1.55, maxHeight: layout.summaryH + 'px', overflowY: 'auto', position: 'relative' }}>
+                  {/* PBS 2026-07-15 · summary-card resize handle (bottom). */}
+                  <div onMouseDown={beginDrag('summaryH')} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 4, cursor: 'row-resize' }} title="Drag to resize summary" />
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.INK_M, fontWeight: 600 }}>Vector summary</div>
                     <button type="button" onClick={() => setAiSummary('')} style={{ background: 'transparent', border: 'none', color: T.INK_M, cursor: 'pointer', fontSize: 14 }} aria-label="Clear">×</button>
@@ -1442,7 +1617,11 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                 />
               ))}
             </div>
-            <div style={{ borderTop: '1px solid ' + T.HAIR, background: T.WHITE, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ borderTop: '1px solid ' + T.HAIR, background: T.WHITE, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, minHeight: replyOpen ? layout.composerH : 'auto', position: 'relative' }}>
+              {/* PBS 2026-07-15 · composer resize handle (top edge). Drag UP to grow, DOWN to shrink. */}
+              {replyOpen && (
+                <div onMouseDown={beginDrag('composerH')} style={{ position: 'absolute', left: 0, right: 0, top: -2, height: 4, cursor: 'row-resize', zIndex: 5 }} title="Drag to resize composer" />
+              )}
               {!replyOpen ? (
                 <button
                   type="button"
@@ -1455,8 +1634,7 @@ export default function MailClient({ userId: _userId, userEmail }: Props) {
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
                     placeholder="Write a reply…"
-                    rows={5}
-                    style={{ width: '100%', border: '1px solid ' + T.HAIR, borderRadius: 6, padding: 10, fontSize: 13, fontFamily: 'inherit', outline: 'none', color: T.INK, background: T.WHITE, resize: 'vertical' }}
+                    style={{ width: '100%', flex: 1, minHeight: 60, border: '1px solid ' + T.HAIR, borderRadius: 6, padding: 10, fontSize: 13, fontFamily: 'inherit', outline: 'none', color: T.INK, background: T.WHITE, resize: 'none' }}
                   />
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -1758,7 +1936,7 @@ function MenuItem({ children, onClick }: { children: React.ReactNode; onClick: (
   );
 }
 
-function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starred, onDelete, onUnsubscribe, onSpam, onRouteSender }: {
+function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starred, onDelete, onUnsubscribe, onSpam, onRouteSender, onConvertToLead, convertingLead, onCreateProposal, creatingProposal }: {
   subject: string;
   onArchive: () => void;
   onTrash: () => void;
@@ -1769,11 +1947,31 @@ function ThreadHeader({ subject, onArchive, onTrash, onStar, onMarkUnread, starr
   onUnsubscribe?: () => void;
   onSpam?: () => void;
   onRouteSender?: (route: 'newsletter' | 'cloudbeds' | 'lighthouse' | 'hide' | 'custom') => void;
+  // PBS 2026-07-15 · Convert-to-Lead / Create-Proposal primary actions.
+  onConvertToLead?: () => void;
+  convertingLead?: boolean;
+  onCreateProposal?: () => void;
+  creatingProposal?: boolean;
 }) {
   const [routeOpen, setRouteOpen] = useState(false);
   return (
     <div style={{ padding: '14px 24px 12px', borderBottom: '1px solid ' + T.HAIR, background: T.WHITE, position: 'sticky', top: 0, zIndex: 2 }}>
       <div style={{ fontSize: 18, fontWeight: 600, color: T.INK, marginBottom: 10, wordBreak: 'break-word' }}>{subject}</div>
+      {/* PBS 2026-07-15 · Primary CRM actions row (green) — Convert-to-Lead + Create-Proposal. */}
+      {(onConvertToLead || onCreateProposal) && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          {onConvertToLead && (
+            <PrimaryBtn onClick={onConvertToLead} disabled={!!convertingLead}>
+              {convertingLead ? '⏳ Extracting…' : '👤 Convert to Lead'}
+            </PrimaryBtn>
+          )}
+          {onCreateProposal && (
+            <PrimaryBtn onClick={onCreateProposal} disabled={!!creatingProposal}>
+              {creatingProposal ? '⏳ Drafting…' : '📄 Create Proposal'}
+            </PrimaryBtn>
+          )}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <HeaderBtn onClick={onArchive}>Archive</HeaderBtn>
         <HeaderBtn onClick={onTrash}>Trash</HeaderBtn>
@@ -1813,6 +2011,52 @@ function HeaderBtn({ children, onClick }: { children: React.ReactNode; onClick: 
       type="button"
       onClick={onClick}
       style={{ background: T.WHITE, color: T.INK, border: '1px solid ' + T.HAIR, borderRadius: 4, padding: '5px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+    >{children}</button>
+  );
+}
+
+// PBS 2026-07-15 · Item 3 — drag-to-resize handle (4px invisible strip that
+// shows a 1-px brand-green line on hover). Grid cell parent gives it space;
+// mouseDown is wired to a caller-supplied handler that runs the drag loop.
+function ResizeHandle({ orientation, onMouseDown }: { orientation: 'col' | 'row'; onMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void }) {
+  const [hover, setHover] = useState(false);
+  const isCol = orientation === 'col';
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={isCol ? 'Drag to resize width' : 'Drag to resize height'}
+      style={{
+        cursor: isCol ? 'col-resize' : 'row-resize',
+        background: hover ? T.FOREST : 'transparent',
+        transition: 'background 120ms',
+        ...(isCol
+          ? { width: 4, height: '100%' }
+          : { height: 4, width: '100%' }),
+      }}
+    />
+  );
+}
+
+// PBS 2026-07-15 · Green primary buttons for Convert-to-Lead / Create-Proposal.
+function PrimaryBtn({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: disabled ? '#B4C7C1' : T.FOREST,
+        color: '#FFFFFF',
+        border: '1px solid ' + T.FOREST,
+        borderRadius: 4,
+        padding: '7px 14px',
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        letterSpacing: '.02em',
+      }}
     >{children}</button>
   );
 }
