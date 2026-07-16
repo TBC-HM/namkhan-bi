@@ -17,7 +17,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getProposalWithBlocks, getInquiry, type ProposalBlock } from '@/lib/sales';
 import { FX_LAK_PER_USD } from '@/lib/format';
-import { renderProposalEmailHtml, type ProposalEmailContext, type ProposalBlockInput } from '@/lib/proposalEmailTemplate';
+import { renderProposalEmailHtml, type ProposalEmailContext, type ProposalBlockInput, type ProposalRateOfferInput } from '@/lib/proposalEmailTemplate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -258,6 +258,25 @@ export async function GET(req: Request, { params }: Ctx) {
   const heroFallback = withPhotos ? await autoHeroForBlocks(sb, blocks) : {};
   // PBS 2026-07-16 item 10 — sender signature.
   const sender = await loadSender(sb, (proposal as unknown as { created_by: string | null }).created_by);
+  // PBS 2026-07-16 (Feature A) — multi-rate offers side-by-side in the email.
+  // Empty or length 1 → template falls back to single-card layout automatically.
+  const { data: offerRows } = await sb
+    .schema('sales')
+    .from('proposal_rate_offers')
+    .select('id, rate_plan_id, position, label, payment_terms, cancellation_terms, unit_price_lak, total_lak')
+    .eq('proposal_id', params.id)
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
+  const rateOffers: ProposalRateOfferInput[] = ((offerRows ?? []) as ProposalRateOfferInput[]).map((o) => ({
+    id: o.id,
+    rate_plan_id: o.rate_plan_id,
+    position: Number(o.position ?? 1),
+    label: o.label ?? null,
+    payment_terms: o.payment_terms ?? null,
+    cancellation_terms: o.cancellation_terms ?? null,
+    unit_price_lak: o.unit_price_lak != null ? Number(o.unit_price_lak) : null,
+    total_lak: o.total_lak != null ? Number(o.total_lak) : null,
+  }));
   const proto = process.env.VERCEL_URL ? 'https' : 'http';
   const host = process.env.VERCEL_URL ?? url.host;
   const base = `${proto}://${host}`;
@@ -289,6 +308,7 @@ export async function GET(req: Request, { params }: Ctx) {
         sort_order: b.sort_order ?? 100,
       };
     }).sort((a, b) => a.sort_order - b.sort_order),
+    rate_offers: rateOffers,
     total_lak: totalLak,
     fx_lak_per_usd: FX_LAK_PER_USD ?? 21800,
     property: propSnap,
