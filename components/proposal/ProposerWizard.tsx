@@ -227,7 +227,7 @@ export default function ProposerWizard({
           {step === 2 && (
             <StepPax
               adults={adults}
-              children={children}
+              childrenCount={children}
               setAdults={setAdults}
               setChildren={setChildrenN}
             />
@@ -467,12 +467,14 @@ function StepDates({
 
 function StepPax({
   adults,
-  children,
+  childrenCount,
   setAdults,
   setChildren,
 }: {
   adults: number;
-  children: number;
+  // 2026-07-16 lint: renamed from `children` to satisfy react/no-children-prop
+  // (component prop `children` collides with JSX children semantics).
+  childrenCount: number;
   setAdults: (v: number) => void;
   setChildren: (v: number) => void;
 }) {
@@ -499,7 +501,7 @@ function StepPax({
             type="number"
             min={0}
             max={12}
-            value={children}
+            value={childrenCount}
             onChange={(e) => setChildren(Math.max(0, Math.min(12, parseInt(e.target.value || '0', 10))))}
           />
         </div>
