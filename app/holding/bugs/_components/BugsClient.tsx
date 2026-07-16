@@ -2,7 +2,7 @@
 // app/holding/bugs/_components/BugsClient.tsx
 // Filters + table + per-row CTAs (Acknowledge / Start / Done / Dismiss / Copy for agent).
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export interface BugRow {
   id: number;
@@ -103,6 +103,25 @@ function agentPayload(r: BugRow): Record<string, unknown> {
   };
 }
 
+// PBS 2026-07-17 — Bug-agent live run state (Phase A shell).
+interface AgentRunLatest {
+  id: number; bug_id: number; phase: string; branch: string | null;
+  pr_url: string | null; commit_sha: string | null;
+  started_at: string; ended_at: string | null;
+  triggered_by: string; error: string | null;
+  log_tail: string | null;
+}
+const PHASE_TONE: Record<string, { bg: string; fg: string; label: string }> = {
+  queued:      { bg: '#F0EAD8', fg: '#B48A3A', label: 'Queued' },
+  planning:    { bg: '#EAF1EE', fg: '#084838', label: 'Planning' },
+  reviewing:   { bg: '#EAF1EE', fg: '#084838', label: 'Reviewing' },
+  shipping:    { bg: '#EAF1EE', fg: '#084838', label: 'Shipping' },
+  verifying:   { bg: '#EAF1EE', fg: '#084838', label: 'Verifying' },
+  done:        { bg: '#EAF1EE', fg: '#084838', label: 'Done ✓' },
+  failed:      { bg: '#FDECE4', fg: '#B04A2F', label: 'Failed' },
+  needs_human: { bg: '#FBF3D9', fg: '#7a5500', label: 'Needs human' },
+};
+
 export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
   const [rows, setRows] = useState<BugRow[]>(initialRows);
   const [busy, setBusy] = useState<number | null>(null);
@@ -111,6 +130,69 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
   const [deptFilter, setDeptFilter] = useState<string>('all');
   const [urlQuery, setUrlQuery] = useState<string>('');
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  // PBS 2026-07-17 — Agent-run pane state (Phase A shell).
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentRuns, setAgentRuns] = useState<AgentRunLatest[]>([]);
+  const [agentMsg, setAgentMsg] = useState<string | null>(null);
+  const runsByBug = useMemo(() => {
+    const m = new Map<number, AgentRunLatest>();
+    for (const r of agentRuns) m.set(r.bug_id, r);
+    return m;
+  }, [agentRuns]);
+
+  // Poll the agent runs view every 2s while a run is active.
+  useEffect(() => {
+    if (!agentBusy) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const r = await fetch('/api/cockpit/bugs/agent-run', { cache: 'no-store' });
+        if (r.ok) {
+          const j = await r.json();
+          if (!cancelled) setAgentRuns(Array.isArray(j.runs) ? j.runs : []);
+        }
+      } catch { /* silent — will retry */ }
+    };
+    tick();
+    const iv = setInterval(tick, 2000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [agentBusy]);
+
+  async function startAgentRun(mode: 'one' | 'drain', max = 5) {
+    if (agentBusy) return;
+    setAgentBusy(true);
+    setAgentMsg('Starting run…');
+    try {
+      const r = await fetch('/api/cockpit/bugs/agent-run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode, max, triggered_by: 'ui' }),
+      });
+      const j = await r.json();
+      if (r.ok) {
+        setAgentMsg(`Processed ${j.processed?.length ?? 0} bug(s) · ${j.note ?? ''}`);
+      } else {
+        setAgentMsg(`Run failed: ${j.error ?? r.status}`);
+      }
+    } catch (e) {
+      setAgentMsg(`Network error · ${(e as Error).message}`);
+    } finally {
+      setAgentBusy(false);
+      // One final poll to catch the last phase transitions after busy=false
+      // stops the interval.
+      try {
+        const rr = await fetch('/api/cockpit/bugs/agent-run', { cache: 'no-store' });
+        if (rr.ok) {
+          const jj = await rr.json();
+          if (Array.isArray(jj.runs)) setAgentRuns(jj.runs);
+        }
+      } catch { /* silent */ }
+      // PBS 2026-07-17 — bugs table state doesn't change in Phase A (no bug
+      // moves to 'in_progress' or 'done'). Phase B: router.refresh() here to
+      // re-fetch server-rendered rows once real shipping/verification lands.
+    }
+  }
 
   const depts = useMemo(() => {
     const s = new Set<string>();
@@ -186,6 +268,51 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
 
   return (
     <div>
+      {/* PBS 2026-07-17 — Bug-agent run pane (Phase A shell). */}
+      <div style={{ background: T.paper, border: `1px solid ${T.hairline}`, borderRadius: 8, padding: 14, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.ink, letterSpacing: 0.2 }}>Bug-agent</div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
+              Phase A shell · walks planning → reviewing → shipping → verifying · <strong>no code pushed to main yet</strong> · Phase B ships real Anthropic planner next.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => startAgentRun('one', 1)}
+              disabled={agentBusy}
+              style={{ padding: '7px 14px', border: `1px solid ${T.hairline}`, background: T.paper, color: T.ink, borderRadius: 4, fontSize: 12, cursor: agentBusy ? 'wait' : 'pointer' }}
+            >{agentBusy ? '…' : '▶ Run 1 bug'}</button>
+            <button
+              onClick={() => startAgentRun('drain', 5)}
+              disabled={agentBusy}
+              style={{ padding: '7px 14px', border: 0, background: T.green, color: '#FFF', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: agentBusy ? 'wait' : 'pointer' }}
+            >{agentBusy ? 'Running…' : '▶ Start Agent Run (drain, max 5)'}</button>
+          </div>
+        </div>
+        {agentMsg && (
+          <div style={{ marginTop: 10, fontSize: 11, color: T.inkSoft, padding: '6px 10px', background: T.warm, borderRadius: 4 }}>{agentMsg}</div>
+        )}
+        {agentRuns.length > 0 && (
+          <div style={{ marginTop: 12, borderTop: `1px solid ${T.hairline}`, paddingTop: 10 }}>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: T.inkSoft, marginBottom: 6 }}>Recent runs (latest per bug)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', columnGap: 10, rowGap: 4, fontSize: 11, color: T.ink }}>
+              {agentRuns.slice(0, 10).map((r) => {
+                const tone = PHASE_TONE[r.phase] ?? { bg: T.warm, fg: T.inkSoft, label: r.phase };
+                return (
+                  <div key={r.id} style={{ display: 'contents' }}>
+                    <div style={{ color: T.inkMute }}>#{r.bug_id}</div>
+                    <div style={{ color: T.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.log_tail ?? ''}>{(r.log_tail ?? '').split('\n').filter(Boolean).slice(-1)[0] ?? '—'}</div>
+                    <div style={{ padding: '2px 8px', background: tone.bg, color: tone.fg, borderRadius: 3, fontSize: 10, fontWeight: 600, textAlign: 'center' }}>{tone.label}</div>
+                    <div style={{ color: T.inkMute, fontSize: 10 }}>{relTime(r.started_at)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Filters */}
       <div style={{ background: T.paper, border: `1px solid ${T.hairline}`, borderRadius: 8, padding: 12, marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 4 }}>
