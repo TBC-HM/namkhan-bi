@@ -4,6 +4,7 @@ import TenantLink from '@/components/nav/TenantLink';
 import { useState, useRef, useEffect } from 'react';
 import type { CurrentUser } from '@/lib/currentUser';
 import { roleLabel } from '@/lib/currentUser';
+import { createBrowserClient } from '@supabase/ssr';
 
 export default function UserMenu({ user }: { user: CurrentUser }) {
   const [open, setOpen] = useState(false);
@@ -13,7 +14,32 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
   // the topbar. GmailNavDropdown stays mounted globally (for the drawer), but
   // its visible chip belongs here.
   const [unread, setUnread] = useState<number | null>(null);
+  // PBS 2026-07-16 · Item 5 — gate Mail Analytics link on holding_role ∈
+  // (owner, admin). Same JWT-claim pattern as HeaderPills.tsx.
+  const [isAdmin, setIsAdmin] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sb = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        );
+        const sess = await sb.auth.getSession();
+        const token = sess.data.session?.access_token;
+        if (!token) return;
+        const parts = token.split('.');
+        const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const pad = b64.length % 4 === 0 ? b64 : b64 + '='.repeat(4 - (b64.length % 4));
+        const claims = JSON.parse(atob(pad));
+        const role = String(claims.holding_role ?? '');
+        if (!cancelled) setIsAdmin(role === 'owner' || role === 'admin');
+      } catch { /* silent — leave false */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -92,6 +118,13 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
               </span>
             )}
           </TenantLink>
+          {/* PBS 2026-07-16 · Item 5 — Mail Analytics moved out of the inbox
+              sidebar. Admin-only (holding_role owner|admin). */}
+          {isAdmin && (
+            <TenantLink href="/mail/analytics" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
+              <span className="user-dropdown-icon">📈</span>Mail Analytics
+            </TenantLink>
+          )}
           <TenantLink href="/settings" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
             <span className="user-dropdown-icon">⚙</span>Settings
           </TenantLink>
