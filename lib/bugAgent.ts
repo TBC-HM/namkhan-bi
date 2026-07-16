@@ -37,19 +37,32 @@ interface RunPatch {
   commit_sha?: string | null; planner_out?: unknown; reviewer_out?: unknown; verifier_out?: unknown;
   cost_usd?: number; log_md?: string; ended_at?: string | null; error?: string | null;
 }
+// PBS 2026-07-17 — cockpit schema is NOT exposed to PostgREST (silent-empty
+// class of bug). Route all reads/writes through public RPCs + public views.
 async function updateRun(runId: number, patch: RunPatch, appendLog?: string) {
   const sb = getSupabaseAdmin();
-  const nextPatch: Record<string, unknown> = { ...patch };
-  if (appendLog) {
-    const { data: prev } = await sb.schema('cockpit').from('bug_agent_runs').select('log_md').eq('id', runId).maybeSingle();
-    const prior = ((prev as { log_md: string } | null)?.log_md ?? '');
-    nextPatch.log_md = prior + `[${new Date().toISOString()}] ${appendLog}\n`;
+  // Serialize numbers/objects as jsonb-safe values. JSONB coerces via json_typeof.
+  const jsonPatch: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    if (v === null) { jsonPatch[k] = null; continue; }
+    if (typeof v === 'object') jsonPatch[k] = v;
+    else jsonPatch[k] = String(v);
   }
-  await sb.schema('cockpit').from('bug_agent_runs').update(nextPatch).eq('id', runId);
+  await sb.rpc('fn_bug_agent_run_update', {
+    p_id: runId,
+    p_patch: jsonPatch,
+    p_append_log: appendLog ?? null,
+  });
 }
 async function markBug(bugId: number, patch: Record<string, unknown>) {
   const sb = getSupabaseAdmin();
-  await sb.schema('cockpit').from('exec_bugs').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', bugId);
+  const jsonPatch: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    jsonPatch[k] = v == null ? null : String(v);
+  }
+  await sb.rpc('fn_exec_bug_mark', { p_id: bugId, p_patch: jsonPatch });
 }
 
 // ---------- GitHub helpers ----------
@@ -293,12 +306,14 @@ async function verifyDeploy(commitSha: string, pageUrl: string | null): Promise<
 
 export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null }, triggeredBy: string): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
   const sb = getSupabaseAdmin();
-  const { data: runRow, error: insErr } = await sb
-    .schema('cockpit').from('bug_agent_runs')
-    .insert({ bug_id: bug.id, triggered_by: triggeredBy, phase: 'planning', log_md: `[${new Date().toISOString()}] START · bug=${bug.id} url=${bug.page_url ?? '(none)'}\n` })
-    .select('id').single();
-  if (insErr || !runRow) return { bug_id: bug.id, ok: false, error: insErr?.message ?? 'insert_failed' };
-  const runId = (runRow as { id: number }).id;
+  const initialLog = `START · bug=${bug.id} url=${bug.page_url ?? '(none)'}`;
+  const { data: rpcData, error: insErr } = await sb.rpc('fn_bug_agent_run_insert', {
+    p_bug_id: bug.id,
+    p_triggered_by: triggeredBy,
+    p_initial_log: `[${new Date().toISOString()}] ${initialLog}\n`,
+  });
+  if (insErr || rpcData == null) return { bug_id: bug.id, ok: false, error: insErr?.message ?? 'rpc_insert_failed' };
+  const runId = Number(rpcData);
   let costUsd = 0;
   try {
     await updateRun(runId, { phase: 'planning' }, `PLAN · calling Anthropic…`);
@@ -341,7 +356,9 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
 
 export async function pickBugs(opts: { bug_ids?: number[]; mode: 'one' | 'drain'; max: number }): Promise<Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null }>> {
   const sb = getSupabaseAdmin();
-  let q = sb.schema('cockpit').from('exec_bugs')
+  // PBS 2026-07-17 — READ from public.cockpit_bugs view (cockpit schema not
+  // PostgREST-exposed). View exposes agent_skip via the underlying table.
+  let q = sb.from('cockpit_bugs')
     .select('id, body, page_url, dept_slug, status, agent_skip')
     .in('status', ['new', 'acknowledged'])
     .eq('agent_skip', false);
