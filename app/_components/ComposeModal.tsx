@@ -359,9 +359,12 @@ export default function ComposeModal({ prefill, onClose, onSent, sharedMailboxId
     const vTo  = validateRecipients(to);
     const vCc  = validateRecipients(cc);
     const vBcc = validateRecipients(bcc);
-    if (!vTo.ok)  { setRecipientErr('To — '  + vTo.error);  return; }
-    if (!vCc.ok)  { setRecipientErr('Cc — '  + vCc.error);  return; }
-    if (!vBcc.ok) { setRecipientErr('Bcc — ' + vBcc.error); return; }
+    // PBS 2026-07-16 · TS narrowing on `!vTo.ok` was failing tsc on Vercel
+    // (possibly older TS in build lane). Explicit `vTo.ok === false` guards
+    // narrow reliably to the { ok: false; error: string } branch.
+    if (vTo.ok === false)  { setRecipientErr('To — '  + vTo.error);  return; }
+    if (vCc.ok === false)  { setRecipientErr('Cc — '  + vCc.error);  return; }
+    if (vBcc.ok === false) { setRecipientErr('Bcc — ' + vBcc.error); return; }
     setSending(true);
     setFlash('idle');
     try {
