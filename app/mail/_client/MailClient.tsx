@@ -51,6 +51,14 @@ interface ListRow {
   labelIds: string[];
 }
 
+// PBS 2026-07-16 · Item 7 — attachment descriptor mirrored from userGmail.ts.
+interface Attachment {
+  filename: string;
+  mimeType: string;
+  size: number;
+  attachmentId: string;
+}
+
 interface FullMessage {
   id: string;
   threadId: string;
@@ -67,6 +75,7 @@ interface FullMessage {
   headers: Record<string, string>;
   unread: boolean;
   starred: boolean;
+  attachments?: Attachment[];
 }
 
 interface Label {
@@ -2198,10 +2207,41 @@ function MessageCard({ msg, expanded, isNewest, onToggle }: { msg: FullMessage; 
               )}
             </>
           )}
+          {/* PBS 2026-07-16 · Item 7 — attachment chips at bottom of message body. */}
+          {msg.attachments && msg.attachments.length > 0 && (
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid ' + T.HAIR, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {msg.attachments.map((a) => (
+                <a
+                  key={a.attachmentId}
+                  href={'/api/mail/message/' + msg.id + '/attachment/' + a.attachmentId}
+                  download={a.filename}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '6px 10px', border: '1px solid ' + T.HAIR, borderRadius: 6,
+                    background: T.WHITE, color: T.INK, fontSize: 12, textDecoration: 'none',
+                    maxWidth: 320, overflow: 'hidden',
+                  }}
+                  title={a.filename + ' · ' + a.mimeType + ' · ' + Math.round(a.size / 1024) + ' KB'}
+                >
+                  <span style={{ fontSize: 14 }}>📎</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.filename}</span>
+                  <span style={{ color: T.INK_M, fontSize: 11 }}>{formatSize(a.size)}</span>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+// PBS 2026-07-16 · Item 7 — human-readable file size.
+function formatSize(n: number): string {
+  if (!n) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 // Stack of parsed forwarded messages, most-recent-first, older collapsed.
