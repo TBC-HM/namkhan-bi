@@ -112,7 +112,7 @@ export interface ExtractedLeadInfo {
   country: string | null;
   city: string | null;
   language: string | null;
-  deal_type: 'fit' | 'group' | 'wedding' | 'retreat' | 'package' | 'b2b' | null;
+  deal_type: 'fit' | 'group' | 'btb_dmc' | 'btb_corporate' | 'retreat_lead' | 'wholesale' | 'influencer' | null;
   notes: string | null;
   retreat_history: boolean | null;
   audience_size_proxy: number | null;
@@ -122,7 +122,7 @@ const LEAD_EXTRACT_SYSTEM = [
   'You are a structured-extraction agent for The Namkhan boutique retreat sales pipeline.',
   'Read an inbound email and return ONLY a JSON object matching the given schema.',
   'Missing fields = null. Never invent data. Read the email body, signature block, subject line.',
-  'deal_type must be one of: fit | group | wedding | retreat | package | b2b — pick the best fit; null if unclear.',
+  'deal_type must be one of: fit (individual leisure) | group (multi-room / weddings / events) | btb_dmc (destination management company / travel agency) | btb_corporate (direct corporate account) | retreat_lead (yoga / wellness / meditation retreat organizer) | wholesale (tour operator / bed-bank) | influencer (media / press / social creator). Pick the best fit; null if unclear.',
   'country and city refer to where the SENDER is based (not travel destination).',
   'notes = one or two short sentences summarising what the sender wants.',
   'Respond with a single JSON object, no prose, no code fence.',
@@ -145,13 +145,47 @@ function safeInt(v: unknown): number | null {
   return null;
 }
 
-const DEAL_TYPES = ['fit','group','wedding','retreat','package','b2b'] as const;
+// PBS 2026-07-16 · sales.leads.deal_type CHECK constraint enum (matches DB).
+const DEAL_TYPES = ['fit','group','btb_dmc','btb_corporate','retreat_lead','wholesale','influencer'] as const;
 type DealType = typeof DEAL_TYPES[number];
+
+// Legacy → canonical mapping. Handles both old prompt outputs and natural
+// language variants (Anthropic sometimes returns "wedding"/"leisure"/"b2b"
+// instead of the enum name).
+const DEAL_TYPE_ALIASES: Record<string, DealType> = {
+  wedding:       'group',
+  event:         'group',
+  events:        'group',
+  package:       'fit',
+  leisure:       'fit',
+  couple:        'fit',
+  family:        'fit',
+  honeymoon:     'fit',
+  retreat:       'retreat_lead',
+  yoga:          'retreat_lead',
+  wellness:      'retreat_lead',
+  meditation:    'retreat_lead',
+  b2b:           'btb_dmc',
+  dmc:           'btb_dmc',
+  agent:         'btb_dmc',
+  agency:        'btb_dmc',
+  travel_agent:  'btb_dmc',
+  corporate:     'btb_corporate',
+  company:       'btb_corporate',
+  tour_operator: 'wholesale',
+  bedbank:       'wholesale',
+  press:         'influencer',
+  media:         'influencer',
+  social:        'influencer',
+  creator:       'influencer',
+};
 
 function safeDealType(v: unknown): DealType | null {
   if (typeof v !== 'string') return null;
   const s = v.trim().toLowerCase();
-  return (DEAL_TYPES as readonly string[]).includes(s) ? (s as DealType) : null;
+  if ((DEAL_TYPES as readonly string[]).includes(s)) return s as DealType;
+  if (s in DEAL_TYPE_ALIASES) return DEAL_TYPE_ALIASES[s];
+  return null;
 }
 
 export async function extractLeadInfo(
@@ -182,7 +216,7 @@ export async function extractLeadInfo(
     '  "country": string|null,',
     '  "city": string|null,',
     '  "language": string|null,',
-    '  "deal_type": "fit"|"group"|"wedding"|"retreat"|"package"|"b2b"|null,',
+    '  "deal_type": "fit"|"group"|"btb_dmc"|"btb_corporate"|"retreat_lead"|"wholesale"|"influencer"|null,',
     '  "notes": string|null,',
     '  "retreat_history": boolean|null,',
     '  "audience_size_proxy": number|null',
