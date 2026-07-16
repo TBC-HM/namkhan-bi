@@ -1,10 +1,10 @@
 // app/api/cockpit/bugs/[id]/route.ts
 // PBS 2026-07-16 — lifecycle transitions for a bug row. PATCH ?id=<id> with
-// { action: 'acknowledge' | 'start' | 'done' | 'dismiss' } sets the matching
-// timestamp column + updates status. Body remains editable via notes-only PATCH.
+// { action: 'acknowledge' | 'start' | 'done' | 'dismiss', notes?: string }.
+// DELETE removes the row entirely.
 //
-// Admin gate — anyone can REPORT a bug (via the widget), only admins can move it
-// through the lifecycle.
+// PBS 2026-07-17 — auth loosened to "any signed-in user". Bugs aren't PII and
+// the widget was already open to everyone signed-in; the CTAs should be too.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 
 interface Ctx { params: { id: string } }
 
-async function isAdmin(): Promise<boolean> {
+async function isSignedIn(): Promise<boolean> {
   try {
     const jar = await cookies();
     const sb = createServerClient(
@@ -25,15 +25,13 @@ async function isAdmin(): Promise<boolean> {
       { cookies: { getAll: () => jar.getAll().map((c) => ({ name: c.name, value: c.value })), setAll: () => {} } },
     );
     const { data: { user } } = await sb.auth.getUser();
-    if (!user) return false;
-    const role = (user.app_metadata?.holding_role ?? user.user_metadata?.holding_role) as string | undefined;
-    return role === 'owner' || role === 'admin';
+    return !!user?.id;
   } catch { return false; }
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
-  const admin = await isAdmin();
-  if (!admin) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const signedIn = await isSignedIn();
+  if (!signedIn) return NextResponse.json({ error: 'not_signed_in' }, { status: 401 });
 
   const id = Number(params.id);
   if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ error: 'invalid_id' }, { status: 400 });
@@ -60,7 +58,18 @@ export async function PATCH(req: Request, { params }: Ctx) {
     .select('*')
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, row: data }, {
-    headers: { 'Cache-Control': 'no-store' },
-  });
+  return NextResponse.json({ ok: true, row: data }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
+export async function DELETE(_req: Request, { params }: Ctx) {
+  const signedIn = await isSignedIn();
+  if (!signedIn) return NextResponse.json({ error: 'not_signed_in' }, { status: 401 });
+
+  const id = Number(params.id);
+  if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ error: 'invalid_id' }, { status: 400 });
+
+  const sb = getSupabaseAdmin();
+  const { error } = await sb.from('cockpit_bugs').delete().eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, deleted_id: id }, { headers: { 'Cache-Control': 'no-store' } });
 }
