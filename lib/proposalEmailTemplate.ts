@@ -165,8 +165,10 @@ function blockCard(ctx: ProposalEmailContext, b: ProposalBlockInput): string {
 // stacking behaviour for narrow widths — same pattern as newsletter machine).
 function rateOffersBlock(ctx: ProposalEmailContext): string {
   const offers = (ctx.rate_offers ?? []).slice(0, 3);
-  if (offers.length < 2) return '';
-  const colWidth = offers.length === 2 ? 280 : 180;
+  // PBS 2026-07-16 — render even a single offer (was gated at >= 2, which silently
+  // hid it in preview when PBS only picked one plan). Single = full-width card.
+  if (offers.length === 0) return '';
+  const colWidth = offers.length === 1 ? 560 : offers.length === 2 ? 280 : 180;
   const publicUrl = ctx.public_token ? `${ctx.base_url}/p/${ctx.public_token}` : '';
 
   const cells = offers.map((o) => {
