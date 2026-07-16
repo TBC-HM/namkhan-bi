@@ -134,9 +134,13 @@ export async function refreshIfExpired(userId: string): Promise<{ access: string
     return { access: row.access_token, gmail: row.gmail_address };
   }
 
-  // Refresh
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || '';
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+  // Refresh — PBS 2026-07-16 · Item 4 · was previously reading process.env
+  // only, which meant that when Vercel didn't have GOOGLE_CLIENT_ID/SECRET set
+  // (they live in the Supabase vault), Google returned 400 invalid_client and
+  // the connection was silently marked inactive → user had to "Reconnect
+  // Email" 5-10x/day. Route through the shared vault-first helper so refresh
+  // uses the same credentials as the initial exchange.
+  const { clientId, clientSecret } = await getGoogleOAuthClient();
   const r = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
