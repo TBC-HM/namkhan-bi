@@ -2,6 +2,13 @@
 // PBS 2026-07-16 · Item 7 — download a Gmail attachment. Streams raw bytes
 // with Content-Disposition: attachment so the browser saves it with the
 // original filename.
+//
+// PBS 2026-07-16 (patch) · corrupted-download fix. Trust the decoded buffer
+// length for content-length (Gmail's j.size can drift or be missing for some
+// mime parts, and any mismatch causes the browser to truncate the file →
+// "downloaded PDF won't open in Preview"). Pass the Buffer straight to
+// NextResponse (Buffer is a valid BodyInit; the extra Uint8Array copy was
+// unnecessary and one more place for byteOffset drift).
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentAuthUser, getAttachmentBytes } from '@/lib/userGmail';
 
@@ -16,15 +23,14 @@ export async function GET(
   if (!user) return NextResponse.json({ ok: false, error: 'not_signed_in' }, { status: 401 });
   const { id, attachmentId } = await ctx.params;
   try {
-    const { data, mimeType, filename, size } = await getAttachmentBytes(user.id, id, attachmentId);
-    // RFC 6266 · fallback ASCII + UTF-8 encoded filename for wide client support.
+    const { data, mimeType, filename } = await getAttachmentBytes(user.id, id, attachmentId);
     const safe = filename.replace(/[^\w\.\-]+/g, '_');
     const enc = encodeURIComponent(filename);
-    return new NextResponse(new Uint8Array(data), {
+    return new NextResponse(data, {
       status: 200,
       headers: {
         'content-type': mimeType,
-        'content-length': String(size),
+        'content-length': String(data.length),
         'content-disposition': 'attachment; filename="' + safe + '"; filename*=UTF-8\'\'' + enc,
         'cache-control': 'private, no-store',
       },
