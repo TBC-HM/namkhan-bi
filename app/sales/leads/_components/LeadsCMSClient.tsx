@@ -655,13 +655,40 @@ function LeadProfileDrawer({
               <Field label="Priority (high/medium/low)" value={form.final_priority} onChange={(v) => setForm({ ...form, final_priority: v })} />
               <Field label="ICP score (0-100)" value={form.icp_score} onChange={(v) => setForm({ ...form, icp_score: v })} />
               <Field label="Intent score (0-100)" value={form.intent_score} onChange={(v) => setForm({ ...form, intent_score: v })} />
-              <Field label="Deal type" value={form.deal_type} onChange={(v) => setForm({ ...form, deal_type: v })} />
+              <SelectField
+                label="Deal type"
+                value={form.deal_type}
+                onChange={(v) => setForm({ ...form, deal_type: v })}
+                options={[
+                  { value: '', label: '(none)' },
+                  { value: 'fit', label: 'FIT' },
+                  { value: 'group', label: 'Group' },
+                  { value: 'btb_dmc', label: 'B2B · DMC' },
+                  { value: 'btb_corporate', label: 'B2B · Corporate' },
+                  { value: 'retreat_lead', label: 'Retreat lead' },
+                  { value: 'wholesale', label: 'Wholesale' },
+                  { value: 'influencer', label: 'Influencer' },
+                ]}
+              />
               <Field label="Next touch (YYYY-MM-DD)" value={form.next_touch_at} onChange={(v) => setForm({ ...form, next_touch_at: v })} />
               <Field label="Converted value (EUR)" value={form.converted_value_eur} onChange={(v) => setForm({ ...form, converted_value_eur: v })} />
               <div style={{ gridColumn: '1 / -1' }}>
                 <Field label="Notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} multiline />
               </div>
-              {err && <div style={{ gridColumn: '1 / -1', color: T.RED, fontSize: 12 }}>{err}</div>}
+              {err && (
+                <div style={{
+                  gridColumn: '1 / -1',
+                  color: T.RED,
+                  fontSize: 12,
+                  padding: '8px 10px',
+                  background: '#FBEEE8',
+                  border: '1px solid ' + T.RED,
+                  borderRadius: 3,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}>
+                  <strong>Save failed:</strong> {err}
+                </div>}
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={onClose} style={btnStyleGhost()}>Cancel</button>
                 <button type="button" onClick={save} disabled={saving} style={btnStylePrimary()}>{saving ? 'Saving…' : (isCreate ? 'Create lead' : 'Save changes')}</button>
@@ -768,6 +795,25 @@ function Field({ label, value, onChange, full, multiline }: {
             style={{ padding: '6px 8px', fontSize: 12, background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 3, color: T.INK, resize: 'vertical' }} />
         : <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
             style={{ padding: '6px 8px', fontSize: 12, background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 3, color: T.INK }} />}
+    </label>
+  );
+}
+
+// PBS 2026-07-16 — SelectField for enum-constrained columns (deal_type, etc.)
+// so users can't send garbage that trips a CHECK constraint.
+function SelectField({ label, value, onChange, options, full }: {
+  label: string; value: string; onChange: (v: string) => void;
+  options: { value: string; label: string }[]; full?: boolean;
+}) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: full ? '1 / -1' : undefined }}>
+      <span style={{ fontSize: 10, color: T.INK_M, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        style={{ padding: '6px 8px', fontSize: 12, background: T.WHITE, border: '1px solid ' + T.HAIR, borderRadius: 3, color: T.INK }}>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
     </label>
   );
 }
