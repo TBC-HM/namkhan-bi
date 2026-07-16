@@ -1,34 +1,221 @@
 'use client';
-// The composer screen — unified split-screen editor.
-// PBS 2026-07-16 unify pass:
-//   item 1  — wizard fields (dates/pax/rooms/rate plan) live at the top of the
-//             left pane so a new proposal + an in-flight one land on the SAME page.
-//   item 2  — right pane is a real iframe of /email/preview and reloads (cache-buster
-//             appended) after any left-pane save.
-//   item 4  — "+ Experience" picker sources from content.activities_catalog via a new
-//             GET /api/proposals/activities?property_id=... endpoint. Legacy Activity-
-//             CatalogDrawer is still available as "+ Activities (advanced)" for the
-//             existing sales.activity_catalog set.
-//   item 5  — per-block "Add. discount %" input (activities only) writes to a new
-//             sales.proposal_blocks.additional_discount_pct column.
-//   item 8  — user-facing "Activities" copy → "Experiences" (block_type stays 'activity').
+// components/proposal/ComposerEditor.tsx
+//
+// Full redesign 2026-07-16 (item 11 · replaces the multi-tab Frankenstein).
+// Design brief:
+//   - Paper-white split screen. Left = section stack (scroll). Right = sticky email iframe.
+//   - Sections (top → bottom): Header, Stay, Rooms & Experiences, Photos & Factsheet,
+//     Body copy, Send.
+//   - No tabs — subject + intro copy edited inline in the "Body copy" card.
+//   - Discount % + auto-hero fallback + factsheet + with-photos toggle preserved from prior
+//     iteration (commit 44d261b) but re-organised into consistent cards.
+//   - Debounced auto-save for every field. Preview iframe cache-busted after each save.
+//
+// Palette (locked · never `var(--paper-warm)` — that token is dark on Namkhan scope):
+//   #FFFFFF paper · #F5F0E1 warm · #E6DFCC hairline
+//   #1B1B1B ink · #5A5A5A ink-soft · #8A8A8A ink-mute
+//   #084838 brand green (primary CTA) · #B04A2F brand red (delete/danger)
+//
+// APIs consumed (all pre-existing — no route changes shipped in this commit):
+//   POST /api/sales/proposals/[id]/wizard          {step:'query'|'commit', ...}
+//   POST /api/sales/proposals/[id]/blocks          add block
+//   PATCH /api/sales/proposals/[id]/blocks         patch block
+//   DELETE /api/sales/proposals/[id]/blocks?...    remove block
+//   POST /api/sales/proposals/[id]/blocks/fill     auto-fill label/note/hero from settings
+//   GET  /api/sales/proposals/[id]/check           availability gate
+//   POST /api/sales/proposals/[id]/send            send / re-send
+//   PATCH /api/sales/proposals/[id]/email          subject + intro + outro + ps
+//   POST /api/sales/proposals/[id]/email/regenerate  AI redraft
+//   GET  /api/marketing/factsheets                 factsheet dropdown
+//   GET  /api/proposals/activities?property_id=n   experience picker source
+//   GET  /api/sales/proposals/[id]/email/preview?with_photos=&factsheet_id=&v= (iframe src)
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import RoomPickerDrawer from './RoomPickerDrawer';
 import ActivityCatalogDrawer from './ActivityCatalogDrawer';
 import PhotoPickerDrawer, { type BlockContext, type PhotoRow } from './PhotoPickerDrawer';
-import EmailEditor from './EmailEditor';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, FX_LAK_PER_USD } from '@/lib/format';
 import type { ProposalBlock } from '@/lib/sales';
 
-const PAPER = '#FFFFFF';
-const HAIRLINE = '#E6DFCC';
-const INK = '#1B1B1B';
-const INK_SOFT = '#5A5A5A';
-const INK_MUTE = '#8A8A8A';
-const GREEN = '#084838';
-const RED = '#B04A2F';
+// ---------- design tokens (inlined; do NOT use CSS vars — see burn memory) ----------
+const T = {
+  paper:    '#FFFFFF',
+  warm:     '#F5F0E1',
+  hairline: '#E6DFCC',
+  ink:      '#1B1B1B',
+  inkSoft:  '#5A5A5A',
+  inkMute:  '#8A8A8A',
+  green:    '#084838',
+  red:      '#B04A2F',
+  sans:     '-apple-system, BlinkMacSystemFont, "SF Pro Text", Segoe UI, Helvetica, Arial, sans-serif',
+  serif:    'Georgia, "Times New Roman", serif',
+};
+
+// ---------- style helpers ----------
+const S = {
+  page: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 48fr) 1px minmax(0, 52fr)',
+    gap: 16,
+    alignItems: 'start',
+    gridColumn: '1 / -1',
+  } as const,
+  leftPane: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    maxHeight: 'calc(100vh - 148px)',
+    overflowY: 'auto',
+    paddingRight: 6,
+  } as const,
+  divider: { width: 1, background: T.hairline, alignSelf: 'stretch' } as const,
+  rightPane: {
+    position: 'sticky',
+    top: 12,
+    background: T.paper,
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 12,
+    overflow: 'hidden',
+    height: 'calc(100vh - 148px)',
+    display: 'flex',
+    flexDirection: 'column',
+  } as const,
+  card: {
+    background: T.paper,
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 12,
+    padding: 16,
+    fontFamily: T.sans,
+    color: T.ink,
+  } as const,
+  cardHead: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  } as const,
+  sectionTitle: {
+    fontFamily: T.sans,
+    fontSize: 12,
+    fontWeight: 600,
+    color: T.inkSoft,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+  } as const,
+  label: {
+    display: 'block',
+    fontSize: 11,
+    color: T.inkSoft,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+    marginBottom: 4,
+  } as const,
+  input: {
+    width: '100%',
+    padding: '7px 10px',
+    fontSize: 13,
+    fontFamily: T.sans,
+    color: T.ink,
+    background: T.paper,
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 6,
+    boxSizing: 'border-box' as const,
+  } as const,
+  textarea: {
+    width: '100%',
+    padding: '10px 12px',
+    fontSize: 13,
+    lineHeight: 1.6,
+    fontFamily: T.sans,
+    color: T.ink,
+    background: T.paper,
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 6,
+    boxSizing: 'border-box' as const,
+    resize: 'vertical' as const,
+  } as const,
+  numInput: {
+    width: 68,
+    padding: '5px 8px',
+    fontSize: 12,
+    fontFamily: T.sans,
+    color: T.ink,
+    background: T.paper,
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 5,
+    boxSizing: 'border-box' as const,
+    fontVariantNumeric: 'tabular-nums' as const,
+  } as const,
+  btn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '7px 12px',
+    fontSize: 12,
+    fontFamily: T.sans,
+    fontWeight: 500,
+    color: T.ink,
+    background: T.paper,
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 6,
+    cursor: 'pointer',
+  } as const,
+  btnPrimary: {
+    padding: '9px 16px',
+    fontSize: 13,
+    fontFamily: T.sans,
+    fontWeight: 600,
+    color: '#FFFFFF',
+    background: T.green,
+    border: `1px solid ${T.green}`,
+    borderRadius: 6,
+    cursor: 'pointer',
+  } as const,
+  btnGhost: {
+    padding: '6px 10px',
+    fontSize: 11,
+    fontFamily: T.sans,
+    color: T.inkSoft,
+    background: 'transparent',
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 5,
+    cursor: 'pointer',
+  } as const,
+  btnDanger: {
+    padding: '6px 10px',
+    fontSize: 12,
+    color: T.red,
+    background: 'transparent',
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 5,
+    cursor: 'pointer',
+  } as const,
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 10px',
+    fontSize: 12,
+    color: T.ink,
+    background: T.warm,
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 999,
+  } as const,
+  headerBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    padding: '10px 14px',
+    marginBottom: 12,
+    background: T.paper,
+    border: `1px solid ${T.hairline}`,
+    borderRadius: 12,
+    gridColumn: '1 / -1',
+  } as const,
+};
 
 interface CatalogActivity {
   activity_id: number;
@@ -61,8 +248,8 @@ interface Props {
   proposalId: string;
   propertyId: number;
   initialBlocks: ProposalBlock[];
-  initialEmail: any | null;
-  proposal: { guest_name: string; date_in: string; date_out: string; status: string; public_token: string | null; };
+  initialEmail: { subject?: string | null; intro_md?: string | null; outro_md?: string | null; ps_md?: string | null } | null;
+  proposal: { guest_name: string; date_in: string; date_out: string; status: string; public_token: string | null };
   wizard: {
     date_in: string | null;
     date_out: string | null;
@@ -74,8 +261,6 @@ interface Props {
     completed_at: string | null;
   };
 }
-
-type Tab = 'blocks' | 'email';
 
 const STATUS_TONE: Record<string, { tone: StatusTone; label: string }> = {
   draft:    { tone: 'inactive', label: 'Draft' },
@@ -94,20 +279,40 @@ function todayPlus(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default function ComposerEditor({ proposalId, propertyId, initialBlocks, initialEmail, proposal, wizard }: Props) {
-  const [tab, setTab] = useState<Tab>('blocks');
+function nightCount(from: string, to: string): number {
+  if (!from || !to) return 1;
+  const d1 = new Date(from), d2 = new Date(to);
+  return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000));
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const s = Math.max(1, Math.round((now - then) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  return new Date(iso).toLocaleString();
+}
+
+export default function ComposerEditor({
+  proposalId, propertyId, initialBlocks, initialEmail, proposal, wizard,
+}: Props) {
+  // --- state ---
   const [blocks, setBlocks] = useState<ProposalBlock[]>(initialBlocks);
   const [showRooms, setShowRooms] = useState(false);
   const [showActivities, setShowActivities] = useState(false);
-  const [photoPickerFor, setPhotoPickerFor] = useState<{ block: ProposalBlock } | null>(null);
+  const [showExperiencePicker, setShowExperiencePicker] = useState(false);
+  const [photoPickerFor, setPhotoPickerFor] = useState<ProposalBlock | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [sentToken, setSentToken] = useState<string | null>(proposal.public_token);
-  const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [withPhotos, setWithPhotos] = useState<boolean>(true);
   const [factsheets, setFactsheets] = useState<Array<{ doc_id: string; title: string; for_deal_types: string[] | null }>>([]);
   const [attachedFactsheetId, setAttachedFactsheetId] = useState<string>('');
+  const [lastSavedIso, setLastSavedIso] = useState<string | null>(null);
+  const [savedTick, setSavedTick] = useState(0); // forces relativeTime re-render
 
-  // --- Wizard fields (item 1) ---
+  // Wizard fields
   const [dateIn, setDateIn] = useState<string>(wizard.date_in || proposal.date_in || todayPlus(30));
   const [dateOut, setDateOut] = useState<string>(wizard.date_out || proposal.date_out || todayPlus(33));
   const [adults, setAdults] = useState<number>(wizard.adults ?? 2);
@@ -117,24 +322,57 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
   const [roomTypeId, setRoomTypeId] = useState<string | null>(wizard.room_type_id);
   const [plans, setPlans] = useState<RatePlan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
-  const [wizardMsg, setWizardMsg] = useState<string | null>(null);
 
-  // Cache-buster so the right-pane iframe reloads after each PATCH.
-  const [previewV, setPreviewV] = useState<number>(() => Date.now());
-  const bumpPreview = useCallback(() => setPreviewV(Date.now()), []);
+  // Email copy
+  const [subject, setSubject] = useState<string>(initialEmail?.subject ?? `Your stay at The Namkhan · ${proposal.date_in}`);
+  const [bodyMd, setBodyMd] = useState<string>(initialEmail?.intro_md ?? '');
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [aiSource, setAiSource] = useState<string | null>(null);
 
-  // --- Catalog activity picker (item 4) ---
-  const [showExperiencePicker, setShowExperiencePicker] = useState(false);
+  // Experience picker catalog
   const [catalog, setCatalog] = useState<CatalogActivity[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
 
-  // Pre-send availability gate state.
+  // Availability gate
   const [check, setCheck] = useState<{
     status: 'green' | 'yellow' | 'red' | 'no_rooms';
     message: string;
-    inventory_freshness_min: number;
     rooms: Array<{ block_id: string; label: string; status: 'green' | 'yellow' | 'red'; message: string; min_avail_in_range: number; qty: number }>;
   } | null>(null);
+
+  // Preview iframe cache-buster
+  const [previewV, setPreviewV] = useState<number>(() => Date.now());
+  const bumpPreview = useCallback(() => setPreviewV(Date.now()), []);
+  const markSaved = useCallback(() => {
+    setLastSavedIso(new Date().toISOString());
+    bumpPreview();
+  }, [bumpPreview]);
+
+  // Debounced email PATCH — one round-trip per pause (500ms).
+  const emailDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialEmailStamp = useRef<string>(JSON.stringify({ s: initialEmail?.subject ?? null, b: initialEmail?.intro_md ?? null }));
+  useEffect(() => {
+    const now = JSON.stringify({ s: subject, b: bodyMd });
+    if (now === initialEmailStamp.current) return;
+    if (emailDebounce.current) clearTimeout(emailDebounce.current);
+    emailDebounce.current = setTimeout(async () => {
+      const r = await fetch(`/api/sales/proposals/${proposalId}/email`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ subject, intro_md: bodyMd }),
+      });
+      if (r.ok) { initialEmailStamp.current = now; markSaved(); }
+    }, 500);
+    return () => { if (emailDebounce.current) clearTimeout(emailDebounce.current); };
+  }, [subject, bodyMd, proposalId, markSaved]);
+
+  // Live "Saved Ns ago" ticker (once/sec while a save exists).
+  useEffect(() => {
+    if (!lastSavedIso) return;
+    const t = setInterval(() => setSavedTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [lastSavedIso]);
+  void savedTick; // used only to force re-render
 
   const refreshCheck = useCallback(async () => {
     try {
@@ -142,17 +380,17 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
       if (r.ok) setCheck(await r.json());
     } catch { /* swallow */ }
   }, [proposalId]);
-
   useEffect(() => { refreshCheck(); }, [refreshCheck, blocks.length]);
 
+  // Load factsheet options on mount.
   useEffect(() => {
-    fetch('/api/marketing/factsheets').then(r => r.ok ? r.json() : { rows: [] }).then((j) => {
-      setFactsheets(Array.isArray(j.rows) ? j.rows : []);
-    }).catch(() => setFactsheets([]));
+    fetch('/api/marketing/factsheets')
+      .then((r) => r.ok ? r.json() : { rows: [] })
+      .then((j) => setFactsheets(Array.isArray(j.rows) ? j.rows : []))
+      .catch(() => setFactsheets([]));
   }, []);
 
-  // Load available rate plans for the current wizard field values.
-  // Debounced fetch: any change to dates/pax/rooms triggers a re-query 450 ms after settle.
+  // Rate-plan availability query (debounced 450ms after any field change).
   useEffect(() => {
     if (!dateIn || !dateOut || dateOut <= dateIn) return;
     const t = setTimeout(() => {
@@ -161,17 +399,10 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
       fetch(`/api/sales/proposals/${proposalId}/wizard`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          step: 'query',
-          date_in: dateIn, date_out: dateOut,
-          adults, children: childrenN, rooms,
-        }),
+        body: JSON.stringify({ step: 'query', date_in: dateIn, date_out: dateOut, adults, children: childrenN, rooms }),
       })
-        .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
-        .then((j) => {
-          if (cancelled) return;
-          setPlans(Array.isArray(j.plans) ? j.plans : []);
-        })
+        .then((r) => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+        .then((j) => { if (!cancelled) setPlans(Array.isArray(j.plans) ? j.plans : []); })
         .catch(() => { if (!cancelled) setPlans([]); })
         .finally(() => { if (!cancelled) setPlansLoading(false); });
       return () => { cancelled = true; };
@@ -179,21 +410,18 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
     return () => clearTimeout(t);
   }, [proposalId, dateIn, dateOut, adults, childrenN, rooms]);
 
-  // Load activity catalog once per open of the picker (item 4).
+  // Load activity catalog when picker opens.
   useEffect(() => {
     if (!showExperiencePicker || catalog.length > 0) return;
     setCatalogLoading(true);
     fetch(`/api/proposals/activities?property_id=${propertyId}`)
-      .then(r => r.ok ? r.json() : { activities: [] })
+      .then((r) => r.ok ? r.json() : { activities: [] })
       .then((j) => setCatalog(Array.isArray(j.activities) ? j.activities : []))
       .catch(() => setCatalog([]))
       .finally(() => setCatalogLoading(false));
   }, [showExperiencePicker, catalog.length, propertyId]);
 
-  // Persist wizard selection whenever a rate plan is chosen.
-  // Fires commit on: rate-plan pick, or dates/pax/rooms change AFTER a plan is picked.
   async function commitWizard(planId: string, rtId: string) {
-    setWizardMsg(null);
     try {
       const r = await fetch(`/api/sales/proposals/${proposalId}/wizard`, {
         method: 'POST',
@@ -206,27 +434,17 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
           selected_room_type_id: rtId,
         }),
       });
-      if (!r.ok) {
-        const t = await r.text();
-        setWizardMsg(`Save failed: ${t.slice(0, 160)}`);
-        return;
-      }
-      setWizardMsg('Saved.');
-      bumpPreview();
-    } catch (e) {
-      setWizardMsg(`Save failed: ${(e as Error).message}`);
-    }
+      if (r.ok) markSaved();
+    } catch { /* swallow */ }
   }
-
   function onPickRatePlan(planId: string) {
-    const p = plans.find(x => x.rate_plan_id === planId);
+    const p = plans.find((x) => x.rate_plan_id === planId);
     if (!p) return;
     setRatePlanId(planId);
     setRoomTypeId(p.room_type_id);
     void commitWizard(planId, p.room_type_id);
   }
-
-  // Re-commit when field-level values change AFTER a plan is picked.
+  // Re-commit when field values change after a plan is picked.
   useEffect(() => {
     if (!ratePlanId || !roomTypeId) return;
     const t = setTimeout(() => { void commitWizard(ratePlanId, roomTypeId); }, 650);
@@ -234,12 +452,8 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateIn, dateOut, adults, childrenN, rooms]);
 
-  const totalLak = blocks.reduce((s, b) => s + Number(b.total_lak ?? 0), 0);
-  const totalUsd = totalLak / FX_LAK_PER_USD;
-  const nights = nightCount(proposal.date_in, proposal.date_out);
-  const status = STATUS_TONE[proposal.status] ?? STATUS_TONE.draft;
-
-  async function addBlockToProposal(payload: Partial<ProposalBlock> & { block_type: ProposalBlock['block_type']; label: string; unit_price_lak: number; }) {
+  // ---------- block mutations ----------
+  async function addBlockToProposal(payload: Partial<ProposalBlock> & { block_type: ProposalBlock['block_type']; label: string; unit_price_lak: number }) {
     setBusy('add');
     const r = await fetch(`/api/sales/proposals/${proposalId}/blocks`, {
       method: 'POST',
@@ -248,15 +462,15 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
     });
     if (r.ok) {
       const j = await r.json();
-      if (j.block) setBlocks(b => [...b, j.block]);
-      bumpPreview();
+      if (j.block) setBlocks((b) => [...b, j.block]);
+      markSaved();
     }
     setBusy(null);
   }
 
   async function patchBlock(id: string, patch: Partial<ProposalBlock>) {
     setBusy(id);
-    setBlocks(b => b.map(x => x.id === id ? {
+    setBlocks((b) => b.map((x) => x.id === id ? {
       ...x, ...patch,
       total_lak: (patch.qty ?? x.qty) * (patch.nights ?? x.nights) * (patch.unit_price_lak ?? x.unit_price_lak),
     } : x));
@@ -265,59 +479,33 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ block_id: id, ...patch }),
     });
-    bumpPreview();
+    markSaved();
     setBusy(null);
   }
 
   async function removeBlock(id: string) {
     setBusy(id);
-    setBlocks(b => b.filter(x => x.id !== id));
+    setBlocks((b) => b.filter((x) => x.id !== id));
     await fetch(`/api/sales/proposals/${proposalId}/blocks?block_id=${id}`, { method: 'DELETE' });
-    bumpPreview();
+    markSaved();
     setBusy(null);
   }
-
-  async function fillFromSettings(b: ProposalBlock) {
-    setBusy(b.id);
-    try {
-      const r = await fetch(`/api/sales/proposals/${proposalId}/blocks/fill`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ block_id: b.id, block_type: b.block_type, ref_id: b.ref_id }),
-      });
-      if (r.ok) {
-        const j = await r.json();
-        setBlocks(prev => prev.map(x => x.id === b.id ? {
-          ...x,
-          label: (j.patch?.label as string) ?? x.label,
-          note:  (j.patch?.note  as string) ?? x.note,
-          hero_asset_id: (j.hero_asset_id as string) ?? x.hero_asset_id,
-        } : x));
-        bumpPreview();
-      }
-    } catch { /* swallow */ }
-    setBusy(null);
-  }
-
-  function pickPhotoFor(b: ProposalBlock) { setPhotoPickerFor({ block: b }); }
 
   async function attachPhoto(blockId: string, asset: PhotoRow) {
     setBusy(blockId);
-    setBlocks(prev => prev.map(x => x.id === blockId ? { ...x, hero_asset_id: asset.asset_id } : x));
+    setBlocks((prev) => prev.map((x) => x.id === blockId ? { ...x, hero_asset_id: asset.asset_id } : x));
     await fetch(`/api/sales/proposals/${proposalId}/blocks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ block_id: blockId, hero_asset_id: asset.asset_id }),
     });
-    bumpPreview();
+    markSaved();
     setBusy(null);
   }
 
   async function sendProposal(opts: { force?: boolean } = {}) {
     setBusy('send');
-    const url = opts.force
-      ? `/api/sales/proposals/${proposalId}/send?force=1`
-      : `/api/sales/proposals/${proposalId}/send`;
+    const url = opts.force ? `/api/sales/proposals/${proposalId}/send?force=1` : `/api/sales/proposals/${proposalId}/send`;
     const r = await fetch(url, { method: 'POST' });
     const j = await r.json();
     if (r.status === 409) {
@@ -332,7 +520,30 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
     setBusy(null);
   }
 
-  // Grouped rate plan options for the dropdown (item 1).
+  async function regenerateEmail() {
+    setEmailBusy(true);
+    setAiSource(null);
+    const r = await fetch(`/api/sales/proposals/${proposalId}/email/regenerate`, { method: 'POST' });
+    if (r.ok) {
+      const j = await r.json();
+      if (j.subject) setSubject(j.subject);
+      if (j.intro_md) setBodyMd(j.intro_md);
+      setAiSource(j.source ?? 'unknown');
+      markSaved();
+    }
+    setEmailBusy(false);
+  }
+
+  // ---------- derived ----------
+  const totalLak = blocks.reduce((s, b) => {
+    const disc = Number(b.additional_discount_pct ?? 0);
+    const unitEff = Number(b.unit_price_lak ?? 0) * (1 - Math.max(0, Math.min(100, disc)) / 100);
+    return s + Number(b.qty ?? 1) * Number(b.nights ?? 1) * unitEff;
+  }, 0);
+  const totalUsd = totalLak / FX_LAK_PER_USD;
+  const nights = nightCount(proposal.date_in, proposal.date_out);
+  const status = STATUS_TONE[proposal.status] ?? STATUS_TONE.draft;
+
   const planGroups = useMemo(() => {
     const groups = new Map<string, { label: string; plans: RatePlan[] }>();
     for (const p of plans) {
@@ -344,267 +555,277 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
   }, [plans]);
 
   const previewSrc = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${previewV}`;
+  const photosMissing = blocks.filter((b) => !b.hero_asset_id).length;
+  const canSend = blocks.length > 0 && check?.status !== 'red' && busy !== 'send';
 
+  // ---------- render ----------
   return (
     <>
-      <header style={{
-        marginTop: 14,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-        gap: 16, flexWrap: 'wrap',
-      }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="t-eyebrow" style={{ marginBottom: 2, color: '#5A5A5A' }}>
-            <strong style={{ color: '#5A5A5A' }}>Sales</strong>
-            <span style={{ margin: '0 6px', color: '#8A8A8A' }}>›</span>
-            Composer · {proposalId.slice(0, 8)}
+      {/* Top bar — breadcrumb, saved indicator, status pill, Send CTA */}
+      <div style={S.headerBar}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: T.inkSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Sales <span style={{ color: T.inkMute, margin: '0 6px' }}>›</span>
+            Proposals <span style={{ color: T.inkMute, margin: '0 6px' }}>›</span>
+            <span style={{ color: T.ink, textTransform: 'none', letterSpacing: 0 }}>{proposal.guest_name}</span>
           </div>
-          <h1 style={{
-            margin: '4px 0 2px',
-            fontFamily: 'var(--serif)', fontWeight: 500,
-            fontSize: 'var(--t-2xl)',
-            letterSpacing: 'var(--ls-tight)',
-            lineHeight: 1.1,
-            fontVariationSettings: '"opsz" 144',
-            color: '#1B1B1B',
-          }}>
-            {proposal.guest_name} <em style={{ color: '#084838', fontStyle: 'italic' }}>· stay</em>
-          </h1>
-          <div style={{ fontSize: 'var(--t-base)', color: '#5A5A5A', marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
-            {fmtIsoDate(proposal.date_in)} → {fmtIsoDate(proposal.date_out)} · {nights} {nights === 1 ? 'night' : 'nights'}
-            <StatusPill tone={status.tone}>{status.label}</StatusPill>
-            {sentToken && (
-              <a href={`/p/${sentToken}`} target="_blank" rel="noopener" style={{ color: '#084838', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-loose)', textTransform: 'uppercase' }}>
-                Open public link →
-              </a>
-            )}
-          </div>
+          <StatusPill tone={status.tone}>{status.label}</StatusPill>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => setTab('blocks')} className={`btn${tab === 'blocks' ? ' btn-primary' : ''}`}>1 · Blocks</button>
-          <button onClick={() => setTab('email')} className={`btn${tab === 'email' ? ' btn-primary' : ''}`}>2 · Email</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {lastSavedIso && (
+            <span style={{ fontSize: 11, color: T.inkSoft }}>Saved {relativeTime(lastSavedIso)}</span>
+          )}
+          {sentToken && (
+            <a href={`/p/${sentToken}`} target="_blank" rel="noopener"
+              style={{ fontSize: 11, color: T.green, letterSpacing: '0.06em', textTransform: 'uppercase', textDecoration: 'none' }}>
+              Open public link →
+            </a>
+          )}
           <button
             onClick={() => sendProposal()}
-            disabled={busy === 'send' || blocks.length === 0 || check?.status === 'red'}
-            className="btn btn-primary"
+            disabled={!canSend}
+            style={{ ...S.btnPrimary, opacity: canSend ? 1 : 0.5, cursor: canSend ? 'pointer' : 'not-allowed' }}
             title={check?.status === 'red' ? 'Send blocked — fix availability first' : undefined}
           >
             {busy === 'send' ? 'Sending…' : sentToken ? 'Re-send →' : 'Send to guest →'}
           </button>
         </div>
-      </header>
+      </div>
 
-      {check && check.status !== 'no_rooms' && (
-        <div className={`avail-banner avail-${check.status}`}>
-          <div className="avail-banner-head">
-            <span className="avail-banner-icon">
-              {check.status === 'green' ? '●' : check.status === 'yellow' ? '◐' : '⚠'}
-            </span>
+      {/* Availability banner (kept from prior iteration) */}
+      {check && check.status !== 'no_rooms' && check.status !== 'green' && (
+        <div style={{
+          gridColumn: '1 / -1', marginBottom: 12, padding: '10px 14px', borderRadius: 8,
+          background: check.status === 'red' ? '#FDECE4' : '#FBF3D9',
+          border: `1px solid ${check.status === 'red' ? '#E7B4A0' : '#E5D48F'}`,
+          fontSize: 12, color: T.ink,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <strong>
-              {check.status === 'green' ? 'Rooms available'
-                : check.status === 'yellow' ? 'Tight or stale'
-                : 'Send blocked — rooms unavailable'}
+              {check.status === 'yellow' ? 'Tight or stale inventory' : 'Send blocked — rooms unavailable'}
             </strong>
-            <span className="avail-banner-msg">{check.message}</span>
+            <span style={{ color: T.inkSoft }}>{check.message}</span>
             {check.status === 'red' && (
-              <button onClick={() => sendProposal({ force: true })} disabled={busy === 'send'} className="btn">
+              <button onClick={() => sendProposal({ force: true })} disabled={busy === 'send'} style={S.btnGhost}>
                 Force-send anyway
               </button>
             )}
-            <button onClick={refreshCheck} className="btn">↻ Re-check</button>
+            <button onClick={refreshCheck} style={S.btnGhost}>↻ Re-check</button>
           </div>
-          {check.rooms.filter(r => r.status !== 'green').length > 0 && (
-            <ul className="avail-banner-list">
-              {check.rooms.filter(r => r.status !== 'green').map(r => (
-                <li key={r.block_id}>
-                  <span className={`avail-room-pill avail-${r.status}`}>{r.label}</span>
-                  <span className="avail-room-msg">{r.message}</span>
-                </li>
+          {check.rooms.filter((r) => r.status !== 'green').length > 0 && (
+            <ul style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: 12, color: T.inkSoft }}>
+              {check.rooms.filter((r) => r.status !== 'green').map((r) => (
+                <li key={r.block_id}><strong style={{ color: T.ink }}>{r.label}</strong> · {r.message}</li>
               ))}
             </ul>
           )}
         </div>
       )}
 
-      {/* PBS 2026-07-16 (items 2 / 5) — newsletter-optic chrome bar */}
-      <div style={{
-        display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
-        padding: '10px 12px', margin: '12px 0',
-        background: PAPER, border: `1px solid ${HAIRLINE}`, borderRadius: 6,
-      }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: INK, cursor: 'pointer' }}>
-          <input type="checkbox" checked={withPhotos} onChange={(e) => { setWithPhotos(e.target.checked); bumpPreview(); }} />
-          <span>With photos in preview</span>
-        </label>
-        <span style={{ width: 1, height: 20, background: HAIRLINE }} />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: INK }}>
-          <span>Factsheet:</span>
-          {factsheets.length === 0 ? (
-            <a href="/marketing/factsheets" style={{ color: '#B04A2F', fontSize: 11 }}>
-              None yet — add one →
-            </a>
-          ) : (
-            <select
-              value={attachedFactsheetId}
-              onChange={(e) => { setAttachedFactsheetId(e.target.value); bumpPreview(); }}
-              style={{ padding: '4px 8px', fontSize: 12, border: `1px solid ${HAIRLINE}`, borderRadius: 3, background: PAPER, color: INK }}
-            >
-              <option value="">(none)</option>
-              {factsheets.map((f) => (
-                <option key={f.doc_id} value={f.doc_id}>
-                  {f.title}{f.for_deal_types && f.for_deal_types.length ? ' · ' + f.for_deal_types.join('/') : ''}
-                </option>
-              ))}
-            </select>
-          )}
-        </label>
-      </div>
+      <div style={S.page}>
+        {/* -------- LEFT PANE -------- */}
+        <div style={S.leftPane}>
 
-      {tab === 'blocks' && (
-        // PBS 2026-07-16 item 2 — real 48% / 52% split; left = editor, right = iframe preview.
-        <div style={{ display: 'grid', gridTemplateColumns: '48fr 1px 52fr', gap: 16, alignItems: 'start', gridColumn: '1 / -1' }}>
-          <section className="panel" style={{ background: PAPER, color: INK, border: `1px solid ${HAIRLINE}`, maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' }}>
-
-            {/* --- Wizard fields (item 1) --- */}
-            <WizardFieldsSection
-              dateIn={dateIn} setDateIn={(v) => { setDateIn(v); }}
-              dateOut={dateOut} setDateOut={(v) => { setDateOut(v); }}
-              adults={adults} setAdults={setAdults}
-              childrenN={childrenN} setChildrenN={setChildrenN}
-              rooms={rooms} setRooms={setRooms}
-              plans={plans} plansLoading={plansLoading}
-              ratePlanId={ratePlanId} onPickRatePlan={onPickRatePlan}
-              planGroups={planGroups}
-              msg={wizardMsg}
-              completedAt={wizard.completed_at}
-            />
-
-            <div style={{ height: 1, background: HAIRLINE, margin: '14px 0' }} />
-
-            <div className="panel-head">
-              <span className="panel-head-title" style={{ color: INK }}>Stay <em style={{ color: GREEN }}>blocks</em></span>
-              <span className="panel-head-meta" style={{ display: 'flex', gap: 6, color: INK_SOFT }}>
-                <button onClick={() => setShowRooms(true)} className="btn">+ Rooms</button>
-                <button onClick={() => setShowExperiencePicker(true)} className="btn">+ Experience</button>
-                <button onClick={() => setShowActivities(true)} className="btn" title="Legacy sales.activity_catalog picker">+ Advanced</button>
+          {/* Stay */}
+          <section style={S.card}>
+            <div style={S.cardHead}>
+              <span style={S.sectionTitle}>Stay</span>
+              <span style={{ fontSize: 11, color: T.inkMute }}>
+                {fmtIsoDate(dateIn)} → {fmtIsoDate(dateOut)} · {nightCount(dateIn, dateOut)} {nightCount(dateIn, dateOut) === 1 ? 'night' : 'nights'}
               </span>
             </div>
-
-            {blocks.length === 0 && (
-              <p style={{ color: INK_MUTE, fontSize: 'var(--t-md)', padding: '32px 0', textAlign: 'center' }}>
-                No blocks yet. Use the buttons above to add rooms and experiences.
-              </p>
-            )}
-
-            {blocks.map(b => {
-              const disc = Number(b.additional_discount_pct ?? 0);
-              const unitAfterDisc = Number(b.unit_price_lak) * (1 - disc / 100);
-              const totalUsdEff = Number(b.qty) * Number(b.nights) * unitAfterDisc / FX_LAK_PER_USD;
-              return (
-                <div key={b.id} style={{ borderBottom: `1px solid ${HAIRLINE}`, padding: '10px 0' }}>
-                  <div className="composer-block-row">
-                    <div className="composer-block-label" style={{ color: INK, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                      {b.hero_asset_id && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`/api/marketing/media/preview?asset_id=${b.hero_asset_id}`}
-                          alt=""
-                          style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, border: `1px solid ${HAIRLINE}`, flexShrink: 0 }}
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      )}
-                      <div style={{ minWidth: 0 }}>
-                        <div>{b.label}</div>
-                        <div className="composer-block-meta" style={{ color: INK_MUTE }}>
-                          {b.block_type === 'activity' ? 'experience' : b.block_type}{b.note ? ` · ${b.note}` : ''}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input type="number" min={0} value={b.qty}
-                        onChange={e => patchBlock(b.id, { qty: Math.max(0, parseInt(e.target.value || '0', 10)) })}
-                        className="composer-num-input"
-                        style={{ background: '#FAFAF7', color: INK, border: `1px solid ${HAIRLINE}` }} />
-                      <span style={{ fontSize: 'var(--t-xs)', color: INK_MUTE }}>×</span>
-                      <input type="number" min={1} value={b.nights}
-                        onChange={e => patchBlock(b.id, { nights: Math.max(1, parseInt(e.target.value || '1', 10)) })}
-                        className="composer-num-input"
-                        style={{ background: '#FAFAF7', color: INK, border: `1px solid ${HAIRLINE}` }} />
-                      <span style={{ fontSize: 'var(--t-xs)', color: INK_MUTE }}>nt @</span>
-                      <input type="number" min={0} step={1000} value={b.unit_price_lak}
-                        onChange={e => patchBlock(b.id, { unit_price_lak: parseFloat(e.target.value || '0') })}
-                        className="composer-num-input" style={{ width: 90, background: '#FAFAF7', color: INK, border: `1px solid ${HAIRLINE}` }} />
-                      <span style={{ fontSize: 'var(--t-xs)', color: INK_MUTE }}>₭</span>
-                    </div>
-                    <div style={{ minWidth: 80, textAlign: 'right', fontWeight: 500, fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', color: INK }}>
-                      {fmtTableUsd(totalUsdEff)}
-                    </div>
-                    <button onClick={() => removeBlock(b.id)} disabled={busy === b.id} className="btn"
-                      style={{ color: RED, padding: '4px 8px' }}>×</button>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6, marginLeft: b.hero_asset_id ? 58 : 0, fontSize: 'var(--t-xs)', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <button onClick={() => pickPhotoFor(b)} disabled={busy === b.id} className="btn" style={{ padding: '3px 8px', fontSize: 11 }}>
-                      {b.hero_asset_id ? 'Change photo' : 'Choose photo'}
-                    </button>
-                    <button onClick={() => fillFromSettings(b)} disabled={busy === b.id} className="btn" style={{ padding: '3px 8px', fontSize: 11 }}>
-                      {busy === b.id ? 'Filling…' : 'Fill from Property Settings'}
-                    </button>
-                    {/* PBS 2026-07-16 item 5 — per-activity add. discount % */}
-                    {b.block_type === 'activity' && (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 6, color: INK_SOFT, fontSize: 11 }}>
-                        Add. discount %
-                        <input type="number" min={0} max={100} step={1}
-                          value={Number(b.additional_discount_pct ?? 0)}
-                          onChange={(e) => {
-                            const v = Math.max(0, Math.min(100, parseFloat(e.target.value || '0')));
-                            patchBlock(b.id, { additional_discount_pct: v } as Partial<ProposalBlock>);
-                          }}
-                          style={{ width: 56, padding: '2px 6px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, fontSize: 11, background: PAPER, color: INK }}
-                        />
-                        {disc > 0 && (
-                          <span style={{ color: INK_MUTE, fontFamily: 'var(--mono)' }}>
-                            base {fmtTableUsd(Number(b.qty) * Number(b.nights) * Number(b.unit_price_lak) / FX_LAK_PER_USD)}
-                          </span>
-                        )}
-                      </label>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            <div className="composer-total-row" style={{ borderTop: `2px solid ${GREEN}` }}>
-              <span className="composer-total-label" style={{ color: INK_MUTE }}>Total</span>
-              <span className="composer-total-value" style={{ color: GREEN }}>{fmtTableUsd(totalUsd)}</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <FieldLabel label="Check-in">
+                <input type="date" style={S.input} value={dateIn} onChange={(e) => setDateIn(e.target.value)} />
+              </FieldLabel>
+              <FieldLabel label="Check-out">
+                <input type="date" style={S.input} value={dateOut} min={dateIn} onChange={(e) => setDateOut(e.target.value)} />
+              </FieldLabel>
+              <FieldLabel label="Rooms">
+                <input type="number" style={S.input} min={1} max={24} value={rooms}
+                  onChange={(e) => setRooms(Math.max(1, Math.min(24, parseInt(e.target.value || '1', 10))))} />
+              </FieldLabel>
+              <FieldLabel label="Adults">
+                <input type="number" style={S.input} min={1} max={24} value={adults}
+                  onChange={(e) => setAdults(Math.max(1, Math.min(24, parseInt(e.target.value || '1', 10))))} />
+              </FieldLabel>
+              <FieldLabel label="Children">
+                <input type="number" style={S.input} min={0} max={12} value={childrenN}
+                  onChange={(e) => setChildrenN(Math.max(0, Math.min(12, parseInt(e.target.value || '0', 10))))} />
+              </FieldLabel>
+              <FieldLabel label={plansLoading ? 'Rate plan · loading…' : `Rate plan · ${plans.length} option${plans.length === 1 ? '' : 's'}`}>
+                <select
+                  value={ratePlanId ?? ''}
+                  onChange={(e) => onPickRatePlan(e.target.value)}
+                  style={{ ...S.input, height: 34 }}
+                >
+                  <option value="">— pick a rate plan —</option>
+                  {planGroups.map(([rtId, g]) => (
+                    <optgroup key={rtId} label={g.label}>
+                      {g.plans.map((p) => (
+                        <option key={p.rate_plan_id} value={p.rate_plan_id}>
+                          {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''} · ${Math.round(p.total_usd).toLocaleString('en-US')} ({p.rooms_available_min} avail)
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </FieldLabel>
             </div>
           </section>
 
-          {/* Vertical hairline divider (item 2 design) */}
-          <div style={{ width: 1, background: HAIRLINE, alignSelf: 'stretch' }} />
+          {/* Rooms & Experiences */}
+          <section style={S.card}>
+            <div style={S.cardHead}>
+              <span style={S.sectionTitle}>Rooms &amp; Experiences</span>
+              <span style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setShowRooms(true)} style={S.btn}>+ Room</button>
+                <button onClick={() => setShowExperiencePicker(true)} style={S.btn}>+ Experience</button>
+                <button onClick={() => setShowActivities(true)} style={S.btnGhost} title="Legacy sales.activity_catalog picker">+ Advanced</button>
+              </span>
+            </div>
 
-          {/* Right pane — real iframe of the outbound email HTML. */}
-          <aside style={{ position: 'sticky', top: 12, background: PAPER, border: `1px solid ${HAIRLINE}`, borderRadius: 6, overflow: 'hidden', height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column' }}>
-            <header style={{ padding: '8px 12px', borderBottom: `1px solid ${HAIRLINE}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: INK_SOFT, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-              <span>Live email preview</span>
-              <button onClick={bumpPreview} className="btn" style={{ fontSize: 10, padding: '2px 6px' }}>↻</button>
-            </header>
-            <iframe
-              title="proposal email preview"
-              src={previewSrc}
-              style={{ flex: 1, border: 0, background: '#F5F0E1' }}
-            />
-          </aside>
+            {blocks.length === 0 ? (
+              <div style={{ padding: '28px 8px', textAlign: 'center', color: T.inkMute, fontSize: 12 }}>
+                No blocks yet — add a room or experience to start.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {blocks.map((b) => (
+                  <BlockRow
+                    key={b.id}
+                    block={b}
+                    busy={busy === b.id}
+                    onPatch={(patch) => patchBlock(b.id, patch)}
+                    onRemove={() => removeBlock(b.id)}
+                    onPickPhoto={() => setPhotoPickerFor(b)}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              marginTop: 12, paddingTop: 12, borderTop: `2px solid ${T.green}`,
+            }}>
+              <span style={{ fontSize: 11, color: T.inkSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Stay total</span>
+              <span style={{
+                fontFamily: T.sans, fontSize: 18, fontWeight: 600, color: T.green,
+                fontVariantNumeric: 'tabular-nums',
+              }}>{fmtTableUsd(totalUsd)}</span>
+            </div>
+          </section>
+
+          {/* Photos & Factsheet */}
+          <section style={S.card}>
+            <div style={S.cardHead}>
+              <span style={S.sectionTitle}>Photos &amp; Factsheet</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.ink, cursor: 'pointer' }}>
+                <input type="checkbox" checked={withPhotos} onChange={(e) => { setWithPhotos(e.target.checked); bumpPreview(); }} />
+                <span>Include photos</span>
+              </label>
+            </div>
+            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 10 }}>
+              {withPhotos
+                ? (photosMissing === 0
+                    ? `All ${blocks.length} block${blocks.length === 1 ? '' : 's'} have a photo set.`
+                    : `${photosMissing} of ${blocks.length} block${blocks.length === 1 ? '' : 's'} rely on auto-hero fallback — override per block above.`)
+                : 'Photos suppressed in preview + email.'}
+            </div>
+            <FieldLabel label="Factsheet PDF">
+              {factsheets.length === 0 ? (
+                <a href="/marketing/factsheets" style={{ color: T.red, fontSize: 12 }}>None yet — add one →</a>
+              ) : (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select
+                    value={attachedFactsheetId}
+                    onChange={(e) => { setAttachedFactsheetId(e.target.value); bumpPreview(); }}
+                    style={{ ...S.input, height: 34, flex: 1 }}
+                  >
+                    <option value="">(none)</option>
+                    {factsheets.map((f) => (
+                      <option key={f.doc_id} value={f.doc_id}>
+                        {f.title}{f.for_deal_types && f.for_deal_types.length ? ' · ' + f.for_deal_types.join('/') : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {attachedFactsheetId && (
+                    <button onClick={() => { setAttachedFactsheetId(''); bumpPreview(); }} style={S.btnGhost}>× clear</button>
+                  )}
+                </div>
+              )}
+            </FieldLabel>
+          </section>
+
+          {/* Body copy */}
+          <section style={S.card}>
+            <div style={S.cardHead}>
+              <span style={S.sectionTitle}>Body copy</span>
+              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {aiSource && (
+                  <span style={{ fontSize: 10, color: aiSource === 'stub' ? T.red : T.green, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    AI: {aiSource}
+                  </span>
+                )}
+                <button onClick={regenerateEmail} disabled={emailBusy} style={S.btnGhost}>
+                  {emailBusy ? '…' : '↻ Re-draft with AI'}
+                </button>
+              </span>
+            </div>
+            <FieldLabel label="Subject">
+              <input style={S.input} value={subject} onChange={(e) => setSubject(e.target.value)} />
+            </FieldLabel>
+            <div style={{ height: 10 }} />
+            <FieldLabel label="Message to guest">
+              <textarea
+                style={{ ...S.textarea, minHeight: 180 }}
+                value={bodyMd}
+                onChange={(e) => setBodyMd(e.target.value)}
+                placeholder="Write a warm, concise note — dates, room, one signature experience. This appears above the stay summary."
+              />
+            </FieldLabel>
+            <div style={{ marginTop: 6, fontSize: 11, color: T.inkMute }}>
+              Auto-saves 500ms after you stop typing. Outro + sign-off are appended automatically from your property signature.
+            </div>
+          </section>
+
+          {/* Bottom padding so last card isn't flush against the scroll edge */}
+          <div style={{ height: 12 }} />
         </div>
-      )}
 
-      {tab === 'email' && (
-        <EmailEditor proposalId={proposalId} initialEmail={initialEmail} blocks={blocks} totalUsd={totalUsd} proposal={proposal} />
-      )}
+        {/* -------- DIVIDER -------- */}
+        <div style={S.divider} />
 
+        {/* -------- RIGHT PANE (email iframe) -------- */}
+        <aside style={S.rightPane}>
+          <header style={{
+            padding: '10px 14px', borderBottom: `1px solid ${T.hairline}`,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            fontSize: 11, color: T.inkSoft, letterSpacing: '0.08em', textTransform: 'uppercase',
+            background: T.paper,
+          }}>
+            <span>Live email preview</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontFamily: T.sans, textTransform: 'none', letterSpacing: 0, color: T.inkMute }}>
+                {nights} {nights === 1 ? 'nt' : 'nts'} · {fmtTableUsd(totalUsd)}
+              </span>
+              <button onClick={bumpPreview} style={S.btnGhost} title="Refresh">↻</button>
+            </div>
+          </header>
+          <iframe
+            title="proposal email preview"
+            src={previewSrc}
+            style={{ flex: 1, border: 0, background: T.warm, width: '100%' }}
+          />
+        </aside>
+      </div>
+
+      {/* -------- Drawers -------- */}
       <RoomPickerDrawer
         open={showRooms}
         onClose={() => setShowRooms(false)}
-        fromDate={proposal.date_in}
-        toDate={proposal.date_out}
+        fromDate={dateIn}
+        toDate={dateOut}
         onPick={(room) => {
           addBlockToProposal({
             block_type: 'room',
@@ -613,13 +834,12 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
             label: room.room_type_name,
             unit_price_lak: Number(room.avg_nightly_lak),
             qty: 1,
-            nights: nights,
+            nights: nightCount(dateIn, dateOut),
             sort_order: 10,
           });
           setShowRooms(false);
         }}
       />
-
       <ActivityCatalogDrawer
         open={showActivities}
         onClose={() => setShowActivities(false)}
@@ -637,15 +857,12 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
           });
         }}
       />
-
-      {/* PBS 2026-07-16 item 4 — inline picker driven by content.activities_catalog */}
       {showExperiencePicker && (
         <ExperienceInlinePicker
           onClose={() => setShowExperiencePicker(false)}
           catalog={catalog}
           loading={catalogLoading}
           onPick={(a) => {
-            // price_amount is USD in content.activities_catalog when non-null; convert to LAK for consistency.
             const usd = Number(a.price_amount ?? 0);
             const lak = usd > 0 ? Math.round(usd * FX_LAK_PER_USD) : 0;
             addBlockToProposal({
@@ -663,141 +880,131 @@ export default function ComposerEditor({ proposalId, propertyId, initialBlocks, 
           }}
         />
       )}
-
       <PhotoPickerDrawer
         open={!!photoPickerFor}
         onClose={() => setPhotoPickerFor(null)}
         propertyId={propertyId}
-        block={photoPickerFor?.block ? ({
-          block_type: photoPickerFor.block.block_type as BlockContext['block_type'],
-          ref_id: photoPickerFor.block.ref_id ?? null,
-          label: photoPickerFor.block.label,
+        block={photoPickerFor ? ({
+          block_type: photoPickerFor.block_type as BlockContext['block_type'],
+          ref_id: photoPickerFor.ref_id ?? null,
+          label: photoPickerFor.label,
         }) : null}
-        currentAssetId={photoPickerFor?.block.hero_asset_id ?? null}
-        onPick={(asset) => {
-          if (photoPickerFor?.block) attachPhoto(photoPickerFor.block.id, asset);
-        }}
+        currentAssetId={photoPickerFor?.hero_asset_id ?? null}
+        onPick={(asset) => { if (photoPickerFor) attachPhoto(photoPickerFor.id, asset); }}
       />
-
-      {tab === 'email' && showEmailPreview && (
-        <div onClick={() => setShowEmailPreview(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(27,27,27,0.4)', zIndex: 70, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(720px, 96vw)', height: '92vh', background: PAPER, border: `1px solid ${HAIRLINE}`, borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <header style={{ padding: '10px 14px', borderBottom: `1px solid ${HAIRLINE}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: INK_SOFT }}>Newsletter-quality preview</span>
-              <button onClick={() => setShowEmailPreview(false)} className="btn">×</button>
-            </header>
-            <iframe
-              title="proposal email preview full"
-              src={previewSrc}
-              style={{ flex: 1, border: 0, background: '#F5F0E1' }}
-            />
-          </div>
-        </div>
-      )}
-
-      {tab === 'email' && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-          <button onClick={() => setShowEmailPreview(true)} className="btn">Full-screen newsletter preview →</button>
-        </div>
-      )}
     </>
   );
 }
 
-// ---------------------- wizard fields section (item 1) ----------------------
-function WizardFieldsSection(props: {
-  dateIn: string; setDateIn: (v: string) => void;
-  dateOut: string; setDateOut: (v: string) => void;
-  adults: number; setAdults: (v: number) => void;
-  childrenN: number; setChildrenN: (v: number) => void;
-  rooms: number; setRooms: (v: number) => void;
-  plans: RatePlan[]; plansLoading: boolean;
-  ratePlanId: string | null; onPickRatePlan: (id: string) => void;
-  planGroups: Array<[string, { label: string; plans: RatePlan[] }]>;
-  msg: string | null;
-  completedAt: string | null;
-}) {
-  const {
-    dateIn, setDateIn, dateOut, setDateOut, adults, setAdults, childrenN, setChildrenN,
-    rooms, setRooms, plans, plansLoading, ratePlanId, onPickRatePlan, planGroups, msg, completedAt,
-  } = props;
-  return (
-    <div>
-      <div className="panel-head">
-        <span className="panel-head-title" style={{ color: INK }}>Stay <em style={{ color: GREEN }}>details</em></span>
-        <span className="panel-head-meta" style={{ color: INK_SOFT, fontSize: 11 }}>
-          {completedAt ? 'Saved' : 'Not saved yet'}
-        </span>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
-        <FieldLabel label="Check-in">
-          <FieldInput type="date" value={dateIn} onChange={(e) => setDateIn(e.target.value)} />
-        </FieldLabel>
-        <FieldLabel label="Check-out">
-          <FieldInput type="date" value={dateOut} onChange={(e) => setDateOut(e.target.value)} min={dateIn} />
-        </FieldLabel>
-        <FieldLabel label="Adults">
-          <FieldInput type="number" min={1} max={24} value={adults}
-            onChange={(e) => setAdults(Math.max(1, Math.min(24, parseInt(e.target.value || '1', 10))))} />
-        </FieldLabel>
-        <FieldLabel label="Children">
-          <FieldInput type="number" min={0} max={12} value={childrenN}
-            onChange={(e) => setChildrenN(Math.max(0, Math.min(12, parseInt(e.target.value || '0', 10))))} />
-        </FieldLabel>
-        <FieldLabel label="Rooms">
-          <FieldInput type="number" min={1} max={24} value={rooms}
-            onChange={(e) => setRooms(Math.max(1, Math.min(24, parseInt(e.target.value || '1', 10))))} />
-        </FieldLabel>
-        <FieldLabel label={plansLoading ? 'Rate plan · checking…' : `Rate plan · ${plans.length} option${plans.length === 1 ? '' : 's'}`}>
-          <select
-            value={ratePlanId ?? ''}
-            onChange={(e) => onPickRatePlan(e.target.value)}
-            style={{ width: '100%', padding: '6px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, background: PAPER, color: INK, fontSize: 12 }}
-          >
-            <option value="">— pick a rate plan —</option>
-            {planGroups.map(([rtId, g]) => (
-              <optgroup key={rtId} label={g.label}>
-                {g.plans.map((p) => (
-                  <option key={p.rate_plan_id} value={p.rate_plan_id}>
-                    {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''} · ${Math.round(p.total_usd).toLocaleString('en-US')} ({p.rooms_available_min} avail)
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </FieldLabel>
-      </div>
-      {msg && (
-        <div style={{ marginTop: 8, fontSize: 11, color: msg.startsWith('Save failed') ? RED : INK_SOFT }}>{msg}</div>
-      )}
-    </div>
-  );
-}
+// ---------- child components ----------
 
 function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: 'block' }}>
-      <span style={{ display: 'block', fontSize: 11, color: INK_SOFT, marginBottom: 3, letterSpacing: 0.2 }}>{label}</span>
+      <span style={S.label}>{label}</span>
       {children}
     </label>
   );
 }
 
-function FieldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+function BlockRow({
+  block, busy, onPatch, onRemove, onPickPhoto,
+}: {
+  block: ProposalBlock;
+  busy: boolean;
+  onPatch: (p: Partial<ProposalBlock>) => void;
+  onRemove: () => void;
+  onPickPhoto: () => void;
+}) {
+  const disc = Number(block.additional_discount_pct ?? 0);
+  const unitAfter = Number(block.unit_price_lak) * (1 - Math.max(0, Math.min(100, disc)) / 100);
+  const totalUsdEff = Number(block.qty) * Number(block.nights) * unitAfter / FX_LAK_PER_USD;
+  const isExperience = block.block_type === 'activity';
+  const kindLabel = isExperience ? 'Experience' : block.block_type === 'room' ? 'Room' : block.block_type;
+
   return (
-    <input {...props}
-      style={{
-        width: '100%', padding: '6px 8px',
-        border: `1px solid ${HAIRLINE}`, borderRadius: 3,
-        background: PAPER, color: INK, fontSize: 12,
-        boxSizing: 'border-box',
-        ...(props.style || {}),
-      }}
-    />
+    <div style={{
+      background: T.paper,
+      border: `1px solid ${T.hairline}`,
+      borderRadius: 8,
+      padding: 10,
+      display: 'flex',
+      gap: 10,
+      alignItems: 'flex-start',
+    }}>
+      {block.hero_asset_id ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/marketing/media/preview?asset_id=${block.hero_asset_id}`}
+          alt=""
+          width={56} height={56}
+          style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6, border: `1px solid ${T.hairline}`, flexShrink: 0 }}
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        />
+      ) : (
+        <div style={{
+          width: 56, height: 56, borderRadius: 6, flexShrink: 0,
+          background: T.warm, border: `1px dashed ${T.hairline}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 10, color: T.inkMute, textAlign: 'center', padding: 4,
+        }}>auto</div>
+      )}
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 10, color: T.inkSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{kindLabel}</div>
+            <div style={{ fontSize: 14, color: T.ink, fontWeight: 500, wordBreak: 'break-word' }}>{block.label}</div>
+            {block.note && (
+              <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2, lineHeight: 1.4 }}>{block.note}</div>
+            )}
+          </div>
+          <button onClick={onRemove} disabled={busy} style={S.btnDanger} title="Remove">×</button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+          <input type="number" min={0} value={block.qty} style={S.numInput}
+            onChange={(e) => onPatch({ qty: Math.max(0, parseInt(e.target.value || '0', 10)) })} />
+          <span style={{ fontSize: 11, color: T.inkMute }}>×</span>
+          <input type="number" min={1} value={block.nights} style={S.numInput}
+            onChange={(e) => onPatch({ nights: Math.max(1, parseInt(e.target.value || '1', 10)) })} />
+          <span style={{ fontSize: 11, color: T.inkMute }}>nt @</span>
+          <input type="number" min={0} step={1000} value={block.unit_price_lak}
+            style={{ ...S.numInput, width: 96 }}
+            onChange={(e) => onPatch({ unit_price_lak: parseFloat(e.target.value || '0') })} />
+          <span style={{ fontSize: 11, color: T.inkMute }}>₭</span>
+          {isExperience && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: T.inkSoft, marginLeft: 4 }}>
+              <span>Add. disc %</span>
+              <input type="number" min={0} max={100} step={1}
+                value={Number(block.additional_discount_pct ?? 0)}
+                style={{ ...S.numInput, width: 54 }}
+                onChange={(e) => onPatch({ additional_discount_pct: Math.max(0, Math.min(100, parseFloat(e.target.value || '0'))) } as Partial<ProposalBlock>)}
+              />
+            </label>
+          )}
+          <span style={{
+            marginLeft: 'auto', fontFamily: T.sans, fontSize: 13, fontWeight: 600, color: T.green,
+            fontVariantNumeric: 'tabular-nums',
+          }}>{fmtTableUsd(totalUsdEff)}</span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+          <button onClick={onPickPhoto} disabled={busy} style={S.btnGhost}>
+            {block.hero_asset_id ? 'Change photo' : 'Choose photo'}
+          </button>
+          {!block.hero_asset_id && (
+            <span style={{ fontSize: 10, color: T.inkMute, alignSelf: 'center' }}>
+              (auto-hero fallback active for preview)
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ---------------------- experience inline picker (item 4) ----------------------
+// ---------------------- experience inline picker ----------------------
 function ExperienceInlinePicker({
   onClose, catalog, loading, onPick,
 }: {
@@ -808,10 +1015,10 @@ function ExperienceInlinePicker({
 }) {
   const [q, setQ] = useState('');
   const visible = useMemo(() => {
-    const rows = catalog.filter(a => a.is_active !== false);
+    const rows = catalog.filter((a) => a.is_active !== false);
     if (!q) return rows;
     const needle = q.toLowerCase();
-    return rows.filter(a =>
+    return rows.filter((a) =>
       (a.name ?? '').toLowerCase().includes(needle) ||
       (a.description ?? '').toLowerCase().includes(needle) ||
       (a.category ?? '').toLowerCase().includes(needle)
@@ -824,37 +1031,36 @@ function ExperienceInlinePicker({
       zIndex: 70, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: 60,
     }}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        width: 'min(640px, 96vw)', maxHeight: '80vh', background: PAPER,
-        border: `1px solid ${HAIRLINE}`, borderRadius: 6, overflow: 'hidden',
+        width: 'min(640px, 96vw)', maxHeight: '80vh', background: T.paper,
+        border: `1px solid ${T.hairline}`, borderRadius: 10, overflow: 'hidden',
         display: 'flex', flexDirection: 'column',
       }}>
-        <header style={{ padding: '12px 14px', borderBottom: `1px solid ${HAIRLINE}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <header style={{ padding: '12px 14px', borderBottom: `1px solid ${T.hairline}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: 11, color: INK_SOFT, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Property Settings</div>
-            <div style={{ fontSize: 15, color: INK, fontWeight: 600 }}>Pick an experience</div>
+            <div style={{ fontSize: 11, color: T.inkSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Property Settings</div>
+            <div style={{ fontSize: 15, color: T.ink, fontWeight: 600 }}>Pick an experience</div>
           </div>
-          <button onClick={onClose} className="btn">Close ✕</button>
+          <button onClick={onClose} style={S.btn}>Close ✕</button>
         </header>
-        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${HAIRLINE}` }}>
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${T.hairline}` }}>
           <input
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search experiences…"
-            style={{ width: '100%', padding: '8px 10px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, fontSize: 13, background: PAPER, color: INK, boxSizing: 'border-box' }}
+            style={S.input}
           />
         </div>
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {loading && <div style={{ padding: 20, color: INK_MUTE, textAlign: 'center', fontSize: 13 }}>Loading catalog…</div>}
+          {loading && <div style={{ padding: 20, color: T.inkMute, textAlign: 'center', fontSize: 13 }}>Loading catalog…</div>}
           {!loading && visible.length === 0 && (
-            <div style={{ padding: 20, color: INK_MUTE, textAlign: 'center', fontSize: 13 }}>
-              No experiences match. Add them in <a href="/settings/property/activities" style={{ color: GREEN }}>Property Settings → Activities</a>.
+            <div style={{ padding: 20, color: T.inkMute, textAlign: 'center', fontSize: 13 }}>
+              No experiences match. Add them in{' '}
+              <a href="/settings/property/activities" style={{ color: T.green }}>Property Settings → Activities</a>.
             </div>
           )}
           {!loading && visible.map((a) => {
-            const priceLabel = a.price_amount != null
-              ? `$${Math.round(Number(a.price_amount))}`
-              : '—';
+            const priceLabel = a.price_amount != null ? `$${Math.round(Number(a.price_amount))}` : '—';
             const dur = a.duration_min != null ? `${a.duration_min}min` : '—';
             return (
               <button
@@ -862,19 +1068,19 @@ function ExperienceInlinePicker({
                 onClick={() => onPick(a)}
                 style={{
                   display: 'block', width: '100%', textAlign: 'left',
-                  background: PAPER, border: 'none',
-                  borderBottom: `1px solid ${HAIRLINE}`,
+                  background: T.paper, border: 'none',
+                  borderBottom: `1px solid ${T.hairline}`,
                   padding: '10px 14px', cursor: 'pointer',
                 }}
               >
-                <div style={{ fontSize: 13, color: INK, fontWeight: 500 }}>
-                  {a.name} <span style={{ color: INK_MUTE, fontWeight: 400 }}>— {dur} — {priceLabel}</span>
+                <div style={{ fontSize: 13, color: T.ink, fontWeight: 500 }}>
+                  {a.name} <span style={{ color: T.inkMute, fontWeight: 400 }}>— {dur} — {priceLabel}</span>
                 </div>
                 {a.description && (
-                  <div style={{ fontSize: 11, color: INK_SOFT, marginTop: 2 }}>{a.description}</div>
+                  <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>{a.description}</div>
                 )}
                 {a.category && (
-                  <div style={{ fontSize: 10, color: INK_MUTE, letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 2 }}>{a.category}</div>
+                  <div style={{ fontSize: 10, color: T.inkMute, letterSpacing: '0.08em', textTransform: 'uppercase', marginTop: 2 }}>{a.category}</div>
                 )}
               </button>
             );
@@ -883,10 +1089,4 @@ function ExperienceInlinePicker({
       </div>
     </div>
   );
-}
-
-function nightCount(from: string, to: string): number {
-  if (!from || !to) return 1;
-  const d1 = new Date(from); const d2 = new Date(to);
-  return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000));
 }
