@@ -366,7 +366,7 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         );
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 12 }}>
-            {tile('Occupancy', `${occ.toFixed(1)}%`)}
+            {tile('Occupancy', `${occ.toFixed(2)}%`)}
             {tile('ADR', `${currencySymbol}${Math.round(avgAdr).toLocaleString()}`)}
             {tile('Room nights', totalNights.toLocaleString())}
             {tile('Room revenue', `${currencySymbol}${Math.round(totalRev).toLocaleString()}`)}
@@ -848,7 +848,7 @@ async function DrillPanel({
                       {revLy != null && revLy > 0 && (<div style={lyCellStyle(rev - revLy)}>LY {formatValue(revLy, 'money', currencySymbol)}  {formatVarPct(rev, revLy)}</div>)}
                     </td>
                     <td style={tdRight}>
-                      <div>{occ.toFixed(1)}%</div>
+                      <div>{occ.toFixed(2)}%</div>
                       {occLy != null && occLy > 0 && (<div style={lyCellStyle(occ - occLy)}>LY {occLy.toFixed(1)}%  {(occ - occLy).toFixed(1)}pp</div>)}
                     </td>
                   </tr>
