@@ -139,6 +139,43 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
     };
   }
 
+  // PBS 2026-07-17: activity-based pickupYesterday (per PBS memo "pickup = new − cxl").
+  // Replaces snapshot-delta which included modifications and diverged from HoD tile.
+  // View sums to fn_hod_day_activity.pickup_net_rn for the anchor day.
+  const { data: actRows } = await supabase
+    .from('v_pickup_matrix_yesterday_activity')
+    .select('stay_month, new_rn_yesterday, cxl_rn_yesterday, new_rev_yesterday, cxl_rev_yesterday')
+    .eq('property_id', propertyId);
+  const activityByMonth: Record<number, { net_rn: number; net_rev: number }> = {};
+  for (const r of (actRows ?? []) as Array<{ stay_month: string; new_rn_yesterday: number; cxl_rn_yesterday: number; new_rev_yesterday: number; cxl_rev_yesterday: number }>) {
+    // stay_month comes back as ISO date (first-of-month). Extract year+month; only keep current stayYear rows.
+    const dt = new Date(r.stay_month + (r.stay_month.length === 10 ? 'T00:00:00' : ''));
+    if (dt.getFullYear() !== stayYear) continue;
+    activityByMonth[dt.getMonth() + 1] = {
+      net_rn:  Number(r.new_rn_yesterday ?? 0)  - Number(r.cxl_rn_yesterday ?? 0),
+      net_rev: Number(r.new_rev_yesterday ?? 0) - Number(r.cxl_rev_yesterday ?? 0),
+    };
+  }
+  function activityPickup(mo: number, metric: PickupMetric): PickupDelta {
+    const a = activityByMonth[mo];
+    if (!a) return { abs: 0, pct: null };
+    if (metric === 'RN')                                return { abs: a.net_rn,  pct: null };
+    if (metric === 'REV' || metric === 'REV rooms')     return { abs: a.net_rev, pct: null };
+    if (metric === 'REV total')                         return { abs: a.net_rev, pct: null };
+    // OCC / ADR / RevPAR are derived — keep null, will fall through to snapshot delta in caller.
+    return { abs: null, pct: null };
+  }
+  const activitySum = Object.values(activityByMonth).reduce(
+    (s, a) => ({ net_rn: s.net_rn + a.net_rn, net_rev: s.net_rev + a.net_rev }),
+    { net_rn: 0, net_rev: 0 },
+  );
+  function activityPickupTotal(metric: PickupMetric): PickupDelta {
+    if (metric === 'RN')                                return { abs: activitySum.net_rn,  pct: null };
+    if (metric === 'REV' || metric === 'REV rooms')     return { abs: activitySum.net_rev, pct: null };
+    if (metric === 'REV total')                         return { abs: activitySum.net_rev, pct: null };
+    return { abs: null, pct: null };
+  }
+
   // PBS 2026-07-03: REV split into rooms-only + total (rooms + extras, Cloudbeds).
   const METRICS: PickupMetric[] = ['RN', 'OCC', 'REV rooms', 'REV total', 'ADR', 'RevPAR'];
 
@@ -160,8 +197,13 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
       otbAll: tAll, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday,
       pickupMonthly:   suppress ? { abs: null, pct: null } : delta(tToday, tMonthly),
       pickupWeekly:    suppress ? { abs: null, pct: null } : delta(tToday, tMonday),
-      // PBS 2026-07-15: yesterday's activity = snapshot(yesterday) - snapshot(dby). Was today-vs-yesterday (last-24h).
-      pickupYesterday: suppress ? { abs: null, pct: null } : delta(tYest, tDby),
+      // PBS 2026-07-17: pickupYesterday = new − cxl (activity math from v_pickup_matrix_yesterday_activity).
+      // Was snapshot(yest)-snapshot(dby), which included modifications → total diverged from HoD tile.
+      pickupYesterday: suppress
+        ? { abs: null, pct: null }
+        : (metric === 'RN' || metric === 'REV' || metric === 'REV rooms' || metric === 'REV total')
+          ? activityPickup(mo, metric)
+          : delta(tYest, tDby),
       vsBudget: { abs: null, pct: null },
       vsLy: delta(tToday, sdlyValue),
       sdly: sdlyValue,
@@ -200,8 +242,13 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
       otbAll: tToday, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday,
       pickupMonthly:   suppress ? { abs: null, pct: null } : delta(tToday, tMonthly),
       pickupWeekly:    suppress ? { abs: null, pct: null } : delta(tToday, tMonday),
-      // PBS 2026-07-15: same yesterday-calendar-day fix as buildRow.
-      pickupYesterday: suppress ? { abs: null, pct: null } : delta(tYest, tDby),
+      // PBS 2026-07-17: activity-based total (sum of per-stay-month new − cxl).
+      // Total row now matches HoD stripe pickup exactly.
+      pickupYesterday: suppress
+        ? { abs: null, pct: null }
+        : (metric === 'RN' || metric === 'REV' || metric === 'REV rooms' || metric === 'REV total')
+          ? activityPickupTotal(metric)
+          : delta(tYest, tDby),
       vsBudget: { abs: null, pct: null },
       vsLy: delta(tToday, sdlyValue),
       sdly: sdlyValue,
