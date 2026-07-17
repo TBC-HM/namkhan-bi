@@ -166,19 +166,21 @@ export default async function CeoEntry({
   ];
 
   const tiles: KpiTileProps[] = [
-    { label: 'Occupancy',     value: `${AYtd.occ.toFixed(1)}%`,        size: 'md',
-      footnote: `rooms sold / rooms available · YTD ${yearNow} · SDLY ${(ASdlyYtd.occ).toFixed(1)}%`,
+    // PBS 2026-07-17: label "· YTD" everywhere so the CEO tile isn't mistaken for "today".
+    // OCC principle: 2 decimals on every tile.
+    { label: 'Occupancy · YTD',     value: `${AYtd.occ.toFixed(2)}%`,        size: 'md',
+      footnote: `rooms sold / rooms available · YTD ${yearNow} · SDLY ${(ASdlyYtd.occ).toFixed(2)}%`,
       delta:   { value: dOcc.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dOcc.direction,    isGoodWhenUp: true },
-      compare: cmp(Number(A30.occ.toFixed(1)), Number(A90.occ.toFixed(1)), Number(A365.occ.toFixed(1)), 'percent') },
-    { label: 'ADR',           value: Math.round(AYtd.adr),    currency: currencyCode, size: 'md',
+      compare: cmp(Number(A30.occ.toFixed(2)), Number(A90.occ.toFixed(2)), Number(A365.occ.toFixed(2)), 'percent') },
+    { label: 'ADR · YTD',           value: Math.round(AYtd.adr),    currency: currencyCode, size: 'md',
       footnote: `rooms revenue / rooms sold · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.adr)}`,
       delta:   { value: dAdr.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dAdr.direction,    isGoodWhenUp: true },
       compare: cmp(Math.round(A30.adr), Math.round(A90.adr), Math.round(A365.adr), 'currency') },
-    { label: 'RevPAR',        value: Math.round(AYtd.revpar), currency: currencyCode, size: 'md',
+    { label: 'RevPAR · YTD',        value: Math.round(AYtd.revpar), currency: currencyCode, size: 'md',
       footnote: `rooms revenue / rooms available · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.revpar)}`,
       delta:   { value: dRevpar.value, period: `vs SDLY YTD ${yearNow - 1}`, direction: dRevpar.direction, isGoodWhenUp: true },
       compare: cmp(Math.round(A30.revpar), Math.round(A90.revpar), Math.round(A365.revpar), 'currency') },
-    { label: 'Rooms revenue', value: Math.round(AYtd.rev),    currency: currencyCode, size: 'md',
+    { label: 'Rooms revenue · YTD', value: Math.round(AYtd.rev),    currency: currencyCode, size: 'md',
       footnote: `rooms-only revenue · consumed nights (excl. cancels / no-shows / F&B / extras) · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.rev).toLocaleString('en-US')}`,
       delta:   { value: dRev.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dRev.direction,    isGoodWhenUp: true },
       compare: cmp(Math.round(A30.rev), Math.round(A90.rev), Math.round(A365.rev), 'currency') },
