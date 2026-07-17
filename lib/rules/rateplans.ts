@@ -55,6 +55,7 @@ export function ruleNrrShareTarget(ctx: RatePlanContext): Insight | null {
   const target = T(ctx, 'nrr_share_target');
   if (ctx.nrrLockedSharePct >= target) {
     return {
+      key: 'nrr_share_target_ok',
       priority: 'info',
       title: 'NRR share on target',
       body: `NRR + Advance-Purchase = ${ctx.nrrLockedSharePct.toFixed(1)}% of YTD revenue (target ≥ ${target}%). Cash discipline healthy.`,
@@ -62,6 +63,7 @@ export function ruleNrrShareTarget(ctx: RatePlanContext): Insight | null {
   }
   const gap = target - ctx.nrrLockedSharePct;
   return {
+    key: 'nrr_share_target',
     priority: gap > 8 ? 'critical' : 'warning',
     title: 'NRR share below target',
     body: `NRR + Advance-Purchase = ${ctx.nrrLockedSharePct.toFixed(1)}% of YTD revenue vs target ≥ ${target}% (gap ${gap.toFixed(1)}pp). Raise NRR discount 3-5pp on 30-90d lead or promote AP tiers to shift booking mix.`,
@@ -71,9 +73,10 @@ export function ruleNrrShareTarget(ctx: RatePlanContext): Insight | null {
 export function ruleEarlyBirdShareTarget(ctx: RatePlanContext): Insight | null {
   if (ctx.earlyBirdSharePct == null) return null;
   const target = T(ctx, 'early_bird_share_target');
-  if (ctx.earlyBirdSharePct >= target) return null; // silent when healthy — NRR rule already fires the positive
+  if (ctx.earlyBirdSharePct >= target) return null;
   const gap = target - ctx.earlyBirdSharePct;
   return {
+    key: 'early_bird_share_target',
     priority: gap > 6 ? 'warning' : 'info',
     title: 'Early-bird share below target',
     body: `Advance-Purchase = ${ctx.earlyBirdSharePct.toFixed(1)}% of YTD revenue vs target ≥ ${target}% (gap ${gap.toFixed(1)}pp). Consider AP60 / AP90 tiers with tighter cancellation to attract long-lead bookers.`,
@@ -85,20 +88,25 @@ export function ruleFlexShareMax(ctx: RatePlanContext): Insight | null {
   const ceiling = T(ctx, 'flex_share_max');
   if (ctx.flexSharePct <= ceiling) return null;
   return {
+    key: 'flex_share_max',
     priority: ctx.flexSharePct > ceiling + 10 ? 'critical' : 'warning',
     title: 'Flex share too high',
     body: `Flex + Semi-Flex = ${ctx.flexSharePct.toFixed(1)}% of YTD revenue vs ceiling ${ceiling}%. Booking mix is exposed to late cancellations — grow NRR / Advance-Purchase to shift the balance.`,
   };
 }
 
+// PBS 2026-07-17: sleeping/never-booked/orphan are DATA-CLEANING items, not tactical
+// revenue decisions. Downgrade severity to 'observation' so they don't crowd out
+// real firings on the briefing page.
 export function ruleSleepingPlanMax(ctx: RatePlanContext): Insight | null {
   const threshold = T(ctx, 'sleeping_plan_max_days');
-  if (threshold >= 3650) return null; // 10y+ ⇒ effectively disabled
+  if (threshold >= 3650) return null;
   if (ctx.sleepingOver2y === 0) return null;
   return {
-    priority: ctx.sleepingOver2y > 100 ? 'critical' : ctx.sleepingOver2y > 30 ? 'warning' : 'info',
+    key: 'sleeping_plan_max_days',
+    priority: 'observation',
     title: `${ctx.sleepingOver2y} rate plans dormant > ${Math.round(threshold / 365)}y`,
-    body: `${ctx.sleepingOver2y} plans have no bookings for over ${threshold} days. PMS bloat inflates rate-plan pickers on OTAs and fragments parity. Retire or archive from the catalogue.`,
+    body: `Data cleaning: ${ctx.sleepingOver2y} plans have no bookings for over ${threshold} days. Retire or archive from the catalogue — reduces PMS bloat + OTA rate-plan picker fatigue.`,
   };
 }
 
@@ -107,9 +115,10 @@ export function ruleNeverBookedShare(ctx: RatePlanContext): Insight | null {
   const ceiling = T(ctx, 'never_booked_plan_max_share');
   if (ctx.neverBookedPct <= ceiling) return null;
   return {
-    priority: ctx.neverBookedPct > ceiling + 20 ? 'critical' : 'warning',
+    key: 'never_booked_plan_max_share',
+    priority: 'observation',
     title: 'Catalogue bloat — never-booked plans',
-    body: `${ctx.neverBooked} of ${ctx.activePlansTotal} active plans (${ctx.neverBookedPct.toFixed(1)}%) have never been booked. Retire the never-booked long tail to reduce PMS-side risk (rate mistakes, parity fragmentation, OTA picker fatigue).`,
+    body: `Data cleaning: ${ctx.neverBooked} of ${ctx.activePlansTotal} active plans (${ctx.neverBookedPct.toFixed(1)}%) have never been booked. Retire the never-booked long tail.`,
   };
 }
 
@@ -117,9 +126,10 @@ export function ruleOrphanCatalogueGap(ctx: RatePlanContext): Insight | null {
   const ceiling = T(ctx, 'orphan_catalogue_gap_max');
   if (ctx.orphanCount <= ceiling) return null;
   return {
-    priority: ctx.orphanCount > ceiling * 4 ? 'warning' : 'info',
+    key: 'orphan_catalogue_gap_max',
+    priority: 'observation',
     title: `${ctx.orphanCount} orphan rate plans`,
-    body: `${ctx.orphanCount} historical rate plans carry bookings but are no longer in the live PMS catalogue. Some are language variants of the same base plan concatenated by the PMS. Investigate PMS sync + normalise to canonical plans.`,
+    body: `Data cleaning: ${ctx.orphanCount} historical rate plans carry bookings but are no longer in the live PMS catalogue. Normalise to canonical plans.`,
   };
 }
 
