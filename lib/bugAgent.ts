@@ -142,37 +142,42 @@ async function ghGetCheckStatus(sha: string): Promise<{ ci_ok: boolean | null; n
 }
 
 // ---------- Planning ----------
+// PBS 2026-07-17 — convert URL path segments to Next.js bracket-notation
+// so we hit real file paths like app/sales/proposals/[id]/edit/page.tsx
+// rather than app/sales/proposals/3c102291-.../edit/page.tsx (which doesn't exist).
+function bracketize(segments: string[]): string[] {
+  return segments.map((s) => {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return '[id]';
+    if (/^\d+$/.test(s)) return '[id]';
+    return s;
+  });
+}
+
 function guessCandidateFiles(bug: { page_url: string | null; body: string | null }): string[] {
   const files: string[] = [];
   const url = bug.page_url ?? '';
   try {
     const u = new URL(url);
     const rawParts = u.pathname.split('/').filter(Boolean);
-    // PBS 2026-07-17 — for /h/{pid}/X, include BOTH variants:
-    //   app/X/page.tsx (if X is a plain path)
-    //   app/h/[propertyId]/X/page.tsx (if X lives under the pid bracket)
     const isPidRoute = rawParts[0] === 'h' && rawParts[1] && /^\d+$/.test(rawParts[1]);
     if (isPidRoute) {
-      const rest = rawParts.slice(2);
+      const rest = bracketize(rawParts.slice(2));
       if (rest.length > 0) {
         files.push(`app/h/[propertyId]/${rest.join('/')}/page.tsx`);
-        // Also try without the h prefix (some pages live at both roots)
         files.push(`app/${rest.join('/')}/page.tsx`);
-        const cap = rest[rest.length - 1].split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-        files.push(`app/h/[propertyId]/${rest.join('/')}/_components/${cap}Client.tsx`);
+        const cap = rest[rest.length - 1].replace(/[[\]]/g,'').split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+        if (cap) files.push(`app/h/[propertyId]/${rest.join('/')}/_components/${cap}Client.tsx`);
       }
     } else {
-      const seg = rawParts;
+      const seg = bracketize(rawParts);
       if (seg.length > 0) {
         files.push(`app/${seg.join('/')}/page.tsx`);
-        const cap = seg[seg.length - 1].split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-        files.push(`app/${seg.join('/')}/_components/${cap}Client.tsx`);
+        const cap = seg[seg.length - 1].replace(/[[\]]/g,'').split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+        if (cap) files.push(`app/${seg.join('/')}/_components/${cap}Client.tsx`);
       }
     }
   } catch { /* ignore */ }
   const body = (bug.body ?? '').toLowerCase();
-  // PBS 2026-07-17 — broaden the "nav intent" heuristic. Any bug about menu
-  // placement / routing / belonging in another menu should include dept-cfg.
   if (body.includes('menu') || body.includes('nav') || body.includes('belong') || body.includes('subpage') || body.includes('sub-page') || body.includes('holding') || body.includes('namkhan')) {
     files.push('lib/dept-cfg/index.ts');
   }
