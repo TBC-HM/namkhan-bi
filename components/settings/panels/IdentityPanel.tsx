@@ -1,13 +1,5 @@
 // components/settings/panels/IdentityPanel.tsx
-// PBS #161 (2026-05-24) — editable Identity panel ("uplink"). Edits save via
-// public.fn_update_property_identity SECURITY DEFINER RPC. property schema
-// isn't exposed through PostgREST (claude_md §0.5), so the RPC bridge is the
-// only legal write path. Whitelisted columns: legal_name, trading_name,
-// business_license_no, tax_id, vat_registered, star_rating, category,
-// affiliations. Pattern: this panel is the canonical reference; the other 11
-// panels (Location, Brand, Policies, Rooms, Facilities, Activities, Seasons,
-// Certifications, Contacts, Social, Team) follow the same shape once PBS
-// signs off on Identity.
+// PBS 2026-07-18 · added director_1, director_2, deputy_director fields.
 'use client';
 
 import { useState, useTransition } from 'react';
@@ -24,43 +16,34 @@ type IdentityRow = {
   star_rating?: number | null;
   category?: string | null;
   affiliations?: string[] | null;
+  director_1?: string | null;
+  director_2?: string | null;
+  deputy_director?: string | null;
 };
 
-export default function IdentityPanel({
-  data,
-  propertyId,
-}: {
-  data: IdentityRow | null;
-  propertyId: number;
-}) {
+export default function IdentityPanel({ data, propertyId }: { data: IdentityRow | null; propertyId: number }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<IdentityRow>(() => ({
-    legal_name: data?.legal_name ?? '',
-    trading_name: data?.trading_name ?? '',
-    business_license_no: data?.business_license_no ?? '',
-    tax_id: data?.tax_id ?? '',
-    vat_registered: data?.vat_registered ?? false,
-    star_rating: data?.star_rating ?? null,
-    category: data?.category ?? '',
-    affiliations: data?.affiliations ?? [],
-  }));
+  const [draft, setDraft] = useState<IdentityRow>(() => hydrate(data));
 
-  function reset() {
-    setDraft({
-      legal_name: data?.legal_name ?? '',
-      trading_name: data?.trading_name ?? '',
-      business_license_no: data?.business_license_no ?? '',
-      tax_id: data?.tax_id ?? '',
-      vat_registered: data?.vat_registered ?? false,
-      star_rating: data?.star_rating ?? null,
-      category: data?.category ?? '',
-      affiliations: data?.affiliations ?? [],
-    });
-    setError(null);
+  function hydrate(d: IdentityRow | null): IdentityRow {
+    return {
+      legal_name: d?.legal_name ?? '',
+      trading_name: d?.trading_name ?? '',
+      business_license_no: d?.business_license_no ?? '',
+      tax_id: d?.tax_id ?? '',
+      vat_registered: d?.vat_registered ?? false,
+      star_rating: d?.star_rating ?? null,
+      category: d?.category ?? '',
+      affiliations: d?.affiliations ?? [],
+      director_1: d?.director_1 ?? '',
+      director_2: d?.director_2 ?? '',
+      deputy_director: d?.deputy_director ?? '',
+    };
   }
+  function reset() { setDraft(hydrate(data)); setError(null); }
 
   function save() {
     setError(null);
@@ -74,31 +57,22 @@ export default function IdentityPanel({
         star_rating: draft.star_rating ?? null,
         category: draft.category?.trim() || null,
         affiliations: (draft.affiliations ?? []).map((a) => a.trim()).filter(Boolean),
+        director_1: draft.director_1?.trim() || null,
+        director_2: draft.director_2?.trim() || null,
+        deputy_director: draft.deputy_director?.trim() || null,
       };
       const { error: rpcErr } = await supabase.rpc('fn_update_property_identity', {
-        p_property_id: propertyId,
-        p_patch: patch,
+        p_property_id: propertyId, p_patch: patch,
       });
-      if (rpcErr) {
-        setError(rpcErr.message);
-        return;
-      }
-      setEditing(false);
-      router.refresh();
+      if (rpcErr) { setError(rpcErr.message); return; }
+      setEditing(false); router.refresh();
     });
   }
 
   if (!data && !editing) {
     return (
       <>
-        <PanelHeader
-          title="Identity"
-          action={
-            <button onClick={() => setEditing(true)} style={btnPrimary}>
-              Add identity
-            </button>
-          }
-        />
+        <PanelHeader title="Identity" action={<button onClick={() => setEditing(true)} style={btnPrimary}>Add identity</button>} />
         <EmptyState message="No identity record found." />
       </>
     );
@@ -108,16 +82,14 @@ export default function IdentityPanel({
     <>
       <PanelHeader
         title="Identity"
-        subtitle="Legal entity, classification, and licensing"
+        subtitle="Legal entity, directors, classification, and licensing"
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Chip>Property ID {propertyId}</Chip>
             {editing ? (
               <>
                 <button onClick={() => { reset(); setEditing(false); }} style={btnSecondary} disabled={saving}>Cancel</button>
-                <button onClick={save} style={btnPrimary} disabled={saving}>
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
+                <button onClick={save} style={btnPrimary} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
               </>
             ) : (
               <button onClick={() => setEditing(true)} style={btnPrimary}>Edit</button>
@@ -133,25 +105,13 @@ export default function IdentityPanel({
       <Section title="Legal Entity">
         {editing ? (
           <>
-            <EditField label="Legal name" span={2}>
-              <input style={inputStyle} value={draft.legal_name ?? ''} onChange={(e) => setDraft({ ...draft, legal_name: e.target.value })} />
-            </EditField>
-            <EditField label="Trading name">
-              <input style={inputStyle} value={draft.trading_name ?? ''} onChange={(e) => setDraft({ ...draft, trading_name: e.target.value })} />
-            </EditField>
-            <EditField label="Business license #">
-              <input style={inputStyle} value={draft.business_license_no ?? ''} onChange={(e) => setDraft({ ...draft, business_license_no: e.target.value })} />
-            </EditField>
-            <EditField label="Tax ID">
-              <input style={inputStyle} value={draft.tax_id ?? ''} onChange={(e) => setDraft({ ...draft, tax_id: e.target.value })} />
-            </EditField>
+            <EditField label="Legal name" span={2}><input style={inputStyle} value={draft.legal_name ?? ''} onChange={(e) => setDraft({ ...draft, legal_name: e.target.value })} /></EditField>
+            <EditField label="Trading name"><input style={inputStyle} value={draft.trading_name ?? ''} onChange={(e) => setDraft({ ...draft, trading_name: e.target.value })} /></EditField>
+            <EditField label="Business license #"><input style={inputStyle} value={draft.business_license_no ?? ''} onChange={(e) => setDraft({ ...draft, business_license_no: e.target.value })} /></EditField>
+            <EditField label="Tax ID"><input style={inputStyle} value={draft.tax_id ?? ''} onChange={(e) => setDraft({ ...draft, tax_id: e.target.value })} /></EditField>
             <EditField label="VAT registered">
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--t-sm)' }}>
-                <input
-                  type="checkbox"
-                  checked={!!draft.vat_registered}
-                  onChange={(e) => setDraft({ ...draft, vat_registered: e.target.checked })}
-                />
+                <input type="checkbox" checked={!!draft.vat_registered} onChange={(e) => setDraft({ ...draft, vat_registered: e.target.checked })} />
                 <span>{draft.vat_registered ? 'Yes' : 'No'}</span>
               </label>
             </EditField>
@@ -162,10 +122,22 @@ export default function IdentityPanel({
             <Field label="Trading name" value={data?.trading_name} />
             <Field label="Business license #" value={data?.business_license_no} />
             <Field label="Tax ID" value={data?.tax_id} />
-            <Field
-              label="VAT registered"
-              value={data?.vat_registered ? <Chip tone="green">Yes</Chip> : <Chip tone="muted">No</Chip>}
-            />
+            <Field label="VAT registered" value={data?.vat_registered ? <Chip tone="green">Yes</Chip> : <Chip tone="muted">No</Chip>} />
+          </>
+        )}
+      </Section>
+      <Section title="Directors">
+        {editing ? (
+          <>
+            <EditField label="Director 1"><input style={inputStyle} value={draft.director_1 ?? ''} onChange={(e) => setDraft({ ...draft, director_1: e.target.value })} placeholder="Full name" /></EditField>
+            <EditField label="Director 2"><input style={inputStyle} value={draft.director_2 ?? ''} onChange={(e) => setDraft({ ...draft, director_2: e.target.value })} placeholder="Full name" /></EditField>
+            <EditField label="Deputy director"><input style={inputStyle} value={draft.deputy_director ?? ''} onChange={(e) => setDraft({ ...draft, deputy_director: e.target.value })} placeholder="Full name" /></EditField>
+          </>
+        ) : (
+          <>
+            <Field label="Director 1" value={data?.director_1} />
+            <Field label="Director 2" value={data?.director_2} />
+            <Field label="Deputy director" value={data?.deputy_director} />
           </>
         )}
       </Section>
@@ -173,35 +145,19 @@ export default function IdentityPanel({
         {editing ? (
           <>
             <EditField label="Star rating">
-              <select
-                style={inputStyle}
-                value={draft.star_rating ?? ''}
-                onChange={(e) => setDraft({ ...draft, star_rating: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
-              >
+              <select style={inputStyle} value={draft.star_rating ?? ''} onChange={(e) => setDraft({ ...draft, star_rating: e.target.value === '' ? null : parseInt(e.target.value, 10) })}>
                 <option value="">—</option>
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>{'★'.repeat(n)} ({n})</option>
-                ))}
+                {[1, 2, 3, 4, 5].map((n) => (<option key={n} value={n}>{'★'.repeat(n)} ({n})</option>))}
               </select>
             </EditField>
-            <EditField label="Category" span={2}>
-              <input style={inputStyle} value={draft.category ?? ''} onChange={(e) => setDraft({ ...draft, category: e.target.value })} />
-            </EditField>
+            <EditField label="Category" span={2}><input style={inputStyle} value={draft.category ?? ''} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /></EditField>
             <EditField label="Affiliations (comma-separated)" span={3}>
-              <input
-                style={inputStyle}
-                value={(draft.affiliations ?? []).join(', ')}
-                onChange={(e) => setDraft({ ...draft, affiliations: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-                placeholder="SLH, ASEAN Green, …"
-              />
+              <input style={inputStyle} value={(draft.affiliations ?? []).join(', ')} onChange={(e) => setDraft({ ...draft, affiliations: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="SLH, ASEAN Green, …" />
             </EditField>
           </>
         ) : (
           <>
-            <Field
-              label="Star rating"
-              value={data?.star_rating ? '★'.repeat(data.star_rating) + ' (' + data.star_rating + ')' : null}
-            />
+            <Field label="Star rating" value={data?.star_rating ? '★'.repeat(data.star_rating) + ' (' + data.star_rating + ')' : null} />
             <Field label="Category" value={data?.category} span={2} />
             <Field label="Affiliations" value={<ChipList items={data?.affiliations} />} span={3} />
           </>
@@ -215,50 +171,18 @@ function EditField({ label, span = 1, children }: { label: string; span?: 1 | 2 
   const spanCls = { 1: 'col-span-1', 2: 'col-span-2', 3: 'col-span-3' }[span];
   return (
     <div className={spanCls}>
-      <dt
-        className="uppercase tracking-wider font-medium mb-1.5"
-        style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}
-      >
-        {label}
-      </dt>
+      <dt className="uppercase tracking-wider font-medium mb-1.5" style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{label}</dt>
       <dd>{children}</dd>
     </div>
   );
 }
 
 const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '6px 10px',
+  width: '100%', padding: '6px 10px',
   background: 'var(--paper-deep, #F4EFE2)',
   border: '1px solid var(--border, #E6DFCC)',
-  borderRadius: 4,
-  color: 'var(--ink, #1B1B1B)',
-  fontSize: 'var(--t-sm, 13px)',
-  fontFamily: 'inherit',
+  borderRadius: 4, color: 'var(--ink, #1B1B1B)',
+  fontSize: 'var(--t-sm, 13px)', fontFamily: 'inherit',
 };
-
-const btnPrimary: React.CSSProperties = {
-  padding: '6px 14px',
-  background: 'var(--brass, #C4A06B)',
-  color: 'var(--paper-deep, #1B1B1B)',
-  border: 'none',
-  borderRadius: 4,
-  fontSize: 'var(--t-xs, 11px)',
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  fontWeight: 600,
-  cursor: 'pointer',
-};
-
-const btnSecondary: React.CSSProperties = {
-  padding: '6px 14px',
-  background: 'transparent',
-  color: 'var(--ink-mute, #5A5A5A)',
-  border: '1px solid var(--border, #E6DFCC)',
-  borderRadius: 4,
-  fontSize: 'var(--t-xs, 11px)',
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  fontWeight: 500,
-  cursor: 'pointer',
-};
+const btnPrimary: React.CSSProperties = { padding: '6px 14px', background: 'var(--brass, #C4A06B)', color: 'var(--paper-deep, #1B1B1B)', border: 'none', borderRadius: 4, fontSize: 'var(--t-xs, 11px)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600, cursor: 'pointer' };
+const btnSecondary: React.CSSProperties = { padding: '6px 14px', background: 'transparent', color: 'var(--ink-mute, #5A5A5A)', border: '1px solid var(--border, #E6DFCC)', borderRadius: 4, fontSize: 'var(--t-xs, 11px)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 500, cursor: 'pointer' };
