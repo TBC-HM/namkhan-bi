@@ -259,7 +259,7 @@ function parseJsonLoose(text: string): Record<string, unknown> {
   }
 }
 
-async function shipPatches(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<{ branch: string; commit_sha: string; pr_number: number; pr_url: string }> {
+async function shipPatches(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<{ branch: string; commit_sha: string; pr_number: number | null; pr_url: string | null; pr_error: string | null }> {
   const branch = `bots/bug-${bug.id}`;
   const mainSha = await ghGetBranchSha(GH_BASE_BRANCH);
   await ghCreateBranch(branch, mainSha);
@@ -281,8 +281,16 @@ async function shipPatches(bug: { id: number; body: string | null }, plan: Plann
     '_Review carefully before merging. Bug-agent v1 does not auto-merge._',
     `_Bug: /holding/bugs · run: cockpit.bug_agent_runs_`,
   ].join('\n');
-  const pr = await ghOpenPR(branch, prTitle, prBody);
-  return { branch, commit_sha: lastCommit, pr_number: pr.number, pr_url: pr.html_url };
+  // PBS 2026-07-17 — PR creation is soft-fail. Vault token has Contents R/W
+  // but may lack Pull-Requests R/W. Branch + commits are the important
+  // artifacts; PBS can open PRs in bulk via `gh pr create --head bots/bug-*`.
+  try {
+    const pr = await ghOpenPR(branch, prTitle, prBody);
+    return { branch, commit_sha: lastCommit, pr_number: pr.number, pr_url: pr.html_url, pr_error: null };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    return { branch, commit_sha: lastCommit, pr_number: null, pr_url: null, pr_error: err };
+  }
 }
 
 async function verifyDeploy(commitSha: string, pageUrl: string | null): Promise<{ ci_ok: boolean | null; curl_status: number | null; curl_body_ok: boolean | null; note: string }> {
@@ -339,16 +347,29 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     }
     await updateRun(runId, { phase: 'shipping' }, `SHIP · creating branch + pushing ${plan.patches.length} file(s)…`);
     const ship = await shipPatches(bug, plan);
-    await updateRun(runId, { branch: ship.branch, commit_sha: ship.commit_sha, pr_number: ship.pr_number, pr_url: ship.pr_url }, `SHIP · PR #${ship.pr_number} → ${ship.pr_url}`);
+    await updateRun(runId, {
+      branch: ship.branch,
+      commit_sha: ship.commit_sha,
+      pr_number: ship.pr_number,
+      pr_url: ship.pr_url,
+    }, ship.pr_url
+      ? `SHIP · PR #${ship.pr_number} → ${ship.pr_url}`
+      : `SHIP · branch=${ship.branch} commit=${ship.commit_sha.slice(0,8)} · PR open BLOCKED: ${ship.pr_error} (open manually via: gh pr create --head ${ship.branch})`
+    );
     await updateRun(runId, { phase: 'verifying' }, `VERIFY · polling CI + curl…`);
     const verify = await verifyDeploy(ship.commit_sha, bug.page_url);
     await updateRun(runId, { verifier_out: verify }, `VERIFY · ci_ok=${verify.ci_ok} curl=${verify.curl_status} body_ok=${verify.curl_body_ok} · ${verify.note}`);
     const success = verify.ci_ok === true && (verify.curl_body_ok !== false);
+    // Determine best fix_link: PR URL if opened, else GH branch compare view
+    const fixLink = ship.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${ship.branch}`;
+    const fixLabel = ship.pr_number ? `PR #${ship.pr_number}` : `branch: ${ship.branch}`;
     if (success) {
-      await markBug(bug.id, { status: 'in_progress', started_at: new Date().toISOString(), fix_link: ship.pr_url, fix_label: `PR #${ship.pr_number}` });
-      await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, `DONE · PR ready for merge`);
+      await markBug(bug.id, { status: 'in_progress', started_at: new Date().toISOString(), fix_link: fixLink, fix_label: fixLabel });
+      await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, ship.pr_url ? `DONE · PR ready for merge` : `DONE · branch ready — open PR manually`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'done', cost_usd: costUsd };
     } else {
+      // Still record the branch so PBS can see it even if verify failed
+      await markBug(bug.id, { status: 'acknowledged', fix_link: fixLink, fix_label: fixLabel });
       await updateRun(runId, { phase: 'failed', cost_usd: costUsd, ended_at: new Date().toISOString(), error: `verify_failed: ci=${verify.ci_ok} curl=${verify.curl_status}` }, `FAIL · verification failed`);
       return { bug_id: bug.id, run_id: runId, ok: false, phase: 'failed', cost_usd: costUsd };
     }
