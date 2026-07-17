@@ -1033,7 +1033,7 @@ async function CategoryBlock({
               height={380} empty={{ title: 'No tier data' }} />
           </div>
         </Container>
-        <Container title="Channel perf by month" subtitle="last 12 months · stacked by channel group · date basis: arrival month">
+        <Container title="Channel perf by month" subtitle="last 12 months · stacked by channel group · date basis: stay-month (night_date)">
           <div style={{ minHeight: 420, display: 'flex', flexDirection: 'column', flex: 1 }}>
             <Chart variant="stacked_bar" data={monthlyPerfData} xKey="month"
               series={monthlyPerfSeries}
