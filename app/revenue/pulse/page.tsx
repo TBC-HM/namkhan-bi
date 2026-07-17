@@ -143,13 +143,15 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     v == null || !Number.isFinite(Number(v)) ? '—' : `${sym}${Math.round(Number(v)).toLocaleString('en-US')}`;
   const fmtSlyInt = (v: number | null | undefined): string =>
     v == null || !Number.isFinite(Number(v)) ? '—' : Math.round(Number(v)).toLocaleString('en-US');
+  // PBS 2026-07-17 principle: OCC everywhere → 2 decimals.
   const fmtSlyPct = (v: number | null | undefined): string =>
-    v == null || !Number.isFinite(Number(v)) ? '—' : `${Math.round(Number(v))}%`;
+    v == null || !Number.isFinite(Number(v)) ? '—' : `${Number(v).toFixed(2)}%`;
 
   const headlineTiles: KpiTileProps[] = [
     // PBS 2026-07-08: read yesterday's OCC from the same mv_kpi_daily aggregate used by
     // the Performance vs STLY container, so the two boxes always report the same number.
-    { label: 'Occ · yesterday', value: `${Math.round(summary.yesterday.occupancyPct ?? 0)}%`, size: 'sm',
+    // PBS 2026-07-17: value now 2 decimals per OCC principle.
+    { label: 'Occ · yesterday', value: `${Number(summary.yesterday.occupancyPct ?? 0).toFixed(2)}%`, size: 'sm',
       delta: occΔ != null ? { value: occΔ, period: 'STLY', direction: occΔ >= 0 ? 'up' : 'down' } : undefined,
       stly: fmtSlyPct(headline.stlyOccupancyPct),
       status: occΔ != null && occΔ >= 0 ? 'green' : occΔ != null ? 'red' : 'grey' },
@@ -171,8 +173,9 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const perfTable = (['occupancyPct','revpar','adr'] as const).map((field) => {
     const label = field === 'occupancyPct' ? 'Occupancy' : field === 'revpar' ? 'RevPAR' : 'ADR';
     const unit  = field === 'occupancyPct' ? 'pct' : 'usd';
+    // PBS 2026-07-17: OCC → 2 decimals per principle.
     const fmt   = (v: number | null | undefined) =>
-      v == null ? '—' : unit === 'pct' ? fmtPct(v, 0) : fmtMoney(v, sym);
+      v == null ? '—' : unit === 'pct' ? fmtPct(v, 2) : fmtMoney(v, sym);
     const stlyField = field === 'occupancyPct' ? 'stlyOccupancyPct' : field === 'revpar' ? 'stlyRevpar' : 'stlyAdr';
     const cell = (snap: PulseKpiSnapshot) => {
       const now = Number(snap[field] ?? 0);
