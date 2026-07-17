@@ -5,6 +5,10 @@
 // PBS 2026-07-14 · Task B — loads 7 photo guardrails datasets.
 // PBS 2026-07-14 · Task B follow-up — v_media_naming_conventions no longer
 // filtered by scope so both photo AND video rules reach PhotoGuardrailsPanel.
+// PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 2 — load
+//   public.v_media_review_queue (all flagged, any status; ADR-149..152) so
+//   the Review tab is no longer empty. Previously ReviewTab received no rows
+//   because page.tsx never fetched the queue.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -24,6 +28,8 @@ async function loadAll(pid: number) {
     stylePresets, musicTracks,
     // Task B guardrails:
     guardNaming, guardCaptions, guardAltText, guardTiers, guardRatios, guardTextPolicy, guardPalette,
+    // SCOPE 2 · media-pipeline-frontend brief — Review queue + area taxonomy + library counts:
+    reviewQueue, areaTaxonomy, libraryCounts,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     sb.from('v_marketing_media_page').select('*').limit(5000),
@@ -56,6 +62,23 @@ async function loadAll(pid: number) {
     sb.from('v_media_aspect_ratio_rules').select('*'),
     sb.from('v_media_text_policy').select('*').eq('id', 1).maybeSingle(),
     sb.from('v_media_brand_palette').select('*'),
+    // SCOPE 2 · Review queue (flagged, any status; brief ADR-149..152):
+    sb.from('v_media_review_queue')
+      .select('asset_id, property_id, original_filename, status, content_class, quality_index, technical_score, aesthetic_score, review_reason, category, needs_review, created_at')
+      .eq('property_id', pid)
+      .order('created_at', { ascending: false })
+      .limit(1000),
+    // SCOPE 3+4 · area taxonomy (drives Clarify dropdown + left folder rail):
+    sb.from('v_media_area_taxonomy')
+      .select('property_id, kind, sort_order, ref_id, area_key, name, extra, photo_count')
+      .eq('property_id', pid)
+      .order('kind', { ascending: true })
+      .order('sort_order', { ascending: true }),
+    // SCOPE 1/6 · library counts snapshot (kept for parity with API route):
+    sb.from('v_media_library_counts')
+      .select('property_id, pics_ready, videos_total, with_tier, with_area, to_clarify, destination, review_junk, website, ota, social, internal')
+      .eq('property_id', pid)
+      .maybeSingle(),
   ]);
 
   const facilityRows = (facilitiesRaw.data ?? []) as Array<{ facility_id: number; name: string; parent_facility_id: number | null; is_meeting_space: boolean | null }>;
@@ -123,6 +146,9 @@ async function loadAll(pid: number) {
       textPolicy: guardTextPolicy.data ?? null,
       brandPalette: guardPalette.data ?? [],
     },
+    reviewRows: reviewQueue.data ?? [],
+    areaTaxonomy: areaTaxonomy.data ?? [],
+    libraryCounts: libraryCounts.data ?? null,
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
@@ -131,6 +157,7 @@ async function loadAll(pid: number) {
       coverageMatrix.error, stylePresets.error, musicTracks.error,
       guardNaming.error, guardCaptions.error, guardAltText.error, guardTiers.error, guardRatios.error,
       guardTextPolicy.error, guardPalette.error,
+      reviewQueue.error, areaTaxonomy.error, libraryCounts.error,
     ].filter(Boolean),
   };
 }
@@ -174,6 +201,9 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             videoBriefs={data.videoBriefs as any}
             pillars={data.pillars as any}
             coverageRows={data.coverageRows as any}
+            reviewRows={data.reviewRows as any}
+            areaTaxonomy={data.areaTaxonomy as any}
+            libraryCounts={data.libraryCounts as any}
             stylePresets={data.stylePresets as any}
             musicTracks={data.musicTracks as any}
             guardrails={data.guardrails as any}
