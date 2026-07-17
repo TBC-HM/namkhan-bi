@@ -431,7 +431,8 @@ export default async function PricingPage({ searchParams, propertyId }: { search
         ? `BAR ${currencySym}${Math.round(barRate!)} − comp median ${currencySym}${Math.round(k.compMedian!)} · ${k.compRows} comp rows today`
         : `no comp rows scraped for today · v_compset_competitor_rate_matrix`,
       status: compGapBar == null ? 'grey' : compGapBar >= 0 ? 'green' : 'amber' },
-    { label: 'OCC today', value: k.occPctToday != null ? `${Math.round(k.occPctToday)}%` : '—', size: 'sm',
+    // PBS 2026-07-17 principle: OCC → 2 decimals everywhere.
+    { label: 'OCC today', value: k.occPctToday != null ? `${Number(k.occPctToday).toFixed(2)}%` : '—', size: 'sm',
       footnote: k.occPctToday != null
         ? `${k.roomsSold ?? 0} sold ÷ ${capacity} sellable units · ${propertyLabel}`
         : `no rooms_sold row for today · v_kpi_daily`,
