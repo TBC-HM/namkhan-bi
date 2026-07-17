@@ -17,6 +17,7 @@ import CertificationsPanel from './panels/CertificationsPanel';
 import ContactsPanel from './panels/ContactsPanel';
 import SocialPanel from './panels/SocialPanel';
 import TeamPanel from './panels/TeamPanel';
+import TeamFeaturesPanel from './panels/TeamFeaturesPanel';
 import OwnerPanel from './panels/OwnerPanel';
 import TransportPanel from './panels/TransportPanel';
 import ImekongPanel from './panels/ImekongPanel';
@@ -60,7 +61,7 @@ function dataFor(tab: Tab, data: any): unknown {
     case 'certifications': return data.certifications;
     case 'contacts':       return data.contacts;
     case 'social':         return data.social;
-    case 'team':           return data.team;
+    case 'team':           return data.teamFeatures;
     case 'transport':      return data.transport;
     case 'imekong':        return { boats: data.boats, cruises: data.boatCruises };
     case 'meeting_spaces': return data.meetingSpaces;
@@ -248,7 +249,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'certifications' && <CertificationsPanel data={data.certifications} propertyId={propertyId} />}
           {active === 'contacts'       && <ContactsPanel       data={data.contacts}       propertyId={propertyId} />}
           {active === 'social'         && <SocialPanel         data={data.social}         propertyId={propertyId} />}
-          {active === 'team'           && <TeamPanel           data={data.team ?? []} propertyId={propertyId} />}
+          {active === 'team'           && <TeamFeaturesPanel   features={data.teamFeatures ?? []} directory={data.team ?? []} propertyId={propertyId} />}
         </div>
       </main>
     </div>
