@@ -91,12 +91,12 @@ const TOP_FILTERS: Array<{ k: 'all'|'top100'|'topRooms'|'topFacilities'; label: 
   { k: 'topFacilities', label: 'Top facilities · 5/facility' },
 ];
 
+// PBS 2026-07-17 · tier chips — merged OTA + Website (same quality bar);
+// Internal is empty after re-tier so removed from the strip.
 const TIER_CHIPS: Array<{ key: string; label: string }> = [
-  { key: '',                  label: 'All'      },
-  { key: 'tier_ota_profile',  label: 'OTA'      },
-  { key: 'tier_website_hero', label: 'Website'  },
+  { key: '',                  label: 'All'          },
+  { key: 'tier_ota_profile',  label: 'OTA / Website'},
   { key: 'tier_social_pool',  label: 'Social'   },
-  { key: 'tier_internal',     label: 'Internal' },
   { key: 'tier_logos',        label: 'Logos'    },
   { key: 'tier_archive',      label: 'Archive'  },
 ];
@@ -347,16 +347,17 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           (keeps first-render smooth; correct numbers land within one tick). */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
         {[
-          { label: 'Pics',        value: libCounts?.pics_ready   ?? totals.tot },
-          { label: 'Videos',      value: libCounts?.videos_total ?? 0 },
-          { label: 'Total ready', value: libCounts?.pics_ready   ?? totals.tot },
-          { label: 'With tier',   value: libCounts?.with_tier    ?? totals.tot },
-          { label: 'With area',   value: libCounts?.with_area    ?? 0 },
-          { label: 'To clarify',  value: libCounts?.to_clarify   ?? 0 },
-          { label: 'OTA',         value: libCounts?.ota          ?? totals.ota },
-          { label: 'Website',     value: libCounts?.website      ?? totals.hero },
-          { label: 'Social',      value: libCounts?.social       ?? totals.social },
-          { label: 'Internal',    value: libCounts?.internal     ?? totals.internal },
+          // PBS 2026-07-17 · OTA + Website merged (same quality bar); Internal
+          // dropped (empty after re-tier). "To clarify" is the single-source
+          // libCounts.to_clarify — same number the Library ClarifyTab uses.
+          { label: 'Pics',           value: libCounts?.pics_ready   ?? totals.tot },
+          { label: 'Videos',         value: libCounts?.videos_total ?? 0 },
+          { label: 'Total ready',    value: libCounts?.pics_ready   ?? totals.tot },
+          { label: 'With tier',      value: libCounts?.with_tier    ?? totals.tot },
+          { label: 'With area',      value: libCounts?.with_area    ?? 0 },
+          { label: 'To clarify',     value: libCounts?.to_clarify   ?? 0 },
+          { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero) },
+          { label: 'Social',         value: libCounts?.social       ?? totals.social },
         ].map((t, i) => (
           <div key={i} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'12px 14px' }}>
             <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:4 }}>{t.label}</div>
