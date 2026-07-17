@@ -146,15 +146,20 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
     .from('v_pickup_matrix_yesterday_activity')
     .select('stay_month, new_rn_yesterday, cxl_rn_yesterday, new_rev_yesterday, cxl_rev_yesterday')
     .eq('property_id', propertyId);
+  // Per-stay-month rows: only keep current stayYear (matrix is filtered to one year).
   const activityByMonth: Record<number, { net_rn: number; net_rev: number }> = {};
+  // Total row: sum ALL stay years so it matches HoD stripe (yesterday's booking activity is year-agnostic).
+  let totalNetRn = 0;
+  let totalNetRev = 0;
   for (const r of (actRows ?? []) as Array<{ stay_month: string; new_rn_yesterday: number; cxl_rn_yesterday: number; new_rev_yesterday: number; cxl_rev_yesterday: number }>) {
-    // stay_month comes back as ISO date (first-of-month). Extract year+month; only keep current stayYear rows.
     const dt = new Date(r.stay_month + (r.stay_month.length === 10 ? 'T00:00:00' : ''));
-    if (dt.getFullYear() !== stayYear) continue;
-    activityByMonth[dt.getMonth() + 1] = {
-      net_rn:  Number(r.new_rn_yesterday ?? 0)  - Number(r.cxl_rn_yesterday ?? 0),
-      net_rev: Number(r.new_rev_yesterday ?? 0) - Number(r.cxl_rev_yesterday ?? 0),
-    };
+    const netRn  = Number(r.new_rn_yesterday ?? 0)  - Number(r.cxl_rn_yesterday ?? 0);
+    const netRev = Number(r.new_rev_yesterday ?? 0) - Number(r.cxl_rev_yesterday ?? 0);
+    totalNetRn  += netRn;
+    totalNetRev += netRev;
+    if (dt.getFullYear() === stayYear) {
+      activityByMonth[dt.getMonth() + 1] = { net_rn: netRn, net_rev: netRev };
+    }
   }
   function activityPickup(mo: number, metric: PickupMetric): PickupDelta {
     const a = activityByMonth[mo];
@@ -165,14 +170,10 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
     // OCC / ADR / RevPAR are derived — keep null, will fall through to snapshot delta in caller.
     return { abs: null, pct: null };
   }
-  const activitySum = Object.values(activityByMonth).reduce(
-    (s, a) => ({ net_rn: s.net_rn + a.net_rn, net_rev: s.net_rev + a.net_rev }),
-    { net_rn: 0, net_rev: 0 },
-  );
   function activityPickupTotal(metric: PickupMetric): PickupDelta {
-    if (metric === 'RN')                                return { abs: activitySum.net_rn,  pct: null };
-    if (metric === 'REV' || metric === 'REV rooms')     return { abs: activitySum.net_rev, pct: null };
-    if (metric === 'REV total')                         return { abs: activitySum.net_rev, pct: null };
+    if (metric === 'RN')                                return { abs: totalNetRn,  pct: null };
+    if (metric === 'REV' || metric === 'REV rooms')     return { abs: totalNetRev, pct: null };
+    if (metric === 'REV total')                         return { abs: totalNetRev, pct: null };
     return { abs: null, pct: null };
   }
 
