@@ -23,6 +23,28 @@ export interface BugRow {
   started_at: string | null;
   done_at: string | null;
   updated_at: string | null;
+  // PBS 2026-07-17 — latest bug-agent run state, joined via v_bugs_with_agent_state
+  agent_phase?: string | null;
+  agent_pr_url?: string | null;
+  agent_branch?: string | null;
+  agent_commit_sha?: string | null;
+}
+
+// PBS 2026-07-17 — machine phase → visible pill
+const AGENT_PHASE_TONE: Record<string, { bg: string; fg: string; label: string }> = {
+  queued:      { bg: '#F0EAD8', fg: '#B48A3A', label: '⏳ queued'    },
+  planning:    { bg: '#EAF1EE', fg: '#084838', label: '🧠 planning'  },
+  reviewing:   { bg: '#EAF1EE', fg: '#084838', label: '👀 reviewing' },
+  shipping:    { bg: '#EAF1EE', fg: '#084838', label: '🚀 shipping'  },
+  verifying:   { bg: '#EAF1EE', fg: '#084838', label: '🔍 verifying' },
+  done:        { bg: '#DCEDE3', fg: '#084838', label: '✓ agent done' },
+  failed:      { bg: '#FDECE4', fg: '#B04A2F', label: '✗ failed'     },
+  needs_human: { bg: '#FBF3D9', fg: '#7a5500', label: '👤 needs human' },
+};
+
+function agentPill(r: BugRow) {
+  if (!r.agent_phase) return null;
+  return AGENT_PHASE_TONE[r.agent_phase] ?? { bg: '#F5F0E1', fg: '#5A5A5A', label: r.agent_phase };
 }
 
 const T = {
@@ -343,7 +365,7 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: T.warm }}>
-              {['When', 'Body', 'Page', 'Reporter', 'Dept', 'Status', 'CTAs'].map((h) => (
+              {['#', 'When', 'Body', 'Page', 'Reporter', 'Dept', 'Status', 'Agent', 'Fix', 'CTAs'].map((h) => (
                 <th key={h} style={{
                   padding: '8px 10px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase',
                   letterSpacing: '.08em', color: T.inkSoft, fontWeight: 600, borderBottom: `1px solid ${T.hairline}`,
@@ -353,29 +375,45 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: T.inkSoft }}>No bugs match the current filter.</td></tr>
+              <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: T.inkSoft }}>No bugs match the current filter.</td></tr>
             ) : filtered.map((r) => {
               const s = statusOf(r);
               const tone = STATUS_TONE[s];
               const isExpanded = expanded.has(r.id);
+              const agent = agentPill(r);
               return (
                 <>
                   <tr key={r.id} style={{ borderBottom: `1px solid ${T.hairline}` }}>
+                    <td style={{ padding: '10px', color: T.ink, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>#{r.id}</td>
                     <td style={{ padding: '10px', color: T.inkSoft, whiteSpace: 'nowrap' }} title={r.created_at}>{relTime(r.created_at)}</td>
-                    <td style={{ padding: '10px', maxWidth: 380 }}>
+                    <td style={{ padding: '10px', maxWidth: 340 }}>
                       <button onClick={() => toggle(r.id)} style={{ background: 'none', border: 0, cursor: 'pointer', textAlign: 'left', padding: 0, color: T.ink, fontSize: 12 }}>
                         <span style={{ display: '-webkit-box', WebkitLineClamp: isExpanded ? undefined : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                           {r.body ?? '(empty body)'}
                         </span>
                       </button>
                     </td>
-                    <td style={{ padding: '10px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '10px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {r.page_url ? <a href={r.page_url} target="_blank" rel="noopener" style={{ color: T.green, textDecoration: 'underline', fontSize: 11 }}>{normalizeRoute(r.page_url)}</a> : '—'}
                     </td>
                     <td style={{ padding: '10px', color: T.inkSoft, fontSize: 11 }}>{r.created_by ?? '—'}</td>
                     <td style={{ padding: '10px', color: T.inkSoft }}>{r.dept_slug ?? '—'}</td>
                     <td style={{ padding: '10px' }}>
                       <span style={{ background: tone.bg, color: tone.fg, padding: '3px 8px', borderRadius: 3, fontSize: 10, fontWeight: 600, letterSpacing: '.05em', textTransform: 'uppercase' }}>{STATUS_LABEL[s]}</span>
+                    </td>
+                    <td style={{ padding: '10px' }}>
+                      {agent
+                        ? <span style={{ background: agent.bg, color: agent.fg, padding: '3px 8px', borderRadius: 3, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>{agent.label}</span>
+                        : <span style={{ color: T.inkMute, fontSize: 11 }}>—</span>}
+                    </td>
+                    <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
+                      {r.fix_link
+                        ? <a href={r.fix_link} target="_blank" rel="noopener" style={{ padding: '4px 10px', border: `1px solid ${T.green}`, background: T.paper, color: T.green, borderRadius: 3, fontSize: 11, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>🔗 {r.fix_label ?? 'View fix'}</a>
+                        : r.agent_pr_url
+                          ? <a href={r.agent_pr_url} target="_blank" rel="noopener" style={{ padding: '4px 10px', border: `1px solid ${T.hairline}`, background: T.paper, color: T.ink, borderRadius: 3, fontSize: 11, textDecoration: 'none', whiteSpace: 'nowrap' }}>PR (draft)</a>
+                          : r.agent_branch
+                            ? <a href={`https://github.com/TBC-HM/namkhan-bi/compare/main...${r.agent_branch}`} target="_blank" rel="noopener" style={{ padding: '4px 10px', border: `1px solid ${T.hairline}`, background: T.paper, color: T.inkSoft, borderRadius: 3, fontSize: 11, textDecoration: 'none', whiteSpace: 'nowrap' }}>branch ↗</a>
+                            : <span style={{ color: T.inkMute, fontSize: 11 }}>—</span>}
                     </td>
                     <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
                       {s === 'open' && <Btn onClick={() => act(r.id, 'acknowledge')} disabled={busy === r.id}>Ack</Btn>}
@@ -388,7 +426,7 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                   </tr>
                   {isExpanded && (
                     <tr key={r.id + '-x'}>
-                      <td colSpan={7} style={{ background: T.warm, padding: '12px 14px', borderBottom: `1px solid ${T.hairline}` }}>
+                      <td colSpan={10} style={{ background: T.warm, padding: '12px 14px', borderBottom: `1px solid ${T.hairline}` }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, fontSize: 11 }}>
                           <div><b>Full body:</b><br/><span style={{ whiteSpace: 'pre-wrap' }}>{r.body ?? '—'}</span></div>
                           <div><b>Notes:</b><br/><span style={{ whiteSpace: 'pre-wrap' }}>{r.notes ?? '—'}</span></div>
