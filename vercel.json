@@ -4,6 +4,9 @@
   "functions": {
     "app/api/marketing/upload/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/cron/briefing-evaluate/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -14,6 +17,10 @@
     {
       "path": "/api/cockpit/agent/run",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/briefing-evaluate",
+      "schedule": "0 23 * * *"
     }
   ]
 }
