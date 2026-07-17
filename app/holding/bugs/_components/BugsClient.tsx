@@ -416,12 +416,13 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                             : <span style={{ color: T.inkMute, fontSize: 11 }}>—</span>}
                     </td>
                     <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
-                      {s === 'open' && <Btn onClick={() => act(r.id, 'acknowledge')} disabled={busy === r.id}>Ack</Btn>}
-                      {s === 'acknowledged' && <Btn onClick={() => act(r.id, 'start')} disabled={busy === r.id}>Start</Btn>}
-                      {s === 'in_progress' && <Btn onClick={() => act(r.id, 'done')} disabled={busy === r.id} tone="green">Done</Btn>}
-                      {s !== 'dismissed' && s !== 'done' && <Btn onClick={() => act(r.id, 'dismiss')} disabled={busy === r.id} tone="red">Dismiss</Btn>}
-                      <Btn onClick={() => del(r.id)} disabled={busy === r.id} tone="red">🗑</Btn>
-                      <Btn onClick={() => copyForAgent(r)} tone="ghost">📋 Agent</Btn>
+                      {/* PBS 2026-07-17 · bug #51 — tooltips explain each CTA */}
+                      {s === 'open' && <Btn onClick={() => act(r.id, 'acknowledge')} disabled={busy === r.id} title="Acknowledge — you've seen it, moves it out of Open">Ack</Btn>}
+                      {s === 'acknowledged' && <Btn onClick={() => act(r.id, 'start')} disabled={busy === r.id} title="Start work — moves it to In Progress">Start</Btn>}
+                      {s === 'in_progress' && <Btn onClick={() => act(r.id, 'done')} disabled={busy === r.id} tone="green" title="Mark as Done — fix shipped">Done</Btn>}
+                      {s !== 'dismissed' && s !== 'done' && <Btn onClick={() => act(r.id, 'dismiss')} disabled={busy === r.id} tone="red" title="Dismiss — not a real bug or wont-fix">Dismiss</Btn>}
+                      <Btn onClick={() => del(r.id)} disabled={busy === r.id} tone="red" title="Delete permanently">🗑</Btn>
+                      <Btn onClick={() => copyForAgent(r)} tone="ghost" title="Copy JSON payload for the bug-agent">📋 Agent</Btn>
                     </td>
                   </tr>
                   {isExpanded && (
@@ -459,12 +460,12 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
   );
 }
 
-function Btn({ children, onClick, disabled, tone }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; tone?: 'green' | 'red' | 'ghost' }) {
+function Btn({ children, onClick, disabled, tone, title }: { children: React.ReactNode; onClick: () => void; disabled?: boolean; tone?: 'green' | 'red' | 'ghost'; title?: string }) {
   const bg = tone === 'green' ? T.green : tone === 'red' ? T.paper : T.paper;
   const fg = tone === 'green' ? '#FFF' : tone === 'red' ? T.red : T.ink;
   const border = tone === 'green' ? T.green : tone === 'red' ? T.red : T.hairline;
   return (
-    <button onClick={onClick} disabled={disabled} style={{
+    <button onClick={onClick} disabled={disabled} title={title} style={{
       background: bg, color: fg, border: `1px solid ${border}`,
       padding: '4px 8px', borderRadius: 3, fontSize: 10, fontWeight: 600,
       cursor: disabled ? 'wait' : 'pointer', marginRight: 4,
