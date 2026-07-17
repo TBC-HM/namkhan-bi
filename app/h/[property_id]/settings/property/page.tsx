@@ -1,14 +1,5 @@
 // app/h/[property_id]/settings/property/page.tsx
-// PBS #160 (2026-05-24): paper-white DashboardPage chrome to match the rest
-// of the cockpit. Tab content still rendered by PropertySettingsClient.
-//
-// 2026-07-07 (PBS): sticky-strip tabs added so operators can flip between
-// Property and Guardrails inside the property-scoped settings shell.
-//
-// 2026-07-15 (item 4): Team tab is now a read-only mirror of HR. Fetch from
-// public.v_team_directory (bridge over v_staff_register_extended + hr.employees).
-// Old source tenancy.property_users retained no longer — HR is source of truth.
-
+// PBS 2026-07-18 v3 · adds spa_treatments + fnb_menus (+ items) fetches; rooms ORDER BY display_order.
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
@@ -22,41 +13,48 @@ async function getPropertyData(propertyId: number) {
     identity, location, brand, brandReality, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
     team, owner, roomUnits, transport, boats, boatCruises, meetingSpaces,
-    retreats,
+    retreats, spaTreatments, fnbMenus, fnbMenuItems,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('brand').select('*').eq('property_id', propertyId).maybeSingle(),
-    // 2026-07-13: single source of truth for AI/reality grounding — moved from media.reality_profile
     supabase.schema('property').from('brand_reality').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('policies').select('*').eq('property_id', propertyId).maybeSingle(),
-    supabase.schema('property').from('rooms').select('*').eq('property_id', propertyId).order('room_type_id'),
+    // PBS 2026-07-18 · rooms in curated order (tents → art → suites → villas)
+    supabase.schema('property').from('rooms').select('*').eq('property_id', propertyId)
+      .order('display_order', { ascending: true, nullsFirst: false })
+      .order('room_type_id'),
     supabase.schema('property').from('facilities').select('*').eq('property_id', propertyId).order('category').order('name'),
     supabase.schema('property').from('activities').select('*').eq('property_id', propertyId).order('display_order').order('name'),
     supabase.schema('property').from('seasons').select('*').eq('property_id', propertyId).order('date_start'),
     supabase.schema('property').from('certifications').select('*').eq('property_id', propertyId).order('certification_name'),
     supabase.schema('property').from('contacts').select('*').eq('property_id', propertyId).order('purpose'),
     supabase.schema('property').from('social').select('*').eq('property_id', propertyId).order('platform'),
-    // PBS 2026-07-15 (item 4): Team panel now READS from HR (source of truth).
-    // Bridge view scoped by property_id. No salary, no writes.
-    supabase
-      .from('v_team_directory')
+    supabase.from('v_team_directory')
       .select('staff_id, emp_id, full_name, dept_code, dept_name, position_title, notes, skills, phone, email, primary_language, english_proficiency, hire_date, tenure_years, employment_type')
       .eq('property_id', propertyId)
       .order('dept_name', { ascending: true, nullsFirst: false })
       .order('full_name', { ascending: true }),
-    // PBS 2026-07-03: owner entity (Namkhan Group Ltd etc.)
     supabase.schema('property').from('owner_entity').select('*').eq('property_id', propertyId).maybeSingle(),
-    // PBS 2026-07-03: unit counts for the Rooms tab — public view over PMS silver.
     supabase.from('v_room_type_units').select('room_type_name, units').eq('property_id', propertyId),
     supabase.schema('property').from('transport_options').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.schema('property').from('boats').select('*').eq('property_id', propertyId).order('name'),
     supabase.schema('property').from('boat_cruises').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.schema('property').from('facilities').select('*').eq('property_id', propertyId).eq('is_meeting_space', true).order('name'),
-    // PBS 2026-07-18 · retreats via public.v_property_retreats (bridge over
-    // content.retreat_programs + retreat_pricing). 3 programs · 2 tiers each.
     supabase.from('v_property_retreats').select('*').eq('property_id', propertyId).eq('is_active', true).order('retreat_id'),
+    // PBS 2026-07-18 v2 · spa treatments + fnb menus/items via public bridge views.
+    supabase.from('v_property_spa_treatments').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
+    supabase.from('v_property_fnb_menus').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
+    supabase.from('v_property_fnb_menu_items').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
   ]);
+
+  // Merge fnb items into their menus
+  const fnbMenusRaw = (fnbMenus.data ?? []) as any[];
+  const fnbItemsRaw = (fnbMenuItems.data ?? []) as any[];
+  const fnbMenusWithItems = fnbMenusRaw.map(m => ({
+    ...m,
+    items: fnbItemsRaw.filter(it => it.menu_id === m.menu_id),
+  }));
 
   return {
     identity: identity.data,
@@ -79,6 +77,8 @@ async function getPropertyData(propertyId: number) {
     boatCruises: boatCruises.data ?? [],
     meetingSpaces: meetingSpaces.data ?? [],
     retreats: retreats.data ?? [],
+    spaTreatments: spaTreatments.data ?? [],
+    fnbMenus: fnbMenusWithItems,
   };
 }
 
