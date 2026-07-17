@@ -3,6 +3,9 @@
 // through to VideoHub → VideoSettingsTab.
 // PBS 2026-07-14 · Task B — thread photo guardrails through PhotoHub.
 // PBS 2026-07-14 · TASK 3 — thread reviewRows through PhotoHub.
+// PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 2/3/4 — thread
+//   areaTaxonomy (drives Clarify dropdown + folder rail) and libraryCounts
+//   (single-source stat tiles) through to PhotoHub.
 'use client';
 
 import { useState } from 'react';
@@ -75,6 +78,34 @@ export interface GuardrailsData {
   brandPalette: BrandPaletteRow[];
 }
 
+// SCOPE 3+4 · media-pipeline-frontend brief — surface v_media_area_taxonomy.
+export interface AreaTaxonomyRow {
+  property_id: number;
+  kind: string;              // rooms|facilities|activities|certifications|team|destination|other|uncategorized
+  sort_order: number;
+  ref_id: string | null;
+  area_key: string;
+  name: string;
+  extra: string | null;
+  photo_count: number | null;
+}
+
+// SCOPE 1 · media-pipeline-frontend brief — single-source counts row.
+export interface LibraryCountsRow {
+  property_id: number;
+  pics_ready: number;
+  videos_total: number;
+  with_tier: number;
+  with_area: number;
+  to_clarify: number;
+  destination: number;
+  review_junk: number;
+  website: number;
+  ota: number;
+  social: number;
+  internal: number;
+}
+
 interface Props {
   propertyId: number;
   byTier: any[];
@@ -94,6 +125,8 @@ interface Props {
   pillars?: PillarOption[];
   coverageRows?: any[];
   reviewRows?: ReviewRow[];
+  areaTaxonomy?: AreaTaxonomyRow[];
+  libraryCounts?: LibraryCountsRow | null;
   stylePresets?: any[];
   musicTracks?: any[];
   guardrails?: GuardrailsData;
@@ -173,6 +206,8 @@ export default function MediaHub(props: Props) {
           areaOptions={props.areaOptions}
           coverageRows={props.coverageRows as any}
           reviewRows={props.reviewRows}
+          areaTaxonomy={props.areaTaxonomy ?? []}
+          libraryCounts={props.libraryCounts ?? null}
           guardrails={props.guardrails ?? EMPTY_GUARDRAILS}
         />
       )}
