@@ -19,6 +19,7 @@ export default function SendLogsPage({ params }: { params: { property_id: string
         { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
         { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
+        { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`, active: true },
       ]}
     >
