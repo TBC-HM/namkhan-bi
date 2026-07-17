@@ -280,9 +280,9 @@ export function insightToUpsertArgs(propertyId: number, insight: Insight): {
   p_headline: string; p_body: string; p_cta_kind: string | null; p_cta_label: string | null;
   p_cta_target: string | null; p_cta_params: Record<string, unknown>; p_kpi_baseline: Record<string, unknown>;
 } {
-  const severity = insight.priority === 'observation' ? 'info'
-    : insight.priority === 'positive' ? 'info'
-    : insight.priority; // critical | warning | info
+  // PBS 2026-07-17: severity now passes through all 5 Insight priorities
+  // (critical | warning | info | positive | observation). Table check-constraint widened.
+  const severity = insight.priority; // no downgrade
   const source_key = insight.key ?? `unknown:${insight.title.slice(0, 60)}`;
   const source_area = source_key.startsWith('parity_') || source_key.startsWith('integrity_') || source_key.startsWith('compset_') || source_key.startsWith('lighthouse_')
     ? 'revenue.parity'
@@ -299,7 +299,8 @@ export function insightToUpsertArgs(propertyId: number, insight: Insight): {
     p_severity: severity,
     p_headline: insight.title,
     p_body: body,
-    p_cta_kind: insight.href ? 'link' : null,
+    // cta_kind is NOT NULL — default to 'none' when the rule doesn't propose a link.
+    p_cta_kind: insight.href ? 'link' : 'none',
     p_cta_label: insight.action ?? null,
     p_cta_target: insight.href ?? null,
     p_cta_params: {},
