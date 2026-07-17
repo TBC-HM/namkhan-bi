@@ -38,14 +38,17 @@ import { fillScore, fillScoreAll } from './fillScore';
 
 type Tab =
   | 'identity' | 'owner' | 'location' | 'brand' | 'reality' | 'policies' | 'licenses'
-  | 'rooms' | 'facilities' | 'jungle_spa' | 'activities' | 'retreats' | 'seasons'
+  | 'rooms' | 'facilities' | 'jungle_spa' | 'fnb' | 'activities' | 'retreats' | 'seasons'
   | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces';
 
-// PBS 2026-07-18 · facility_ids that belong to the new Jungle Spa mini-hub
-// (currently: The Jungle Spa + Treatment Rooms 1/2/3 at Namkhan). Filtering
-// happens both in the Jungle Spa tab (inclusive) and Facilities tab (exclusive
-// via `hideFacilityIds` prop) so rows aren't double-shown.
-export const SPA_FACILITY_IDS = new Set<number>([6, 118, 119, 120]);
+// PBS 2026-07-18 · facility_ids extracted into their own dedicated tabs so
+// they don't show up in the generic Facilities list. Update these sets when
+// new spa rooms / F&B outlets are added in Settings > Facilities.
+export const SPA_FACILITY_IDS = new Set<number>([6, 118, 119, 120]);  // Jungle Spa + Treatment Rooms 1/2/3
+export const FNB_FACILITY_IDS = new Set<number>([1, 2]);              // Roots Restaurant + Pool Bar
+export const EXTRACTED_FACILITY_IDS = new Set<number>([
+  ...SPA_FACILITY_IDS, ...FNB_FACILITY_IDS,
+]);
 
 // dataFor(tab, data) — returns the object/array used for both fillScore + panel render.
 function dataFor(tab: Tab, data: any): unknown {
@@ -57,8 +60,9 @@ function dataFor(tab: Tab, data: any): unknown {
     case 'reality':        return data.brandReality;
     case 'policies':       return data.policies;
     case 'rooms':          return data.rooms;
-    case 'facilities':     return (data.facilities ?? []).filter((f: any) => !SPA_FACILITY_IDS.has(f.facility_id));
+    case 'facilities':     return (data.facilities ?? []).filter((f: any) => !EXTRACTED_FACILITY_IDS.has(f.facility_id));
     case 'jungle_spa':     return (data.facilities ?? []).filter((f: any) => SPA_FACILITY_IDS.has(f.facility_id));
+    case 'fnb':            return (data.facilities ?? []).filter((f: any) => FNB_FACILITY_IDS.has(f.facility_id));
     case 'activities':     return data.activities;
     case 'retreats':       return [];  // placeholder until property.retreats DDL lands
     case 'seasons':        return data.seasons;
@@ -83,8 +87,9 @@ const TABS: { key: Tab; label: string; subtitle: string }[] = [
   { key: 'policies',       label: 'Policies',       subtitle: 'Bookings & terms' },
   { key: 'licenses',       label: 'Licenses',       subtitle: 'Regulatory · insurance · linked docs' },
   { key: 'rooms',          label: 'Rooms',          subtitle: 'Room type catalog' },
-  { key: 'facilities',     label: 'Facilities',     subtitle: 'Pool · dining · outdoors' },
+  { key: 'facilities',     label: 'Facilities',     subtitle: 'Outdoors · wellness · non-F&B non-spa' },
   { key: 'jungle_spa',     label: 'Jungle Spa',     subtitle: 'Facilities · experiences · treatments' },
+  { key: 'fnb',            label: 'F&B',            subtitle: 'Restaurant · Pool Bar' },
   { key: 'activities',     label: 'Activities',     subtitle: 'Wellness · culture · adventure' },
   { key: 'retreats',       label: 'Retreats',       subtitle: 'Multi-day packages · fixed departures' },
   { key: 'transport',      label: 'Transport',      subtitle: 'Shuttle · private car · boat' },
@@ -113,6 +118,10 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
 
   const spaFacilities = useMemo(
     () => (data.facilities ?? []).filter((f: any) => SPA_FACILITY_IDS.has(f.facility_id)),
+    [data.facilities],
+  );
+  const fnbFacilities = useMemo(
+    () => (data.facilities ?? []).filter((f: any) => FNB_FACILITY_IDS.has(f.facility_id)),
     [data.facilities],
   );
 
@@ -258,8 +267,9 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'policies'       && <PoliciesPanel       data={data.policies}       propertyId={propertyId} />}
           {active === 'licenses'       && <LicensesPanel       propertyId={propertyId} />}
           {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} propertyId={propertyId} />}
-          {active === 'facilities'     && <FacilitiesPanel     data={(data.facilities ?? []).filter((f: any) => !SPA_FACILITY_IDS.has(f.facility_id))} propertyId={propertyId} />}
+          {active === 'facilities'     && <FacilitiesPanel     data={(data.facilities ?? []).filter((f: any) => !EXTRACTED_FACILITY_IDS.has(f.facility_id))} propertyId={propertyId} />}
           {active === 'jungle_spa'     && <JungleSpaPanel      facilities={spaFacilities} propertyId={propertyId} />}
+          {active === 'fnb'            && <FacilitiesPanel     data={fnbFacilities} propertyId={propertyId} />}
           {active === 'activities'     && <ActivitiesPanel     data={data.activities}     propertyId={propertyId} />}
           {active === 'retreats'       && <RetreatsPanel       propertyId={propertyId} />}
           {active === 'transport'      && <TransportPanel      data={data.transport ?? []}     propertyId={propertyId} />}
