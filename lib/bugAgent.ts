@@ -384,10 +384,10 @@ export async function pickBugs(opts: { bug_ids?: number[]; mode: 'one' | 'drain'
   const sb = getSupabaseAdmin();
   // PBS 2026-07-17 — READ from public.cockpit_bugs view (cockpit schema not
   // PostgREST-exposed). View exposes agent_skip via the underlying table.
-  let q = sb.from('cockpit_bugs')
-    .select('id, body, page_url, dept_slug, status, agent_skip')
-    .in('status', ['new', 'acknowledged'])
-    .eq('agent_skip', false);
+  // PBS 2026-07-17 — v_bugs_ready_for_agent excludes bugs attempted in the
+  // last 4h so drain doesn't re-pick the same 3 bugs every call.
+  let q = sb.from('v_bugs_ready_for_agent')
+    .select('id, body, page_url, dept_slug, status');
   if (opts.bug_ids && opts.bug_ids.length > 0) q = q.in('id', opts.bug_ids);
   q = q.order('created_at', { ascending: true }).limit(opts.mode === 'one' ? 1 : opts.max);
   const { data } = await q;
