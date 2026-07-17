@@ -33,7 +33,8 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; p
 
 const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const fmtInt = (n: number) => `${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
-const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
+// PBS 2026-07-17 principle: OCC → 2 decimals everywhere.
+const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(2)}%`;
 const fmt1   = (n: number) => `${(Number(n) || 0).toFixed(1)}`;
 
 export default async function RoomsPage({ searchParams, propertyId }: Props) {
