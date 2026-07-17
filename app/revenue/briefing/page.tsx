@@ -18,6 +18,7 @@ import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import BriefingFeed, { type BriefingRow } from './_components/BriefingFeed';
+import RefreshButton from './_components/RefreshButton';
 
 export const revalidate = 30;
 export const dynamic = 'force-dynamic';
@@ -111,8 +112,9 @@ export default async function RevenueBriefingPage({ propertyId }: Props) {
       <div style={{ gridColumn: '1 / -1' }}>
         <Container
           title="Guardrail feed"
-          subtitle={`${items.length} item${items.length === 1 ? '' : 's'} · sorted by severity then newest first · accept to fire the CTA, dismiss to log why, snooze 24h to defer`}
+          subtitle={`${items.length} item${items.length === 1 ? '' : 's'} · auto-refresh 06:00 Vientiane · accept to fire the CTA, dismiss to log why, snooze 24h to defer`}
           density="compact"
+          action={<RefreshButton propertyId={pid} />}
         >
           <BriefingFeed initial={items} />
         </Container>
