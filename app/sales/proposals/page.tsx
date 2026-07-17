@@ -67,6 +67,15 @@ function statusColor(s: string): string {
   }
 }
 
+function proposalHref(p: ProposalRow): string {
+  // Draft proposals open the editable composer; any other status opens the
+  // read-only view so the sent proposal cannot be modified.
+  if (p.status === 'draft') {
+    return '/sales/proposals/' + p.id + '/edit';
+  }
+  return '/sales/proposals/' + p.id;
+}
+
 export default async function SalesProposalsIndexPage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? NAMKHAN;
   const rows = await loadProposals(pid);
@@ -105,6 +114,8 @@ export default async function SalesProposalsIndexPage({ propertyId }: PageProps 
                   : p.inquiry_id ? 'inquiry'
                   : 'manual';
                 const dates = [p.date_in_snapshot, p.date_out_snapshot].filter(Boolean).join(' → ');
+                const href = proposalHref(p);
+                const isDraft = p.status === 'draft';
                 return (
                   <tr key={p.id}>
                     <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, fontWeight: 600 }}>
@@ -125,10 +136,10 @@ export default async function SalesProposalsIndexPage({ propertyId }: PageProps 
                       {new Date(p.created_at).toLocaleDateString()}
                     </td>
                     <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <Link href={'/sales/proposals/' + p.id + '/edit'} style={{
+                      <Link href={href} style={{
                         padding: '4px 10px', fontSize: 11, borderRadius: 4, border: '1px solid ' + T.FOREST,
                         color: T.FOREST, textDecoration: 'none', fontWeight: 600,
-                      }}>Open →</Link>
+                      }}>{isDraft ? 'Edit →' : 'Open →'}</Link>
                       <DeleteProposalButton proposalId={p.id} label={p.guest_name_snapshot ?? undefined} />
                     </td>
                   </tr>
