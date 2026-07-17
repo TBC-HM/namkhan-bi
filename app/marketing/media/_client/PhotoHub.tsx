@@ -142,6 +142,7 @@ export default function PhotoHub(props: Props) {
           rooms={props.rooms}
           taxonomy={props.taxonomy}
           areaTaxonomy={props.areaTaxonomy}
+          libraryCounts={props.libraryCounts ?? null}
         />
       )}
       {sub === 'review' && (
