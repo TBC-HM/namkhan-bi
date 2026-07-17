@@ -65,6 +65,13 @@ interface Props {
   rooms?: Array<{ room_type_id: number; room_type_name: string }>;
   taxonomy?: DrawerTaxonomy;
   areaTaxonomy?: ClarifyAreaTaxonomyRow[];
+  // PBS 2026-07-17 · aligns the "To clarify" tile with the Library top strip.
+  // When provided, uses libCounts.to_clarify + with_area etc as the single
+  // source (v_media_library_counts) instead of the client-side mediaPage recompute.
+  libraryCounts?: {
+    pics_ready: number; with_area: number; with_tier: number;
+    to_clarify: number; destination: number;
+  } | null;
 }
 
 const WHITE  = '#FFFFFF';
@@ -93,7 +100,7 @@ function isVideoRow(r: MediaRow): boolean {
   return /\.(mp4|mov|webm|m4v)(\?|$)/.test(p);
 }
 
-export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonomy, areaTaxonomy = [] }: Props) {
+export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonomy, areaTaxonomy = [], libraryCounts = null }: Props) {
   const [editing, setEditing] = useState<MediaRow | null>(null);
   const [playing, setPlaying] = useState<MediaRow | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
@@ -153,6 +160,19 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
   }, [photos, localDismiss]);
 
   const stats = useMemo(() => {
+    // PBS 2026-07-17 · align "To clarify" tile with the Library top strip.
+    // When libraryCounts is available, use v_media_library_counts as the single
+    // source of truth (hotel-class-no-area = the actual Iris-clarify backlog).
+    // Otherwise fall back to the local mediaPage recompute.
+    if (libraryCounts) {
+      return {
+        toClarify: libraryCounts.to_clarify,
+        withArea:  libraryCounts.with_area,
+        withTier:  libraryCounts.with_tier,
+        clean:     libraryCounts.with_area,
+        total:     libraryCounts.pics_ready,
+      };
+    }
     const total = photos.length;
     const withArea = photos.filter(r => r.property_area != null).length;
     const withTier = photos.filter(r => r.primary_tier != null).length;
