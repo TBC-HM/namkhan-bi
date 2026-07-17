@@ -233,11 +233,19 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
             if (!r.primary_tier)  badges.push({ k: 'tier', label: '?tier' });
             const qBadge = qaBadge(r.quality_index ?? null);
             return (
-              <button key={r.asset_id} onClick={() => setEditing(r)} style={{
+              <div key={r.asset_id} style={{
                 background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, overflow: 'hidden',
-                display: 'flex', flexDirection: 'column', padding: 0, cursor: 'pointer', textAlign: 'left',
+                display: 'flex', flexDirection: 'column', padding: 0, textAlign: 'left',
               }}>
-                <div style={{ position: 'relative', width: '100%', height: 120, background: '#F5F0E1' }}>
+                {/* PBS 2026-07-17 · tile no longer a <button> so the inline
+                    <select> below works. Image area is the click target for edit. */}
+                <div
+                  onClick={() => setEditing(r)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter') setEditing(r); }}
+                  style={{ position: 'relative', width: '100%', height: 120, background: '#F5F0E1', cursor: 'pointer' }}
+                >
                   {r.public_url ? (
                     isVideoRow(r) ? (
                       <video
@@ -335,7 +343,7 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                     <div style={{ color:INK_M, marginTop:2 }}>Click to edit ✎</div>
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
