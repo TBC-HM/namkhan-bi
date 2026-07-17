@@ -20,7 +20,9 @@ import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import BriefingFeed, { type BriefingRow } from './_components/BriefingFeed';
 import RefreshButton from './_components/RefreshButton';
 
-export const revalidate = 30;
+// PBS 2026-07-17: revalidate=0 so RefreshButton + cron writes surface immediately.
+// The 30s cache was serving stale count (e.g. 11 vs actual 37 after a cron run).
+export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 
 interface Props { searchParams?: Record<string, string | string[] | undefined>; propertyId?: number }
