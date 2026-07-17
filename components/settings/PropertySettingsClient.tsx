@@ -64,7 +64,7 @@ function dataFor(tab: Tab, data: any): unknown {
     case 'jungle_spa':     return (data.facilities ?? []).filter((f: any) => SPA_FACILITY_IDS.has(f.facility_id));
     case 'fnb':            return (data.facilities ?? []).filter((f: any) => FNB_FACILITY_IDS.has(f.facility_id));
     case 'activities':     return data.activities;
-    case 'retreats':       return [];  // placeholder until property.retreats DDL lands
+    case 'retreats':       return data.retreats;
     case 'seasons':        return data.seasons;
     case 'certifications': return data.certifications;
     case 'contacts':       return data.contacts;
@@ -271,7 +271,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'jungle_spa'     && <JungleSpaPanel      facilities={spaFacilities} propertyId={propertyId} />}
           {active === 'fnb'            && <FacilitiesPanel     data={fnbFacilities} propertyId={propertyId} />}
           {active === 'activities'     && <ActivitiesPanel     data={data.activities}     propertyId={propertyId} />}
-          {active === 'retreats'       && <RetreatsPanel       propertyId={propertyId} />}
+          {active === 'retreats'       && <RetreatsPanel       retreats={data.retreats ?? []} propertyId={propertyId} />}
           {active === 'transport'      && <TransportPanel      data={data.transport ?? []}     propertyId={propertyId} />}
           {active === 'imekong'        && <ImekongPanel        boats={data.boats ?? []} cruises={data.boatCruises ?? []} propertyId={propertyId} />}
           {active === 'meeting_spaces' && <MeetingSpacesPanel data={data.meetingSpaces ?? []} />}
