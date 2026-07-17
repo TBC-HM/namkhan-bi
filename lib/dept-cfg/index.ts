@@ -546,7 +546,7 @@ const MARKETING_CFG: DeptCfg = {
     // - Orphan stub /marketing/content deleted.
     { label: 'HoD',               href: '/marketing'                 },
     { label: 'Overview',          href: '/marketing/overview'        },
-    { label: 'Acquisition',       href: '/marketing/acquisition'     },
+    { label: 'Campaigns',         href: '/marketing/acquisition'     }, // PBS 2026-07-17 · bug #68 · label renamed (URL kept for backwards compat)
     { label: 'Products & Offers', href: '/marketing/offers'          },
     { label: 'Digital',           href: '/marketing/digital'         },
     { label: 'Media',             href: '/marketing/media'           },
