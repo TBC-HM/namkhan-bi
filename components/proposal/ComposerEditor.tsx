@@ -1173,16 +1173,8 @@ function RateOfferCard({
         </button>
       </div>
 
-      <FieldLabel label="Guest-facing label">
-        <input
-          type="text"
-          value={offer.label ?? ''}
-          onChange={(e) => onPatch({ label: e.target.value })}
-          placeholder={plan ? plan.rate_plan_name : 'e.g. Flex · Bed & Breakfast'}
-          disabled={busy}
-          style={S.input}
-        />
-      </FieldLabel>
+      {/* PBS 2026-07-17 · bug #58 — Guest-facing label removed. Label is set
+          automatically to plan.rate_plan_name on plan change (line ~1149). */}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <FieldLabel label="Payment terms">
@@ -1191,7 +1183,8 @@ function RateOfferCard({
             onChange={(e) => onPatch({ payment_terms: e.target.value })}
             placeholder={DEFAULT_PAYMENT_TERMS}
             rows={2}
-            disabled={busy}
+            /* PBS 2026-07-17 · bug #62 — do NOT disable during optimistic patch
+               (was flipping every keystroke → lost focus after 1 letter). */
             style={{ ...S.textarea, minHeight: 52 }}
           />
         </FieldLabel>
@@ -1201,7 +1194,6 @@ function RateOfferCard({
             onChange={(e) => onPatch({ cancellation_terms: e.target.value })}
             placeholder={DEFAULT_CANCELLATION_TERMS}
             rows={2}
-            disabled={busy}
             style={{ ...S.textarea, minHeight: 52 }}
           />
         </FieldLabel>
