@@ -2,8 +2,7 @@
 // POST { asset_id } — clear the Iris review flag (needs_review=false, review_reason=NULL).
 // PBS 2026-07-14 · TASK 3.
 // PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 2 — switch to canonical
-//   public.fn_clear_review (ADR-149..152). Old fn_media_asset_clear_review kept
-//   for the sibling AssetEditDrawer path; this route now uses the brief RPC.
+//   public.fn_clear_review (ADR-149..152).
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
