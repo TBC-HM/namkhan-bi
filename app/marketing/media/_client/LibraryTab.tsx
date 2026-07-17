@@ -114,6 +114,16 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   type FacetGroups = Record<'rooms'|'facilities'|'activities'|'certifications'|'team'|'other'|'uncategorized', FacetRow[]>;
   const [facetGroups, setFacetGroups] = useState<FacetGroups | null>(null);
 
+  // PBS 2026-07-17 · SCOPE 1 · media-pipeline-frontend brief.
+  // Canonical stat-tile counts come from public.v_media_library_counts (ADR-149).
+  // Kills the 832-vs-1125 client-side recompute bug — tiles below read libCounts.
+  interface LibraryCounts {
+    pics_ready: number; videos_total: number; with_tier: number; with_area: number;
+    to_clarify: number; destination: number; review_junk: number;
+    website: number; ota: number; social: number; internal: number;
+  }
+  const [libCounts, setLibCounts] = useState<LibraryCounts | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -124,6 +134,16 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         if (cancelled) return;
         if (j?.groups) setFacetGroups(j.groups as FacetGroups);
       } catch { /* silent — fallback to static options */ }
+    })();
+    // Fetch canonical library counts (SCOPE 1).
+    (async () => {
+      try {
+        const res = await fetch('/api/marketing/media/library-counts', { cache: 'no-store' });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (cancelled) return;
+        if (j?.counts) setLibCounts(j.counts as LibraryCounts);
+      } catch { /* silent — falls back to legacy byTier totals */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -265,17 +285,25 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         activities={(taxonomy?.activities ?? []).map(a => ({ id: a.id, name: a.name }))}
         areaChoices={['restaurant','lifestyle','grounds','pool','bar','lobby','wellness','behind_scenes','Logos','No area']}
       />
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8, marginBottom:16 }}>
+      {/* PBS 2026-07-17 · SCOPE 1 · tiles bound to v_media_library_counts.
+          Fallback to legacy byTier totals only when libCounts is not yet loaded
+          (keeps first-render smooth; correct numbers land within one tick). */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
         {[
-          { label: 'Total ready', value: totals.tot },
-          { label: 'OTA',         value: totals.ota },
-          { label: 'Website',     value: totals.hero },
-          { label: 'Social',      value: totals.social },
-          { label: 'Internal',    value: totals.internal },
+          { label: 'Pics',        value: libCounts?.pics_ready   ?? totals.tot },
+          { label: 'Videos',      value: libCounts?.videos_total ?? 0 },
+          { label: 'Total ready', value: libCounts?.pics_ready   ?? totals.tot },
+          { label: 'With tier',   value: libCounts?.with_tier    ?? totals.tot },
+          { label: 'With area',   value: libCounts?.with_area    ?? 0 },
+          { label: 'To clarify',  value: libCounts?.to_clarify   ?? 0 },
+          { label: 'OTA',         value: libCounts?.ota          ?? totals.ota },
+          { label: 'Website',     value: libCounts?.website      ?? totals.hero },
+          { label: 'Social',      value: libCounts?.social       ?? totals.social },
+          { label: 'Internal',    value: libCounts?.internal     ?? totals.internal },
         ].map((t, i) => (
           <div key={i} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'12px 14px' }}>
             <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:4 }}>{t.label}</div>
-            <div style={{ fontSize:22, fontWeight:700, color:INK }}>{t.value.toLocaleString()}</div>
+            <div style={{ fontSize:22, fontWeight:700, color:INK }}>{(t.value ?? 0).toLocaleString()}</div>
           </div>
         ))}
       </div>
