@@ -319,16 +319,16 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
         </Container>
       </div>
 
-      {/* PBS 2026-07-08: new TrendTile — avg room-nights sold per day over the last 30d.
-          Powered by public.v_pulse_rn_sold_30d (property-scoped, both properties). */}
+      {/* PBS 2026-07-17: renamed "sold" → "in house" to avoid confusion with pickup.
+          Same underlying data (v_pulse_rn_sold_30d = rooms actually occupied per night). */}
       <div style={fullRow}>
-        <Container title="Trend · last 30 days" subtitle="daily room-nights sold · dashed line = average" density="compact">
+        <Container title="Rooms in house · last 30 days" subtitle="rooms occupied each night · dashed line = average" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
             <TrendTile
-              label="Avg RN sold · 30d"
+              label="Avg rooms in house · 30d"
               value={avgRnSold.toFixed(1)}
               series={rnSoldSeries}
-              footnote={`${rnSoldSeries.length} days · ${Math.round(rnSoldSeries.reduce((s, r) => s + r.value, 0))} rooms sold total`}
+              footnote={`${rnSoldSeries.length} days · ${Math.round(rnSoldSeries.reduce((s, r) => s + r.value, 0))} total room-nights in house`}
             />
           </div>
         </Container>
