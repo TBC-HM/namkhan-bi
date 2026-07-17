@@ -164,7 +164,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const lyTodayKpi = (lyTodayKpiRes.data ?? null) as LyKpi;
   const lyYestKpi  = (lyYestKpiRes.data  ?? null) as LyKpi;
   const TAX_SERVICE_LY = 1.21;
-  const fmtSlyPct = (v: number | string | null | undefined) => v == null ? '—' : `${Math.round(Number(v))}%`;
+  // PBS 2026-07-17 principle: OCC everywhere shows 2 decimals.
+  const fmtSlyPct = (v: number | string | null | undefined) => v == null ? '—' : `${Number(v).toFixed(2)}%`;
   const fmtSlyMoney = (v: number | string | null | undefined, sym: string, tax = 1) => v == null ? '—' : `${sym}${Math.round(Number(v) / tax).toLocaleString('en-US')}`;
   const fmtSlyRn = (v: number | null | undefined) => v == null ? '—' : `${v} RN`;
   const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
@@ -491,7 +492,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // KPI tiles (same as before + one forward-looking tile)
   const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
     if (todayKpi) {
-      if (k.k === 'OCC')    return { label: 'OCC',    value: `${todayKpi.occ_pct ?? 0}%`, size: 'sm', footnote: `${todayKpi.rn_tonight ?? 0} of ${todayKpi.capacity ?? 0} rooms tonight`, stly: fmtSlyPct(lyTodayKpi?.occupancy_pct) } as KpiTileProps;
+      if (k.k === 'OCC')    return { label: 'OCC',    value: `${Number(todayKpi.occ_pct ?? 0).toFixed(2)}%`, size: 'sm', footnote: `${todayKpi.rn_tonight ?? 0} of ${todayKpi.capacity ?? 0} rooms tonight`, stly: fmtSlyPct(lyTodayKpi?.occupancy_pct) } as KpiTileProps;
       if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdr.toLocaleString('en-US')}`,    size: 'sm', footnote: 'today · in-house · net', stly: fmtSlyMoney(lyTodayKpi?.adr, symToday, TAX_SERVICE_LY) } as KpiTileProps;
       if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevpar.toLocaleString('en-US')}`, size: 'sm', footnote: 'today · vs capacity · net', stly: fmtSlyMoney(lyTodayKpi?.revpar, symToday, TAX_SERVICE_LY) } as KpiTileProps;
     }
@@ -538,7 +539,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // OTB, and would be identical to today ± last-24h pickup. Yesterday stripe = closed day.
   const yesterdayBaseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).filter((k) => k.k !== 'PACE').map((k) => {
     if (yesterdayKpi) {
-      const occY = Math.round(Number(yesterdayKpi.occupancy_pct ?? 0));
+      const occY = Number(yesterdayKpi.occupancy_pct ?? 0).toFixed(2);
       if (k.k === 'OCC')    return { label: 'OCC',    value: `${occY}%`, size: 'sm', footnote: `${yesterdayKpi.rooms_sold ?? 0} of ${yesterdayKpi.rooms_available ?? 0} rooms`, stly: fmtSlyPct(lyYestKpi?.occupancy_pct) } as KpiTileProps;
       if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdrY.toLocaleString('en-US')}`,    size: 'sm', footnote: 'yesterday · in-house · net', stly: fmtSlyMoney(lyYestKpi?.adr, symToday, TAX_SERVICE_LY) } as KpiTileProps;
       if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevparY.toLocaleString('en-US')}`, size: 'sm', footnote: 'yesterday · vs capacity · net', stly: fmtSlyMoney(lyYestKpi?.revpar, symToday, TAX_SERVICE_LY) } as KpiTileProps;
