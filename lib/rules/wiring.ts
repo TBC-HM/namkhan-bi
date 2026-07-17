@@ -57,6 +57,15 @@ export const WIRING: Record<string, Record<string, RuleWiring>> = {
     sleeping_plan_max_days:         { status: 'live', consumedBy: 'ruleSleepingPlanMax@rateplans.ts',      requiresData: ['v_rate_plan_hygiene'] },
     never_booked_plan_max_share:    { status: 'live', consumedBy: 'ruleNeverBookedShare@rateplans.ts',     requiresData: ['v_rate_plan_hygiene'] },
     orphan_catalogue_gap_max:       { status: 'live', consumedBy: 'ruleOrphanCatalogueGap@rateplans.ts',   requiresData: ['v_rate_plan_hygiene'] },
+    // PBS 2026-07-17: page-scoped dynamic rules from evaluateDynamicPageRules.
+    hod_pickup_missed_yesterday:        { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['fn_hod_day_activity','fn_guardrail_effective_threshold'] },
+    pulse_low_occ_cluster_next14:       { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_otb_pace'] },
+    pace_behind_60d_out:                { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_otb_pace','mv_kpi_daily'] },
+    pace_ahead_30d_out:                 { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_otb_pace','mv_kpi_daily'] },
+    compset_we_cheapest_not_soldout:    { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_parity_matrix_pb','v_otb_pace'] },
+    markets_country_early_bird_closing: { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_country_stay_month_heatmap'] },
+    markets_country_demand_surge:       { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_country_stay_month_heatmap'] },
+    markets_country_new_market_signal:  { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_country_market_summary'] },
   },
 
   retention: {
