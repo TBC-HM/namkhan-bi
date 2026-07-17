@@ -13,8 +13,8 @@ import { callAnthropic } from '@/lib/mail/anthropic';
 const GH_REPO = 'TBC-HM/namkhan-bi';
 const GH_BASE_BRANCH = 'main';
 export const COST_CAP_USD = 2.0;
-const MAX_FILES_PER_PLAN = 3;
-const MAX_FILE_BYTES = 40_000;
+const MAX_FILES_PER_PLAN = 2;   // PBS 2026-07-17 — reduced from 3 to keep run < 60s
+const MAX_FILE_BYTES = 20_000;  // reduced from 40k
 
 let __cachedGhToken: string | null = null;
 async function getGhToken(): Promise<string> {
@@ -230,7 +230,12 @@ const REVIEWER_SYSTEM = [
 async function reviewPlan(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<ReviewerResult> {
   if (plan.patches.length === 0) return { verdict: 'needs_human', notes: 'Planner produced no patches.', cost_usd: 0 };
   if (plan.patches.length > 3) return { verdict: 'needs_human', notes: `Too many files (${plan.patches.length}), needs human.`, cost_usd: 0 };
-  const patchSummary = plan.patches.map((p) => `--- ${p.path} (${p.new_content.length} bytes) ---\n${p.reasoning}\nFIRST 40 LINES:\n${p.new_content.split('\n').slice(0, 40).join('\n')}`).join('\n\n');
+  const patchSummary = plan.patches.map((p) => {
+    const content = p.new_content.length > 15000
+      ? p.new_content.slice(0, 15000) + '\n... (truncated at 15KB — file is ' + p.new_content.length + ' bytes total)'
+      : p.new_content;
+    return `--- ${p.path} (${p.new_content.length} bytes) ---\nRATIONALE: ${p.reasoning}\nFULL PATCHED CONTENT:\n${content}`;
+  }).join('\n\n');
   const prompt = [
     `BUG #${bug.id}: ${bug.body ?? '(empty)'}`,
     `PLAN: ${plan.plan_md}`,
