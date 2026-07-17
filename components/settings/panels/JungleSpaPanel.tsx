@@ -1,16 +1,11 @@
 // components/settings/panels/JungleSpaPanel.tsx
-// PBS 2026-07-18 · new mini-hub for the spa cluster (facility_id 6 + treatment
-// rooms 118-120 at Namkhan). Three sub-tabs:
-//   · Facilities   — the physical spa rooms (reuses property.facilities rows)
-//   · Experiences  — multi-day wellness journeys (backed by property.retreats,
-//                    filtered where wellness_focus is spa-related — awaits DDL)
-//   · Treatments   — individual bookable treatments (awaits property.spa_treatments DDL)
-// Facilities sub-tab wires immediately; Experiences + Treatments show a
-// coming-soon banner until PBS greenlights the two new tables.
+// PBS 2026-07-18 v2 · Experiences → RetreatsPanel (real data), Treatments → SpaTreatmentsPanel.
 'use client';
 
 import { useState } from 'react';
 import FacilitiesPanel from './FacilitiesPanel';
+import RetreatsPanel from './RetreatsPanel';
+import SpaTreatmentsPanel from './SpaTreatmentsPanel';
 
 type Sub = 'facilities' | 'experiences' | 'treatments';
 
@@ -18,21 +13,21 @@ const HAIR   = '#E6DFCC';
 const INK    = '#1B1B1B';
 const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
-const AMBER  = '#B87F26';
-const CREAM  = '#F5F0E1';
 
 interface Props {
   facilities: any[];
+  treatments: any[];
+  retreats: any[];
   propertyId: number;
 }
 
-export default function JungleSpaPanel({ facilities, propertyId }: Props) {
+export default function JungleSpaPanel({ facilities, treatments, retreats, propertyId }: Props) {
   const [sub, setSub] = useState<Sub>('facilities');
 
-  const TABS: Array<{ key: Sub; label: string; count: number | null; live: boolean }> = [
-    { key: 'facilities',  label: 'Facilities',  count: facilities.length, live: true },
-    { key: 'experiences', label: 'Experiences', count: null,              live: false },
-    { key: 'treatments',  label: 'Treatments',  count: null,              live: false },
+  const TABS: Array<{ key: Sub; label: string; count: number }> = [
+    { key: 'facilities',  label: 'Facilities',  count: facilities.length },
+    { key: 'experiences', label: 'Experiences', count: retreats.length },
+    { key: 'treatments',  label: 'Treatments',  count: treatments.length },
   ];
 
   return (
@@ -69,36 +64,15 @@ export default function JungleSpaPanel({ facilities, propertyId }: Props) {
               }}
             >
               {t.label}
-              {t.count != null && <span style={{ fontSize: 10, opacity: 0.7 }}>· {t.count}</span>}
-              {!t.live && (
-                <span style={{ background: AMBER, color: '#FFF', fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 8, letterSpacing: 0 }}>
-                  soon
-                </span>
-              )}
+              <span style={{ fontSize: 10, opacity: 0.7 }}>· {t.count}</span>
             </button>
           );
         })}
       </div>
 
-      {sub === 'facilities' && <FacilitiesPanel data={facilities} propertyId={propertyId} />}
-
-      {sub === 'experiences' && (
-        <div style={{ background: CREAM, border: '1px solid ' + HAIR, borderRadius: 4, padding: 20, textAlign: 'center', color: INK_M }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 6 }}>Experiences · coming soon</div>
-          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-            Multi-day wellness experiences (Yoga Immersion, Detox Reset, etc.) will surface here once the <code>property.retreats</code> table is created. This table is pending PBS DDL approval — schema drafted in chat.
-          </div>
-        </div>
-      )}
-
-      {sub === 'treatments' && (
-        <div style={{ background: CREAM, border: '1px solid ' + HAIR, borderRadius: 4, padding: 20, textAlign: 'center', color: INK_M }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 6 }}>Treatments · coming soon</div>
-          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-            Individual bookable treatments (massage · aromatherapy · reflexology, per-therapist assignment, contraindications) will surface here once the <code>property.spa_treatments</code> table is created. Pending PBS DDL approval.
-          </div>
-        </div>
-      )}
+      {sub === 'facilities'  && <FacilitiesPanel data={facilities} propertyId={propertyId} />}
+      {sub === 'experiences' && <RetreatsPanel retreats={retreats} propertyId={propertyId} />}
+      {sub === 'treatments'  && <SpaTreatmentsPanel treatments={treatments} facilities={facilities} propertyId={propertyId} />}
     </div>
   );
 }
