@@ -99,8 +99,9 @@ export default async function PropertySettingsPage({
       title={`Settings · ${data.identity?.trading_name ?? 'Property'}`}
       subtitle={subtitleParts}
       tabs={[
-        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
+        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`,   active: true },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
+        { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
       ]}
     >
       <div style={fullRow}>
