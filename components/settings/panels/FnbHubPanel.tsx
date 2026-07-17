@@ -14,13 +14,10 @@ const INK = '#1B1B1B';
 const INK_M = '#5A5A5A';
 const FOREST = '#084838';
 
-interface Menu { menu_id: number; property_id: number; facility_id: number | null; name: string; meal_period: string | null; is_active: boolean; display_order: number | null; items?: any[]; }
-interface Activity { activity_id: number; facility_id: number | null; }
-
 interface Props {
   facilities: any[];
-  menus: Menu[];
-  activities: Activity[];
+  menus: any[];
+  activities: any[];
   propertyId: number;
 }
 
@@ -28,9 +25,9 @@ export default function FnbHubPanel({ facilities, menus, activities, propertyId 
   const [sub, setSub] = useState<Sub>('facilities');
 
   const facilityIds = new Set(facilities.map(f => f.facility_id));
-  const fnbActivities = activities.filter(a => a.facility_id != null && facilityIds.has(a.facility_id));
+  const fnbActivities = activities.filter((a: any) => a.facility_id != null && facilityIds.has(a.facility_id));
 
-  const isGroup = (m: Menu) => (m.meal_period || '').toLowerCase().includes('group');
+  const isGroup = (m: any) => (m.meal_period || '').toLowerCase().includes('group');
   const regularMenus = menus.filter(m => !isGroup(m));
   const groupMenus   = menus.filter(isGroup);
 
