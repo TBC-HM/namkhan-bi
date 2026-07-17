@@ -3,6 +3,7 @@
 // public.cockpit_bugs; this page surfaces them with CTAs (ack/start/done/dismiss)
 // and a "Copy for agent" clipboard action that emits a structured JSON blob a
 // future auto-fix agent can pick up.
+import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import BugsClient, { type BugRow } from './_components/BugsClient';
 
@@ -14,6 +15,13 @@ const T = {
   paper: '#FFFFFF', hairline: '#E6DFCC', warm: '#F5F0E1',
   ink: '#1B1B1B', inkSoft: '#5A5A5A', green: '#084838',
 };
+
+const HOLDING_NAV = [
+  { label: 'Overview', href: '/holding' },
+  { label: 'Properties', href: '/holding/properties' },
+  { label: 'Users', href: '/holding/users' },
+  { label: 'Bugs', href: '/holding/bugs' },
+];
 
 async function loadBugs(): Promise<BugRow[]> {
   const sb = getSupabaseAdmin();
@@ -42,27 +50,56 @@ export default async function HoldingBugsPage() {
     : null;
 
   return (
-    <div style={{ padding: 24, background: T.paper, minHeight: '100vh', color: T.ink, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: T.inkSoft, marginBottom: 4 }}>
-            Holding <span style={{ color: T.inkSoft, margin: '0 6px' }}>›</span> Bugs
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 600, color: T.ink }}>Bug reports</div>
-          <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4 }}>
-            Every bug submitted via the site-wide widget. Use the CTAs to move through the lifecycle. &ldquo;Copy for agent&rdquo; emits a task payload for autonomous fixers.
-          </div>
+    <div style={{ background: T.paper, minHeight: '100vh', color: T.ink, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {/* Sub-nav */}
+      <nav style={{ borderBottom: `1px solid ${T.hairline}`, background: T.paper }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px', display: 'flex', gap: 0 }}>
+          {HOLDING_NAV.map((item) => {
+            const active = item.href === '/holding/bugs';
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                style={{
+                  display: 'inline-block',
+                  padding: '12px 16px',
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? T.green : T.inkSoft,
+                  textDecoration: 'none',
+                  borderBottom: active ? `2px solid ${T.green}` : '2px solid transparent',
+                  marginBottom: -1,
+                }}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
+      </nav>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-          <Tile label="Open" value={String(openCount)} />
-          <Tile label="Today's new" value={String(todayNew)} />
-          <Tile label="In progress" value={String(inProgress)} />
-          <Tile label="Done · 7d" value={String(done7d)} />
-          <Tile label="Avg time to fix" value={avgHours != null ? avgHours.toFixed(1) + 'h' : '—'} />
+      <div style={{ padding: 24 }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: T.inkSoft, marginBottom: 4 }}>
+              Holding <span style={{ color: T.inkSoft, margin: '0 6px' }}>›</span> Bugs
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 600, color: T.ink }}>Bug reports</div>
+            <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4 }}>
+              Every bug submitted via the site-wide widget. Use the CTAs to move through the lifecycle. &ldquo;Copy for agent&rdquo; emits a task payload for autonomous fixers.
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
+            <Tile label="Open" value={String(openCount)} />
+            <Tile label="Today's new" value={String(todayNew)} />
+            <Tile label="In progress" value={String(inProgress)} />
+            <Tile label="Done · 7d" value={String(done7d)} />
+            <Tile label="Avg time to fix" value={avgHours != null ? avgHours.toFixed(1) + 'h' : '—'} />
+          </div>
+
+          <BugsClient initialRows={rows} />
         </div>
-
-        <BugsClient initialRows={rows} />
       </div>
     </div>
   );
