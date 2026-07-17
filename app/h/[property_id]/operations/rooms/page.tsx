@@ -20,7 +20,8 @@ interface Props {
 
 const fmtEurStr = (n: number) => `€${Math.round(Number(n) || 0).toLocaleString('en-GB')}`;
 const fmtInt = (n: number) => `${Math.round(Number(n) || 0).toLocaleString('en-GB')}`;
-const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
+// PBS 2026-07-17 principle: OCC → 2 decimals everywhere.
+const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(2)}%`;
 
 const monthLabel = (yyyymm: string): string => {
   const [y, m] = yyyymm.split('-').map(Number);
