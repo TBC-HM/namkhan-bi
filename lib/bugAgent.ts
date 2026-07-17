@@ -147,17 +147,33 @@ function guessCandidateFiles(bug: { page_url: string | null; body: string | null
   const url = bug.page_url ?? '';
   try {
     const u = new URL(url);
-    const parts = u.pathname.split('/').filter(Boolean);
-    if (parts[0] === 'h' && parts[1] && /^\d+$/.test(parts[1])) parts.splice(0, 2);
-    const seg = parts.filter(Boolean);
-    if (seg.length > 0) {
-      files.push(`app/${seg.join('/')}/page.tsx`);
-      const cap = seg[seg.length - 1].split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-      files.push(`app/${seg.join('/')}/_components/${cap}Client.tsx`);
+    const rawParts = u.pathname.split('/').filter(Boolean);
+    // PBS 2026-07-17 — for /h/{pid}/X, include BOTH variants:
+    //   app/X/page.tsx (if X is a plain path)
+    //   app/h/[propertyId]/X/page.tsx (if X lives under the pid bracket)
+    const isPidRoute = rawParts[0] === 'h' && rawParts[1] && /^\d+$/.test(rawParts[1]);
+    if (isPidRoute) {
+      const rest = rawParts.slice(2);
+      if (rest.length > 0) {
+        files.push(`app/h/[propertyId]/${rest.join('/')}/page.tsx`);
+        // Also try without the h prefix (some pages live at both roots)
+        files.push(`app/${rest.join('/')}/page.tsx`);
+        const cap = rest[rest.length - 1].split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+        files.push(`app/h/[propertyId]/${rest.join('/')}/_components/${cap}Client.tsx`);
+      }
+    } else {
+      const seg = rawParts;
+      if (seg.length > 0) {
+        files.push(`app/${seg.join('/')}/page.tsx`);
+        const cap = seg[seg.length - 1].split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+        files.push(`app/${seg.join('/')}/_components/${cap}Client.tsx`);
+      }
     }
   } catch { /* ignore */ }
   const body = (bug.body ?? '').toLowerCase();
-  if (body.includes('sub menu') || body.includes('submenu') || body.includes('nav') || body.includes('menu')) {
+  // PBS 2026-07-17 — broaden the "nav intent" heuristic. Any bug about menu
+  // placement / routing / belonging in another menu should include dept-cfg.
+  if (body.includes('menu') || body.includes('nav') || body.includes('belong') || body.includes('subpage') || body.includes('sub-page') || body.includes('holding') || body.includes('namkhan')) {
     files.push('lib/dept-cfg/index.ts');
   }
   return Array.from(new Set(files)).slice(0, MAX_FILES_PER_PLAN);
