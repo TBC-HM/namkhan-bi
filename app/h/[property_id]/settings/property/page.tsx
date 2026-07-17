@@ -107,6 +107,7 @@ export default async function PropertySettingsPage({
         { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`,   active: true },
         { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
+        { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
       ]}
     >
