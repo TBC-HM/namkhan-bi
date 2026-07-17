@@ -5,6 +5,7 @@
 // future auto-fix agent can pick up.
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import BugsClient, { type BugRow } from './_components/BugsClient';
+import Link from 'next/link';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,11 @@ const T = {
   paper: '#FFFFFF', hairline: '#E6DFCC', warm: '#F5F0E1',
   ink: '#1B1B1B', inkSoft: '#5A5A5A', green: '#084838',
 };
+
+const SUB_NAV: { label: string; href: string }[] = [
+  { label: 'Overview', href: '/holding' },
+  { label: 'Bugs', href: '/holding/bugs' },
+];
 
 async function loadBugs(): Promise<BugRow[]> {
   const sb = getSupabaseAdmin();
@@ -44,6 +50,33 @@ export default async function HoldingBugsPage() {
   return (
     <div style={{ padding: 24, background: T.paper, minHeight: '100vh', color: T.ink, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+
+        {/* Sub-navigation */}
+        <nav style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${T.hairline}`, paddingBottom: 0 }}>
+          {SUB_NAV.map((item) => {
+            const active = item.href === '/holding/bugs';
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                style={{
+                  display: 'inline-block',
+                  padding: '8px 14px',
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? T.green : T.inkSoft,
+                  textDecoration: 'none',
+                  borderBottom: active ? `2px solid ${T.green}` : '2px solid transparent',
+                  marginBottom: -1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: T.inkSoft, marginBottom: 4 }}>
             Holding <span style={{ color: T.inkSoft, margin: '0 6px' }}>›</span> Bugs
