@@ -118,6 +118,34 @@ export default function ReviewTab({ rows }: Props) {
     }
   }
 
+  // PBS 2026-07-17 · Archive from Review — demote to tier_archive AND clear the
+  // review flag in one action, so the photo leaves the queue but stays in the
+  // library under Archive tier (recoverable, not deleted).
+  async function archiveAsset(assetId: string) {
+    setBusyId(assetId); setMsg(null);
+    try {
+      const [tierRes, clearRes] = await Promise.all([
+        fetch('/api/marketing/media/asset-update', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: assetId, primary_tier: 'tier_archive' }),
+        }),
+        fetch('/api/marketing/media/clear-review', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: assetId }),
+        }),
+      ]);
+      if (!tierRes.ok)  throw new Error('tier_set_failed');
+      if (!clearRes.ok) throw new Error('clear_review_failed');
+      setLocalDismiss((s) => { const next = new Set(s); next.add(assetId); return next; });
+      setSelected(null);
+      setMsg('Archived — moved to Archive tier');
+    } catch (e: any) {
+      setMsg('Archive failed: ' + e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const counts = useMemo(() => {
     const nonHotel = rows.filter((r) => reasonKind(r) === 'non_hotel').length;
     const lowQual  = rows.filter((r) => reasonKind(r) === 'low_quality').length;
@@ -184,20 +212,19 @@ export default function ReviewTab({ rows }: Props) {
           {filtered.map((r) => {
             const b = reasonBadge(r);
             return (
-              <button
+              <div
                 key={r.asset_id}
-                onClick={() => setSelected(r)}
                 style={{
                   background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4,
                   overflow: 'hidden', display: 'flex', flexDirection: 'column',
-                  padding: 0, cursor: 'pointer', textAlign: 'left',
+                  padding: 0, textAlign: 'left',
                 }}
               >
-                <div style={{ position: 'relative' }}>
-                  {/* PBS 2026-07-17 · route ingested-status previews through
-                      /preview-any (reads media.media_assets directly, bypasses
-                      the ready-only filter on v_marketing_media_page). Ready
-                      rows still get public_url from mediaPage join. */}
+                {/* PBS 2026-07-17 · tile no longer a button — inline action row
+                    below the image handles Keep / Archive / Delete without
+                    opening the drawer. Click the image to open the drawer for
+                    the full classification detail. */}
+                <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setSelected(r)}>
                   {(() => {
                     const src = r.public_url || ('/api/marketing/media/preview-any?asset_id=' + r.asset_id);
                     return (
@@ -206,16 +233,14 @@ export default function ReviewTab({ rows }: Props) {
                         style={{ width: '100%', aspectRatio: '16/9', minHeight: 160, objectFit: 'cover', background: '#F5F0E1', display: 'block' }} />
                     );
                   })()}
-                  <div
-                    style={{
-                      position: 'absolute', left: 4, bottom: 4,
-                      background: b.bg, color: b.fg,
-                      fontSize: 10, fontWeight: 700,
-                      padding: '2px 6px', borderRadius: 3,
-                      letterSpacing: '0.02em',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
-                    }}
-                  >
+                  <div style={{
+                    position: 'absolute', left: 4, bottom: 4,
+                    background: b.bg, color: b.fg,
+                    fontSize: 10, fontWeight: 700,
+                    padding: '2px 6px', borderRadius: 3,
+                    letterSpacing: '0.02em',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                  }}>
                     {b.label}
                   </div>
                 </div>
@@ -227,8 +252,41 @@ export default function ReviewTab({ rows }: Props) {
                     {r.quality_index != null && <span>QI {Math.round(Number(r.quality_index))}</span>}
                     {r.category && <span>· {r.category}</span>}
                   </div>
+                  {/* PBS 2026-07-17 · inline actions — no drawer needed */}
+                  <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                    <button
+                      onClick={() => clearFlag(r.asset_id)}
+                      disabled={busyId === r.asset_id}
+                      title="Keep this photo — clear the review flag"
+                      style={{
+                        flex: 1, padding: '4px 6px', fontSize: 10, fontWeight: 600,
+                        background: WHITE, color: FOREST, border: '1px solid ' + FOREST,
+                        borderRadius: 3, cursor: busyId === r.asset_id ? 'wait' : 'pointer',
+                      }}
+                    >Keep</button>
+                    <button
+                      onClick={() => archiveAsset(r.asset_id)}
+                      disabled={busyId === r.asset_id}
+                      title="Move to Archive tier — keeps the file, out of active library"
+                      style={{
+                        flex: 1, padding: '4px 6px', fontSize: 10, fontWeight: 600,
+                        background: WHITE, color: AMBER, border: '1px solid ' + AMBER,
+                        borderRadius: 3, cursor: busyId === r.asset_id ? 'wait' : 'pointer',
+                      }}
+                    >Archive</button>
+                    <button
+                      onClick={() => deleteAsset(r.asset_id, r.original_filename)}
+                      disabled={busyId === r.asset_id}
+                      title="Confirm as junk — soft-delete (reversible)"
+                      style={{
+                        flex: 1, padding: '4px 6px', fontSize: 10, fontWeight: 600,
+                        background: WHITE, color: RED, border: '1px solid ' + RED,
+                        borderRadius: 3, cursor: busyId === r.asset_id ? 'wait' : 'pointer',
+                      }}
+                    >Delete</button>
+                  </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
