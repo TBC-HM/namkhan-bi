@@ -266,10 +266,20 @@ export async function evaluateForBriefings(propertyId: number): Promise<Insight[
     targets: ratePlanTargets,
   };
 
+  // PBS 2026-07-17: page-scoped dynamic rules (fully evaluated live views).
+  // Runs in parallel with the existing three evaluators, appended to same output.
+  const dynamicPageInsights = await (async () => {
+    try {
+      const { evaluateDynamicPageRules } = await import('@/lib/rules/dynamicPageRules');
+      return await evaluateDynamicPageRules(propertyId);
+    } catch { return []; }
+  })();
+
   return [
     ...evaluateParityRules(parityCtx),
     ...runRatePlanRules(ratePlanCtx),
     ...evaluateRevenueRules(revenueCtx),
+    ...dynamicPageInsights,
   ];
 }
 
