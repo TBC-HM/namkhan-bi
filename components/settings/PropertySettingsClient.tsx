@@ -94,8 +94,21 @@ const TABS: { key: Tab; label: string; subtitle: string }[] = [
   { key: 'team',           label: 'Team',           subtitle: 'Featured for AI mention' },
 ];
 
+// PBS 2026-07-18 v3 · sidebar reorg — 5 collapsible groups (Donna-scale).
+const GROUPS: { key: string; label: string; keys: Tab[] }[] = [
+  { key: 'property',    label: 'Property',              keys: ['identity','owner','location','brand','reality','policies','licenses','certifications','contacts','social','team'] },
+  { key: 'accom',       label: 'Accommodation',         keys: ['rooms'] },
+  { key: 'facilities',  label: 'Facilities & Outlets',  keys: ['facilities','jungle_spa','fnb','meeting_spaces'] },
+  { key: 'experiences', label: 'Experiences',           keys: ['activities','retreats','imekong','transport'] },
+  { key: 'calendar',    label: 'Calendar',              keys: ['seasons'] },
+];
+
 export default function PropertySettingsClient({ data, propertyId }: { data: any; propertyId: number }) {
   const [active, setActive] = useState<Tab>('identity');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleGroup = (k: string) => setCollapsed(prev => {
+    const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n;
+  });
 
   const total = useMemo(() => fillScoreAll(data), [data]);
   const pctComplete = total.tracked > 0 ? Math.round(((total.tracked - total.missing) / total.tracked) * 100) : 100;
@@ -163,65 +176,78 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
             </div>
           </div>
 
-          {TABS.map((tab) => {
-            const isActive = active === tab.key;
-            const missing = perTile[tab.key]?.missing ?? 0;
+          {GROUPS.map((group) => {
+            const isCollapsed = collapsed.has(group.key);
+            const groupTabs = group.keys.map(k => TABS.find(t => t.key === k)!).filter(Boolean);
+            const groupMissing = groupTabs.reduce((s, t) => s + (perTile[t.key]?.missing ?? 0), 0);
+            const containsActive = groupTabs.some(t => t.key === active);
             return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActive(tab.key)}
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '10px 12px',
-                  border: `1px solid ${isActive ? '#1F3A2E' : '#E6DFCC'}`,
-                  background: isActive ? '#1F3A2E' : '#FFFFFF',
-                  color: isActive ? '#FFFFFF' : '#1B1B1B',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  transition: 'background 120ms',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{tab.label}</span>
-                  {missing > 0 && (
-                    <span
-                      title={`${missing} fields still empty`}
-                      style={{
-                        fontSize: 11,
-                        padding: '1px 8px',
-                        borderRadius: 99,
-                        background: isActive ? 'rgba(255,255,255,0.2)' : '#FBEFD9',
-                        color: isActive ? '#FFFFFF' : '#B87F26',
-                        fontVariantNumeric: 'tabular-nums',
-                        fontWeight: 600,
-                      }}
-                    >
-                      ⚠ {missing}
+              <div key={group.key} style={{ marginTop: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.key)}
+                  style={{
+                    width: '100%', textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: containsActive ? '#1F3A2E' : '#5A5A5A',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+                    fontWeight: 700,
+                  }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 9, opacity: 0.65 }}>{isCollapsed ? '▸' : '▾'}</span>
+                    {group.label}
+                  </span>
+                  {groupMissing > 0 && (
+                    <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: '#FBEFD9', color: '#B87F26', fontVariantNumeric: 'tabular-nums', fontWeight: 700, letterSpacing: 0, textTransform: 'none' }}>
+                      ⚠ {groupMissing}
                     </span>
                   )}
-                  {missing === 0 && perTile[tab.key]?.tracked > 0 && (
-                    <span
-                      title="all fields filled"
+                </button>
+                {!isCollapsed && groupTabs.map((tab) => {
+                  const isActive = active === tab.key;
+                  const missing = perTile[tab.key]?.missing ?? 0;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setActive(tab.key)}
                       style={{
-                        fontSize: 11,
-                        padding: '1px 8px',
-                        borderRadius: 99,
-                        background: isActive ? 'rgba(255,255,255,0.2)' : '#EBF1EE',
-                        color: isActive ? '#FFFFFF' : '#1F5C2C',
-                        fontWeight: 600,
+                        width: '100%', textAlign: 'left',
+                        padding: '8px 10px 8px 22px',
+                        marginTop: 2,
+                        border: `1px solid ${isActive ? '#1F3A2E' : '#E6DFCC'}`,
+                        background: isActive ? '#1F3A2E' : '#FFFFFF',
+                        color: isActive ? '#FFFFFF' : '#1B1B1B',
+                        borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+                        transition: 'background 120ms',
                       }}
                     >
-                      ✓
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 11, color: isActive ? 'rgba(255,255,255,0.75)' : '#5A5A5A', marginTop: 2 }}>
-                  {tab.subtitle}
-                </div>
-              </button>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>{tab.label}</span>
+                        {missing > 0 && (
+                          <span title={`${missing} fields still empty`} style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, background: isActive ? 'rgba(255,255,255,0.2)' : '#FBEFD9', color: isActive ? '#FFFFFF' : '#B87F26', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                            ⚠ {missing}
+                          </span>
+                        )}
+                        {missing === 0 && perTile[tab.key]?.tracked > 0 && (
+                          <span title="all fields filled" style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, background: isActive ? 'rgba(255,255,255,0.2)' : '#EBF1EE', color: isActive ? '#FFFFFF' : '#1F5C2C', fontWeight: 600 }}>
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 10, color: isActive ? 'rgba(255,255,255,0.75)' : '#5A5A5A', marginTop: 1 }}>
+                        {tab.subtitle}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
