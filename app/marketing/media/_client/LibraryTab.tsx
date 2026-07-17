@@ -345,25 +345,42 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       {/* PBS 2026-07-17 · SCOPE 1 · tiles bound to v_media_library_counts.
           Fallback to legacy byTier totals only when libCounts is not yet loaded
           (keeps first-render smooth; correct numbers land within one tick). */}
+      {/* PBS 2026-07-17 · tiles are now clickable filters. Redundant tier chip
+          row below removed. Clicking a tile toggles the matching tier filter;
+          the "Total ready" tile clears all tier filters. */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
-        {[
-          // PBS 2026-07-17 · OTA + Website merged (same quality bar); Internal
-          // dropped (empty after re-tier). "To clarify" is the single-source
-          // libCounts.to_clarify — same number the Library ClarifyTab uses.
-          { label: 'Pics',           value: libCounts?.pics_ready   ?? totals.tot },
-          { label: 'Videos',         value: libCounts?.videos_total ?? 0 },
-          { label: 'Total ready',    value: libCounts?.pics_ready   ?? totals.tot },
-          { label: 'With tier',      value: libCounts?.with_tier    ?? totals.tot },
-          { label: 'With area',      value: libCounts?.with_area    ?? 0 },
-          { label: 'To clarify',     value: libCounts?.to_clarify   ?? 0 },
-          { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero) },
-          { label: 'Social',         value: libCounts?.social       ?? totals.social },
-        ].map((t, i) => (
-          <div key={i} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'12px 14px' }}>
-            <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:4 }}>{t.label}</div>
-            <div style={{ fontSize:22, fontWeight:700, color:INK }}>{(t.value ?? 0).toLocaleString()}</div>
-          </div>
-        ))}
+        {([
+          { label: 'Pics',           value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null   },
+          { label: 'Videos',         value: libCounts?.videos_total ?? 0,                                                          filterTier: null   },
+          { label: 'Total ready',    value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: ''     },
+          { label: 'With tier',      value: libCounts?.with_tier    ?? totals.tot,                                                filterTier: null   },
+          { label: 'With area',      value: libCounts?.with_area    ?? 0,                                                          filterTier: null   },
+          { label: 'To clarify',     value: libCounts?.to_clarify   ?? 0,                                                          filterTier: null   },
+          { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero),                  filterTier: 'tier_ota_profile' },
+          { label: 'Social',         value: libCounts?.social       ?? totals.social,                                             filterTier: 'tier_social_pool' },
+        ] as Array<{ label: string; value: number | undefined; filterTier: string | null }>).map((t, i) => {
+          const isActive    = t.filterTier !== null && tier === t.filterTier;
+          const isClickable = t.filterTier !== null;
+          return (
+            <button
+              key={i}
+              onClick={isClickable ? () => { setTier(t.filterTier as string); setPage(0); } : undefined}
+              disabled={!isClickable}
+              style={{
+                textAlign:'left', padding:'12px 14px', borderRadius:6,
+                background: isActive ? FOREST : WHITE,
+                border:'1px solid ' + (isActive ? FOREST : HAIR),
+                color: isActive ? WHITE : INK,
+                cursor: isClickable ? 'pointer' : 'default',
+                fontFamily:'inherit',
+              }}
+              title={isClickable ? 'Click to filter · click Total ready to clear' : undefined}
+            >
+              <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color: isActive ? WHITE : INK_M, marginBottom:4, opacity: isActive ? 0.85 : 1 }}>{t.label}</div>
+              <div style={{ fontSize:22, fontWeight:700, color: isActive ? WHITE : INK }}>{(t.value ?? 0).toLocaleString()}</div>
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:12 }}>
@@ -408,17 +425,9 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
             }}>{f.label}</button>
           );
         })}
-        {TIER_CHIPS.map(c => {
-            const active = tier === c.key;
-            return (
-              <button key={c.key || 'all'} onClick={() => { setTier(c.key); setPage(0); }} style={{
-                padding:'6px 12px', fontSize:11, fontWeight:600, borderRadius:4,
-                border:'1px solid ' + (active ? FOREST : HAIR),
-                background: active ? FOREST : WHITE,
-                color: active ? WHITE : INK, cursor:'pointer',
-              }}>{c.label}</button>
-            );
-          })}
+        {/* PBS 2026-07-17 · tier chips retired — the tiles above are now
+            clickable and are the single-source tier filter. The dead
+            "Internal" chip that showed 0-hits after re-tier is gone too. */}
         </div>
         <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
           <span style={{ fontSize:11, color:INK_M }}>{filtered.length.toLocaleString()} tagged photos shown</span>
