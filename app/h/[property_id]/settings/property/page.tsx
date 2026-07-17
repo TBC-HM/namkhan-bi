@@ -22,6 +22,7 @@ async function getPropertyData(propertyId: number) {
     identity, location, brand, brandReality, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
     team, owner, roomUnits, transport, boats, boatCruises, meetingSpaces,
+    retreats,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
@@ -52,6 +53,9 @@ async function getPropertyData(propertyId: number) {
     supabase.schema('property').from('boats').select('*').eq('property_id', propertyId).order('name'),
     supabase.schema('property').from('boat_cruises').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.schema('property').from('facilities').select('*').eq('property_id', propertyId).eq('is_meeting_space', true).order('name'),
+    // PBS 2026-07-18 · retreats via public.v_property_retreats (bridge over
+    // content.retreat_programs + retreat_pricing). 3 programs · 2 tiers each.
+    supabase.from('v_property_retreats').select('*').eq('property_id', propertyId).eq('is_active', true).order('retreat_id'),
   ]);
 
   return {
@@ -74,6 +78,7 @@ async function getPropertyData(propertyId: number) {
     boats: boats.data ?? [],
     boatCruises: boatCruises.data ?? [],
     meetingSpaces: meetingSpaces.data ?? [],
+    retreats: retreats.data ?? [],
   };
 }
 
@@ -99,8 +104,11 @@ export default async function PropertySettingsPage({
       title={`Settings · ${data.identity?.trading_name ?? 'Property'}`}
       subtitle={subtitleParts}
       tabs={[
-        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
+        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`,   active: true },
+        { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
+        { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
+        { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
       ]}
     >
       <div style={fullRow}>

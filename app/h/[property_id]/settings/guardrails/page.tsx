@@ -111,7 +111,10 @@ export default async function PropertyGuardrailsPage({
         title="Settings · Guardrails"
         tabs={[
           { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
-          { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
+          { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
+          { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails`, active: true },
+          { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
+          { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
         ]}
       >
         <div style={{ gridColumn: '1 / -1' }}>
