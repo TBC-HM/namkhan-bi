@@ -345,26 +345,28 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       {/* PBS 2026-07-17 · SCOPE 1 · tiles bound to v_media_library_counts.
           Fallback to legacy byTier totals only when libCounts is not yet loaded
           (keeps first-render smooth; correct numbers land within one tick). */}
-      {/* PBS 2026-07-17 · tiles are now clickable filters. Redundant tier chip
-          row below removed. Clicking a tile toggles the matching tier filter;
-          the "Total ready" tile clears all tier filters. */}
+      {/* PBS 2026-07-17 · clickable tiles ARE the tier filter. All tiers live
+          here (OTA/Website · Social · Archive · Logos). Click active tile again
+          to clear — no more hunting for a "Clear" button. */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
         {([
           { label: 'Pics',           value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null   },
           { label: 'Videos',         value: libCounts?.videos_total ?? 0,                                                          filterTier: null   },
-          { label: 'Total ready',    value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: ''     },
+          { label: 'Total ready',    value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null   },
           { label: 'With tier',      value: libCounts?.with_tier    ?? totals.tot,                                                filterTier: null   },
           { label: 'With area',      value: libCounts?.with_area    ?? 0,                                                          filterTier: null   },
           { label: 'To clarify',     value: libCounts?.to_clarify   ?? 0,                                                          filterTier: null   },
           { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero),                  filterTier: 'tier_ota_profile' },
           { label: 'Social',         value: libCounts?.social       ?? totals.social,                                             filterTier: 'tier_social_pool' },
+          { label: 'Archive',        value: n(byTier.find(r => r.primary_tier === 'tier_archive')?.total),                        filterTier: 'tier_archive' },
+          { label: 'Logos',          value: n(byTier.find(r => r.primary_tier === 'tier_logos')?.total),                          filterTier: 'tier_logos' },
         ] as Array<{ label: string; value: number | undefined; filterTier: string | null }>).map((t, i) => {
           const isActive    = t.filterTier !== null && tier === t.filterTier;
           const isClickable = t.filterTier !== null;
           return (
             <button
               key={i}
-              onClick={isClickable ? () => { setTier(t.filterTier as string); setPage(0); } : undefined}
+              onClick={isClickable ? () => { setTier(isActive ? '' : (t.filterTier as string)); setPage(0); } : undefined}
               disabled={!isClickable}
               style={{
                 textAlign:'left', padding:'12px 14px', borderRadius:6,
@@ -374,7 +376,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
                 cursor: isClickable ? 'pointer' : 'default',
                 fontFamily:'inherit',
               }}
-              title={isClickable ? 'Click to filter · click Total ready to clear' : undefined}
+              title={isClickable ? (isActive ? 'Click again to clear filter' : 'Click to filter to this tier') : undefined}
             >
               <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color: isActive ? WHITE : INK_M, marginBottom:4, opacity: isActive ? 0.85 : 1 }}>{t.label}</div>
               <div style={{ fontSize:22, fontWeight:700, color: isActive ? WHITE : INK }}>{(t.value ?? 0).toLocaleString()}</div>
