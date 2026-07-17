@@ -194,13 +194,18 @@ export default function ReviewTab({ rows }: Props) {
                 }}
               >
                 <div style={{ position: 'relative' }}>
-                  {r.public_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.public_url} alt={r.original_filename ?? ''} loading="lazy"
-                      style={{ width: '100%', aspectRatio: '16/9', minHeight: 160, objectFit: 'cover', background: '#F5F0E1', display: 'block' }} />
-                  ) : (
-                    <div style={{ width: '100%', aspectRatio: '16/9', minHeight: 160, background: '#F5F0E1', color: INK_M, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>no preview</div>
-                  )}
+                  {/* PBS 2026-07-17 · route ingested-status previews through
+                      /preview-any (reads media.media_assets directly, bypasses
+                      the ready-only filter on v_marketing_media_page). Ready
+                      rows still get public_url from mediaPage join. */}
+                  {(() => {
+                    const src = r.public_url || ('/api/marketing/media/preview-any?asset_id=' + r.asset_id);
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={src} alt={r.original_filename ?? ''} loading="lazy"
+                        style={{ width: '100%', aspectRatio: '16/9', minHeight: 160, objectFit: 'cover', background: '#F5F0E1', display: 'block' }} />
+                    );
+                  })()}
                   <div
                     style={{
                       position: 'absolute', left: 4, bottom: 4,
@@ -253,10 +258,13 @@ export default function ReviewTab({ rows }: Props) {
               <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: INK_M, lineHeight: 1 }}>x</button>
             </div>
 
-            {selected.public_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={selected.public_url} alt={selected.original_filename ?? ''} style={{ width: '100%', maxHeight: 320, objectFit: 'contain', background: '#F5F0E1', borderRadius: 4 }} />
-            )}
+            {(() => {
+              const src = selected.public_url || ('/api/marketing/media/preview-any?asset_id=' + selected.asset_id);
+              return (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={src} alt={selected.original_filename ?? ''} style={{ width: '100%', maxHeight: 320, objectFit: 'contain', background: '#F5F0E1', borderRadius: 4 }} />
+              );
+            })()}
 
             <div style={{ background: CREAM, border: '1px solid ' + HAIR, borderRadius: 4, padding: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
               <FieldRow label="Reason"        value={selected.review_reason ?? '—'} strong />
