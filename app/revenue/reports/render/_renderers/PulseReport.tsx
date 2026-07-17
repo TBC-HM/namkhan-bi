@@ -132,7 +132,8 @@ export default async function PulseReport({ period, propertyId }: Props) {
     `Fwd 30d OTB ${otbRooms30}RN / ${fmt$(otbRev30)}${soldOutDays.length ? ` · ${soldOutDays.length} sold-out` : ''}${lowOccDays.length ? ` · ${lowOccDays.length} low-occ` : ''}`;
 
   const mainTiles: KpiTileProps[] = [
-    { label: 'Occupancy', value: `${main.occ.toFixed(1)}%`,   size: 'sm', delta: cmpActive ? { value: dOcc.value,    period: `vs ${cmpLabelShort}`, direction: dOcc.direction,    isGoodWhenUp: true } : undefined, footnote: `${main.sold}/${main.avail} RN` },
+    // PBS 2026-07-17 principle: OCC → 2 decimals everywhere.
+    { label: 'Occupancy', value: `${main.occ.toFixed(2)}%`,   size: 'sm', delta: cmpActive ? { value: dOcc.value,    period: `vs ${cmpLabelShort}`, direction: dOcc.direction,    isGoodWhenUp: true } : undefined, footnote: `${main.sold}/${main.avail} RN` },
     { label: 'ADR',       value: Math.round(main.adr),    currency: 'USD', size: 'sm', delta: cmpActive ? { value: dAdr.value,    period: `vs ${cmpLabelShort}`, direction: dAdr.direction,    isGoodWhenUp: true } : undefined, footnote: cmpActive ? `${cmpLabelShort} ${fmt$(cmp.adr)}` : undefined },
     { label: 'RevPAR',    value: Math.round(main.revpar), currency: 'USD', size: 'sm', delta: cmpActive ? { value: dRevpar.value, period: `vs ${cmpLabelShort}`, direction: dRevpar.direction, isGoodWhenUp: true } : undefined, footnote: cmpActive ? `${cmpLabelShort} ${fmt$(cmp.revpar)}` : undefined },
     { label: 'Rooms rev', value: Math.round(main.rev),    currency: 'USD', size: 'sm', delta: cmpActive ? { value: dRooms.value,  period: `vs ${cmpLabelShort}`, direction: dRooms.direction,  isGoodWhenUp: true } : undefined, footnote: cmpActive ? `${cmpLabelShort} ${fmt$(cmp.rev)}` : undefined },
@@ -148,7 +149,7 @@ export default async function PulseReport({ period, propertyId }: Props) {
   const fwdTiles: KpiTileProps[] = [
     { label: 'Rooms OTB',   value: otbRooms30, size: 'sm', footnote: `${otbPace.length}d` },
     { label: 'Revenue OTB', value: Math.round(otbRev30), currency: 'USD', size: 'sm' },
-    { label: 'Occ %',       value: `${otbOcc30.toFixed(0)}%`, size: 'sm', footnote: cap30 > 0 ? `${otbRooms30}/${cap30}` : undefined },
+    { label: 'Occ %',       value: `${otbOcc30.toFixed(2)}%`, size: 'sm', footnote: cap30 > 0 ? `${otbRooms30}/${cap30}` : undefined },
     { label: 'Sold-out days', value: soldOutDays.length, size: 'sm', status: soldOutDays.length > 0 ? 'green' : undefined, footnote: soldOutDays.slice(0, 3).map(d => d.night_date.slice(5)).join('·') || 'none' },
     { label: 'Low-occ days', value: lowOccDays.length, size: 'sm', status: lowOccDays.length >= 5 ? 'red' : lowOccDays.length > 0 ? 'amber' : 'green', footnote: '<25% booked' },
   ];
