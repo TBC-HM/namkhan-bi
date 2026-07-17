@@ -24,7 +24,13 @@ type LicenseRow = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  attached_doc_id: string | null;
+  attached_doc_title: string | null;
+  attached_doc_url: string | null;
+  attached_doc_filename: string | null;
 };
+
+type DocOption = { doc_id: string; title: string | null; doc_type: string | null; file_name: string | null; public_url: string | null };
 
 interface Draft {
   id: number | null;
@@ -35,6 +41,7 @@ interface Draft {
   valid_to: string;
   document_url: string;
   notes: string;
+  attached_doc_id: string;
 }
 
 // Canonical dropdown — mirrors the comment inside fn_license_upsert.
@@ -64,18 +71,20 @@ const EMPTY: Draft = {
   valid_to: '',
   document_url: '',
   notes: '',
+  attached_doc_id: '',
 };
 
 function toDraft(r: LicenseRow): Draft {
   return {
-    id:             r.id,
-    license_type:   r.license_type ?? LICENSE_TYPES[0],
-    license_number: r.license_number ?? '',
-    issuer:         r.issuer ?? '',
-    valid_from:     r.valid_from ?? '',
-    valid_to:       r.valid_to ?? '',
-    document_url:   r.document_url ?? '',
-    notes:          r.notes ?? '',
+    id:              r.id,
+    license_type:    r.license_type ?? LICENSE_TYPES[0],
+    license_number:  r.license_number ?? '',
+    issuer:          r.issuer ?? '',
+    valid_from:      r.valid_from ?? '',
+    valid_to:        r.valid_to ?? '',
+    document_url:    r.document_url ?? '',
+    notes:           r.notes ?? '',
+    attached_doc_id: r.attached_doc_id ?? '',
   };
 }
 
@@ -105,6 +114,7 @@ function sortRows(rows: LicenseRow[]): LicenseRow[] {
 
 export default function LicensesPanel({ propertyId }: { propertyId: number }) {
   const [rows, setRows] = useState<LicenseRow[]>([]);
+  const [docOptions, setDocOptions] = useState<DocOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, startTransition] = useTransition();
@@ -113,12 +123,17 @@ export default function LicensesPanel({ propertyId }: { propertyId: number }) {
 
   async function load() {
     setLoading(true);
-    const { data, error: e } = await supabase
-      .from('v_property_licenses')
-      .select('*')
-      .eq('property_id', propertyId);
+    const [{ data, error: e }, docsRes] = await Promise.all([
+      supabase.from('v_property_licenses').select('*').eq('property_id', propertyId),
+      supabase.from('v_documents_registry')
+        .select('doc_id, title, doc_type, file_name, public_url')
+        .eq('property_id', propertyId)
+        .in('doc_type', ['legal', 'insurance', 'compliance', 'certification', 'permit'])
+        .order('title', { ascending: true }),
+    ]);
     if (e) { setError(e.message); setRows([]); }
     else   { setRows(sortRows((data ?? []) as LicenseRow[])); setError(null); }
+    setDocOptions((docsRes.data ?? []) as DocOption[]);
     setLoading(false);
   }
 
@@ -139,6 +154,7 @@ export default function LicensesPanel({ propertyId }: { propertyId: number }) {
         p_valid_to:       draft.valid_to || null,
         p_document_url:   draft.document_url.trim() || null,
         p_notes:          draft.notes.trim() || null,
+        p_attached_doc_id: draft.attached_doc_id || null,
       });
       if (e) { setError(e.message); return; }
       setDraft(null);
@@ -185,6 +201,7 @@ export default function LicensesPanel({ propertyId }: { propertyId: number }) {
       {draft && (
         <LicenseForm
           draft={draft}
+          docOptions={docOptions}
           onChange={setDraft}
           onSave={save}
           onCancel={() => { setDraft(null); setError(null); }}
@@ -226,6 +243,17 @@ export default function LicensesPanel({ propertyId }: { propertyId: number }) {
                         document ↗
                       </a>
                     )}
+                    {r.attached_doc_id && (
+                      <a
+                        href={r.attached_doc_url ?? `/documents/${r.attached_doc_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#1F3A2E', fontWeight: 600 }}
+                        title={r.attached_doc_filename ?? undefined}
+                      >
+                        📎 {r.attached_doc_title ?? 'registry doc'} ↗
+                      </a>
+                    )}
                   </div>
                   {r.notes && <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 3, fontStyle: 'italic' }}>{r.notes}</div>}
                 </div>
@@ -249,8 +277,8 @@ export default function LicensesPanel({ propertyId }: { propertyId: number }) {
   );
 }
 
-function LicenseForm({ draft, onChange, onSave, onCancel, busy }: {
-  draft: Draft; onChange: (d: Draft) => void; onSave: () => void; onCancel: () => void; busy: boolean;
+function LicenseForm({ draft, docOptions, onChange, onSave, onCancel, busy }: {
+  draft: Draft; docOptions: DocOption[]; onChange: (d: Draft) => void; onSave: () => void; onCancel: () => void; busy: boolean;
 }) {
   const setF = <K extends keyof Draft>(k: K, v: Draft[K]) => onChange({ ...draft, [k]: v });
   return (
@@ -278,6 +306,19 @@ function LicenseForm({ draft, onChange, onSave, onCancel, busy }: {
         </F>
         <F label="Document URL">
           <input type="url" value={draft.document_url} onChange={(e) => setF('document_url', e.target.value)} placeholder="https://…" style={input} />
+        </F>
+        <F label="Attach registry document" span={3}>
+          <select value={draft.attached_doc_id} onChange={(e) => setF('attached_doc_id', e.target.value)} style={input}>
+            <option value="">— none —</option>
+            {docOptions.map((d) => (
+              <option key={d.doc_id} value={d.doc_id}>
+                {d.title ?? d.file_name ?? d.doc_id}{d.doc_type ? ` [${d.doc_type}]` : ''}
+              </option>
+            ))}
+          </select>
+          <div style={{ fontSize: 10, color: '#5A5A5A', marginTop: 4 }}>
+            {docOptions.length} document{docOptions.length===1?'':'s'} in the registry (legal · insurance · compliance · certification · permit)
+          </div>
         </F>
         <F label="Notes" span={3}>
           <input type="text" value={draft.notes} onChange={(e) => setF('notes', e.target.value)} style={input} />
