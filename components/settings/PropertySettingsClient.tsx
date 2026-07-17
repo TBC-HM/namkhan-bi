@@ -1,16 +1,5 @@
 // components/settings/PropertySettingsClient.tsx
-// PBS 2026-07-03: paper-white + hairline redesign.
-// PBS 2026-07-13: added "Media QA" tab.
-// PBS 2026-07-15 (Item 6): added "Licenses" tab.
-// PBS 2026-07-15 (Send Logs): added "Send Logs" tab at the end.
-// PBS 2026-07-18: refinement pass —
-//   · Top KPI tile (fillScoreAll) shows "X of Y fields still empty"
-//   · Per-tile badge swapped from row count to "⚠ N missing"
-//   · Send Logs removed (moved to /h/[pid]/settings/send-logs sibling tab)
-//   · Media QA removed (moved to Media area · Photo Settings sub-tab)
-//   · NEW Jungle Spa tab — mini-hub filtering spa facilities out of the Facilities tab
-//   · NEW Retreats tab (awaits property.retreats DDL; renders coming-soon banner meanwhile)
-
+// PBS 2026-07-18 v2 · category-driven filters + real Jungle Spa/F&B mini-hubs.
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -33,6 +22,7 @@ import TransportPanel from './panels/TransportPanel';
 import ImekongPanel from './panels/ImekongPanel';
 import MeetingSpacesPanel from './panels/MeetingSpacesPanel';
 import JungleSpaPanel from './panels/JungleSpaPanel';
+import FnbHubPanel from './panels/FnbHubPanel';
 import RetreatsPanel from './panels/RetreatsPanel';
 import { fillScore, fillScoreAll } from './fillScore';
 
@@ -41,16 +31,17 @@ type Tab =
   | 'rooms' | 'facilities' | 'jungle_spa' | 'fnb' | 'activities' | 'retreats' | 'seasons'
   | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces';
 
-// PBS 2026-07-18 · facility_ids extracted into their own dedicated tabs so
-// they don't show up in the generic Facilities list. Update these sets when
-// new spa rooms / F&B outlets are added in Settings > Facilities.
-export const SPA_FACILITY_IDS = new Set<number>([6, 118, 119, 120]);  // Jungle Spa + Treatment Rooms 1/2/3
-export const FNB_FACILITY_IDS = new Set<number>([1, 2]);              // Roots Restaurant + Pool Bar
-export const EXTRACTED_FACILITY_IDS = new Set<number>([
-  ...SPA_FACILITY_IDS, ...FNB_FACILITY_IDS,
-]);
+// Category-driven filters (case-insensitive). Any wellness/treatment_room row
+// lands in Jungle Spa; any dining/restaurant/bar row lands in F&B.
+const WELLNESS_CATS = new Set(['wellness', 'treatment_room']);
+const FNB_CATS = new Set(['dining', 'f&b', 'fnb', 'restaurant', 'bar', 'food']);
 
-// dataFor(tab, data) — returns the object/array used for both fillScore + panel render.
+export const isSpaFacility = (f: any): boolean =>
+  !!f?.category && WELLNESS_CATS.has(String(f.category).toLowerCase().trim());
+export const isFnbFacility = (f: any): boolean =>
+  !!f?.category && FNB_CATS.has(String(f.category).toLowerCase().trim());
+export const isExtractedFacility = (f: any): boolean => isSpaFacility(f) || isFnbFacility(f);
+
 function dataFor(tab: Tab, data: any): unknown {
   switch (tab) {
     case 'identity':       return data.identity;
@@ -60,9 +51,9 @@ function dataFor(tab: Tab, data: any): unknown {
     case 'reality':        return data.brandReality;
     case 'policies':       return data.policies;
     case 'rooms':          return data.rooms;
-    case 'facilities':     return (data.facilities ?? []).filter((f: any) => !EXTRACTED_FACILITY_IDS.has(f.facility_id));
-    case 'jungle_spa':     return (data.facilities ?? []).filter((f: any) => SPA_FACILITY_IDS.has(f.facility_id));
-    case 'fnb':            return (data.facilities ?? []).filter((f: any) => FNB_FACILITY_IDS.has(f.facility_id));
+    case 'facilities':     return (data.facilities ?? []).filter((f: any) => !isExtractedFacility(f));
+    case 'jungle_spa':     return (data.facilities ?? []).filter(isSpaFacility);
+    case 'fnb':            return (data.facilities ?? []).filter(isFnbFacility);
     case 'activities':     return data.activities;
     case 'retreats':       return data.retreats;
     case 'seasons':        return data.seasons;
@@ -73,13 +64,13 @@ function dataFor(tab: Tab, data: any): unknown {
     case 'transport':      return data.transport;
     case 'imekong':        return { boats: data.boats, cruises: data.boatCruises };
     case 'meeting_spaces': return data.meetingSpaces;
-    case 'licenses':       return [];  // fetched client-side inside LicensesPanel
+    case 'licenses':       return [];
     default:               return null;
   }
 }
 
 const TABS: { key: Tab; label: string; subtitle: string }[] = [
-  { key: 'identity',       label: 'Identity',       subtitle: 'Legal & licensing' },
+  { key: 'identity',       label: 'Identity',       subtitle: 'Legal · directors · licensing' },
   { key: 'owner',          label: 'Owner',          subtitle: 'Company · registration · bank' },
   { key: 'location',       label: 'Location',       subtitle: 'Address · GPS · climate' },
   { key: 'brand',          label: 'Brand',          subtitle: 'Logo · palette · copy' },
@@ -87,9 +78,9 @@ const TABS: { key: Tab; label: string; subtitle: string }[] = [
   { key: 'policies',       label: 'Policies',       subtitle: 'Bookings & terms' },
   { key: 'licenses',       label: 'Licenses',       subtitle: 'Regulatory · insurance · linked docs' },
   { key: 'rooms',          label: 'Rooms',          subtitle: 'Room type catalog' },
-  { key: 'facilities',     label: 'Facilities',     subtitle: 'Outdoors · wellness · non-F&B non-spa' },
+  { key: 'facilities',     label: 'Facilities',     subtitle: 'Outdoors · common · non-F&B non-spa' },
   { key: 'jungle_spa',     label: 'Jungle Spa',     subtitle: 'Facilities · experiences · treatments' },
-  { key: 'fnb',            label: 'F&B',            subtitle: 'Restaurant · Pool Bar' },
+  { key: 'fnb',            label: 'F&B',            subtitle: 'Facilities · menus · group menus · experiences' },
   { key: 'activities',     label: 'Activities',     subtitle: 'Wellness · culture · adventure' },
   { key: 'retreats',       label: 'Retreats',       subtitle: 'Multi-day packages · fixed departures' },
   { key: 'transport',      label: 'Transport',      subtitle: 'Shuttle · private car · boat' },
@@ -99,31 +90,25 @@ const TABS: { key: Tab; label: string; subtitle: string }[] = [
   { key: 'certifications', label: 'Certifications', subtitle: 'SLH · ASEAN Green · etc' },
   { key: 'contacts',       label: 'Contacts',       subtitle: 'Reservations · GM · owner' },
   { key: 'social',         label: 'Social',         subtitle: 'IG · FB · TripAdvisor' },
-  { key: 'team',           label: 'Team',           subtitle: 'GM & department heads' },
+  { key: 'team',           label: 'Team',           subtitle: 'Featured for AI mention' },
 ];
 
 export default function PropertySettingsClient({ data, propertyId }: { data: any; propertyId: number }) {
   const [active, setActive] = useState<Tab>('identity');
 
-  // KPI: total missing across every panel that has counted data.
   const total = useMemo(() => fillScoreAll(data), [data]);
   const pctComplete = total.tracked > 0 ? Math.round(((total.tracked - total.missing) / total.tracked) * 100) : 100;
 
-  // Per-tile missing counts (memoised across all tabs).
   const perTile = useMemo(() => {
     const out: Record<Tab, { missing: number; tracked: number }> = {} as any;
     for (const tab of TABS) out[tab.key] = fillScore(dataFor(tab.key, data));
     return out;
   }, [data]);
 
-  const spaFacilities = useMemo(
-    () => (data.facilities ?? []).filter((f: any) => SPA_FACILITY_IDS.has(f.facility_id)),
-    [data.facilities],
-  );
-  const fnbFacilities = useMemo(
-    () => (data.facilities ?? []).filter((f: any) => FNB_FACILITY_IDS.has(f.facility_id)),
-    [data.facilities],
-  );
+  const allFacilities = data.facilities ?? [];
+  const spaFacilities = useMemo(() => allFacilities.filter(isSpaFacility), [allFacilities]);
+  const fnbFacilities = useMemo(() => allFacilities.filter(isFnbFacility), [allFacilities]);
+  const generalFacilities = useMemo(() => allFacilities.filter((f: any) => !isExtractedFacility(f)), [allFacilities]);
 
   return (
     <div className="settings-paper-scope" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
@@ -144,9 +129,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
         .settings-paper-scope button,
         .settings-paper-scope input,
         .settings-paper-scope select,
-        .settings-paper-scope textarea {
-          color: #1B1B1B;
-        }
+        .settings-paper-scope textarea { color: #1B1B1B; }
         .settings-paper-scope input[type="text"],
         .settings-paper-scope input[type="number"],
         .settings-paper-scope input[type="email"],
@@ -159,7 +142,6 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
       `}</style>
       <aside>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'sticky', top: 12 }}>
-          {/* PBS 2026-07-18 · KPI tile at top of the sidebar */}
           <div style={{
             padding: '12px 12px',
             border: '1px solid #E6DFCC',
@@ -235,13 +217,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
                     </span>
                   )}
                 </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: isActive ? 'rgba(255,255,255,0.75)' : '#5A5A5A',
-                    marginTop: 2,
-                  }}
-                >
+                <div style={{ fontSize: 11, color: isActive ? 'rgba(255,255,255,0.75)' : '#5A5A5A', marginTop: 2 }}>
                   {tab.subtitle}
                 </div>
               </button>
@@ -251,14 +227,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
       </aside>
 
       <main>
-        <div
-          style={{
-            background: '#FFFFFF',
-            border: '1px solid #E6DFCC',
-            borderRadius: 6,
-            minHeight: 400,
-          }}
-        >
+        <div style={{ background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6, minHeight: 400 }}>
           {active === 'identity'       && <IdentityPanel       data={data.identity}       propertyId={propertyId} />}
           {active === 'owner'          && <OwnerPanel          data={data.owner}          propertyId={propertyId} />}
           {active === 'location'       && <LocationPanel       data={data.location}       propertyId={propertyId} />}
@@ -267,9 +236,9 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'policies'       && <PoliciesPanel       data={data.policies}       propertyId={propertyId} />}
           {active === 'licenses'       && <LicensesPanel       propertyId={propertyId} />}
           {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} propertyId={propertyId} />}
-          {active === 'facilities'     && <FacilitiesPanel     data={(data.facilities ?? []).filter((f: any) => !EXTRACTED_FACILITY_IDS.has(f.facility_id))} propertyId={propertyId} />}
-          {active === 'jungle_spa'     && <JungleSpaPanel      facilities={spaFacilities} propertyId={propertyId} />}
-          {active === 'fnb'            && <FacilitiesPanel     data={fnbFacilities} propertyId={propertyId} />}
+          {active === 'facilities'     && <FacilitiesPanel     data={generalFacilities} propertyId={propertyId} />}
+          {active === 'jungle_spa'     && <JungleSpaPanel      facilities={spaFacilities} treatments={data.spaTreatments ?? []} retreats={data.retreats ?? []} propertyId={propertyId} />}
+          {active === 'fnb'            && <FnbHubPanel         facilities={fnbFacilities} menus={data.fnbMenus ?? []} activities={data.activities ?? []} propertyId={propertyId} />}
           {active === 'activities'     && <ActivitiesPanel     data={data.activities}     propertyId={propertyId} />}
           {active === 'retreats'       && <RetreatsPanel       retreats={data.retreats ?? []} propertyId={propertyId} />}
           {active === 'transport'      && <TransportPanel      data={data.transport ?? []}     propertyId={propertyId} />}
