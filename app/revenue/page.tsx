@@ -459,7 +459,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // populated dynamically by /api/cron/briefing-evaluate. Keeping context computation intact
   // so the same rule set can be re-mounted here in future if PBS wants an inline preview.
   void [...parityInsights, ...ratePlanInsights, ...evaluateRevenueRules(revenueCtx)];
-  void Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults';
+  void (Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults');
   // PBS 2026-07-15: softNightsNext30 declaration removed alongside the Soft-nights tile.
   // PBS 2026-07-15: real PACE metric — TY OTB next 30 nights vs LY actuals same 30 nights.
   // Feeds baseTiles PACE override (Option C: abs RN as headline value, % in footnote).
