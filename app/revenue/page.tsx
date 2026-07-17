@@ -27,7 +27,8 @@ import AttentionList from './_components/AttentionList';
 import RmMailPanel from './_components/RmMailPanel';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
-import ConclusionBlock from '@/app/_components/ConclusionBlock';
+// PBS 2026-07-17: ConclusionBlock removed — Daily Briefing moved to /revenue/briefing.
+// import ConclusionBlock from '@/app/_components/ConclusionBlock';
 import {
   evaluateRevenueRules,
   type RevenueContext, type RevenueTargets,
@@ -453,9 +454,12 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   };
   const ratePlanInsights = runRatePlanRules(ratePlanCtx);
 
-  const revenueInsights = [...parityInsights, ...ratePlanInsights, ...evaluateRevenueRules(revenueCtx)];
-
-  const activeTargets = Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults';
+  // PBS 2026-07-17: revenueInsights + activeTargets computed but not rendered here anymore.
+  // The Daily Briefing container was removed — insights now live on /revenue/briefing,
+  // populated dynamically by /api/cron/briefing-evaluate. Keeping context computation intact
+  // so the same rule set can be re-mounted here in future if PBS wants an inline preview.
+  void [...parityInsights, ...ratePlanInsights, ...evaluateRevenueRules(revenueCtx)];
+  void Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults';
   // PBS 2026-07-15: softNightsNext30 declaration removed alongside the Soft-nights tile.
   // PBS 2026-07-15: real PACE metric — TY OTB next 30 nights vs LY actuals same 30 nights.
   // Feeds baseTiles PACE override (Option C: abs RN as headline value, % in footnote).
@@ -663,36 +667,11 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       {/* PBS 2026-07-08 (final): scheduled reports table.
           Report options now include the 3 built-in scheduled reports (Daily/Weekly/Monthly)
           + every report type from the department config. Build a report container removed. */}
-      {/* Daily Briefing — rev-manager forward brief.
-          PBS 2026-07-08 (final): renamed from "Conclusions" and made expandable
-          via <details>. Default open. ConclusionBlock stays in `bare` mode. */}
-      {/* PBS 2026-07-08 final: `alignSelf:start` on the wrapper prevents the
-          auto-fit grid from stretching neighbour cells; internal max-height
-          + overflowY:auto keeps the box compact even with 20+ insights so nothing
-          overflows the parent grid track ("half-content-lost" bug). */}
-      <div style={{ ...fullRow, alignSelf: 'start' }}>
-        <details open style={{ background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6, width: '100%' }}>
-          <summary style={{
-            cursor: 'pointer', padding: '10px 14px', borderBottom: '1px solid #E6DFCC',
-            display: 'flex', flexDirection: 'column', gap: 2, background: '#FAFAF7',
-          }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#1B1B1B' }}>Daily Briefing</span>
-            <span style={{ fontSize: 11, color: '#5A5A5A' }}>
-              14/30/60/90d windows · countries · rate plans · LOS · {paceNext90.length} nights forward · {totalPickupL14} bookings L14 · {topCountriesL14.length} source markets · targets: {activeTargets}
-            </span>
-          </summary>
-          <div style={{ padding: 12, maxHeight: '70vh', overflowY: 'auto' }}>
-            <ConclusionBlock
-              bare
-              groupByPriority
-              insights={revenueInsights}
-              emptyText="Everything nominal. No forward-window alarms firing."
-              storageKey={`revenue_hod_signals:${pid}`}
-              maxRender={30}
-            />
-          </div>
-        </details>
-      </div>
+      {/* PBS 2026-07-17: Daily Briefing container removed from HoD.
+          The /revenue/briefing page is now the single source for guardrail
+          firings — populated dynamically by /api/cron/briefing-evaluate
+          (daily @ 06:00 Vientiane + manual Refresh button on the briefing page).
+          No duplicate rendering of the same rule set on two surfaces. */}
 
       <div style={fullRow}>
         <BookingActivity propertyId={pid} searchParams={searchParams} />
