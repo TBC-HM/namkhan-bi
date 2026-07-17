@@ -11,6 +11,10 @@
 //   Settings-taxonomy list (rooms/facilities/activities/etc) surfaced fine-grained
 //   entries that yield 0 photos because tagging uses coarse values like
 //   pool/restaurant/rooms/grounds/lifestyle. Taxonomy stays for AssetEditDrawer.
+// PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 4/6 — Destination
+//   optgroup fed by threaded areaTaxonomy prop (Luang Prabang / Laos / People /
+//   Ban Done Keo Village) + relabelled Uncategorized + compact orphan/tiff admin
+//   panel below the grid (fed by /api/marketing/media/ingest-problems).
 'use client';
 
 import { useEffect, useMemo, useState, Fragment } from 'react';
@@ -43,6 +47,23 @@ function displayName(r: MediaRow): string {
 }
 interface ChannelSpec { channel: string; display_name: string; min_quality_score?: number | null; image_min_width?: number | null; image_min_height?: number | null; }
 
+export interface LibraryAreaTaxonomyRow {
+  property_id: number;
+  kind: string;
+  sort_order: number;
+  ref_id: string | null;
+  area_key: string;
+  name: string;
+  extra: string | null;
+  photo_count: number | null;
+}
+export interface LibraryCountsProp {
+  property_id: number;
+  pics_ready: number; videos_total: number; with_tier: number; with_area: number;
+  to_clarify: number; destination: number; review_junk: number;
+  website: number; ota: number; social: number; internal: number;
+}
+
 interface Props {
   propertyId: number;
   byTier: TierRow[];
@@ -52,6 +73,8 @@ interface Props {
   areaOptions?: string[];
   rooms?: Array<{ room_type_id: number; room_type_name: string }>;
   taxonomy?: DrawerTaxonomy;
+  areaTaxonomy?: LibraryAreaTaxonomyRow[];
+  libraryCounts?: LibraryCountsProp | null;
 }
 
 const WHITE  = '#FFFFFF';
@@ -80,7 +103,7 @@ const TIER_CHIPS: Array<{ key: string; label: string }> = [
 
 function n(v: any): number { return Number(v ?? 0); }
 
-export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [], taxonomy }: Props) {
+export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [], taxonomy, areaTaxonomy = [], libraryCounts: libraryCountsProp = null }: Props) {
   const [tier, setTier] = useState<string>('');
   const [page, setPage] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
@@ -122,7 +145,19 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     to_clarify: number; destination: number; review_junk: number;
     website: number; ota: number; social: number; internal: number;
   }
-  const [libCounts, setLibCounts] = useState<LibraryCounts | null>(null);
+  // PBS 2026-07-17 · Scope 1 seed — start from server-loaded row if page.tsx
+  // already fetched v_media_library_counts (avoids first-tick tile flash).
+  const [libCounts, setLibCounts] = useState<LibraryCounts | null>(libraryCountsProp);
+
+  // Scope 6 · ingest problems (orphan raw paths + tiff/heic mime) — served by
+  // /api/marketing/media/ingest-problems (public.v_media_ingest_status only).
+  interface IngestProblem {
+    queue_id: number; status: string; storage_path: string | null; detected_mime: string | null;
+    size_mb: number | null; retries: number; last_attempt_at: string | null; asset_id: string | null;
+    problem: string;
+  }
+  const [problems, setProblems] = useState<IngestProblem[]>([]);
+  const [problemsOpen, setProblemsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,7 +170,8 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         if (j?.groups) setFacetGroups(j.groups as FacetGroups);
       } catch { /* silent — fallback to static options */ }
     })();
-    // Fetch canonical library counts (SCOPE 1).
+    // Fetch canonical library counts (SCOPE 1). Only re-fetch client-side if
+    // the server-side prop wasn't provided, or to refresh after a slow update.
     (async () => {
       try {
         const res = await fetch('/api/marketing/media/library-counts', { cache: 'no-store' });
@@ -144,6 +180,16 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         if (cancelled) return;
         if (j?.counts) setLibCounts(j.counts as LibraryCounts);
       } catch { /* silent — falls back to legacy byTier totals */ }
+    })();
+    // Fetch ingest problems (SCOPE 6).
+    (async () => {
+      try {
+        const res = await fetch('/api/marketing/media/ingest-problems', { cache: 'no-store' });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (cancelled) return;
+        if (Array.isArray(j?.rows)) setProblems(j.rows as IngestProblem[]);
+      } catch { /* silent — panel simply stays empty */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -170,6 +216,17 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       else if (prefix === 'activity') out = out.filter(r => String((r as any).activity_id ?? '') === rest);
       else if (prefix === 'cert')     out = out.filter(r => String((r as any).certification_id ?? '') === rest);
       else if (prefix === 'contact')  out = out.filter(r => String((r as any).contact_id ?? '') === rest);
+      // SCOPE 4 · destination folder filter — match on lowercased property_area
+      // slug (fn_place_destination stores the slug there) OR on destination_id
+      // if the row surfaces it.
+      else if (prefix === 'dest') {
+        const slug = rest.toLowerCase();
+        out = out.filter(r => {
+          const area = String((r as any).property_area ?? '').toLowerCase();
+          const destId = String((r as any).destination_id ?? '').toLowerCase();
+          return area === slug || destId === slug;
+        });
+      }
       else if (key === 'other:rooms')      out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && String((r as any).category ?? '').toLowerCase().startsWith('room'));
       else if (key === 'other:facilities') out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && ['f&b','pool','lobby','exterior'].includes(String((r as any).category ?? '').toLowerCase()));
       else if (key === 'other:activities') out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && String((r as any).category ?? '').toLowerCase().startsWith('activit'));
@@ -321,7 +378,18 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
               {facetGroups.certifications.length > 0 && (<optgroup label="Certifications">{facetGroups.certifications.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.team.length > 0 && (<optgroup label="Team">{facetGroups.team.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.other.length > 0 && (<optgroup label="Review — needs human sort">{facetGroups.other.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
-              {facetGroups.uncategorized.length > 0 && (<optgroup label="Uncategorized">{facetGroups.uncategorized.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {/* SCOPE 4 · destination folders — Luang Prabang / Laos / People / Ban Done Keo Village */}
+              {areaTaxonomy.filter(r => r.kind === 'destination').length > 0 && (
+                <optgroup label="Destination">
+                  {areaTaxonomy.filter(r => r.kind === 'destination').map(r => (
+                    <option key={'dest::' + r.area_key} value={'dest:' + r.area_key}>
+                      {r.name + (r.photo_count != null ? ' · ' + r.photo_count.toLocaleString() : '')}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {/* SCOPE 4 · Uncategorized relabelled — routing moved lifestyle→destination */}
+              {facetGroups.uncategorized.length > 0 && (<optgroup label="Uncategorized (genuine unknowns)">{facetGroups.uncategorized.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
             </>
           ) : (
             <option disabled>Loading…</option>
@@ -488,6 +556,54 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           <button disabled={page + 1 >= totalPages} onClick={() => setPage(p => p + 1)} style={{
             padding:'4px 10px', fontSize:11, border:'1px solid '+HAIR, background:WHITE, borderRadius:3, cursor: page + 1 >= totalPages ? 'default' : 'pointer', color:INK,
           }}>Next</button>
+        </div>
+      )}
+
+      {/* SCOPE 6 · orphan / tiff / heic admin panel — actionable list of assets
+          the ingest pipeline cannot auto-process. Small, collapsible. */}
+      {problems.length > 0 && (
+        <div style={{ marginTop: 24, background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4 }}>
+          <button
+            onClick={() => setProblemsOpen(v => !v)}
+            style={{
+              width: '100%', textAlign: 'left', background: '#FAF7EE',
+              border: 'none', borderBottom: problemsOpen ? '1px solid ' + HAIR : 'none',
+              padding: '10px 14px', fontSize: 12, fontWeight: 700, color: INK, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 8, borderRadius: '4px 4px 0 0',
+            }}
+          >
+            <span>Admin · orphan / tiff / heic ({problems.length})</span>
+            <span style={{ color: INK_M, fontWeight: 400, fontSize: 11, marginLeft: 'auto' }}>{problemsOpen ? 'hide' : 'show'}</span>
+          </button>
+          {problemsOpen && (
+            <div style={{ maxHeight: 300, overflow: 'auto' }}>
+              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#F5F0E1' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid ' + HAIR, color: INK_M, fontWeight: 600 }}>Problem</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid ' + HAIR, color: INK_M, fontWeight: 600 }}>Path</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid ' + HAIR, color: INK_M, fontWeight: 600 }}>MIME</th>
+                    <th style={{ textAlign: 'right', padding: '6px 10px', borderBottom: '1px solid ' + HAIR, color: INK_M, fontWeight: 600 }}>Size</th>
+                    <th style={{ textAlign: 'right', padding: '6px 10px', borderBottom: '1px solid ' + HAIR, color: INK_M, fontWeight: 600 }}>Retries</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {problems.map(p => (
+                    <tr key={p.queue_id}>
+                      <td style={{ padding: '4px 10px', borderBottom: '1px solid ' + HAIR, color: '#B23A2E', fontWeight: 600 }}>{p.problem}</td>
+                      <td style={{ padding: '4px 10px', borderBottom: '1px solid ' + HAIR, color: INK, fontFamily: 'ui-monospace, Menlo, monospace', maxWidth: 480, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.storage_path ?? ''}>{p.storage_path ?? '—'}</td>
+                      <td style={{ padding: '4px 10px', borderBottom: '1px solid ' + HAIR, color: INK_M }}>{p.detected_mime ?? '—'}</td>
+                      <td style={{ padding: '4px 10px', borderBottom: '1px solid ' + HAIR, color: INK_M, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.size_mb != null ? p.size_mb.toFixed(1) + ' MB' : '—'}</td>
+                      <td style={{ padding: '4px 10px', borderBottom: '1px solid ' + HAIR, color: INK_M, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.retries}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ padding: '8px 12px', fontSize: 10, color: INK_M, borderTop: '1px solid ' + HAIR }}>
+                Re-upload as JPG/PNG/WebP to bring these into the library. TIFF/HEIC bypass the ingest pipeline.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
