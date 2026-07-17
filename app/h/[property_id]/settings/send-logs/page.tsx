@@ -17,6 +17,7 @@ export default function SendLogsPage({ params }: { params: { property_id: string
       subtitle={`Every send out · all areas · property ${propertyId}`}
       tabs={[
         { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
+        { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`, active: true },
       ]}
