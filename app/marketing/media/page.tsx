@@ -146,7 +146,25 @@ async function loadAll(pid: number) {
       textPolicy: guardTextPolicy.data ?? null,
       brandPalette: guardPalette.data ?? [],
     },
-    reviewRows: reviewQueue.data ?? [],
+    reviewRows: (() => {
+      // PBS 2026-07-17 hot-fix — enrich review rows with public_url / mime_type /
+      // master_path from mediaPage. v_media_review_queue omits these fields, so
+      // ReviewTab tiles were rendering "no preview". No backend change needed —
+      // the JOIN is done here in server-space by asset_id.
+      const urlByAssetId = new Map<string, { public_url: string | null; master_path: string | null; mime_type: string | null; raw_path: string | null }>();
+      for (const r of ((mediaPage.data ?? []) as Array<any>)) {
+        urlByAssetId.set(String(r.asset_id), {
+          public_url: r.public_url ?? null,
+          master_path: r.master_path ?? null,
+          mime_type: r.mime_type ?? null,
+          raw_path: r.raw_path ?? null,
+        });
+      }
+      return ((reviewQueue.data ?? []) as Array<any>).map((r) => {
+        const extra = urlByAssetId.get(String(r.asset_id)) ?? { public_url: null, master_path: null, mime_type: null, raw_path: null };
+        return { ...r, ...extra };
+      });
+    })(),
     areaTaxonomy: areaTaxonomy.data ?? [],
     libraryCounts: libraryCounts.data ?? null,
     errors: [
