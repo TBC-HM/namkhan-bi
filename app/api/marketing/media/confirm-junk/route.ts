@@ -1,8 +1,9 @@
-// app/api/marketing/media/clear-review/route.ts
-// POST { asset_id } — clear the Iris review flag (needs_review=false, review_reason=NULL).
-// PBS 2026-07-14 · TASK 3.
-// PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 2 — switch to canonical
-//   public.fn_clear_review (ADR-149..152).
+// app/api/marketing/media/confirm-junk/route.ts
+// PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 2 — Junk cull for
+// Review tab. POST { asset_id } → public.fn_confirm_junk (SECURITY DEFINER,
+// reversible soft-delete, respects tier_locked). Kept SEPARATE from the older
+// /asset-delete route so Library's generic Delete button (which routes any
+// asset regardless of review state) stays on fn_media_asset_soft_delete.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -25,9 +26,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'asset_id must be UUID' }, { status: 400 });
   }
 
-  const { data, error } = await sb.rpc('fn_clear_review', { p_asset_id: id });
-  if (error) return NextResponse.json({ error: 'clear_failed', detail: error.message, code: error.code }, { status: 500 });
-  const res = (data as { ok?: boolean; asset_id?: string; error?: string } | null) ?? null;
-  if (!res || !res.ok) return NextResponse.json({ error: res?.error ?? 'clear_failed_or_not_found' }, { status: 400 });
+  const { data, error } = await sb.rpc('fn_confirm_junk', { p_asset_id: id });
+  if (error) return NextResponse.json({ error: 'junk_failed', detail: error.message, code: error.code }, { status: 500 });
+  const res = (data as { ok?: boolean; error?: string } | null) ?? null;
+  if (!res || !res.ok) return NextResponse.json({ error: res?.error ?? 'not_found_or_locked' }, { status: 400 });
   return NextResponse.json(res);
 }

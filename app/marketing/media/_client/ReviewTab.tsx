@@ -1,8 +1,9 @@
 // app/marketing/media/_client/ReviewTab.tsx
-// PBS 2026-07-14 · TASK 3 — new Review tab for photos flagged by Iris.
-// Source: public.v_media_review_queue (needs_review=true rows).
-// Actions per tile: clear review flag (fn_media_asset_clear_review) OR
-// soft-delete (fn_media_asset_soft_delete). Chip filters: Non-Hotel · Low Quality.
+// PBS 2026-07-14 · TASK 3 — Review tab for photos flagged by Iris.
+// PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 2 — swap to canonical
+//   /confirm-junk (public.fn_confirm_junk) + /clear-review (public.fn_clear_review).
+// Source: public.v_media_review_queue (all flagged, any status).
+// Chip filters: Non-Hotel · Low Quality · Junk.
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -10,24 +11,28 @@ import { useMemo, useState } from 'react';
 export interface ReviewRow {
   asset_id: string;
   original_filename: string | null;
-  primary_tier: string | null;
-  property_area: string | null;
-  file_size_bytes: number | string | null;
+  primary_tier?: string | null;
+  property_area?: string | null;
+  file_size_bytes?: number | string | null;
   technical_score: number | null;
   aesthetic_score: number | null;
-  marketing_score: number | null;
+  marketing_score?: number | null;
   quality_index: number | null;
-  is_hotel_property: boolean | null;
+  is_hotel_property?: boolean | null;
   category: string | null;
-  sub_category: string | null;
+  sub_category?: string | null;
   review_reason: string | null;
-  qa_notes: any;
-  qa_scored_at: string | null;
+  qa_notes?: any;
+  qa_scored_at?: string | null;
   created_at: string | null;
-  raw_path: string | null;
-  master_path: string | null;
-  mime_type: string | null;
-  public_url: string | null;
+  raw_path?: string | null;
+  master_path?: string | null;
+  mime_type?: string | null;
+  public_url?: string | null;
+  status?: string | null;
+  content_class?: string | null;
+  needs_review?: boolean | null;
+  property_id?: number | null;
 }
 
 interface Props {
@@ -43,20 +48,22 @@ const AMBER  = '#B87F26';
 const RED    = '#B23A2E';
 const CREAM  = '#F5F0E1';
 
-type FilterKey = 'all' | 'non_hotel' | 'low_quality';
+type FilterKey = 'all' | 'non_hotel' | 'low_quality' | 'junk';
 
-function reasonKind(reason: string | null | undefined): 'non_hotel' | 'low_quality' | 'other' {
-  const r = (reason ?? '').toLowerCase();
+function reasonKind(row: ReviewRow): 'non_hotel' | 'low_quality' | 'junk' | 'other' {
+  if ((row.content_class ?? '').toLowerCase() === 'junk') return 'junk';
+  const r = (row.review_reason ?? '').toLowerCase();
   if (r.includes('hotel')) return 'non_hotel';
   if (r.includes('low quality') || r.includes('low-quality') || r.includes('quality')) return 'low_quality';
   return 'other';
 }
 
-function reasonBadge(reason: string | null | undefined): { label: string; bg: string; fg: string } {
-  const k = reasonKind(reason);
-  if (k === 'non_hotel') return { label: 'Non-Hotel', bg: '#FBE8E4', fg: RED };
+function reasonBadge(row: ReviewRow): { label: string; bg: string; fg: string } {
+  const k = reasonKind(row);
+  if (k === 'junk')        return { label: 'Junk',              bg: '#FBE8E4', fg: RED };
+  if (k === 'non_hotel')   return { label: 'Non-Hotel',         bg: '#FBE8E4', fg: RED };
   if (k === 'low_quality') return { label: 'Low quality (<30)', bg: '#FBEFD9', fg: AMBER };
-  return { label: reason ?? 'Flagged', bg: CREAM, fg: INK_M };
+  return { label: row.review_reason ?? 'Flagged', bg: CREAM, fg: INK_M };
 }
 
 export default function ReviewTab({ rows }: Props) {
@@ -68,8 +75,7 @@ export default function ReviewTab({ rows }: Props) {
 
   const filtered = useMemo(() => {
     let out = rows.filter((r) => !localDismiss.has(r.asset_id));
-    if (filter === 'non_hotel') out = out.filter((r) => reasonKind(r.review_reason) === 'non_hotel');
-    if (filter === 'low_quality') out = out.filter((r) => reasonKind(r.review_reason) === 'low_quality');
+    if (filter !== 'all') out = out.filter((r) => reasonKind(r) === filter);
     return out;
   }, [rows, filter, localDismiss]);
 
@@ -93,29 +99,30 @@ export default function ReviewTab({ rows }: Props) {
   }
 
   async function deleteAsset(assetId: string, filename: string | null) {
-    if (!window.confirm('Delete "' + (filename ?? assetId.slice(0, 8)) + '"? (soft-delete)')) return;
+    if (!window.confirm('Confirm as junk: "' + (filename ?? assetId.slice(0, 8)) + '"? (reversible soft-delete via fn_confirm_junk)')) return;
     setBusyId(assetId); setMsg(null);
     try {
-      const res = await fetch('/api/marketing/media/asset-delete', {
+      const res = await fetch('/api/marketing/media/confirm-junk', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ asset_id: assetId }),
       });
       const j = await res.json();
-      if (!res.ok) throw new Error(j.error || 'delete_failed');
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'junk_failed');
       setLocalDismiss((s) => { const next = new Set(s); next.add(assetId); return next; });
       setSelected(null);
-      setMsg('Deleted — refresh to sync');
+      setMsg('Confirmed junk — refresh to sync');
     } catch (e: any) {
-      setMsg('Delete failed: ' + e.message);
+      setMsg('Junk-confirm failed: ' + e.message);
     } finally {
       setBusyId(null);
     }
   }
 
   const counts = useMemo(() => {
-    const nonHotel = rows.filter((r) => reasonKind(r.review_reason) === 'non_hotel').length;
-    const lowQual = rows.filter((r) => reasonKind(r.review_reason) === 'low_quality').length;
-    return { total: rows.length, nonHotel, lowQual };
+    const nonHotel = rows.filter((r) => reasonKind(r) === 'non_hotel').length;
+    const lowQual  = rows.filter((r) => reasonKind(r) === 'low_quality').length;
+    const junk     = rows.filter((r) => reasonKind(r) === 'junk').length;
+    return { total: rows.length, nonHotel, lowQual, junk };
   }, [rows]);
 
   return (
@@ -127,7 +134,7 @@ export default function ReviewTab({ rows }: Props) {
             Review Queue — photos flagged by Iris
           </div>
           <div style={{ fontSize: 11, color: INK_M, marginTop: 2 }}>
-            {counts.total.toLocaleString()} flagged · {counts.nonHotel} non-hotel · {counts.lowQual} low-quality
+            {counts.total.toLocaleString()} flagged · {counts.nonHotel} non-hotel · {counts.lowQual} low-quality · {counts.junk} junk
           </div>
         </div>
         <div style={{ fontSize: 11, color: INK_M }}>{filtered.length.toLocaleString()} shown</div>
@@ -136,9 +143,10 @@ export default function ReviewTab({ rows }: Props) {
       {/* Filter chips */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
         {([
-          { k: 'all',         l: 'All',              n: counts.total },
+          { k: 'all',         l: 'All',               n: counts.total },
           { k: 'non_hotel',   l: 'Non-Hotel Content', n: counts.nonHotel },
           { k: 'low_quality', l: 'Low Quality',       n: counts.lowQual },
+          { k: 'junk',        l: 'Junk',              n: counts.junk },
         ] as Array<{ k: FilterKey; l: string; n: number }>).map((c) => {
           const active = filter === c.k;
           return (
@@ -174,7 +182,7 @@ export default function ReviewTab({ rows }: Props) {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
           {filtered.map((r) => {
-            const b = reasonBadge(r.review_reason);
+            const b = reasonBadge(r);
             return (
               <button
                 key={r.asset_id}
@@ -252,6 +260,7 @@ export default function ReviewTab({ rows }: Props) {
 
             <div style={{ background: CREAM, border: '1px solid ' + HAIR, borderRadius: 4, padding: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
               <FieldRow label="Reason"        value={selected.review_reason ?? '—'} strong />
+              <FieldRow label="Content class" value={selected.content_class ?? '—'} />
               <FieldRow label="Category"      value={selected.category ?? '—'} />
               <FieldRow label="Sub-category"  value={selected.sub_category ?? '—'} />
               <FieldRow label="Is hotel?"     value={selected.is_hotel_property == null ? '—' : (selected.is_hotel_property ? 'yes' : 'no')} />
@@ -283,7 +292,7 @@ export default function ReviewTab({ rows }: Props) {
                   opacity: busyId === selected.asset_id ? 0.6 : 1,
                 }}
               >
-                Clear review flag
+                Keep · clear review flag
               </button>
               <button
                 onClick={() => deleteAsset(selected.asset_id, selected.original_filename)}
@@ -295,7 +304,7 @@ export default function ReviewTab({ rows }: Props) {
                   opacity: busyId === selected.asset_id ? 0.6 : 1,
                 }}
               >
-                Delete
+                Delete · confirm junk
               </button>
             </div>
           </div>

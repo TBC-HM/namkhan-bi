@@ -6,6 +6,9 @@
 // PBS 2026-07-14 · Coverage drill-down — pass mediaPage to CoverageTab so cells
 //   open a filtered thumbnail modal. Data source unchanged; page.tsx already
 //   fetches with dynamic='force-dynamic' + revalidate=0.
+// PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 3/4/5/6 — threads
+//   areaTaxonomy (Clarify dropdown + folder rail) + libraryCounts (tile source
+//   of truth) + destination-folder aware badges.
 'use client';
 
 import { useState } from 'react';
@@ -16,7 +19,7 @@ import SettingsTab from './SettingsTab';
 import CoverageTab, { type CoverageRow } from './CoverageTab';
 import ReviewTab, { type ReviewRow } from './ReviewTab';
 import ProfilesTab from './ProfilesTab';
-import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy, GuardrailsData } from './MediaHub';
+import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy, GuardrailsData, AreaTaxonomyRow, LibraryCountsRow } from './MediaHub';
 
 type Sub = 'library' | 'ai' | 'clarify' | 'review' | 'coverage' | 'profiles' | 'settings';
 
@@ -35,6 +38,8 @@ interface Props {
   areaOptions: string[];
   coverageRows?: CoverageRow[];
   reviewRows?: ReviewRow[];
+  areaTaxonomy?: AreaTaxonomyRow[];
+  libraryCounts?: LibraryCountsRow | null;
   initialSub?: Sub;
   initialAiAssetId?: string | null;
   guardrails: GuardrailsData;
@@ -114,6 +119,8 @@ export default function PhotoHub(props: Props) {
           areaOptions={props.areaOptions}
           rooms={props.rooms}
           taxonomy={props.taxonomy}
+          areaTaxonomy={props.areaTaxonomy}
+          libraryCounts={props.libraryCounts ?? null}
         />
       )}
       {sub === 'ai' && (
@@ -134,6 +141,7 @@ export default function PhotoHub(props: Props) {
           areaOptions={props.areaOptions}
           rooms={props.rooms}
           taxonomy={props.taxonomy}
+          areaTaxonomy={props.areaTaxonomy}
         />
       )}
       {sub === 'review' && (
