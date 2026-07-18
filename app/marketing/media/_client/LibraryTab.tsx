@@ -351,7 +351,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
         {([
           { label: 'Pics',           value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null   },
-          { label: 'Videos',         value: libCounts?.videos_total ?? 0,                                                          filterTier: null   },
+          // PBS 2026-07-18 · Videos tile removed — videos have their own top-strip section
           { label: 'Total ready',    value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null   },
           { label: 'With tier',      value: libCounts?.with_tier    ?? totals.tot,                                                filterTier: null   },
           { label: 'With area',      value: libCounts?.with_area    ?? 0,                                                          filterTier: null   },
