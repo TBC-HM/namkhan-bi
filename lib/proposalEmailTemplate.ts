@@ -343,7 +343,7 @@ function footerBlock(ctx: ProposalEmailContext): string {
       All our prices include 10% Lao VAT and 10% service charge.
     </div>
     <div style="font-family:${SANS};font-size:10px;color:${INK_SOFT};line-height:1.5;border-top:1px dashed ${HAIRLINE};padding-top:10px">
-      Rates in USD (converted from LAK at internal FX). Cancellation follows the terms shown on your proposal page. Reply to this email to adjust anything.
+      Rates in USD (converted from LAK at internal FX). Cancellation follows the terms shown on your proposal page.
     </div>
   </td></tr>`;
 }
@@ -373,7 +373,6 @@ export function renderProposalEmailHtml(ctx: ProposalEmailContext): string {
       ${signatureBlock(ctx)}
       ${footerBlock(ctx)}
     </table>
-    <div style="font-family:${SANS};font-size:10px;color:${INK_SOFT};max-width:640px;padding:12px 24px">You are receiving this because you enquired with ${esc(ctx.property.name)}. To stop receiving proposals, reply "unsubscribe" and we will remove you.</div>
   </td></tr>
 </table>
 </body></html>`;
