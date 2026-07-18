@@ -13,7 +13,7 @@ async function getPropertyData(propertyId: number) {
     identity, location, brand, brandReality, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
     team, owner, roomUnits, transport, boats, boatCruises, meetingSpaces,
-    retreats, spaTreatments, fnbMenus, fnbMenuItems, teamFeatures,
+    retreats, spaTreatments, fnbMenus, fnbMenuItems, teamFeatures, ratePlans,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
@@ -47,6 +47,11 @@ async function getPropertyData(propertyId: number) {
     supabase.from('v_property_fnb_menus').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.from('v_property_fnb_menu_items').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.from('v_property_team_features').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('full_name'),
+    // PBS 2026-07-18 · rate plan hygiene · sub-tab in Accommodation group
+    supabase.from('v_rate_plans_grouped').select('*').eq('property_id', propertyId)
+      .order('featured_for_proposals', { ascending: false })
+      .order('bookings_12m', { ascending: false })
+      .order('effective_label', { ascending: true }),
   ]);
 
   // Merge fnb items into their menus
@@ -81,6 +86,7 @@ async function getPropertyData(propertyId: number) {
     spaTreatments: spaTreatments.data ?? [],
     fnbMenus: fnbMenusWithItems,
     teamFeatures: teamFeatures.data ?? [],
+    ratePlans: ratePlans.data ?? [],
   };
 }
 
