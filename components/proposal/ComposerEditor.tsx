@@ -1011,6 +1011,31 @@ export default function ComposerEditor({
                     AI: {aiSource}
                   </span>
                 )}
+                {/* PBS 2026-07-18 · ✨ Polish — refines the current body copy in place (keeps your intent). */}
+                <button
+                  onClick={async () => {
+                    if (emailBusy || !bodyMd.trim()) return;
+                    setEmailBusy(true);
+                    try {
+                      const res = await fetch('/api/mail/ai/polish', {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({ draft: bodyMd, tone: 'warm-professional', mode: 'polish' }),
+                      });
+                      const j = await res.json();
+                      if (j?.ok && typeof j.polished === 'string' && j.polished.trim()) {
+                        setBodyMd(j.polished.trim());
+                        setAiSource('polished');
+                      } else {
+                        console.warn('[polish] failed', j);
+                      }
+                    } catch (e) { console.warn('[polish]', e); }
+                    finally { setEmailBusy(false); }
+                  }}
+                  disabled={emailBusy || !bodyMd.trim()}
+                  style={S.btnGhost}
+                  title="Refines what you typed — keeps your intent, tightens the wording"
+                >{emailBusy ? '…' : '✨ Polish'}</button>
                 <button onClick={regenerateEmail} disabled={emailBusy} style={S.btnGhost}>
                   {emailBusy ? '…' : '↻ Re-draft with AI'}
                 </button>
