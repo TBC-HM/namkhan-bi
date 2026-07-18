@@ -89,6 +89,7 @@ const KIND_LABEL: Record<string, string> = {
   fnb: 'F&B',
   activities: 'Activities',
   retreats: 'Retreats',
+  transport: 'Transport',
   imekong: 'Imekong',
   certifications: 'Certifications',
   team: 'Team',
@@ -96,7 +97,7 @@ const KIND_LABEL: Record<string, string> = {
   other: 'Other',
   uncategorized: 'Uncategorized',
 };
-const KIND_ORDER = ['rooms','facilities','jungle_spa','fnb','activities','retreats','imekong','certifications','destination','other','uncategorized'];
+const KIND_ORDER = ['rooms','facilities','jungle_spa','fnb','activities','retreats','transport','imekong','certifications','destination','other','uncategorized'];
 
 function isVideoRow(r: MediaRow): boolean {
   const mt = (r.mime_type ?? '').toLowerCase();
