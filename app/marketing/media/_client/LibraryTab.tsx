@@ -134,7 +134,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   type TopFilter = 'all' | 'top100' | 'topRooms' | 'topFacilities';
   const [topFilter, setTopFilter] = useState<TopFilter>('all');
   type FacetRow = { kind: string; sort_order: number; ref_id: string; area_key: string; name: string; extra: string | null; photo_count: number };
-  type FacetGroups = Record<'rooms'|'facilities'|'activities'|'certifications'|'team'|'other'|'uncategorized', FacetRow[]>;
+  type FacetGroups = Record<'rooms'|'facilities'|'jungle_spa'|'fnb'|'activities'|'retreats'|'imekong'|'certifications'|'team'|'destination'|'other'|'uncategorized', FacetRow[]>;
   const [facetGroups, setFacetGroups] = useState<FacetGroups | null>(null);
 
   // PBS 2026-07-17 · SCOPE 1 · media-pipeline-frontend brief.
@@ -392,23 +392,28 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           <option value="">All areas</option>
           {facetGroups ? (
             <>
-              {facetGroups.rooms.length > 0 && (<optgroup label="Rooms">{facetGroups.rooms.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {/* PBS 2026-07-18 · Library dropdown mirrors Property Settings sidebar 1:1 */}
+              {facetGroups.rooms.length > 0 && (<optgroup label="Accommodation">{facetGroups.rooms.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.facilities.length > 0 && (<optgroup label="Facilities">{facetGroups.facilities.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.jungle_spa && facetGroups.jungle_spa.length > 0 && (<optgroup label="Jungle Spa">{facetGroups.jungle_spa.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.fnb && facetGroups.fnb.length > 0 && (<optgroup label="F&B">{facetGroups.fnb.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.activities.length > 0 && (<optgroup label="Activities">{facetGroups.activities.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.retreats && facetGroups.retreats.length > 0 && (<optgroup label="Retreats">{facetGroups.retreats.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.imekong && facetGroups.imekong.length > 0 && (<optgroup label="Imekong">{facetGroups.imekong.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.certifications.length > 0 && (<optgroup label="Certifications">{facetGroups.certifications.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
-              {facetGroups.team.length > 0 && (<optgroup label="Team">{facetGroups.team.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
-              {facetGroups.other.length > 0 && (<optgroup label="Review — needs human sort">{facetGroups.other.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
-              {/* SCOPE 4 · destination folders — Luang Prabang / Laos / People / Ban Done Keo Village */}
-              {areaTaxonomy.filter(r => r.kind === 'destination').length > 0 && (
-                <optgroup label="Destination">
-                  {areaTaxonomy.filter(r => r.kind === 'destination').map(r => (
-                    <option key={'dest::' + r.area_key} value={'dest:' + r.area_key}>
-                      {r.name + (r.photo_count != null ? ' · ' + r.photo_count.toLocaleString() : '')}
-                    </option>
+              {/* Destination folders — Luang Prabang / Laos / People / Ban Done Keo Village */}
+              {(facetGroups.destination && facetGroups.destination.length > 0)
+                ? (<optgroup label="Destination">{facetGroups.destination.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)
+                : (areaTaxonomy.filter(r => r.kind === 'destination').length > 0 && (
+                    <optgroup label="Destination">
+                      {areaTaxonomy.filter(r => r.kind === 'destination').map(r => (
+                        <option key={'dest::' + r.area_key} value={'dest:' + r.area_key}>
+                          {r.name + (r.photo_count != null ? ' · ' + r.photo_count.toLocaleString() : '')}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
-                </optgroup>
-              )}
-              {/* SCOPE 4 · Uncategorized relabelled — routing moved lifestyle→destination */}
+              {facetGroups.other.length > 0 && (<optgroup label="Review — needs human sort">{facetGroups.other.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.uncategorized.length > 0 && (<optgroup label="Uncategorized (genuine unknowns)">{facetGroups.uncategorized.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
             </>
           ) : (
