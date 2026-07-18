@@ -1213,7 +1213,15 @@ function RateOfferCard({
   onPatch: (patch: Partial<RateOfferRow>) => void;
   onDelete: () => void;
 }) {
-  const plan = plans.find((p) => p.rate_plan_id === offer.rate_plan_id);
+  // PBS 2026-07-19 · local memory of user's pick. Fixes the "jumps back to first plan"
+  // bug: the composite value in the <select> uses room_type_id, but proposal_rate_offers
+  // only stores rate_plan_id → optimistic update loses the room hint → plans.find()
+  // returns whichever room happens to be first for that rate_plan_id → composite value
+  // no longer matches an <option> → React resets to first. Track pick locally instead.
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
+  const plan = pickedKey
+    ? plans.find((p) => `${p.rate_plan_id}::${p.room_type_id}` === pickedKey)
+    : plans.find((p) => p.rate_plan_id === offer.rate_plan_id);
   const nightlyLak = offer.unit_price_lak != null ? Number(offer.unit_price_lak) : (plan ? Number(plan.total_lak) / Math.max(1, Number(plan.nights ?? 1)) : 0);
   const totalLak = offer.total_lak != null ? Number(offer.total_lak) : (plan ? Number(plan.total_lak) : 0);
   const nightlyUsd = nightlyLak / FX_LAK_PER_USD;
@@ -1239,8 +1247,9 @@ function RateOfferCard({
               rate_plan_id (typical for Flex Rate across all rooms) React collapsed them to a single option.
               Composite value "planId::roomTypeId" keeps them distinct so the picker shows real prices. */}
           <select
-            value={`${offer.rate_plan_id}::${plan?.room_type_id ?? ''}`}
+            value={pickedKey ?? `${offer.rate_plan_id}::${plan?.room_type_id ?? ''}`}
             onChange={(e) => {
+              setPickedKey(e.target.value);
               const [newPlanId, newRoomId] = e.target.value.split('::');
               const newPlan = plans.find((p) => p.rate_plan_id === newPlanId && String(p.room_type_id) === newRoomId)
                            || plans.find((p) => p.rate_plan_id === newPlanId);
@@ -1249,10 +1258,10 @@ function RateOfferCard({
               const roomLabel = newPlan.room_type_name ? `${newPlan.room_type_name} · ` : '';
               onPatch({
                 rate_plan_id: newPlan.rate_plan_id,
-                label: (offer.label && offer.label.trim()) ? offer.label : (roomLabel + newPlan.rate_plan_name + (newPlan.board ? ` · ${newPlan.board}` : '')),
+                label: roomLabel + newPlan.rate_plan_name + (newPlan.board ? ` · ${newPlan.board}` : ''),
                 unit_price_lak: Math.round(nlLak),
                 total_lak: Math.round(Number(newPlan.total_lak)),
-                cancellation_terms: offer.cancellation_terms ?? newPlan.cancellation_policy ?? DEFAULT_CANCELLATION_TERMS,
+                cancellation_terms: newPlan.cancellation_policy ?? DEFAULT_CANCELLATION_TERMS,
               });
             }}
             disabled={busy || plans.length === 0}
