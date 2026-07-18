@@ -881,6 +881,25 @@ export default function ComposerEditor({
             </div>
           </section>
 
+          {/* PBS 2026-07-18 · Include-photos toggle promoted to top so operator sees it before adding blocks */}
+          <section style={{ ...S.card, borderLeft: `3px solid ${withPhotos ? T.green : '#E6DFCC'}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: T.ink, cursor: 'pointer', fontWeight: 600 }}>
+                <input type="checkbox" checked={withPhotos} onChange={(e) => { setWithPhotos(e.target.checked); bumpPreview(); }} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                <span>Include photos in this proposal</span>
+              </label>
+              <span style={{ fontSize: 11, color: T.inkSoft }}>
+                {withPhotos
+                  ? (blocks.length === 0
+                      ? 'On — each block you add below will show a photo (auto-hero if you don\'t pick one).'
+                      : photosMissing === 0
+                        ? `On — all ${blocks.length} block${blocks.length === 1 ? '' : 's'} have a photo.`
+                        : `On — ${photosMissing} of ${blocks.length} block${blocks.length === 1 ? '' : 's'} use auto-hero (click "Choose photo" per block to override).`)
+                  : 'Off — no photos rendered in preview or email.'}
+              </span>
+            </div>
+          </section>
+
           {/* Rooms & Experiences */}
           <section style={S.card}>
             <div style={S.cardHead}>
@@ -923,21 +942,10 @@ export default function ComposerEditor({
             </div>
           </section>
 
-          {/* Photos & Factsheet */}
+          {/* Factsheet (Photos toggle moved to top of composer) */}
           <section style={S.card}>
             <div style={S.cardHead}>
-              <span style={S.sectionTitle}>Photos &amp; Factsheet</span>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: T.ink, cursor: 'pointer' }}>
-                <input type="checkbox" checked={withPhotos} onChange={(e) => { setWithPhotos(e.target.checked); bumpPreview(); }} />
-                <span>Include photos</span>
-              </label>
-            </div>
-            <div style={{ fontSize: 11, color: T.inkSoft, marginBottom: 10 }}>
-              {withPhotos
-                ? (photosMissing === 0
-                    ? `All ${blocks.length} block${blocks.length === 1 ? '' : 's'} have a photo set.`
-                    : `${photosMissing} of ${blocks.length} block${blocks.length === 1 ? '' : 's'} rely on auto-hero fallback — override per block above.`)
-                : 'Photos suppressed in preview + email.'}
+              <span style={S.sectionTitle}>Factsheet PDF</span>
             </div>
             <FieldLabel label="Factsheet PDF">
               {factsheets.length === 0 ? (
@@ -1280,10 +1288,11 @@ function BlockRow({
           <input type="number" min={1} value={block.nights} style={S.numInput}
             onChange={(e) => onPatch({ nights: Math.max(1, parseInt(e.target.value || '1', 10)) })} />
           <span style={{ fontSize: 11, color: T.inkMute }}>nt @</span>
-          <input type="number" min={0} step={1000} value={block.unit_price_lak}
-            style={{ ...S.numInput, width: 96 }}
-            onChange={(e) => onPatch({ unit_price_lak: parseFloat(e.target.value || '0') })} />
-          <span style={{ fontSize: 11, color: T.inkMute }}>₭</span>
+          {/* PBS 2026-07-18 · USD input (LAK stored internally = usd × FX_LAK_PER_USD) */}
+          <input type="number" min={0} step={1} value={Math.round((Number(block.unit_price_lak) || 0) / FX_LAK_PER_USD * 100) / 100}
+            style={{ ...S.numInput, width: 84 }}
+            onChange={(e) => onPatch({ unit_price_lak: Math.round(parseFloat(e.target.value || '0') * FX_LAK_PER_USD) })} />
+          <span style={{ fontSize: 11, color: T.inkMute }}>$</span>
           {isExperience && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: T.inkSoft, marginLeft: 4 }}>
               <span>Add. disc %</span>
