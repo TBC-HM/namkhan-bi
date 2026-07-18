@@ -1,8 +1,17 @@
 // app/api/sales/proposals/[id]/email/preview/route.ts
-// PBS 2026-07-18 v2 — force Vercel serverless function rebuild.
-// Routes proposal+blocks+offers+email through SECURITY DEFINER RPC
-// public.fn_proposal_preview_state to bypass sales-schema silent-empty burn.
-// Diag banner now surfaces the RPC error if the RPC path fails.
+// PBS 2026-07-18 v3 — root-cause fix for iframe rendering "1 night $0 + no cards"
+// despite RPC returning valid data. Root cause: `supabase-js` sometimes
+// unwraps a jsonb-returning RPC into either `data = {...}` or `data = [{fn_...: {...}}]`
+// depending on runtime state; the previous route only handled the object form.
+// This version normalises both shapes AND surfaces every branch via response
+// headers so DevTools > Network > Response Headers is now the debug channel
+// (no on-page DIAG banner — PBS asked for silence). Every response includes:
+//   X-Preview-Shape         object | array-wrapped | unknown
+//   X-Preview-Blocks-Raw    length of blocks in RPC response (before mapping)
+//   X-Preview-Offers-Raw    length of offers in RPC response (before mapping)
+//   X-Preview-Date-In       proposal.date_in_snapshot as returned by RPC
+//   X-Preview-RPC-Err       RPC error message, if any
+//   X-Preview-Route-Rev     'v3-2026-07-18-shape-normalize' (bumps file hash)
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -178,7 +187,29 @@ export async function GET(req: Request, { params }: Ctx) {
   // as a single JSON blob. Bypasses PostgREST schema-cache issue that caused
   // sb.schema('sales').from() to return silently-empty despite valid data.
   const { data: stateData, error: stateErr } = await sb.rpc('fn_proposal_preview_state', { p_proposal_id: params.id });
-  const state = (stateData ?? {}) as {
+
+  // PBS 2026-07-18 v3 — normalise both possible supabase-js shapes.
+  // Shape A (single-row jsonb): stateData = {proposal, blocks, offers, email}
+  // Shape B (setof-wrapped):    stateData = [{fn_proposal_preview_state: {proposal, blocks, offers, email}}]
+  // Shape C (edge/prefer=single wrap): stateData = [{proposal, blocks, offers, email}]
+  // Also handle string-encoded jsonb defensively.
+  let shape: 'object' | 'array-wrapped' | 'array-flat' | 'string' | 'unknown' = 'unknown';
+  let raw: any = stateData;
+  if (typeof raw === 'string') { shape = 'string'; try { raw = JSON.parse(raw); } catch { raw = {}; } }
+  if (Array.isArray(raw)) {
+    if (raw.length > 0 && raw[0] && typeof raw[0] === 'object' && 'fn_proposal_preview_state' in raw[0]) {
+      shape = 'array-wrapped'; raw = raw[0].fn_proposal_preview_state;
+    } else if (raw.length > 0 && raw[0] && typeof raw[0] === 'object' && ('proposal' in raw[0] || 'blocks' in raw[0])) {
+      shape = 'array-flat'; raw = raw[0];
+    } else {
+      raw = {};
+    }
+  } else if (raw && typeof raw === 'object') {
+    shape = 'object';
+  }
+  if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = {}; } }
+
+  const state = (raw ?? {}) as {
     proposal?: any;
     blocks?: any[];
     offers?: any[];
@@ -186,8 +217,16 @@ export async function GET(req: Request, { params }: Ctx) {
     error?: string;
   };
   if (stateErr || state.error === 'proposal_not_found' || !state.proposal) {
-    console.error('[preview] state RPC failed', { proposal_id: params.id, err: stateErr?.message, state_error: state.error });
-    return NextResponse.json({ error: 'proposal_not_found', detail: stateErr?.message ?? state.error }, { status: 404 });
+    console.error('[preview] state RPC failed', { proposal_id: params.id, err: stateErr?.message, state_error: state.error, shape, keys: raw && typeof raw === 'object' ? Object.keys(raw) : [] });
+    return new NextResponse(JSON.stringify({ error: 'proposal_not_found', detail: stateErr?.message ?? state.error ?? 'no proposal in RPC payload' }), {
+      status: 404,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Preview-Shape': shape,
+        'X-Preview-RPC-Err': stateErr?.message ?? state.error ?? '',
+        'X-Preview-Route-Rev': 'v3-2026-07-18-shape-normalize',
+      },
+    });
   }
 
   const proposal = state.proposal;
@@ -270,17 +309,20 @@ export async function GET(req: Request, { params }: Ctx) {
   };
 
   const html = renderProposalEmailHtml(ctx);
-  // PBS 2026-07-19 · DIAG banner removed. Empty state now handled by composer left panel
-  // ("No blocks yet — add a room or experience to start.") and inventory pre-send guard.
+  // PBS 2026-07-18 v3 · No on-page DIAG banner. All diagnostics on response headers.
 
   if (format === 'json') return NextResponse.json({
     subject: ctx.subject,
     html,
     base_url: base,
     diag: {
+      shape,
       blocks_len: blocks.length,
       offers_len: offerRows.length,
       email_version: email?.version ?? null,
+      date_in: dateIn,
+      date_out: dateOut,
+      nights,
     },
   });
 
@@ -292,6 +334,12 @@ export async function GET(req: Request, { params }: Ctx) {
       'Pragma':        'no-cache',
       'Expires':       '0',
       'X-Preview-Rendered-At': new Date().toISOString(),
+      'X-Preview-Route-Rev': 'v3-2026-07-18-shape-normalize',
+      'X-Preview-Shape':  shape,
+      'X-Preview-Blocks-Raw': String(Array.isArray(state.blocks) ? state.blocks.length : -1),
+      'X-Preview-Offers-Raw': String(Array.isArray(state.offers) ? state.offers.length : -1),
+      'X-Preview-Date-In':  String(proposal.date_in_snapshot ?? ''),
+      'X-Preview-Date-Out': String(proposal.date_out_snapshot ?? ''),
       'X-Block-Count':  String(blocks.length),
       'X-Offer-Count':  String(offerRows.length),
       'X-Email-Version': String(email?.version ?? ''),
