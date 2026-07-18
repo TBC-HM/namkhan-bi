@@ -177,7 +177,7 @@ export async function GET(req: Request, { params }: Ctx) {
   // PBS 2026-07-18 — SECURITY DEFINER RPC returns proposal+blocks+offers+email
   // as a single JSON blob. Bypasses PostgREST schema-cache issue that caused
   // sb.schema('sales').from() to return silently-empty despite valid data.
-  const { data: stateData, error: stateErr } = await sb.rpc('fn_proposal_preview_state', { _proposal_id: params.id });
+  const { data: stateData, error: stateErr } = await sb.rpc('fn_proposal_preview_state', { p_proposal_id: params.id });
   const state = (stateData ?? {}) as {
     proposal?: any;
     blocks?: any[];
