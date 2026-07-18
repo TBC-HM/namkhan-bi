@@ -863,13 +863,27 @@ export default function ComposerEditor({
                       ? '+ Add rate offer (pick dates first)'
                       : `+ Add rate offer — pick from ${filteredPlans.length} plan${filteredPlans.length === 1 ? '' : 's'}`}
                 </option>
+                {/* PBS 2026-07-18 · richer label — room · rate · board · $total ($nightly/nt) · MinLoS */}
                 {planGroups.map(([rtId, g]) => (
                   <optgroup key={rtId} label={g.label}>
-                    {g.plans.map((p) => (
-                      <option key={p.rate_plan_id} value={p.rate_plan_id}>
-                        {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''} · ${Math.round(p.total_usd).toLocaleString('en-US')}
-                      </option>
-                    ))}
+                    {g.plans.map((p) => {
+                      const nightly = p.nights > 0 ? Math.round(p.total_usd / p.nights) : Math.round(p.total_usd);
+                      const total   = Math.round(p.total_usd).toLocaleString('en-US');
+                      const nightlyStr = nightly.toLocaleString('en-US');
+                      const nights = p.nights || 0;
+                      const parts = [
+                        g.label,                                   // "Explorer Glamping"
+                        p.rate_plan_name,                          // "Flex Rate" / "Advance Purchase" etc
+                        p.board ? p.board : null,                  // "BB" if present
+                        `$${total} total`,                         // "$495 total"
+                        `$${nightlyStr}/nt × ${nights}n`,          // "$165/nt × 3n"
+                      ].filter(Boolean);
+                      return (
+                        <option key={p.rate_plan_id} value={p.rate_plan_id}>
+                          {parts.join(' · ')}
+                        </option>
+                      );
+                    })}
                   </optgroup>
                 ))}
               </select>
