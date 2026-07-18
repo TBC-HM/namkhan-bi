@@ -1,17 +1,7 @@
 // app/api/sales/proposals/[id]/email/preview/route.ts
-// PBS 2026-07-16 — Renders the newsletter-quality proposal email as HTML.
-// Query params:
-//   format=json  → { subject, html }
-//   default      → raw HTML with Content-Type: text/html
-// Used by:
-//   - Composer preview iframe.
-//   - POST /send passes this HTML through to Make webhook for outbound delivery.
-//
-// PBS 2026-07-16 (item 6) — when a block has no hero_asset_id, fall back to the
-// best marketing-tier asset for the linked room_type / activity so previews are
-// never empty. Fallback is preview-only; the DB is not mutated.
-// PBS 2026-07-16 (item 10) — sender signature resolved from proposal.created_by
-// via auth.users; fallback to the Reservations desk.
+// PBS 2026-07-18 — Rewritten to bypass PostgREST schema-cache mystery on sales.*
+// by routing proposal+blocks+offers+email through SECURITY DEFINER RPC
+// public.fn_proposal_preview_state. Same class of fix as media-schema burn.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -67,33 +57,11 @@ async function loadPropertySnapshot(propertyId: number) {
 }
 
 async function loadFactsheet(sb: ReturnType<typeof getSupabaseAdmin>, factsheetId: string) {
-  // PBS 2026-07-16 (item 5) — fetch factsheet metadata for footer chip.
   if (!factsheetId) return null;
   const { data } = await sb.from('v_marketing_factsheets').select('doc_id,title,file_name,external_url').eq('doc_id', factsheetId).maybeSingle();
   return data as { doc_id: string; title: string; file_name: string | null; external_url: string | null } | null;
 }
 
-// PBS 2026-07-16 (item 6 + follow-up) — for each block that is missing a
-// hero_asset_id, resolve the best marketing-tier candidate from
-// media.media_assets. Ranking within each candidate set:
-//   status IN ('ready','tagged')     — the Namkhan asset_status enum has no
-//                                       'approved'; 'ready' + 'tagged' are the
-//                                       marketing-approved tiers.
-//   quality_index DESC NULLS LAST → technical_score DESC NULLS LAST → created_at DESC
-//
-// Three block-type paths:
-//   1) block_type='room'      → media_assets.room_type_id = Number(ref_id)
-//   2) block_type='activity'  → if ref_id is a bigint (new content.activities pick),
-//                               join on media_assets.activity_id = Number(ref_id).
-//   3) block_type='activity'  → if ref_id is a UUID (legacy sales.activity_catalog
-//                               pick), fall back to LABEL MATCH on caption /
-//                               alt_text / original_filename / sub_category. This is
-//                               imperfect but "any thumbnail" beats "text-only" for
-//                               the preview iframe.
-//
-// This is preview-only — we do NOT persist the fallback back to
-// sales.proposal_blocks. The composer's explicit photo picker is still the
-// canonical way to set a hero.
 async function autoHeroForBlocks(
   sb: ReturnType<typeof getSupabaseAdmin>,
   blocks: ProposalBlock[],
@@ -107,21 +75,13 @@ async function autoHeroForBlocks(
     if (b.block_type === 'room' && b.ref_id) {
       const n = Number(b.ref_id);
       if (Number.isFinite(n)) roomIds.add(n);
-      continue;
-    }
-    if (b.block_type === 'activity' && b.ref_id) {
-      if (/^\d+$/.test(b.ref_id)) {
-        activityBigints.add(Number(b.ref_id));
-      } else if (b.label) {
-        // Legacy sales.activity_catalog UUIDs → fall back to label match.
-        labelLookups.push({ blockId: b.id, label: b.label });
-      }
+    } else if (b.block_type === 'activity' && b.ref_id) {
+      if (/^\d+$/.test(b.ref_id)) activityBigints.add(Number(b.ref_id));
+      else if (b.label) labelLookups.push({ blockId: b.id, label: b.label });
     }
   }
 
   const APPROVED_TIERS = ['ready', 'tagged'];
-
-  // Rank helper — quality_index → technical_score → created_at.
   function rank(a: any, b: any): number {
     const qa = Number(a.quality_index ?? 0), qb = Number(b.quality_index ?? 0);
     if (qa !== qb) return qb - qa;
@@ -132,58 +92,36 @@ async function autoHeroForBlocks(
 
   const byRoom: Record<number, string> = {};
   if (roomIds.size > 0) {
-    const { data } = await sb
-      .schema('media')
-      .from('media_assets')
+    const { data } = await sb.schema('media').from('media_assets')
       .select('asset_id, room_type_id, quality_index, technical_score, created_at')
       .in('room_type_id', Array.from(roomIds))
       .in('status', APPROVED_TIERS);
     const ranked = ((data ?? []) as any[]).slice().sort(rank);
-    for (const row of ranked) {
-      if (!byRoom[row.room_type_id]) byRoom[row.room_type_id] = row.asset_id as string;
-    }
+    for (const row of ranked) if (!byRoom[row.room_type_id]) byRoom[row.room_type_id] = row.asset_id as string;
   }
 
   const byActivity: Record<number, string> = {};
   if (activityBigints.size > 0) {
-    const { data } = await sb
-      .schema('media')
-      .from('media_assets')
+    const { data } = await sb.schema('media').from('media_assets')
       .select('asset_id, activity_id, quality_index, technical_score, created_at')
       .in('activity_id', Array.from(activityBigints))
       .in('status', APPROVED_TIERS);
     const ranked = ((data ?? []) as any[]).slice().sort(rank);
-    for (const row of ranked) {
-      if (!byActivity[row.activity_id]) byActivity[row.activity_id] = row.asset_id as string;
-    }
+    for (const row of ranked) if (!byActivity[row.activity_id]) byActivity[row.activity_id] = row.asset_id as string;
   }
 
-  // Label match for legacy activity blocks. We build one OR-of-ilike query per
-  // unique label so a single round-trip covers all lookups.
   const byLabel: Record<string, string> = {};
   if (labelLookups.length > 0) {
     for (const { blockId, label } of labelLookups) {
       const needle = label.trim().toLowerCase();
       if (!needle) continue;
-      // First try the full label, then split into words ≥4 chars to widen the net
-      // (so "MotoLao countryside ride" also matches "motorbike" via caption text).
-      const words = Array.from(new Set([
-        needle,
-        ...needle.split(/\W+/).filter((w) => w.length >= 4),
-      ]));
-      // Build a supabase-js .or() filter: ilike matches on any of the guest-facing text columns.
+      const words = Array.from(new Set([needle, ...needle.split(/\W+/).filter((w) => w.length >= 4)]));
       const cols = ['caption', 'alt_text', 'original_filename', 'sub_category', 'category'];
-      const orExpr = words
-        .flatMap((w) => cols.map((c) => `${c}.ilike.%${w.replace(/[%,()]/g, '')}%`))
-        .join(',');
+      const orExpr = words.flatMap((w) => cols.map((c) => `${c}.ilike.%${w.replace(/[%,()]/g, '')}%`)).join(',');
       if (!orExpr) continue;
-      const { data } = await sb
-        .schema('media')
-        .from('media_assets')
+      const { data } = await sb.schema('media').from('media_assets')
         .select('asset_id, quality_index, technical_score, created_at')
-        .in('status', APPROVED_TIERS)
-        .or(orExpr)
-        .limit(25);
+        .in('status', APPROVED_TIERS).or(orExpr).limit(25);
       const ranked = ((data ?? []) as any[]).slice().sort(rank);
       if (ranked.length > 0) byLabel[blockId] = ranked[0].asset_id as string;
     }
@@ -208,8 +146,6 @@ async function autoHeroForBlocks(
   return out;
 }
 
-// PBS 2026-07-16 (item 10) — resolve the sender from proposal.created_by.
-// auth.users lives in the `auth` schema and requires service-role access.
 async function loadSender(
   sb: ReturnType<typeof getSupabaseAdmin>,
   createdBy: string | null | undefined,
@@ -232,58 +168,43 @@ async function loadSender(
 export async function GET(req: Request, { params }: Ctx) {
   const url = new URL(req.url);
   const format = (url.searchParams.get('format') ?? 'html').toLowerCase();
-  // PBS 2026-07-16 (item 4) — with_photos=0 strips hero_asset_id from every block
-  // so PBS can send a text-only proposal without editing each block by hand.
   const withPhotos = url.searchParams.get('with_photos') !== '0';
   const factsheetId = url.searchParams.get('factsheet_id') ?? '';
 
-  // PBS 2026-07-17 — inline the block fetch so we can log the RAW response
-  // (data + error + status + count) and prove where the helper's 0 comes from.
-  // getProposalWithBlocks uses Promise.all and destructures data-only, hiding
-  // any error or partial-response condition.
-  const sbInline = getSupabaseAdmin();
-  const [proposalR, blocksHelperR, blocksProbeR, blocksSelectStarR, emailR] = await Promise.all([
-    sbInline.schema('sales').from('proposals').select('*').eq('id', params.id).maybeSingle(),
-    // Exact helper query (what getProposalWithBlocks does)
-    sbInline.schema('sales').from('proposal_blocks').select('*').eq('proposal_id', params.id).order('sort_order'),
-    // Count-only probe (worked earlier — returned 1)
-    sbInline.schema('sales').from('proposal_blocks').select('id', { count: 'exact', head: true }).eq('proposal_id', params.id),
-    // Alt: select ONE known column, no order
-    sbInline.schema('sales').from('proposal_blocks').select('id,label,block_type,qty,nights,unit_price_lak,sort_order,additional_discount_pct,hero_asset_id,note,ref_table,ref_id,removable,ics_url,total_lak,created_at,proposal_id').eq('proposal_id', params.id),
-    sbInline.schema('sales').from('proposal_emails').select('*').eq('proposal_id', params.id).order('version', { ascending: false }).limit(1).maybeSingle(),
-  ]);
-  const proposal = (proposalR.data as any) ?? null;
-  if (!proposal) return NextResponse.json({ error: 'proposal_not_found' }, { status: 404 });
-  const helperErr = blocksHelperR.error ? `${blocksHelperR.error.code ?? ''}:${blocksHelperR.error.message ?? ''}:${(blocksHelperR.error as any).details ?? ''}:${(blocksHelperR.error as any).hint ?? ''}` : null;
-  const helperData = (blocksHelperR.data ?? []) as any[];
-  const altErr = blocksSelectStarR.error ? `${blocksSelectStarR.error.code ?? ''}:${blocksSelectStarR.error.message ?? ''}` : null;
-  const altData = (blocksSelectStarR.data ?? []) as any[];
-  const probeCount = blocksProbeR.count ?? null;
-  const probeErr = blocksProbeR.error ? `${blocksProbeR.error.code ?? ''}:${blocksProbeR.error.message ?? ''}` : null;
-  const email = (emailR.data as any) ?? null;
+  const sb = getSupabaseAdmin();
 
-  // Prefer whichever result actually returned rows (self-heals the render if
-  // the helper misbehaves for reasons we haven't isolated yet).
-  const blocks = (helperData.length > 0 ? helperData : altData) as any[];
+  // PBS 2026-07-18 — SECURITY DEFINER RPC returns proposal+blocks+offers+email
+  // as a single JSON blob. Bypasses PostgREST schema-cache issue that caused
+  // sb.schema('sales').from() to return silently-empty despite valid data.
+  const { data: stateData, error: stateErr } = await sb.rpc('fn_proposal_preview_state', { _proposal_id: params.id });
+  const state = (stateData ?? {}) as {
+    proposal?: any;
+    blocks?: any[];
+    offers?: any[];
+    email?: any;
+    error?: string;
+  };
+  if (stateErr || state.error === 'proposal_not_found' || !state.proposal) {
+    console.error('[preview] state RPC failed', { proposal_id: params.id, err: stateErr?.message, state_error: state.error });
+    return NextResponse.json({ error: 'proposal_not_found', detail: stateErr?.message ?? state.error }, { status: 404 });
+  }
 
-  const diagBlockErr = helperErr ?? probeErr ?? altErr;
-  const diagBlockCountFromServiceRole = probeCount;
-  console.error('[preview.diag] block fetch', {
+  const proposal = state.proposal;
+  const blocks = (state.blocks ?? []) as any[];
+  const offerRows = (state.offers ?? []) as any[];
+  const email = state.email ?? null;
+
+  console.error('[preview] RPC result', {
     proposal_id: params.id,
-    helper_len: helperData.length,
-    helper_err: helperErr,
-    probe_count: probeCount,
-    probe_err: probeErr,
-    alt_len: altData.length,
-    alt_err: altErr,
-    resolved_len: blocks.length,
+    blocks_len: blocks.length,
+    offers_len: offerRows.length,
+    email_version: email?.version ?? null,
   });
 
   const inq = proposal.inquiry_id ? await getInquiry(proposal.inquiry_id) : null;
   const dateIn = (proposal.date_in_snapshot ?? inq?.date_in ?? '') as string;
   const dateOut = (proposal.date_out_snapshot ?? inq?.date_out ?? '') as string;
   const nights = nightCount(dateIn, dateOut);
-  // PBS 2026-07-16 (item 5) — sum with per-block additional_discount_pct applied.
   const totalLak = blocks.reduce((s, b) => {
     const disc = Number(b.additional_discount_pct ?? 0);
     const unitEff = Number(b.unit_price_lak ?? 0) * (1 - Math.max(0, Math.min(100, disc)) / 100);
@@ -291,40 +212,11 @@ export async function GET(req: Request, { params }: Ctx) {
   }, 0);
 
   const propSnap = await loadPropertySnapshot(Number(proposal.property_id));
-  const sb = getSupabaseAdmin();
   const factsheet = await loadFactsheet(sb, factsheetId);
-  // PBS 2026-07-16 item 6 — resolve fallback hero photos for blocks missing hero_asset_id.
-  const heroFallback = withPhotos ? await autoHeroForBlocks(sb, blocks) : {};
-  // PBS 2026-07-16 item 10 — sender signature.
-  const sender = await loadSender(sb, (proposal as unknown as { created_by: string | null }).created_by);
-  // PBS 2026-07-16 (Feature A) — multi-rate offers side-by-side in the email.
-  // Empty or length 1 → template falls back to single-card layout automatically.
-  // PBS 2026-07-17 — parallel unordered fallback so we always render every
-  // saved offer even if .order() interacts weirdly with PostgREST schema cache.
-  const [orderedR, fallbackR] = await Promise.all([
-    sb.schema('sales').from('proposal_rate_offers')
-      .select('id, rate_plan_id, position, label, payment_terms, cancellation_terms, unit_price_lak, total_lak, created_at')
-      .eq('proposal_id', params.id)
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true }),
-    sb.schema('sales').from('proposal_rate_offers')
-      .select('id, rate_plan_id, position, label, payment_terms, cancellation_terms, unit_price_lak, total_lak, created_at')
-      .eq('proposal_id', params.id),
-  ]);
-  const orderedRows = (orderedR.data ?? []) as any[];
-  const fallbackRows = (fallbackR.data ?? []) as any[];
-  const offerRows = (orderedRows.length >= fallbackRows.length ? orderedRows : fallbackRows)
-    .slice()
-    .sort((a: any, b: any) => (Number(a.position ?? 0) - Number(b.position ?? 0)) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')));
-  console.error('[preview.diag] offers fetch', {
-    proposal_id: params.id,
-    ordered_len: orderedRows.length,
-    ordered_err: orderedR.error?.message ?? null,
-    fallback_len: fallbackRows.length,
-    fallback_err: fallbackR.error?.message ?? null,
-    resolved_len: offerRows.length,
-  });
-  const rateOffers: ProposalRateOfferInput[] = (offerRows as ProposalRateOfferInput[]).map((o) => ({
+  const heroFallback = withPhotos ? await autoHeroForBlocks(sb, blocks as ProposalBlock[]) : {};
+  const sender = await loadSender(sb, proposal.created_by ?? null);
+
+  const rateOffers: ProposalRateOfferInput[] = offerRows.map((o: any) => ({
     id: o.id,
     rate_plan_id: o.rate_plan_id,
     position: Number(o.position ?? 1),
@@ -334,6 +226,7 @@ export async function GET(req: Request, { params }: Ctx) {
     unit_price_lak: o.unit_price_lak != null ? Number(o.unit_price_lak) : null,
     total_lak: o.total_lak != null ? Number(o.total_lak) : null,
   }));
+
   const proto = process.env.VERCEL_URL ? 'https' : 'http';
   const host = process.env.VERCEL_URL ?? url.host;
   const base = `${proto}://${host}`;
@@ -349,9 +242,7 @@ export async function GET(req: Request, { params }: Ctx) {
     intro_md: email?.intro_md ?? '',
     outro_md: email?.outro_md ?? '',
     ps_md: email?.ps_md ?? null,
-    blocks: blocks.map((b): ProposalBlockInput => {
-      // PBS 2026-07-16 (item 5) — apply per-block additional_discount_pct at render time,
-      // so the stored total_lak stays the base price (undiscounted).
+    blocks: blocks.map((b: any): ProposalBlockInput => {
       const disc = Number(b.additional_discount_pct ?? 0);
       const unitEff = Number(b.unit_price_lak ?? 0) * (1 - Math.max(0, Math.min(100, disc)) / 100);
       const totalEff = Number(b.qty ?? 1) * Number(b.nights ?? 1) * unitEff;
@@ -360,7 +251,6 @@ export async function GET(req: Request, { params }: Ctx) {
         note: b.note, qty: b.qty, nights: b.nights,
         unit_price_lak: unitEff,
         total_lak: totalEff,
-        // PBS 2026-07-16 (item 4 + 6) — honour master toggle, then use auto-hero fallback.
         hero_asset_id: withPhotos ? ((b.hero_asset_id ?? heroFallback[b.id]) ?? null) : null,
         sort_order: b.sort_order ?? 100,
       };
@@ -379,13 +269,7 @@ export async function GET(req: Request, { params }: Ctx) {
   };
 
   let html = renderProposalEmailHtml(ctx);
-  // PBS 2026-07-17 — banner shows the full triad: helper vs probe vs alt.
-  // If helper=0 but alt>0, the failure is in the ordered wildcard select
-  // (probably enum column serialization). If probe=0 too, actually empty.
-  if (helperData.length === 0 && ((probeCount ?? 0) > 0 || altData.length > 0)) {
-    const banner = `<div style="padding:12px 18px;background:#8B0000;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em;line-height:1.5">DIAG · helper(select-*)=${helperData.length} · probe(count)=${probeCount} · alt(select-cols)=${altData.length} · resolved=${blocks.length} · err=${(diagBlockErr ?? 'none')} · proposal=${params.id}</div>`;
-    html = banner + html;
-  } else if (blocks.length === 0) {
+  if (blocks.length === 0) {
     const banner = `<div style="padding:12px 18px;background:#7a5500;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em">DIAG · No blocks yet for this proposal. Add a room from the composer before previewing.</div>`;
     html = banner + html;
   }
@@ -395,18 +279,12 @@ export async function GET(req: Request, { params }: Ctx) {
     html,
     base_url: base,
     diag: {
-      helper_len: helperData.length,
-      helper_err: helperErr,
-      probe_count: probeCount,
-      probe_err: probeErr,
-      alt_len: altData.length,
-      alt_err: altErr,
-      resolved_len: blocks.length,
-      email_present: !!email,
+      blocks_len: blocks.length,
+      offers_len: offerRows.length,
+      email_version: email?.version ?? null,
     },
   });
-  // PBS 2026-07-16 — aggressive no-cache; browser + service worker were serving
-  // stale preview responses even though the client bumped the ?v= param.
+
   return new Response(html, {
     status: 200,
     headers: {
@@ -415,12 +293,9 @@ export async function GET(req: Request, { params }: Ctx) {
       'Pragma':        'no-cache',
       'Expires':       '0',
       'X-Preview-Rendered-At': new Date().toISOString(),
-      'X-Block-Helper-Len':   String(helperData.length),
-      'X-Block-Helper-Err':   (helperErr ?? '').slice(0, 200),
-      'X-Block-Probe-Count':  String(probeCount ?? ''),
-      'X-Block-Alt-Len':      String(altData.length),
-      'X-Block-Alt-Err':      (altErr ?? '').slice(0, 200),
-      'X-Block-Resolved-Len': String(blocks.length),
+      'X-Block-Count':  String(blocks.length),
+      'X-Offer-Count':  String(offerRows.length),
+      'X-Email-Version': String(email?.version ?? ''),
       'Surrogate-Control':     'no-store',
       'CDN-Cache-Control':     'no-store',
       'Vercel-CDN-Cache-Control': 'no-store',
