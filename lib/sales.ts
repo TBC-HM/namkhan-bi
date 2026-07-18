@@ -146,16 +146,28 @@ export async function getProposal(id: string): Promise<Proposal | null> {
 }
 
 export async function getProposalWithBlocks(id: string): Promise<{ proposal: Proposal | null; blocks: ProposalBlock[]; email: any | null }> {
+  // PBS 2026-07-18 v2 — pivoted to fn_proposal_preview_state RPC. Direct
+  // sb.schema('sales').from('proposals'|'proposal_blocks'|'proposal_emails').select()
+  // silently returned [] even with service_role + grants + schema exposed
+  // (see agent memory: feedback_sales_schema_silent_empty_despite_exposed).
+  // That left the composer left pane empty on load — PBS saw no photos, wrong price,
+  // and the live preview iframe fetched a stale-looking hydration. RPC is the same
+  // source the /email/preview route already uses, so left pane + iframe now agree.
   const sb = getSupabaseAdmin();
-  const [{ data: proposal }, { data: blocks }, { data: email }] = await Promise.all([
-    sb.schema('sales').from('proposals').select('*').eq('id', id).maybeSingle(),
-    sb.schema('sales').from('proposal_blocks').select('*').eq('proposal_id', id).order('sort_order'),
-    sb.schema('sales').from('proposal_emails').select('*').eq('proposal_id', id).order('version', { ascending: false }).limit(1).maybeSingle(),
-  ]);
+  const { data, error } = await sb.rpc('fn_proposal_preview_state', { p_proposal_id: id });
+  if (error) {
+    return { proposal: null, blocks: [], email: null };
+  }
+  const state = (data ?? {}) as { proposal?: any; blocks?: any[]; email?: any; error?: string };
+  if (state.error === 'proposal_not_found' || !state.proposal) {
+    return { proposal: null, blocks: [], email: null };
+  }
+  const blocks = (state.blocks ?? []) as ProposalBlock[];
+  blocks.sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0));
   return {
-    proposal: (proposal as Proposal) ?? null,
-    blocks: ((blocks ?? []) as ProposalBlock[]),
-    email: email ?? null,
+    proposal: state.proposal as Proposal,
+    blocks,
+    email: state.email ?? null,
   };
 }
 
