@@ -83,15 +83,20 @@ const FOREST = '#084838';
 const CREAM  = '#F5F0E1';
 
 const KIND_LABEL: Record<string, string> = {
-  rooms: 'Rooms',
+  rooms: 'Accommodation',
   facilities: 'Facilities',
+  jungle_spa: 'Jungle Spa',
+  fnb: 'F&B',
   activities: 'Activities',
+  retreats: 'Retreats',
+  imekong: 'Imekong',
   certifications: 'Certifications',
   team: 'Team',
   destination: 'Destination',
   other: 'Other',
   uncategorized: 'Uncategorized',
 };
+const KIND_ORDER = ['rooms','facilities','jungle_spa','fnb','activities','retreats','imekong','certifications','destination','other','uncategorized'];
 
 function isVideoRow(r: MediaRow): boolean {
   const mt = (r.mime_type ?? '').toLowerCase();
@@ -118,13 +123,43 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
       if (!byKind.has(k)) byKind.set(k, []);
       byKind.get(k)!.push(r);
     }
-    const order = ['rooms', 'facilities', 'activities', 'certifications', 'team', 'destination', 'other'];
-    for (const k of order) {
+    for (const k of KIND_ORDER) {
       const rows = byKind.get(k);
       if (rows && rows.length) groups.push({ kind: k, label: KIND_LABEL[k] ?? k, rows });
     }
     return groups;
   }, [areaTaxonomy]);
+
+  // PBS 2026-07-18 · bulk-select + mass-assign
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleId = (id: string) => setSelectedIds(prev => {
+    const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
+  async function bulkAssign(tr: ClarifyAreaTaxonomyRow) {
+    const ids = Array.from(selectedIds); if (ids.length === 0) return;
+    setBulkBusy(true); setMsg(null);
+    try {
+      const results = await Promise.all(ids.map(async id => {
+        const res = await fetch('/api/marketing/media/clarify-assign', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            asset_id: id, kind: tr.kind,
+            ref_id: tr.kind === 'destination' ? (tr.ref_id ?? tr.area_key) : (tr.ref_id ?? null),
+            area_key: tr.area_key,
+          }),
+        });
+        const j = await res.json().catch(() => ({}));
+        return { id, ok: res.ok && j?.ok };
+      }));
+      const okIds = results.filter(r => r.ok).map(r => r.id);
+      const failed = results.length - okIds.length;
+      setLocalDismiss(s => { const n = new Set(s); okIds.forEach(id => n.add(id)); return n; });
+      setSelectedIds(new Set());
+      setMsg(`Assigned ${okIds.length} → ${tr.name}${failed > 0 ? ' · ' + failed + ' failed' : ''}`);
+    } catch (e: any) { setMsg('Bulk assign failed: ' + e.message); }
+    finally { setBulkBusy(false); }
+  }
 
   async function inlineAssign(row: MediaRow, taxRow: ClarifyAreaTaxonomyRow) {
     setBusyId(row.asset_id); setMsg(null);
@@ -221,6 +256,49 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
         ))}
       </div>
 
+      {/* PBS 2026-07-18 · bulk-select action bar */}
+      {clarify.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10, padding: '8px 10px', background: selectedIds.size > 0 ? CREAM : WHITE, border: '1px solid ' + HAIR, borderRadius: 4 }}>
+          <span style={{ fontSize: 12, color: INK, fontWeight: selectedIds.size > 0 ? 600 : 400 }}>
+            {selectedIds.size > 0 ? `${selectedIds.size} selected` : 'Bulk assign — check tiles to select'}
+          </span>
+          {selectedIds.size === 0 ? (
+            <button onClick={() => setSelectedIds(new Set(clarify.map(r => r.asset_id)))} style={{ padding: '3px 10px', fontSize: 11, background: WHITE, color: INK, border: '1px solid ' + HAIR, borderRadius: 3, cursor: 'pointer' }}>
+              Select all ({clarify.length})
+            </button>
+          ) : (
+            <>
+              <button onClick={() => setSelectedIds(new Set())} style={{ padding: '3px 10px', fontSize: 11, background: WHITE, color: INK_M, border: '1px solid ' + HAIR, borderRadius: 3, cursor: 'pointer' }}>
+                Clear
+              </button>
+              <select
+                disabled={bulkBusy}
+                defaultValue=""
+                onChange={(e) => {
+                  const [kind, key] = e.target.value.split('::');
+                  if (!kind) return;
+                  const tr = areaTaxonomy.find(t => t.kind === kind && t.area_key === key);
+                  if (tr) bulkAssign(tr);
+                  e.currentTarget.value = '';
+                }}
+                style={{ padding: '4px 8px', fontSize: 11, border: '1px solid ' + HAIR, background: WHITE, color: INK, borderRadius: 3, cursor: bulkBusy ? 'wait' : 'pointer', minWidth: 220 }}
+              >
+                <option value="">{bulkBusy ? 'Assigning…' : `⇓ Mass-assign ${selectedIds.size} to…`}</option>
+                {taxonomyGroups.map(g => (
+                  <optgroup key={g.kind} label={g.label}>
+                    {g.rows.map(tr => (
+                      <option key={g.kind + '::' + tr.area_key} value={g.kind + '::' + tr.area_key}>
+                        {tr.name}{tr.photo_count != null ? ' · ' + tr.photo_count : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </>
+          )}
+        </div>
+      )}
+
       {clarify.length === 0 ? (
         <div style={{ padding:40, textAlign:'center', color:INK_M, background:WHITE, border:'1px solid '+HAIR, borderRadius:4 }}>
           Nothing to clarify — every photo has an area and a tier. Videos live in the Videos → Clarify tab.
@@ -232,11 +310,17 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
             if (!r.property_area) badges.push({ k: 'area', label: '?area' });
             if (!r.primary_tier)  badges.push({ k: 'tier', label: '?tier' });
             const qBadge = qaBadge(r.quality_index ?? null);
+            const isSelected = selectedIds.has(r.asset_id);
             return (
               <div key={r.asset_id} style={{
-                background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, overflow: 'hidden',
+                background: WHITE, border: '2px solid ' + (isSelected ? FOREST : HAIR), borderRadius: 4, overflow: 'hidden',
                 display: 'flex', flexDirection: 'column', padding: 0, textAlign: 'left',
+                position: 'relative',
               }}>
+                {/* PBS 2026-07-18 · bulk-select checkbox top-right */}
+                <label style={{ position: 'absolute', top: 4, right: 4, zIndex: 3, background: 'rgba(255,255,255,0.92)', borderRadius: 3, padding: '2px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={isSelected} onChange={() => toggleId(r.asset_id)} style={{ cursor: 'pointer', margin: 0 }} title="Select for bulk assign" />
+                </label>
                 {/* PBS 2026-07-17 · tile no longer a <button> so the inline
                     <select> below works. Image area is the click target for edit. */}
                 <div
