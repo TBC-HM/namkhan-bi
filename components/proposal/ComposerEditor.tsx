@@ -803,33 +803,23 @@ export default function ComposerEditor({
         </span>
       </div>
 
-      {/* Availability banner (kept from prior iteration) */}
-      {check && check.status !== 'no_rooms' && check.status !== 'green' && (
+      {/* PBS 2026-07-19 · Inventory banner removed at PBS request.
+          Red status (hard-block) still surfaces via canSend + Send button title.
+          Yellow "tight/stale" is silent — availability_check can be re-triggered from the top strip. */}
+      {check && check.status === 'red' && (
         <div style={{
           gridColumn: '1 / -1', marginBottom: 12, padding: '10px 14px', borderRadius: 8,
-          background: check.status === 'red' ? '#FDECE4' : '#FBF3D9',
-          border: `1px solid ${check.status === 'red' ? '#E7B4A0' : '#E5D48F'}`,
+          background: '#FDECE4', border: `1px solid #E7B4A0`,
           fontSize: 12, color: T.ink,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <strong>
-              {check.status === 'yellow' ? 'Tight or stale inventory' : 'Send blocked — rooms unavailable'}
-            </strong>
+            <strong>Send blocked — rooms unavailable</strong>
             <span style={{ color: T.inkSoft }}>{check.message}</span>
-            {check.status === 'red' && (
-              <button onClick={() => sendProposal({ force: true })} disabled={busy === 'send'} style={S.btnGhost}>
-                Force-send anyway
-              </button>
-            )}
+            <button onClick={() => sendProposal({ force: true })} disabled={busy === 'send'} style={S.btnGhost}>
+              Force-send anyway
+            </button>
             <button onClick={refreshCheck} style={S.btnGhost}>↻ Re-check</button>
           </div>
-          {check.rooms.filter((r) => r.status !== 'green').length > 0 && (
-            <ul style={{ margin: '6px 0 0', paddingLeft: 20, fontSize: 12, color: T.inkSoft }}>
-              {check.rooms.filter((r) => r.status !== 'green').map((r) => (
-                <li key={r.block_id}><strong style={{ color: T.ink }}>{r.label}</strong> · {r.message}</li>
-              ))}
-            </ul>
-          )}
         </div>
       )}
 
