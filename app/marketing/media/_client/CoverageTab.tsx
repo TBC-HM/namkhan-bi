@@ -39,10 +39,35 @@ interface MediaRowLite {
   master_path?: string | null;
 }
 
+// PBS 2026-07-18 · dynamic folder coverage from v_media_area_taxonomy
+export interface TaxRow {
+  kind: string;
+  ref_id: string | null;
+  area_key: string;
+  name: string;
+  extra: string | null;
+  photo_count: number | null;
+  sort_key?: string | null;
+}
+
 interface Props {
   rows: CoverageRow[];
   mediaPage?: MediaRowLite[];
+  areaTaxonomy?: TaxRow[];
 }
+
+const KIND_LABEL_LIB: Record<string, string> = {
+  rooms: 'Accommodation',
+  facilities: 'Facilities',
+  jungle_spa: 'Jungle Spa',
+  fnb: 'F&B',
+  activities: 'Activities',
+  retreats: 'Retreats',
+  imekong: 'Imekong',
+  certifications: 'Certifications',
+  destination: 'Destination',
+};
+const KIND_ORDER_LIB = ['rooms','facilities','jungle_spa','fnb','activities','retreats','imekong','certifications','destination'];
 
 // Design tokens (Namkhan palette per claude_md v3.24 §0.55)
 const WHITE  = '#FFFFFF';
@@ -244,9 +269,29 @@ async function fetchDrill(query: DrillQuery): Promise<MediaRowLite[]> {
 // Kept for optional client-side fallback only; drill-down now hits the API.
 void filterMedia; void filterMediaRow; void filterMediaCol;
 
-export default function CoverageTab({ rows, mediaPage: _mediaPage = [] }: Props) {
+export default function CoverageTab({ rows, mediaPage: _mediaPage = [], areaTaxonomy = [] }: Props) {
   void _mediaPage;
   const [drill, setDrill] = useState<DrillState | null>(null);
+
+  // PBS 2026-07-18 · dynamic folder coverage — mirrors Library dropdown
+  const folderGroups = useMemo(() => {
+    const byKind = new Map<string, TaxRow[]>();
+    for (const r of areaTaxonomy) {
+      if (!byKind.has(r.kind)) byKind.set(r.kind, []);
+      byKind.get(r.kind)!.push(r);
+    }
+    const groups: Array<{ kind: string; label: string; rows: TaxRow[]; total: number; withPhotos: number; gaps: number }> = [];
+    for (const k of KIND_ORDER_LIB) {
+      const rowsK = byKind.get(k);
+      if (!rowsK || rowsK.length === 0) continue;
+      const sorted = [...rowsK].sort((a, b) => (a.sort_key ?? a.name ?? '').localeCompare(b.sort_key ?? b.name ?? ''));
+      const total = sorted.reduce((s, r) => s + (r.photo_count ?? 0), 0);
+      const withPhotos = sorted.filter(r => (r.photo_count ?? 0) > 0).length;
+      const gaps = sorted.filter(r => (r.photo_count ?? 0) === 0).length;
+      groups.push({ kind: k, label: KIND_LABEL_LIB[k] ?? k, rows: sorted, total, withPhotos, gaps });
+    }
+    return groups;
+  }, [areaTaxonomy]);
 
   const sections = useMemo(
     () => SECTIONS.map(s => buildSection(s.key, rows)),
@@ -339,6 +384,61 @@ export default function CoverageTab({ rows, mediaPage: _mediaPage = [] }: Props)
 
   return (
     <div>
+      {/* PBS 2026-07-18 · dynamic folder coverage — mirrors Library dropdown exactly */}
+      {folderGroups.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: INK, fontWeight: 600 }}>
+              Photo coverage by folder — same structure as the Library dropdown
+            </div>
+            <div style={{ fontSize: 11, color: INK_M, marginTop: 4 }}>
+              Every folder from Property Settings + virtual sub-folders. Green = has photos · Amber = &lt; 3 (thin) · Red = zero (gap).
+            </div>
+          </div>
+          {folderGroups.map(g => (
+            <div key={'folders-'+g.kind} style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>{g.label}</div>
+                <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  {g.rows.length} folder{g.rows.length === 1 ? '' : 's'} · {g.total.toLocaleString()} photos · {g.gaps > 0 ? g.gaps + ' gap' + (g.gaps === 1 ? '' : 's') : 'no gaps'}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 8 }}>
+                {g.rows.map(r => {
+                  const n = r.photo_count ?? 0;
+                  const isGap = n === 0;
+                  const isThin = n > 0 && n < 3;
+                  const bg = isGap ? '#FBE8E4' : isThin ? AMBER_BG : FOREST_BG;
+                  const fg = isGap ? '#8A2419' : isThin ? MUTED : FOREST;
+                  return (
+                    <a key={r.area_key}
+                       href={`/marketing/media?tab=library&area=${encodeURIComponent(r.area_key)}`}
+                       style={{
+                         background: WHITE, border: '1px solid '+HAIR, borderRadius: 4,
+                         padding: '8px 10px', textDecoration: 'none',
+                         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                       }}>
+                      <div style={{ fontSize: 12, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                      <div style={{
+                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 3,
+                        background: bg, color: fg, fontVariantNumeric: 'tabular-nums',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {isGap ? 'no photos' : n.toLocaleString() + ' photo' + (n === 1 ? '' : 's')}
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          <div style={{ borderTop: '1px solid '+HAIR, marginTop: 20, marginBottom: 20 }} />
+          <div style={{ fontSize: 11, color: INK_M, marginBottom: 8, fontStyle: 'italic' }}>
+            Below · Coverage by usage tier (OTA · Website · Social · etc.). Same photos, sliced differently.
+          </div>
+        </div>
+      )}
+
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: INK, fontWeight: 600 }}>
           Live photo coverage &mdash; rows are categories, columns are usage tiers. 0 = gap, 3+ = solid coverage. Click any non-zero cell to see the matching photos.
