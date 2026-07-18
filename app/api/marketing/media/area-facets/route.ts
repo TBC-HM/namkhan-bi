@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 interface Row {
-  kind: 'rooms' | 'facilities' | 'jungle_spa' | 'fnb' | 'activities' | 'retreats' | 'imekong'
+  kind: 'rooms' | 'facilities' | 'jungle_spa' | 'fnb' | 'activities' | 'retreats' | 'transport' | 'imekong'
        | 'certifications' | 'team' | 'destination' | 'other' | 'uncategorized';
   sort_order: number;
   ref_id: string;
@@ -52,6 +52,7 @@ export async function GET(req: Request) {
     fnb:            rows.filter(r => r.kind === 'fnb'),
     activities:     rows.filter(r => r.kind === 'activities'),
     retreats:       rows.filter(r => r.kind === 'retreats'),
+    transport:      rows.filter(r => r.kind === 'transport'),
     imekong:        rows.filter(r => r.kind === 'imekong'),
     certifications: rows.filter(r => r.kind === 'certifications'),
     team:           rows.filter(r => r.kind === 'team'),
