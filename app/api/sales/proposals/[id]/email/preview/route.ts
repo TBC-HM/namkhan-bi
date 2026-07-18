@@ -269,13 +269,9 @@ export async function GET(req: Request, { params }: Ctx) {
     sender,
   };
 
-  let html = renderProposalEmailHtml(ctx);
-  if (blocks.length === 0) {
-    // Verbose diag so we can see if RPC failed vs actually-empty proposal.
-    const diagLine = `RPC route · blocks=${blocks.length} · offers=${offerRows.length} · email=${email ? 'v'+email.version : 'none'} · proposal=${params.id}`;
-    const banner = `<div style="padding:12px 18px;background:#7a5500;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em">DIAG · No blocks yet for this proposal. ${diagLine}</div>`;
-    html = banner + html;
-  }
+  const html = renderProposalEmailHtml(ctx);
+  // PBS 2026-07-19 · DIAG banner removed. Empty state now handled by composer left panel
+  // ("No blocks yet — add a room or experience to start.") and inventory pre-send guard.
 
   if (format === 'json') return NextResponse.json({
     subject: ctx.subject,
