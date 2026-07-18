@@ -352,6 +352,9 @@ export default function ComposerEditor({
   // Email copy
   const [subject, setSubject] = useState<string>(initialEmail?.subject ?? `Your stay at The Namkhan · ${proposal.date_in}`);
   const [bodyMd, setBodyMd] = useState<string>(initialEmail?.intro_md ?? '');
+  // PBS 2026-07-18 — outro + P.S. were previously locked in the template. Made editable per row.
+  const [outroMd, setOutroMd] = useState<string>(initialEmail?.outro_md ?? '');
+  const [psMd, setPsMd] = useState<string>(initialEmail?.ps_md ?? '');
   const [emailBusy, setEmailBusy] = useState(false);
   const [aiSource, setAiSource] = useState<string | null>(null);
 
@@ -380,21 +383,26 @@ export default function ComposerEditor({
 
   // Debounced email PATCH — one round-trip per pause (500ms).
   const emailDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialEmailStamp = useRef<string>(JSON.stringify({ s: initialEmail?.subject ?? null, b: initialEmail?.intro_md ?? null }));
+  const initialEmailStamp = useRef<string>(JSON.stringify({
+    s: initialEmail?.subject ?? null,
+    b: initialEmail?.intro_md ?? null,
+    o: initialEmail?.outro_md ?? null,
+    p: initialEmail?.ps_md ?? null,
+  }));
   useEffect(() => {
-    const now = JSON.stringify({ s: subject, b: bodyMd });
+    const now = JSON.stringify({ s: subject, b: bodyMd, o: outroMd, p: psMd });
     if (now === initialEmailStamp.current) return;
     if (emailDebounce.current) clearTimeout(emailDebounce.current);
     emailDebounce.current = setTimeout(async () => {
       const r = await fetch(`/api/sales/proposals/${proposalId}/email`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ subject, intro_md: bodyMd }),
+        body: JSON.stringify({ subject, intro_md: bodyMd, outro_md: outroMd, ps_md: psMd }),
       });
       if (r.ok) { initialEmailStamp.current = now; markSaved(); }
     }, 500);
     return () => { if (emailDebounce.current) clearTimeout(emailDebounce.current); };
-  }, [subject, bodyMd, proposalId, markSaved]);
+  }, [subject, bodyMd, outroMd, psMd, proposalId, markSaved]);
 
   // Live "Saved Ns ago" ticker (once/sec while a save exists).
   useEffect(() => {
@@ -1078,8 +1086,26 @@ export default function ComposerEditor({
                 placeholder="Write a warm, concise note — dates, room, one signature experience. This appears above the stay summary."
               />
             </FieldLabel>
+            <div style={{ height: 10 }} />
+            <FieldLabel label="Closing note (below pricing, before CTAs)">
+              <textarea
+                style={{ ...S.textarea, minHeight: 80 }}
+                value={outroMd}
+                onChange={(e) => setOutroMd(e.target.value)}
+                placeholder="e.g. If anything wants changing, write back. We sit on the river and we have time."
+              />
+            </FieldLabel>
+            <div style={{ height: 10 }} />
+            <FieldLabel label="P.S. (optional italic line under closing)">
+              <textarea
+                style={{ ...S.textarea, minHeight: 60 }}
+                value={psMd}
+                onChange={(e) => setPsMd(e.target.value)}
+                placeholder="e.g. The boat leaves at 06:30. The light is the reason."
+              />
+            </FieldLabel>
             <div style={{ marginTop: 6, fontSize: 11, color: T.inkMute }}>
-              Auto-saves 500ms after you stop typing. Outro + sign-off are appended automatically from your property signature.
+              Auto-saves 500ms after you stop typing. Sign-off is appended automatically from your property signature.
             </div>
           </section>
 
