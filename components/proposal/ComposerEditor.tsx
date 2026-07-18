@@ -246,10 +246,13 @@ interface RatePlan {
 
 // PBS 2026-07-16 (Feature A) — one row per offer stored in sales.proposal_rate_offers.
 // Up to 3 per proposal — email renders side-by-side.
+// PBS 2026-07-18 — added room_type_id (nullable text) so the composer dropdown
+// stops "reverting to first option" when a rate_plan_id spans multiple rooms.
 interface RateOfferRow {
   id: string;
   proposal_id: string;
   rate_plan_id: string;
+  room_type_id: string | null;
   position: number | null;
   label: string | null;
   payment_terms: string | null;
@@ -574,7 +577,10 @@ export default function ComposerEditor({
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         rate_plan_id: planId,
-        label: plan.rate_plan_name + (plan.board ? ` · ${plan.board}` : ''),
+        room_type_id: String(plan.room_type_id),
+        // PBS 2026-07-18 · label includes room name (was previously stripped);
+        // keeps the picker readable when multiple rooms share a rate plan.
+        label: (plan.room_type_name ? `${plan.room_type_name} · ` : '') + plan.rate_plan_name + (plan.board ? ` · ${plan.board}` : ''),
         payment_terms: DEFAULT_PAYMENT_TERMS,
         cancellation_terms: plan.cancellation_policy ?? DEFAULT_CANCELLATION_TERMS,
         unit_price_lak: Math.round(nightlyLak),
@@ -1219,14 +1225,12 @@ function RateOfferCard({
   onPatch: (patch: Partial<RateOfferRow>) => void;
   onDelete: () => void;
 }) {
-  // PBS 2026-07-19 · local memory of user's pick. Fixes the "jumps back to first plan"
-  // bug: the composite value in the <select> uses room_type_id, but proposal_rate_offers
-  // only stores rate_plan_id → optimistic update loses the room hint → plans.find()
-  // returns whichever room happens to be first for that rate_plan_id → composite value
-  // no longer matches an <option> → React resets to first. Track pick locally instead.
-  const [pickedKey, setPickedKey] = useState<string | null>(null);
-  const plan = pickedKey
-    ? plans.find((p) => `${p.rate_plan_id}::${p.room_type_id}` === pickedKey)
+  // PBS 2026-07-18 · constitutional fix — sales.proposal_rate_offers now persists
+  // room_type_id explicitly (migration 20260718 add_room_type_id_to_proposal_rate_offers).
+  // If offer has room_type_id, use it directly. Otherwise fall back to first-match
+  // (legacy rows written before the migration).
+  const plan = offer.room_type_id
+    ? plans.find((p) => p.rate_plan_id === offer.rate_plan_id && String(p.room_type_id) === offer.room_type_id)
     : plans.find((p) => p.rate_plan_id === offer.rate_plan_id);
   const nightlyLak = offer.unit_price_lak != null ? Number(offer.unit_price_lak) : (plan ? Number(plan.total_lak) / Math.max(1, Number(plan.nights ?? 1)) : 0);
   const totalLak = offer.total_lak != null ? Number(offer.total_lak) : (plan ? Number(plan.total_lak) : 0);
@@ -1248,14 +1252,13 @@ function RateOfferCard({
           <div style={{ fontSize: 10, color: T.inkSoft, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>
             Offer {offer.position ?? 1}
           </div>
-          {/* PBS 2026-07-18 · edit dropdown mirrors the +Add dropdown — optgroup per room, rich label per plan.
-              Previous version used p.rate_plan_id as both key AND value; when multiple rooms share the same
-              rate_plan_id (typical for Flex Rate across all rooms) React collapsed them to a single option.
-              Composite value "planId::roomTypeId" keeps them distinct so the picker shows real prices. */}
+          {/* PBS 2026-07-18 · composite value "planId::roomTypeId" keeps rows distinct
+              when the same rate_plan_id spans multiple rooms (Flex Rate). Selection is
+              now persisted server-side via room_type_id column on sales.proposal_rate_offers,
+              so the dropdown no longer resets on re-fetch. */}
           <select
-            value={pickedKey ?? `${offer.rate_plan_id}::${plan?.room_type_id ?? ''}`}
+            value={`${offer.rate_plan_id}::${offer.room_type_id ?? plan?.room_type_id ?? ''}`}
             onChange={(e) => {
-              setPickedKey(e.target.value);
               const [newPlanId, newRoomId] = e.target.value.split('::');
               const newPlan = plans.find((p) => p.rate_plan_id === newPlanId && String(p.room_type_id) === newRoomId)
                            || plans.find((p) => p.rate_plan_id === newPlanId);
@@ -1264,6 +1267,7 @@ function RateOfferCard({
               const roomLabel = newPlan.room_type_name ? `${newPlan.room_type_name} · ` : '';
               onPatch({
                 rate_plan_id: newPlan.rate_plan_id,
+                room_type_id: String(newPlan.room_type_id),
                 label: roomLabel + newPlan.rate_plan_name + (newPlan.board ? ` · ${newPlan.board}` : ''),
                 unit_price_lak: Math.round(nlLak),
                 total_lak: Math.round(Number(newPlan.total_lak)),
