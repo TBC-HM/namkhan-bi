@@ -1,11 +1,11 @@
 // app/api/marketing/media/area-facets/route.ts
 // GET — grouped taxonomy dropdown for /marketing/media Photo Library.
-// PBS 2026-07-14 — REVERT + EXTEND: pull from public.v_media_area_taxonomy which
-// unions Settings taxonomy (rooms/facilities/activities/certifications/team) with
-// three "Other X" review buckets and Uncategorized. Every row carries area_key
-// like 'room:511120' / 'facility:1' / 'other:rooms' / 'uncategorized' which
-// LibraryTab resolves to the right DB filter (room_type_id / facility_id / …).
-// Prior version pulled DISTINCT property_area and erased the Settings link.
+// PBS 2026-07-18 v3 — extended kinds so the Library dropdown mirrors Property
+// Settings sidebar: rooms (Accommodation) · facilities (generic non-wellness
+// non-dining) · jungle_spa · fnb · activities · retreats · imekong · certs ·
+// destination · other · uncategorized. Team dropped (contacts noise). All
+// derived from public.v_media_area_taxonomy which now splits facilities by
+// category and unions retreats + boats/cruises for zero-config extension.
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -14,7 +14,8 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 interface Row {
-  kind: 'rooms' | 'facilities' | 'activities' | 'certifications' | 'team' | 'other' | 'uncategorized';
+  kind: 'rooms' | 'facilities' | 'jungle_spa' | 'fnb' | 'activities' | 'retreats' | 'imekong'
+       | 'certifications' | 'team' | 'destination' | 'other' | 'uncategorized';
   sort_order: number;
   ref_id: string;
   area_key: string;
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
     .from('v_media_area_taxonomy')
     .select('kind, sort_order, ref_id, area_key, name, extra, photo_count')
     .eq('property_id', propertyId)
-    // PBS 2026-07-15 · exclude 'team' (contacts) — not a photo location, was cluttering the dropdown
+    // Team = contacts, not a location — drop from dropdown per 2026-07-15 decision
     .neq('kind', 'team')
     .order('sort_order')
     .order('photo_count', { ascending: false })
@@ -47,9 +48,14 @@ export async function GET(req: Request) {
   const groups = {
     rooms:          rows.filter(r => r.kind === 'rooms'),
     facilities:     rows.filter(r => r.kind === 'facilities'),
+    jungle_spa:     rows.filter(r => r.kind === 'jungle_spa'),
+    fnb:            rows.filter(r => r.kind === 'fnb'),
     activities:     rows.filter(r => r.kind === 'activities'),
+    retreats:       rows.filter(r => r.kind === 'retreats'),
+    imekong:        rows.filter(r => r.kind === 'imekong'),
     certifications: rows.filter(r => r.kind === 'certifications'),
     team:           rows.filter(r => r.kind === 'team'),
+    destination:    rows.filter(r => r.kind === 'destination'),
     other:          rows.filter(r => r.kind === 'other'),
     uncategorized:  rows.filter(r => r.kind === 'uncategorized'),
   };
