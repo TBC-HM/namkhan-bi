@@ -32,7 +32,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import RoomPickerDrawer from './RoomPickerDrawer';
-import ActivityCatalogDrawer from './ActivityCatalogDrawer';
+// ActivityCatalogDrawer (legacy sales.activity_catalog) retired 2026-07-18 · replaced by "+ Custom" bespoke-block flow.
 import PhotoPickerDrawer, { type BlockContext, type PhotoRow } from './PhotoPickerDrawer';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, FX_LAK_PER_USD } from '@/lib/format';
@@ -320,7 +320,7 @@ export default function ComposerEditor({
   // --- state ---
   const [blocks, setBlocks] = useState<ProposalBlock[]>(initialBlocks);
   const [showRooms, setShowRooms] = useState(false);
-  const [showActivities, setShowActivities] = useState(false);
+  // showActivities retired 2026-07-18 (was legacy catalog drawer)
   const [showExperiencePicker, setShowExperiencePicker] = useState(false);
   const [photoPickerFor, setPhotoPickerFor] = useState<ProposalBlock | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -907,7 +907,22 @@ export default function ComposerEditor({
               <span style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => setShowRooms(true)} style={S.btn}>+ Room</button>
                 <button onClick={() => setShowExperiencePicker(true)} style={S.btn}>+ Experience</button>
-                <button onClick={() => setShowActivities(true)} style={S.btnGhost} title="Legacy sales.activity_catalog picker">+ Advanced</button>
+                {/* PBS 2026-07-18 · bespoke one-off block (not saved to Settings catalog) */}
+                <button
+                  onClick={() => addBlockToProposal({
+                    block_type: 'activity',
+                    ref_table: null as any,
+                    ref_id: null as any,
+                    label: 'Custom item',
+                    note: undefined,
+                    unit_price_lak: 0,
+                    qty: 1,
+                    nights: 1,
+                    sort_order: 200,
+                  })}
+                  style={S.btn}
+                  title="One-off item just for this proposal — fill label, price, photo inline. Not saved to Settings."
+                >+ Custom</button>
               </span>
             </div>
 
@@ -1056,23 +1071,7 @@ export default function ComposerEditor({
           setShowRooms(false);
         }}
       />
-      <ActivityCatalogDrawer
-        open={showActivities}
-        onClose={() => setShowActivities(false)}
-        onPick={(activity) => {
-          addBlockToProposal({
-            block_type: 'activity',
-            ref_table: 'sales.activity_catalog',
-            ref_id: activity.id,
-            label: activity.title,
-            note: activity.short_summary ?? undefined,
-            unit_price_lak: Number(activity.sell_lak),
-            qty: 2,
-            nights: 1,
-            sort_order: 100,
-          });
-        }}
-      />
+      {/* ActivityCatalogDrawer removed 2026-07-18 — "+ Custom" button replaces it */}
       {showExperiencePicker && (
         <ExperienceInlinePicker
           onClose={() => setShowExperiencePicker(false)}
