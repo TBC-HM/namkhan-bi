@@ -1,8 +1,11 @@
 // app/api/sales/proposals/[id]/email/preview/route.ts
-// PBS 2026-07-18 · CLEAN REWRITE (v4).
+// PBS 2026-07-18 · v5 · hotel-wide hero fallback.
 // Single source: public.fn_proposal_preview_state RPC returns
 // {proposal, blocks, offers, email} as one jsonb payload — bypasses the
 // PostgREST-sales-schema silent-empty burn (see agent memory).
+// v5: when property.brand.hero_image_url is NULL, fall back to best-scoring
+// exterior/villa/landscape asset from media.media_assets so the newsletter
+// header carries an image instead of blank cream.
 // No shape normalizers. No diagnostic headers. No debug banners. No verbose
 // console.error. If it breaks, DevTools > Network shows a 4xx JSON with `detail`.
 
@@ -26,6 +29,32 @@ function nightCount(from: string | null | undefined, to: string | null | undefin
   if (!from || !to) return 1;
   const d1 = new Date(from), d2 = new Date(to);
   return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000));
+}
+
+// Hotel-wide hero fallback when property.brand.hero_image_url is NULL.
+// Pulls the best-scoring exterior/villa/landscape asset from media.media_assets
+// and returns a proxied /api/marketing/media/preview URL for it.
+async function loadHotelHeroFallback(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+  baseUrl: string,
+): Promise<string | null> {
+  const { data } = await sb.schema('media').from('media_assets')
+    .select('asset_id, quality_index, technical_score, width_px, created_at, category, sub_category, property_area')
+    .in('status', ['ready', 'tagged'])
+    .gte('width_px', 1200)
+    .or('category.in.(Exterior,Landscape,Grounds),sub_category.ilike.%exterior%,sub_category.ilike.%landscape%,sub_category.ilike.%villa%,sub_category.ilike.%pool%,sub_category.ilike.%river%,sub_category.ilike.%pavilion%')
+    .limit(20);
+  const rows = (data ?? []) as Array<Record<string, any>>;
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => {
+    const qa = Number(a.quality_index ?? 0), qb = Number(b.quality_index ?? 0);
+    if (qa !== qb) return qb - qa;
+    const ta = Number(a.technical_score ?? 0), tb = Number(b.technical_score ?? 0);
+    if (ta !== tb) return tb - ta;
+    return String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
+  });
+  const pick = rows[0]?.asset_id;
+  return pick ? `${baseUrl}/api/marketing/media/preview?asset_id=${pick}` : null;
 }
 
 async function loadPropertySnapshot(propertyId: number) {
@@ -215,7 +244,18 @@ export async function GET(req: Request, { params }: Ctx) {
     return s + Number(b.qty ?? 1) * Number(b.nights ?? 1) * unitEff;
   }, 0);
 
+  const proto = process.env.VERCEL_URL ? 'https' : 'http';
+  const host = process.env.VERCEL_URL ?? url.host;
+  const base = `${proto}://${host}`;
+
   const propSnap = await loadPropertySnapshot(Number(proposal.property_id));
+  // Header hero fallback: property.brand.hero_image_url is often NULL. Pull best
+  // exterior/villa/landscape asset from media so the newsletter header carries
+  // an image instead of blank cream.
+  if (!propSnap.hero_image_url) {
+    const fallbackHero = await loadHotelHeroFallback(sb, base);
+    if (fallbackHero) propSnap.hero_image_url = fallbackHero;
+  }
   const factsheet = await loadFactsheet(sb, factsheetId);
   const heroFallback = withPhotos ? await autoHeroForBlocks(sb, blocks as ProposalBlock[]) : {};
   const sender = await loadSender(sb, proposal.created_by ?? null);
@@ -230,10 +270,6 @@ export async function GET(req: Request, { params }: Ctx) {
     unit_price_lak: o.unit_price_lak != null ? Number(o.unit_price_lak) : null,
     total_lak: o.total_lak != null ? Number(o.total_lak) : null,
   }));
-
-  const proto = process.env.VERCEL_URL ? 'https' : 'http';
-  const host = process.env.VERCEL_URL ?? url.host;
-  const base = `${proto}://${host}`;
 
   const ctx: ProposalEmailContext = {
     proposal_id: params.id,
