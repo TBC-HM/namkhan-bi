@@ -688,6 +688,10 @@ export default function ComposerEditor({
       {/* Top bar — breadcrumb, saved indicator, status pill, Send CTA */}
       <div style={S.headerBar}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          {/* PBS 2026-07-18 · Back button — returns to /sales/proposals list */}
+          <a href="/sales/proposals" style={{ ...S.btnGhost, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }} title="Back to proposals list">
+            ← Back
+          </a>
           <div style={{ fontSize: 11, color: T.inkSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             Sales <span style={{ color: T.inkMute, margin: '0 6px' }}>›</span>
             Proposals <span style={{ color: T.inkMute, margin: '0 6px' }}>›</span>
@@ -697,8 +701,29 @@ export default function ComposerEditor({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {lastSavedIso && (
-            <span style={{ fontSize: 11, color: T.inkSoft }}>Saved {relativeTime(lastSavedIso)}</span>
+            <span style={{ fontSize: 11, color: T.inkSoft }}>Saved {relativeTime(lastSavedIso)} · auto-draft</span>
           )}
+          {/* PBS 2026-07-18 · explicit Save-as-draft — the composer auto-saves every keystroke,
+              this button is a manual "flush now" so the operator sees the "Saved just now" tick. */}
+          <button
+            onClick={async () => {
+              setEmailBusy(true);
+              try {
+                await fetch(`/api/sales/proposals/${proposalId}/email`, {
+                  method: 'PATCH',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ subject, intro_md: bodyMd }),
+                });
+                markSaved();
+              } catch (e) { console.warn('[save-draft]', e); }
+              finally { setEmailBusy(false); }
+            }}
+            disabled={emailBusy}
+            style={S.btnGhost}
+            title="Force a save now (auto-save fires 500ms after you stop typing)"
+          >
+            {emailBusy ? '…' : '💾 Save draft'}
+          </button>
           {sentToken && (
             <a href={`/p/${sentToken}`} target="_blank" rel="noopener"
               style={{ fontSize: 11, color: T.green, letterSpacing: '0.06em', textTransform: 'uppercase', textDecoration: 'none' }}>
@@ -1183,16 +1208,22 @@ function RateOfferCard({
           <div style={{ fontSize: 10, color: T.inkSoft, letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 4 }}>
             Offer {offer.position ?? 1}
           </div>
+          {/* PBS 2026-07-18 · edit dropdown mirrors the +Add dropdown — optgroup per room, rich label per plan.
+              Previous version used p.rate_plan_id as both key AND value; when multiple rooms share the same
+              rate_plan_id (typical for Flex Rate across all rooms) React collapsed them to a single option.
+              Composite value "planId::roomTypeId" keeps them distinct so the picker shows real prices. */}
           <select
-            value={offer.rate_plan_id}
+            value={`${offer.rate_plan_id}::${plan?.room_type_id ?? ''}`}
             onChange={(e) => {
-              const newId = e.target.value;
-              const newPlan = plans.find((p) => p.rate_plan_id === newId);
+              const [newPlanId, newRoomId] = e.target.value.split('::');
+              const newPlan = plans.find((p) => p.rate_plan_id === newPlanId && String(p.room_type_id) === newRoomId)
+                           || plans.find((p) => p.rate_plan_id === newPlanId);
               if (!newPlan) return;
               const nlLak = Number(newPlan.total_lak) / Math.max(1, Number(newPlan.nights ?? 1));
+              const roomLabel = newPlan.room_type_name ? `${newPlan.room_type_name} · ` : '';
               onPatch({
-                rate_plan_id: newId,
-                label: (offer.label && offer.label.trim()) ? offer.label : (newPlan.rate_plan_name + (newPlan.board ? ` · ${newPlan.board}` : '')),
+                rate_plan_id: newPlan.rate_plan_id,
+                label: (offer.label && offer.label.trim()) ? offer.label : (roomLabel + newPlan.rate_plan_name + (newPlan.board ? ` · ${newPlan.board}` : '')),
                 unit_price_lak: Math.round(nlLak),
                 total_lak: Math.round(Number(newPlan.total_lak)),
                 cancellation_terms: offer.cancellation_terms ?? newPlan.cancellation_policy ?? DEFAULT_CANCELLATION_TERMS,
@@ -1201,11 +1232,25 @@ function RateOfferCard({
             disabled={busy || plans.length === 0}
             style={{ ...S.input, height: 32, width: '100%', fontSize: 12 }}
           >
-            {plan ? null : <option value={offer.rate_plan_id}>(unknown plan {offer.rate_plan_id.slice(0, 8)})</option>}
-            {plans.map((p) => (
-              <option key={p.rate_plan_id} value={p.rate_plan_id}>
-                {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''}
-              </option>
+            {plan ? null : <option value={`${offer.rate_plan_id}::`}>(unknown plan {offer.rate_plan_id.slice(0, 8)})</option>}
+            {/* Group same as +Add dropdown */}
+            {Array.from(plans.reduce((m, p) => {
+              const k = String(p.room_type_id);
+              if (!m.has(k)) m.set(k, { label: p.room_type_name || 'Room', plans: [] as typeof plans });
+              m.get(k)!.plans.push(p);
+              return m;
+            }, new Map<string, { label: string; plans: typeof plans }>()).entries()).map(([rtId, g]) => (
+              <optgroup key={rtId} label={g.label}>
+                {g.plans.map((p) => {
+                  const nightly = p.nights > 0 ? Math.round(p.total_usd / p.nights) : Math.round(p.total_usd);
+                  const total = Math.round(p.total_usd).toLocaleString('en-US');
+                  return (
+                    <option key={`${p.rate_plan_id}::${p.room_type_id}`} value={`${p.rate_plan_id}::${p.room_type_id}`}>
+                      {p.rate_plan_name}{p.board ? ` · ${p.board}` : ''} · ${total} total · ${nightly.toLocaleString('en-US')}/nt × {p.nights}n
+                    </option>
+                  );
+                })}
+              </optgroup>
             ))}
           </select>
         </div>
