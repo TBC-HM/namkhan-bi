@@ -134,7 +134,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   type TopFilter = 'all' | 'top100' | 'topRooms' | 'topFacilities';
   const [topFilter, setTopFilter] = useState<TopFilter>('all');
   type FacetRow = { kind: string; sort_order: number; ref_id: string; area_key: string; name: string; extra: string | null; photo_count: number };
-  type FacetGroups = Record<'rooms'|'facilities'|'jungle_spa'|'fnb'|'activities'|'retreats'|'imekong'|'certifications'|'team'|'destination'|'other'|'uncategorized', FacetRow[]>;
+  type FacetGroups = Record<'rooms'|'facilities'|'jungle_spa'|'fnb'|'activities'|'retreats'|'transport'|'imekong'|'certifications'|'team'|'destination'|'other'|'uncategorized', FacetRow[]>;
   const [facetGroups, setFacetGroups] = useState<FacetGroups | null>(null);
 
   // PBS 2026-07-17 · SCOPE 1 · media-pipeline-frontend brief.
@@ -399,6 +399,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
               {facetGroups.fnb && facetGroups.fnb.length > 0 && (<optgroup label="F&B">{facetGroups.fnb.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.activities.length > 0 && (<optgroup label="Activities">{facetGroups.activities.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.retreats && facetGroups.retreats.length > 0 && (<optgroup label="Retreats">{facetGroups.retreats.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
+              {facetGroups.transport && facetGroups.transport.length > 0 && (<optgroup label="Transport">{facetGroups.transport.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.imekong && facetGroups.imekong.length > 0 && (<optgroup label="Imekong">{facetGroups.imekong.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {facetGroups.certifications.length > 0 && (<optgroup label="Certifications">{facetGroups.certifications.map(f => <option key={f.area_key} value={f.area_key}>{f.name + ' · ' + f.photo_count.toLocaleString()}</option>)}</optgroup>)}
               {/* Destination folders — Luang Prabang / Laos / People / Ban Done Keo Village */}
