@@ -63,11 +63,12 @@ const KIND_LABEL_LIB: Record<string, string> = {
   fnb: 'F&B',
   activities: 'Activities',
   retreats: 'Retreats',
+  transport: 'Transport',
   imekong: 'Imekong',
   certifications: 'Certifications',
   destination: 'Destination',
 };
-const KIND_ORDER_LIB = ['rooms','facilities','jungle_spa','fnb','activities','retreats','imekong','certifications','destination'];
+const KIND_ORDER_LIB = ['rooms','facilities','jungle_spa','fnb','activities','retreats','transport','imekong','certifications','destination'];
 
 // Design tokens (Namkhan palette per claude_md v3.24 §0.55)
 const WHITE  = '#FFFFFF';
@@ -395,6 +396,47 @@ export default function CoverageTab({ rows, mediaPage: _mediaPage = [], areaTaxo
               Every folder from Property Settings + virtual sub-folders. Green = has photos · Amber = &lt; 3 (thin) · Red = zero (gap).
             </div>
           </div>
+
+          {/* PBS 2026-07-18 · attention tiles for backlog buckets (clickable) */}
+          {(() => {
+            const uncat = areaTaxonomy.find(r => r.kind === 'uncategorized');
+            const otherRows = areaTaxonomy.filter(r => r.kind === 'other');
+            const uncount = uncat?.photo_count ?? 0;
+            const otherTotal = otherRows.reduce((s, r) => s + (r.photo_count ?? 0), 0);
+            const backlogTotal = uncount + otherTotal;
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginBottom: 16 }}>
+                <a href="/marketing/media?tab=clarify" style={{
+                  background: '#FBE8E4', border: '1px solid #E7A69A', borderRadius: 6, padding: '12px 14px',
+                  textDecoration: 'none', color: '#8A2419',
+                }}>
+                  <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4, fontWeight: 700 }}>To clarify · click</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{backlogTotal.toLocaleString()}</div>
+                  <div style={{ fontSize: 11, marginTop: 2, opacity: 0.85 }}>photos need area + tier — jump to Clarify</div>
+                </a>
+                {uncat && uncount > 0 && (
+                  <a href={`/marketing/media?tab=library&area=${encodeURIComponent(uncat.area_key)}`} style={{
+                    background: AMBER_BG, border: '1px solid ' + HAIR, borderRadius: 6, padding: '12px 14px',
+                    textDecoration: 'none', color: INK,
+                  }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, marginBottom: 4, fontWeight: 700 }}>Uncategorized · click</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: MUTED, fontVariantNumeric: 'tabular-nums' }}>{uncount.toLocaleString()}</div>
+                    <div style={{ fontSize: 11, color: INK_M, marginTop: 2 }}>neither Iris nor tags could place — open in Library</div>
+                  </a>
+                )}
+                {otherRows.map(r => (
+                  <a key={r.area_key} href={`/marketing/media?tab=library&area=${encodeURIComponent(r.area_key)}`} style={{
+                    background: AMBER_BG, border: '1px solid ' + HAIR, borderRadius: 6, padding: '12px 14px',
+                    textDecoration: 'none', color: INK,
+                  }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, marginBottom: 4, fontWeight: 700 }}>{r.name} · click</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: MUTED, fontVariantNumeric: 'tabular-nums' }}>{(r.photo_count ?? 0).toLocaleString()}</div>
+                    <div style={{ fontSize: 11, color: INK_M, marginTop: 2 }}>Iris unsure — needs human sort</div>
+                  </a>
+                ))}
+              </div>
+            );
+          })()}
           {folderGroups.map(g => (
             <div key={'folders-'+g.kind} style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
