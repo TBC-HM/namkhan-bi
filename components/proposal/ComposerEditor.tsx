@@ -381,6 +381,22 @@ export default function ComposerEditor({
     bumpPreview();
   }, [bumpPreview]);
 
+  // PBS 2026-07-19 · Insurance auto-bump — whenever the blocks or rateOffers array
+  // changes in any way (add/remove/edit/hero/price), bump the iframe cache-buster
+  // 400ms after the last change. Belt-and-braces on top of markSaved() calls.
+  const blocksSig = useMemo(() =>
+    blocks.map((b) => `${b.id}:${b.qty}:${b.nights}:${b.unit_price_lak}:${b.hero_asset_id ?? ''}:${b.label}`).join('|'),
+    [blocks]
+  );
+  const rateOffersSig = useMemo(() =>
+    rateOffers.map((o) => `${o.id}:${o.rate_plan_id}:${o.unit_price_lak}:${o.total_lak}`).join('|'),
+    [rateOffers]
+  );
+  useEffect(() => {
+    const t = setTimeout(() => bumpPreview(), 400);
+    return () => clearTimeout(t);
+  }, [blocksSig, rateOffersSig, bumpPreview]);
+
   // Debounced email PATCH — one round-trip per pause (500ms).
   const emailDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialEmailStamp = useRef<string>(JSON.stringify({
