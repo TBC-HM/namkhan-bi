@@ -1,23 +1,21 @@
 // app/api/sales/proposals/[id]/email/preview/route.ts
-// PBS 2026-07-18 v3 — root-cause fix for iframe rendering "1 night $0 + no cards"
-// despite RPC returning valid data. Root cause: `supabase-js` sometimes
-// unwraps a jsonb-returning RPC into either `data = {...}` or `data = [{fn_...: {...}}]`
-// depending on runtime state; the previous route only handled the object form.
-// This version normalises both shapes AND surfaces every branch via response
-// headers so DevTools > Network > Response Headers is now the debug channel
-// (no on-page DIAG banner — PBS asked for silence). Every response includes:
-//   X-Preview-Shape         object | array-wrapped | unknown
-//   X-Preview-Blocks-Raw    length of blocks in RPC response (before mapping)
-//   X-Preview-Offers-Raw    length of offers in RPC response (before mapping)
-//   X-Preview-Date-In       proposal.date_in_snapshot as returned by RPC
-//   X-Preview-RPC-Err       RPC error message, if any
-//   X-Preview-Route-Rev     'v3-2026-07-18-shape-normalize' (bumps file hash)
+// PBS 2026-07-18 · CLEAN REWRITE (v4).
+// Single source: public.fn_proposal_preview_state RPC returns
+// {proposal, blocks, offers, email} as one jsonb payload — bypasses the
+// PostgREST-sales-schema silent-empty burn (see agent memory).
+// No shape normalizers. No diagnostic headers. No debug banners. No verbose
+// console.error. If it breaks, DevTools > Network shows a 4xx JSON with `detail`.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getInquiry, type ProposalBlock } from '@/lib/sales';
 import { FX_LAK_PER_USD } from '@/lib/format';
-import { renderProposalEmailHtml, type ProposalEmailContext, type ProposalBlockInput, type ProposalRateOfferInput } from '@/lib/proposalEmailTemplate';
+import {
+  renderProposalEmailHtml,
+  type ProposalEmailContext,
+  type ProposalBlockInput,
+  type ProposalRateOfferInput,
+} from '@/lib/proposalEmailTemplate';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -183,63 +181,29 @@ export async function GET(req: Request, { params }: Ctx) {
 
   const sb = getSupabaseAdmin();
 
-  // PBS 2026-07-18 — SECURITY DEFINER RPC returns proposal+blocks+offers+email
-  // as a single JSON blob. Bypasses PostgREST schema-cache issue that caused
-  // sb.schema('sales').from() to return silently-empty despite valid data.
-  const { data: stateData, error: stateErr } = await sb.rpc('fn_proposal_preview_state', { p_proposal_id: params.id });
+  // Single SECURITY DEFINER RPC returns {proposal, blocks, offers, email} as jsonb.
+  // supabase-js unwraps a jsonb-returning RPC into `data` as the plain object.
+  const { data, error } = await sb.rpc('fn_proposal_preview_state', { p_proposal_id: params.id });
 
-  // PBS 2026-07-18 v3 — normalise both possible supabase-js shapes.
-  // Shape A (single-row jsonb): stateData = {proposal, blocks, offers, email}
-  // Shape B (setof-wrapped):    stateData = [{fn_proposal_preview_state: {proposal, blocks, offers, email}}]
-  // Shape C (edge/prefer=single wrap): stateData = [{proposal, blocks, offers, email}]
-  // Also handle string-encoded jsonb defensively.
-  let shape: 'object' | 'array-wrapped' | 'array-flat' | 'string' | 'unknown' = 'unknown';
-  let raw: any = stateData;
-  if (typeof raw === 'string') { shape = 'string'; try { raw = JSON.parse(raw); } catch { raw = {}; } }
-  if (Array.isArray(raw)) {
-    if (raw.length > 0 && raw[0] && typeof raw[0] === 'object' && 'fn_proposal_preview_state' in raw[0]) {
-      shape = 'array-wrapped'; raw = raw[0].fn_proposal_preview_state;
-    } else if (raw.length > 0 && raw[0] && typeof raw[0] === 'object' && ('proposal' in raw[0] || 'blocks' in raw[0])) {
-      shape = 'array-flat'; raw = raw[0];
-    } else {
-      raw = {};
-    }
-  } else if (raw && typeof raw === 'object') {
-    shape = 'object';
-  }
-  if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = {}; } }
-
-  const state = (raw ?? {}) as {
+  const state = (data ?? {}) as {
     proposal?: any;
     blocks?: any[];
     offers?: any[];
     email?: any;
     error?: string;
   };
-  if (stateErr || state.error === 'proposal_not_found' || !state.proposal) {
-    console.error('[preview] state RPC failed', { proposal_id: params.id, err: stateErr?.message, state_error: state.error, shape, keys: raw && typeof raw === 'object' ? Object.keys(raw) : [] });
-    return new NextResponse(JSON.stringify({ error: 'proposal_not_found', detail: stateErr?.message ?? state.error ?? 'no proposal in RPC payload' }), {
-      status: 404,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Preview-Shape': shape,
-        'X-Preview-RPC-Err': stateErr?.message ?? state.error ?? '',
-        'X-Preview-Route-Rev': 'v3-2026-07-18-shape-normalize',
-      },
-    });
+
+  if (error || state.error === 'proposal_not_found' || !state.proposal) {
+    return NextResponse.json(
+      { error: state.error ?? 'proposal_not_found', detail: error?.message ?? null },
+      { status: 404 },
+    );
   }
 
   const proposal = state.proposal;
   const blocks = (state.blocks ?? []) as any[];
   const offerRows = (state.offers ?? []) as any[];
   const email = state.email ?? null;
-
-  console.error('[preview] RPC result', {
-    proposal_id: params.id,
-    blocks_len: blocks.length,
-    offers_len: offerRows.length,
-    email_version: email?.version ?? null,
-  });
 
   const inq = proposal.inquiry_id ? await getInquiry(proposal.inquiry_id) : null;
   const dateIn = (proposal.date_in_snapshot ?? inq?.date_in ?? '') as string;
@@ -309,42 +273,20 @@ export async function GET(req: Request, { params }: Ctx) {
   };
 
   const html = renderProposalEmailHtml(ctx);
-  // PBS 2026-07-18 v3 · No on-page DIAG banner. All diagnostics on response headers.
 
-  if (format === 'json') return NextResponse.json({
-    subject: ctx.subject,
-    html,
-    base_url: base,
-    diag: {
-      shape,
-      blocks_len: blocks.length,
-      offers_len: offerRows.length,
-      email_version: email?.version ?? null,
-      date_in: dateIn,
-      date_out: dateOut,
-      nights,
-    },
-  });
+  if (format === 'json') {
+    return NextResponse.json({ subject: ctx.subject, html, base_url: base });
+  }
 
   return new Response(html, {
     status: 200,
     headers: {
-      'Content-Type':  'text/html; charset=utf-8',
+      'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0, private',
-      'Pragma':        'no-cache',
-      'Expires':       '0',
-      'X-Preview-Rendered-At': new Date().toISOString(),
-      'X-Preview-Route-Rev': 'v3-2026-07-18-shape-normalize',
-      'X-Preview-Shape':  shape,
-      'X-Preview-Blocks-Raw': String(Array.isArray(state.blocks) ? state.blocks.length : -1),
-      'X-Preview-Offers-Raw': String(Array.isArray(state.offers) ? state.offers.length : -1),
-      'X-Preview-Date-In':  String(proposal.date_in_snapshot ?? ''),
-      'X-Preview-Date-Out': String(proposal.date_out_snapshot ?? ''),
-      'X-Block-Count':  String(blocks.length),
-      'X-Offer-Count':  String(offerRows.length),
-      'X-Email-Version': String(email?.version ?? ''),
-      'Surrogate-Control':     'no-store',
-      'CDN-Cache-Control':     'no-store',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+      'CDN-Cache-Control': 'no-store',
       'Vercel-CDN-Cache-Control': 'no-store',
     },
   });
