@@ -152,6 +152,7 @@ export default function PhotoHub(props: Props) {
         <CoverageTab
           rows={props.coverageRows ?? []}
           mediaPage={props.mediaPage ?? []}
+          areaTaxonomy={props.areaTaxonomy}
         />
       )}
       {sub === 'profiles' && (
