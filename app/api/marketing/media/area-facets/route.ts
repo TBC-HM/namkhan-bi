@@ -34,13 +34,13 @@ export async function GET(req: Request) {
 
   const { data, error } = await sb
     .from('v_media_area_taxonomy')
-    .select('kind, sort_order, ref_id, area_key, name, extra, photo_count')
+    .select('kind, sort_order, ref_id, area_key, name, extra, sort_key, photo_count')
     .eq('property_id', propertyId)
     // Team = contacts, not a location — drop from dropdown per 2026-07-15 decision
     .neq('kind', 'team')
+    // Order by kind's sort_order, then by sort_key (keeps parent + virtual sub-folder adjacent)
     .order('sort_order')
-    .order('photo_count', { ascending: false })
-    .order('name');
+    .order('sort_key');
 
   if (error) return NextResponse.json({ error: 'facets_failed', detail: error.message }, { status: 500 });
 
