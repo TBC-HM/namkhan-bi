@@ -1,7 +1,8 @@
 // app/api/sales/proposals/[id]/email/preview/route.ts
-// PBS 2026-07-18 — Rewritten to bypass PostgREST schema-cache mystery on sales.*
-// by routing proposal+blocks+offers+email through SECURITY DEFINER RPC
-// public.fn_proposal_preview_state. Same class of fix as media-schema burn.
+// PBS 2026-07-18 v2 — force Vercel serverless function rebuild.
+// Routes proposal+blocks+offers+email through SECURITY DEFINER RPC
+// public.fn_proposal_preview_state to bypass sales-schema silent-empty burn.
+// Diag banner now surfaces the RPC error if the RPC path fails.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -270,7 +271,9 @@ export async function GET(req: Request, { params }: Ctx) {
 
   let html = renderProposalEmailHtml(ctx);
   if (blocks.length === 0) {
-    const banner = `<div style="padding:12px 18px;background:#7a5500;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em">DIAG · No blocks yet for this proposal. Add a room from the composer before previewing.</div>`;
+    // Verbose diag so we can see if RPC failed vs actually-empty proposal.
+    const diagLine = `RPC route · blocks=${blocks.length} · offers=${offerRows.length} · email=${email ? 'v'+email.version : 'none'} · proposal=${params.id}`;
+    const banner = `<div style="padding:12px 18px;background:#7a5500;color:#fff;font-family:system-ui;font-size:12px;letter-spacing:0.02em">DIAG · No blocks yet for this proposal. ${diagLine}</div>`;
     html = banner + html;
   }
 
