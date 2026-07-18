@@ -23,16 +23,23 @@ interface Ctx { params: { id: string } }
 const MAX_OFFERS = 3;
 
 export async function GET(_req: Request, { params }: Ctx) {
+  // PBS 2026-07-18 v2 — pivoted from sb.schema('sales').from('proposal_rate_offers')
+  // to fn_proposal_preview_state RPC. Direct schema('sales').select() silently
+  // returned [] even with service_role + grants + schema exposed, leaving the
+  // composer left pane offer list empty on load (see agent memory:
+  // feedback_sales_schema_silent_empty_despite_exposed). Iframe preview already
+  // uses this RPC; left pane now agrees.
   const sb = getSupabaseAdmin();
-  const { data, error } = await sb
-    .schema('sales')
-    .from('proposal_rate_offers')
-    .select('*')
-    .eq('proposal_id', params.id)
-    .order('position', { ascending: true })
-    .order('created_at', { ascending: true });
+  const { data, error } = await sb.rpc('fn_proposal_preview_state', { p_proposal_id: params.id });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ rows: data ?? [] });
+  const state = (data ?? {}) as { offers?: any[]; error?: string };
+  if (state.error) return NextResponse.json({ rows: [] });
+  const offers = (state.offers ?? []).slice().sort((a: any, b: any) => {
+    const pa = Number(a.position ?? 0), pb = Number(b.position ?? 0);
+    if (pa !== pb) return pa - pb;
+    return String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''));
+  });
+  return NextResponse.json({ rows: offers });
 }
 
 export async function POST(req: Request, { params }: Ctx) {
