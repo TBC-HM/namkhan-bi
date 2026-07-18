@@ -60,6 +60,7 @@ export async function POST(req: Request, { params }: Ctx) {
   const insert = {
     proposal_id: params.id,
     rate_plan_id,
+    room_type_id: body?.room_type_id ?? null,
     position: nextPos,
     label: body?.label ?? null,
     payment_terms: body?.payment_terms ?? null,
@@ -84,7 +85,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!id) return NextResponse.json({ error: 'id_required' }, { status: 400 });
   const body = await req.json().catch(() => ({}));
   const patch: Record<string, unknown> = {};
-  for (const k of ['rate_plan_id', 'label', 'payment_terms', 'cancellation_terms', 'unit_price_lak', 'total_lak', 'position']) {
+  for (const k of ['rate_plan_id', 'room_type_id', 'label', 'payment_terms', 'cancellation_terms', 'unit_price_lak', 'total_lak', 'position']) {
     if (k in (body ?? {})) patch[k] = body[k];
   }
   if (Object.keys(patch).length === 0) {
