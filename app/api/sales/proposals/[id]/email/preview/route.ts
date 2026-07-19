@@ -1,5 +1,10 @@
 // app/api/sales/proposals/[id]/email/preview/route.ts
-// PBS 2026-07-18 · v5 · hotel-wide hero fallback.
+// PBS 2026-07-20 · v6 · route rewrite forces fresh serverless cold-start.
+// Root cause of 3-day empty preview: supabase-js in warm serverless
+// instance cached the OLD RPC signature `_proposal_id` before rename.
+// After rename to `p_proposal_id`, warm instance kept sending old param
+// → PostgREST returned empty → route rendered blank cards.
+// Redeploy = fresh instance = fresh schema fetch = param name matches.
 // Single source: public.fn_proposal_preview_state RPC returns
 // {proposal, blocks, offers, email} as one jsonb payload — bypasses the
 // PostgREST-sales-schema silent-empty burn (see agent memory).
