@@ -48,23 +48,24 @@ export async function POST(req: NextRequest) {
   const kindRaw = (body.kind ?? '').toLowerCase();
   if (!kindRaw) return NextResponse.json({ error: 'kind required' }, { status: 400 });
 
-  // Destination path — one asset only (fn_place_destination is per-asset).
-  // PBS 2026-07-19 · destination rows in v_media_area_taxonomy have ref_id='1'
-  // (numeric dest_id) and area_key='destination:luang-prabang'. fn_place_destination
-  // needs the SLUG, not the numeric id — prefer area_key. fn_manage_virtual_folders
-  // also now accepts 'facility:X:Y' for virtual F&B/Farm sub-folders, so we route
-  // any area_key that already looks like a folder slug through the same RPC.
-  if (kindRaw === 'destination'
-      || (typeof body.area_key === 'string' && (body.area_key.startsWith('destination:') || body.area_key.startsWith('facility:')))) {
+  // Virtual-folder path — anything the DB's fn_manage_virtual_folders knows how
+  // to unpack: destination:X · facility:X · facility:X:Y · boat:X · cruise:X ·
+  // plus bare destination slugs from the destination kind.
+  // PBS 2026-07-19 · imekong/fnb/jungle_spa/transport rows carry non-numeric ref_ids
+  // (boat:1, cruise:1, facility:1, facility:1:food). Routing them through the
+  // virtual-folder RPC fixes 'unsupported kind' + 'ref_id required (numeric)'.
+  const areaKey = typeof body.area_key === 'string' ? body.area_key.trim() : '';
+  const refIdStr = String(body.ref_id ?? '').trim();
+  const looksVirtual = /^(destination|facility|boat|cruise):/.test(areaKey) || /^(destination|facility|boat|cruise):/.test(refIdStr);
+  if (kindRaw === 'destination' || looksVirtual) {
     const id = body.asset_id;
     if (!id || !UUID_RE.test(id)) return NextResponse.json({ error: 'asset_id must be UUID' }, { status: 400 });
-    const areaKey = typeof body.area_key === 'string' ? body.area_key.trim() : '';
-    const folder = areaKey || String(body.ref_id ?? '').trim();
+    const folder = areaKey || refIdStr;
     if (!folder) return NextResponse.json({ error: 'destination folder slug required' }, { status: 400 });
     const { data, error } = await sb.rpc('fn_place_destination', { p_asset_id: id, p_folder: folder });
     if (error) return NextResponse.json({ error: 'place_failed', detail: error.message }, { status: 500 });
     const r = (data as { ok?: boolean; error?: string } | null) ?? null;
-    if (!r || !r.ok) return NextResponse.json({ error: r?.error ?? 'place_failed' }, { status: 400 });
+    if (!r || !r.ok) return NextResponse.json({ error: r?.error ?? 'place_failed', folder }, { status: 400 });
     return NextResponse.json(r);
   }
 
