@@ -20,6 +20,14 @@ const KIND_SINGULAR: Record<string, string> = {
   certifications: 'certification',
   team: 'contact',
   contacts: 'contact',
+  // PBS 2026-07-19 · taxonomy exposes these as their own top-level groups but the
+  // underlying storage is still property.facilities / content.activities_catalog.
+  // Map to their canonical singular so fn_assign_area writes the right FK column.
+  jungle_spa: 'facility',
+  fnb: 'facility',
+  transport: 'facility',
+  imekong: 'facility',
+  retreats: 'activity',
 };
 
 export async function POST(req: NextRequest) {
@@ -41,10 +49,17 @@ export async function POST(req: NextRequest) {
   if (!kindRaw) return NextResponse.json({ error: 'kind required' }, { status: 400 });
 
   // Destination path — one asset only (fn_place_destination is per-asset).
-  if (kindRaw === 'destination') {
+  // PBS 2026-07-19 · destination rows in v_media_area_taxonomy have ref_id='1'
+  // (numeric dest_id) and area_key='destination:luang-prabang'. fn_place_destination
+  // needs the SLUG, not the numeric id — prefer area_key. fn_manage_virtual_folders
+  // also now accepts 'facility:X:Y' for virtual F&B/Farm sub-folders, so we route
+  // any area_key that already looks like a folder slug through the same RPC.
+  if (kindRaw === 'destination'
+      || (typeof body.area_key === 'string' && (body.area_key.startsWith('destination:') || body.area_key.startsWith('facility:')))) {
     const id = body.asset_id;
     if (!id || !UUID_RE.test(id)) return NextResponse.json({ error: 'asset_id must be UUID' }, { status: 400 });
-    const folder = String(body.ref_id ?? body.area_key ?? '').trim();
+    const areaKey = typeof body.area_key === 'string' ? body.area_key.trim() : '';
+    const folder = areaKey || String(body.ref_id ?? '').trim();
     if (!folder) return NextResponse.json({ error: 'destination folder slug required' }, { status: 400 });
     const { data, error } = await sb.rpc('fn_place_destination', { p_asset_id: id, p_folder: folder });
     if (error) return NextResponse.json({ error: 'place_failed', detail: error.message }, { status: 500 });
