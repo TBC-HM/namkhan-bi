@@ -321,7 +321,27 @@ export async function GET(req: Request, { params }: Ctx) {
   const html = renderProposalEmailHtml(ctx);
 
   if (format === 'json') {
-    return NextResponse.json({ subject: ctx.subject, html, base_url: base });
+    // PBS 2026-07-20 diag dump: raw RPC state + mapped ctx summary — reveals
+    // where blocks/offers/dates disappear between supabase-js and template.
+    return NextResponse.json({
+      subject: ctx.subject,
+      html,
+      base_url: base,
+      _rpc_error: error ? String(error.message ?? error) : null,
+      _rpc_state_raw: data,
+      _state_shape: {
+        has_proposal: !!state.proposal,
+        blocks_len: (state.blocks ?? []).length,
+        offers_len: (state.offers ?? []).length,
+        email_version: state.email?.version ?? null,
+        proposal_date_in: state.proposal?.date_in_snapshot ?? null,
+      },
+      _ctx_summary: {
+        date_in: ctx.date_in, date_out: ctx.date_out, nights: ctx.nights,
+        blocks_len: ctx.blocks.length, offers_len: (ctx.rate_offers ?? []).length,
+        guest_name: ctx.guest_name, subject: ctx.subject,
+      },
+    });
   }
 
   return new Response(html, {
