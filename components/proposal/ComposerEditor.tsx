@@ -398,26 +398,13 @@ export default function ComposerEditor({
     bumpPreview();
   }, [bumpPreview]);
 
-  // PBS 2026-07-19 · Insurance auto-bump — whenever any composer state changes
-  // (blocks, offers, body text, header photo), bump the iframe cache-buster 700ms
-  // after the last change. Belt-and-braces on top of markSaved() calls in each
-  // mutation. Debounce long enough that user typing doesn't spam the preview.
-  const blocksSig = useMemo(() =>
-    blocks.map((b) => `${b.id}:${b.qty}:${b.nights}:${b.unit_price_lak}:${b.hero_asset_id ?? ''}:${b.label}`).join('|'),
-    [blocks]
-  );
-  const rateOffersSig = useMemo(() =>
-    rateOffers.map((o) => `${o.id}:${o.rate_plan_id}:${o.unit_price_lak}:${o.total_lak}`).join('|'),
-    [rateOffers]
-  );
-  const bodyTextSig = useMemo(() =>
-    `${subject}|${bodyMd}|${outroMd}|${psMd}|${headerHeroAssetId ?? ''}|${headerHeroHide}|${attachedFactsheetId}`,
-    [subject, bodyMd, outroMd, psMd, headerHeroAssetId, headerHeroHide, attachedFactsheetId]
-  );
-  useEffect(() => {
-    const t = setTimeout(() => bumpPreview(), 700);
-    return () => clearTimeout(t);
-  }, [blocksSig, rateOffersSig, bodyTextSig, bumpPreview]);
+  // PBS 2026-07-20 · Option B: iframe killed. No auto-refresh timer. Preview is
+  // on-demand via the "Generate email" button in the right pane, which flushes
+  // any pending email save first then fetches a fresh render into a modal.
+  const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  const [previewHtml, setPreviewHtml] = useState<string>('');
+  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // Debounced email PATCH — one round-trip per pause (500ms).
   const emailDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -441,6 +428,42 @@ export default function ComposerEditor({
     }, 500);
     return () => { if (emailDebounce.current) clearTimeout(emailDebounce.current); };
   }, [subject, bodyMd, outroMd, psMd, proposalId, markSaved]);
+
+  // Flush any pending debounced email PATCH BEFORE we fetch the preview, so
+  // the rendered email reflects the latest typing. Returns when the PATCH lands.
+  const flushEmailSave = useCallback(async () => {
+    if (emailDebounce.current) {
+      clearTimeout(emailDebounce.current);
+      emailDebounce.current = null;
+    }
+    const stamp = JSON.stringify({ s: subject, b: bodyMd, o: outroMd, p: psMd });
+    if (stamp === initialEmailStamp.current) return;
+    const r = await fetch(`/api/sales/proposals/${proposalId}/email`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ subject, intro_md: bodyMd, outro_md: outroMd, ps_md: psMd }),
+    });
+    if (r.ok) initialEmailStamp.current = stamp;
+  }, [subject, bodyMd, outroMd, psMd, proposalId]);
+
+  const generatePreview = useCallback(async () => {
+    setPreviewOpen(true);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewHtml('');
+    try {
+      await flushEmailSave();
+      const url = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${Date.now()}`;
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const html = await r.text();
+      setPreviewHtml(html);
+    } catch (e) {
+      setPreviewError(e instanceof Error ? e.message : 'preview_failed');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [proposalId, withPhotos, attachedFactsheetId, flushEmailSave]);
 
   // Live "Saved Ns ago" ticker (once/sec while a save exists).
   useEffect(() => {
@@ -743,7 +766,6 @@ export default function ComposerEditor({
     return Array.from(groups.entries());
   }, [filteredPlans]);
 
-  const previewSrc = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${previewV}`;
   const photosMissing = blocks.filter((b) => !b.hero_asset_id).length;
   const canSend = blocks.length > 0 && check?.status !== 'red' && busy !== 'send';
 
@@ -1208,63 +1230,98 @@ export default function ComposerEditor({
         {/* -------- DIVIDER -------- */}
         <div style={S.divider} />
 
-        {/* -------- RIGHT PANE (email iframe) -------- */}
-        <aside style={S.rightPane}>
-          <header style={{
-            padding: '10px 14px', borderBottom: `1px solid ${T.hairline}`,
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            fontSize: 11, color: T.inkSoft, letterSpacing: '0.08em', textTransform: 'uppercase',
-            background: T.paper,
-          }}>
-            <span>Live email preview</span>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontFamily: T.sans, textTransform: 'none', letterSpacing: 0, color: T.inkMute }}>
-                {nights} {nights === 1 ? 'nt' : 'nts'} · {fmtTableUsd(totalUsd)}
-              </span>
-              <button
-                onClick={bumpPreview}
-                title="Force refresh the email preview now"
-                style={{
-                  ...S.btnGhost,
-                  background: T.green,
-                  color: '#FFFFFF',
-                  borderColor: T.green,
-                  padding: '6px 12px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  letterSpacing: '0.02em',
-                }}
-              >↻ Refresh</button>
-              {/* PBS 2026-07-20 · escape hatch — open the preview HTML in a fresh
-                  browser tab, bypassing iframe/cache mysteries. Recommended when
-                  the iframe shows stale content despite Refresh. */}
-              <button
-                onClick={() => {
-                  const url = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${Date.now()}`;
-                  window.open(url, '_blank', 'noopener');
-                }}
-                title="Open the email preview in a new tab (fresh render, no cache)"
-                style={{
-                  ...S.btnGhost,
-                  background: '#FFFFFF',
-                  color: T.green,
-                  borderColor: T.green,
-                  padding: '6px 12px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  letterSpacing: '0.02em',
-                }}
-              >↗ Open in new tab</button>
+        {/* -------- RIGHT PANE (Generate button) --------
+            PBS 2026-07-20 · Option B: replaced the live iframe with an
+            on-demand Generate button. Kills the entire class of iframe
+            refresh/cache/race bugs. User composes on the left, clicks
+            Generate → modal shows the fresh render → Send from left action bar. */}
+        <aside style={{ ...S.rightPane, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 24px' }}>
+          <div style={{ textAlign: 'center', maxWidth: 340 }}>
+            <div style={{ fontSize: 11, color: T.inkSoft, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>
+              {nights} {nights === 1 ? 'night' : 'nights'} · {fmtTableUsd(totalUsd)}
             </div>
-          </header>
-          <iframe
-            key={previewV}
-            title="proposal email preview"
-            src={previewSrc}
-            style={{ flex: 1, border: 0, background: T.warm, width: '100%' }}
-          />
+            <button
+              onClick={generatePreview}
+              disabled={previewLoading}
+              style={{
+                background: T.green, color: '#FFFFFF', border: `1px solid ${T.green}`,
+                padding: '16px 28px', fontSize: 15, fontWeight: 600, letterSpacing: '0.02em',
+                borderRadius: 6, cursor: previewLoading ? 'wait' : 'pointer', width: '100%',
+              }}
+            >
+              {previewLoading ? 'Generating…' : '✉ Generate email preview'}
+            </button>
+            <div style={{ fontSize: 12, color: T.inkMute, marginTop: 14, lineHeight: 1.5 }}>
+              Finish the offer on the left — rooms, rate offers, photos, notes.<br />
+              Then click Generate to see the final email before sending.
+            </div>
+          </div>
         </aside>
       </div>
+
+      {/* -------- Preview modal (Option B) --------
+          Opens when Generate is clicked. Fetches fresh HTML from the preview
+          route each time (with_photos + factsheet_id + cache-buster). No live
+          coupling to composer state — user re-clicks Generate to re-render. */}
+      {previewOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }} onClick={() => setPreviewOpen(false)}>
+          <div style={{
+            background: '#FFFFFF', width: '100%', maxWidth: 760, height: '90vh',
+            borderRadius: 8, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+          }} onClick={(e) => e.stopPropagation()}>
+            <header style={{
+              padding: '12px 18px', borderBottom: `1px solid ${T.hairline}`,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: T.paper,
+            }}>
+              <span style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.inkSoft }}>
+                Email preview
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={generatePreview}
+                  disabled={previewLoading}
+                  style={{ ...S.btnGhost, padding: '6px 12px', fontSize: 12 }}
+                >{previewLoading ? '…' : '↻ Re-generate'}</button>
+                <button
+                  onClick={() => {
+                    const url = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${Date.now()}`;
+                    window.open(url, '_blank', 'noopener');
+                  }}
+                  style={{ ...S.btnGhost, padding: '6px 12px', fontSize: 12 }}
+                >↗ Open in new tab</button>
+                <button
+                  onClick={() => setPreviewOpen(false)}
+                  style={{ ...S.btnGhost, padding: '6px 12px', fontSize: 12 }}
+                >Close</button>
+              </div>
+            </header>
+            <div style={{ flex: 1, overflow: 'auto', background: T.warm }}>
+              {previewLoading && (
+                <div style={{ padding: 48, textAlign: 'center', color: T.inkSoft, fontSize: 13 }}>
+                  Generating email preview…
+                </div>
+              )}
+              {previewError && !previewLoading && (
+                <div style={{ padding: 24, color: T.red, fontSize: 13 }}>
+                  Preview failed: {previewError}
+                </div>
+              )}
+              {!previewLoading && !previewError && previewHtml && (
+                <iframe
+                  title="email preview"
+                  srcDoc={previewHtml}
+                  style={{ width: '100%', height: '100%', border: 0, background: T.warm }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* -------- Drawers -------- */}
       <RoomPickerDrawer
