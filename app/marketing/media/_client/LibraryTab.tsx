@@ -341,6 +341,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         facilities={(taxonomy?.facilities ?? []).map(f => ({ id: f.id, name: f.name }))}
         activities={(taxonomy?.activities ?? []).map(a => ({ id: a.id, name: a.name }))}
         areaChoices={['restaurant','lifestyle','grounds','pool','bar','lobby','wellness','behind_scenes','Logos','No area']}
+        areaTaxonomy={areaTaxonomy as any}
       />
       {/* PBS 2026-07-17 · SCOPE 1 · tiles bound to v_media_library_counts.
           Fallback to legacy byTier totals only when libCounts is not yet loaded
