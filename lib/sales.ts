@@ -212,6 +212,18 @@ export async function createProposalFromInquiry(inquiryId: string): Promise<{ id
 
 export async function addBlock(proposalId: string, block: Partial<ProposalBlock> & { block_type: ProposalBlock['block_type']; label: string; unit_price_lak: number; }): Promise<ProposalBlock | null> {
   const sb = getSupabaseAdmin();
+  // PBS 2026-07-19 · auto-pick a hero photo at insert. Uses SECURITY DEFINER RPC
+  // fn_best_hero_for_ref which ranks media.media_assets by quality → tech score → recency.
+  // Returns NULL if no ready/tagged asset for that room/activity — falls through to
+  // the preview route's auto-hero fallback for the email render.
+  let heroAssetId: string | null = null;
+  if (block.ref_id) {
+    const { data: heroId } = await sb.rpc('fn_best_hero_for_ref', {
+      _block_type: block.block_type,
+      _ref_id: block.ref_id,
+    });
+    if (heroId) heroAssetId = heroId as string;
+  }
   const { data, error } = await sb
     .schema('sales')
     .from('proposal_blocks')
@@ -225,6 +237,7 @@ export async function addBlock(proposalId: string, block: Partial<ProposalBlock>
       qty: block.qty ?? 1,
       nights: block.nights ?? 1,
       unit_price_lak: block.unit_price_lak,
+      hero_asset_id: heroAssetId,
       sort_order: block.sort_order ?? 100,
     })
     .select('*')
