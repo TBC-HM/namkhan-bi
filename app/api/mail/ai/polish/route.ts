@@ -20,7 +20,25 @@ export async function POST(req: NextRequest) {
 
   try {
     const system = polishSystemFor(mode);
-    const prompt = `Rewrite this email draft. Mode: ${mode}. Tone: ${tone}. Preserve the writer's intent and any facts/numbers. Return the rewritten BODY only — no explanations, no "Here is the polished version" preamble.\n\nDRAFT:\n${b.draft}`;
+    // PBS 2026-07-20 · v2 prompt — unambiguous so Claude treats the text as
+    // the body to rewrite. Previous wording ("Rewrite this email draft ...
+    // Return the rewritten BODY only") caused Claude to sometimes reply
+    // "Please share the draft body text you'd like me to polish".
+    const prompt = [
+      `You are polishing the BODY COPY of an email that a hospitality operator has just typed.`,
+      `The text between <<<BODY>>> and <<<END>>> IS the body — treat it as a complete draft, however short.`,
+      `Rewrite it in mode: ${mode} · tone: ${tone}.`,
+      `Rules:`,
+      `- Keep every fact, name, date, number, price, and offer intact.`,
+      `- Keep the writer's intent and voice.`,
+      `- Do NOT add a subject line, salutation, or signature — return ONLY the rewritten body text.`,
+      `- Do NOT ask clarifying questions and do NOT reply with meta-commentary. Just output the rewritten body.`,
+      `- If the input is a single line or fragment, rewrite that same fragment — do not invent extra paragraphs.`,
+      ``,
+      `<<<BODY>>>`,
+      b.draft,
+      `<<<END>>>`,
+    ].join('\n');
     const polished = await callAnthropic({ system, prompt, maxTokens: 900 });
     return NextResponse.json({ ok: true, polished, mode });
   } catch (e: unknown) {
