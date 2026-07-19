@@ -37,6 +37,8 @@ export default async function ComposerPage({ params }: { params: { id: string } 
         date_out: proposal.date_out_snapshot ?? inq?.date_out ?? '',
         status: proposal.status,
         public_token: proposal.public_token,
+        header_hero_asset_id: (proposal as any).header_hero_asset_id ?? null,
+        header_hero_hide: (proposal as any).header_hero_hide ?? false,
       }}
       wizard={{
         date_in: proposal.date_in_snapshot ?? inq?.date_in ?? null,
