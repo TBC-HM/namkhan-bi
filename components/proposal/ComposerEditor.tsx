@@ -1526,15 +1526,20 @@ function BlockRow({
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
           <input type="number" min={0} value={block.qty} style={S.numInput}
             onChange={(e) => onPatch({ qty: Math.max(0, parseInt(e.target.value || '0', 10)) })} />
-          <span style={{ fontSize: 11, color: T.inkMute }}>×</span>
-          <input type="number" min={1} value={block.nights} style={S.numInput}
-            onChange={(e) => onPatch({ nights: Math.max(1, parseInt(e.target.value || '1', 10)) })} />
-          <span style={{ fontSize: 11, color: T.inkMute }}>nt @</span>
+          <span style={{ fontSize: 11, color: T.inkMute }}>{isExperience ? 'pax @' : '×'}</span>
+          {/* PBS 2026-07-19 · nights field only makes sense for rooms; activities are always 1 session (nights=1 forced). */}
+          {!isExperience && (
+            <>
+              <input type="number" min={1} value={block.nights} style={S.numInput}
+                onChange={(e) => onPatch({ nights: Math.max(1, parseInt(e.target.value || '1', 10)) })} />
+              <span style={{ fontSize: 11, color: T.inkMute }}>nt @</span>
+            </>
+          )}
           {/* PBS 2026-07-18 · USD input (LAK stored internally = usd × FX_LAK_PER_USD) */}
           <input type="number" min={0} step={1} value={Math.round((Number(block.unit_price_lak) || 0) / FX_LAK_PER_USD * 100) / 100}
             style={{ ...S.numInput, width: 84 }}
             onChange={(e) => onPatch({ unit_price_lak: Math.round(parseFloat(e.target.value || '0') * FX_LAK_PER_USD) })} />
-          <span style={{ fontSize: 11, color: T.inkMute }}>$</span>
+          <span style={{ fontSize: 11, color: T.inkMute }}>{isExperience ? '$/pax' : '$'}</span>
           {isExperience && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: T.inkSoft, marginLeft: 4 }}>
               <span>Add. disc %</span>
