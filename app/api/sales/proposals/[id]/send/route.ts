@@ -63,21 +63,38 @@ export async function POST(req: Request, { params }: Ctx) {
   }
 
   // ---- render the newsletter-quality HTML ----
+  // PBS 2026-07-20 · forward incoming Cookie header so the internal preview
+  // fetch inherits the caller's Supabase auth session. Without this the
+  // preview route returns 401 "auth required" and send aborts with
+  // preview_render_failed even though the composer preview works fine.
   const proto = process.env.VERCEL_URL ? 'https' : 'http';
   const host = process.env.VERCEL_URL ?? 'localhost:3000';
+  const cookieHeader = req.headers.get('cookie') ?? '';
   let emailHtml: string | null = null;
   let emailSubject: string = email?.subject ?? `Your stay at The Namkhan`;
+  let previewDiag: string | null = null;
   try {
-    const r = await fetch(`${proto}://${host}/api/sales/proposals/${params.id}/email/preview?format=json`, { cache: 'no-store' });
+    const r = await fetch(`${proto}://${host}/api/sales/proposals/${params.id}/email/preview?format=json`, {
+      cache: 'no-store',
+      headers: cookieHeader ? { cookie: cookieHeader } : {},
+    });
     if (r.ok) {
       const j = await r.json();
       emailHtml = j.html ?? null;
       if (j.subject) emailSubject = j.subject;
+    } else {
+      const body = await r.text().catch(() => '');
+      previewDiag = `HTTP ${r.status} · ${body.slice(0, 200)}`;
     }
-  } catch (_) { /* non-fatal */ }
+  } catch (e) {
+    previewDiag = e instanceof Error ? e.message : String(e);
+  }
 
   if (!emailHtml) {
-    return NextResponse.json({ error: 'preview_render_failed', message: 'Could not render email HTML — send aborted so no partial send.' }, { status: 500 });
+    return NextResponse.json({
+      error: 'preview_render_failed',
+      message: `Could not render email HTML — send aborted so no partial send.${previewDiag ? ' · ' + previewDiag : ''}`,
+    }, { status: 500 });
   }
 
   // ---- send via the current user's Gmail ----
