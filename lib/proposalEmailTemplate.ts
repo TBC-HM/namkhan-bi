@@ -157,7 +157,11 @@ function heroBlock(ctx: ProposalEmailContext): string {
 function blockCard(ctx: ProposalEmailContext, b: ProposalBlockInput): string {
   const heroUrl = heroImgSrc(ctx, b.hero_asset_id);
   const totalUsd = fmtUsd(Number(b.total_lak), ctx.fx_lak_per_usd);
-  const meta = `${b.qty} × ${b.nights} ${b.nights === 1 ? 'night' : 'nights'}`;
+  // PBS 2026-07-20 · activities show "pax" not "nights". Rooms keep "N × M nights".
+  const isActivity = b.block_type === 'activity' || b.block_type === 'fnb' || b.block_type === 'spa';
+  const meta = isActivity
+    ? `${b.qty} ${b.qty === 1 ? 'pax' : 'pax'}`
+    : `${b.qty} × ${b.nights} ${b.nights === 1 ? 'night' : 'nights'}`;
   const kind = (BLOCK_TYPE_LABEL[b.block_type] ?? b.block_type).toUpperCase();
   const heroCell = heroUrl ? `<td style="width:200px;padding:0;vertical-align:top"><img src="${heroUrl}" alt="${esc(b.label)}" width="200" style="display:block;width:200px;height:150px;object-fit:cover;border-radius:4px 0 0 4px;border:0"/></td>` : '';
   return `
@@ -342,8 +346,8 @@ export function renderProposalEmailHtml(ctx: ProposalEmailContext): string {
       ${proposalTitleBlock(ctx)}
       <tr><td style="padding:8px 32px;background:${PAPER}">${introHtml}</td></tr>
       ${blocksHtml ? `<tr><td style="padding:6px 32px;background:${PAPER}">${blocksHtml}</td></tr>` : ''}
-      ${offersHtml ? `<tr><td style="padding:6px 32px;background:${PAPER}">${offersHtml}</td></tr>` : ''}
       <tr><td style="padding:14px 32px;background:${PAPER}">${pricing}</td></tr>
+      ${offersHtml ? `<tr><td style="padding:6px 32px;background:${PAPER}">${offersHtml}</td></tr>` : ''}
       <tr><td style="padding:18px 32px 6px 32px;background:${PAPER}">${outroHtml}${psHtml}</td></tr>
       ${ctaBlock(ctx)}
       ${factsheetChip(ctx)}
