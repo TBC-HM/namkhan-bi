@@ -1234,7 +1234,27 @@ export default function ComposerEditor({
                   fontWeight: 600,
                   letterSpacing: '0.02em',
                 }}
-              >↻ Refresh preview</button>
+              >↻ Refresh</button>
+              {/* PBS 2026-07-20 · escape hatch — open the preview HTML in a fresh
+                  browser tab, bypassing iframe/cache mysteries. Recommended when
+                  the iframe shows stale content despite Refresh. */}
+              <button
+                onClick={() => {
+                  const url = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${Date.now()}`;
+                  window.open(url, '_blank', 'noopener');
+                }}
+                title="Open the email preview in a new tab (fresh render, no cache)"
+                style={{
+                  ...S.btnGhost,
+                  background: '#FFFFFF',
+                  color: T.green,
+                  borderColor: T.green,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                }}
+              >↗ Open in new tab</button>
             </div>
           </header>
           <iframe
