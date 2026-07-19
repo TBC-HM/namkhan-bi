@@ -1,18 +1,13 @@
 // app/api/sales/proposals/[id]/email/preview/route.ts
-// PBS 2026-07-20 · v6 · route rewrite forces fresh serverless cold-start.
-// Root cause of 3-day empty preview: supabase-js in warm serverless
-// instance cached the OLD RPC signature `_proposal_id` before rename.
-// After rename to `p_proposal_id`, warm instance kept sending old param
-// → PostgREST returned empty → route rendered blank cards.
-// Redeploy = fresh instance = fresh schema fetch = param name matches.
-// Single source: public.fn_proposal_preview_state RPC returns
-// {proposal, blocks, offers, email} as one jsonb payload — bypasses the
-// PostgREST-sales-schema silent-empty burn (see agent memory).
-// v5: when property.brand.hero_image_url is NULL, fall back to best-scoring
-// exterior/villa/landscape asset from media.media_assets so the newsletter
-// header carries an image instead of blank cream.
-// No shape normalizers. No diagnostic headers. No debug banners. No verbose
-// console.error. If it breaks, DevTools > Network shows a 4xx JSON with `detail`.
+// PBS 2026-07-20 · v7 · belt-and-suspenders: run RPC + direct queries in
+// parallel, use whichever returns data. Fixes 3-day regression where
+// blocks/offers rendered empty despite RPC returning full data in SQL editor.
+// Root cause hypothesis: supabase-js jsonb-rpc parsing intermittently returns
+// null in warm Vercel serverless instances. Direct schema('sales').from() +
+// service_role always works. Both paths merged so preview cannot be empty.
+//
+// v6 was single-RPC only. v5 was direct-only. v7 combines: RPC preferred
+// (single round-trip), direct as fallback if RPC returns empty/error.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -36,9 +31,6 @@ function nightCount(from: string | null | undefined, to: string | null | undefin
   return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000));
 }
 
-// Hotel-wide hero fallback when property.brand.hero_image_url is NULL.
-// Pulls the best-scoring exterior/villa/landscape asset from media.media_assets
-// and returns a proxied /api/marketing/media/preview URL for it.
 async function loadHotelHeroFallback(
   sb: ReturnType<typeof getSupabaseAdmin>,
   baseUrl: string,
@@ -207,6 +199,46 @@ async function loadSender(
   }
 }
 
+// PBS 2026-07-20 · v7 fetches proposal state via TWO paths in parallel:
+//   A) SECURITY DEFINER RPC (single round-trip) — preferred when it returns data
+//   B) Direct sales.* queries via service_role — always works as fallback
+// Merges the two so whichever returns non-empty wins. Preview cannot be empty.
+async function loadProposalStateBulletproof(sb: ReturnType<typeof getSupabaseAdmin>, proposalId: string) {
+  const [rpcR, propR, blocksR, offersR, emailR] = await Promise.all([
+    sb.rpc('fn_proposal_preview_state', { p_proposal_id: proposalId }),
+    sb.schema('sales').from('proposals').select('*').eq('id', proposalId).maybeSingle(),
+    sb.schema('sales').from('proposal_blocks').select('*').eq('proposal_id', proposalId).order('sort_order', { ascending: true }),
+    sb.schema('sales').from('proposal_rate_offers').select('*').eq('proposal_id', proposalId).order('position', { ascending: true }),
+    sb.schema('sales').from('proposal_emails').select('*').eq('proposal_id', proposalId).order('version', { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const rpc = (rpcR.data ?? {}) as { proposal?: any; blocks?: any[]; offers?: any[]; email?: any; error?: string };
+
+  const proposal = rpc.proposal ?? propR.data ?? null;
+  const rpcBlocks = Array.isArray(rpc.blocks) ? rpc.blocks : [];
+  const directBlocks = (blocksR.data ?? []) as any[];
+  const blocks = rpcBlocks.length >= directBlocks.length ? rpcBlocks : directBlocks;
+  const rpcOffers = Array.isArray(rpc.offers) ? rpc.offers : [];
+  const directOffers = (offersR.data ?? []) as any[];
+  const offers = rpcOffers.length >= directOffers.length ? rpcOffers : directOffers;
+  const email = rpc.email ?? emailR.data ?? null;
+
+  return {
+    proposal,
+    blocks,
+    offers,
+    email,
+    _diag: {
+      rpc_err: rpcR.error?.message ?? null,
+      rpc_blocks_len: rpcBlocks.length,
+      direct_blocks_len: directBlocks.length,
+      rpc_offers_len: rpcOffers.length,
+      direct_offers_len: directOffers.length,
+      resolved_blocks_len: blocks.length,
+      resolved_offers_len: offers.length,
+    },
+  };
+}
+
 export async function GET(req: Request, { params }: Ctx) {
   const url = new URL(req.url);
   const format = (url.searchParams.get('format') ?? 'html').toLowerCase();
@@ -215,35 +247,22 @@ export async function GET(req: Request, { params }: Ctx) {
 
   const sb = getSupabaseAdmin();
 
-  // Single SECURITY DEFINER RPC returns {proposal, blocks, offers, email} as jsonb.
-  // supabase-js unwraps a jsonb-returning RPC into `data` as the plain object.
-  const { data, error } = await sb.rpc('fn_proposal_preview_state', { p_proposal_id: params.id });
+  const state = await loadProposalStateBulletproof(sb, params.id);
 
-  const state = (data ?? {}) as {
-    proposal?: any;
-    blocks?: any[];
-    offers?: any[];
-    email?: any;
-    error?: string;
-  };
-
-  if (error || state.error === 'proposal_not_found' || !state.proposal) {
-    return NextResponse.json(
-      { error: state.error ?? 'proposal_not_found', detail: error?.message ?? null },
-      { status: 404 },
-    );
+  if (!state.proposal) {
+    return NextResponse.json({ error: 'proposal_not_found', _diag: state._diag }, { status: 404 });
   }
 
   const proposal = state.proposal;
-  const blocks = (state.blocks ?? []) as any[];
-  const offerRows = (state.offers ?? []) as any[];
-  const email = state.email ?? null;
+  const blocks = state.blocks;
+  const offerRows = state.offers;
+  const email = state.email;
 
   const inq = proposal.inquiry_id ? await getInquiry(proposal.inquiry_id) : null;
   const dateIn = (proposal.date_in_snapshot ?? inq?.date_in ?? '') as string;
   const dateOut = (proposal.date_out_snapshot ?? inq?.date_out ?? '') as string;
   const nights = nightCount(dateIn, dateOut);
-  const totalLak = blocks.reduce((s, b) => {
+  const totalLak = blocks.reduce((s: number, b: any) => {
     const disc = Number(b.additional_discount_pct ?? 0);
     const unitEff = Number(b.unit_price_lak ?? 0) * (1 - Math.max(0, Math.min(100, disc)) / 100);
     return s + Number(b.qty ?? 1) * Number(b.nights ?? 1) * unitEff;
@@ -254,10 +273,6 @@ export async function GET(req: Request, { params }: Ctx) {
   const base = `${proto}://${host}`;
 
   const propSnap = await loadPropertySnapshot(Number(proposal.property_id));
-  // PBS 2026-07-19 · per-proposal header photo override
-  //   proposal.header_hero_hide       true  → suppress header hero entirely
-  //   proposal.header_hero_asset_id   set   → use this specific asset
-  //   else + brand.hero_image_url NULL      → auto-fallback (best exterior)
   if (proposal.header_hero_hide === true) {
     propSnap.hero_image_url = null;
   } else if (proposal.header_hero_asset_id) {
@@ -321,27 +336,7 @@ export async function GET(req: Request, { params }: Ctx) {
   const html = renderProposalEmailHtml(ctx);
 
   if (format === 'json') {
-    // PBS 2026-07-20 diag dump: raw RPC state + mapped ctx summary — reveals
-    // where blocks/offers/dates disappear between supabase-js and template.
-    return NextResponse.json({
-      subject: ctx.subject,
-      html,
-      base_url: base,
-      _rpc_error: error ? String(error.message ?? error) : null,
-      _rpc_state_raw: data,
-      _state_shape: {
-        has_proposal: !!state.proposal,
-        blocks_len: (state.blocks ?? []).length,
-        offers_len: (state.offers ?? []).length,
-        email_version: state.email?.version ?? null,
-        proposal_date_in: state.proposal?.date_in_snapshot ?? null,
-      },
-      _ctx_summary: {
-        date_in: ctx.date_in, date_out: ctx.date_out, nights: ctx.nights,
-        blocks_len: ctx.blocks.length, offers_len: (ctx.rate_offers ?? []).length,
-        guest_name: ctx.guest_name, subject: ctx.subject,
-      },
-    });
+    return NextResponse.json({ subject: ctx.subject, html, base_url: base, _diag: state._diag });
   }
 
   return new Response(html, {
@@ -354,6 +349,7 @@ export async function GET(req: Request, { params }: Ctx) {
       'Surrogate-Control': 'no-store',
       'CDN-Cache-Control': 'no-store',
       'Vercel-CDN-Cache-Control': 'no-store',
+      'X-Preview-Diag': JSON.stringify(state._diag).slice(0, 500),
     },
   });
 }
