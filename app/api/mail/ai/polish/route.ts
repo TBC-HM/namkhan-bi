@@ -20,22 +20,23 @@ export async function POST(req: NextRequest) {
 
   try {
     const system = polishSystemFor(mode);
-    // PBS 2026-07-20 · v2 prompt — unambiguous so Claude treats the text as
-    // the body to rewrite. Previous wording ("Rewrite this email draft ...
-    // Return the rewritten BODY only") caused Claude to sometimes reply
-    // "Please share the draft body text you'd like me to polish".
+    // PBS 2026-07-20 · v3 prompt — expand + polish. Previous v1 was too vague
+    // (Claude asked "share the body"); v2 was too literal (Claude echoed short
+    // fragments back). v3 tells Claude: treat the notes as SEED for a full
+    // guest-facing email body — expand into 2-4 warm paragraphs even from a
+    // short jotting, but never invent facts.
     const prompt = [
-      `You are polishing the BODY COPY of an email that a hospitality operator has just typed.`,
-      `The text between <<<BODY>>> and <<<END>>> IS the body — treat it as a complete draft, however short.`,
-      `Rewrite it in mode: ${mode} · tone: ${tone}.`,
+      `You are drafting the BODY COPY of a guest-facing hospitality email.`,
+      `The notes between <<<NOTES>>> and <<<END>>> are the operator's raw jotting — treat them as SEED material.`,
+      `Expand and polish them into a warm, well-formed guest-facing email body in mode: ${mode}, tone: ${tone}.`,
       `Rules:`,
-      `- Keep every fact, name, date, number, price, and offer intact.`,
-      `- Keep the writer's intent and voice.`,
-      `- Do NOT add a subject line, salutation, or signature — return ONLY the rewritten body text.`,
-      `- Do NOT ask clarifying questions and do NOT reply with meta-commentary. Just output the rewritten body.`,
-      `- If the input is a single line or fragment, rewrite that same fragment — do not invent extra paragraphs.`,
+      `- Preserve every fact, name, date, number, price, and offer stated by the operator.`,
+      `- If the notes are short or bullet-style, EXPAND them into 2-4 flowing paragraphs suitable to send to a guest.`,
+      `- Do NOT invent prices, dates, room names, or offers that are not implied by the notes.`,
+      `- Do NOT add subject line, salutation, or signature — only the body paragraphs.`,
+      `- Do NOT reply with meta-commentary or clarifying questions. Return the body directly.`,
       ``,
-      `<<<BODY>>>`,
+      `<<<NOTES>>>`,
       b.draft,
       `<<<END>>>`,
     ].join('\n');
