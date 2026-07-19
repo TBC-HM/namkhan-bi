@@ -603,6 +603,11 @@ export default function ComposerEditor({
     });
     if (r.ok) {
       await refreshRateOffers();
+      // PBS 2026-07-19 · sync matching room block price to the picked offer.
+      const matchingBlocks = blocks.filter((b) => b.block_type === 'room' && String(b.ref_id) === String(plan.room_type_id));
+      for (const b of matchingBlocks) {
+        await patchBlock(b.id, { unit_price_lak: Math.round(nightlyLak) });
+      }
       markSaved();
     }
     setRateOffersBusy(null);
@@ -617,6 +622,17 @@ export default function ComposerEditor({
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch),
     });
+    // PBS 2026-07-19 · when a rate offer's plan/price changes, sync the matching room block.
+    if (patch.rate_plan_id != null || patch.unit_price_lak != null) {
+      const newRoomTypeId = (patch as any).room_type_id ?? rateOffers.find((o) => o.id === id)?.room_type_id;
+      const newUnitLak = patch.unit_price_lak != null ? Number(patch.unit_price_lak) : rateOffers.find((o) => o.id === id)?.unit_price_lak;
+      if (newRoomTypeId != null && newUnitLak != null) {
+        const matchingBlocks = blocks.filter((b) => b.block_type === 'room' && String(b.ref_id) === String(newRoomTypeId));
+        for (const b of matchingBlocks) {
+          await patchBlock(b.id, { unit_price_lak: Math.round(Number(newUnitLak)) });
+        }
+      }
+    }
     markSaved();
     setRateOffersBusy(null);
   }
@@ -1219,12 +1235,19 @@ export default function ComposerEditor({
         fromDate={dateIn}
         toDate={dateOut}
         onPick={(room) => {
+          // PBS 2026-07-19 · block price defers to the picked rate offer.
+          // If an offer already exists for this room, use its nightly. Otherwise 0
+          // (so "no rate plan → no price shown" matches PBS's expected UX).
+          const matchingOffer = rateOffers.find((o) => String(o.room_type_id ?? '') === String(room.room_type_id));
+          const unitLak = matchingOffer && matchingOffer.unit_price_lak != null
+            ? Number(matchingOffer.unit_price_lak)
+            : 0;
           addBlockToProposal({
             block_type: 'room',
             ref_table: 'public.room_types',
             ref_id: String(room.room_type_id),
             label: room.room_type_name,
-            unit_price_lak: Number(room.avg_nightly_lak),
+            unit_price_lak: unitLak,
             qty: 1,
             nights: nightCount(dateIn, dateOut),
             sort_order: 10,
