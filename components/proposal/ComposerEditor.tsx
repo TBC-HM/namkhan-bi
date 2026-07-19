@@ -398,9 +398,10 @@ export default function ComposerEditor({
     bumpPreview();
   }, [bumpPreview]);
 
-  // PBS 2026-07-19 · Insurance auto-bump — whenever the blocks or rateOffers array
-  // changes in any way (add/remove/edit/hero/price), bump the iframe cache-buster
-  // 400ms after the last change. Belt-and-braces on top of markSaved() calls.
+  // PBS 2026-07-19 · Insurance auto-bump — whenever any composer state changes
+  // (blocks, offers, body text, header photo), bump the iframe cache-buster 700ms
+  // after the last change. Belt-and-braces on top of markSaved() calls in each
+  // mutation. Debounce long enough that user typing doesn't spam the preview.
   const blocksSig = useMemo(() =>
     blocks.map((b) => `${b.id}:${b.qty}:${b.nights}:${b.unit_price_lak}:${b.hero_asset_id ?? ''}:${b.label}`).join('|'),
     [blocks]
@@ -409,10 +410,14 @@ export default function ComposerEditor({
     rateOffers.map((o) => `${o.id}:${o.rate_plan_id}:${o.unit_price_lak}:${o.total_lak}`).join('|'),
     [rateOffers]
   );
+  const bodyTextSig = useMemo(() =>
+    `${subject}|${bodyMd}|${outroMd}|${psMd}|${headerHeroAssetId ?? ''}|${headerHeroHide}|${attachedFactsheetId}`,
+    [subject, bodyMd, outroMd, psMd, headerHeroAssetId, headerHeroHide, attachedFactsheetId]
+  );
   useEffect(() => {
-    const t = setTimeout(() => bumpPreview(), 400);
+    const t = setTimeout(() => bumpPreview(), 700);
     return () => clearTimeout(t);
-  }, [blocksSig, rateOffersSig, bumpPreview]);
+  }, [blocksSig, rateOffersSig, bodyTextSig, bumpPreview]);
 
   // Debounced email PATCH — one round-trip per pause (500ms).
   const emailDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1216,7 +1221,20 @@ export default function ComposerEditor({
               <span style={{ fontFamily: T.sans, textTransform: 'none', letterSpacing: 0, color: T.inkMute }}>
                 {nights} {nights === 1 ? 'nt' : 'nts'} · {fmtTableUsd(totalUsd)}
               </span>
-              <button onClick={bumpPreview} style={S.btnGhost} title="Refresh">↻</button>
+              <button
+                onClick={bumpPreview}
+                title="Force refresh the email preview now"
+                style={{
+                  ...S.btnGhost,
+                  background: T.green,
+                  color: '#FFFFFF',
+                  borderColor: T.green,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                }}
+              >↻ Refresh preview</button>
             </div>
           </header>
           <iframe
