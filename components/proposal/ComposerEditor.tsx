@@ -271,7 +271,7 @@ interface Props {
   propertyId: number;
   initialBlocks: ProposalBlock[];
   initialEmail: { subject?: string | null; intro_md?: string | null; outro_md?: string | null; ps_md?: string | null } | null;
-  proposal: { guest_name: string; date_in: string; date_out: string; status: string; public_token: string | null };
+  proposal: { guest_name: string; date_in: string; date_out: string; status: string; public_token: string | null; header_hero_asset_id?: string | null; header_hero_hide?: boolean };
   wizard: {
     date_in: string | null;
     date_out: string | null;
@@ -326,6 +326,20 @@ export default function ComposerEditor({
   // showActivities retired 2026-07-18 (was legacy catalog drawer)
   const [showExperiencePicker, setShowExperiencePicker] = useState(false);
   const [photoPickerFor, setPhotoPickerFor] = useState<ProposalBlock | null>(null);
+  // PBS 2026-07-19 · per-proposal newsletter header photo override
+  const [headerHeroAssetId, setHeaderHeroAssetId] = useState<string | null>(proposal.header_hero_asset_id ?? null);
+  const [headerHeroHide, setHeaderHeroHide] = useState<boolean>(proposal.header_hero_hide ?? false);
+  const [headerPickerOpen, setHeaderPickerOpen] = useState<boolean>(false);
+  async function patchHeaderHero(patch: { header_hero_asset_id?: string | null; header_hero_hide?: boolean }) {
+    try {
+      await fetch(`/api/sales/proposals/${proposalId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+    } catch { /* swallow */ }
+    bumpPreview();
+  }
   const [busy, setBusy] = useState<string | null>(null);
   const [sentToken, setSentToken] = useState<string | null>(proposal.public_token);
   const [withPhotos, setWithPhotos] = useState<boolean>(true);
@@ -959,6 +973,51 @@ export default function ComposerEditor({
             </div>
           </section>
 
+          {/* PBS 2026-07-19 · Newsletter header photo — per-proposal override */}
+          <section style={S.card}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {headerHeroHide ? (
+                <div style={{ width: 80, height: 60, borderRadius: 6, border: `1px dashed ${T.hairline}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: T.inkMute, letterSpacing: '0.08em', textTransform: 'uppercase' }}>hidden</div>
+              ) : headerHeroAssetId ? (
+                <img src={`/api/marketing/media/preview?asset_id=${headerHeroAssetId}`} alt="Header photo" style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 6, border: `1px solid ${T.hairline}` }} />
+              ) : (
+                <div style={{ width: 80, height: 60, borderRadius: 6, background: '#F5F0E1', border: `1px solid ${T.hairline}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: T.inkMute, letterSpacing: '0.08em', textTransform: 'uppercase' }}>auto</div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: T.ink, fontWeight: 600, marginBottom: 2 }}>Email header photo</div>
+                <div style={{ fontSize: 11, color: T.inkSoft }}>
+                  {headerHeroHide
+                    ? 'Hidden — newsletter frame will render without a top image.'
+                    : headerHeroAssetId
+                      ? 'Custom photo picked for this proposal.'
+                      : 'Auto — best exterior/landscape from your media library.'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => { setHeaderPickerOpen(true); }}
+                  disabled={headerHeroHide}
+                  style={S.btnGhost}
+                >Change</button>
+                {(headerHeroAssetId || headerHeroHide) && (
+                  <button
+                    onClick={() => { setHeaderHeroAssetId(null); setHeaderHeroHide(false); patchHeaderHero({ header_hero_asset_id: null, header_hero_hide: false }); }}
+                    style={S.btnGhost}
+                  >Reset to auto</button>
+                )}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: T.inkSoft, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={headerHeroHide}
+                    onChange={(e) => { setHeaderHeroHide(e.target.checked); patchHeaderHero({ header_hero_hide: e.target.checked }); }}
+                    style={{ width: 14, height: 14, cursor: 'pointer' }}
+                  />
+                  <span>Hide from email</span>
+                </label>
+              </div>
+            </div>
+          </section>
+
           {/* Rooms & Experiences */}
           <section style={S.card}>
             <div style={S.cardHead}>
@@ -1208,6 +1267,20 @@ export default function ComposerEditor({
         }) : null}
         currentAssetId={photoPickerFor?.hero_asset_id ?? null}
         onPick={(asset) => { if (photoPickerFor) attachPhoto(photoPickerFor.id, asset); }}
+      />
+      {/* PBS 2026-07-19 · picker for the newsletter header photo (all hotel photos) */}
+      <PhotoPickerDrawer
+        open={headerPickerOpen}
+        onClose={() => setHeaderPickerOpen(false)}
+        propertyId={propertyId}
+        block={null}
+        currentAssetId={headerHeroAssetId}
+        onPick={(asset) => {
+          setHeaderHeroAssetId(asset.asset_id);
+          setHeaderHeroHide(false);
+          patchHeaderHero({ header_hero_asset_id: asset.asset_id, header_hero_hide: false });
+          setHeaderPickerOpen(false);
+        }}
       />
     </>
   );
