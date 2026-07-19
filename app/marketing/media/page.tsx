@@ -51,7 +51,10 @@ async function loadAll(pid: number) {
     sb.from('v_video_templates').select('*').order('sort_order', { ascending: true }),
     sb.from('v_marketing_video_briefs').select('*').eq('property_id', pid).order('created_at', { ascending: false }),
     sb.from('v_yt_content_pillars').select('pillar_key, label').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }),
-    sb.from('v_media_coverage_matrix').select('scope_label, scope_type, scope_key, property_id, primary_tier, n').eq('property_id', pid),
+    // PBS 2026-07-19 · view was rewritten 2026-07-18 (commit 1337952b): dropped
+    // scope_type/scope_key and added kind/sort_order/area_key/ref_id/sort_key. Old
+    // select silently returned null → CoverageTab rendered empty.
+    sb.from('v_media_coverage_matrix').select('property_id, kind, sort_order, area_key, ref_id, scope_label, sort_key, primary_tier, n').eq('property_id', pid),
     sb.from('v_video_style_presets').select('*').or(`property_id.is.null,property_id.eq.${pid}`),
     sb.from('v_video_music_tracks').select('*').order('created_at', { ascending: false }).limit(100),
     // Task B guardrails
