@@ -405,6 +405,11 @@ export default function ComposerEditor({
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  // PBS 2026-07-20 · monotonic counter used as iframe `key` so React remounts
+  // the <iframe> element on every re-generate. Without this, some browsers
+  // cache the srcDoc content and show stale HTML after a re-fetch even though
+  // React reassigned the srcDoc prop.
+  const [previewFetchN, setPreviewFetchN] = useState<number>(0);
 
   // Debounced email PATCH — one round-trip per pause (500ms).
   const emailDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -454,10 +459,11 @@ export default function ComposerEditor({
     try {
       await flushEmailSave();
       const url = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${Date.now()}`;
-      const r = await fetch(url, { cache: 'no-store' });
+      const r = await fetch(url, { cache: 'no-store', headers: { 'cache-control': 'no-store' } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const html = await r.text();
       setPreviewHtml(html);
+      setPreviewFetchN((n) => n + 1);
     } catch (e) {
       setPreviewError(e instanceof Error ? e.message : 'preview_failed');
     } finally {
@@ -1313,6 +1319,7 @@ export default function ComposerEditor({
               )}
               {!previewLoading && !previewError && previewHtml && (
                 <iframe
+                  key={previewFetchN}
                   title="email preview"
                   srcDoc={previewHtml}
                   style={{ width: '100%', height: '100%', border: 0, background: T.warm }}
