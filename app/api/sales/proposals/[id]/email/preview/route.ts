@@ -249,10 +249,15 @@ export async function GET(req: Request, { params }: Ctx) {
   const base = `${proto}://${host}`;
 
   const propSnap = await loadPropertySnapshot(Number(proposal.property_id));
-  // Header hero fallback: property.brand.hero_image_url is often NULL. Pull best
-  // exterior/villa/landscape asset from media so the newsletter header carries
-  // an image instead of blank cream.
-  if (!propSnap.hero_image_url) {
+  // PBS 2026-07-19 · per-proposal header photo override
+  //   proposal.header_hero_hide       true  → suppress header hero entirely
+  //   proposal.header_hero_asset_id   set   → use this specific asset
+  //   else + brand.hero_image_url NULL      → auto-fallback (best exterior)
+  if (proposal.header_hero_hide === true) {
+    propSnap.hero_image_url = null;
+  } else if (proposal.header_hero_asset_id) {
+    propSnap.hero_image_url = `${base}/api/marketing/media/preview?asset_id=${proposal.header_hero_asset_id}`;
+  } else if (!propSnap.hero_image_url) {
     const fallbackHero = await loadHotelHeroFallback(sb, base);
     if (fallbackHero) propSnap.hero_image_url = fallbackHero;
   }
