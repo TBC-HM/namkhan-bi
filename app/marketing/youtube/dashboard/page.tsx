@@ -1,6 +1,8 @@
 // app/marketing/youtube/dashboard/page.tsx
 // PBS 2026-07-13 — Dashboard sub-tab. Channel identity + AnalyticsKPIs + Recent uploads + Comments.
 // PBS 2026-07-13 pm — proactive fn_yt_refresh_if_expired at top of loader so PBS never has to reconnect.
+// PBS 2026-07-21 — wrap fn_yt_refresh_if_expired in Promise.race with 8s timeout so a
+// hung Google refresh never blocks page render (dashboard was hanging 2min).
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -12,13 +14,21 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const NAMKHAN = 260955;
+const RPC_TIMEOUT_MS = 8000;
 
 export default async function YouTubeDashboardPage() {
   const sb = getSupabaseAdmin();
 
   // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC.
   // No-op if token still valid; refreshes server-side using vault refresh_token + client creds.
-  try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
+  // Wrapped in Promise.race with 8s cap — the RPC uses pg_net which has its own timeout,
+  // but a hung Google endpoint downstream shouldn't block the page loader.
+  try {
+    await Promise.race([
+      sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('rpc_timeout_8s')), RPC_TIMEOUT_MS)),
+    ]);
+  } catch { /* silent */ }
 
   const { data: connection } = await sb
     .from('v_yt_channel_connections')

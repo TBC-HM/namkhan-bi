@@ -17,10 +17,26 @@
 // credentials. This means PBS never has to re-connect YouTube — every server loader
 // that calls getFreshAccessToken() gets a fresh token automatically. The subsequent
 // Google refresh path below is retained as a fallback (belt + braces).
+//
+// PBS 2026-07-21 — 5s timeout on every Google network fetch. User's refresh token has
+// been invalidated by Google → refresh_failed_401 was correct but hung ~2 min because
+// no timeout was set on the outbound fetch. All Google fetches now wrapped in
+// fetchWithTimeout so worst-case latency is 5s (returns refresh_timeout_5s on abort).
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const TIMEOUT_MS = 5000;
+
+async function fetchWithTimeout(url: string, init: RequestInit, ms = TIMEOUT_MS): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export interface YtConnection {
   id: string;
@@ -119,11 +135,20 @@ export async function getFreshAccessToken(propertyId: number): Promise<FreshToke
     refresh_token: s.refresh_token.trim(),
     grant_type:    'refresh_token',
   });
-  const gRes = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
+  let gRes: Response;
+  try {
+    gRes = await fetchWithTimeout(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+  } catch (err: unknown) {
+    const e = err as { name?: string; message?: string };
+    if (e?.name === 'AbortError') {
+      return { ok: false, error: 'refresh_timeout_5s', detail: 'Google token endpoint did not respond within 5s' };
+    }
+    return { ok: false, error: 'refresh_network_error', detail: (e?.message ?? '').slice(0, 240) };
+  }
   const gJson = (await gRes.json().catch(() => ({}))) as GoogleTokenResponse;
 
   if (!gRes.ok || !gJson.access_token) {
