@@ -405,6 +405,9 @@ export default function ComposerEditor({
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
   const [previewHtml, setPreviewHtml] = useState<string>('');
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  // PBS 2026-07-20 pm · item #5 · Send-test-to-me state
+  const [sendTestBusy, setSendTestBusy] = useState<boolean>(false);
+  const [sendTestMsg, setSendTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   // PBS 2026-07-20 · monotonic counter used as iframe `key` so React remounts
   // the <iframe> element on every re-generate. Without this, some browsers
@@ -469,6 +472,27 @@ export default function ComposerEditor({
       setPreviewError(e instanceof Error ? e.message : 'preview_failed');
     } finally {
       setPreviewLoading(false);
+    }
+  }, [proposalId, withPhotos, attachedFactsheetId, flushEmailSave]);
+
+  // PBS 2026-07-20 pm · item #5 · send preview HTML to the signed-in user's Gmail.
+  const sendTestToMe = useCallback(async () => {
+    setSendTestBusy(true);
+    setSendTestMsg(null);
+    try {
+      await flushEmailSave();
+      const qs = `?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}`;
+      const r = await fetch(`/api/sales/proposals/${proposalId}/send-test${qs}`, { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok) {
+        setSendTestMsg({ ok: true, text: `Sent to ${j.to}` });
+      } else {
+        setSendTestMsg({ ok: false, text: j.message || j.error || `HTTP ${r.status}` });
+      }
+    } catch (e) {
+      setSendTestMsg({ ok: false, text: e instanceof Error ? e.message : 'send failed' });
+    } finally {
+      setSendTestBusy(false);
     }
   }, [proposalId, withPhotos, attachedFactsheetId, flushEmailSave]);
 
@@ -1315,6 +1339,12 @@ export default function ComposerEditor({
                   style={{ ...S.btnGhost, padding: '6px 12px', fontSize: 12 }}
                 >{previewLoading ? '…' : '↻ Re-generate'}</button>
                 <button
+                  onClick={sendTestToMe}
+                  disabled={sendTestBusy || previewLoading}
+                  title="Send this preview to your own inbox (does NOT touch the guest)"
+                  style={{ ...S.btnGhost, padding: '6px 12px', fontSize: 12 }}
+                >{sendTestBusy ? 'Sending…' : '📧 Send test to me'}</button>
+                <button
                   onClick={() => {
                     const url = `/api/sales/proposals/${proposalId}/email/preview?with_photos=${withPhotos ? 1 : 0}${attachedFactsheetId ? '&factsheet_id=' + attachedFactsheetId : ''}&v=${Date.now()}`;
                     window.open(url, '_blank', 'noopener');
@@ -1327,6 +1357,14 @@ export default function ComposerEditor({
                 >Close</button>
               </div>
             </header>
+              {sendTestMsg && (
+                <div style={{
+                  padding: '8px 14px', fontSize: 12,
+                  background: sendTestMsg.ok ? '#EBF1EE' : '#FBE8E4',
+                  color: sendTestMsg.ok ? '#1F5C2C' : '#B23A2E',
+                  borderBottom: `1px solid ${'#E6DFCC'}`,
+                }}>{sendTestMsg.ok ? '✓ ' : '✗ '}{sendTestMsg.text}</div>
+              )}
             <div style={{ flex: 1, overflow: 'auto', background: T.warm }}>
               {previewLoading && (
                 <div style={{ padding: 48, textAlign: 'center', color: T.inkSoft, fontSize: 13 }}>
