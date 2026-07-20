@@ -97,7 +97,9 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   if (sort && dir) {
     qry = qry.order(sort, { ascending: dir === 'asc', nullsFirst: false });
   } else {
-    qry = qry.order('doc_date', { ascending: true, nullsFirst: false });
+    // PBS 2026-07-20 pm · default = newest upload first (was doc_date ASC which
+    // buried today's uploads at the bottom of the register).
+    qry = qry.order('uploaded_at', { ascending: false, nullsFirst: false });
   }
   // Stable tiebreaker so pagination doesn't shuffle when sort key has ties.
   qry = qry.order('doc_id', { ascending: true });
