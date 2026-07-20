@@ -77,7 +77,8 @@ function PostCard({ p }: { p: any }) {
   );
 }
 
-export default async function Socials({ searchParams }: { searchParams?: Record<string, string | undefined> }) {
+export default async function Socials(props: any) {
+  const searchParams = (props && props.searchParams) || {};
   const tab = (searchParams?.tab) || 'posts';
   const sb = getSupabaseAdmin();
 
