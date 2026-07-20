@@ -114,7 +114,10 @@ export async function POST(req: NextRequest) {
 
   if (contentType.includes('application/json')) {
     // Mode B — file already in storage, fetch by ref
-    let body: { staging_bucket?: string; staging_path?: string; file_name?: string; mime?: string };
+    // PBS 2026-07-20 pm · accept optional operator overrides that WIN over the
+    // AI classifier: title, doc_type, doc_subtype. Used by the /finance/legal
+    // multi-upload modal so the folder the operator picked actually sticks.
+    let body: { staging_bucket?: string; staging_path?: string; file_name?: string; mime?: string; title?: string; doc_type?: string; doc_subtype?: string };
     try { body = await req.json(); }
     catch { return NextResponse.json({ ok: false, error: 'invalid_json' }, { status: 400 }); }
 
@@ -128,6 +131,12 @@ export async function POST(req: NextRequest) {
     stagingBucket = body.staging_bucket;
     stagingPath = body.staging_path;
     fileName = body.file_name;
+    // Stash overrides on the request object via closure — applied after classification
+    (req as any)._overrides = {
+      title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : null,
+      doc_type: typeof body.doc_type === 'string' && body.doc_type.trim() ? body.doc_type.trim() : null,
+      doc_subtype: typeof body.doc_subtype === 'string' && body.doc_subtype.trim() ? body.doc_subtype.trim() : null,
+    };
 
     // Pull file bytes from Supabase Storage (no Vercel body limit on this side)
     const { data: blob, error: dlErr } = await admin.storage
@@ -151,6 +160,12 @@ export async function POST(req: NextRequest) {
     const file = form.get('file') as File | null;
     fileName = (form.get('file_name') as string | null) || file?.name || 'untitled';
     if (!file) return NextResponse.json({ ok: false, error: 'no_file' }, { status: 400 });
+    // PBS 2026-07-20 pm · same override pass-through for Mode A
+    (req as any)._overrides = {
+      title: (form.get('title') as string | null)?.trim() || null,
+      doc_type: (form.get('doc_type') as string | null)?.trim() || null,
+      doc_subtype: (form.get('doc_subtype') as string | null)?.trim() || null,
+    };
 
     mimeType = file.type || 'application/octet-stream';
     buffer = Buffer.from(await file.arrayBuffer());
@@ -223,6 +238,25 @@ export async function POST(req: NextRequest) {
     cls.tags = [...(cls.tags || []), `lang_remap:${originalLang}->${safeLang}`].slice(0, 8);
   }
   cls.language = safeLang as typeof cls.language;
+
+  // PBS 2026-07-20 pm · apply operator overrides AFTER safe-remap. If the
+  // operator picked a doc_type in the upload modal, that wins over the AI
+  // classifier's guess. Title + subtype ditto. Overrides are still validated
+  // against the same enum + fallback to safeDocType if unknown.
+  const overrides = (req as any)._overrides ?? {};
+  if (overrides.doc_type) {
+    const safeOverride = safeDocType(overrides.doc_type);
+    if (safeOverride !== cls.doc_type) {
+      cls.tags = [...(cls.tags || []), `override:${cls.doc_type}->${safeOverride}`].slice(0, 8);
+      cls.doc_type = safeOverride as typeof cls.doc_type;
+    }
+  }
+  if (overrides.doc_subtype) {
+    cls.doc_subtype = overrides.doc_subtype;
+  }
+  if (overrides.title) {
+    cls.title = overrides.title;
+  }
 
   // --- 3. Pick bucket + final path
   const finalBucket = bucketForSensitivity(cls.sensitivity);
