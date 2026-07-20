@@ -1,5 +1,7 @@
 // app/h/[property_id]/settings/property/page.tsx
 // PBS 2026-07-18 v3 · adds spa_treatments + fnb_menus (+ items) fetches; rooms ORDER BY display_order.
+// PBS 2026-07-20 · Rate Plans moved to its own top-level Settings sub-page —
+// ratePlans fetch removed here + rate_plans tab inserted between Media and Guardrails.
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
@@ -13,7 +15,7 @@ async function getPropertyData(propertyId: number) {
     identity, location, brand, brandReality, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
     team, owner, roomUnits, transport, boats, boatCruises, meetingSpaces,
-    retreats, spaTreatments, fnbMenus, fnbMenuItems, teamFeatures, ratePlans,
+    retreats, spaTreatments, fnbMenus, fnbMenuItems, teamFeatures,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
@@ -47,11 +49,6 @@ async function getPropertyData(propertyId: number) {
     supabase.from('v_property_fnb_menus').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.from('v_property_fnb_menu_items').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.from('v_property_team_features').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('full_name'),
-    // PBS 2026-07-18 · rate plan hygiene · sub-tab in Accommodation group
-    supabase.from('v_rate_plans_grouped').select('*').eq('property_id', propertyId)
-      .order('featured_for_proposals', { ascending: false })
-      .order('bookings_12m', { ascending: false })
-      .order('effective_label', { ascending: true }),
   ]);
 
   // Merge fnb items into their menus
@@ -86,7 +83,6 @@ async function getPropertyData(propertyId: number) {
     spaTreatments: spaTreatments.data ?? [],
     fnbMenus: fnbMenusWithItems,
     teamFeatures: teamFeatures.data ?? [],
-    ratePlans: ratePlans.data ?? [],
   };
 }
 
@@ -114,6 +110,7 @@ export default async function PropertySettingsPage({
       tabs={[
         { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`,   active: true },
         { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
+        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
