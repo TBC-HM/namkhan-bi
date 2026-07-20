@@ -3,6 +3,7 @@
 // sibling top-level tab (Property · Guardrails · Send Logs). Renders the
 // existing SendLogsPanel which fetches its own data client-side from
 // public.v_all_sends_unified.
+// PBS 2026-07-20 · Rate Plans tab inserted between Media and Guardrails.
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import SendLogsPanel from '@/components/settings/panels/SendLogsPanel';
 
@@ -18,6 +19,7 @@ export default function SendLogsPage({ params }: { params: { property_id: string
       tabs={[
         { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
         { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
+        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`, active: true },
