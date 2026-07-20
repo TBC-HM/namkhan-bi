@@ -39,6 +39,10 @@ export default async function ComposerPage({ params }: { params: { id: string } 
         public_token: proposal.public_token,
         header_hero_asset_id: (proposal as any).header_hero_asset_id ?? null,
         header_hero_hide: (proposal as any).header_hero_hide ?? false,
+        // PBS 2026-07-20 pm · item #6 · timeline + lock state
+        locked_at: (proposal as any).locked_at ?? null,
+        sent_at: (proposal as any).sent_at ?? null,
+        created_at: (proposal as any).created_at ?? null,
       }}
       wizard={{
         date_in: proposal.date_in_snapshot ?? inq?.date_in ?? null,
