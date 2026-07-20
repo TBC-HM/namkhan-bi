@@ -1,50 +1,65 @@
 // app/marketing/audience/page.tsx
-// PBS 2026-07-21 · Audience hub — links to Subscribers, Prospects, Sequences, Scrape, Candidates.
-// Zero URL migrations: every card just points at an existing page.
+// PBS 2026-07-21 · Phase 2 — Unified people directory.
+// Replaces the phase-1 link-card hub. Reads public.v_marketing_audience (subscribers UNION prospects)
+// plus v_subscriber_groups. Pre-scopes filter state from ?source= / ?tab= searchParams.
+// Design: paper white (#FFFFFF) — never var(--paper-warm) per Namkhan token burn.
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
-import { DEPT_CFG } from '@/lib/dept-cfg';
+import { MARKETING_SUBPAGES } from '../_subpages';
+import AudienceUnifiedClient, {
+  type AudienceRow,
+  type GroupRow,
+} from './_components/AudienceUnifiedClient';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 30;
 
-const WHITE = '#FFFFFF';
-const HAIR  = '#E6DFCC';
-const INK   = '#1B1B1B';
-const INK_S = '#5A5A5A';
+interface PageProps {
+  searchParams?: Promise<{ source?: string; tab?: string }>;
+}
 
-interface Card { label: string; href: string; footer: string }
+export default async function AudienceUnifiedPage({ searchParams }: PageProps) {
+  const sb = getSupabaseAdmin();
 
-const CARDS: Card[] = [
-  { label: 'Subscribers',     href: '/marketing/subscribers',                 footer: '827 newsletter list' },
-  { label: 'Prospects',       href: '/marketing/prospects',                   footer: '1300+ outbound targets' },
-  { label: 'Sequences',       href: '/marketing/prospects/sequences',         footer: 'Enrollment + preview + schedule' },
-  { label: 'Scrape engine',   href: '/marketing/prospects/scrape',            footer: 'Import from URL' },
-  { label: 'Candidates pool', href: '/marketing/subscribers?tab=candidates',  footer: 'Raw Gmail-extracted pool' },
-];
+  const audienceQ = await sb
+    .from('v_marketing_audience')
+    .select('*')
+    .order('is_pinned', { ascending: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .limit(3000);
+  const rows: AudienceRow[] = (audienceQ.data ?? []) as AudienceRow[];
 
-export default function AudienceHubPage() {
-  const cfg = DEPT_CFG.marketing;
-  const tabs: DashboardTab[] = cfg.subPages.map(s => ({
+  const groupsQ = await sb
+    .from('v_subscriber_groups')
+    .select('id, slug, name, description, color, is_system, sort_order, member_count')
+    .order('sort_order', { ascending: true });
+  const groups: GroupRow[] = (groupsQ.data ?? []) as GroupRow[];
+
+  const sp = (await searchParams) ?? {};
+  const initialSource = (sp.source === 'subscribers' || sp.source === 'prospects') ? sp.source : 'all';
+  const initialTab    = sp.tab === 'scrape' ? 'scrape' : 'table';
+
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href,
     active: s.href === '/marketing/audience',
   }));
 
   return (
-    <DashboardPage title="Marketing · Audience" subtitle="People we can reach — subscribers, prospects, sequences." tabs={tabs}>
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        {CARDS.map(card => (
-          <a
-            key={card.href}
-            href={card.href}
-            style={{
-              display: 'block', padding: 20, background: WHITE, border: `1px solid ${HAIR}`,
-              borderRadius: 4, textDecoration: 'none', color: INK,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 500 }}>{card.label}</div>
-            <div style={{ fontSize: 11, color: INK_S, marginTop: 6 }}>{card.footer}</div>
-          </a>
-        ))}
-      </div>
-    </DashboardPage>
+    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+      <DashboardPage
+        title="Marketing · Audience"
+        subtitle="Unified people directory — subscribers + prospects in one table."
+        tabs={tabs}
+      >
+        <div style={{ gridColumn: '1 / -1' }}>
+          <AudienceUnifiedClient
+            initialRows={rows}
+            initialGroups={groups}
+            initialSource={initialSource}
+            initialTab={initialTab}
+          />
+        </div>
+      </DashboardPage>
+    </div>
   );
 }
