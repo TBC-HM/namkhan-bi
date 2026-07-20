@@ -1,6 +1,7 @@
 // app/h/[property_id]/settings/media/page.tsx
 // PBS 2026-07-18 v2 · full PhotoGuardrailsPanel port with server-side fetch of
 // all 7 guardrail datasets (naming/captions/altText/tiers/ratios/textPolicy/palette).
+// PBS 2026-07-20 · Rate Plans tab inserted between Media and Guardrails.
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import MediaQaPanel from '@/components/settings/panels/MediaQaPanel';
@@ -41,6 +42,7 @@ export default async function MediaSettingsPage({ params }: { params: { property
       tabs={[
         { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
         { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media`, active: true },
+        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
