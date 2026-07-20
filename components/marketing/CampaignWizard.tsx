@@ -3,6 +3,15 @@
 // components/marketing/CampaignWizard.tsx
 // 5-step wizard: Brief → Curate → Compose → Approve → Distribute.
 // Receives templates + asset pool from the server; manages all step state in client state.
+//
+// PBS 2026-07-21: Token/chrome sweep to design v6/v7.
+//   - Killed every var(--paper-warm) / var(--paper) / var(--paper-deep) — resolves
+//     to dark on Namkhan (see memory: paper-warm burn, importance 9). Hardcoded
+//     paper white #FFFFFF.
+//   - Replaced var(--moss)/(--brass)/(--ink*)/(--line*)/(--oxblood) with hex.
+//   - Replaced var(--serif)/(--mono)/(--t-*) with system stack + fixed px sizes.
+//   - Container radius 4px, pills 3px, hairlines #E6DFCC.
+//   - Business logic (steps, guards, brief state, AI-caption gen) unchanged.
 
 import { useMemo, useState } from 'react';
 import type { CampaignTemplate, MediaAssetReady } from '@/lib/marketing';
@@ -26,6 +35,24 @@ const TONES = [
   { key: 'direct',    label: 'Direct' },
   { key: 'playful',   label: 'Playful' },
 ];
+
+// ────────────────────────────────────────────────────────────────────────────
+// Design v6/v7 tokens — hardcoded to survive Namkhan's --paper-warm dark burn.
+// ────────────────────────────────────────────────────────────────────────────
+const WHITE  = '#FFFFFF';
+const HAIR   = '#E6DFCC';
+const HAIR_S = '#EFEAD9';
+const INK    = '#1B1B1B';
+const INK_M  = '#5A5A5A';
+const INK_L  = '#8A8A8A';
+const FOREST = '#084838';
+const FOREST_TINT = 'rgba(8,72,56,0.10)';
+const FOREST_TINT_SOFT = 'rgba(8,72,56,0.06)';
+const BRASS  = '#B48A3A';
+const BRASS_TINT = 'rgba(180,138,58,0.10)';
+const CREAM  = '#F5F0E1';
+const OXBLD  = '#B04A2F';
+const MONO   = 'ui-monospace, SFMono-Regular, monospace';
 
 interface Props {
   templates: CampaignTemplate[];
@@ -142,7 +169,10 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
   function back() { setStep(s => Math.max(1, s - 1) as Step); }
 
   return (
-    <div className="card">
+    <div style={{
+      background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4,
+      padding: 20,
+    }}>
       {/* Progress strip */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 22, alignItems: 'center', flexWrap: 'wrap' }}>
         {STEPS.map((s, i) => {
@@ -151,18 +181,18 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
           return (
             <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <div style={{
-                padding: '6px 14px',
-                fontSize: "var(--t-base)",
+                padding: '6px 12px',
+                fontSize: 11,
                 fontWeight: active || done ? 600 : 500,
-                color: active ? 'var(--paper-warm)' : done ? 'var(--moss)' : 'var(--ink-mute)',
-                background: active ? 'var(--moss)' : done ? 'rgba(31,53,40,0.10)' : 'transparent',
-                border: active ? '1px solid var(--moss)' : '1px solid var(--line)',
-                borderRadius: 4,
-                fontFamily: 'var(--mono)',
+                color: active ? WHITE : done ? FOREST : INK_M,
+                background: active ? FOREST : done ? FOREST_TINT : WHITE,
+                border: active ? '1px solid ' + FOREST : '1px solid ' + HAIR,
+                borderRadius: 3,
+                fontFamily: MONO,
                 textTransform: 'uppercase',
-                letterSpacing: 1,
+                letterSpacing: '0.06em',
               }}>{s.n}. {s.label}</div>
-              {i < STEPS.length - 1 && <span style={{ color: 'var(--ink-mute)' }}>→</span>}
+              {i < STEPS.length - 1 && <span style={{ color: INK_L }}>→</span>}
             </div>
           );
         })}
@@ -215,13 +245,13 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
       <div style={{
         marginTop: 28,
         paddingTop: 16,
-        borderTop: '1px solid var(--line-soft)',
+        borderTop: '1px solid ' + HAIR,
         display: 'flex',
         gap: 8,
         alignItems: 'center',
       }}>
-        {step > 1 && step < 5 && <button onClick={back} className="btn" style={{ fontSize: "var(--t-sm)" }}>← back</button>}
-        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
+        {step > 1 && step < 5 && <button onClick={back} style={btnSecondary}>← back</button>}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: INK_M }}>
           {step === 1 && (canContinue ? 'brief complete' : 'fill in objective · type · audience · dates · template · brief (20+ chars)')}
           {step === 2 && template && `picked ${picked.length} of ${template.min_assets === template.max_assets ? template.max_assets : `${template.min_assets}–${template.max_assets}`}`}
           {step === 3 && `caption ${caption.length} / ${template?.caption_max_chars || 2200} chars`}
@@ -230,25 +260,19 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
           <button
             onClick={next}
             disabled={!canContinue}
-            className="btn"
             style={{
-              fontSize: "var(--t-sm)",
-              background: canContinue ? 'var(--moss)' : 'var(--ink-mute)',
-              color: 'var(--paper-warm)',
-              borderColor: canContinue ? 'var(--moss)' : 'var(--ink-mute)',
+              ...btnPrimary,
+              background: canContinue ? FOREST : INK_L,
+              borderColor: canContinue ? FOREST : INK_L,
               cursor: canContinue ? 'pointer' : 'not-allowed',
             }}
           >continue →</button>
         )}
         {step === 4 && (
-          <button
-            onClick={() => setStep(5)}
-            className="btn"
-            style={{ fontSize: "var(--t-sm)", background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}
-          >✓ approve & schedule</button>
+          <button onClick={() => setStep(5)} style={btnPrimary}>✓ approve &amp; schedule</button>
         )}
         {step === 5 && (
-          <a href="/marketing/campaigns" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>back to campaigns</a>
+          <a href="/marketing/campaigns" style={btnSecondary}>back to campaigns</a>
         )}
       </div>
     </div>
@@ -350,24 +374,36 @@ const BUDGET_TYPES: Array<{ k: BudgetType; label: string }> = [
   { k: 'per_impression',  label: 'Per-impression (CPM)' },
 ];
 
-// Paper-white hardcoded tokens (avoids var(--paper-warm) dark-render on Namkhan).
-const P_WHITE = '#FFFFFF';
-const P_HAIR  = '#E6DFCC';
-const P_INK   = '#1B1B1B';
-const P_INK_M = '#5A5A5A';
-const P_INK_L = '#8A8A8A';
-const P_ACC   = '#0F5B4A';
-const P_CREAM = '#F5F0E1';
-
+// Form control primitives.
 const p_control: React.CSSProperties = {
   width: '100%', padding: '8px 12px',
-  border: '1px solid ' + P_HAIR, borderRadius: 4,
-  fontSize: 13, fontFamily: 'inherit', color: P_INK, background: P_WHITE,
+  border: '1px solid ' + HAIR, borderRadius: 4,
+  fontSize: 13, fontFamily: 'inherit', color: INK, background: WHITE,
 };
 const p_label: React.CSSProperties = {
   display: 'block', fontSize: 10, fontWeight: 600,
   letterSpacing: '0.06em', textTransform: 'uppercase',
-  color: P_INK_M, marginBottom: 6,
+  color: INK_M, marginBottom: 6,
+};
+
+// Button primitives per design v6/v7 button contract.
+const btnPrimary: React.CSSProperties = {
+  padding: '6px 14px', fontSize: 12, fontWeight: 600,
+  background: FOREST, color: WHITE, border: '1px solid ' + FOREST, borderRadius: 4,
+  cursor: 'pointer', textDecoration: 'none', display: 'inline-block',
+  fontFamily: 'inherit',
+};
+const btnSecondary: React.CSSProperties = {
+  padding: '6px 12px', fontSize: 12, fontWeight: 500,
+  background: WHITE, color: INK, border: '1px solid ' + HAIR, borderRadius: 4,
+  cursor: 'pointer', textDecoration: 'none', display: 'inline-block',
+  fontFamily: 'inherit',
+};
+const btnSmall: React.CSSProperties = {
+  padding: '4px 10px', fontSize: 11, fontWeight: 500,
+  background: WHITE, color: INK, border: '1px solid ' + HAIR, borderRadius: 4,
+  cursor: 'pointer', textDecoration: 'none', display: 'inline-block',
+  fontFamily: 'inherit',
 };
 
 function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b: Brief) => void; templates: CampaignTemplate[] }) {
@@ -386,7 +422,7 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
           <select style={p_control} value={brief.objective} onChange={e => setBrief({ ...brief, objective: e.target.value as Objective })}>
             {OBJECTIVES.map(o => <option key={o.k} value={o.k}>{o.label}</option>)}
           </select>
-          <div style={{ marginTop: 4, fontSize: 11, color: P_INK_L, fontStyle: 'italic' }}>{objectiveMeta?.hint}</div>
+          <div style={{ marginTop: 4, fontSize: 11, color: INK_L, fontStyle: 'italic' }}>{objectiveMeta?.hint}</div>
         </div>
         <div>
           <label style={p_label}>Campaign type</label>
@@ -403,7 +439,7 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
           <select style={p_control} value={brief.audience} onChange={e => setBrief({ ...brief, audience: e.target.value as AudienceSegment })}>
             {AUDIENCES.map(a => <option key={a.k} value={a.k}>{a.label}</option>)}
           </select>
-          <div style={{ marginTop: 4, fontSize: 11, color: P_INK_L, fontStyle: 'italic' }}>{audienceMeta?.hint}</div>
+          <div style={{ marginTop: 4, fontSize: 11, color: INK_L, fontStyle: 'italic' }}>{audienceMeta?.hint}</div>
         </div>
         {showMarkets && (
           <div>
@@ -416,8 +452,8 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                     onClick={() => setBrief({ ...brief, targetMarkets: active ? brief.targetMarkets.filter(x => x !== m.iso) : [...brief.targetMarkets, m.iso] })}
                     style={{
                       padding: '4px 10px', fontSize: 11, fontWeight: 500,
-                      background: active ? P_ACC : P_WHITE, color: active ? P_WHITE : P_INK,
-                      border: '1px solid ' + (active ? P_ACC : P_HAIR), borderRadius: 3,
+                      background: active ? FOREST : WHITE, color: active ? WHITE : INK,
+                      border: '1px solid ' + (active ? FOREST : HAIR), borderRadius: 3,
                       cursor: 'pointer', fontFamily: 'inherit',
                     }}
                   >{m.iso} · {m.name}</button>
@@ -509,8 +545,8 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                 onClick={() => setBrief({ ...brief, vibes: active ? brief.vibes.filter(x => x !== v) : [...brief.vibes, v] })}
                 style={{
                   padding: '4px 10px', fontSize: 11, fontWeight: 500, textTransform: 'capitalize',
-                  background: active ? P_CREAM : P_WHITE, color: P_INK,
-                  border: '1px solid ' + (active ? '#B08834' : P_HAIR), borderRadius: 3,
+                  background: active ? CREAM : WHITE, color: INK,
+                  border: '1px solid ' + (active ? BRASS : HAIR), borderRadius: 3,
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >{v}</button>
@@ -530,13 +566,13 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                 onClick={() => setBrief({ ...brief, templateId: t.template_id })}
                 style={{
                   textAlign: 'left', padding: '10px 12px',
-                  border: '1px solid ' + (active ? P_ACC : P_HAIR),
-                  background: active ? '#EAF3EE' : P_WHITE,
+                  border: '1px solid ' + (active ? FOREST : HAIR),
+                  background: active ? '#EAF3EE' : WHITE,
                   borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
-                <div style={{ fontSize: 12, fontWeight: 600, color: P_INK }}>{t.name}</div>
-                <div style={{ fontSize: 10, color: P_INK_L, marginTop: 3, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: INK }}>{t.name}</div>
+                <div style={{ fontSize: 10, color: INK_L, marginTop: 3, fontFamily: MONO }}>
                   {t.aspect_ratio} · {t.output_width}×{t.output_height} · {t.min_assets === t.max_assets ? t.max_assets : `${t.min_assets}–${t.max_assets}`} asset{t.max_assets > 1 ? 's' : ''}
                 </div>
               </button>
@@ -547,10 +583,11 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
 
       {template && (
         <div style={{
-          padding: '10px 14px', background: P_CREAM,
-          borderLeft: '3px solid #B08834', fontSize: 11, color: P_INK_M, lineHeight: 1.6,
+          padding: '10px 14px', background: CREAM,
+          borderLeft: '3px solid ' + BRASS, fontSize: 11, color: INK_M, lineHeight: 1.6,
+          borderRadius: 4,
         }}>
-          <div style={{ fontWeight: 600, color: P_INK }}>Template constraints (auto-applied later):</div>
+          <div style={{ fontWeight: 600, color: INK }}>Template constraints (auto-applied later):</div>
           License must allow: {(template.license_filter ?? []).join(', ') || '—'} · Aspect ratio: {template.aspect_ratio} · {template.output_width}×{template.output_height}px · Asset count: {template.min_assets === template.max_assets ? template.max_assets : `${template.min_assets}–${template.max_assets}`} · Caption limit: {template.caption_max_chars ?? '—'} chars · Hashtag max: {template.hashtag_max ?? '—'}
         </div>
       )}
@@ -581,10 +618,12 @@ function Step2Curate({
 
   if (assetPool.length === 0) {
     return (
-      <div className="stub" style={{ padding: 32, textAlign: 'center' }}>
-        <h3>No assets in the library yet</h3>
-        <p>Upload some photos at <a href="/marketing/upload" style={{ color: 'var(--brass)' }}>/marketing/upload</a> first, then return to build a campaign.</p>
-        <p style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 16 }}>
+      <div style={{ padding: 32, textAlign: 'center', background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, color: INK, margin: '0 0 8px' }}>No assets in the library yet</h3>
+        <p style={{ fontSize: 12, color: INK_M, margin: '0 0 8px' }}>
+          Upload some photos at <a href="/marketing/upload" style={{ color: FOREST, fontWeight: 600 }}>/marketing/upload</a> first, then return to build a campaign.
+        </p>
+        <p style={{ fontSize: 11, color: INK_L, marginTop: 16 }}>
           Once Phase 1 ingest pipeline is fed, the AI will rank candidates against your brief automatically.
         </p>
       </div>
@@ -595,10 +634,11 @@ function Step2Curate({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{
         padding: '10px 14px',
-        background: 'rgba(31,53,40,0.06)',
-        borderLeft: '3px solid var(--moss)',
-        fontSize: "var(--t-base)",
-        color: 'var(--ink-soft)',
+        background: FOREST_TINT_SOFT,
+        borderLeft: '3px solid ' + FOREST,
+        borderRadius: 4,
+        fontSize: 12,
+        color: INK,
         lineHeight: 1.6,
       }}>
         <strong>AI proposed {proposals.length} assets ranked for your brief.</strong> Pick {template?.min_assets === template?.max_assets ? template?.max_assets : `${template?.min_assets}–${template?.max_assets}`} that work. Click cards for full preview.
@@ -624,11 +664,11 @@ function Step2Curate({
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, fontSize: "var(--t-sm)", color: 'var(--ink-mute)', alignItems: 'center', marginTop: 8 }}>
-        <button className="btn" style={{ fontSize: "var(--t-sm)" }}>show 10 more</button>
-        <a href="/marketing/library" target="_blank" rel="noreferrer" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>browse library manually ↗</a>
+      <div style={{ display: 'flex', gap: 8, fontSize: 11, color: INK_M, alignItems: 'center', marginTop: 8 }}>
+        <button style={btnSmall}>show 10 more</button>
+        <a href="/marketing/library" target="_blank" rel="noreferrer" style={btnSmall}>browse library manually ↗</a>
         <span style={{ marginLeft: 'auto' }}>
-          you picked <strong style={{ color: 'var(--ink)' }}>{picked.length}</strong> of {template?.max_assets ?? '?'}
+          you picked <strong style={{ color: INK }}>{picked.length}</strong> of {template?.max_assets ?? '?'}
         </span>
       </div>
     </div>
@@ -649,8 +689,9 @@ function ProposalCard({ asset, picked, score, reason, onToggle }: {
     <div
       onClick={onToggle}
       style={{
-        background: 'var(--paper)',
-        border: picked ? '2px solid var(--moss)' : '1px solid var(--line)',
+        background: WHITE,
+        border: picked ? '2px solid ' + FOREST : '1px solid ' + HAIR,
+        borderRadius: 4,
         cursor: 'pointer',
         position: 'relative',
         overflow: 'hidden',
@@ -662,28 +703,28 @@ function ProposalCard({ asset, picked, score, reason, onToggle }: {
         {thumb
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={thumb} alt={asset.alt_text ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: "var(--t-xs)" }}>no preview</div>
+          : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: MONO, fontSize: 10 }}>no preview</div>
         }
         <div style={{
           position: 'absolute', top: 6, right: 6,
-          background: 'var(--brass)', color: 'var(--paper-warm)',
-          fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", fontWeight: 700,
-          padding: '3px 8px',
+          background: BRASS, color: WHITE,
+          fontFamily: MONO, fontSize: 11, fontWeight: 700,
+          padding: '3px 8px', borderRadius: 3,
         }}>{score.toFixed(2)}</div>
         <div style={{
           position: 'absolute', bottom: 6, right: 6,
           width: 28, height: 28, borderRadius: '50%',
-          background: picked ? 'var(--moss)' : 'rgba(255,255,255,0.92)',
-          color: picked ? 'var(--paper-warm)' : 'var(--ink)',
+          background: picked ? FOREST : 'rgba(255,255,255,0.92)',
+          color: picked ? WHITE : INK,
           display: 'grid', placeItems: 'center',
-          fontSize: "var(--t-lg)", fontWeight: 700,
+          fontSize: 14, fontWeight: 700,
         }}>{picked ? '✓' : '+'}</div>
       </div>
       <div style={{ padding: '8px 10px' }}>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-md)", color: 'var(--ink)', lineHeight: 1.3 }}>
+        <div style={{ fontSize: 13, color: INK, lineHeight: 1.4 }}>
           {asset.caption ?? asset.original_filename}
         </div>
-        <div style={{ marginTop: 4, fontSize: "var(--t-xs)", color: 'var(--ink-mute)', fontStyle: 'italic' }}>
+        <div style={{ marginTop: 4, fontSize: 10, color: INK_M, fontStyle: 'italic' }}>
           {reason}
         </div>
       </div>
@@ -726,25 +767,27 @@ function Step3Compose({
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22 }}>
       {/* Preview */}
       <div>
-        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 8 }}>preview · {template?.name}</div>
+        <div style={{ fontSize: 11, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_M, marginBottom: 8 }}>preview · {template?.name}</div>
         <div style={{
           aspectRatio: aspectStr.replace(':', ' / '),
           background: '#0c0e0d',
           position: 'relative',
           maxWidth: 480,
           margin: '0 auto',
+          borderRadius: 4,
+          overflow: 'hidden',
         }}>
           {slideUrl
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={slideUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#666', fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>(no preview)</div>}
-          <div style={{ position: 'absolute', bottom: 12, right: 12, fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", color: 'var(--paper-warm)', background: 'rgba(0,0,0,0.5)', padding: '2px 6px' }}>thenamkhan</div>
+            : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#666', fontFamily: MONO, fontSize: 11 }}>(no preview)</div>}
+          <div style={{ position: 'absolute', bottom: 12, right: 12, fontFamily: MONO, fontSize: 10, color: WHITE, background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: 3 }}>thenamkhan</div>
         </div>
         {slides.length > 1 && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'center', alignItems: 'center', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
-            <button className="btn" style={{ fontSize: "var(--t-xs)" }} onClick={() => setSlideIdx((slideIdx - 1 + slides.length) % slides.length)}>◀</button>
-            <span style={{ fontFamily: 'var(--mono)' }}>slide {slideIdx + 1} of {slides.length}</span>
-            <button className="btn" style={{ fontSize: "var(--t-xs)" }} onClick={() => setSlideIdx((slideIdx + 1) % slides.length)}>▶</button>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'center', alignItems: 'center', fontSize: 11, color: INK_M }}>
+            <button style={btnSmall} onClick={() => setSlideIdx((slideIdx - 1 + slides.length) % slides.length)}>◀</button>
+            <span style={{ fontFamily: MONO }}>slide {slideIdx + 1} of {slides.length}</span>
+            <button style={btnSmall} onClick={() => setSlideIdx((slideIdx + 1) % slides.length)}>▶</button>
           </div>
         )}
       </div>
@@ -758,30 +801,32 @@ function Step3Compose({
             rows={6}
             style={{
               width: '100%',
-              fontFamily: 'var(--serif)',
+              fontFamily: 'inherit',
               fontStyle: 'italic',
-              fontSize: "var(--t-lg)",
+              fontSize: 13,
               padding: 12,
-              border: '1px solid var(--line)',
+              color: INK,
+              border: '1px solid ' + HAIR,
               borderRadius: 4,
-              background: 'var(--paper-warm)',
+              background: WHITE,
               boxSizing: 'border-box',
               lineHeight: 1.5,
+              resize: 'vertical',
             }}
           />
-          <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
-            <button className="btn" style={{ fontSize: "var(--t-sm)" }} onClick={regenerate}>regenerate</button>
-            <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>tone:</span>
+          <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button style={btnSmall} onClick={regenerate}>regenerate</button>
+            <span style={{ fontSize: 11, color: INK_M }}>tone:</span>
             {TONES.map(t => (
               <button
                 key={t.key}
                 onClick={() => setTone(t.key)}
-                className="btn"
                 style={{
-                  fontSize: "var(--t-xs)",
-                  background: tone === t.key ? 'var(--moss)' : 'var(--paper-warm)',
-                  color: tone === t.key ? 'var(--paper-warm)' : 'var(--ink)',
-                  borderColor: tone === t.key ? 'var(--moss)' : 'var(--line)',
+                  padding: '4px 10px', fontSize: 10, fontWeight: 500,
+                  background: tone === t.key ? FOREST : WHITE,
+                  color: tone === t.key ? WHITE : INK,
+                  border: '1px solid ' + (tone === t.key ? FOREST : HAIR),
+                  borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >{t.label}</button>
             ))}
@@ -792,18 +837,21 @@ function Step3Compose({
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {hashtags.map((h, i) => (
               <span key={i} style={{
-                fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", padding: '3px 8px',
-                background: 'var(--paper-warm)', border: '1px solid var(--line)',
+                fontFamily: MONO, fontSize: 11, padding: '3px 8px', color: INK,
+                background: WHITE, border: '1px solid ' + HAIR, borderRadius: 3,
               }}>#{h}</span>
             ))}
-            {hashtags.length === 0 && <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>—</span>}
+            {hashtags.length === 0 && <span style={{ fontSize: 11, color: INK_M }}>—</span>}
           </div>
         </Section>
 
         <Section title="Logo placement">
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>{template?.logo_position ?? 'bottom-right'} (default)</span>
-            <button className="btn" style={{ fontSize: "var(--t-sm)" }}>change</button>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{
+              display: 'inline-block', padding: '3px 10px', borderRadius: 3, fontSize: 11, fontWeight: 600,
+              background: FOREST, color: WHITE, border: '1px solid ' + FOREST,
+            }}>{template?.logo_position ?? 'bottom-right'} (default)</span>
+            <button style={btnSmall}>change</button>
           </div>
         </Section>
       </div>
@@ -835,56 +883,59 @@ function Step4Approve({ template, picked, assetPool, caption, hashtags, brief }:
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)' }}>review · {template?.name} · {slides.length} asset{slides.length === 1 ? '' : 's'}</div>
+      <div style={{ fontFamily: MONO, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: INK_M }}>review · {template?.name} · {slides.length} asset{slides.length === 1 ? '' : 's'}</div>
 
       {/* PBS 2026-07-10: Planner v2 summary — objective/type/audience/markets/timing/budget/metric */}
-      <div style={{ border: '1px solid #E6DFCC', borderRadius: 6, padding: '14px 16px', background: '#FAFAF7' }}>
-        <div style={{ fontSize: 10, fontFamily: 'ui-monospace, SFMono-Regular, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#5A5A5A', marginBottom: 10 }}>Campaign brief</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px 20px', fontSize: 12, color: '#1B1B1B' }}>
-          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Objective</div>{brief.objective.replace(/_/g, ' ')}</div>
-          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Type</div>{brief.campaignType.replace(/_/g, ' ')}</div>
-          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Audience</div>{brief.audience.replace(/_/g, ' ')}</div>
+      <div style={{ border: '1px solid ' + HAIR, borderRadius: 4, padding: '14px 16px', background: WHITE }}>
+        <div style={{ fontSize: 10, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.08em', color: INK_M, marginBottom: 10 }}>Campaign brief</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px 20px', fontSize: 12, color: INK }}>
+          <div><div style={{ fontSize: 10, color: INK_L, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Objective</div>{brief.objective.replace(/_/g, ' ')}</div>
+          <div><div style={{ fontSize: 10, color: INK_L, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Type</div>{brief.campaignType.replace(/_/g, ' ')}</div>
+          <div><div style={{ fontSize: 10, color: INK_L, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Audience</div>{brief.audience.replace(/_/g, ' ')}</div>
           {brief.targetMarkets.length > 0 && (
-            <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Markets</div>{brief.targetMarkets.join(' · ')}</div>
+            <div><div style={{ fontSize: 10, color: INK_L, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Markets</div>{brief.targetMarkets.join(' · ')}</div>
           )}
-          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Timing</div>{brief.startDate}{brief.endDate ? ` → ${brief.endDate}` : ''}{brief.recurrence !== 'one_off' ? ` · ${brief.recurrence}` : ''}</div>
-          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Budget</div>{brief.budgetType === 'organic' ? 'Organic' : `${brief.budgetCurrency} ${brief.budgetAmount || '—'} · ${brief.budgetType.replace(/_/g, ' ')}`}</div>
-          <div><div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Success metric</div>{brief.successMetric.replace(/_/g, ' ')}{brief.successTarget ? ` · target ${brief.successTarget}` : ''}</div>
+          <div><div style={{ fontSize: 10, color: INK_L, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Timing</div>{brief.startDate}{brief.endDate ? ` → ${brief.endDate}` : ''}{brief.recurrence !== 'one_off' ? ` · ${brief.recurrence}` : ''}</div>
+          <div><div style={{ fontSize: 10, color: INK_L, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Budget</div>{brief.budgetType === 'organic' ? 'Organic' : `${brief.budgetCurrency} ${brief.budgetAmount || '—'} · ${brief.budgetType.replace(/_/g, ' ')}`}</div>
+          <div><div style={{ fontSize: 10, color: INK_L, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Success metric</div>{brief.successMetric.replace(/_/g, ' ')}{brief.successTarget ? ` · target ${brief.successTarget}` : ''}</div>
         </div>
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #E6DFCC' }}>
-          <div style={{ fontSize: 10, color: '#8A8A8A', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Freetext brief</div>
-          <div style={{ fontFamily: 'var(--serif, Georgia, serif)', fontStyle: 'italic', fontSize: 14, color: '#1B1B1B', lineHeight: 1.5 }}>{brief.briefText}</div>
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid ' + HAIR }}>
+          <div style={{ fontSize: 10, color: INK_L, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Freetext brief</div>
+          <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 14, color: INK, lineHeight: 1.5 }}>{brief.briefText}</div>
         </div>
       </div>
 
       <div>
-        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>caption</div>
-        <div style={{ fontSize: "var(--t-md)", color: 'var(--ink-soft)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{caption}</div>
+        <div style={{ fontSize: 11, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_M, marginBottom: 6 }}>caption</div>
+        <div style={{ fontSize: 13, color: INK, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{caption}</div>
       </div>
 
       <div>
-        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>hashtags ({hashtags.length})</div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", color: 'var(--ink)' }}>
+        <div style={{ fontSize: 11, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_M, marginBottom: 6 }}>hashtags ({hashtags.length})</div>
+        <div style={{ fontFamily: MONO, fontSize: 11, color: INK }}>
           {hashtags.map(h => `#${h}`).join('  ')}
         </div>
       </div>
 
       <div>
-        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 8 }}>checklist</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: "var(--t-base)" }}>
+        <div style={{ fontSize: 11, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_M, marginBottom: 8 }}>checklist</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
           {checks.map((c, i) => (
-            <div key={i} style={{ color: c.pass ? 'var(--moss)' : 'var(--oxblood)' }}>
+            <div key={i} style={{ color: c.pass ? FOREST : OXBLD }}>
               {c.pass ? '✓' : '✕'} {c.label}
             </div>
           ))}
-          {allPass && <div style={{ color: 'var(--moss)', fontWeight: 600, marginTop: 4 }}>✓ ready to ship</div>}
-          {!allPass && <div style={{ color: 'var(--oxblood)', fontWeight: 600, marginTop: 4 }}>✕ resolve checklist before approving</div>}
+          {allPass && <div style={{ color: FOREST, fontWeight: 600, marginTop: 4 }}>✓ ready to ship</div>}
+          {!allPass && <div style={{ color: OXBLD, fontWeight: 600, marginTop: 4 }}>✕ resolve checklist before approving</div>}
         </div>
       </div>
 
       <div>
-        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>approver</div>
-        <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>Paul Bauer (Owner)</span>
+        <div style={{ fontSize: 11, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_M, marginBottom: 6 }}>approver</div>
+        <span style={{
+          display: 'inline-block', padding: '3px 10px', borderRadius: 3, fontSize: 11, fontWeight: 600,
+          background: FOREST, color: WHITE, border: '1px solid ' + FOREST,
+        }}>Paul Bauer (Owner)</span>
       </div>
     </div>
   );
@@ -898,32 +949,37 @@ function Step5Distribute({ template, picked, brief }: { template: CampaignTempla
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{
         padding: '14px 18px',
-        background: 'rgba(31,53,40,0.10)',
-        borderLeft: '3px solid var(--moss)',
-        fontSize: "var(--t-lg)",
-        color: 'var(--ink)',
+        background: FOREST_TINT,
+        borderLeft: '3px solid ' + FOREST,
+        borderRadius: 4,
+        fontSize: 14,
+        color: INK,
       }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--moss)', fontWeight: 600 }}>✓ approved</div>
-        <div style={{ marginTop: 4, fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-xl)" }}>your campaign is queued</div>
-        <div style={{ marginTop: 4, fontSize: "var(--t-base)", color: 'var(--ink-soft)' }}>{brief.objective.replace(/_/g, ' ')} · {brief.campaignType.replace(/_/g, ' ')} · {brief.audience.replace(/_/g, ' ')}{brief.targetMarkets.length > 0 ? ` (${brief.targetMarkets.join(', ')})` : ''} · {brief.startDate}{brief.endDate ? ` → ${brief.endDate}` : ''}</div>
+        <div style={{ fontFamily: MONO, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: FOREST, fontWeight: 600 }}>✓ approved</div>
+        <div style={{ marginTop: 4, fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 18 }}>your campaign is queued</div>
+        <div style={{ marginTop: 4, fontSize: 12, color: INK_M }}>{brief.objective.replace(/_/g, ' ')} · {brief.campaignType.replace(/_/g, ' ')} · {brief.audience.replace(/_/g, ' ')}{brief.targetMarkets.length > 0 ? ` (${brief.targetMarkets.join(', ')})` : ''} · {brief.startDate}{brief.endDate ? ` → ${brief.endDate}` : ''}</div>
       </div>
 
-      <div className="card" style={{ background: 'var(--paper)', padding: 16 }}>
-        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 10 }}>where it goes</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: "var(--t-base)" }}>
+      <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, padding: 16 }}>
+        <div style={{ fontSize: 11, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_M, marginBottom: 10 }}>where it goes</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
           <Row label="Logged in usage history for all assets" status="done" />
           <Row label="Backed up to /campaigns archive" status="done" />
           <Row label={`Auto-post to ${template?.channel.startsWith('instagram') ? 'Instagram @thenamkhan' : template?.name ?? 'channel'} (via Make scenario)`} status="scheduled" />
         </div>
       </div>
 
-      <div style={{ padding: 14, background: 'rgba(168,133,74,0.10)', borderLeft: '3px solid var(--brass)', fontSize: "var(--t-sm)", color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+      <div style={{
+        padding: 14, background: BRASS_TINT,
+        borderLeft: '3px solid ' + BRASS, borderRadius: 4,
+        fontSize: 11, color: INK_M, lineHeight: 1.6,
+      }}>
         <strong>auto-posting comes in Phase 4.</strong> for now, download the renders below and post manually.
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn" style={{ fontSize: "var(--t-sm)" }}>⤓ all slides as ZIP</button>
-        <button className="btn" style={{ fontSize: "var(--t-sm)" }}>⤓ caption + hashtags TXT</button>
+        <button style={btnSecondary}>⤓ all slides as ZIP</button>
+        <button style={btnSecondary}>⤓ caption + hashtags TXT</button>
       </div>
     </div>
   );
@@ -931,14 +987,17 @@ function Step5Distribute({ template, picked, brief }: { template: CampaignTempla
 
 function Row({ label, status }: { label: string; status: 'done' | 'scheduled' | 'pending' }) {
   const color =
-    status === 'done'      ? 'var(--moss)' :
-    status === 'scheduled' ? 'var(--brass)' :
-    'var(--ink-mute)';
+    status === 'done'      ? FOREST :
+    status === 'scheduled' ? BRASS :
+    INK_M;
   const sym = status === 'done' ? '✓' : status === 'scheduled' ? '⏳' : '·';
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--line-soft)' }}>
-      <span style={{ color: 'var(--ink-soft)' }}>{label}</span>
-      <span className="pill" style={{ background: color, color: 'var(--paper-warm)' }}>{sym} {status}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid ' + HAIR_S }}>
+      <span style={{ color: INK }}>{label}</span>
+      <span style={{
+        display: 'inline-block', padding: '3px 10px', borderRadius: 3, fontSize: 10, fontWeight: 600,
+        background: color, color: WHITE, border: '1px solid ' + color,
+      }}>{sym} {status}</span>
     </div>
   );
 }
@@ -949,7 +1008,7 @@ function Row({ label, status }: { label: string; status: 'done' | 'scheduled' | 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', fontWeight: 600, marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 11, fontFamily: MONO, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_M, fontWeight: 600, marginBottom: 8 }}>{title}</div>
       {children}
     </div>
   );
