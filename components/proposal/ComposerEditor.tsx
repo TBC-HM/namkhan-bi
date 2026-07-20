@@ -586,11 +586,31 @@ export default function ComposerEditor({
       ...x, ...patch,
       total_lak: (patch.qty ?? x.qty) * (patch.nights ?? x.nights) * (patch.unit_price_lak ?? x.unit_price_lak),
     } : x));
-    await fetch(`/api/sales/proposals/${proposalId}/blocks`, {
+    await fetch(`/api/sales/proposals//blocks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ block_id: id, ...patch }),
     });
+    // PBS 2026-07-20 pm · item #3 · block→offer price sync. Reverse of the
+    // offer→block sync above: when a room block's unit price changes,
+    // update every matching rate offer's nightly + total.
+    if (patch.unit_price_lak != null) {
+      const changedBlock = blocks.find((x) => x.id === id);
+      if (changedBlock && changedBlock.block_type === 'room' && changedBlock.ref_id) {
+        const newUnit = Number(patch.unit_price_lak);
+        const nights = Math.max(1, Number(patch.nights ?? changedBlock.nights ?? 1));
+        const matchingOffers = rateOffers.filter((o) => o.room_type_id != null && String(o.room_type_id) === String(changedBlock.ref_id));
+        for (const o of matchingOffers) {
+          const newTotal = Math.round(newUnit * nights);
+          setRateOffers((arr) => arr.map((x) => x.id === o.id ? { ...x, unit_price_lak: Math.round(newUnit), total_lak: newTotal } : x));
+          await fetch(`/api/sales/proposals//rate-offers?id=`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ unit_price_lak: Math.round(newUnit), total_lak: newTotal }),
+          });
+        }
+      }
+    }
     markSaved();
     setBusy(null);
   }
