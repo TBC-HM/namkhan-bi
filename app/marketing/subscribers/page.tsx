@@ -8,6 +8,10 @@
 //
 // 2026-07-21 — added subscriber groups (FIT/BTB/DMC + custom). One tile per group
 // in the KPI strip · v_subscriber_groups seeds server-side member_count.
+//
+// 2026-07-21 (pm) — /marketing/contacts consolidated into this page as the
+// "Candidates pool" tab. Extra loaders below fetch the full v_gmail_contacts
+// (top 500 by message_count, both internal + external) and top-10 domains.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -17,6 +21,8 @@ import SubscribersClient, {
   type ScrapeEventRow,
   type GmailContactRow,
   type GroupRow,
+  type ContactRow,
+  type DomainRow,
 } from './_components/SubscribersClient';
 
 export const dynamic = 'force-dynamic';
@@ -54,6 +60,22 @@ export default async function SubscribersPage() {
     .select('*')
     .order('sort_order', { ascending: true });
   const initialGroups: GroupRow[] = (groupsQ.data ?? []) as GroupRow[];
+
+  // Candidates pool payload (merged in from ex-/marketing/contacts page):
+  //   • top 500 v_gmail_contacts (both internal + external — filters live client-side)
+  //   • top 10 external domains
+  const allContactsQ = await sb
+    .from('v_gmail_contacts')
+    .select('email, display_name, first_seen_at, last_seen_at, message_count, direction_mix, source_accounts, domain, is_internal, updated_at')
+    .order('message_count', { ascending: false })
+    .limit(500);
+  const allContacts: ContactRow[] = (allContactsQ.data ?? []) as ContactRow[];
+
+  const domainsQ = await sb
+    .from('v_gmail_contact_domains')
+    .select('domain, contact_count, total_messages, most_recent')
+    .limit(10);
+  const topDomains: DomainRow[] = (domainsQ.data ?? []) as DomainRow[];
 
   const totalActive = subscribers.filter((s) => !!s.opted_in_at && !s.unsubscribed_at).length;
   const totalUnsub  = subscribers.filter((s) => !!s.unsubscribed_at).length;
@@ -102,7 +124,7 @@ export default async function SubscribersPage() {
     <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
       <DashboardPage
         title="Marketing · Subscribers"
-        subtitle={`${totalActive.toLocaleString()} active · ${totalPending.toLocaleString()} pending confirm · ${totalUnsub.toLocaleString()} unsubscribed`}
+        subtitle={`${totalActive.toLocaleString()} active · ${totalPending.toLocaleString()} pending confirm · ${totalUnsub.toLocaleString()} unsubscribed · ${allContacts.length.toLocaleString()} Gmail candidates`}
         tabs={tabs}
       >
         {/* GDPR banner */}
@@ -139,6 +161,8 @@ export default async function SubscribersPage() {
             gmailCandidates={gmailCandidates}
             scrapeEvents={scrapeEvents}
             initialGroups={initialGroups}
+            allContacts={allContacts}
+            topDomains={topDomains}
           />
         </div>
       </DashboardPage>

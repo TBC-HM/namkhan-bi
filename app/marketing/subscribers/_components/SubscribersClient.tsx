@@ -11,8 +11,13 @@
 //  · bulk "Assign to group" select in bulk-action bar
 //  · row-level group chips (coloured by group.color)
 //  · create-group modal (slug auto-derived from name)
+//
+// 2026-07-21 (pm) — /marketing/contacts folded in as top-level "Candidates pool"
+// tab. Reads ?tab=candidates from URL to preserve the old contacts landing.
+// Full contact table + top-domain chips + "Add to Lead" action all preserved.
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export interface SubscriberRow {
   id: number;
@@ -61,6 +66,27 @@ export interface GroupRow {
   is_system: boolean;
   sort_order: number;
   member_count: number;
+}
+
+// Candidates pool (ex-/marketing/contacts):
+export interface ContactRow {
+  email: string;
+  display_name: string | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  message_count: number;
+  direction_mix: { in?: number; out?: number } | null;
+  source_accounts: string[] | null;
+  domain: string;
+  is_internal: boolean;
+  updated_at: string | null;
+}
+
+export interface DomainRow {
+  domain: string;
+  contact_count: number;
+  total_messages: number;
+  most_recent: string | null;
 }
 
 type SortKey = 'email' | 'name' | 'source' | 'created_at' | 'updated_at' | 'opted_in_at';
@@ -151,12 +177,22 @@ export default function SubscribersClient({
   gmailCandidates,
   scrapeEvents,
   initialGroups,
+  allContacts = [],
+  topDomains = [],
 }: {
   initialSubscribers: SubscriberRow[];
   gmailCandidates: GmailContactRow[];
   scrapeEvents: ScrapeEventRow[];
   initialGroups: GroupRow[];
+  allContacts?: ContactRow[];
+  topDomains?: DomainRow[];
 }) {
+  // Top-level tab: ?tab=candidates lands on the Candidates pool (ex-/marketing/contacts).
+  const searchParams = useSearchParams();
+  const initialTopTab: 'subscribers' | 'candidates' =
+    searchParams?.get('tab') === 'candidates' ? 'candidates' : 'subscribers';
+  const [topTab, setTopTab] = useState<'subscribers' | 'candidates'>(initialTopTab);
+
   const [subs, setSubs] = useState<SubscriberRow[]>(initialSubscribers);
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -437,6 +473,40 @@ export default function SubscribersClient({
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
+      {/* Top-level tab strip: Subscribers | Candidates pool.
+          "Candidates pool" is the ex-/marketing/contacts landing (Gmail-extract directory). */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid ' + HAIRLINE }}>
+        {([
+          { k: 'subscribers', label: 'Subscribers',      count: subs.length },
+          { k: 'candidates',  label: 'Candidates pool',  count: allContacts.length },
+        ] as const).map((t) => {
+          const active = topTab === t.k;
+          return (
+            <button
+              key={t.k}
+              onClick={() => setTopTab(t.k)}
+              style={{
+                fontSize: 12,
+                fontWeight: active ? 600 : 500,
+                padding: '10px 18px',
+                border: 'none',
+                background: 'transparent',
+                color: active ? INK : INK_SOFT,
+                borderBottom: active ? '2px solid ' + BRAND : '2px solid transparent',
+                cursor: 'pointer',
+                marginBottom: -1,
+              }}
+            >
+              {t.label} <span style={{ color: INK_SOFT, fontWeight: 400, marginLeft: 4 }}>· {t.count.toLocaleString()}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {topTab === 'candidates' ? (
+        <CandidatesPool contacts={allContacts} topDomains={topDomains} />
+      ) : (<>
+
       {msg && (
         <div style={{ padding: '6px 10px', fontSize: 11, color: BRAND, background: PAPER, border: '1px solid ' + HAIRLINE, borderRadius: 4 }}>
           {msg} <button onClick={() => setMsg(null)} style={{ ...buttonBase, marginLeft: 8, padding: '2px 6px' }}>dismiss</button>
@@ -745,6 +815,218 @@ export default function SubscribersClient({
           }}
         />
       )}
+      </>)}
+    </div>
+  );
+}
+
+// ─── Candidates pool (ex-/marketing/contacts landing) ───────────────
+// Top-500 v_gmail_contacts payload · client-side filter/sort ·
+// internal/external toggle · top-10 external-domain chips ·
+// per-row "+ Lead" that POSTs to /api/sales/leads/create.
+type ContactSortKey = 'email' | 'display_name' | 'domain' | 'first_seen_at' | 'last_seen_at' | 'message_count';
+
+function CandidatesPool({
+  contacts, topDomains,
+}: {
+  contacts: ContactRow[];
+  topDomains: DomainRow[];
+}) {
+  const [query, setQuery] = useState('');
+  const [sortKey, setSortKey] = useState<ContactSortKey>('message_count');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [scope, setScope] = useState<'external' | 'internal' | 'all'>('external');
+  const [addedLeads, setAddedLeads] = useState<Record<string, 'ok' | 'err'>>({});
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let rows = contacts.slice();
+    if (scope === 'external') rows = rows.filter((r) => !r.is_internal);
+    else if (scope === 'internal') rows = rows.filter((r) => r.is_internal);
+    if (q) rows = rows.filter((r) =>
+      r.email.toLowerCase().includes(q)
+      || (r.display_name ?? '').toLowerCase().includes(q)
+      || (r.domain ?? '').toLowerCase().includes(q)
+    );
+    rows.sort((a, b) => {
+      let av: string | number = '';
+      let bv: string | number = '';
+      switch (sortKey) {
+        case 'message_count':
+          av = a.message_count; bv = b.message_count; break;
+        case 'first_seen_at':
+          av = a.first_seen_at ?? ''; bv = b.first_seen_at ?? ''; break;
+        case 'last_seen_at':
+          av = a.last_seen_at ?? ''; bv = b.last_seen_at ?? ''; break;
+        case 'display_name':
+          av = (a.display_name ?? '').toLowerCase(); bv = (b.display_name ?? '').toLowerCase(); break;
+        case 'domain':
+          av = a.domain ?? ''; bv = b.domain ?? ''; break;
+        case 'email':
+        default:
+          av = a.email; bv = b.email; break;
+      }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }, [contacts, query, sortKey, sortDir, scope]);
+
+  function toggleSort(k: ContactSortKey) {
+    if (k === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(k); setSortDir(k === 'message_count' ? 'desc' : 'asc'); }
+  }
+
+  async function addToLead(row: ContactRow) {
+    setAddedLeads((s) => ({ ...s, [row.email]: 'ok' }));
+    try {
+      const guessedCompany = row.display_name?.trim() || row.domain || row.email.split('@')[1] || 'Unknown';
+      const r = await fetch('/api/sales/leads/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          company_name: guessedCompany,
+          type: 'other',
+          origin: 'inbound',
+          email: row.email,
+          decision_maker_name: row.display_name ?? null,
+          notes: 'Added from Gmail contact extract. Seen in: '
+            + (row.source_accounts ?? []).join(', ')
+            + '. Messages: ' + row.message_count + '.',
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) setAddedLeads((s) => ({ ...s, [row.email]: 'err' }));
+    } catch {
+      setAddedLeads((s) => ({ ...s, [row.email]: 'err' }));
+    }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div style={{ padding: '8px 12px', fontSize: 11, color: INK_SOFT, background: WARM, border: '1px solid ' + HAIRLINE, borderRadius: 4 }}>
+        Extracted from connected Gmail mailboxes for internal reference. Marketing outreach requires opt-in — <em>do not</em> add to newsletters without consent.
+        Use <strong>+ Lead</strong> to move a candidate into the sales pipeline.
+      </div>
+
+      {/* Scope toggle + filter */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', background: PAPER, padding: 8, border: '1px solid ' + HAIRLINE, borderRadius: 4 }}>
+        {(['external', 'internal', 'all'] as const).map((s) => {
+          const active = scope === s;
+          return (
+            <button
+              key={s}
+              onClick={() => setScope(s)}
+              style={{
+                ...buttonBase,
+                background: active ? BRAND : PAPER,
+                color: active ? PAPER : INK,
+                border: '1px solid ' + (active ? BRAND : HAIRLINE),
+                textTransform: 'capitalize',
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
+        <input
+          type="search"
+          placeholder="filter email / name / domain…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ flex: '1 1 240px', fontSize: 12, padding: '6px 8px', border: '1px solid ' + HAIRLINE, borderRadius: 4, background: PAPER, color: INK }}
+        />
+        <div style={{ fontSize: 11, color: INK_SOFT }}>
+          {filtered.length.toLocaleString()} of top {contacts.length.toLocaleString()} (by message count)
+        </div>
+      </div>
+
+      {/* Top external domains */}
+      {topDomains.length > 0 && (
+        <div style={{ background: PAPER, padding: 8, border: '1px solid ' + HAIRLINE, borderRadius: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: INK_SOFT, marginBottom: 6 }}>TOP 10 EXTERNAL DOMAINS</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {topDomains.map((d) => (
+              <div
+                key={d.domain}
+                title={d.contact_count.toLocaleString() + ' contacts · last seen ' + fmtDate(d.most_recent)}
+                style={{ padding: '4px 10px', fontSize: 11, color: INK, background: PAPER, border: '1px solid ' + HAIRLINE, borderRadius: 4, cursor: 'pointer' }}
+                onClick={() => { setQuery(d.domain); setScope('external'); }}
+              >
+                <span style={{ fontWeight: 600 }}>{d.domain}</span>
+                <span style={{ color: INK_SOFT, marginLeft: 6 }}>{d.total_messages.toLocaleString()} msgs · {d.contact_count} contacts</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Contacts table */}
+      <div style={{ overflowX: 'auto', background: PAPER, border: '1px solid ' + HAIRLINE, borderRadius: 4 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', background: PAPER }}>
+          <thead>
+            <tr>
+              <th style={headStyle} onClick={() => toggleSort('email')}>email {sortKey === 'email' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th style={headStyle} onClick={() => toggleSort('display_name')}>name {sortKey === 'display_name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th style={headStyle} onClick={() => toggleSort('domain')}>domain {sortKey === 'domain' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th style={headStyle} onClick={() => toggleSort('first_seen_at')}>first seen {sortKey === 'first_seen_at' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th style={headStyle} onClick={() => toggleSort('last_seen_at')}>last seen {sortKey === 'last_seen_at' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th style={headStyle} onClick={() => toggleSort('message_count')}>msgs {sortKey === 'message_count' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th style={headStyle}>source</th>
+              <th style={headStyle}>internal?</th>
+              <th style={headStyle}>action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => {
+              const state = addedLeads[r.email];
+              return (
+                <tr key={r.email}>
+                  <td style={cellStyle}><span style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.email}</span></td>
+                  <td style={cellStyle}>{r.display_name ?? <span style={{ color: INK_SOFT }}>—</span>}</td>
+                  <td style={cellStyle}>{r.domain}</td>
+                  <td style={cellStyle}>{fmtDate(r.first_seen_at)}</td>
+                  <td style={cellStyle}>{fmtDate(r.last_seen_at)}</td>
+                  <td style={{ ...cellStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.message_count.toLocaleString()}</td>
+                  <td style={{ ...cellStyle, fontSize: 11, color: INK_SOFT }}>{(r.source_accounts ?? []).join(', ')}</td>
+                  <td style={cellStyle}>
+                    {r.is_internal
+                      ? <span style={{ color: INK_SOFT, fontSize: 11 }}>staff</span>
+                      : <span style={{ color: BRAND, fontWeight: 600, fontSize: 11 }}>external</span>}
+                  </td>
+                  <td style={cellStyle}>
+                    {r.is_internal ? (
+                      <span style={{ color: INK_SOFT, fontSize: 11 }}>—</span>
+                    ) : state === 'ok' ? (
+                      <span style={{ color: BRAND, fontSize: 11, fontWeight: 600 }}>added ✓</span>
+                    ) : state === 'err' ? (
+                      <span style={{ color: RED, fontSize: 11 }}>failed</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => addToLead(r)}
+                        style={{ ...buttonBase, padding: '3px 8px', color: BRAND }}
+                      >
+                        + Lead
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ ...cellStyle, textAlign: 'center', color: INK_SOFT, padding: 20 }}>
+                  {contacts.length === 0
+                    ? 'No Gmail contacts extracted yet. Connect a mailbox and run extraction from the (former) /marketing/contacts admin panel.'
+                    : (query ? 'No matches for “' + query + '”.' : 'No rows match the current scope.')}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

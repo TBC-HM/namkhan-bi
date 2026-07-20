@@ -551,8 +551,9 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Digital',           href: '/marketing/digital'         },
     { label: 'Media',             href: '/marketing/media'           },
     { label: 'Socials',           href: '/marketing/socials'         },
-    { label: 'Contacts',          href: '/marketing/contacts'        },
-    // PBS 2026-07-16 · opt-in-managed newsletter list (separate from Contacts extract).
+    // PBS 2026-07-21 pm · /marketing/contacts folded into Subscribers as the
+    // "Candidates pool" tab — top-nav entry removed to kill the duplicate.
+    // The old URL still resolves via a server redirect for bookmarks.
     { label: 'Subscribers',       href: '/marketing/subscribers'     },
   ],
   quickChips: [
