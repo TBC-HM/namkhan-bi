@@ -6,7 +6,7 @@
 // Data source: public.v_media_coverage_matrix (rewritten to key by kind + area_key).
 'use client';
 
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 
 export interface CoverageRow {
   kind: string;              // NEW · rooms/facilities/jungle_spa/fnb/activities/retreats/transport/imekong/certifications/destination
@@ -84,8 +84,36 @@ interface Section {
   grandTotal: number;
 }
 
+interface DrillItem { asset_id: string; original_filename?: string | null; seo_target_filename?: string | null; preview_url?: string | null; public_url?: string | null; quality_index?: number | null; }
+
 export default function CoverageTab({ rows, mediaPage: _mp = [], areaTaxonomy = [] }: Props) {
   void _mp;
+  // PBS 2026-07-19 · click-cell → modal restored (was in the pre-2026-07-18
+  // CoverageTab; the simplified rewrite dropped it).
+  const [drillTitle, setDrillTitle] = useState<string | null>(null);
+  const [drillItems, setDrillItems] = useState<DrillItem[]>([]);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState<string | null>(null);
+
+  async function openCell(kind: string, areaKey: string, tier: string, name: string, n: number) {
+    if (n <= 0) return;
+    setDrillTitle(`${name} × ${TIER_LABELS[tier] ?? tier} — ${n} photo${n === 1 ? '' : 's'}`);
+    setDrillItems([]);
+    setDrillError(null);
+    setDrillLoading(true);
+    try {
+      const u = `/api/marketing/media/coverage-drill?kind=${encodeURIComponent(kind)}&area_key=${encodeURIComponent(areaKey)}&tier=${encodeURIComponent(tier)}`;
+      const r = await fetch(u, { cache: 'no-store' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+      setDrillItems(j.items ?? []);
+    } catch (e) {
+      setDrillError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDrillLoading(false);
+    }
+  }
+  function closeDrill() { setDrillTitle(null); setDrillItems([]); setDrillError(null); }
 
   const sections = useMemo<Section[]>(() => {
     // Group coverage rows by (kind, area_key)
@@ -237,9 +265,12 @@ export default function CoverageTab({ rows, mediaPage: _mp = [], areaTaxonomy = 
                       return (
                         <td key={t} style={{ padding: '4px 10px', textAlign: 'right', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR, fontVariantNumeric: 'tabular-nums', ...s }}>
                           {n > 0 ? (
-                            <a href={`/marketing/media?tab=library&area=${encodeURIComponent(r.area_key)}&tier=${t}`} style={{ color: s.color, textDecoration: 'none', display: 'block' }}>
-                              {n}
-                            </a>
+                            <button
+                              type="button"
+                              onClick={() => openCell(sec.kind, r.area_key, t, r.name, n)}
+                              title="Click to see the matching photos"
+                              style={{ all: 'unset', color: s.color, cursor: 'pointer', width: '100%', textAlign: 'right', display: 'block' }}
+                            >{n}</button>
                           ) : '·'}
                         </td>
                       );
@@ -267,6 +298,69 @@ export default function CoverageTab({ rows, mediaPage: _mp = [], areaTaxonomy = 
           </div>
         </div>
       ))}
+
+      {drillTitle && (
+        <div onClick={closeDrill} style={{
+          position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(27,27,27,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6,
+            width: '100%', maxWidth: 1120, maxHeight: '90vh',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '12px 16px', borderBottom: '1px solid ' + HAIR,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: WHITE,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: INK, letterSpacing: '0.02em' }}>{drillTitle}</div>
+              <button type="button" onClick={closeDrill} style={{
+                padding: '4px 12px', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+                border: '1px solid ' + HAIR, background: WHITE, color: INK, borderRadius: 3,
+                cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+              }}>Close</button>
+            </div>
+            <div style={{ padding: 16, overflowY: 'auto', flex: 1, background: WHITE }}>
+              {drillLoading && <div style={{ padding: 32, textAlign: 'center', color: INK_M, fontSize: 12 }}>Loading photos…</div>}
+              {drillError && !drillLoading && <div style={{ padding: 16, color: '#B23A2E', fontSize: 12 }}>Error: {drillError}</div>}
+              {!drillLoading && !drillError && drillItems.length === 0 && (
+                <div style={{ padding: 32, textAlign: 'center', color: INK_M, fontSize: 12 }}>
+                  No photos returned. This may mean the coverage view row is stale — the matrix may need a refresh.
+                </div>
+              )}
+              {!drillLoading && drillItems.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+                  {drillItems.map(r => (
+                    <div key={r.asset_id} style={{
+                      background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, overflow: 'hidden',
+                      display: 'flex', flexDirection: 'column',
+                    }}>
+                      <div style={{
+                        width: '100%', aspectRatio: '4 / 3', background: CREAM,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                      }}>
+                        {(r.preview_url || r.public_url) ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img src={r.preview_url || r.public_url || ''} alt={r.original_filename ?? r.asset_id}
+                               style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                        ) : <div style={{ fontSize: 10, color: INK_M }}>no preview</div>}
+                      </div>
+                      <div style={{ padding: '6px 8px', fontSize: 10, color: INK, borderTop: '1px solid ' + HAIR }}>
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.original_filename ?? ''}>
+                          {r.seo_target_filename || r.original_filename || r.asset_id.slice(0, 8)}
+                        </div>
+                        {r.quality_index != null && (
+                          <div style={{ color: INK_M, marginTop: 2 }}>QA {Math.round(Number(r.quality_index))}%</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
