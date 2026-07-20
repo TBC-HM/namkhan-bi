@@ -342,8 +342,9 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
         />
       </Container>
 
-      {/* 5. Lawyer-mail */}
-      <ComingSoon title="Lawyer-mail inbox" subtitle="External counsel · routed mail only" icon="✉" hint="Filtered cockpit_tickets feed: only mail from / to external counsel + the legal team. Threaded by case." />
+      {/* 5. Lawyer-mail placeholder REMOVED 2026-07-20 pm · replaced by
+             the 3-domain email containers (grandaccountinglao / brslawyers /
+             grandeurlaw) added under the Documents container in a separate row. */}
 
       {/* 6. Running cases */}
       <Container title="Running cases" subtitle="Open + closed register · click for case file" density="compact">
