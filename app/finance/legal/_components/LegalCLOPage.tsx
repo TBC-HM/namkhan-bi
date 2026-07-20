@@ -17,6 +17,7 @@
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import LegalQuickActions from './LegalQuickActions';
+import CounselMailRow from './CounselMailRow';
 
 interface Props {
   propertyId: number;
@@ -284,6 +285,12 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
           </div>
         </Container>
       </div>
+
+      {/* PBS 2026-07-20 pm · External counsel email containers (3-in-a-row).
+             Reads public.v_legal_counsel_emails. Placed below Documents,
+             above Contracts. */}
+      {/* @ts-expect-error async server component */}
+      <CounselMailRow propertyId={propertyId} />
 
       {/* 1. Contracts */}
       <Container title={`Contracts · ${contracts.total}`} subtitle="Loan · security · pledges · lease · party-to-party agreements" density="compact">
