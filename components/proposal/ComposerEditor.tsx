@@ -272,7 +272,7 @@ interface Props {
   propertyId: number;
   initialBlocks: ProposalBlock[];
   initialEmail: { subject?: string | null; intro_md?: string | null; outro_md?: string | null; ps_md?: string | null } | null;
-  proposal: { guest_name: string; date_in: string; date_out: string; status: string; public_token: string | null; header_hero_asset_id?: string | null; header_hero_hide?: boolean };
+  proposal: { guest_name: string; date_in: string; date_out: string; status: string; public_token: string | null; header_hero_asset_id?: string | null; header_hero_hide?: boolean; locked_at?: string | null; sent_at?: string | null; created_at?: string | null };
   wizard: {
     date_in: string | null;
     date_out: string | null;
@@ -408,6 +408,26 @@ export default function ComposerEditor({
   // PBS 2026-07-20 pm · item #5 · Send-test-to-me state
   const [sendTestBusy, setSendTestBusy] = useState<boolean>(false);
   const [sendTestMsg, setSendTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // PBS 2026-07-20 pm · item #6 · lock state (server value = source of truth
+  // on next load; toggle mirrors the RPC response immediately).
+  const [lockedAt, setLockedAt] = useState<string | null>(proposal.locked_at ?? null);
+  const [lockBusy, setLockBusy] = useState<boolean>(false);
+  const isLocked = lockedAt != null;
+
+  const toggleLock = useCallback(async () => {
+    setLockBusy(true);
+    try {
+      const nextLock = !isLocked;
+      const r = await fetch(`/api/sales/proposals/${proposalId}/lock`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ lock: nextLock }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) setLockedAt(j.locked_at ?? null);
+    } catch { /* swallow */ }
+    finally { setLockBusy(false); }
+  }, [isLocked, proposalId]);
   const [previewError, setPreviewError] = useState<string | null>(null);
   // PBS 2026-07-20 · monotonic counter used as iframe `key` so React remounts
   // the <iframe> element on every re-generate. Without this, some browsers
@@ -818,7 +838,7 @@ export default function ComposerEditor({
   }, [filteredPlans]);
 
   const photosMissing = blocks.filter((b) => !b.hero_asset_id).length;
-  const canSend = blocks.length > 0 && check?.status !== 'red' && busy !== 'send';
+  const canSend = blocks.length > 0 && check?.status !== 'red' && busy !== 'send' && !isLocked;
 
   // ---------- render ----------
   return (
@@ -841,6 +861,21 @@ export default function ComposerEditor({
           {lastSavedIso && (
             <span style={{ fontSize: 11, color: T.inkSoft }}>Saved {relativeTime(lastSavedIso)} · auto-draft</span>
           )}
+          {/* PBS 2026-07-20 pm · item #6 · Lock / Unlock button */}
+          <button
+            onClick={toggleLock}
+            disabled={lockBusy}
+            title={isLocked ? 'Unlock — allow further edits' : 'Lock — freeze this proposal so no accidental edits change it'}
+            style={{
+              ...S.btnGhost,
+              background: isLocked ? '#FBEFD9' : '#FFFFFF',
+              borderColor: isLocked ? '#B87F26' : '#E6DFCC',
+              color: isLocked ? '#B87F26' : '#5A5A5A',
+              fontWeight: isLocked ? 600 : 400,
+            }}
+          >
+            {lockBusy ? '…' : (isLocked ? '🔓 Unlock' : '🔒 Lock')}
+          </button>
           {/* PBS 2026-07-18 · explicit Save-as-draft — the composer auto-saves every keystroke,
               this button is a manual "flush now" so the operator sees the "Saved just now" tick. */}
           <button
@@ -856,9 +891,9 @@ export default function ComposerEditor({
               } catch (e) { console.warn('[save-draft]', e); }
               finally { setEmailBusy(false); }
             }}
-            disabled={emailBusy}
+            disabled={emailBusy || isLocked}
             style={S.btnGhost}
-            title="Force a save now (auto-save fires 500ms after you stop typing)"
+            title={isLocked ? 'Locked — click Unlock first' : 'Force a save now (auto-save fires 500ms after you stop typing)'}
           >
             {emailBusy ? '…' : '💾 Save draft'}
           </button>
@@ -879,7 +914,19 @@ export default function ComposerEditor({
         </div>
       </div>
 
-      {/* PBS 2026-07-17 — send outcome banner (was silently swallowed). */}
+      {/* PBS 2026-07-20 pm · item #6 · timeline strip · created / saved / locked / sent */}
+      <div style={{
+        padding: '6px 20px', fontSize: 11, color: T.inkSoft,
+        borderBottom: `1px solid ${T.hairline}`, background: '#FFFFFF',
+        display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap',
+      }}>
+        {proposal.created_at && <span>Created {relativeTime(proposal.created_at)}</span>}
+        {lastSavedIso && <span>· Last saved {relativeTime(lastSavedIso)}</span>}
+        {lockedAt && <span style={{ color: '#B87F26', fontWeight: 600 }}>· 🔒 Locked {relativeTime(lockedAt)}</span>}
+        {proposal.sent_at && <span style={{ color: '#1F5C2C', fontWeight: 600 }}>· ✓ Sent {relativeTime(proposal.sent_at)}</span>}
+      </div>
+
+            {/* PBS 2026-07-17 — send outcome banner (was silently swallowed). */}
       {sendResult && (
         <div style={{
           padding: '10px 24px', fontSize: 12, lineHeight: 1.5,
