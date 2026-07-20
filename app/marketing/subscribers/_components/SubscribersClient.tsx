@@ -4,6 +4,13 @@
 // Every write goes through /api/marketing/subscribers/* which calls a
 // SECURITY DEFINER RPC (fn_subscriber_*). No direct writes from client.
 // Paper-white per Namkhan token burn (var(--paper-warm) is DARK).
+//
+// 2026-07-21 — Added subscriber groups (FIT/BTB/DMC + custom):
+//  · dynamic KPI headline strip (one tile per group + Total) — click to filter
+//  · groups chip row under Segments — click to filter + delete custom groups
+//  · bulk "Assign to group" select in bulk-action bar
+//  · row-level group chips (coloured by group.color)
+//  · create-group modal (slug auto-derived from name)
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
 
@@ -20,6 +27,7 @@ export interface SubscriberRow {
   created_at: string;
   updated_at: string;
   is_active: boolean;
+  group_slugs?: string[] | null;
 }
 
 export interface ScrapeEventRow {
@@ -44,6 +52,17 @@ export interface GmailContactRow {
   is_internal: boolean;
 }
 
+export interface GroupRow {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  color: string;
+  is_system: boolean;
+  sort_order: number;
+  member_count: number;
+}
+
 type SortKey = 'email' | 'name' | 'source' | 'created_at' | 'updated_at' | 'opted_in_at';
 
 const HAIRLINE = '#E6DFCC';
@@ -55,6 +74,12 @@ const PAPER = '#FFFFFF';
 const WARM = '#F5F0E1';
 
 const PAGE_SIZE = 50;
+
+// Preset colours for the create-group modal picker.
+const GROUP_COLOR_PRESETS = [
+  '#7A4B2A', '#084838', '#B48A3A', '#B04A2F', '#3E5C76',
+  '#7A5C99', '#4E6E58', '#8C5A3C', '#2E4B36', '#A65E44',
+];
 
 const cellStyle: React.CSSProperties = {
   padding: '6px 8px',
@@ -116,14 +141,21 @@ function csvCell(v: unknown): string {
   return s;
 }
 
+// slugify — used in the create-group modal so PBS doesn't have to type a slug.
+function slugify(s: string): string {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+}
+
 export default function SubscribersClient({
   initialSubscribers,
   gmailCandidates,
   scrapeEvents,
+  initialGroups,
 }: {
   initialSubscribers: SubscriberRow[];
   gmailCandidates: GmailContactRow[];
   scrapeEvents: ScrapeEventRow[];
+  initialGroups: GroupRow[];
 }) {
   const [subs, setSubs] = useState<SubscriberRow[]>(initialSubscribers);
   const [query, setQuery] = useState('');
@@ -140,6 +172,24 @@ export default function SubscribersClient({
   const [optInModal, setOptInModal] = useState(false);
   const [optInList, setOptInList] = useState<{id:number; email:string; name:string|null; token:string}[]>([]);
 
+  // Groups state — served from initialGroups; refreshed on create/delete.
+  const [groups, setGroups] = useState<GroupRow[]>(initialGroups);
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+
+  const groupBySlug = useMemo(() => {
+    const m = new Map<string, GroupRow>();
+    for (const g of groups) m.set(g.slug, g);
+    return m;
+  }, [groups]);
+
+  // Refresh groups list from server (after create/delete).
+  const refreshGroups = useCallback(async () => {
+    const r = await fetch('/api/marketing/subscribers/groups', { cache: 'no-store' });
+    const j = await r.json().catch(() => ({}));
+    if (j.ok && Array.isArray(j.groups)) setGroups(j.groups as GroupRow[]);
+  }, []);
+
   const allTags = useMemo(() => {
     const c: Record<string, number> = {};
     for (const s of subs) for (const t of s.tags ?? []) c[t] = (c[t] ?? 0) + 1;
@@ -154,6 +204,7 @@ export default function SubscribersClient({
     if (statusFilter === 'unsub')   rows = rows.filter((r) => !!r.unsubscribed_at);
     if (statusFilter === 'bounced') rows = rows.filter((r) => !!r.bounced_at);
     if (tagFilter) rows = rows.filter((r) => (r.tags ?? []).includes(tagFilter));
+    if (groupFilter) rows = rows.filter((r) => (r.group_slugs ?? []).includes(groupFilter));
     if (q) rows = rows.filter((r) =>
       r.email.toLowerCase().includes(q)
       || (r.name ?? '').toLowerCase().includes(q)
@@ -171,7 +222,7 @@ export default function SubscribersClient({
       return 0;
     });
     return rows;
-  }, [subs, query, tagFilter, statusFilter, sortKey, sortDir]);
+  }, [subs, query, tagFilter, groupFilter, statusFilter, sortKey, sortDir]);
 
   const paged = useMemo(
     () => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
@@ -262,13 +313,71 @@ export default function SubscribersClient({
     });
   }, [selected]);
 
+  // Bulk assign to group — updates group_slugs optimistically + refreshes group counts.
+  const doBulkAssignGroup = useCallback(async (groupId: string) => {
+    const ids = Array.from(selected);
+    const g = groups.find((x) => x.id === groupId);
+    if (!ids.length || !g) return;
+    startTransition(async () => {
+      const r = await fetch('/api/marketing/subscribers/groups', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'assign', subscriber_ids: ids, group_id: groupId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) { setMsg('Assign failed: ' + (j.error ?? 'unknown')); return; }
+      setSubs((prev) => prev.map((s) => selected.has(s.id)
+        ? { ...s, group_slugs: Array.from(new Set([...(s.group_slugs ?? []), g.slug])) }
+        : s));
+      setMsg('Assigned ' + (j.affected ?? ids.length) + ' to ' + g.name);
+      refreshGroups();
+    });
+  }, [selected, groups, refreshGroups]);
+
+  // Create group — POST create then refresh.
+  const doCreateGroup = useCallback(async (slug: string, name: string, description: string, color: string) => {
+    const r = await fetch('/api/marketing/subscribers/groups', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'create', slug, name, description, color }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) { setMsg('Create failed: ' + (j.error ?? 'unknown')); return false; }
+    await refreshGroups();
+    setMsg('Group "' + name + '" created');
+    return true;
+  }, [refreshGroups]);
+
+  // Delete group — guard against is_system + confirm.
+  const doDeleteGroup = useCallback(async (g: GroupRow) => {
+    if (g.is_system) { setMsg('System groups cannot be deleted'); return; }
+    if (!confirm('Delete group "' + g.name + '"? Members lose the tag (subscribers themselves are NOT deleted).')) return;
+    startTransition(async () => {
+      const r = await fetch('/api/marketing/subscribers/groups', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', group_id: g.id }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) { setMsg('Delete failed: ' + (j.error ?? 'unknown')); return; }
+      setSubs((prev) => prev.map((s) => ({
+        ...s,
+        group_slugs: (s.group_slugs ?? []).filter((sl) => sl !== g.slug),
+      })));
+      if (groupFilter === g.slug) setGroupFilter(null);
+      await refreshGroups();
+      setMsg('Group "' + g.name + '" deleted');
+    });
+  }, [groupFilter, refreshGroups]);
+
   function exportSelected() {
     const rows = selected.size > 0 ? subs.filter((s) => selected.has(s.id)) : filtered;
-    const headers = ['email','name','tags','source','opted_in_at','unsubscribed_at','bounced_at','created_at','notes'];
+    const headers = ['email','name','tags','groups','source','opted_in_at','unsubscribed_at','bounced_at','created_at','notes'];
     const lines = [headers.join(',')];
     for (const r of rows) {
       lines.push([
         csvCell(r.email), csvCell(r.name), csvCell((r.tags ?? []).join('|')),
+        csvCell((r.group_slugs ?? []).join('|')),
         csvCell(r.source), csvCell(r.opted_in_at), csvCell(r.unsubscribed_at),
         csvCell(r.bounced_at), csvCell(r.created_at), csvCell(r.notes),
       ].join(','));
@@ -318,6 +427,14 @@ export default function SubscribersClient({
 
   const pendingCount = subs.filter((s) => !s.opted_in_at && !s.unsubscribed_at).length;
 
+  // Client-side per-group counts (respect current filter set later applied by user).
+  // We use full subs so tiles remain stable regardless of filters.
+  const clientGroupCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const s of subs) for (const sl of s.group_slugs ?? []) c[sl] = (c[sl] ?? 0) + 1;
+    return c;
+  }, [subs]);
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       {msg && (
@@ -325,6 +442,27 @@ export default function SubscribersClient({
           {msg} <button onClick={() => setMsg(null)} style={{ ...buttonBase, marginLeft: 8, padding: '2px 6px' }}>dismiss</button>
         </div>
       )}
+
+      {/* Dynamic KPI headline strip — Total + one tile per group. Click to filter. */}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '2px 0' }}>
+        <GroupTile
+          label="Total"
+          value={subs.length}
+          color={INK}
+          active={groupFilter === null}
+          onClick={() => { setGroupFilter(null); setPage(0); }}
+        />
+        {groups.map((g) => (
+          <GroupTile
+            key={g.id}
+            label={g.name}
+            value={clientGroupCounts[g.slug] ?? g.member_count ?? 0}
+            color={g.color}
+            active={groupFilter === g.slug}
+            onClick={() => { setGroupFilter(groupFilter === g.slug ? null : g.slug); setPage(0); }}
+          />
+        ))}
+      </div>
 
       {/* Action bar: search + status + opt-in button + import toggle */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', background: PAPER, padding: 8, border: '1px solid ' + HAIRLINE, borderRadius: 4 }}>
@@ -398,6 +536,75 @@ export default function SubscribersClient({
         </div>
       )}
 
+      {/* Groups filter chip row */}
+      <div style={{ background: PAPER, padding: 8, border: '1px solid ' + HAIRLINE, borderRadius: 4 }}>
+        <div style={{ fontSize: 11, color: INK_SOFT, marginBottom: 6 }}>Groups · click to filter</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          <button
+            onClick={() => { setGroupFilter(null); setPage(0); }}
+            style={{
+              ...buttonBase,
+              background: groupFilter === null ? BRAND : PAPER,
+              color: groupFilter === null ? PAPER : INK,
+              border: '1px solid ' + (groupFilter === null ? BRAND : HAIRLINE),
+            }}
+          >
+            all
+          </button>
+          {groups.map((g) => {
+            const active = groupFilter === g.slug;
+            return (
+              <span key={g.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                <button
+                  onClick={() => { setGroupFilter(active ? null : g.slug); setPage(0); }}
+                  title={g.description ?? g.slug}
+                  style={{
+                    ...buttonBase,
+                    background: active ? g.color : PAPER,
+                    color: active ? PAPER : INK,
+                    border: '1px solid ' + (active ? g.color : HAIRLINE),
+                    borderRight: g.is_system ? ('1px solid ' + (active ? g.color : HAIRLINE)) : 'none',
+                    borderTopRightRadius: g.is_system ? 4 : 0,
+                    borderBottomRightRadius: g.is_system ? 4 : 0,
+                  }}
+                >
+                  <span style={{
+                    display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                    background: g.color, marginRight: 6, verticalAlign: 'middle',
+                    border: active ? '1px solid ' + PAPER : '1px solid ' + HAIRLINE,
+                  }} />
+                  {g.name} · {clientGroupCounts[g.slug] ?? g.member_count ?? 0}
+                </button>
+                {!g.is_system && (
+                  <button
+                    onClick={() => doDeleteGroup(g)}
+                    title={'Delete group "' + g.name + '"'}
+                    style={{
+                      ...buttonBase,
+                      padding: '6px 8px',
+                      color: RED,
+                      background: PAPER,
+                      border: '1px solid ' + HAIRLINE,
+                      borderLeft: 'none',
+                      borderTopLeftRadius: 0,
+                      borderBottomLeftRadius: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            );
+          })}
+          <button
+            onClick={() => setShowCreateGroup(true)}
+            style={{ ...buttonBase, borderStyle: 'dashed', color: BRAND }}
+          >
+            + New group
+          </button>
+        </div>
+      </div>
+
       {/* Import panel */}
       {importOpen && (
         <ImportPanel
@@ -417,9 +624,22 @@ export default function SubscribersClient({
 
       {/* Bulk action bar (only when selection) */}
       {selected.size > 0 && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: WARM, padding: 8, border: '1px solid ' + HAIRLINE, borderRadius: 4, fontSize: 12 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: WARM, padding: 8, border: '1px solid ' + HAIRLINE, borderRadius: 4, fontSize: 12, flexWrap: 'wrap' }}>
           <strong>{selected.size}</strong> selected
           <BulkTagAction onAdd={(t) => doBulk('add_tag', t)} onRemove={(t) => doBulk('remove_tag', t)} />
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const gid = e.target.value;
+              if (!gid) return;
+              doBulkAssignGroup(gid);
+              e.target.value = '';
+            }}
+            style={{ fontSize: 11, padding: '4px 6px', border: '1px solid ' + HAIRLINE, background: PAPER, color: INK }}
+          >
+            <option value="">Assign to group…</option>
+            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
           <button onClick={exportSelected} style={buttonBase}>Export CSV</button>
           <button onClick={() => doBulk('unsubscribe')} style={buttonBase}>Unsubscribe</button>
           <button onClick={() => doBulk('delete')} style={buttonDanger}>Delete</button>
@@ -453,6 +673,7 @@ export default function SubscribersClient({
               <SubscriberRowView
                 key={r.id}
                 row={r}
+                groupBySlug={groupBySlug}
                 selected={selected.has(r.id)}
                 onToggle={() => toggleRow(r.id)}
                 onUnsub={() => doUnsub(r.id)}
@@ -512,15 +733,67 @@ export default function SubscribersClient({
           </div>
         </div>
       )}
+
+      {/* Create-group modal */}
+      {showCreateGroup && (
+        <CreateGroupModal
+          existingSlugs={new Set(groups.map((g) => g.slug))}
+          onClose={() => setShowCreateGroup(false)}
+          onSubmit={async (slug, name, description, color) => {
+            const ok = await doCreateGroup(slug, name, description, color);
+            if (ok) setShowCreateGroup(false);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─── KPI headline tile ───────────────────────────────────────────
+function GroupTile({
+  label, value, color, active, onClick,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: PAPER,
+        border: '1px solid ' + (active ? color : HAIRLINE),
+        borderWidth: active ? 2 : 1,
+        borderRadius: 4,
+        padding: '10px 14px',
+        minWidth: 120,
+        cursor: 'pointer',
+        textAlign: 'left',
+        position: 'relative',
+        color: INK,
+        flex: '0 0 auto',
+      }}
+    >
+      <span style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 4,
+        background: color, borderTopLeftRadius: 3, borderTopRightRadius: 3,
+      }} />
+      <div style={{ fontSize: 20, fontWeight: 600, color: INK, marginTop: 4 }}>
+        {value.toLocaleString()}
+      </div>
+      <div style={{ fontSize: 11, color: INK_SOFT, marginTop: 2 }}>{label}</div>
+    </button>
   );
 }
 
 // ─── row view with inline editable tag chips ─────────────────────────
 function SubscriberRowView({
-  row, selected, onToggle, onUnsub, onSetTags,
+  row, groupBySlug, selected, onToggle, onUnsub, onSetTags,
 }: {
   row: SubscriberRow;
+  groupBySlug: Map<string, GroupRow>;
   selected: boolean;
   onToggle: () => void;
   onUnsub: () => void;
@@ -537,6 +810,9 @@ function SubscriberRowView({
 
   const optedIn = !!row.opted_in_at;
   const unsub = !!row.unsubscribed_at;
+  const rowGroups = (row.group_slugs ?? [])
+    .map((sl) => groupBySlug.get(sl))
+    .filter((g): g is GroupRow => !!g);
 
   return (
     <tr style={{ background: selected ? '#F9F5EA' : PAPER, opacity: unsub ? 0.55 : 1 }}>
@@ -562,9 +838,24 @@ function SubscriberRowView({
           </div>
         ) : (
           <div onClick={() => setEditing(true)} style={{ cursor: 'pointer', minHeight: 18, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-            {(row.tags ?? []).length === 0 && <span style={{ color: INK_SOFT, fontSize: 10 }}>+ add tag</span>}
+            {(row.tags ?? []).length === 0 && rowGroups.length === 0 && (
+              <span style={{ color: INK_SOFT, fontSize: 10 }}>+ add tag</span>
+            )}
             {(row.tags ?? []).map((t) => (
               <span key={t} style={{ fontSize: 10, padding: '1px 6px', background: WARM, border: '1px solid ' + HAIRLINE, borderRadius: 10, color: INK }}>{t}</span>
+            ))}
+            {rowGroups.map((g) => (
+              <span
+                key={g.id}
+                title={'Group: ' + g.name}
+                style={{
+                  fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                  background: g.color, color: PAPER,
+                  border: '1px solid ' + g.color,
+                }}
+              >
+                {g.name}
+              </span>
             ))}
           </div>
         )}
@@ -602,6 +893,106 @@ function BulkTagAction({
       <button onClick={() => { if (t.trim()) { onAdd(t.trim()); setT(''); } }} style={buttonBase}>+ tag</button>
       <button onClick={() => { if (t.trim()) { onRemove(t.trim()); setT(''); } }} style={buttonBase}>− tag</button>
     </>
+  );
+}
+
+// ─── create-group modal ─────────────────────────────────────────────
+function CreateGroupModal({
+  existingSlugs, onClose, onSubmit,
+}: {
+  existingSlugs: Set<string>;
+  onClose: () => void;
+  onSubmit: (slug: string, name: string, description: string, color: string) => Promise<void>;
+}) {
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [description, setDescription] = useState('');
+  const [color, setColor] = useState(GROUP_COLOR_PRESETS[0]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function onNameChange(v: string) {
+    setName(v);
+    if (!slugTouched) setSlug(slugify(v));
+  }
+
+  async function submit() {
+    const s = slug.trim();
+    const n = name.trim();
+    if (!s || !n) { setErr('name and slug are required'); return; }
+    if (!/^[a-z0-9_]+$/.test(s)) { setErr('slug must be lowercase a-z, 0-9, or _'); return; }
+    if (existingSlugs.has(s)) { setErr('slug already exists'); return; }
+    setErr(null);
+    setBusy(true);
+    try {
+      await onSubmit(s, n, description.trim(), color);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const input: React.CSSProperties = {
+    fontSize: 12, padding: '6px 8px', border: '1px solid ' + HAIRLINE,
+    borderRadius: 4, background: PAPER, color: INK, width: '100%',
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{
+        background: PAPER, padding: 20, borderRadius: 6, maxWidth: 480, width: '90%',
+        border: '1px solid ' + HAIRLINE, display: 'grid', gap: 10,
+      }}>
+        <h3 style={{ margin: 0, fontSize: 14, color: INK }}>New subscriber group</h3>
+        <label style={{ fontSize: 11, color: INK_SOFT }}>name
+          <input value={name} onChange={(e) => onNameChange(e.target.value)} placeholder="e.g. VIP travellers" style={input} autoFocus />
+        </label>
+        <label style={{ fontSize: 11, color: INK_SOFT }}>slug · lowercase snake_case
+          <input
+            value={slug}
+            onChange={(e) => { setSlug(e.target.value); setSlugTouched(true); }}
+            placeholder="e.g. vip_travellers"
+            style={input}
+          />
+        </label>
+        <label style={{ fontSize: 11, color: INK_SOFT }}>description · optional
+          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="short one-liner" style={input} />
+        </label>
+        <div>
+          <div style={{ fontSize: 11, color: INK_SOFT, marginBottom: 4 }}>colour</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {GROUP_COLOR_PRESETS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                title={c}
+                style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: c, cursor: 'pointer',
+                  border: color === c ? '3px solid ' + INK : '1px solid ' + HAIRLINE,
+                  padding: 0,
+                }}
+              />
+            ))}
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              title="custom colour"
+              style={{ width: 28, height: 28, border: '1px solid ' + HAIRLINE, borderRadius: 4, background: PAPER, cursor: 'pointer' }}
+            />
+          </div>
+        </div>
+        {err && <div style={{ fontSize: 11, color: RED }}>{err}</div>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button onClick={onClose} style={buttonBase} disabled={busy}>Cancel</button>
+          <button onClick={submit} style={buttonPrimary} disabled={busy}>{busy ? 'Creating…' : 'Create group'}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

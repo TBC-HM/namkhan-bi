@@ -5,6 +5,9 @@
 //
 // GDPR: unconfirmed rows CANNOT be blasted. Column "Opted in?" is the consent gate.
 // Design: paper white (#FFFFFF) — never var(--paper-warm) per Namkhan token burn.
+//
+// 2026-07-21 — added subscriber groups (FIT/BTB/DMC + custom). One tile per group
+// in the KPI strip · v_subscriber_groups seeds server-side member_count.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -13,6 +16,7 @@ import SubscribersClient, {
   type SubscriberRow,
   type ScrapeEventRow,
   type GmailContactRow,
+  type GroupRow,
 } from './_components/SubscribersClient';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +27,7 @@ export default async function SubscribersPage() {
 
   const subsQ = await sb
     .from('v_marketing_subscribers')
-    .select('id, email, name, tags, source, opted_in_at, unsubscribed_at, bounced_at, notes, created_at, updated_at, is_active')
+    .select('id, email, name, tags, source, opted_in_at, unsubscribed_at, bounced_at, notes, created_at, updated_at, is_active, group_slugs')
     .order('created_at', { ascending: false })
     .limit(5000);
   const subscribers: SubscriberRow[] = (subsQ.data ?? []) as SubscriberRow[];
@@ -44,6 +48,13 @@ export default async function SubscribersPage() {
     .limit(20);
   const scrapeEvents: ScrapeEventRow[] = (scrapesQ.data ?? []) as ScrapeEventRow[];
 
+  // Subscriber groups (FIT / BTB / DMC + custom) — server-side member_count.
+  const groupsQ = await sb
+    .from('v_subscriber_groups')
+    .select('*')
+    .order('sort_order', { ascending: true });
+  const initialGroups: GroupRow[] = (groupsQ.data ?? []) as GroupRow[];
+
   const totalActive = subscribers.filter((s) => !!s.opted_in_at && !s.unsubscribed_at).length;
   const totalUnsub  = subscribers.filter((s) => !!s.unsubscribed_at).length;
   const totalBounced = subscribers.filter((s) => !!s.bounced_at).length;
@@ -60,7 +71,7 @@ export default async function SubscribersPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
 
-  const tiles: KpiTileProps[] = [
+  const baseTiles: KpiTileProps[] = [
     { label: 'Total active',       value: totalActive.toLocaleString(), size: 'sm', status: totalActive > 0 ? 'green' : undefined, footnote: 'opted-in and not unsubscribed' },
     { label: 'Opt-in rate',        value: optInRate + '%',              size: 'sm', footnote: totalPending + ' pending confirm' },
     { label: 'Unsubscribed',       value: totalUnsub.toLocaleString(),  size: 'sm', footnote: 'excluded from sends' },
@@ -72,6 +83,16 @@ export default async function SubscribersPage() {
       footnote: 'click a chip below to filter',
     },
   ];
+
+  // One tile per group (server-side member_count).
+  const groupTiles: KpiTileProps[] = initialGroups.map((g) => ({
+    label: g.name,
+    value: (g.member_count ?? 0).toLocaleString(),
+    size: 'sm',
+    footnote: g.is_system ? 'system group' : 'custom group',
+  }));
+
+  const tiles: KpiTileProps[] = [...baseTiles, ...groupTiles];
 
   const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/marketing/subscribers',
@@ -100,7 +121,7 @@ export default async function SubscribersPage() {
           The <em>Opted in?</em> column shows consent status. New imports always start unconfirmed (opted_in_at = NULL).
         </div>
 
-        {/* KPI strip */}
+        {/* KPI strip (base + group tiles) */}
         <div
           style={{
             gridColumn: '1 / -1',
@@ -117,6 +138,7 @@ export default async function SubscribersPage() {
             initialSubscribers={subscribers}
             gmailCandidates={gmailCandidates}
             scrapeEvents={scrapeEvents}
+            initialGroups={initialGroups}
           />
         </div>
       </DashboardPage>
