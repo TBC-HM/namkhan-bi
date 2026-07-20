@@ -218,7 +218,8 @@ const S = {
 };
 
 interface CatalogActivity {
-  activity_id: number;
+  activity_id: string;
+  kind?: 'activity' | 'transport' | 'cruise';
   property_id: number;
   category: string | null;
   name: string;
@@ -1366,10 +1367,18 @@ export default function ComposerEditor({
           onPick={(a) => {
             const usd = Number(a.price_amount ?? 0);
             const lak = usd > 0 ? Math.round(usd * FX_LAK_PER_USD) : 0;
+            // PBS 2026-07-20 pm · picker now returns activity/transport/cruise.
+            // Compound activity_id is "{kind}:{numeric_id}"; strip prefix for ref_id
+            // and route to the correct source table so email render can rehydrate.
+            const kind = a.kind ?? 'activity';
+            const refTable = kind === 'transport' ? 'property.transport_options'
+                          : kind === 'cruise'    ? 'property.boat_cruises'
+                          :                            'content.activities_catalog';
+            const rawId = String(a.activity_id).includes(':') ? String(a.activity_id).split(':')[1] : String(a.activity_id);
             addBlockToProposal({
               block_type: 'activity',
-              ref_table: 'content.activities_catalog',
-              ref_id: String(a.activity_id),
+              ref_table: refTable,
+              ref_id: rawId,
               label: a.name,
               note: a.description ?? undefined,
               unit_price_lak: lak,
