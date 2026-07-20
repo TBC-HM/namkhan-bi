@@ -92,6 +92,7 @@ export default async function DataSettingsPage({ params }: { params: { property_
       tabs={[
         { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
         { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
+        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data`, active: true },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
