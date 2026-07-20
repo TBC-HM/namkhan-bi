@@ -230,7 +230,17 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       else if (key === 'other:rooms')      out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && String((r as any).category ?? '').toLowerCase().startsWith('room'));
       else if (key === 'other:facilities') out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && ['f&b','pool','lobby','exterior'].includes(String((r as any).category ?? '').toLowerCase()));
       else if (key === 'other:activities') out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && String((r as any).category ?? '').toLowerCase().startsWith('activit'));
-      else if (key === 'uncategorized')    out = out.filter(r => !(r as any).room_type_id && !(r as any).facility_id && !(r as any).activity_id && !(r as any).certification_id && !(r as any).contact_id);
+      // PBS 2026-07-20 · Uncategorized = truly no classification anywhere. Old
+      // formula only checked FK columns → photos with property_area='Roots'
+      // still leaked in. Now also excludes destination/boat/cruise FKs +
+      // property_area free-text. Matches v_media_area_taxonomy formula.
+      else if (key === 'uncategorized') out = out.filter(r => {
+        const x = r as any;
+        return !x.room_type_id && !x.facility_id && !x.activity_id
+            && !x.certification_id && !x.contact_id
+            && !x.destination_id && !x.boat_id && !x.boat_cruise_id
+            && (!x.property_area || String(x.property_area).trim() === '');
+      });
     }
     if (aiOnly)       out = out.filter((r: any) => r.is_ai_generated === true);
     if (searchText) {
