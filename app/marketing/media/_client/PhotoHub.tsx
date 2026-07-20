@@ -64,7 +64,13 @@ export default function PhotoHub(props: Props) {
   const [aiInitialAssetId, setAiInitialAssetId] = useState<string | null>(props.initialAiAssetId ?? null);
 
   const photoRows = (props.mediaPage ?? []).filter((r: any) => !isVideoRow(r));
-  const clarifyCount = photoRows.filter((r: any) => r.property_area == null || r.primary_tier == null).length;
+  // PBS 2026-07-20 · Photo Clarify sub-menu badge now reads the SAME single source
+  // as the Library tile + Clarify tab tile: v_media_library_counts.to_clarify
+  // (= needs_review IS TRUE). Old formula counted from the paged mediaPage window
+  // using a different rule (property_area or primary_tier null) → 3 places showed
+  // 3 different numbers for the same "to clarify" concept.
+  const clarifyCount = (props as any).libraryCounts?.to_clarify
+    ?? photoRows.filter((r: any) => r.property_area == null || r.primary_tier == null).length;
   const reviewCount = (props.reviewRows ?? []).length;
 
   const TABS: Array<{ key: Sub; label: string; badge?: number; badgeColor?: string }> = [
