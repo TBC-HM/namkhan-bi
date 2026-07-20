@@ -351,12 +351,16 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           to clear — no more hunting for a "Clear" button. */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
         {([
-          // PBS 2026-07-19 · every tile now goes somewhere. Pics/Total ready = clear
-          // all filters. With tier / With area = jump to Coverage tab. To clarify =
-          // jump to Clarify tab. Others = tier filter on the grid below.
+          // PBS 2026-07-19 · every tile goes somewhere. Pics = clear filters.
+          // With area = Coverage tab. To clarify = Clarify tab. Others = tier
+          // filter on grid below.
+          // PBS 2026-07-19 (later) · dropped "Total ready" (dup of Pics) and
+          // "With tier" (always = Pics — 100% ready photos have a tier).
+          // Replaced with "Untiered" — only rendered when > 0. Cleaner strip.
           { label: 'Pics',           value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null, action: 'clear'      },
-          { label: 'Total ready',    value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null, action: 'clear'      },
-          { label: 'With tier',      value: libCounts?.with_tier    ?? totals.tot,                                                filterTier: null, action: 'coverage'   },
+          ...(((libCounts?.pics_ready ?? totals.tot) - (libCounts?.with_tier ?? totals.tot)) > 0
+              ? [{ label: 'Untiered', value: (libCounts?.pics_ready ?? totals.tot) - (libCounts?.with_tier ?? totals.tot), filterTier: null, action: 'coverage' as const }]
+              : []),
           { label: 'With area',      value: libCounts?.with_area    ?? 0,                                                          filterTier: null, action: 'coverage'   },
           { label: 'To clarify',     value: libCounts?.to_clarify   ?? 0,                                                          filterTier: null, action: 'clarify'    },
           { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero),                  filterTier: 'tier_ota_profile' },
