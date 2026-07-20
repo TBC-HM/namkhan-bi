@@ -289,7 +289,6 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
       {/* PBS 2026-07-20 pm · External counsel email containers (3-in-a-row).
              Reads public.v_legal_counsel_emails. Placed below Documents,
              above Contracts. */}
-      {/* @ts-expect-error async server component */}
       <CounselMailRow propertyId={propertyId} />
 
       {/* 1. Contracts */}
