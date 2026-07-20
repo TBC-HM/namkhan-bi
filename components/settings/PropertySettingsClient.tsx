@@ -25,12 +25,11 @@ import MeetingSpacesPanel from './panels/MeetingSpacesPanel';
 import JungleSpaPanel from './panels/JungleSpaPanel';
 import FnbHubPanel from './panels/FnbHubPanel';
 import RetreatsPanel from './panels/RetreatsPanel';
-import RatePlansHygienePanel from './panels/RatePlansHygienePanel';
 import { fillScore, fillScoreAll } from './fillScore';
 
 type Tab =
   | 'identity' | 'owner' | 'location' | 'brand' | 'reality' | 'policies' | 'licenses'
-  | 'rooms' | 'rate_plans' | 'facilities' | 'jungle_spa' | 'fnb' | 'activities' | 'retreats' | 'seasons'
+  | 'rooms' | 'facilities' | 'jungle_spa' | 'fnb' | 'activities' | 'retreats' | 'seasons'
   | 'certifications' | 'contacts' | 'social' | 'team' | 'transport' | 'imekong' | 'meeting_spaces';
 
 // Category-driven filters (case-insensitive). Any wellness/treatment_room row
@@ -53,7 +52,6 @@ function dataFor(tab: Tab, data: any): unknown {
     case 'reality':        return data.brandReality;
     case 'policies':       return data.policies;
     case 'rooms':          return data.rooms;
-    case 'rate_plans':     return data.ratePlans;
     case 'facilities':     return (data.facilities ?? []).filter((f: any) => !isExtractedFacility(f));
     case 'jungle_spa':     return (data.facilities ?? []).filter(isSpaFacility);
     case 'fnb':            return (data.facilities ?? []).filter(isFnbFacility);
@@ -81,7 +79,6 @@ const TABS: { key: Tab; label: string; subtitle: string }[] = [
   { key: 'policies',       label: 'Policies',       subtitle: 'Bookings & terms' },
   { key: 'licenses',       label: 'Licenses',       subtitle: 'Regulatory · insurance · linked docs' },
   { key: 'rooms',          label: 'Rooms',          subtitle: 'Room type catalog' },
-  { key: 'rate_plans',     label: 'Rate Plans',     subtitle: 'Feature toggle · LoS · deposit · cancel · payment terms' },
   { key: 'facilities',     label: 'Facilities',     subtitle: 'Outdoors · common · non-F&B non-spa' },
   { key: 'jungle_spa',     label: 'Jungle Spa',     subtitle: 'Facilities · experiences · treatments' },
   { key: 'fnb',            label: 'F&B',            subtitle: 'Facilities · menus · group menus · experiences' },
@@ -100,7 +97,7 @@ const TABS: { key: Tab; label: string; subtitle: string }[] = [
 // PBS 2026-07-18 v3 · sidebar reorg — 5 collapsible groups (Donna-scale).
 const GROUPS: { key: string; label: string; keys: Tab[] }[] = [
   { key: 'property',    label: 'Property',              keys: ['identity','owner','location','brand','reality','policies','licenses','certifications','contacts','social','team'] },
-  { key: 'accom',       label: 'Accommodation',         keys: ['rooms','rate_plans'] },
+  { key: 'accom',       label: 'Accommodation',         keys: ['rooms'] },
   { key: 'facilities',  label: 'Facilities & Outlets',  keys: ['facilities','jungle_spa','fnb','meeting_spaces'] },
   { key: 'experiences', label: 'Experiences',           keys: ['activities','retreats','imekong','transport'] },
   { key: 'calendar',    label: 'Calendar',              keys: ['seasons'] },
@@ -266,7 +263,6 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'policies'       && <PoliciesPanel       data={data.policies}       propertyId={propertyId} />}
           {active === 'licenses'       && <LicensesPanel       propertyId={propertyId} />}
           {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} propertyId={propertyId} />}
-          {active === 'rate_plans'     && <RatePlansHygienePanel rows={data.ratePlans ?? []} propertyId={propertyId} />}
           {active === 'facilities'     && <FacilitiesPanel     data={generalFacilities} propertyId={propertyId} />}
           {active === 'jungle_spa'     && <JungleSpaPanel      facilities={spaFacilities} treatments={data.spaTreatments ?? []} retreats={data.retreats ?? []} propertyId={propertyId} />}
           {active === 'fnb'            && <FnbHubPanel         facilities={fnbFacilities} menus={data.fnbMenus ?? []} activities={data.activities ?? []} propertyId={propertyId} />}
