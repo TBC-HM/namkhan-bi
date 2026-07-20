@@ -1,6 +1,6 @@
-// app/marketing/digital/page.tsx
-// PBS 2026-07-21 · Digital hub — web, funnels, SEO.
-// Was a placeholder stub, now a hub of 3 link cards. Every URL preserved.
+// app/marketing/content/page.tsx
+// PBS 2026-07-21 · Content hub — offers, compiler, campaigns, newsletter, media.
+// Zero URL migrations: every card just points at an existing page.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 
@@ -14,20 +14,22 @@ const INK_S = '#5A5A5A';
 interface Card { label: string; href: string; footer: string }
 
 const CARDS: Card[] = [
-  { label: 'Web',     href: '/marketing/digital/web', footer: 'Website surfaces + Bluehost' },
-  { label: 'Funnels', href: '/marketing/funnels',    footer: 'Conversion funnels + tracking' },
-  { label: 'SEO',     href: '/marketing/seo',        footer: 'Search visibility + keywords' },
+  { label: 'Products & Offers', href: '/marketing/offers',     footer: 'Sellable products + offer catalogue' },
+  { label: 'Compiler',          href: '/marketing/compiler',   footer: 'Assemble briefs + long-form content' },
+  { label: 'Campaigns',         href: '/marketing/campaigns',  footer: 'Wizard + scheduling + tracking' },
+  { label: 'Newsletter',        href: '/marketing/newsletter', footer: 'Broadcast to subscribers' },
+  { label: 'Media',             href: '/marketing/media',      footer: 'Photo + video library' },
 ];
 
-export default function DigitalHubPage() {
+export default function ContentHubPage() {
   const cfg = DEPT_CFG.marketing;
   const tabs: DashboardTab[] = cfg.subPages.map(s => ({
     key: s.href, label: s.label, href: s.href,
-    active: s.href === '/marketing/digital',
+    active: s.href === '/marketing/content',
   }));
 
   return (
-    <DashboardPage title="Marketing · Digital" subtitle="Website, funnels, SEO — the always-on digital surfaces." tabs={tabs}>
+    <DashboardPage title="Marketing · Content" subtitle="What we ship — offers, campaigns, newsletters, media." tabs={tabs}>
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {CARDS.map(card => (
           <a

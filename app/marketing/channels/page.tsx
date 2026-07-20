@@ -1,6 +1,6 @@
-// app/marketing/digital/page.tsx
-// PBS 2026-07-21 · Digital hub — web, funnels, SEO.
-// Was a placeholder stub, now a hub of 3 link cards. Every URL preserved.
+// app/marketing/channels/page.tsx
+// PBS 2026-07-21 · Channels hub — socials, youtube, digital.
+// Zero URL migrations: every card just points at an existing page.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 
@@ -14,20 +14,20 @@ const INK_S = '#5A5A5A';
 interface Card { label: string; href: string; footer: string }
 
 const CARDS: Card[] = [
-  { label: 'Web',     href: '/marketing/digital/web', footer: 'Website surfaces + Bluehost' },
-  { label: 'Funnels', href: '/marketing/funnels',    footer: 'Conversion funnels + tracking' },
-  { label: 'SEO',     href: '/marketing/seo',        footer: 'Search visibility + keywords' },
+  { label: 'Socials', href: '/marketing/social',             footer: 'Instagram · Facebook · TikTok · X' },
+  { label: 'YouTube', href: '/marketing/youtube/dashboard',  footer: 'Channel · uploads · renders' },
+  { label: 'Digital', href: '/marketing/digital',            footer: 'Web · funnels · SEO' },
 ];
 
-export default function DigitalHubPage() {
+export default function ChannelsHubPage() {
   const cfg = DEPT_CFG.marketing;
   const tabs: DashboardTab[] = cfg.subPages.map(s => ({
     key: s.href, label: s.label, href: s.href,
-    active: s.href === '/marketing/digital',
+    active: s.href === '/marketing/channels',
   }));
 
   return (
-    <DashboardPage title="Marketing · Digital" subtitle="Website, funnels, SEO — the always-on digital surfaces." tabs={tabs}>
+    <DashboardPage title="Marketing · Channels" subtitle="Where we show up — socials, YouTube, digital surfaces." tabs={tabs}>
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
         {CARDS.map(card => (
           <a

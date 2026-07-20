@@ -540,21 +540,15 @@ const MARKETING_CFG: DeptCfg = {
   //   Library           → Docs
   // Parent tab links to the first child so clicking always lands somewhere useful.
   subPages: [
-    // PBS 2026-07-07 night → 2026-07-09 pm:
-    // - Content removed from top strip (overlapped with Overview/Library — same DB source).
-    // - Gallery now a sub-tab under Overview (Library main · Gallery secondary).
-    // - Orphan stub /marketing/content deleted.
-    { label: 'HoD',               href: '/marketing'                 },
-    { label: 'Overview',          href: '/marketing/overview'        },
-    { label: 'Campaigns',         href: '/marketing/acquisition'     }, // PBS 2026-07-17 · bug #68 · label renamed (URL kept for backwards compat)
-    { label: 'Products & Offers', href: '/marketing/offers'          },
-    { label: 'Digital',           href: '/marketing/digital'         },
-    { label: 'Media',             href: '/marketing/media'           },
-    { label: 'Socials',           href: '/marketing/socials'         },
-    // PBS 2026-07-21 pm · /marketing/contacts folded into Subscribers as the
-    // "Candidates pool" tab — top-nav entry removed to kill the duplicate.
-    // The old URL still resolves via a server redirect for bookmarks.
-    { label: 'Subscribers',       href: '/marketing/subscribers'     },
+    // PBS 2026-07-21 night · IA restructure — top nav grouped by intent.
+    // Old strip (Overview / Campaigns / Offers / Digital / Media / Socials / Subscribers)
+    // collapsed into 4 hub landings. Every existing /marketing/* URL still resolves
+    // — subscribers, prospects, compiler, campaigns, media, social, youtube, funnels, seo
+    // are all reached via the new hub landings (Audience / Content / Channels).
+    { label: 'Overview',  href: '/marketing/overview' },
+    { label: 'Audience',  href: '/marketing/audience' },
+    { label: 'Content',   href: '/marketing/content'  },
+    { label: 'Channels',  href: '/marketing/channels' },
   ],
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
@@ -695,14 +689,14 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Reputation',  href: '/guest/reputation'     },
     { label: 'Behaviour',   href: '/guest/behaviour'      },
     { label: 'Subscribers', href: '/marketing/subscribers' }, // PBS 2026-07-16 · surfaced in Contacts sub-nav (page lives under /marketing)
-    { label: 'Contacts',    href: '/marketing/contacts'   }, // PBS 2026-07-16 · Gmail-extracted directory
+    // PBS 2026-07-21 night · Contacts removed — folded into Subscribers as
+    // the "Candidates pool" tab. URL still resolves for bookmarks.
     { label: 'Newsletters', href: '/guest/newsletters'    },
   ],
   quickChips: [
     { label: 'Guests',      href: '/guest/directory'      },
     { label: 'Reputation',  href: '/guest/reputation'     },
     { label: 'Subscribers', href: '/marketing/subscribers'},
-    { label: 'Contacts',    href: '/marketing/contacts'   },
     { label: 'Behaviour',   href: '/guest/behaviour'      },
     { label: 'Newsletters', href: '/guest/newsletters'    },
   ],
