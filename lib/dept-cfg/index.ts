@@ -550,7 +550,7 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Products & Offers', href: '/marketing/offers'          },
     { label: 'Digital',           href: '/marketing/digital'         },
     { label: 'Media',             href: '/marketing/media'           },
-    { label: 'Contacts',          href: '/marketing/contacts'        },
+    { label: 'Socials',           href: '/marketing/socials'         },          href: '/marketing/contacts'        },
     // PBS 2026-07-16 · opt-in-managed newsletter list (separate from Contacts extract).
     { label: 'Subscribers',       href: '/marketing/subscribers'     },
   ],
