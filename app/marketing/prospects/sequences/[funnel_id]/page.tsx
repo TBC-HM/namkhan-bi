@@ -1,11 +1,10 @@
 // app/marketing/prospects/sequences/[funnel_id]/page.tsx
-// PBS 2026-07-21 v3: step viewer + AI Refine (per-step + whole-sequence).
+// PBS 2026-07-05: read-only step viewer for a single email sequence.
 import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../../_subpages';
-import RefineStepButton from './_components/RefineStepButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -16,8 +15,7 @@ type Row = {
   target_tag_key: string | null; target_tag_label: string | null;
   step_id: string | null; step_no: number | null; delay_days: number | null;
   send_hour_local: number | null; subject: string | null; body_md: string | null;
-  hero_image_url: string | null; hero_asset_id: string | null; hero_public_url: string | null;
-  click_tag_map: Record<string, unknown> | null;
+  hero_image_url: string | null; click_tag_map: Record<string, unknown> | null;
   step_sends: number | null;
 };
 
@@ -52,10 +50,7 @@ export default async function SeqDetailPage({ params }: { params: { funnel_id: s
       >
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <TenantLink href="/marketing/prospects/sequences" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequences</TenantLink>
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            {steps.length > 0 && (
-              <RefineStepButton mode="all" funnelId={head.funnel_id} />
-            )}
+          <div style={{ display:'flex', gap:8 }}>
             <TenantLink href={`/marketing/prospects/sequences/${head.funnel_id}/preview`} style={btnLight}>Preview</TenantLink>
             <TenantLink href={`/marketing/prospects/sequences/${head.funnel_id}/enroll`}  style={btnGreen}>Enroll subscribers</TenantLink>
           </div>
@@ -84,31 +79,15 @@ export default async function SeqDetailPage({ params }: { params: { funnel_id: s
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {steps.map(s => {
-                const heroUrl = s.hero_public_url ?? s.hero_image_url ?? null;
-                return (
+              {steps.map(s => (
                 <div key={s.step_id} style={{ border:'1px solid '+HAIR, borderRadius:6, background:'#FFFFFF', padding:14 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, borderBottom:'1px solid '+HAIR, paddingBottom:8, marginBottom:10 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                       <span style={{ display:'inline-block', padding:'2px 10px', fontSize:11, fontWeight:600, background:CREAM, border:'1px solid '+HAIR, borderRadius:10 }}>Step {s.step_no}</span>
                       <span style={{ fontSize:11, color:INK_M }}>{fmtDelay(s.delay_days)}{s.send_hour_local != null ? ` · ${String(s.send_hour_local).padStart(2,'0')}:00 Vientiane` : ''}</span>
                       {s.step_sends ? <span style={{ fontSize:11, color:'#084838' }}>· {s.step_sends} sent</span> : null}
-                      {heroUrl ? <span style={{ fontSize:11, color:'#084838' }}>· hero ✓</span> : <span style={{ fontSize:11, color:'#B03826' }}>· no hero</span>}
                     </div>
-                    <RefineStepButton
-                      mode="step"
-                      funnelId={head.funnel_id}
-                      stepId={s.step_id ?? undefined}
-                      stepNo={s.step_no}
-                      currentSubject={s.subject}
-                      currentBodyMd={s.body_md}
-                      currentHeroAssetId={s.hero_asset_id}
-                    />
                   </div>
-                  {heroUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={heroUrl} alt={s.subject ?? 'hero'} style={{ maxWidth:280, height:'auto', display:'block', borderRadius:4, marginBottom:10, border:'1px solid '+HAIR }} />
-                  )}
                   <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:6 }}>{s.subject}</div>
                   <div style={{ fontSize:12, color:INK, lineHeight:1.6, whiteSpace:'pre-wrap', fontFamily:'Georgia, serif', background:'#FDFCF8', padding:12, borderRadius:4, border:'1px solid '+HAIR, maxHeight:280, overflow:'auto' }}>
                     {s.body_md}
@@ -124,7 +103,7 @@ export default async function SeqDetailPage({ params }: { params: { funnel_id: s
                     </div>
                   )}
                 </div>
-              );})}
+              ))}
             </div>
           )}
         </div>

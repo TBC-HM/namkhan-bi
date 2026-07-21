@@ -1,13 +1,11 @@
 // app/h/[property_id]/marketing/prospects/sequences/page.tsx
-// PBS 2026-07-21: page moved under Guest · Newsletters as a sub-tab.
-// Preserves tenant scoping by redirecting to the same property's new URL.
-import { redirect, notFound } from 'next/navigation';
-
-export const dynamic = 'force-dynamic';
+// PBS 2026-07-08 Donna structural mirror.
+import { notFound } from "next/navigation";
+import DeptSubpageStub from "@/app/h/[property_id]/_shared/DeptSubpageStub";
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-export default function Page({ params }: { params: { property_id: string } }) {
+export default function DonnaPage({ params }: { params: { property_id: string } }) {
   const pid = Number(params.property_id);
   if (!Number.isFinite(pid)) notFound();
-  redirect(`/h/${pid}/guest/newsletters/sequences`);
+  return (<DeptSubpageStub propertyId={pid} deptLabel="Prospects" routeLabel="Sequences" namkhanPath="/marketing/prospects/sequences" hint="Email nurture sequences — Donna prospect list scoping pending." />);
 }

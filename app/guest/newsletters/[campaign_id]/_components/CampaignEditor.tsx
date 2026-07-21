@@ -1,27 +1,31 @@
 'use client';
 // app/guest/newsletters/[campaign_id]/_components/CampaignEditor.tsx
-// PBS 2026-07-05 v2 · 2026-07-21 v3: shared renderEmailFrame() for live preview.
+// PBS 2026-07-05 v2: planned_date input · inline image preview · MediaPicker button.
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TenantLink from '@/components/nav/TenantLink';
 import { supabase } from '@/lib/supabase';
 import MediaPicker from './MediaPicker';
-import RefineNewsletterButton from './RefineNewsletterButton';
-import { renderEmailFrame, markdownToInlineHtml } from '@/lib/emailFrame';
 
 interface Props { initial: Record<string, unknown>; }
 
 const WHITE='#FFFFFF'; const HAIR='#E6DFCC'; const INK='#1B1B1B';
 const INK_M='#5A5A5A'; const GREEN='#1F3A2E'; const RED='#B03826';
 
-// Extract first ![](url) as hero, strip it from body_md before rendering the frame.
-function splitHeroAndBody(md: string): { heroUrl: string | null; bodyMd: string } {
-  const m = /!\[[^\]]*\]\(([^)]+)\)/m.exec(md);
-  if (!m) return { heroUrl: null, bodyMd: md };
-  const url = m[1];
-  const bodyMd = md.replace(m[0], '').replace(/^\s*\n+/, '');
-  return { heroUrl: url, bodyMd };
+function renderMarkdownLite(md: string): string {
+  const html = md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g,'<em>$1</em>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:3px;" />')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2">$1</a>')
+    .replace(/^---$/gm,'<hr />')
+    .replace(/\n\n/g,'</p><p>');
+  return '<p>'+html+'</p>';
 }
 
 export default function CampaignEditor({ initial }: Props) {
@@ -101,18 +105,6 @@ export default function CampaignEditor({ initial }: Props) {
     else setBodyMd(`![](${url})\n\n` + bodyMd);
   }
 
-  // Live preview via shared frame
-  const { heroUrl, bodyMd: bodyWithoutHero } = splitHeroAndBody(bodyMd);
-  const previewHtml = renderEmailFrame({
-    heroImageUrl: heroUrl,
-    heroAlt: subject || name,
-    bodyHtml: markdownToInlineHtml(bodyWithoutHero),
-    propertyName: 'THE NAMKHAN',
-    propertyEmail: fromEmail || 'info@thenamkhan.com',
-    propertyWebsite: 'thenamkhan.com',
-    unsubscribeUrl: '#unsubscribe',
-  });
-
   return (
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:12, marginBottom:16 }}>
@@ -149,18 +141,8 @@ export default function CampaignEditor({ initial }: Props) {
             {field('Booking URL', <input type="text" value={bookUrl} onChange={(e) => setBookUrl(e.target.value)} style={ip} />)}
           </div>
 
-          <div style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center', flexWrap:'wrap' }}>
+          <div style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center' }}>
             <label style={{ fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, flex:1 }}>Body (Markdown)</label>
-            <RefineNewsletterButton
-              campaignId={init.campaign_id}
-              currentSubject={subject}
-              currentBodyMd={bodyMd}
-              onAccept={(newSubject, newBodyMd) => {
-                if (newSubject != null) setSubject(newSubject);
-                if (newBodyMd != null) setBodyMd(newBodyMd);
-                setMsg('AI proposal accepted — click Save changes to persist.');
-              }}
-            />
             <button type="button" onClick={() => setPickerMode('replace-hero')} style={smallBtn}>Change hero photo</button>
             <button type="button" onClick={() => setPickerMode('insert')} style={smallBtn}>Insert photo</button>
           </div>
@@ -181,12 +163,24 @@ export default function CampaignEditor({ initial }: Props) {
         </div>
 
         <div>
-          <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:8 }}>Live preview (shared frame)</div>
+          <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:8 }}>Live preview</div>
           <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:6, overflow:'hidden' }}>
-            <div style={{ padding:'8px 12px', background:'#F5F0E1', borderBottom:'1px solid '+HAIR, fontSize:11, color:INK_M }}>
-              Subject: <strong style={{ color:INK }}>{subject || '(no subject)'}</strong>
+            <div style={{ padding:'18px', textAlign:'center', background:'#F5F0E1', borderBottom:'1px solid '+HAIR }}>
+              <div style={{ fontSize:16, fontWeight:600, letterSpacing:'0.08em', color:INK, fontFamily:'Georgia, serif' }}>THE NAMKHAN</div>
+              <div style={{ fontSize:10, color:INK_M, marginTop:4, letterSpacing:'0.06em' }}>Luang Prabang · Laos</div>
             </div>
-            <iframe title="campaign-preview" srcDoc={previewHtml} style={{ width:'100%', height:720, border:'none', background:'#F0EBE1', display:'block' }} />
+            <div style={{ padding:'20px 24px', background:WHITE, color:INK, fontSize:14, lineHeight:1.6 }}>
+              <div style={{ fontSize:11, color:INK_M, marginBottom:8 }}>Subject preview:</div>
+              <div style={{ fontWeight:600, marginBottom:16, fontSize:15 }}>{subject}</div>
+              <div style={{ borderTop:'1px solid '+HAIR, paddingTop:12 }} dangerouslySetInnerHTML={{ __html: renderMarkdownLite(bodyMd) }} />
+            </div>
+            <div style={{ padding:'18px 24px', background:'#F5F0E1', borderTop:'1px solid '+HAIR, textAlign:'center', fontSize:11, color:INK_M, lineHeight:1.6 }}>
+              <div style={{ fontWeight:600, color:INK, letterSpacing:'0.08em' }}>THE NAMKHAN</div>
+              <div>Ban Xieng Lom, Luang Prabang, Laos</div>
+              <div>info@thenamkhan.com</div>
+              <div style={{ margin:'10px 0' }}>[ IG ] [ FB ] [ TikTok ] [ Website ]</div>
+              <div>Unsubscribe · Update preferences</div>
+            </div>
           </div>
         </div>
       </div>

@@ -285,12 +285,7 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
       if (tier    !== (asset.primary_tier ?? ''))        payload.primary_tier = tier || null;
       if (area    !== (asset.property_area ?? ''))       payload.property_area = area || null;
       // PBS 2026-07-15 · #205 · resolve the selected area name to the right FK so photo moves OUT of "Other X" bucket.
-      // PBS 2026-07-21 · when reassigning area, clear ALL mutually-exclusive FKs
-      // so photo actually moves out of the old area folder. Previously only
-      // facility/activity were touched; old room_type_id/cert/contact/destination
-      // lingered and photo appeared in both old and new folders.
-      const areaChanged = area !== (asset.property_area ?? '');
-      if (areaChanged) {
+      if (area !== (asset.property_area ?? '')) {
         const norm = (s: string) => s.trim().toLowerCase();
         const target = norm(area);
         let matchedFacility: number | null = null;
@@ -305,20 +300,14 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
             for (const r of (taxonomy?.rooms ?? [])) { if (norm(r.name) === target) { matchedRoom = r.id; break; } }
           }
         }
-        // Clear every mutually-exclusive FK the RPC knows about, then set the matched one.
-        // destination_id / boat_id / boat_cruise_id / transport_id aren't in fn_media_asset_update's
-        // CASE WHEN guards so passing them here would be no-ops — skip.
-        payload.facility_id      = matchedFacility;   // null if not matched
-        payload.activity_id      = matchedActivity;   // null if not matched
-        payload.room_type_id     = matchedRoom != null ? String(matchedRoom) : null;
-        payload.certification_id = null;
-        payload.contact_id       = null;
+        // Send the FK (null if area cleared or unmatched — RPC uses field-present semantics)
+        payload.facility_id = matchedFacility;
+        payload.activity_id = matchedActivity;
+        if (matchedRoom != null) payload.room_type_id = String(matchedRoom);
       }
       if (aiGen   !== Boolean(asset.is_ai_generated))    payload.is_ai_generated = aiGen;
       const currentRoom = asset.room_type_id != null ? String(asset.room_type_id) : '';
-      // Only honour the room dropdown's explicit change when area DIDN'T change;
-      // otherwise the area-change block above owns the FK reassignment.
-      if (!areaChanged && roomTypeId !== currentRoom) payload.room_type_id = roomTypeId || null;
+      if (roomTypeId !== currentRoom) payload.room_type_id = roomTypeId || null;
       const currentLat = asset.gps_lat != null ? String(asset.gps_lat) : '';
       const currentLng = asset.gps_lng != null ? String(asset.gps_lng) : '';
       if (gpsLat !== currentLat) payload.gps_lat = gpsLat === '' ? null : Number(gpsLat);
