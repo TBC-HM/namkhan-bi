@@ -750,10 +750,32 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
         areaOptions={areaOptions}
         rooms={rooms}
         taxonomy={taxonomy}
-        onSaved={(updated) => {
-          if (updated?.asset_id) {
-            setLocalDismiss(s => new Set(s).add(updated.asset_id));
+        onSaved={async (updated) => {
+          if (!updated?.asset_id) return;
+          const id = updated.asset_id;
+          try {
+            // 1) Re-score with new context (area, tier changed)
+            await fetch('/api/marketing/media/qa-rescore', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ asset_id: id }),
+            });
+            // 2) Regenerate SEO filename + alt/caption (Iris)
+            await fetch('/api/marketing/media/apply-iris-filename', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ asset_id: id }),
+            });
+            // 3) Clear needs_review — auto-drop from Clarify list
+            await fetch('/api/marketing/media/clear-review', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ asset_id: id }),
+            });
+            setMsg('Photo classified · re-scored · SEO filename regenerated · moved to Library.');
+            setTimeout(() => setMsg((m) => m === 'Photo classified · re-scored · SEO filename regenerated · moved to Library.' ? null : m), 4000);
+          } catch (e) {
+            console.error('[clarify post-save chain]', e);
           }
+          // Existing behaviour: drop from local list
+          setLocalDismiss(s => new Set(s).add(id));
         }}
       />
 

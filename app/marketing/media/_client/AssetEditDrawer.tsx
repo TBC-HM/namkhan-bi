@@ -31,6 +31,7 @@ export interface DrawerTaxonomy {
 
 export interface AssetEditRow {
   asset_id: string;
+  property_id?: number | null;
   room_type_id?: number | null;
   original_filename?: string | null;
   seo_target_filename?: string | null;
@@ -236,8 +237,13 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
     setArea(asset.property_area ?? '');
     setAiGen(Boolean(asset.is_ai_generated));
     setRoomTypeId(asset.room_type_id != null ? String(asset.room_type_id) : '');
-    setGpsLat(asset.gps_lat != null ? String(asset.gps_lat) : '');
-    setGpsLng(asset.gps_lng != null ? String(asset.gps_lng) : '');
+    // PBS 2026-07-21 · Default GPS = Namkhan centre (19.8563, 102.1354) when both null AND property matches.
+    // Drawer is Namkhan-only in practice; if property_id is missing on the row we still default (safe).
+    const propId = asset.property_id ?? 260955;
+    const isNamkhan = propId === 260955;
+    const shouldDefault = isNamkhan && asset.gps_lat == null && asset.gps_lng == null;
+    setGpsLat(asset.gps_lat != null ? String(asset.gps_lat) : (shouldDefault ? '19.8563' : ''));
+    setGpsLng(asset.gps_lng != null ? String(asset.gps_lng) : (shouldDefault ? '102.1354' : ''));
     setCapturedAt(asset.captured_at ? String(asset.captured_at).slice(0, 10) : '');
     setCameraMake(asset.camera_make ?? '');
     setCameraModel(asset.camera_model ?? '');
@@ -597,14 +603,12 @@ export default function AssetEditDrawer({ open, onClose, asset, areaOptions, roo
           <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
             <input type="number" step="0.0001" placeholder="lat (e.g. 19.8563)" value={gpsLat} onChange={e => setGpsLat(e.target.value)} style={{ ...S.input, maxWidth:150 }} />
             <input type="number" step="0.0001" placeholder="lng (e.g. 102.1354)" value={gpsLng} onChange={e => setGpsLng(e.target.value)} style={{ ...S.input, maxWidth:150 }} />
-            <button type="button" onClick={() => { setGpsLat('19.8563'); setGpsLng('102.1354'); }} style={{ padding:'6px 10px', fontSize:11, background:'#FFFFFF', color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer' }}>Use Namkhan centre</button>
-            <button type="button" onClick={() => { setGpsLat('39.5696'); setGpsLng('2.6502'); }} style={{ padding:'6px 10px', fontSize:11, background:'#FFFFFF', color:INK, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer' }}>Use Donna centre</button>
             <button type="button" onClick={() => { setGpsLat(''); setGpsLng(''); }} style={{ padding:'6px 10px', fontSize:11, background:'#FFFFFF', color:INK_M, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer' }}>Clear</button>
             {gpsLat && gpsLng && (
               <a href={`https://www.google.com/maps?q=${gpsLat},${gpsLng}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:11, color:'#084838', textDecoration:'underline' }}>View on Google Maps →</a>
             )}
           </div>
-          <div style={{ fontSize:10, color:INK_M, marginTop:4 }}>Backfilled to 19.8563, 102.1354 (Namkhan centre) for all hotel photos on 2026-07-14. Edit here to pin a specific location.</div>
+          <div style={{ fontSize:10, color:INK_M, marginTop:4 }}>Default: The Namkhan Luang Prabang (19.8563, 102.1354). Edit only for photos taken off-property.</div>
         </Field>
 
         {video && (

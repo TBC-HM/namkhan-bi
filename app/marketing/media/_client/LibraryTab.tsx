@@ -681,6 +681,23 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
         areaOptions={areaOptions}
         rooms={rooms}
         taxonomy={taxonomy}
+        onSaved={async (updated) => {
+          if (!updated?.asset_id) return;
+          const id = updated.asset_id;
+          try {
+            // 1) Re-score with new context (area/tier may have shifted)
+            await fetch('/api/marketing/media/qa-rescore', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ asset_id: id }),
+            });
+            // 2) Regenerate SEO filename + alt/caption (Iris)
+            await fetch('/api/marketing/media/apply-iris-filename', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ asset_id: id }),
+            });
+            // Note: LibraryTab doesn't need clear-review — its rows are already status=ready
+          } catch (e) { console.error('[library post-save chain]', e); }
+        }}
       />
     </div>
   );
