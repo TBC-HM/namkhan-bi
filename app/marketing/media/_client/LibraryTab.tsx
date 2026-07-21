@@ -356,9 +356,10 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       {/* PBS 2026-07-17 · SCOPE 1 · tiles bound to v_media_library_counts.
           Fallback to legacy byTier totals only when libCounts is not yet loaded
           (keeps first-render smooth; correct numbers land within one tick). */}
-      {/* PBS 2026-07-17 · clickable tiles ARE the tier filter. All tiers live
-          here (OTA/Website · Social · Archive · Logos). Click active tile again
-          to clear — no more hunting for a "Clear" button. */}
+      {/* PBS 2026-07-17 · clickable tiles ARE the tier filter. Tiers surfaced:
+          OTA/Website · Social · Logos. Click active tile again to clear.
+          PBS 2026-07-21 · Archive tile removed — archived assets stay filterable
+          via search/URL but drop from the top strip. */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
         {([
           // PBS 2026-07-19 · every tile goes somewhere. Pics = clear filters.
@@ -375,7 +376,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           { label: 'To clarify',     value: libCounts?.to_clarify   ?? 0,                                                          filterTier: null, action: 'clarify'    },
           { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero),                  filterTier: 'tier_ota_profile' },
           { label: 'Social',         value: libCounts?.social       ?? totals.social,                                             filterTier: 'tier_social_pool' },
-          { label: 'Archive',        value: n(byTier.find(r => r.primary_tier === 'tier_archive')?.total),                        filterTier: 'tier_archive' },
           { label: 'Logos',          value: n(byTier.find(r => r.primary_tier === 'tier_logos')?.total),                          filterTier: 'tier_logos' },
         ] as Array<{ label: string; value: number | undefined; filterTier: string | null; action?: 'clear'|'coverage'|'clarify' }>).map((t, i) => {
           const isActive    = t.filterTier !== null && tier === t.filterTier;
