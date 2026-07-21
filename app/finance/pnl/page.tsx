@@ -23,7 +23,11 @@ import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
 import { FINANCE_SUBPAGES } from '../_subpages';
-import TabStrip, { PNL_TABS } from '../_components/TabStrip';
+// PBS 2026-07-21: dropped legacy TabStrip import — NAV_SUBGROUPS
+// (parentHref='/finance/pnl') renders the canonical P&L · Ledger ·
+// Transactions · Budget sub-strip via DashboardPage's SubTabStrip.
+// The local <TabStrip tabs={PNL_TABS}> was a second, uppercase/mono/brass
+// row underneath the canonical one — classic doubling bug.
 import TwelveMonthPanel from './TwelveMonthPanel';
 import MonthDropdown from './MonthDropdown';
 import CompareDropdown, { type CompareMode } from './CompareDropdown';
@@ -597,7 +601,6 @@ export default async function PnLPage({ searchParams, propertyId }: Props) {
       tabs={FINANCE_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/finance/pnl' }))}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <TabStrip tabs={PNL_TABS} activeKey="pnl" />
       {/* PBS 2026-06-18 #224 — dropdowns ABOVE the KPI strip so they're first thing user touches */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', padding: '4px 0 6px' }}>
         <MonthDropdown value={cur} options={monthOptions} />
