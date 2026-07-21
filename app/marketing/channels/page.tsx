@@ -18,7 +18,7 @@ export default function ChannelsHubPage() {
       subtitle="Socials, YouTube, Digital — where you publish and distribute."
       tabs={tabs}
     >
-      {/* Empty body — sub-strip is the nav. */}
+      <></>
     </DashboardPage>
   );
 }

@@ -18,7 +18,7 @@ export default function ContentHubPage() {
       subtitle="Products & Offers, Compiler, Campaigns, Newsletter, Media — everything you produce and send."
       tabs={tabs}
     >
-      {/* Empty body — sub-strip is the nav. */}
+      <></>
     </DashboardPage>
   );
 }

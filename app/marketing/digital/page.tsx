@@ -19,7 +19,7 @@ export default function DigitalHubPage() {
       subtitle="Web, Funnels, SEO — the acquisition surface."
       tabs={tabs}
     >
-      {/* Empty body — sub-strip is the nav. */}
+      <></>
     </DashboardPage>
   );
 }
