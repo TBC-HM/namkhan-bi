@@ -113,6 +113,38 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Other',      href: '/operations/other'      },
     ],
   },
+  // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
+  {
+    parentHref: '/operations/inventory',
+    members: [
+      '/operations/inventory',
+      '/operations/inventory/assets',
+      '/operations/inventory/capex',
+      '/operations/inventory/catalog',
+      '/operations/inventory/counts',
+      '/operations/inventory/items',
+      '/operations/inventory/orders',
+      '/operations/inventory/par',
+      '/operations/inventory/requests',
+      '/operations/inventory/shop',
+      '/operations/inventory/stock',
+      '/operations/inventory/suppliers',
+    ],
+    tabs: [
+      { label: 'Overview',  href: '/operations/inventory'           },
+      { label: 'Assets',    href: '/operations/inventory/assets'    },
+      { label: 'Capex',     href: '/operations/inventory/capex'     },
+      { label: 'Catalog',   href: '/operations/inventory/catalog'   },
+      { label: 'Counts',    href: '/operations/inventory/counts'    },
+      { label: 'Items',     href: '/operations/inventory/items'     },
+      { label: 'Orders',    href: '/operations/inventory/orders'    },
+      { label: 'Par',       href: '/operations/inventory/par'       },
+      { label: 'Requests',  href: '/operations/inventory/requests'  },
+      { label: 'Shop',      href: '/operations/inventory/shop'      },
+      { label: 'Stock',     href: '/operations/inventory/stock'     },
+      { label: 'Suppliers', href: '/operations/inventory/suppliers' },
+    ],
+  },
 
   // ─── Marketing ────────────────────────────────────────────
   // PBS 2026-07-21: /marketing/{content,channels,digital} become nav-hubs.

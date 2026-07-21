@@ -616,6 +616,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Overview',         href: '/operations/overview'        },
     { label: 'Departments',      href: '/operations/rooms'           },
     { label: 'Menus',            href: '/operations/menus'           },
+    { label: 'Inventory',        href: '/operations/inventory'       },
     { label: 'Suppliers',        href: '/operations/suppliers'       },
     { label: 'QA',               href: '/operations/sops'            },
   ],
