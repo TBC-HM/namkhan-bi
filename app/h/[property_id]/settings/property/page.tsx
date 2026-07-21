@@ -116,7 +116,11 @@ export default async function PropertySettingsPage({
         // PBS 2026-07-21 pm · Audience surfaces on the property-scoped tree too
         // (mirrors the top-level /settings/property/audience tab). Client is
         // imported directly — no duplication.
-        { key: 'audience',   label: 'Audience',   href: `/h/${propertyId}/settings/property/audience` },
+        // PBS 2026-07-22 pm · label renamed "Audience" → "Newsletter" (URL unchanged
+        // to keep external links alive; panel now hosts Sender Identity + Blocklist
+        // + Groups & Rules + Import Rules + Email Chrome + Editorial Goals — all
+        // newsletter-scoped).
+        { key: 'audience',   label: 'Newsletter', href: `/h/${propertyId}/settings/property/audience` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },

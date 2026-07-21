@@ -178,7 +178,7 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots 
       <section style={panel}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
           <h3 style={h3}>Editorial goals · read-only summary</h3>
-          <TenantLink href="/settings/property/audience#editorial-goals" style={editLink}>Edit weights in Settings → Audience → Editorial Goals →</TenantLink>
+          <TenantLink href="/settings/property/audience#editorial-goals" style={editLink}>Edit weights in Settings → Newsletter → Editorial Goals →</TenantLink>
         </div>
         <p style={muted}>The AI Director plans slots proportional to these normalised weights.</p>
 
