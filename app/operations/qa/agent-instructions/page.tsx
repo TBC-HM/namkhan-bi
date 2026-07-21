@@ -3,26 +3,22 @@
 // Server component. Reads active + all history rows from public.v_sop_agent_instructions
 // (bridge onto knowledge.sop_agent_instructions). Delegates interactivity to
 // the client editor.
+//
+// 2026-07-21 (fix): dropped local qaTabs() — it was replacing the canonical
+// Operations top strip with a duplicate of the QA sub-strip. NAV_SUBGROUPS
+// (lib/nav-subgroups.ts, parentHref='/operations/sops') already renders the
+// SOPs · QA registry · Proposals · Generate · Agent instructions row below,
+// so we now feed DashboardPage the canonical 5-item Operations strip.
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import AgentInstructionsEditor, { type InstructionRow } from './_components/AgentInstructionsEditor';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 interface Props { propertyId?: number }
-
-function qaTabs(pid: number, active: 'overview' | 'registry' | 'generate' | 'proposals' | 'agent'): DashboardTab[] {
-  const base = pid === PROPERTY_ID ? '' : `/h/${pid}`;
-  return [
-    { key: `${base}/operations/qa`,                   label: 'Overview',            href: `${base}/operations/qa`,                   active: active === 'overview'  },
-    { key: `${base}/operations/qa/registry`,          label: 'Registry',            href: `${base}/operations/qa/registry`,          active: active === 'registry'  },
-    { key: `${base}/operations/qa/generate`,          label: 'Generate',            href: `${base}/operations/qa/generate`,          active: active === 'generate'  },
-    { key: `${base}/operations/qa/proposals`,         label: 'Proposals',           href: `${base}/operations/qa/proposals`,         active: active === 'proposals' },
-    { key: `${base}/operations/qa/agent-instructions`,label: 'Agent Instructions',  href: `${base}/operations/qa/agent-instructions`,active: active === 'agent'     },
-  ];
-}
 
 export default async function AgentInstructionsPage({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
@@ -36,7 +32,12 @@ export default async function AgentInstructionsPage({ propertyId }: Props = {}) 
   const rows: InstructionRow[] = (data as InstructionRow[]) ?? [];
   const activeRow = rows.find((r) => r.active) ?? null;
 
-  const tabs = qaTabs(pid, 'agent');
+  const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href === '/operations/sops', // QA parent
+  }));
 
   return (
     <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>

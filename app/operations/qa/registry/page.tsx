@@ -3,9 +3,16 @@
 // Dept, title, purpose (short_summary), status, updated_at. Server component.
 // No filtering — search lives on the Overview tab. Property-scoped:
 // shared corp catalog UNION own-tenant rows. Tenant delegate mirrors this.
+//
+// 2026-07-21 (fix): dropped local qaTabs() — it was replacing the canonical
+// Operations top strip with a duplicate of the QA sub-strip. NAV_SUBGROUPS
+// (lib/nav-subgroups.ts, parentHref='/operations/sops') already renders the
+// SOPs · QA registry · Proposals · Generate · Agent instructions row below,
+// so we now feed DashboardPage the canonical 5-item Operations strip.
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,17 +36,6 @@ const HAIR  = '#E6DFCC';
 const INK   = '#1B1B1B';
 const INK_S = '#5A5A5A';
 const PRIMARY = '#084838';
-
-function qaTabs(pid: number, active: 'overview' | 'registry' | 'generate' | 'proposals' | 'agent'): DashboardTab[] {
-  const base = pid === PROPERTY_ID ? '' : `/h/${pid}`;
-  return [
-    { key: `${base}/operations/qa`,                   label: 'Overview',            href: `${base}/operations/qa`,                   active: active === 'overview'  },
-    { key: `${base}/operations/qa/registry`,          label: 'Registry',            href: `${base}/operations/qa/registry`,          active: active === 'registry'  },
-    { key: `${base}/operations/qa/generate`,          label: 'Generate',            href: `${base}/operations/qa/generate`,          active: active === 'generate'  },
-    { key: `${base}/operations/qa/proposals`,         label: 'Proposals',           href: `${base}/operations/qa/proposals`,         active: active === 'proposals' },
-    { key: `${base}/operations/qa/agent-instructions`,label: 'Agent Instructions',  href: `${base}/operations/qa/agent-instructions`,active: active === 'agent'     },
-  ];
-}
 
 function normDept(code: string): string {
   const cu = code.toUpperCase().replace(/^OPS_/, '').replace(/^COMM_/, '');
@@ -79,7 +75,12 @@ export default async function QaRegistryPage({ propertyId }: Props = {}) {
   const rows: SopRow[] = (data as SopRow[]) ?? [];
   const distinctDepts = new Set(rows.map((r) => r.dept_code)).size;
 
-  const tabs = qaTabs(pid, 'registry');
+  const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href === '/operations/sops', // QA parent
+  }));
 
   const th: React.CSSProperties = {
     padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 600,

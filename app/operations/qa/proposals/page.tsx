@@ -7,9 +7,16 @@
 // 2026-07-08 (later): tabs strip switched from the top-level operations
 // subPages to the QA-cluster tabs (Overview / Registry / Generate / Proposals /
 // Agent Instructions) per PBS's QA sub-menu spec.
+//
+// 2026-07-21 (fix): dropped local qaTabs() — it was replacing the canonical
+// Operations top strip with a duplicate of the QA sub-strip. NAV_SUBGROUPS
+// (lib/nav-subgroups.ts, parentHref='/operations/sops') already renders the
+// SOPs · QA registry · Proposals · Generate · Agent instructions row below,
+// so we now feed DashboardPage the canonical 5-item Operations strip.
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import SopProposalList, { type ProposalRow } from './_components/SopProposalList';
 
 export const dynamic = 'force-dynamic';
@@ -21,17 +28,6 @@ const SCOPE_FOR: Record<number, string> = {
   260955:  'namkhan',
   1000001: 'donna',
 };
-
-function qaTabs(pid: number, active: 'overview' | 'registry' | 'generate' | 'proposals' | 'agent'): DashboardTab[] {
-  const base = pid === PROPERTY_ID ? '' : `/h/${pid}`;
-  return [
-    { key: `${base}/operations/qa`,                   label: 'Overview',            href: `${base}/operations/qa`,                   active: active === 'overview'  },
-    { key: `${base}/operations/qa/registry`,          label: 'Registry',            href: `${base}/operations/qa/registry`,          active: active === 'registry'  },
-    { key: `${base}/operations/qa/generate`,          label: 'Generate',            href: `${base}/operations/qa/generate`,          active: active === 'generate'  },
-    { key: `${base}/operations/qa/proposals`,         label: 'Proposals',           href: `${base}/operations/qa/proposals`,         active: active === 'proposals' },
-    { key: `${base}/operations/qa/agent-instructions`,label: 'Agent Instructions',  href: `${base}/operations/qa/agent-instructions`,active: active === 'agent'     },
-  ];
-}
 
 export default async function SopProposalsPage({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
@@ -51,7 +47,12 @@ export default async function SopProposalsPage({ propertyId }: Props = {}) {
   // PBS 2026-07-11 pm (dir 2) — server debug line so future "0 rows" bugs surface in Vercel logs.
   console.log('SopProposalsPage', { pid, scope, rows: proposals.length });
 
-  const tabs = qaTabs(pid, 'proposals');
+  const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href === '/operations/sops', // QA parent
+  }));
 
   const generateBaseHref = pid === PROPERTY_ID
     ? '/operations/qa/generate'

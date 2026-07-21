@@ -15,10 +15,17 @@
 // via lib/propertyContext and passes it to the client form as a string prop.
 // The client form embeds it in the POST body to /api/sop/generate so the LLM
 // has hotel-specific ground truth.
+//
+// 2026-07-21 (fix): dropped local qaTabs() — it was replacing the canonical
+// Operations top strip with a duplicate of the QA sub-strip. NAV_SUBGROUPS
+// (lib/nav-subgroups.ts, parentHref='/operations/sops') already renders the
+// SOPs · QA registry · Proposals · Generate · Agent instructions row below,
+// so we now feed DashboardPage the canonical 5-item Operations strip.
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { getPropertyContext, renderPropertyContextForLLM } from '@/lib/propertyContext';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import GenerateSopForm from './_components/GenerateSopForm';
 
 export const dynamic = 'force-dynamic';
@@ -29,21 +36,15 @@ interface Props {
   searchParams?: { dept?: string; purpose?: string; proposal_id?: string };
 }
 
-function qaTabs(pid: number, active: 'overview' | 'registry' | 'generate' | 'proposals' | 'agent'): DashboardTab[] {
-  const base = pid === PROPERTY_ID ? '' : `/h/${pid}`;
-  return [
-    { key: `${base}/operations/qa`,                   label: 'Overview',            href: `${base}/operations/qa`,                   active: active === 'overview'  },
-    { key: `${base}/operations/qa/registry`,          label: 'Registry',            href: `${base}/operations/qa/registry`,          active: active === 'registry'  },
-    { key: `${base}/operations/qa/generate`,          label: 'Generate',            href: `${base}/operations/qa/generate`,          active: active === 'generate'  },
-    { key: `${base}/operations/qa/proposals`,         label: 'Proposals',           href: `${base}/operations/qa/proposals`,         active: active === 'proposals' },
-    { key: `${base}/operations/qa/agent-instructions`,label: 'Agent Instructions',  href: `${base}/operations/qa/agent-instructions`,active: active === 'agent'     },
-  ];
-}
-
 export default async function GenerateSopPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
 
-  const tabs = qaTabs(pid, 'generate');
+  const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href === '/operations/sops', // QA parent
+  }));
 
   const deptPrefill    = searchParams?.dept?.trim() || undefined;
   const purposePrefill = searchParams?.purpose?.trim() || undefined;
