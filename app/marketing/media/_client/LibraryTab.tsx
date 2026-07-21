@@ -204,10 +204,14 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
   };
 
   const filtered = useMemo(() => {
+    // PBS 2026-07-21 · exclude tier_archive from the default Library grid.
+    // Archive gets its own PhotoHub sub-tab in a follow-up commit; keeping
+    // archived assets in the main grid clutters the working surface.
     let out = mediaPage.filter(r =>
       ((r.asset_type ?? '').toLowerCase() !== 'video') &&
       !((r.mime_type ?? '').toLowerCase().startsWith('video/')) &&
-      isFullyTagged(r)
+      isFullyTagged(r) &&
+      r.primary_tier !== 'tier_archive'
     );
     if (tier)         out = out.filter(r => r.primary_tier === tier);
     if (areaFilter) {
@@ -359,10 +363,12 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           Fallback to legacy byTier totals only when libCounts is not yet loaded
           (keeps first-render smooth; correct numbers land within one tick). */}
       {/* PBS 2026-07-17 · clickable tiles ARE the tier filter. Tiers surfaced:
-          OTA/Website · Social · Logos · Archive. Click active tile again to clear.
-          PBS 2026-07-21 · Approved Pics now excludes tier_archive (DB view
-          v_media_library_counts.pics_ready filter); Archive tile restored at
-          end of strip, backed by new v_media_library_counts.archive column. */}
+          OTA/Website · Social · Logos. Click active tile again to clear.
+          PBS 2026-07-21 · "Approved Pics" excludes tier_archive at TWO layers:
+          (1) DB view v_media_library_counts.pics_ready already filters archive,
+          (2) `filtered` useMemo drops r.primary_tier==='tier_archive' from the
+          grid itself. Archive gets its own PhotoHub sub-tab in a follow-up
+          commit — no Archive tile in this headline strip. */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
         {([
           // PBS 2026-07-19 · every tile goes somewhere. Pics = clear filters.
@@ -380,7 +386,6 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero),                  filterTier: 'tier_ota_profile' },
           { label: 'Social',         value: libCounts?.social       ?? totals.social,                                             filterTier: 'tier_social_pool' },
           { label: 'Logos',          value: n(byTier.find(r => r.primary_tier === 'tier_logos')?.total),                          filterTier: 'tier_logos' },
-          { label: 'Archive',        value: libCounts?.archive ?? n(byTier.find(r => r.primary_tier === 'tier_archive')?.total), filterTier: 'tier_archive' },
         ] as Array<{ label: string; value: number | undefined; filterTier: string | null; action?: 'clear'|'coverage'|'clarify' }>).map((t, i) => {
           const isActive    = t.filterTier !== null && tier === t.filterTier;
           const isClickable = t.filterTier !== null || !!t.action;
