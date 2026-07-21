@@ -9,6 +9,12 @@
 // PBS 2026-07-17 · media-pipeline-frontend brief · SCOPE 3/4/5/6 — threads
 //   areaTaxonomy (Clarify dropdown + folder rail) + libraryCounts (tile source
 //   of truth) + destination-folder aware badges.
+// PBS 2026-07-21 · MERGE Review INTO Clarify — Review tab REMOVED from the
+//   PhotoHub sub-strip. Clarify now hosts the [All · Non-Hotel · Low Quality
+//   · Junk] filter chips internally and receives reviewRows as a prop. The
+//   ReviewTab.tsx file itself is kept in place (reasonKind logic + as escape
+//   hatch for future direct references). See ClarifyTab.tsx header for merge
+//   rationale.
 'use client';
 
 import { useState } from 'react';
@@ -17,13 +23,17 @@ import AiStudioTab from './AiStudioTab';
 import ClarifyTab from './ClarifyTab';
 import SettingsTab from './SettingsTab';
 import CoverageTab, { type CoverageRow } from './CoverageTab';
-import ReviewTab, { type ReviewRow } from './ReviewTab';
+// PBS 2026-07-21 · Review tab removed from PhotoHub — kept import of the type
+// so page.tsx still passes reviewRows into props typed correctly. ReviewTab
+// component itself no longer rendered here.
+import { type ReviewRow } from './ReviewTab';
 import ProfilesTab from './ProfilesTab';
 // PBS 2026-07-21 · Archive is now a PhotoHub sub-tab (was Library headline tile)
 import ArchiveTab from './ArchiveTab';
 import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy, GuardrailsData, AreaTaxonomyRow, LibraryCountsRow } from './MediaHub';
 
-type Sub = 'library' | 'ai' | 'clarify' | 'review' | 'coverage' | 'profiles' | 'archive' | 'settings';
+// PBS 2026-07-21 · 'review' removed from Sub union — was the standalone Review tab key.
+type Sub = 'library' | 'ai' | 'clarify' | 'coverage' | 'profiles' | 'archive' | 'settings';
 
 interface Props {
   propertyId: number;
@@ -51,7 +61,9 @@ const HAIR   = '#E6DFCC';
 const INK_M  = '#5A5A5A';
 const FOREST = '#084838';
 const RED    = '#B23A2E';
-const AMBER  = '#B87F26';
+// PBS 2026-07-21 · AMBER no longer used after Review tab removal — kept as
+// commented reference for future badge work.
+// const AMBER  = '#B87F26';
 
 function isVideoRow(r: any): boolean {
   if ((r?.asset_type ?? '').toLowerCase() === 'video') return true;
@@ -73,18 +85,21 @@ export default function PhotoHub(props: Props) {
   // 3 different numbers for the same "to clarify" concept.
   const clarifyCount = (props as any).libraryCounts?.to_clarify
     ?? photoRows.filter((r: any) => r.property_area == null || r.primary_tier == null).length;
-  const reviewCount = (props.reviewRows ?? []).length;
+  // PBS 2026-07-21 · reviewCount retained for potential future consumers, but
+  // no longer surfaces in the sub-strip (Review tab merged into Clarify).
+  const _reviewCount = (props.reviewRows ?? []).length;
   // PBS 2026-07-21 · Archive sub-tab badge. Primary source =
   // v_media_library_counts.archive (added to LibraryCountsRow same day).
   // Falls back to byTier tier_archive row if the counts prop hasn't loaded yet.
   const archiveCount = props.libraryCounts?.archive
     ?? Number((props.byTier ?? []).find((r: any) => r.primary_tier === 'tier_archive')?.total ?? 0);
 
+  // PBS 2026-07-21 · Review tab entry removed. Clarify badge = 383 (unified
+  // v_media_library_counts.to_clarify) already reflects needs_review count.
   const TABS: Array<{ key: Sub; label: string; badge?: number; badgeColor?: string }> = [
     { key: 'library',  label: 'Photo Library'   },
     { key: 'ai',       label: 'Photo AI Studio' },
     { key: 'clarify',  label: 'Photo Clarify',  badge: clarifyCount, badgeColor: RED },
-    { key: 'review',   label: 'Review',         badge: reviewCount,  badgeColor: AMBER },
     { key: 'coverage', label: 'Coverage'        },
     { key: 'profiles', label: 'Profiles'         },
     { key: 'archive',  label: 'Archive',        badge: archiveCount },  // PBS 2026-07-21 · new sub-tab (between Profiles + Photo Settings)
@@ -157,10 +172,8 @@ export default function PhotoHub(props: Props) {
           taxonomy={props.taxonomy}
           areaTaxonomy={props.areaTaxonomy}
           libraryCounts={props.libraryCounts ?? null}
+          reviewRows={(props.reviewRows ?? []) as any}
         />
-      )}
-      {sub === 'review' && (
-        <ReviewTab rows={props.reviewRows ?? []} />
       )}
       {sub === 'coverage' && (
         <CoverageTab

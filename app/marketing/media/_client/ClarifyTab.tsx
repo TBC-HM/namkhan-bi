@@ -9,6 +9,14 @@
 //   /api/marketing/media/clarify-assign (fn_assign_area / fn_place_destination).
 //   Header banner: "Iris suggests · Lens confirms". AssetEditDrawer stays as
 //   the deep-edit fallback (click filename).
+// PBS 2026-07-21 · MERGE Review INTO Clarify — kill standalone Review tab.
+//   Add sub-strip [All · Non-Hotel · Low Quality · Junk] mirroring ReviewTab
+//   categorization (reasonKind fn duplicated to avoid coupling). Data source
+//   broadened to union of (area/tier null) OR (needs_review=true) via
+//   reviewRows prop. Per-row Edit button opens AssetEditDrawer (mirrors
+//   LibraryTab pattern). Per-row Keep/Archive/Delete actions (from ReviewTab).
+//   Keep button DISABLED until property_area + primary_tier set — prevents
+//   the "photo disappeared" burn when clearing review before classification.
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -37,6 +45,58 @@ interface MediaRow {
   marketing_score?: number | null;
   qa_notes?: any;
   qa_scored_at?: string | null;
+  // PBS 2026-07-21 · Review-into-Clarify merge — fields needed for reasonKind
+  // filter chips + Keep gating.
+  content_class?: string | null;
+  review_reason?: string | null;
+  needs_review?: boolean | null;
+  is_hotel_property?: boolean | null;
+  category?: string | null;
+  sub_category?: string | null;
+}
+
+// PBS 2026-07-21 · Review-into-Clarify merge — separate shape for the
+// v_media_review_queue rows arriving via reviewRows prop. Enriched server-side
+// with public_url/mime_type/master_path so tiles can render.
+export interface ClarifyReviewRow {
+  asset_id: string;
+  original_filename: string | null;
+  primary_tier?: string | null;
+  property_area?: string | null;
+  file_size_bytes?: number | string | null;
+  technical_score: number | null;
+  aesthetic_score: number | null;
+  marketing_score?: number | null;
+  quality_index: number | null;
+  is_hotel_property?: boolean | null;
+  category: string | null;
+  sub_category?: string | null;
+  review_reason: string | null;
+  qa_notes?: any;
+  qa_scored_at?: string | null;
+  created_at: string | null;
+  raw_path?: string | null;
+  master_path?: string | null;
+  mime_type?: string | null;
+  public_url?: string | null;
+  status?: string | null;
+  content_class?: string | null;
+  needs_review?: boolean | null;
+  property_id?: number | null;
+}
+
+// PBS 2026-07-21 · duplicated from ReviewTab so filter logic lives locally
+// (avoids cross-file coupling). Same rule set: content_class='junk' → junk,
+// review_reason contains 'hotel' → non_hotel, contains 'low quality'/'quality'
+// → low_quality, else 'other'.
+type FilterKey = 'all' | 'non_hotel' | 'low_quality' | 'junk';
+
+function reasonKind(row: { content_class?: string | null; review_reason?: string | null }): 'non_hotel' | 'low_quality' | 'junk' | 'other' {
+  if ((row.content_class ?? '').toLowerCase() === 'junk') return 'junk';
+  const r = (row.review_reason ?? '').toLowerCase();
+  if (r.includes('hotel')) return 'non_hotel';
+  if (r.includes('low quality') || r.includes('low-quality') || r.includes('quality')) return 'low_quality';
+  return 'other';
 }
 
 // PBS 2026-07-14 · display swap — prefer Iris SEO filename, keep original as tooltip.
@@ -72,6 +132,10 @@ interface Props {
     pics_ready: number; with_area: number; with_tier: number;
     to_clarify: number; destination: number;
   } | null;
+  // PBS 2026-07-21 · Review-into-Clarify merge — pass reviewRows so the
+  // sub-strip filters (Non-Hotel/Low Quality/Junk) have actual review-queue
+  // rows to categorize. These are unioned with the unclassified mediaPage rows.
+  reviewRows?: ClarifyReviewRow[];
 }
 
 const WHITE  = '#FFFFFF';
@@ -106,14 +170,76 @@ function isVideoRow(r: MediaRow): boolean {
   return /\.(mp4|mov|webm|m4v)(\?|$)/.test(p);
 }
 
-export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonomy, areaTaxonomy = [], libraryCounts = null }: Props) {
+export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonomy, areaTaxonomy = [], libraryCounts = null, reviewRows = [] }: Props) {
   const [editing, setEditing] = useState<MediaRow | null>(null);
   const [playing, setPlaying] = useState<MediaRow | null>(null);
   const [localDismiss, setLocalDismiss] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // PBS 2026-07-21 · Review-into-Clarify merge — internal sub-strip filter.
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   const photos = useMemo(() => mediaPage.filter(r => !isVideoRow(r)), [mediaPage]);
+
+  // PBS 2026-07-21 · union mediaPage photos with reviewRows on asset_id,
+  // preferring reviewRows-only fields (content_class/review_reason/needs_review)
+  // for the categorization chips. mediaPage rows may already carry those
+  // fields (if page.tsx selects them) — reviewRows serve as the primary source
+  // for any needs_review=true photo not appearing in the paged mediaPage window.
+  const unified = useMemo<MediaRow[]>(() => {
+    const byId = new Map<string, MediaRow>();
+    for (const r of photos) byId.set(r.asset_id, r);
+    for (const rr of reviewRows) {
+      const existing = byId.get(rr.asset_id);
+      if (existing) {
+        // Merge review-only fields onto the mediaPage row
+        byId.set(rr.asset_id, {
+          ...existing,
+          content_class:     rr.content_class     ?? existing.content_class     ?? null,
+          review_reason:     rr.review_reason     ?? existing.review_reason     ?? null,
+          needs_review:      rr.needs_review      ?? existing.needs_review      ?? null,
+          is_hotel_property: rr.is_hotel_property ?? existing.is_hotel_property ?? null,
+          category:          rr.category          ?? existing.category          ?? null,
+          sub_category:      rr.sub_category      ?? existing.sub_category      ?? null,
+          quality_index:     existing.quality_index ?? rr.quality_index         ?? null,
+          technical_score:   existing.technical_score ?? rr.technical_score     ?? null,
+          aesthetic_score:   existing.aesthetic_score ?? rr.aesthetic_score     ?? null,
+          marketing_score:   existing.marketing_score ?? rr.marketing_score     ?? null,
+        });
+      } else {
+        // reviewRow-only entry — synthesize a MediaRow shape
+        byId.set(rr.asset_id, {
+          asset_id: rr.asset_id,
+          original_filename: rr.original_filename,
+          seo_target_filename: null,
+          primary_tier: rr.primary_tier ?? null,
+          property_area: rr.property_area ?? null,
+          public_url: rr.public_url ?? null,
+          master_path: rr.master_path ?? null,
+          mime_type: rr.mime_type ?? null,
+          status: rr.status ?? null,
+          width_px: null,
+          height_px: null,
+          file_size_bytes: rr.file_size_bytes ?? null,
+          file_size_human: null,
+          created_at: rr.created_at,
+          quality_index: rr.quality_index,
+          technical_score: rr.technical_score,
+          aesthetic_score: rr.aesthetic_score,
+          marketing_score: rr.marketing_score ?? null,
+          qa_notes: rr.qa_notes,
+          qa_scored_at: rr.qa_scored_at ?? null,
+          content_class: rr.content_class ?? null,
+          review_reason: rr.review_reason ?? null,
+          needs_review: rr.needs_review ?? null,
+          is_hotel_property: rr.is_hotel_property ?? null,
+          category: rr.category ?? null,
+          sub_category: rr.sub_category ?? null,
+        });
+      }
+    }
+    return Array.from(byId.values());
+  }, [photos, reviewRows]);
 
   // SCOPE 3 — dropdown option groups from v_media_area_taxonomy.
   const taxonomyGroups = useMemo(() => {
@@ -162,6 +288,68 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
     finally { setBulkBusy(false); }
   }
 
+  // PBS 2026-07-21 · Review-into-Clarify merge — ported from ReviewTab.
+  async function clearFlag(assetId: string) {
+    setBusyId(assetId); setMsg(null);
+    try {
+      const res = await fetch('/api/marketing/media/clear-review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_id: assetId }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'clear_failed');
+      setLocalDismiss((s) => { const next = new Set(s); next.add(assetId); return next; });
+      setMsg('Review flag cleared — refresh to sync');
+    } catch (e: any) {
+      setMsg('Clear failed: ' + e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirmJunk(assetId: string, filename: string | null) {
+    if (!window.confirm('Confirm as junk: "' + (filename ?? assetId.slice(0, 8)) + '"? (reversible soft-delete via fn_confirm_junk)')) return;
+    setBusyId(assetId); setMsg(null);
+    try {
+      const res = await fetch('/api/marketing/media/confirm-junk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset_id: assetId }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'junk_failed');
+      setLocalDismiss((s) => { const next = new Set(s); next.add(assetId); return next; });
+      setMsg('Confirmed junk — refresh to sync');
+    } catch (e: any) {
+      setMsg('Junk-confirm failed: ' + e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function archiveAsset(assetId: string) {
+    setBusyId(assetId); setMsg(null);
+    try {
+      const [tierRes, clearRes] = await Promise.all([
+        fetch('/api/marketing/media/asset-update', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: assetId, primary_tier: 'tier_archive' }),
+        }),
+        fetch('/api/marketing/media/clear-review', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset_id: assetId }),
+        }),
+      ]);
+      if (!tierRes.ok)  throw new Error('tier_set_failed');
+      if (!clearRes.ok) throw new Error('clear_review_failed');
+      setLocalDismiss((s) => { const next = new Set(s); next.add(assetId); return next; });
+      setMsg('Archived — moved to Archive tier');
+    } catch (e: any) {
+      setMsg('Archive failed: ' + e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function inlineAssign(row: MediaRow, taxRow: ClarifyAreaTaxonomyRow) {
     setBusyId(row.asset_id); setMsg(null);
     try {
@@ -188,12 +376,32 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
     }
   }
 
-  const clarify = useMemo(() => {
-    return photos.filter(r => {
+  // PBS 2026-07-21 · Review-into-Clarify merge — the display pool is now the
+  // UNION of (unclassified: area null OR tier null) OR (flagged: needs_review).
+  // Junk rows (content_class='junk') are also included so the Junk chip has
+  // rows to show even if the photo already has area+tier assigned.
+  const clarifyBase = useMemo(() => {
+    return unified.filter(r => {
       if (localDismiss.has(r.asset_id)) return false;
-      return r.property_area == null || r.primary_tier == null;
+      const unclassified = r.property_area == null || r.primary_tier == null;
+      const flagged      = r.needs_review === true;
+      const isJunk       = (r.content_class ?? '').toLowerCase() === 'junk';
+      return unclassified || flagged || isJunk;
     });
-  }, [photos, localDismiss]);
+  }, [unified, localDismiss]);
+
+  // Filter chip counts (before filter applied so counts stay stable)
+  const filterCounts = useMemo(() => {
+    const nonHotel = clarifyBase.filter(r => reasonKind(r) === 'non_hotel').length;
+    const lowQual  = clarifyBase.filter(r => reasonKind(r) === 'low_quality').length;
+    const junk     = clarifyBase.filter(r => reasonKind(r) === 'junk').length;
+    return { all: clarifyBase.length, non_hotel: nonHotel, low_quality: lowQual, junk };
+  }, [clarifyBase]);
+
+  const clarify = useMemo(() => {
+    if (filter === 'all') return clarifyBase;
+    return clarifyBase.filter(r => reasonKind(r) === filter);
+  }, [clarifyBase, filter]);
 
   const stats = useMemo(() => {
     // PBS 2026-07-17 · align "To clarify" tile with the Library top strip.
@@ -235,6 +443,43 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
             : 'loading area taxonomy…'}
         </span>
       </div>
+
+      {/* PBS 2026-07-21 · Review-into-Clarify merge — canonical SubTabStrip
+          typography (padding 4px 8px, fontSize 12, gap 8, borderBottom 2px
+          active/transparent, background transparent, fontFamily inherit). */}
+      <nav
+        style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2, marginBottom: 12, borderBottom: '1px solid ' + HAIR, paddingBottom: 4 }}
+        role="tablist"
+        aria-label="Clarify filter"
+      >
+        {(['all','non_hotel','low_quality','junk'] as const).map(k => {
+          const on = filter === k;
+          const label = k === 'all' ? 'All' : k === 'non_hotel' ? 'Non-Hotel Content' : k === 'low_quality' ? 'Low Quality' : 'Junk';
+          const count = filterCounts[k];
+          return (
+            <button
+              key={k}
+              onClick={() => setFilter(k)}
+              role="tab"
+              aria-selected={on}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: '4px 8px',
+                fontSize: 12,
+                fontWeight: on ? 600 : 500,
+                color: on ? 'var(--ink, #1B1B1B)' : 'var(--ink-soft, #5A5A5A)',
+                cursor: 'pointer',
+                borderBottom: on ? '2px solid var(--primary, #1F3A2E)' : '2px solid transparent',
+                textDecoration: 'none',
+                fontFamily: 'inherit',
+              }}
+            >
+              {label} · {count}
+            </button>
+          );
+        })}
+      </nav>
 
       {msg && (
         <div style={{ padding:'6px 10px', background:'#F7F0E1', border:'1px solid '+HAIR, borderRadius:4, marginBottom:10, fontSize:12, color:INK }}>
@@ -302,16 +547,30 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
 
       {clarify.length === 0 ? (
         <div style={{ padding:40, textAlign:'center', color:INK_M, background:WHITE, border:'1px solid '+HAIR, borderRadius:4 }}>
-          Nothing to clarify — every photo has an area and a tier. Videos live in the Videos → Clarify tab.
+          {filter === 'all'
+            ? 'Nothing to clarify — every photo has an area, a tier, and no review flag. Videos live in the Videos → Clarify tab.'
+            : `No photos match the ${filter === 'non_hotel' ? 'Non-Hotel Content' : filter === 'low_quality' ? 'Low Quality' : 'Junk'} filter — try another chip above.`}
         </div>
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:12 }}>
           {clarify.map(r => {
-            const badges: Array<{ k: string; label: string }> = [];
+            const badges: Array<{ k: string; label: string; bg?: string; fg?: string }> = [];
             if (!r.property_area) badges.push({ k: 'area', label: '?area' });
             if (!r.primary_tier)  badges.push({ k: 'tier', label: '?tier' });
+            // PBS 2026-07-21 · Review-into-Clarify merge — add reason-kind badge
+            // matching ReviewTab colour law (junk/non-hotel = red, low-quality
+            // = amber, other = cream).
+            const rk = reasonKind(r);
+            if (rk === 'junk')        badges.push({ k: 'junk',      label: 'Junk',              bg: '#FBE8E4', fg: RED });
+            else if (rk === 'non_hotel')   badges.push({ k: 'nonhotel', label: 'Non-Hotel',         bg: '#FBE8E4', fg: RED });
+            else if (rk === 'low_quality') badges.push({ k: 'lowqual',  label: 'Low quality (<30)', bg: '#FBEFD9', fg: '#B87F26' });
+            else if (r.needs_review === true && r.review_reason) badges.push({ k: 'flag', label: r.review_reason, bg: CREAM, fg: INK_M });
             const qBadge = qaBadge(r.quality_index ?? null);
             const isSelected = selectedIds.has(r.asset_id);
+            // PBS 2026-07-21 · Keep gating — clearing needs_review on a photo
+            // without area+tier makes it "disappear" from Library too
+            // (untagged filter). Force user to Edit → assign area + tier first.
+            const canKeep = !!r.property_area && !!r.primary_tier;
             return (
               <div key={r.asset_id} style={{
                 background: WHITE, border: '2px solid ' + (isSelected ? FOREST : HAIR), borderRadius: 4, overflow: 'hidden',
@@ -352,10 +611,10 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                   ) : (
                     <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:INK_M }}>no preview</div>
                   )}
-                  <div style={{ position:'absolute', top:6, left:6, display:'flex', gap:4 }}>
+                  <div style={{ position:'absolute', top:6, left:6, display:'flex', gap:4, flexWrap:'wrap', maxWidth:'75%' }}>
                     {badges.map(b => (
                       <span key={b.k} style={{
-                        background: RED, color: WHITE, fontSize: 10, fontWeight: 700,
+                        background: b.bg ?? RED, color: b.fg ?? WHITE, fontSize: 10, fontWeight: 700,
                         padding: '2px 6px', borderRadius: 3, letterSpacing: '0.02em',
                       }}>{b.label}</span>
                     ))}
@@ -427,6 +686,56 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                   ) : (
                     <div style={{ color:INK_M, marginTop:2 }}>Click to edit ✎</div>
                   )}
+                  {/* PBS 2026-07-21 · Review-into-Clarify merge — per-row action row.
+                      Edit opens AssetEditDrawer (LibraryTab pattern). Keep/Archive/
+                      Delete port ReviewTab handlers. Keep is DISABLED until
+                      property_area + primary_tier are set (see canKeep) — prevents
+                      the "photo disappeared" burn when clearing review before
+                      classification. */}
+                  <div style={{ display: 'flex', gap: 3, marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setEditing(r)}
+                      title="Open full editor (area, tier, alt text, etc.)"
+                      style={{
+                        flex: 1, padding: '4px 6px', fontSize: 10, fontWeight: 600,
+                        background: WHITE, color: INK, border: '1px solid ' + INK,
+                        borderRadius: 3, cursor: 'pointer',
+                      }}
+                    >Edit</button>
+                    <button
+                      onClick={() => canKeep && clearFlag(r.asset_id)}
+                      disabled={!canKeep || busyId === r.asset_id}
+                      title={canKeep ? 'Clear review flag' : 'Assign area + tier via Edit first'}
+                      style={{
+                        flex: 1, padding: '4px 6px', fontSize: 10, fontWeight: 600,
+                        background: WHITE, color: canKeep ? FOREST : INK_M,
+                        border: '1px solid ' + (canKeep ? FOREST : HAIR),
+                        borderRadius: 3,
+                        cursor: !canKeep ? 'not-allowed' : (busyId === r.asset_id ? 'wait' : 'pointer'),
+                        opacity: canKeep ? 1 : 0.55,
+                      }}
+                    >Keep</button>
+                    <button
+                      onClick={() => archiveAsset(r.asset_id)}
+                      disabled={busyId === r.asset_id}
+                      title="Move to Archive tier — keeps the file, out of active library"
+                      style={{
+                        flex: 1, padding: '4px 6px', fontSize: 10, fontWeight: 600,
+                        background: WHITE, color: '#B87F26', border: '1px solid #B87F26',
+                        borderRadius: 3, cursor: busyId === r.asset_id ? 'wait' : 'pointer',
+                      }}
+                    >Archive</button>
+                    <button
+                      onClick={() => confirmJunk(r.asset_id, r.original_filename)}
+                      disabled={busyId === r.asset_id}
+                      title="Confirm as junk — soft-delete (reversible)"
+                      style={{
+                        flex: 1, padding: '4px 6px', fontSize: 10, fontWeight: 600,
+                        background: WHITE, color: RED, border: '1px solid ' + RED,
+                        borderRadius: 3, cursor: busyId === r.asset_id ? 'wait' : 'pointer',
+                      }}
+                    >Delete</button>
+                  </div>
                 </div>
               </div>
             );
