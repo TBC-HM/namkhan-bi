@@ -1,0 +1,23 @@
+// app/api/marketing/audience/blocklist-remove/route.ts
+// POST — delete a blocklist rule.
+// PBS 2026-07-21.
+import { NextRequest, NextResponse } from 'next/server';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: NextRequest) {
+  let sb;
+  try { sb = getSupabaseAdmin(); }
+  catch (e: any) { return NextResponse.json({ ok: false, error: e.message }, { status: 500 }); }
+
+  const body = await req.json().catch(() => ({}));
+  const id = Number(body?.id);
+  if (!Number.isFinite(id)) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
+
+  const { data, error } = await sb.rpc('fn_blocklist_remove', { p_id: id });
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
+  const res = data as any;
+  return NextResponse.json({ ok: res?.ok ?? true });
+}

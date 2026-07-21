@@ -4,6 +4,11 @@
 // One table for subscribers + prospects · KPI headline strip · scrape embed ·
 // filters (source / status / MX / group) · search · bulk group assign (subscribers only).
 // Design: paper white #FFFFFF, hairline #E6DFCC — no var(--paper-warm).
+//
+// 2026-07-21 · Audience settings feature additions:
+//   1. Group multi-select filter (UNION semantics)
+//   2. Per-row Delete button (soft-delete → auto blocklist via trigger)
+//   3. Sortable column headers (asc/desc, default created_at desc)
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
 
@@ -13,6 +18,7 @@ const INK    = '#1B1B1B';
 const INK_S  = '#5A5A5A';
 const BRAND  = '#084838';
 const WARM   = '#F5F0E1';
+const RED    = '#B03826';
 
 export interface AudienceRow {
   audience_id: string;              // 'subscriber:123' | 'prospect:<uuid>'
@@ -51,6 +57,9 @@ type StatusFilter = 'any' | 'active' | 'pending' | 'unsub' | 'bounced';
 type MxFilter = 'any' | 'valid' | 'invalid';
 type TabKey = 'table' | 'scrape';
 
+type SortKey = 'email' | 'name' | 'country' | 'group' | 'source' | 'created_at' | 'opted_in_at';
+type SortDir = 'asc' | 'desc';
+
 const PAGE_SIZE = 50;
 
 interface Props {
@@ -63,19 +72,35 @@ interface Props {
 export default function AudienceUnifiedClient({
   initialRows, initialGroups, initialSource, initialTab,
 }: Props) {
-  const [rows] = useState<AudienceRow[]>(initialRows);
+  const [rows, setRows] = useState<AudienceRow[]>(initialRows);
   const [groups, setGroups] = useState<GroupRow[]>(initialGroups);
   const [tab, setTab] = useState<TabKey>(initialTab);
 
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSource);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('any');
   const [mxFilter, setMxFilter]         = useState<MxFilter>('any');
-  const [groupFilter, setGroupFilter]   = useState<string | null>(null);
+  const [groupFilters, setGroupFilters] = useState<string[]>([]);  // multi-select UNION
+  const [groupDdOpen, setGroupDdOpen]   = useState(false);
   const [query, setQuery]               = useState('');
   const [page, setPage]                 = useState(0);
   const [selected, setSelected]         = useState<Set<string>>(new Set());
   const [msg, setMsg]                   = useState<string | null>(null);
   const [busy, startTransition]         = useTransition();
+
+  // Sort state (default: created_at desc → newest first)
+  const [sortKey, setSortKey] = useState<SortKey>('created_at');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const toggleSort = (k: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === k) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDir(k === 'created_at' || k === 'opted_in_at' ? 'desc' : 'asc');
+      return k;
+    });
+    setPage(0);
+  };
 
   // Scrape embed state (simple: leads_finder actor)
   const [scrapeOpen, setScrapeOpen]     = useState(initialTab === 'scrape');
@@ -100,7 +125,8 @@ export default function AudienceUnifiedClient({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((r) => {
+    const groupSet = new Set(groupFilters);
+    const filteredRows = rows.filter((r) => {
       if (sourceFilter === 'subscribers' && r.source !== 'subscriber') return false;
       if (sourceFilter === 'prospects' && r.source !== 'prospect') return false;
       if (r.source === 'subscriber') {
@@ -118,14 +144,44 @@ export default function AudienceUnifiedClient({
       } else {
         if (mxFilter !== 'any' && sourceFilter !== 'subscribers') return false;
       }
-      if (groupFilter && !(r.groups ?? []).includes(groupFilter)) return false;
+      // Multi-group UNION: row matches if it belongs to ANY selected group
+      if (groupSet.size > 0) {
+        const rg = r.groups ?? [];
+        let hit = false;
+        for (const g of rg) { if (groupSet.has(g)) { hit = true; break; } }
+        if (!hit) return false;
+      }
       if (q) {
         const hay = (r.email + ' ' + (r.name ?? '') + ' ' + (r.company ?? '')).toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [rows, sourceFilter, statusFilter, mxFilter, groupFilter, query]);
+
+    // Sort
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const cmpStr = (a: string | null | undefined, b: string | null | undefined) => {
+      const A = (a ?? '').toLowerCase(); const B = (b ?? '').toLowerCase();
+      if (A < B) return -1 * dir; if (A > B) return 1 * dir; return 0;
+    };
+    filteredRows.sort((a, b) => {
+      switch (sortKey) {
+        case 'email':   return cmpStr(a.email, b.email);
+        case 'name':    return cmpStr(a.name, b.name);
+        case 'country': return cmpStr(a.country, b.country);
+        case 'source':  return cmpStr(a.source, b.source);
+        case 'group': {
+          const aG = (a.groups ?? []).slice().sort().join(',');
+          const bG = (b.groups ?? []).slice().sort().join(',');
+          return cmpStr(aG, bG);
+        }
+        case 'opted_in_at': return cmpStr(a.opted_in_at, b.opted_in_at);
+        case 'created_at':
+        default:            return cmpStr(a.created_at, b.created_at);
+      }
+    });
+    return filteredRows;
+  }, [rows, sourceFilter, statusFilter, mxFilter, groupFilters, query, sortKey, sortDir]);
 
   const paged = useMemo(
     () => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
@@ -200,6 +256,29 @@ export default function AudienceUnifiedClient({
     });
   }, [selectedSubscriberIds]);
 
+  const doDeleteRow = useCallback((row: AudienceRow) => {
+    if (row.source !== 'subscriber') {
+      setMsg('Delete only supported on subscriber rows (prospects coming soon).');
+      return;
+    }
+    if (!confirm(`Delete ${row.email} and add to blocklist forever?`)) return;
+    startTransition(async () => {
+      const r = await fetch('/api/marketing/audience/subscriber-delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ audience_id: row.audience_id }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) { setMsg('Delete failed: ' + (j.error ?? 'unknown')); return; }
+      setRows((prev) => prev.filter((x) => x.audience_id !== row.audience_id));
+      setSelected((s) => {
+        if (!s.has(row.audience_id)) return s;
+        const n = new Set(s); n.delete(row.audience_id); return n;
+      });
+      setMsg(`Deleted ${row.email} · added to blocklist.`);
+    });
+  }, []);
+
   const exportCsv = () => {
     const target = selected.size ? filtered.filter(r => selected.has(r.audience_id)) : filtered;
     const header = ['audience_id','source','email','name','company','country','lifecycle_stage','opted_in_at','unsubscribed_at','bounced_at','mx_valid','booking_count','groups','tags','ingest_source','created_at'];
@@ -251,6 +330,12 @@ export default function AudienceUnifiedClient({
     }
   };
 
+  const toggleGroupFilter = (slug: string) => {
+    setGroupFilters((prev) => prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]);
+    setPage(0);
+  };
+  const resetGroupFilters = () => { setGroupFilters([]); setPage(0); };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* KPI headline strip */}
@@ -264,8 +349,8 @@ export default function AudienceUnifiedClient({
             label={g.name}
             value={groupCounts[g.slug] ?? g.member_count ?? 0}
             color={g.color}
-            onClick={() => { setGroupFilter((cur) => (cur === g.slug ? null : g.slug)); setPage(0); }}
-            active={groupFilter === g.slug}
+            onClick={() => toggleGroupFilter(g.slug)}
+            active={groupFilters.includes(g.slug)}
           />
         ))}
       </div>
@@ -362,11 +447,75 @@ export default function AudienceUnifiedClient({
             </FilterChip>
           ))}
         </FilterGroup>
-        {groupFilter && (
-          <FilterChip active onClick={() => setGroupFilter(null)}>
-            Group: {groupFilter} ✕
-          </FilterChip>
+
+        {/* Group multi-select dropdown */}
+        <FilterGroup label="Groups">
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setGroupDdOpen((v) => !v)}
+              style={{
+                padding: '4px 10px', fontSize: 11, cursor: 'pointer',
+                background: groupFilters.length ? BRAND : WHITE,
+                color: groupFilters.length ? WHITE : INK,
+                border: `1px solid ${groupFilters.length ? BRAND : HAIR}`, borderRadius: 3,
+              }}
+            >
+              {groupFilters.length ? `${groupFilters.length} selected` : 'Any group'} {groupDdOpen ? '▲' : '▼'}
+            </button>
+            {groupDdOpen && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 10,
+                background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 3,
+                padding: 8, minWidth: 240, maxHeight: 320, overflowY: 'auto',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, color: INK_S, textTransform: 'uppercase', letterSpacing: 0.4 }}>Union · in ANY selected</span>
+                  <button
+                    onClick={resetGroupFilters}
+                    style={{ fontSize: 10, color: BRAND, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                  >Reset</button>
+                </div>
+                {groups.map((g) => {
+                  const checked = groupFilters.includes(g.slug);
+                  return (
+                    <label key={g.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px',
+                      fontSize: 12, color: INK, cursor: 'pointer',
+                      background: checked ? WARM : 'transparent', borderRadius: 3,
+                    }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleGroupFilter(g.slug)} />
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: g.color, display: 'inline-block' }} />
+                      <span style={{ flex: 1 }}>{g.name}</span>
+                      <span style={{ fontSize: 10, color: INK_S }}>{groupCounts[g.slug] ?? g.member_count ?? 0}</span>
+                    </label>
+                  );
+                })}
+                {groups.length === 0 && (
+                  <div style={{ fontSize: 11, color: INK_S, padding: 6 }}>No groups defined.</div>
+                )}
+              </div>
+            )}
+          </div>
+        </FilterGroup>
+
+        {groupFilters.length > 0 && (
+          <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+            {groupFilters.map((slug) => {
+              const g = groups.find((x) => x.slug === slug);
+              return (
+                <span key={slug} style={{
+                  padding: '3px 8px', background: g?.color ?? INK_S, color: WHITE,
+                  borderRadius: 3, fontSize: 10, display: 'inline-flex', gap: 4, alignItems: 'center',
+                }}>
+                  {g?.name ?? slug}
+                  <button onClick={() => toggleGroupFilter(slug)} style={{ background: 'transparent', border: 'none', color: WHITE, cursor: 'pointer', padding: 0, fontSize: 10 }}>✕</button>
+                </span>
+              );
+            })}
+          </div>
         )}
+
         <input
           value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }}
           placeholder="Search email · name · company"
@@ -427,14 +576,14 @@ export default function AudienceUnifiedClient({
                   onChange={toggleAllOnPage}
                 />
               </th>
-              <th style={thStyle}>Email</th>
-              <th style={thStyle}>Name</th>
+              <SortHeader label="Email"     k="email"       cur={sortKey} dir={sortDir} on={toggleSort} />
+              <SortHeader label="Name"      k="name"        cur={sortKey} dir={sortDir} on={toggleSort} />
               <th style={thStyle}>Company</th>
-              <th style={thStyle}>Source</th>
+              <SortHeader label="Source"    k="source"      cur={sortKey} dir={sortDir} on={toggleSort} />
               <th style={thStyle}>Lifecycle</th>
-              <th style={thStyle}>Groups</th>
-              <th style={thStyle}>Opted in</th>
-              <th style={thStyle}>Created</th>
+              <SortHeader label="Groups"    k="group"       cur={sortKey} dir={sortDir} on={toggleSort} />
+              <SortHeader label="Opted in"  k="opted_in_at" cur={sortKey} dir={sortDir} on={toggleSort} />
+              <SortHeader label="Created"   k="created_at"  cur={sortKey} dir={sortDir} on={toggleSort} />
               <th style={thStyle}>Actions</th>
             </tr>
           </thead>
@@ -474,10 +623,24 @@ export default function AudienceUnifiedClient({
                 <td style={tdStyle}>{fmtDate(r.opted_in_at)}</td>
                 <td style={tdStyle}>{fmtDate(r.created_at)}</td>
                 <td style={tdStyle}>
-                  <a href={`/marketing/prospects/sequences?email=${encodeURIComponent(r.email)}`}
-                     style={{ fontSize: 11, color: BRAND, textDecoration: 'none' }}>
-                    → Sequence
-                  </a>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <a href={`/marketing/prospects/sequences?email=${encodeURIComponent(r.email)}`}
+                       style={{ fontSize: 11, color: BRAND, textDecoration: 'none' }}>
+                      → Sequence
+                    </a>
+                    {r.source === 'subscriber' && (
+                      <button
+                        onClick={() => doDeleteRow(r)}
+                        disabled={busy}
+                        title="Delete + auto-add to blocklist"
+                        style={{
+                          padding: '2px 8px', background: WHITE, color: RED,
+                          border: `1px solid ${RED}`, borderRadius: 3,
+                          fontSize: 10, cursor: 'pointer',
+                        }}
+                      >Delete</button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -525,6 +688,21 @@ const btnStyle: React.CSSProperties = {
 const selectStyle: React.CSSProperties = { ...btnStyle, background: WHITE };
 const thStyle: React.CSSProperties = { padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: INK_S, borderBottom: `1px solid ${HAIR}` };
 const tdStyle: React.CSSProperties = { padding: '8px 10px', verticalAlign: 'top' };
+
+function SortHeader({ label, k, cur, dir, on }: {
+  label: string; k: SortKey; cur: SortKey; dir: SortDir; on: (k: SortKey) => void;
+}) {
+  const active = cur === k;
+  return (
+    <th
+      onClick={() => on(k)}
+      style={{ ...thStyle, cursor: 'pointer', userSelect: 'none', color: active ? INK : INK_S }}
+      title={`Sort by ${label}`}
+    >
+      {label} {active ? (dir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.35 }}>↕</span>}
+    </th>
+  );
+}
 
 // KpiCell — inline KPI tile matching Namkhan paper-white tokens.
 function KpiCell(props: {
