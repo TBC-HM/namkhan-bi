@@ -208,7 +208,7 @@ export function extractBodies(p: GmailPayload | undefined): { text: string; html
 //   1. Service account created: namkhan-gmail-extractor@namkhan-bi.iam.gserviceaccount.com
 //   2. DWD authorized in admin.google.com/ac/owl/domainwidedelegation for scopes:
 //        https://www.googleapis.com/auth/gmail.readonly
-//        https://www.googleapis.com/auth/gmail.metadata
+//        https://www.googleapis.com/auth/gmail.metadata  (authorized but NOT requested at runtime — see DWD_SCOPES below)
 //   3. Service account JSON stored in Supabase vault as GMAIL_SERVICE_ACCOUNT_JSON
 //
 // Reads the JSON via SECURITY DEFINER RPC fn_get_secret (never via vault-direct).
@@ -216,7 +216,9 @@ export function extractBodies(p: GmailPayload | undefined): { text: string; html
 
 const DWD_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.metadata',
+  // PBS 2026-07-21: dropped gmail.metadata — Google returns 403
+  // "Metadata scope does not support 'q' parameter" on messages.list({q}).
+  // readonly is a superset that supports q.
 ].join(' ');
 
 interface ServiceAccountKey {
