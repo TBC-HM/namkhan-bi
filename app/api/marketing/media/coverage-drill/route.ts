@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     .eq('property_id', propertyId)
     .eq('asset_type', 'photo')
     .eq('primary_tier', tier)
-    .not('status', 'in', '(removed,deleted)')
+    .not('status', 'in', '(removed,archived,qc_failed)')
     .order('quality_index', { ascending: false, nullsFirst: false })
     .limit(200);
 
