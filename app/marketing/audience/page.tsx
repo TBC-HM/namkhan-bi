@@ -8,6 +8,7 @@ import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import AudienceUnifiedClient, {
   type AudienceRow,
+  type AudienceTiles,
   type GroupRow,
 } from './_components/AudienceUnifiedClient';
 
@@ -35,6 +36,17 @@ export default async function AudienceUnifiedPage({ searchParams }: PageProps) {
     .order('sort_order', { ascending: true });
   const groups: GroupRow[] = (groupsQ.data ?? []) as GroupRow[];
 
+  // Authoritative tile counts — bypasses the 3000-row rows[] cap so tiles
+  // never look stale on large audiences. Fed by public.v_marketing_audience_tiles.
+  const tilesQ = await sb
+    .from('v_marketing_audience_tiles')
+    .select('total_subs, mailable, guests, returning_guests, dmc, responders, prospects')
+    .maybeSingle();
+  const initialTiles: AudienceTiles = (tilesQ.data as AudienceTiles) ?? {
+    total_subs: 0, mailable: 0, guests: 0, returning_guests: 0,
+    dmc: 0, responders: 0, prospects: 0,
+  };
+
   const sp = (await searchParams) ?? {};
   const initialSource = (sp.source === 'subscribers' || sp.source === 'prospects') ? sp.source : 'all';
   const initialTab    = sp.tab === 'scrape' ? 'scrape' : 'table';
@@ -57,6 +69,7 @@ export default async function AudienceUnifiedPage({ searchParams }: PageProps) {
             initialGroups={groups}
             initialSource={initialSource}
             initialTab={initialTab}
+            initialTiles={initialTiles}
           />
         </div>
       </DashboardPage>

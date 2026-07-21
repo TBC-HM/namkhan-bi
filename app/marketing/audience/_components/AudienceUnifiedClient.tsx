@@ -46,6 +46,18 @@ export interface GroupRow {
   member_count: number;
 }
 
+// Authoritative tile counts from public.v_marketing_audience_tiles.
+// Independent of the 3000-row rows[] sample so the headline strip never looks stale.
+export interface AudienceTiles {
+  total_subs: number;
+  mailable: number;
+  guests: number;
+  returning_guests: number;
+  dmc: number;
+  responders: number;
+  prospects: number;
+}
+
 type SourceFilter = 'all' | 'subscribers' | 'prospects';
 type StatusFilter = 'any' | 'active' | 'pending' | 'unsub' | 'bounced';
 type MxFilter = 'any' | 'valid' | 'invalid';
@@ -58,10 +70,11 @@ interface Props {
   initialGroups: GroupRow[];
   initialSource: SourceFilter;
   initialTab: TabKey;
+  initialTiles: AudienceTiles;
 }
 
 export default function AudienceUnifiedClient({
-  initialRows, initialGroups, initialSource, initialTab,
+  initialRows, initialGroups, initialSource, initialTab, initialTiles,
 }: Props) {
   const [rows] = useState<AudienceRow[]>(initialRows);
   const [groups, setGroups] = useState<GroupRow[]>(initialGroups);
@@ -251,8 +264,28 @@ export default function AudienceUnifiedClient({
     }
   };
 
+  const resetFilters = () => {
+    setSourceFilter('all'); setStatusFilter('any'); setMxFilter('any');
+    setGroupFilter(null); setQuery(''); setPage(0);
+  };
+  const setGroupOnly = (slug: string) => {
+    setSourceFilter('all'); setStatusFilter('any'); setMxFilter('any');
+    setGroupFilter(slug); setPage(0);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Authoritative headline tiles — DB-sourced, always fresh */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
+        <TileCompact label="Total"           value={initialTiles.total_subs}       onClick={resetFilters} />
+        <TileCompact label="Mailable"        value={initialTiles.mailable}         onClick={resetFilters} />
+        <TileCompact label="Guests"          value={initialTiles.guests}           onClick={() => setGroupOnly('guests')}           active={groupFilter === 'guests'} />
+        <TileCompact label="Returning Guests" value={initialTiles.returning_guests} onClick={() => setGroupOnly('returning-guests')} active={groupFilter === 'returning-guests'} />
+        <TileCompact label="DMC Contracted" value={initialTiles.dmc}               onClick={() => setGroupOnly('dmc-contracted')}   active={groupFilter === 'dmc-contracted'} />
+        <TileCompact label="Prospects"       value={initialTiles.prospects}        onClick={() => { setSourceFilter('prospects'); setPage(0); }} active={sourceFilter === 'prospects'} />
+        <TileCompact label="Responders"      value={initialTiles.responders}       onClick={() => setGroupOnly('responders')}       active={groupFilter === 'responders'} />
+      </div>
+
       {/* KPI headline strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
         <KpiCell label="Total people" value={totalCount} highlight />
@@ -525,6 +558,31 @@ const btnStyle: React.CSSProperties = {
 const selectStyle: React.CSSProperties = { ...btnStyle, background: WHITE };
 const thStyle: React.CSSProperties = { padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: INK_S, borderBottom: `1px solid ${HAIR}` };
 const tdStyle: React.CSSProperties = { padding: '8px 10px', verticalAlign: 'top' };
+
+// TileCompact — small headline tile (22px number, 10px uppercase label).
+// Renders authoritative DB counts above the derived KpiCell strip.
+function TileCompact(props: {
+  label: string; value: number; onClick?: () => void; active?: boolean;
+}) {
+  const border = props.active ? BRAND : HAIR;
+  return (
+    <div
+      onClick={props.onClick}
+      style={{
+        padding: '10px 12px', background: WHITE, border: `1px solid ${border}`, borderRadius: 4,
+        cursor: props.onClick ? 'pointer' : 'default',
+        display: 'flex', flexDirection: 'column', gap: 4,
+      }}
+    >
+      <div style={{ fontSize: 10, color: INK_S, textTransform: 'uppercase', letterSpacing: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {props.label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 600, color: INK, lineHeight: 1 }}>
+        {props.value.toLocaleString()}
+      </div>
+    </div>
+  );
+}
 
 // KpiCell — inline KPI tile matching Namkhan paper-white tokens.
 function KpiCell(props: {
