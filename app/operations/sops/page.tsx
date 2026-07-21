@@ -25,8 +25,6 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
     .or(`property_id.is.null,property_id.eq.${pid}`)
     .order('sop_code');
   const sops: SopRow[] = (data as SopRow[]) ?? [];
-  const generateHref  = pid === PROPERTY_ID ? '/operations/qa/generate'  : `/h/${pid}/operations/qa/generate`;
-  const proposalsHref = pid === PROPERTY_ID ? '/operations/qa/proposals' : `/h/${pid}/operations/qa/proposals`;
 
   // KPI strip counts
   const distinctDepts = new Set(sops.map((s) => s.dept_code)).size;
@@ -55,28 +53,12 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
 
-        {/* PBS 2026-07-14 · #29 — QA sub-nav strip. Replaces the 2 inline action-bar buttons on SopBrowser.
-            Surfaces: SOPs (this page) · Generate · Propose · Agent Instructions.
-            Agent Instructions lives at /h/[pid]/operations/qa/agent-instructions (property-scoped only). */}
-        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 4, borderBottom: '1px solid #E6DFCC', marginBottom: 12 }}>
-          {[
-            { key: 'sops',         label: 'SOPs',              href: pid === PROPERTY_ID ? '/operations/sops'                    : `/h/${pid}/operations/sops` },
-            { key: 'generate',     label: '+ Generate SOP',    href: generateHref },
-            { key: 'proposals',    label: 'Propose SOPs',      href: proposalsHref },
-            { key: 'instructions', label: 'Agent instructions', href: `/h/${pid}/operations/qa/agent-instructions` },
-          ].map((t) => {
-            const active = t.key === 'sops';
-            return (
-              <a key={t.key} href={t.href} style={{
-                padding: '8px 14px', fontSize: 11, letterSpacing: '0.05em', textTransform: 'uppercase',
-                borderBottom: active ? '2px solid #084838' : '2px solid transparent',
-                color: active ? '#084838' : '#5A5A5A',
-                fontWeight: active ? 700 : 500,
-                textDecoration: 'none', marginBottom: -1,
-              }}>{t.label}</a>
-            );
-          })}
-        </div>
+        {/* PBS 2026-07-21 · dropped inline QA sub-nav strip. NAV_SUBGROUPS
+            (lib/nav-subgroups.ts, parentHref='/operations/sops') already
+            renders the canonical row above (SOPs · QA registry · Proposals ·
+            Generate · Agent instructions) via DashboardPage's SubTabStrip.
+            The old inline strip was uppercase/mono/brass typography — a
+            duplicate that broke the industry-standard SubTab visual. */}
 
         <div style={{ gridColumn: '1 / -1' }}>
           <SopBrowser sops={sops} />
