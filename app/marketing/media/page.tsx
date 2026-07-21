@@ -79,7 +79,7 @@ async function loadAll(pid: number) {
       .order('sort_order', { ascending: true }),
     // SCOPE 1/6 · library counts snapshot (kept for parity with API route):
     sb.from('v_media_library_counts')
-      .select('property_id, pics_ready, videos_total, with_tier, with_area, to_clarify, destination, review_junk, website, ota, social, internal')
+      .select('property_id, pics_ready, videos_total, with_tier, with_area, to_clarify, destination, review_junk, website, ota, social, internal, archive, logos')
       .eq('property_id', pid)
       .maybeSingle(),
   ]);

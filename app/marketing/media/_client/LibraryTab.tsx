@@ -62,6 +62,7 @@ export interface LibraryCountsProp {
   pics_ready: number; videos_total: number; with_tier: number; with_area: number;
   to_clarify: number; destination: number; review_junk: number;
   website: number; ota: number; social: number; internal: number;
+  archive: number; logos: number;
 }
 
 interface Props {
@@ -144,6 +145,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     pics_ready: number; videos_total: number; with_tier: number; with_area: number;
     to_clarify: number; destination: number; review_junk: number;
     website: number; ota: number; social: number; internal: number;
+    archive: number; logos: number;
   }
   // PBS 2026-07-17 · Scope 1 seed — start from server-loaded row if page.tsx
   // already fetched v_media_library_counts (avoids first-tick tile flash).
@@ -357,9 +359,10 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           Fallback to legacy byTier totals only when libCounts is not yet loaded
           (keeps first-render smooth; correct numbers land within one tick). */}
       {/* PBS 2026-07-17 · clickable tiles ARE the tier filter. Tiers surfaced:
-          OTA/Website · Social · Logos. Click active tile again to clear.
-          PBS 2026-07-21 · Archive tile removed — archived assets stay filterable
-          via search/URL but drop from the top strip. */}
+          OTA/Website · Social · Logos · Archive. Click active tile again to clear.
+          PBS 2026-07-21 · Approved Pics now excludes tier_archive (DB view
+          v_media_library_counts.pics_ready filter); Archive tile restored at
+          end of strip, backed by new v_media_library_counts.archive column. */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:8, marginBottom:16 }}>
         {([
           // PBS 2026-07-19 · every tile goes somewhere. Pics = clear filters.
@@ -368,7 +371,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           // PBS 2026-07-19 (later) · dropped "Total ready" (dup of Pics) and
           // "With tier" (always = Pics — 100% ready photos have a tier).
           // Replaced with "Untiered" — only rendered when > 0. Cleaner strip.
-          { label: 'Pics',           value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null, action: 'clear'      },
+          { label: 'Approved Pics',  value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null, action: 'clear'      },
           ...(((libCounts?.pics_ready ?? totals.tot) - (libCounts?.with_tier ?? totals.tot)) > 0
               ? [{ label: 'Untiered', value: (libCounts?.pics_ready ?? totals.tot) - (libCounts?.with_tier ?? totals.tot), filterTier: null, action: 'coverage' as const }]
               : []),
@@ -377,6 +380,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero),                  filterTier: 'tier_ota_profile' },
           { label: 'Social',         value: libCounts?.social       ?? totals.social,                                             filterTier: 'tier_social_pool' },
           { label: 'Logos',          value: n(byTier.find(r => r.primary_tier === 'tier_logos')?.total),                          filterTier: 'tier_logos' },
+          { label: 'Archive',        value: libCounts?.archive ?? n(byTier.find(r => r.primary_tier === 'tier_archive')?.total), filterTier: 'tier_archive' },
         ] as Array<{ label: string; value: number | undefined; filterTier: string | null; action?: 'clear'|'coverage'|'clarify' }>).map((t, i) => {
           const isActive    = t.filterTier !== null && tier === t.filterTier;
           const isClickable = t.filterTier !== null || !!t.action;
