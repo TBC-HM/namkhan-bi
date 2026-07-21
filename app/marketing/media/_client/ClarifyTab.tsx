@@ -266,19 +266,6 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
   const toggleId = (id: string) => setSelectedIds(prev => {
     const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
   });
-  // PBS 2026-07-21 · Logos synthetic option — taxonomy view doesn't emit a Logos
-  // pseudo-row, so Clarify inline/bulk dropdowns can't reach tier_logos without
-  // opening the full Edit drawer. Direct asset-update POST bypasses clarify-assign
-  // (which expects a taxonomy row) and writes tier + area in one shot.
-  async function assignLogos(assetId: string): Promise<boolean> {
-    const res = await fetch('/api/marketing/media/asset-update', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ asset_id: assetId, primary_tier: 'tier_logos', property_area: 'Logos', facility_id: null, activity_id: null, room_type_id: null, certification_id: null, contact_id: null }),
-    });
-    const j = await res.json().catch(() => ({}));
-    return res.ok && j?.ok !== false;
-  }
-
   async function bulkAssign(tr: ClarifyAreaTaxonomyRow) {
     const ids = Array.from(selectedIds); if (ids.length === 0) return;
     setBulkBusy(true); setMsg(null);
@@ -421,17 +408,26 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
     return clarifyBase.filter(r => reasonKind(r) === filter);
   }, [clarifyBase, filter]);
 
-  // PBS 2026-07-21 · Clarify headline strip is Clarify-specific.
-  // toClarify must match the red menu badge → v_media_library_counts.to_clarify.
-  // Fallback to clarifyBase.length only when libraryCounts isn't loaded yet.
-  const newlyIngested = useMemo(
-    () => unified.filter(r => (r.status ?? '').toLowerCase() === 'ingested').length,
-    [unified],
-  );
   const stats = useMemo(() => {
-    const toClarify = libraryCounts ? libraryCounts.to_clarify : clarifyBase.length;
-    return { toClarify };
-  }, [libraryCounts, clarifyBase.length]);
+    // PBS 2026-07-17 · align "To clarify" tile with the Library top strip.
+    // When libraryCounts is available, use v_media_library_counts as the single
+    // source of truth (hotel-class-no-area = the actual Iris-clarify backlog).
+    // Otherwise fall back to the local mediaPage recompute.
+    if (libraryCounts) {
+      return {
+        toClarify: libraryCounts.to_clarify,
+        withArea:  libraryCounts.with_area,
+        withTier:  libraryCounts.with_tier,
+        clean:     libraryCounts.with_area,
+        total:     libraryCounts.pics_ready,
+      };
+    }
+    const total = photos.length;
+    const withArea = photos.filter(r => r.property_area != null).length;
+    const withTier = photos.filter(r => r.primary_tier != null).length;
+    const clean = photos.filter(r => r.property_area != null && r.primary_tier != null).length;
+    return { toClarify: clarify.length, withArea, withTier, clean, total };
+  }, [photos, clarify.length]);
 
   return (
     <div>
@@ -499,10 +495,10 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8, marginBottom:16 }}>
         {[
-          { label: 'To clarify',      value: stats.toClarify, tone: stats.toClarify > 0 ? RED : INK },
-          { label: 'Non-Hotel',       value: filterCounts.non_hotel },
-          { label: 'Junk (<25 q)',    value: filterCounts.junk },
-          { label: 'Newly ingested',  value: newlyIngested },
+          { label: 'To clarify', value: stats.toClarify, tone: stats.toClarify > 0 ? RED : INK },
+          { label: 'With area',  value: stats.withArea },
+          { label: 'With tier',  value: stats.withTier },
+          { label: 'Clean',      value: stats.clean },
         ].map((t, i) => (
           <div key={i} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'12px 14px' }}>
             <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:4 }}>{t.label}</div>
@@ -529,33 +525,16 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
               <select
                 disabled={bulkBusy}
                 defaultValue=""
-                onChange={async (e) => {
-                  const val = e.target.value;
-                  e.currentTarget.value = '';
-                  if (!val) return;
-                  if (val === '__LOGOS__') {
-                    const ids = Array.from(selectedIds); if (ids.length === 0) return;
-                    setBulkBusy(true); setMsg(null);
-                    try {
-                      const results = await Promise.all(ids.map(async id => ({ id, ok: await assignLogos(id) })));
-                      const okIds = results.filter(r => r.ok).map(r => r.id);
-                      const failed = results.length - okIds.length;
-                      setLocalDismiss(s => { const n = new Set(s); okIds.forEach(id => n.add(id)); return n; });
-                      setSelectedIds(new Set());
-                      setMsg(`Assigned ${okIds.length} → Logos${failed > 0 ? ' · ' + failed + ' failed' : ''}`);
-                    } catch (err: any) { setMsg('Bulk logos assign failed: ' + err.message); }
-                    finally { setBulkBusy(false); }
-                    return;
-                  }
-                  const [kind, key] = val.split('::');
+                onChange={(e) => {
+                  const [kind, key] = e.target.value.split('::');
                   if (!kind) return;
                   const tr = areaTaxonomy.find(t => t.kind === kind && t.area_key === key);
                   if (tr) bulkAssign(tr);
+                  e.currentTarget.value = '';
                 }}
                 style={{ padding: '4px 8px', fontSize: 11, border: '1px solid ' + HAIR, background: WHITE, color: INK, borderRadius: 3, cursor: bulkBusy ? 'wait' : 'pointer', minWidth: 220 }}
               >
                 <option value="">{bulkBusy ? 'Assigning…' : `⇓ Mass-assign ${selectedIds.size} to…`}</option>
-                <option value="__LOGOS__">→ Logos (tier)</option>
                 {taxonomyGroups.map(g => (
                   <optgroup key={g.kind} label={g.label}>
                     {g.rows.map(tr => (
@@ -684,25 +663,12 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                         aria-label="Assign area"
                         disabled={busyId === r.asset_id}
                         defaultValue=""
-                        onChange={async (e) => {
-                          const val = e.target.value;
-                          e.currentTarget.value = '';
-                          if (!val) return;
-                          if (val === '__LOGOS__') {
-                            setBusyId(r.asset_id); setMsg(null);
-                            try {
-                              const ok = await assignLogos(r.asset_id);
-                              if (!ok) throw new Error('logos_assign_failed');
-                              setLocalDismiss(s => new Set(s).add(r.asset_id));
-                              setMsg('Assigned Logos — row cleared');
-                            } catch (err: any) { setMsg('Logos assign failed: ' + err.message); }
-                            finally { setBusyId(null); }
-                            return;
-                          }
-                          const [kind, key] = val.split('::');
+                        onChange={(e) => {
+                          const [kind, key] = e.target.value.split('::');
                           if (!kind) return;
                           const tr = areaTaxonomy.find(t => t.kind === kind && t.area_key === key);
                           if (tr) inlineAssign(r, tr);
+                          e.currentTarget.value = '';
                         }}
                         style={{
                           width:'100%', fontSize:10, padding:'4px 6px',
@@ -711,7 +677,6 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
                         }}
                       >
                         <option value="">— assign area…</option>
-                        <option value="__LOGOS__">→ Logos (tier)</option>
                         {taxonomyGroups.map(g => (
                           <optgroup key={g.kind} label={g.label}>
                             {g.rows.map(tr => (
