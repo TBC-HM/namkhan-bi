@@ -335,23 +335,6 @@ export default function AudienceUnifiedClient({
         <TileCompact label="Unsubscribed (purged)" value={initialTiles.purged_unsubscribed} />
       </div>
 
-      {/* KPI headline strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
-        <KpiCell label="Total people" value={totalCount} highlight />
-        <KpiCell label="Subscribers"  value={subCount}   onClick={() => { setSourceFilter('subscribers'); setPage(0); }} />
-        <KpiCell label="Prospects"    value={proCount}   onClick={() => { setSourceFilter('prospects');   setPage(0); }} />
-        {groups.map((g) => (
-          <KpiCell
-            key={g.id}
-            label={g.name}
-            value={groupCounts[g.slug] ?? g.member_count ?? 0}
-            color={g.color}
-            onClick={() => toggleGroupFilter(g.slug)}
-            active={groupFilters.includes(g.slug)}
-          />
-        ))}
-      </div>
-
       {/* Scrape embed */}
       <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4 }}>
         <button
