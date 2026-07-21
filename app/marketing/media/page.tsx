@@ -9,6 +9,11 @@
 //   public.v_media_review_queue (all flagged, any status; ADR-149..152) so
 //   the Review tab is no longer empty. Previously ReviewTab received no rows
 //   because page.tsx never fetched the queue.
+// PBS 2026-07-21 · Library truncation fix — PostgREST silently caps at 1000
+//   rows regardless of .limit(5000). v_marketing_media_page has 1649 rows;
+//   rows 1001-1649 were silently dropped (e.g. Art Deluxe Family 4th photo
+//   asset_id 2d66f5fa-... at row 1227). Replace single .limit() with a
+//   paginated .range() loop that returns the full set as { data, error }.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -18,6 +23,28 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const NAMKHAN_PROPERTY_ID = 260955;
+
+// PBS 2026-07-21 — paginated fetch of v_marketing_media_page. PostgREST's
+// db-max-rows caps every .select() at 1000 rows even when .limit(5000) is
+// requested. This helper pages through in 1000-row chunks (hard cap 10000)
+// and returns a Supabase-shaped { data, error } so downstream code is
+// untouched.
+async function fetchAllMedia(sb: ReturnType<typeof getSupabaseAdmin>): Promise<{ data: any[]; error: any }> {
+  const all: any[] = [];
+  const CHUNK = 1000;
+  const HARD_CAP = 10000;
+  for (let start = 0; start < HARD_CAP; start += CHUNK) {
+    const { data, error } = await sb
+      .from('v_marketing_media_page')
+      .select('*')
+      .range(start, start + CHUNK - 1);
+    if (error) return { data: all, error };
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < CHUNK) break;
+  }
+  return { data: all, error: null };
+}
 
 async function loadAll(pid: number) {
   const sb = getSupabaseAdmin();
@@ -32,7 +59,7 @@ async function loadAll(pid: number) {
     reviewQueue, areaTaxonomy, libraryCounts,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
-    sb.from('v_marketing_media_page').select('*').limit(5000),
+    fetchAllMedia(sb),
     sb.from('v_media_channel_specs').select('*'),
     sb.from('v_media_rules_active').select('*'),
     sb.from('v_ai_generations').select('*').order('created_at', { ascending: false }).limit(50),
