@@ -16,7 +16,6 @@ import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
 import { FINANCE_SUBPAGES } from '../_subpages';
-import TabStrip, { ACC_TABS } from '../_components/TabStrip';
 import CoverageMatrixExpandable from './_components/CoverageMatrixExpandable';
 import { fmtMoney } from '@/lib/format';
 import {
@@ -72,9 +71,6 @@ export default async function BanksPage({ searchParams }: Props) {
       tabs={FINANCE_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/finance/acc' }))}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {/* ─── Acc hub strip (Transactions · Banks · POS) ────────────── */}
-      <TabStrip tabs={ACC_TABS} activeKey="banks" />
-
       {/* ─── Banks inner tabs ──────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--paper-deep)', marginBottom: 12 }}>
         <TabLink href="/finance/banks?tab=overview"  active={tab === 'overview'}>

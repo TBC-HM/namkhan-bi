@@ -3,7 +3,6 @@
 
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { FINANCE_SUBPAGES } from '../_subpages';
-import TabStrip, { ACC_TABS } from '../_components/TabStrip';
 import KpiBox from '@/components/kpi/KpiBox';
 // 2026-05-09: public.transactions has RLS blocking anon; use service role.
 import { PROPERTY_ID } from '@/lib/supabase';
@@ -158,7 +157,6 @@ export default async function TransactionsPage({ searchParams }: Props) {
       tabs={FINANCE_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/finance/acc' }))}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <TabStrip tabs={ACC_TABS} activeKey="transactions" />
       <div style={{
         margin: '8px 0 4px', padding: '8px 12px',
         fontSize: 'var(--t-sm)', color: 'var(--ink-soft)',

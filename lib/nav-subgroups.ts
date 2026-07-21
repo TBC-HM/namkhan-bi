@@ -236,11 +236,13 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // so P&L/Ledger/Transactions/Budget are visible even before you click Finance.
   {
     parentHref: '/finance/pnl',
-    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/budget'],
+    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/banks', '/finance/pos', '/finance/budget'],
     tabs: [
       { label: 'P&L',          href: '/finance/pnl'          },
       { label: 'Ledger',       href: '/finance/ledger'       },
       { label: 'Transactions', href: '/finance/transactions' },
+      { label: 'Banks',        href: '/finance/banks'        },
+      { label: 'POS',          href: '/finance/pos'          },
       { label: 'Budget',       href: '/finance/budget'       },
     ],
   },

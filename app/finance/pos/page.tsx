@@ -25,7 +25,6 @@ import KpiBox from '@/components/kpi/KpiBox';
 import FilterStrip from '@/components/nav/FilterStrip';
 import PosterReceiptsTable from '@/components/poster/PosterReceiptsTable';
 import { FINANCE_SUBPAGES } from '../_subpages';
-import TabStrip, { ACC_TABS } from '../_components/TabStrip';
 import { resolvePeriod } from '@/lib/period';
 import { fmtMoney } from '@/lib/format';
 import {
@@ -109,7 +108,6 @@ export default async function PosControllerPage({ searchParams }: Props) {
       tabs={FINANCE_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/finance/acc' }))}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <TabStrip tabs={ACC_TABS} activeKey="pos" />
       {/* ─── 1. Controller KPIs (lead with the reconciliation health) ─ */}
       <div
         style={{
