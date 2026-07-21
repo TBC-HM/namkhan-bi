@@ -1,5 +1,8 @@
 // app/guest/newsletters/page.tsx
 // PBS 2026-07-04 v4: Planned date column · Schedule button on drafts · Halt button on scheduled.
+// PBS 2026-07-21: 2-tab sub-strip (Newsletters · Sequences) added — Sequences page
+// moved here from /marketing/prospects/sequences. Substrip mounted at top of
+// DashboardPage children; old URL redirects to /guest/newsletters/sequences.
 
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
@@ -10,6 +13,7 @@ import ScheduleDrawer from './_components/ScheduleDrawer';
 import HaltButton from './_components/HaltButton';
 import RecipientsButton from './_components/RecipientsButton';
 import DeleteCampaignButton from './_components/DeleteCampaignButton';
+import NewslettersSubStrip from './_components/NewslettersSubStrip';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -66,6 +70,8 @@ export default async function NewslettersPage({ propertyId }: PageProps = {}) {
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title="Contacts · Newsletters"
         subtitle={`${rows.length} campaign${rows.length === 1 ? '' : 's'} — Drafts, Scheduled and Sent.`} tabs={tabs}>
+        <NewslettersSubStrip active="newsletters" />
+
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8 }}>
           <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
           <TenantLink href="/guest/directory" style={ctaButton}>+ Compose from Directory</TenantLink>

@@ -356,7 +356,7 @@ export default function AudienceUnifiedClient({
       prefill_recipient: row.email,
       prefill_name: row.name ?? '',
     }).toString();
-    window.open(`/marketing/prospects/sequences?${qs}`, '_blank', 'noopener,noreferrer');
+    window.open(`/guest/newsletters/sequences?${qs}`, '_blank', 'noopener,noreferrer');
   };
 
   const selectedEmails = useMemo(() => {
