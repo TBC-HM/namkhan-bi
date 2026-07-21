@@ -382,7 +382,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           // PBS 2026-07-19 (later) · dropped "Total ready" (dup of Pics) and
           // "With tier" (always = Pics — 100% ready photos have a tier).
           // Replaced with "Untiered" — only rendered when > 0. Cleaner strip.
-          { label: 'Approved Pics',  value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null, action: 'clear'      },
+          { label: 'Approved Pics',  value: libCounts?.pics_ready   ?? totals.tot,                                                filterTier: null, action: 'clear', sub: 'status ready · tier set · not archive' },
           ...(((libCounts?.pics_ready ?? totals.tot) - (libCounts?.with_tier ?? totals.tot)) > 0
               ? [{ label: 'Untiered', value: (libCounts?.pics_ready ?? totals.tot) - (libCounts?.with_tier ?? totals.tot), filterTier: null, action: 'coverage' as const }]
               : []),
@@ -391,8 +391,8 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero),                  filterTier: 'tier_ota_profile' },
           { label: 'Social',         value: libCounts?.social       ?? totals.social,                                             filterTier: 'tier_social_pool' },
           { label: 'Logos',          value: n(byTier.find(r => r.primary_tier === 'tier_logos')?.total),                          filterTier: 'tier_logos' },
-          { label: 'Archive',        value: libCounts?.archive ?? n(byTier.find(r => r.primary_tier === 'tier_archive')?.total),  filterTier: 'tier_archive' },
-        ] as Array<{ label: string; value: number | undefined; filterTier: string | null; action?: 'clear'|'coverage'|'clarify' }>).map((t, i) => {
+          { label: 'Archive',        value: libCounts?.archive ?? n(byTier.find(r => r.primary_tier === 'tier_archive')?.total),  filterTier: 'tier_archive', sub: 'auto: quality < 50 or any sub-score < 5 · or manual' },
+        ] as Array<{ label: string; value: number | undefined; filterTier: string | null; action?: 'clear'|'coverage'|'clarify'; sub?: string }>).map((t, i) => {
           const isActive    = t.filterTier !== null && tier === t.filterTier;
           const isClickable = t.filterTier !== null || !!t.action;
           const onTileClick = () => {
@@ -424,6 +424,11 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
             >
               <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color: isActive ? WHITE : INK_M, marginBottom:4, opacity: isActive ? 0.85 : 1 }}>{t.label}</div>
               <div style={{ fontSize:22, fontWeight:700, color: isActive ? WHITE : INK }}>{(t.value ?? 0).toLocaleString()}</div>
+              {t.sub && (
+                <div style={{ fontSize:10, color: isActive ? WHITE : 'var(--ink-soft, #5A5A5A)', marginTop:4, lineHeight:1.3, opacity: isActive ? 0.85 : 1 }}>
+                  {t.sub}
+                </div>
+              )}
             </button>
           );
         })}
