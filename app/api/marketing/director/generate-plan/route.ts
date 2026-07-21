@@ -88,7 +88,7 @@ function toneForGroup(slug: string | null | undefined): string {
   if (slug === 'returning-guests') return 'warm, personal, we-miss-you';
   if (slug === 'guests') return 'welcoming, informative, sightseeing tips';
   if (slug === 'dmc-contracted' || slug === 'dmc') return 'commercial, availability + rates, quick-turnaround';
-  if (slug === 'fit' || slug === 'fit-ota-address') return 'transactional, price + book, urgency';
+  if (slug === 'fit' || slug === 'ota-traveller') return 'transactional, price + book, urgency';
   if (slug === 'ota') return 'brand-safe (no direct pricing), FYI updates';
   if (slug === 'btb') return 'partnership-focused, calendar & inventory led';
   return 'informative';
