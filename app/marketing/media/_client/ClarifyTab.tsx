@@ -421,26 +421,17 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
     return clarifyBase.filter(r => reasonKind(r) === filter);
   }, [clarifyBase, filter]);
 
+  // PBS 2026-07-21 · Clarify headline strip is Clarify-specific.
+  // toClarify must match the red menu badge → v_media_library_counts.to_clarify.
+  // Fallback to clarifyBase.length only when libraryCounts isn't loaded yet.
+  const newlyIngested = useMemo(
+    () => unified.filter(r => (r.status ?? '').toLowerCase() === 'ingested').length,
+    [unified],
+  );
   const stats = useMemo(() => {
-    // PBS 2026-07-17 · align "To clarify" tile with the Library top strip.
-    // When libraryCounts is available, use v_media_library_counts as the single
-    // source of truth (hotel-class-no-area = the actual Iris-clarify backlog).
-    // Otherwise fall back to the local mediaPage recompute.
-    if (libraryCounts) {
-      return {
-        toClarify: libraryCounts.to_clarify,
-        withArea:  libraryCounts.with_area,
-        withTier:  libraryCounts.with_tier,
-        clean:     libraryCounts.with_area,
-        total:     libraryCounts.pics_ready,
-      };
-    }
-    const total = photos.length;
-    const withArea = photos.filter(r => r.property_area != null).length;
-    const withTier = photos.filter(r => r.primary_tier != null).length;
-    const clean = photos.filter(r => r.property_area != null && r.primary_tier != null).length;
-    return { toClarify: clarify.length, withArea, withTier, clean, total };
-  }, [photos, clarify.length]);
+    const toClarify = libraryCounts ? libraryCounts.to_clarify : clarifyBase.length;
+    return { toClarify };
+  }, [libraryCounts, clarifyBase.length]);
 
   return (
     <div>
@@ -508,10 +499,10 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px, 1fr))', gap:8, marginBottom:16 }}>
         {[
-          { label: 'To clarify', value: stats.toClarify, tone: stats.toClarify > 0 ? RED : INK },
-          { label: 'With area',  value: stats.withArea },
-          { label: 'With tier',  value: stats.withTier },
-          { label: 'Clean',      value: stats.clean },
+          { label: 'To clarify',      value: stats.toClarify, tone: stats.toClarify > 0 ? RED : INK },
+          { label: 'Non-Hotel',       value: filterCounts.non_hotel },
+          { label: 'Junk (<25 q)',    value: filterCounts.junk },
+          { label: 'Newly ingested',  value: newlyIngested },
         ].map((t, i) => (
           <div key={i} style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'12px 14px' }}>
             <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:4 }}>{t.label}</div>
