@@ -1,23 +1,23 @@
 // app/guest/newsletters/_components/NewslettersSubStrip.tsx
 // PBS 2026-07-22 v2 (Newsletter Engine v2): 5-tab sub-strip inside Guest · Newsletters.
-//   Newsletters (Broadcasts, default) · Lifecycle · Sequences · Templates · Director
-// Mirrors /marketing/media MediaHub tab pattern (padding 4px 8px, fontSize 12,
-// gap 8, borderBottom 2px solid var(--primary, #1F3A2E) when active). Uses
-// TenantLink so the tenant prefix (/h/{property_id}) is preserved.
+// PBS 2026-07-22 v3 (Cockpit): + Overview as first sub-tab (default landing).
+//   Overview (cockpit, default) · Broadcasts · Lifecycle · Sequences · Templates · Director
+// Mirrors /marketing/media MediaHub tab pattern.
 
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
 
-export type NewslettersTabKey = 'newsletters' | 'lifecycle' | 'sequences' | 'templates' | 'director';
+export type NewslettersTabKey = 'overview' | 'newsletters' | 'lifecycle' | 'sequences' | 'templates' | 'director';
 
 interface Props { active: NewslettersTabKey }
 
 const TABS: Array<{ key: NewslettersTabKey; label: string; href: string }> = [
-  { key: 'newsletters', label: 'Newsletters', href: '/guest/newsletters'            },
-  { key: 'lifecycle',   label: 'Lifecycle',   href: '/guest/newsletters/lifecycle'  },
-  { key: 'sequences',   label: 'Sequences',   href: '/guest/newsletters/sequences'  },
-  { key: 'templates',   label: 'Templates',   href: '/guest/newsletters/templates'  },
-  { key: 'director',    label: 'Director',    href: '/guest/newsletters/director'   },
+  { key: 'overview',    label: 'Overview',     href: '/guest/newsletters'             },
+  { key: 'newsletters', label: 'Broadcasts',   href: '/guest/newsletters?tab=broadcasts' },
+  { key: 'lifecycle',   label: 'Lifecycle',    href: '/guest/newsletters/lifecycle'   },
+  { key: 'sequences',   label: 'Sequences',    href: '/guest/newsletters/sequences'   },
+  { key: 'templates',   label: 'Templates',    href: '/guest/newsletters/templates'   },
+  { key: 'director',    label: 'Director',     href: '/guest/newsletters/director'    },
 ];
 
 const HAIR    = '#E6DFCC';

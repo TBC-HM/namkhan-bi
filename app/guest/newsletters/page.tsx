@@ -1,11 +1,17 @@
 // app/guest/newsletters/page.tsx
-// PBS 2026-07-04 v4: Planned date column · Schedule button on drafts · Halt button on scheduled.
-// PBS 2026-07-21: 2-tab sub-strip (Newsletters · Sequences) added.
-// PBS 2026-07-22 v2 (Newsletter Engine v2):
-//   * 5-tab sub-strip (Newsletters · Lifecycle · Sequences · Templates · Director).
-//   * This page now shows ONLY campaign_kind='broadcast' with a B2C/B2B audience toggle.
-//   * Lifecycle campaigns moved to /guest/newsletters/lifecycle.
-//   * All existing chrome/columns preserved — additive only.
+// PBS 2026-07-04 v4 · 2026-07-21 (5-tab strip) · 2026-07-22 v2 (broadcasts) ·
+// 2026-07-22 v3 (COCKPIT): default now renders OverviewCockpit; the historical
+// Drafts/Scheduled/Sent broadcasts table lives at ?tab=broadcasts (same URL,
+// same sub-strip tab pointing at that param). All old behaviour preserved —
+// additive only.
+//
+// Sub-strip:
+//   Overview  → this page (no ?tab)                    [DEFAULT]
+//   Broadcasts→ this page with ?tab=broadcasts
+//   Lifecycle → /guest/newsletters/lifecycle
+//   Sequences → /guest/newsletters/sequences
+//   Templates → /guest/newsletters/templates
+//   Director  → /guest/newsletters/director
 
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
@@ -17,6 +23,8 @@ import HaltButton from './_components/HaltButton';
 import RecipientsButton from './_components/RecipientsButton';
 import DeleteCampaignButton from './_components/DeleteCampaignButton';
 import NewslettersSubStrip from './_components/NewslettersSubStrip';
+import OverviewCockpit from './_components/OverviewCockpit';
+import ProposeNewsletterButton from './_components/ProposeNewsletterButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -55,20 +63,53 @@ function fmtRelSchedule(row: CampaignRow): string {
 }
 function pctOr(n: number, d: number): string { if (!d) return '—'; return `${((n / d) * 100).toFixed(0)}%`; }
 
-interface PageProps { propertyId?: number; searchParams?: { audience?: string } }
+interface PageProps { propertyId?: number; searchParams?: { audience?: string; tab?: string; cal?: string } }
 
 export default async function NewslettersPage({ propertyId, searchParams }: PageProps = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const audienceParam = (searchParams?.audience || 'b2c').toLowerCase();
   const audience: 'b2c' | 'b2b' | 'all' = audienceParam === 'b2b' ? 'b2b' : audienceParam === 'all' ? 'all' : 'b2c';
+  const tab = (searchParams?.tab || 'overview').toLowerCase();
+  const isBroadcasts = tab === 'broadcasts';
 
+  const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
+    key: s.href, label: s.label, href: s.href, active: s.href === '/guest/newsletters',
+  }));
+
+  // ================= OVERVIEW (default) =================
+  if (!isBroadcasts) {
+    return (
+      <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
+        <DashboardPage
+          title="Contacts · Newsletters"
+          subtitle="Marketing-ops cockpit — analytics, monthly calendar, and live sequences."
+          tabs={tabs}
+        >
+          <NewslettersSubStrip active="overview" />
+
+          <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center', marginBottom:8 }}>
+            <ProposeNewsletterButton propertyId={pid} defaultAudience={audience} />
+            <TenantLink href="/guest/newsletters?tab=broadcasts" style={secondaryButton}>Broadcasts →</TenantLink>
+            <TenantLink href="/guest/newsletters/director" style={secondaryButton}>AI Director</TenantLink>
+            <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
+            <TenantLink href="/guest/directory" style={ctaButton}>+ Compose from Directory</TenantLink>
+          </div>
+
+          <div style={{ gridColumn:'1 / -1' }}>
+            <OverviewCockpit propertyId={pid} month={searchParams?.cal} />
+          </div>
+        </DashboardPage>
+      </div>
+    );
+  }
+
+  // ================= BROADCASTS (original UI, preserved) =================
   const { data, error } = await supabase.from('v_guest_campaigns').select('*')
     .eq('property_id', pid).is('archived_at', null)
     .order('planned_date', { ascending: true, nullsFirst: false })
     .order('updated_at', { ascending: false });
   const allRows: CampaignRow[] = (data as CampaignRow[]) ?? [];
 
-  // Filter to broadcasts + audience (fallback: NULL campaign_kind counts as broadcast for back-compat)
   const rows = allRows.filter((r) => {
     const kind = (r.campaign_kind ?? 'broadcast') as string;
     if (kind !== 'broadcast') return false;
@@ -81,10 +122,6 @@ export default async function NewslettersPage({ propertyId, searchParams }: Page
   const upcoming = rows.filter(r => r.status === 'scheduled' || r.status === 'sending');
   const sent     = rows.filter(r => r.status === 'sent');
 
-  const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
-    key: s.href, label: s.label, href: s.href, active: s.href === '/guest/newsletters',
-  }));
-
   return (
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title="Contacts · Newsletters"
@@ -94,11 +131,12 @@ export default async function NewslettersPage({ propertyId, searchParams }: Page
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', gap:8, alignItems:'center' }}>
           <div style={{ display:'flex', gap:4, alignItems:'center' }}>
             <span style={audLabel}>Audience:</span>
-            <TenantLink href={`/guest/newsletters?audience=b2c`} style={audience==='b2c' ? audActive : audInactive}>B2C</TenantLink>
-            <TenantLink href={`/guest/newsletters?audience=b2b`} style={audience==='b2b' ? audActive : audInactive}>B2B</TenantLink>
-            <TenantLink href={`/guest/newsletters?audience=all`} style={audience==='all' ? audActive : audInactive}>All</TenantLink>
+            <TenantLink href={`/guest/newsletters?tab=broadcasts&audience=b2c`} style={audience==='b2c' ? audActive : audInactive}>B2C</TenantLink>
+            <TenantLink href={`/guest/newsletters?tab=broadcasts&audience=b2b`} style={audience==='b2b' ? audActive : audInactive}>B2B</TenantLink>
+            <TenantLink href={`/guest/newsletters?tab=broadcasts&audience=all`} style={audience==='all' ? audActive : audInactive}>All</TenantLink>
           </div>
           <div style={{ display:'flex', gap:8 }}>
+            <ProposeNewsletterButton propertyId={pid} defaultAudience={audience} />
             <TenantLink href="/guest/newsletters/director" style={secondaryButton}>AI Director</TenantLink>
             <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
             <TenantLink href="/guest/directory" style={ctaButton}>+ Compose from Directory</TenantLink>

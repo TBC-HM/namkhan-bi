@@ -1,17 +1,21 @@
 'use client';
 // app/guest/newsletters/director/_components/DirectorClient.tsx
-// PBS 2026-07-22 (Newsletter Engine v2): AI Editorial Director UI.
+// PBS 2026-07-22 (Newsletter Engine v2) · 2026-07-22 v3 (COCKPIT REFACTOR):
+//   * Editorial goals editor MOVED to Property Settings → Audience (EditorialGoalsPanel).
+//     This client now shows a compact read-only summary + link out.
+//   * Fixed "grid renders empty" bug: month cells now list every slot with title
+//     + status pill (previously only tiny 8x8px dots — PBS read that as "empty").
+//   * Weight scale bumped to 0-100 (share-of-slots semantic). Read-only chip shows
+//     normalised share ≈ N% per goal.
 //
-// Sections:
-//   1. Goals editor (weight slider 0-10 per goal · Save on blur)
-//   2. Generate 12-month plan (date range + regenerate-empty-only mode)
-//   3. Month × week grid (12 months) — click month cell → drawer of slots
-//   4. Slot drawer: preview · Refine (AI popover) · Approve (schedule at slot_date · 10:00)
-//
-// All writes go through fn_director_* SECURITY DEFINER RPCs via API routes.
+// Bug root cause (2026-07-22): month cells rendered slots as 8x8 dots inside a
+// wrap-flex row. With 22 slots spread across 5 months, each cell only showed 4-5
+// tiny dots that were invisible against the cream background. Fix = render each
+// slot as a titled row with its status pill (visible + clickable).
 
 import { Fragment, useMemo, useState, useTransition } from 'react';
 import type { CSSProperties } from 'react';
+import TenantLink from '@/components/nav/TenantLink';
 
 export interface GoalRow {
   id: number; property_id: number; goal_key: string; goal_label: string;
@@ -48,10 +52,10 @@ const STATUS_COLOR: Record<SlotRow['status'], { bg: string; fg: string; brd: str
 };
 
 function fmtMonth(d: Date): string {
-  return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 function fmtDate(iso: string): string {
-  try { return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short' }); }
+  try { return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short', timeZone: 'UTC' }); }
   catch { return iso; }
 }
 function monthKey(iso: string): string {
@@ -60,7 +64,7 @@ function monthKey(iso: string): string {
 }
 
 export default function DirectorClient({ propertyId, initialGoals, initialSlots }: Props) {
-  const [goals, setGoals] = useState<GoalRow[]>(initialGoals);
+  const [goals] = useState<GoalRow[]>(initialGoals);
   const [slots, setSlots] = useState<SlotRow[]>(initialSlots);
   const [openMonth, setOpenMonth] = useState<string | null>(null);
   const [drawerSlot, setDrawerSlot] = useState<SlotRow | null>(null);
@@ -89,23 +93,13 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots 
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(s);
     }
+    // Sort within each month by slot_date
+    for (const [, arr] of m) arr.sort((a, b) => a.slot_date.localeCompare(b.slot_date));
     return m;
   }, [slots]);
 
-  async function saveGoalWeight(goalKey: string, weight: number) {
-    setBusy('goal');
-    try {
-      const g = goals.find(x => x.goal_key === goalKey);
-      if (!g) return;
-      const res = await fetch('/api/marketing/director/goal-upsert', {
-        method:'POST', headers:{'content-type':'application/json'},
-        body: JSON.stringify({ property_id: propertyId, goal_key: goalKey, goal_label: g.goal_label, weight, active: g.active }),
-      });
-      if (!res.ok) { setMsg(`Save goal failed: ${await res.text()}`); return; }
-      setGoals(prev => prev.map(x => x.goal_key===goalKey ? { ...x, weight } : x));
-      setMsg('Goal saved.');
-    } finally { setBusy(''); setTimeout(()=>setMsg(''), 2000); }
-  }
+  const activeGoals = goals.filter(g => g.active);
+  const totalWeight = activeGoals.reduce((s, g) => s + (g.weight || 0), 0) || 1;
 
   async function generatePlan() {
     setBusy('generate');
@@ -180,34 +174,38 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots 
     <div style={{ display:'grid', gap:24 }}>
       {msg && <div style={infoBox}>{msg}</div>}
 
-      {/* GOALS EDITOR */}
+      {/* GOALS SUMMARY (read-only) */}
       <section style={panel}>
-        <h3 style={h3}>1 · Editorial goals · weights (0-10)</h3>
-        <p style={muted}>Higher weight = more slots devoted to that goal in the AI plan.</p>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 60px 60px', gap:8, alignItems:'center' }}>
-          {goals.map((g) => (
-            <Fragment key={g.goal_key}>
-              <label style={{ fontSize:12, color:INK }}>
-                <span style={{ fontWeight:600 }}>{g.goal_label}</span>
-                <span style={{ color: INK_M, marginLeft:8, fontFamily:'ui-monospace, monospace', fontSize:10 }}>{g.goal_key}</span>
-              </label>
-              <input
-                type="range" min={0} max={10} step={1}
-                defaultValue={g.weight}
-                disabled={busy==='goal'}
-                onMouseUp={(e) => saveGoalWeight(g.goal_key, Number((e.target as HTMLInputElement).value))}
-                onTouchEnd={(e) => saveGoalWeight(g.goal_key, Number((e.target as HTMLInputElement).value))}
-                style={{ width:'100%' }}
-              />
-              <span style={{ fontSize:12, fontVariantNumeric:'tabular-nums', textAlign:'right', color: g.weight===0?INK_M:INK }}>{g.weight}</span>
-            </Fragment>
-          ))}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+          <h3 style={h3}>Editorial goals · read-only summary</h3>
+          <TenantLink href="/settings/property/audience#editorial-goals" style={editLink}>Edit weights in Settings → Audience → Editorial Goals →</TenantLink>
         </div>
+        <p style={muted}>The AI Director plans slots proportional to these normalised weights.</p>
+
+        {activeGoals.length === 0 ? (
+          <div style={{ padding:12, background:'#FBE8E4', color:'#8A2419', border:'1px solid #E8B7AB', borderRadius:4, fontSize:12 }}>
+            No active goals — the Director will stall until you set some.
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+            {activeGoals.sort((a,b)=>b.weight-a.weight).map((g) => {
+              const share = totalWeight > 0 ? (g.weight / totalWeight) : 0;
+              return (
+                <span key={g.goal_key} style={goalChip}>
+                  <strong style={{ color:INK }}>{g.goal_label}</strong>
+                  <span style={{ marginLeft:6, color:INK_M }}>·</span>
+                  <span style={{ marginLeft:6, fontVariantNumeric:'tabular-nums', color:INK }}>{(share*100).toFixed(0)}%</span>
+                  <span style={{ marginLeft:4, fontSize:10, color:INK_M }}>(w={g.weight})</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* GENERATE PLAN */}
       <section style={panel}>
-        <h3 style={h3}>2 · Generate 12-month plan</h3>
+        <h3 style={h3}>Generate 12-month plan</h3>
         <div style={{ display:'flex', gap:12, alignItems:'end', flexWrap:'wrap' }}>
           <label style={fieldWrap}>
             <span style={fieldLabel}>From</span>
@@ -228,72 +226,58 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots 
         </div>
       </section>
 
-      {/* MONTH GRID */}
+      {/* MONTH GRID — with slot lists (not tiny dots) */}
       <section style={panel}>
-        <h3 style={h3}>3 · 12-month calendar</h3>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:8 }}>
+        <h3 style={h3}>12-month calendar · {slots.length} slot{slots.length===1?'':'s'} loaded</h3>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(3, minmax(0, 1fr))', gap:12 }}>
           {months.map((m) => {
             const s = slotsByMonth.get(m.key) ?? [];
             const isOpen = openMonth === m.key;
             return (
-              <button
+              <div
                 key={m.key}
-                type="button"
-                onClick={() => setOpenMonth(isOpen ? null : m.key)}
                 style={{
-                  ...monthCell,
+                  ...monthCard,
                   background: isOpen ? '#F5F1E6' : '#FFFFFF',
                   borderColor: isOpen ? PRIMARY : HAIR,
                 }}
               >
-                <div style={{ fontWeight:600, fontSize:12 }}>{m.label}</div>
-                <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>{s.length} slot{s.length===1?'':'s'}</div>
-                {s.length > 0 && (
-                  <div style={{ marginTop:6, display:'flex', flexWrap:'wrap', gap:2 }}>
+                <button type="button"
+                  onClick={() => setOpenMonth(isOpen ? null : m.key)}
+                  style={{ background:'transparent', border:'none', textAlign:'left', width:'100%', padding:0, cursor:'pointer', fontFamily:'inherit' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:INK }}>{m.label}</div>
+                    <div style={{ fontSize:11, color:INK_M }}>{s.length} slot{s.length===1?'':'s'}</div>
+                  </div>
+                </button>
+
+                {s.length === 0 ? (
+                  <div style={{ marginTop:6, fontSize:11, color:INK_M, fontStyle:'italic' }}>No slots.</div>
+                ) : (
+                  <ul style={{ margin:'6px 0 0', padding:0, listStyle:'none', display:'flex', flexDirection:'column', gap:4 }}>
                     {s.map((x) => {
                       const c = STATUS_COLOR[x.status];
-                      return <span key={x.id} title={`${x.title} (${x.status})`} style={{ display:'inline-block', width:8, height:8, borderRadius:2, background:c.bg, border:`1px solid ${c.brd}` }} />;
+                      return (
+                        <li key={x.id} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:10, fontFamily:'ui-monospace, monospace', color:INK_M, minWidth:40 }}>{fmtDate(x.slot_date)}</span>
+                          <button type="button" onClick={()=>{ setDrawerSlot(x); setRefineText(''); }}
+                            style={{
+                              flex:1, textAlign:'left', padding:'2px 6px', fontSize:11, fontWeight:600,
+                              background:c.bg, color:c.fg, border:`1px solid ${c.brd}`, borderRadius:3, cursor:'pointer',
+                              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontFamily:'inherit',
+                            }}
+                            title={`${x.title} · ${x.status} · ${x.goal_tag}`}>
+                            {x.title}
+                          </button>
+                        </li>
+                      );
                     })}
-                  </div>
+                  </ul>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
-
-        {openMonth && (
-          <div style={{ marginTop:16, border:`1px solid ${HAIR}`, borderRadius:6, background:'#FFFFFF' }}>
-            <div style={{ padding:'8px 12px', background:'#FAFAF7', borderBottom:`1px solid ${HAIR}`, fontSize:11, textTransform:'uppercase', letterSpacing:'.06em', color:INK_M, fontWeight:600 }}>
-              {months.find(x=>x.key===openMonth)?.label} · slots
-            </div>
-            <table style={{ width:'100%', borderCollapse:'collapse' }}>
-              <thead>
-                <tr style={{ background:'#FAFAF7', borderBottom:`1px solid ${HAIR}` }}>
-                  <th style={th}>Date</th><th style={th}>Title</th><th style={th}>Goal</th><th style={th}>Audience</th><th style={th}>Status</th><th style={{...th, textAlign:'right', width:120}}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {(slotsByMonth.get(openMonth) ?? []).map((s) => {
-                  const c = STATUS_COLOR[s.status];
-                  return (
-                    <tr key={s.id} style={{ borderBottom:`1px solid ${HAIR}` }}>
-                      <td style={tdL}>{fmtDate(s.slot_date)}</td>
-                      <td style={{ ...tdL, fontWeight:500 }}>{s.title}</td>
-                      <td style={tdL}><span style={{ fontFamily:'ui-monospace, monospace', fontSize:11 }}>{s.goal_tag}</span></td>
-                      <td style={tdL}>{s.audience_type}</td>
-                      <td style={tdL}>
-                        <span style={{ padding:'2px 8px', fontSize:10, fontWeight:600, borderRadius:10, background:c.bg, color:c.fg, border:`1px solid ${c.brd}` }}>{s.status}</span>
-                      </td>
-                      <td style={{ ...tdR, textAlign:'right' }}>
-                        <button onClick={()=>{ setDrawerSlot(s); setRefineText(''); }} style={actionBtnLight}>Open</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </section>
 
       {/* DRAWER */}
@@ -351,7 +335,9 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots 
 const panel: CSSProperties = { border:`1px solid ${HAIR}`, borderRadius:6, background:'#FFFFFF', padding:16 };
 const h3: CSSProperties    = { margin:'0 0 4px', fontSize:13, fontWeight:700, color:INK };
 const muted: CSSProperties = { margin:'0 0 12px', fontSize:11, color:INK_M };
-const monthCell: CSSProperties = { textAlign:'left', padding:10, border:`1px solid ${HAIR}`, borderRadius:6, cursor:'pointer', fontFamily:'inherit' };
+const monthCard: CSSProperties = { padding:10, border:`1px solid ${HAIR}`, borderRadius:6, fontFamily:'inherit' };
+const goalChip: CSSProperties = { display:'inline-flex', alignItems:'center', padding:'4px 10px', border:`1px solid ${HAIR}`, borderRadius:20, background:'#FAFAF7', fontSize:12, color:INK };
+const editLink: CSSProperties = { fontSize:11, color:PRIMARY, textDecoration:'none', fontWeight:600 };
 const fieldWrap: CSSProperties = { display:'flex', flexDirection:'column', gap:4 };
 const fieldLabel: CSSProperties = { fontSize:10, textTransform:'uppercase', letterSpacing:'.06em', color:INK_M, fontWeight:600 };
 const input: CSSProperties = { border:`1px solid ${HAIR}`, borderRadius:4, padding:'4px 8px', fontSize:12, fontFamily:'inherit' };
@@ -359,7 +345,3 @@ const infoBox: CSSProperties = { padding:8, background:'#EEF6EE', border:'1px so
 const preBox: CSSProperties = { padding:10, border:`1px solid ${HAIR}`, borderRadius:4, fontSize:12, background:'#FAFAF7' };
 const ctaButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:PRIMARY, color:'#FFFFFF', border:`1px solid ${PRIMARY}`, borderRadius:4, cursor:'pointer' };
 const secondaryButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:PRIMARY, border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer' };
-const actionBtnLight: CSSProperties = { padding:'4px 10px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#3A3A3A', border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer' };
-const th: CSSProperties = { padding:'8px 10px', fontSize:10, fontWeight:600, letterSpacing:'.06em', textTransform:'uppercase', color:INK, textAlign:'left' };
-const tdL: CSSProperties = { padding:'8px 10px', fontSize:12, color:INK };
-const tdR: CSSProperties = { padding:'8px 10px', fontSize:12, textAlign:'right' };
