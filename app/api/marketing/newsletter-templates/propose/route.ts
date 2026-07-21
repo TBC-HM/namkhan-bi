@@ -114,7 +114,7 @@ async function callAnthropic(userPrompt: string): Promise<Proposal> {
 async function safeSelect(sb: ReturnType<typeof getSupabaseAdmin>, table: string, cols: string, pid: number, limit = 20): Promise<Array<Record<string, unknown>>> {
   try {
     const { data } = await sb.from(table).select(cols).eq('property_id', pid).limit(limit);
-    return (data as Array<Record<string, unknown>>) ?? [];
+    return ((data as unknown) as Array<Record<string, unknown>>) ?? [];
   } catch { return []; }
 }
 
