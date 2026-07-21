@@ -1,5 +1,7 @@
 // app/h/[property_id]/guest/newsletters/page.tsx
-// PBS 2026-07-08: Tenant delegate — mounts Namkhan Newsletters body with propertyId scoping.
+// PBS 2026-07-21 · tenant delegate — mounts the canonical Newsletters cockpit
+// with propertyId scoping AND searchParams passthrough (?tab / ?audience / ?cal).
+// Same delegation pattern used across the tenant tree.
 
 import { notFound } from 'next/navigation';
 import NewslettersBody from '@/app/guest/newsletters/page';
@@ -9,10 +11,12 @@ export const revalidate = 0;
 
 export default function TenantNewslettersPage({
   params,
+  searchParams,
 }: {
   params: { property_id: string };
+  searchParams?: { audience?: string; tab?: string; cal?: string };
 }) {
   const pid = Number(params.property_id);
   if (!Number.isFinite(pid)) notFound();
-  return <NewslettersBody propertyId={pid} />;
+  return <NewslettersBody propertyId={pid} searchParams={searchParams} />;
 }

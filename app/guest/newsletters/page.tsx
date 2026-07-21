@@ -1,8 +1,17 @@
 // app/guest/newsletters/page.tsx
-// PBS 2026-07-04 v4: Planned date column · Schedule button on drafts · Halt button on scheduled.
-// PBS 2026-07-21 pm (Add 2): NewslettersSubStrip (Broadcasts / Lifecycle / Templates) at top +
-// ProposeNewsletterButton in top row so the "✨ Propose Newsletter" affordance is
-// visible on both Broadcasts and Lifecycle views. Default kind = 'broadcast'.
+// PBS 2026-07-04 v4 · 2026-07-21 (5-tab strip) · 2026-07-22 v2 (broadcasts) ·
+// 2026-07-22 v3 (COCKPIT): default now renders OverviewCockpit; the historical
+// Drafts/Scheduled/Sent broadcasts table lives at ?tab=broadcasts (same URL,
+// same sub-strip tab pointing at that param). All old behaviour preserved —
+// additive only.
+//
+// Sub-strip:
+//   Overview  → this page (no ?tab)                    [DEFAULT]
+//   Broadcasts→ this page with ?tab=broadcasts
+//   Lifecycle → /guest/newsletters/lifecycle
+//   Sequences → /guest/newsletters/sequences
+//   Templates → /guest/newsletters/templates
+//   Director  → /guest/newsletters/director
 
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
@@ -14,6 +23,7 @@ import HaltButton from './_components/HaltButton';
 import RecipientsButton from './_components/RecipientsButton';
 import DeleteCampaignButton from './_components/DeleteCampaignButton';
 import NewslettersSubStrip from './_components/NewslettersSubStrip';
+import OverviewCockpit from './_components/OverviewCockpit';
 import ProposeNewsletterButton from './_components/ProposeNewsletterButton';
 
 export const dynamic = 'force-dynamic';
@@ -29,6 +39,8 @@ type CampaignRow = {
   created_by: string | null; created_at: string; updated_at: string; archived_at: string | null;
   planned_date: string | null;
   campaign_kind?: string | null;
+  audience_type?: string | null;
+  goal_tag?: string | null;
 };
 
 function fmtDateTime(iso: string | null): string {
@@ -51,35 +63,84 @@ function fmtRelSchedule(row: CampaignRow): string {
 }
 function pctOr(n: number, d: number): string { if (!d) return '—'; return `${((n / d) * 100).toFixed(0)}%`; }
 
-interface PageProps { propertyId?: number }
+interface PageProps { propertyId?: number; searchParams?: { audience?: string; tab?: string; cal?: string } }
 
-export default async function NewslettersPage({ propertyId }: PageProps = {}) {
+export default async function NewslettersPage({ propertyId, searchParams }: PageProps = {}) {
   const pid = propertyId ?? PROPERTY_ID;
-  const { data, error } = await supabase.from('v_guest_campaigns').select('*')
-    .eq('property_id', pid).is('archived_at', null)
-    .order('planned_date', { ascending: true, nullsFirst: false })
-    .order('updated_at', { ascending: false });
-  const allRows: CampaignRow[] = (data as CampaignRow[]) ?? [];
-  // Broadcasts view = everything that is not explicitly a lifecycle campaign.
-  const rows = allRows.filter((r) => (r.campaign_kind ?? 'broadcast') !== 'lifecycle');
-  const drafts   = rows.filter(r => r.status === 'draft');
-  const upcoming = rows.filter(r => r.status === 'scheduled' || r.status === 'sending');
-  const sent     = rows.filter(r => r.status === 'sent');
+  const audienceParam = (searchParams?.audience || 'b2c').toLowerCase();
+  const audience: 'b2c' | 'b2b' | 'all' = audienceParam === 'b2b' ? 'b2b' : audienceParam === 'all' ? 'all' : 'b2c';
+  const tab = (searchParams?.tab || 'overview').toLowerCase();
+  const isBroadcasts = tab === 'broadcasts';
 
   const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/guest/newsletters',
   }));
 
+  // ================= OVERVIEW (default) =================
+  if (!isBroadcasts) {
+    return (
+      <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
+        <DashboardPage
+          title="Contacts · Newsletters"
+          subtitle="Marketing-ops cockpit — analytics, monthly calendar, and live sequences."
+          tabs={tabs}
+        >
+          <NewslettersSubStrip active="overview" />
+
+          <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center', marginBottom:8 }}>
+            <ProposeNewsletterButton propertyId={pid} defaultAudience={audience} />
+            <TenantLink href="/guest/newsletters?tab=broadcasts" style={secondaryButton}>Broadcasts →</TenantLink>
+            <TenantLink href="/guest/newsletters/director" style={secondaryButton}>AI Director</TenantLink>
+            <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
+            <TenantLink href="/guest/directory" style={ctaButton}>+ Compose from Directory</TenantLink>
+          </div>
+
+          <div style={{ gridColumn:'1 / -1' }}>
+            <OverviewCockpit propertyId={pid} month={searchParams?.cal} />
+          </div>
+        </DashboardPage>
+      </div>
+    );
+  }
+
+  // ================= BROADCASTS (original UI, preserved) =================
+  const { data, error } = await supabase.from('v_guest_campaigns').select('*')
+    .eq('property_id', pid).is('archived_at', null)
+    .order('planned_date', { ascending: true, nullsFirst: false })
+    .order('updated_at', { ascending: false });
+  const allRows: CampaignRow[] = (data as CampaignRow[]) ?? [];
+
+  const rows = allRows.filter((r) => {
+    const kind = (r.campaign_kind ?? 'broadcast') as string;
+    if (kind !== 'broadcast') return false;
+    if (audience === 'all') return true;
+    const a = (r.audience_type ?? 'b2c') as string;
+    return a === audience;
+  });
+
+  const drafts   = rows.filter(r => r.status === 'draft');
+  const upcoming = rows.filter(r => r.status === 'scheduled' || r.status === 'sending');
+  const sent     = rows.filter(r => r.status === 'sent');
+
   return (
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title="Contacts · Newsletters"
-        subtitle={`${rows.length} campaign${rows.length === 1 ? '' : 's'} — Drafts, Scheduled and Sent.`} tabs={tabs}>
-        <NewslettersSubStrip active="broadcasts" />
+        subtitle={`${rows.length} broadcast${rows.length === 1 ? '' : 's'} — Drafts, Scheduled and Sent.`} tabs={tabs}>
+        <NewslettersSubStrip active="newsletters" />
 
-        <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center' }}>
-          <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
-          <ProposeNewsletterButton propertyId={pid} defaultKind="broadcast" />
-          <TenantLink href="/guest/directory" style={ctaButton}>+ Compose from Directory</TenantLink>
+        <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', gap:8, alignItems:'center' }}>
+          <div style={{ display:'flex', gap:4, alignItems:'center' }}>
+            <span style={audLabel}>Audience:</span>
+            <TenantLink href={`/guest/newsletters?tab=broadcasts&audience=b2c`} style={audience==='b2c' ? audActive : audInactive}>B2C</TenantLink>
+            <TenantLink href={`/guest/newsletters?tab=broadcasts&audience=b2b`} style={audience==='b2b' ? audActive : audInactive}>B2B</TenantLink>
+            <TenantLink href={`/guest/newsletters?tab=broadcasts&audience=all`} style={audience==='all' ? audActive : audInactive}>All</TenantLink>
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            <ProposeNewsletterButton propertyId={pid} defaultAudience={audience} />
+            <TenantLink href="/guest/newsletters/director" style={secondaryButton}>AI Director</TenantLink>
+            <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
+            <TenantLink href="/guest/directory" style={ctaButton}>+ Compose from Directory</TenantLink>
+          </div>
         </div>
 
         {error && <div style={{ ...errorBox, gridColumn:'1 / -1' }}>Could not load campaigns: {error.message}</div>}
@@ -214,3 +275,6 @@ const tdR: CSSProperties = { padding:'8px 10px', fontSize:12, textAlign:'right',
 const pctSub: CSSProperties = { fontSize:10, color:'#5A5A5A', marginLeft:4 };
 const actionBtnGreen: CSSProperties = { display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600, background:'#1F3A2E', color:'#FFFFFF', border:'none', borderRadius:4, textDecoration:'none' };
 const actionBtnLight: CSSProperties = { display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#3A3A3A', border:'1px solid #E6DFCC', borderRadius:4, textDecoration:'none' };
+const audLabel: CSSProperties = { fontSize:11, color:'#5A5A5A', marginRight:4 };
+const audActive: CSSProperties = { padding:'4px 10px', fontSize:11, fontWeight:700, background:'#1F3A2E', color:'#FFFFFF', border:'1px solid #1F3A2E', borderRadius:4, textDecoration:'none' };
+const audInactive: CSSProperties = { padding:'4px 10px', fontSize:11, fontWeight:500, background:'#FFFFFF', color:'#3A3A3A', border:'1px solid #E6DFCC', borderRadius:4, textDecoration:'none' };
