@@ -30,7 +30,35 @@ function chip(kind: string) {
 }
 function SubTabs({ active }: { active: string }) {
   const tabs: [string, string][] = [['menus', 'Menus'], ['catalog', 'POS Catalog (reference)'], ['import', 'New / Import']];
-  return <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--hairline,#E6DFCC)' }}>{tabs.map(([k, l]) => { const on = active === k; return <a key={k} href={'/operations/menus?tab=' + k} style={{ padding: '6px 12px', fontSize: 13, fontWeight: on ? 600 : 500, color: on ? 'var(--ink,#1B1B1B)' : 'var(--ink-soft,#5A5A5A)', borderBottom: on ? '2px solid var(--primary,#1F3A2E)' : '2px solid transparent', textDecoration: 'none' }}>{l}</a>; })}</div>;
+  return (
+    <nav style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }} role="tablist" aria-label="Menu Studio sections">
+      {tabs.map(([k, l]) => {
+        const on = active === k;
+        return (
+          <a
+            key={k}
+            href={'/operations/menus?tab=' + k}
+            role="tab"
+            aria-selected={on}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '4px 8px',
+              fontSize: 12,
+              fontWeight: on ? 600 : 500,
+              color: on ? 'var(--ink, #1B1B1B)' : 'var(--ink-soft, #5A5A5A)',
+              cursor: 'pointer',
+              borderBottom: on ? '2px solid var(--primary, #1F3A2E)' : '2px solid transparent',
+              textDecoration: 'none',
+              fontFamily: 'inherit',
+            }}
+          >
+            {l}
+          </a>
+        );
+      })}
+    </nav>
+  );
 }
 function itemRow(i: any) {
   return (
