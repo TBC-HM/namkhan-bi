@@ -1,10 +1,11 @@
 // app/settings/property/audience/page.tsx
 // PBS 2026-07-21 · Audience Settings tab.
-// 4 stacked panels:
+// 5 stacked panels (v2 2026-07-21 pm — added EmailChromePanel):
 //   1. SenderIdentityPanel        — property_email_settings upsert
 //   2. BlocklistPanel             — subscriber_blocklist CRUD + preview + apply
 //   3. GroupsRulesPanel           — subscriber_group_rules editor per group
 //   4. ImportRoutingRulesPanel    — import_routing_rules editor
+//   5. EmailChromePanel           — header logo/tagline + footer address/social/disclaimer/unsub
 // Reads via public.v_marketing_* bridge views (PostgREST public-only rule).
 // Writes via SECURITY DEFINER RPCs (public.fn_*).
 
@@ -19,6 +20,7 @@ import AudienceSettingsClient, {
   type BlocklistRow, type GroupRow, type GroupRuleRow,
   type EmailSettingsRow, type RoutingRuleRow,
 } from './_components/AudienceSettingsClient';
+import type { EmailChromeSettings } from './_components/EmailChromePanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,13 +42,16 @@ export default async function AudienceSettingsPage() {
     );
   }
 
-  const [sectionsRes, blocklistRes, groupsRes, groupRulesRes, emailRes, routingRes] = await Promise.all([
+  const [sectionsRes, blocklistRes, groupsRes, groupRulesRes, emailRes, routingRes, chromeRes] = await Promise.all([
     admin.schema('marketing').from('v_settings_sections_live').select('*').order('display_order'),
     admin.from('v_marketing_subscriber_blocklist').select('*').limit(500),
     admin.from('v_subscriber_groups').select('id, slug, name, description, color, is_system, sort_order, member_count').order('sort_order'),
     admin.from('v_marketing_subscriber_group_rules').select('*').limit(1000),
     admin.from('v_marketing_property_email_settings').select('*').eq('property_id', PROPERTY_ID).maybeSingle(),
     admin.from('v_marketing_import_routing_rules').select('*').limit(500),
+    admin.from('v_marketing_property_email_settings')
+      .select('property_id, header_logo_asset_id, header_logo_public_url, header_tagline, default_hero_asset_id, default_hero_public_url, footer_address_lines, footer_social_links, footer_disclaimer_text, footer_unsubscribe_wording')
+      .eq('property_id', PROPERTY_ID).maybeSingle(),
   ]);
 
   const sections: SectionRow[] = (sectionsRes.data ?? []) as SectionRow[];
@@ -55,8 +60,9 @@ export default async function AudienceSettingsPage() {
   const groupRules: GroupRuleRow[] = (groupRulesRes.data ?? []) as GroupRuleRow[];
   const emailSettings: EmailSettingsRow | null = (emailRes.data ?? null) as EmailSettingsRow | null;
   const routingRules: RoutingRuleRow[] = (routingRes.data ?? []) as RoutingRuleRow[];
+  const chrome: EmailChromeSettings | null = (chromeRes.data ?? null) as EmailChromeSettings | null;
 
-  const dbErr = blocklistRes.error || groupsRes.error || groupRulesRes.error || emailRes.error || routingRes.error;
+  const dbErr = blocklistRes.error || groupsRes.error || groupRulesRes.error || emailRes.error || routingRes.error || chromeRes.error;
 
   return (
     <Page
@@ -74,7 +80,7 @@ export default async function AudienceSettingsPage() {
         <SectionSidebar sections={sections} active="audience" />
         <Card
           title="Audience"
-          sub={`${blocklist.length} blocklist rules · ${groups.length} groups · ${groupRules.length} group rules · ${routingRules.length} routing rules`}
+          sub={`${blocklist.length} blocklist rules · ${groups.length} groups · ${groupRules.length} group rules · ${routingRules.length} routing rules · email chrome`}
           source="marketing.subscriber_blocklist + subscriber_group_rules + property_email_settings + import_routing_rules"
         >
           <AudienceSettingsClient
@@ -84,6 +90,7 @@ export default async function AudienceSettingsPage() {
             initialGroupRules={groupRules}
             initialEmailSettings={emailSettings}
             initialRoutingRules={routingRules}
+            initialEmailChrome={chrome}
           />
         </Card>
       </div>

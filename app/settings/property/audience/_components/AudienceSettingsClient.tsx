@@ -1,10 +1,12 @@
 'use client';
 // app/settings/property/audience/_components/AudienceSettingsClient.tsx
-// PBS 2026-07-21 · 4 stacked panels for the Audience settings tab.
+// PBS 2026-07-21 · 5 stacked panels for the Audience settings tab.
+//   (v2 2026-07-21 pm — added EmailChromePanel below the 4 existing panels.)
 // Design tokens: paper white #FFFFFF · hairline #E6DFCC · ink #1B1B1B · forest #084838.
 // All writes go through /api/marketing/audience/* thin routes → public.fn_* RPCs.
 
 import { useCallback, useState, useTransition } from 'react';
+import EmailChromePanel, { type EmailChromeSettings } from './EmailChromePanel';
 
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
@@ -77,7 +79,7 @@ interface Props {
   initialRoutingRules: RoutingRuleRow[];
 }
 
-export default function AudienceSettingsClient(props: Props) {
+export default function AudienceSettingsClient(props: Props & { initialEmailChrome?: EmailChromeSettings | null }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <SenderIdentityPanel
@@ -96,6 +98,10 @@ export default function AudienceSettingsClient(props: Props) {
         propertyId={props.propertyId}
         groups={props.initialGroups}
         initial={props.initialRoutingRules}
+      />
+      <EmailChromePanel
+        propertyId={props.propertyId}
+        initial={props.initialEmailChrome ?? null}
       />
     </div>
   );

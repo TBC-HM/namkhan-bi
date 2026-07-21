@@ -1,5 +1,6 @@
 // app/guest/newsletters/_components/NewslettersSubStrip.tsx
-// PBS 2026-07-21: 2-tab sub-strip inside Guest · Newsletters.
+// PBS 2026-07-21: 3-tab sub-strip inside Guest · Newsletters.
+// (v2 2026-07-21 pm — added "Templates" as 3rd tab.)
 // Mirrors the /marketing/media MediaHub tab pattern (padding 4px 8px, fontSize 12,
 // gap 8, borderBottom 2px solid var(--primary, #1F3A2E) when active) but uses
 // TenantLink navigation so the tenant prefix (/h/{property_id}) is preserved.
@@ -7,13 +8,14 @@
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
 
-type SubTabKey = 'newsletters' | 'sequences';
+type SubTabKey = 'newsletters' | 'sequences' | 'templates';
 
 interface Props { active: SubTabKey }
 
 const TABS: Array<{ key: SubTabKey; label: string; href: string }> = [
   { key: 'newsletters', label: 'Newsletters', href: '/guest/newsletters'           },
   { key: 'sequences',   label: 'Sequences',   href: '/guest/newsletters/sequences' },
+  { key: 'templates',   label: 'Templates',   href: '/guest/newsletters/templates' },
 ];
 
 const HAIR    = '#E6DFCC';
