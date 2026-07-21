@@ -62,9 +62,21 @@ type MediaCandidate = {
   primary_tier: string | null;
 };
 
+type LinkCatalogRow = {
+  url: string;
+  title: string | null;
+  anchor_hint: string | null;
+  section: string | null;
+  description: string | null;
+};
+
+type TransportRow = { name: string; transport_type: string | null; route_from: string | null; route_to: string | null; duration_min: number | null; capacity_pax: number | null; price_amount: number | null; price_currency: string | null; is_complimentary: boolean | null };
+type SpaRow       = { name: string; category: string | null; duration_min: number | null; price_usd: number | null; is_signature: boolean | null; short_description: string | null };
+type FnbRow       = { name: string; section: string | null; price_usd: number | null; is_signature: boolean | null; description: string | null };
+
 async function fetchGuardrails(propertyId: number) {
   const sb = getSupabaseAdmin();
-  const [rules, facilities, activities, rooms, docs, mediaCandidates] = await Promise.all([
+  const [rules, facilities, activities, rooms, docs, mediaCandidates, linkCatalog, transport, spa, fnb] = await Promise.all([
     sb.from('v_marketing_email_general_rules').select('rule_kind, rule_text')
       .or(`property_id.eq.${propertyId},property_id.is.null`),
     sb.from('v_facilities_lite').select('name, category').eq('property_id', propertyId).limit(60),
@@ -77,6 +89,14 @@ async function fetchGuardrails(propertyId: number) {
       .in('primary_tier', ['tier_ota_profile','tier_website_hero'])
       .order('quality_index', { ascending: false })
       .limit(30),
+    sb.from('v_marketing_internal_link_catalog').select('url, title, anchor_hint, section, description')
+      .eq('property_id', propertyId),
+    sb.from('v_transport_options').select('name, transport_type, route_from, route_to, duration_min, capacity_pax, price_amount, price_currency, is_complimentary')
+      .eq('property_id', propertyId).eq('is_active', true).limit(20),
+    sb.from('v_property_spa_treatments').select('name, category, duration_min, price_usd, is_signature, short_description')
+      .eq('property_id', propertyId).eq('is_active', true).limit(30),
+    sb.from('v_property_fnb_menu_items').select('name, section, price_usd, is_signature, description')
+      .eq('property_id', propertyId).eq('is_active', true).limit(40),
   ]);
   return {
     rules: (rules.data as RuleRow[] | null) ?? [],
@@ -85,7 +105,52 @@ async function fetchGuardrails(propertyId: number) {
     rooms: (rooms.data as RoomRow[] | null) ?? [],
     docs: (docs.data as DocRow[] | null) ?? [],
     mediaCandidates: (mediaCandidates.data as MediaCandidate[] | null) ?? [],
+    linkCatalog: (linkCatalog.data as LinkCatalogRow[] | null) ?? [],
+    transport: (transport.data as TransportRow[] | null) ?? [],
+    spa: (spa.data as SpaRow[] | null) ?? [],
+    fnb: (fnb.data as FnbRow[] | null) ?? [],
   };
+}
+
+function buildUpsellBlock(t: TransportRow[], s: SpaRow[], f: FnbRow[], a: ActivityRow[]): string {
+  const tLines = t.length
+    ? t.map(x => `  - ${x.name}${x.transport_type ? ` [${x.transport_type}]` : ''}${x.route_from && x.route_to ? ` (${x.route_from} → ${x.route_to})` : ''}${x.duration_min ? `, ${x.duration_min}min` : ''}${x.capacity_pax ? `, ${x.capacity_pax}pax` : ''}${x.is_complimentary ? ' — COMPLIMENTARY' : (x.price_amount ? `, ${x.price_currency ?? 'USD'} ${x.price_amount}` : '')}`).join('\n')
+    : '  (none)';
+  const sLines = s.length
+    ? s.map(x => `  - ${x.name}${x.category ? ` [${x.category}]` : ''}${x.duration_min ? ` (${x.duration_min}min)` : ''}${x.price_usd ? ` — USD ${x.price_usd}` : ''}${x.is_signature ? ' ★signature' : ''}${x.short_description ? `: ${x.short_description.slice(0, 90)}` : ''}`).join('\n')
+    : '  (none)';
+  const fLines = f.length
+    ? f.slice(0, 20).map(x => `  - ${x.name}${x.section ? ` [${x.section}]` : ''}${x.price_usd ? ` — USD ${x.price_usd}` : ''}${x.is_signature ? ' ★signature' : ''}${x.description ? `: ${x.description.slice(0, 80)}` : ''}`).join('\n')
+    : '  (none)';
+  const aLines = a.length
+    ? a.slice(0, 15).map(x => `  - ${x.name}${x.category ? ` [${x.category}]` : ''}${x.description ? `: ${x.description.slice(0, 80)}` : ''}`).join('\n')
+    : '  (none)';
+  return `TRANSPORT (airport/pick-up options):\n${tLines}\n\nJUNGLE SPA TREATMENTS:\n${sLines}\n\nF&B EXPERIENCES / MENU ITEMS:\n${fLines}\n\nACTIVITIES:\n${aLines}`;
+}
+
+function buildLinkCatalogBlock(links: LinkCatalogRow[]): string {
+  if (!links.length) return '(no internal links catalogued — you may only use mailto: links)';
+  return links.map(l => {
+    const bits: string[] = [];
+    if (l.section) bits.push(`section=${l.section}`);
+    if (l.anchor_hint) bits.push(`anchor="${l.anchor_hint}"`);
+    return `  - ${l.url}\n    title: ${l.title ?? ''}\n    ${bits.join(' · ')}${l.description ? `\n    ${l.description}` : ''}`;
+  }).join('\n');
+}
+
+// Validate that every markdown link URL in body_md is in the catalog or a mailto:.
+// Returns list of invalid URLs (empty = clean).
+export function findInvalidLinks(bodyMd: string, catalogUrls: Set<string>): string[] {
+  const bad: string[] = [];
+  const re = /\[[^\]]+\]\(([^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(bodyMd)) !== null) {
+    const url = m[1].trim();
+    if (url.startsWith('mailto:')) continue;
+    if (catalogUrls.has(url)) continue;
+    bad.push(url);
+  }
+  return bad;
 }
 
 function buildBrandContext(docs: DocRow[]): string {
@@ -152,6 +217,24 @@ ${buildFacilitiesBlock(g.facilities, g.activities, g.rooms)}
 HERO PHOTO SHORTLIST (pick ONE hero_asset_id per step from below; match the step's theme; leave null only if truly none fits):
 ${buildMediaBlock(g.mediaCandidates)}
 
+INTERNAL LINK CATALOG (you MUST use ONLY these URLs for booking/CTA/legal links; never invent, never render raw Cloudbeds URLs — always wrap in the suggested anchor text):
+${buildLinkCatalogBlock(g.linkCatalog)}
+Rules for choosing a link:
+  - retreat email → use the retreat booking URL
+  - members/loyalty/returning-guest email → use the members-rate URL
+  - all other booking CTAs → use the standard booking URL
+  - cancellation/deposit/T&Cs mention → use the Terms & Conditions URL
+Any body_md link URL that is NOT in this catalog and NOT a mailto: will be REJECTED at accept time.
+
+AVAILABLE UPSELL PRODUCTS (use REAL product name + duration + price; never invent):
+${buildUpsellBlock(g.transport, g.spa, g.fnb, g.activities)}
+Pre-arrival emails (segment in welcome / anticipation / booking_confirm / retreat_confirm) MUST weave ≥3 upsell CTAs into the story:
+  1. Airport transfer (from TRANSPORT list) — anchor "Reserve your riverside pick-up"
+  2. Wellness ritual (from JUNGLE SPA list) — anchor "Book a first-morning ritual"
+  3. F&B experience (from F&B list) — anchor "Reserve a private riverside dinner"
+  4. (optional) Activity (from ACTIVITIES list) — anchor "Add a Mekong sunset boat"
+If no matching internal_link_catalog URL exists for a specific CTA, use the plain-text prompt: "reply to reserve — we can add this to your stay on arrival". NEVER invent a booking URL.
+
 Segment: ${segment}
 Tone: ${toneLine}
 ${briefBlock}
@@ -178,7 +261,8 @@ Return ONLY valid JSON matching:
   ]
 }
 body_md is markdown, 120-260 words per step, sensory, first-person-plural, no "discount" language.
-hero_asset_id MUST be one of the asset_id values from the HERO PHOTO SHORTLIST above, or null.`;
+hero_asset_id MUST be one of the asset_id values from the HERO PHOTO SHORTLIST above, or null.
+Every markdown link URL MUST come from the INTERNAL LINK CATALOG above (or be a mailto:).`;
 }
 
 async function callClaude(prompt: string): Promise<Funnel> {
@@ -212,6 +296,30 @@ function validateHeroAssets(funnel: Funnel, candidates: MediaCandidate[]): Funne
   return funnel;
 }
 
+// Scan every step's body_md and image URLs; return a per-step map of violations.
+function validateStepLinksAndImages(funnel: Funnel, catalog: LinkCatalogRow[]): Record<number, string[]> {
+  const violations: Record<number, string[]> = {};
+  const catalogUrls = new Set(catalog.map(l => l.url));
+  const imageRe = /!\[[^\]]*\]\(([^)]+)\)/g;
+  for (const s of funnel.steps) {
+    const problems: string[] = [];
+    // link URLs
+    const bad = findInvalidLinks(s.body_md ?? '', catalogUrls);
+    for (const u of bad) problems.push(`invalid link URL: ${u} (not in internal_link_catalog)`);
+    // image URLs — must be a supabase-storage URL for media-raw/media-master/media-ai/media-renders
+    let m: RegExpExecArray | null;
+    const body = s.body_md ?? '';
+    while ((m = imageRe.exec(body)) !== null) {
+      const u = m[1].trim();
+      if (!/\/storage\/v1\/object\/public\/media-(raw|master|ai|renders)\//.test(u)) {
+        problems.push(`invalid image URL: ${u} (must be a supabase media-* public URL)`);
+      }
+    }
+    if (problems.length) violations[s.step_no] = problems;
+  }
+  return violations;
+}
+
 export async function POST(req: NextRequest) {
   let body: { segment?: SegmentKey; custom_brief?: string; property_id?: number };
   try {
@@ -233,15 +341,22 @@ export async function POST(req: NextRequest) {
     const guardrails = await fetchGuardrails(propertyId);
     const funnel = await callClaude(buildPrompt(segment, body.custom_brief, guardrails));
     if (!funnel?.steps?.length) throw new Error('empty_funnel');
+    const validated = validateHeroAssets(funnel, guardrails.mediaCandidates);
+    const violations = validateStepLinksAndImages(validated, guardrails.linkCatalog);
     return NextResponse.json({
       ok: true,
-      funnel: validateHeroAssets(funnel, guardrails.mediaCandidates),
+      funnel: validated,
+      violations,
       guardrails_summary: {
         rules: guardrails.rules.length,
         facilities: guardrails.facilities.length,
         activities: guardrails.activities.length,
         rooms: guardrails.rooms.length,
         hero_candidates: guardrails.mediaCandidates.length,
+        link_catalog: guardrails.linkCatalog.length,
+        transport: guardrails.transport.length,
+        spa: guardrails.spa.length,
+        fnb: guardrails.fnb.length,
       },
     });
   } catch (e) {

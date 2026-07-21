@@ -47,6 +47,14 @@ type MediaRow = {
   quality_index: number | null; primary_tier: string | null; public_url: string | null;
 };
 
+type LinkCatalogRow = {
+  url: string;
+  title: string | null;
+  anchor_hint: string | null;
+  section: string | null;
+  description: string | null;
+};
+
 type ProposalStep = {
   step_id: string;
   step_no: number | null;
@@ -82,6 +90,74 @@ async function loadMediaCandidates(propertyId: number): Promise<MediaRow[]> {
     .order('quality_index', { ascending: false })
     .limit(30);
   return (r.data as MediaRow[] | null) ?? [];
+}
+
+async function loadLinkCatalog(propertyId: number): Promise<LinkCatalogRow[]> {
+  const sb = getSupabaseAdmin();
+  const r = await sb.from('v_marketing_internal_link_catalog')
+    .select('url, title, anchor_hint, section, description')
+    .eq('property_id', propertyId);
+  return (r.data as LinkCatalogRow[] | null) ?? [];
+}
+
+async function loadUpsellProducts(propertyId: number) {
+  const sb = getSupabaseAdmin();
+  const [t, s, f, a] = await Promise.all([
+    sb.from('v_transport_options').select('name, transport_type, route_from, route_to, duration_min, capacity_pax, price_amount, price_currency, is_complimentary').eq('property_id', propertyId).eq('is_active', true).limit(20),
+    sb.from('v_property_spa_treatments').select('name, category, duration_min, price_usd, is_signature, short_description').eq('property_id', propertyId).eq('is_active', true).limit(30),
+    sb.from('v_property_fnb_menu_items').select('name, section, price_usd, is_signature, description').eq('property_id', propertyId).eq('is_active', true).limit(40),
+    sb.from('v_activities_catalog').select('name, category, description').eq('property_id', propertyId).eq('is_active', true).limit(30),
+  ]);
+  return {
+    transport: (t.data as Array<{ name: string; transport_type: string | null; route_from: string | null; route_to: string | null; duration_min: number | null; capacity_pax: number | null; price_amount: number | null; price_currency: string | null; is_complimentary: boolean | null }> | null) ?? [],
+    spa: (s.data as Array<{ name: string; category: string | null; duration_min: number | null; price_usd: number | null; is_signature: boolean | null; short_description: string | null }> | null) ?? [],
+    fnb: (f.data as Array<{ name: string; section: string | null; price_usd: number | null; is_signature: boolean | null; description: string | null }> | null) ?? [],
+    activities: (a.data as Array<{ name: string; category: string | null; description: string | null }> | null) ?? [],
+  };
+}
+
+function upsellBlock(u: Awaited<ReturnType<typeof loadUpsellProducts>>): string {
+  const t = u.transport.map(x => `  - ${x.name}${x.transport_type ? ` [${x.transport_type}]` : ''}${x.route_from && x.route_to ? ` (${x.route_from} → ${x.route_to})` : ''}${x.duration_min ? `, ${x.duration_min}min` : ''}${x.is_complimentary ? ' — COMPLIMENTARY' : (x.price_amount ? `, ${x.price_currency ?? 'USD'} ${x.price_amount}` : '')}`).join('\n') || '  (none)';
+  const s = u.spa.map(x => `  - ${x.name}${x.category ? ` [${x.category}]` : ''}${x.duration_min ? ` (${x.duration_min}min)` : ''}${x.price_usd ? ` — USD ${x.price_usd}` : ''}${x.is_signature ? ' ★' : ''}`).join('\n') || '  (none)';
+  const f = u.fnb.slice(0, 15).map(x => `  - ${x.name}${x.section ? ` [${x.section}]` : ''}${x.price_usd ? ` — USD ${x.price_usd}` : ''}${x.is_signature ? ' ★' : ''}`).join('\n') || '  (none)';
+  const a = u.activities.slice(0, 10).map(x => `  - ${x.name}${x.category ? ` [${x.category}]` : ''}`).join('\n') || '  (none)';
+  return `TRANSPORT:\n${t}\n\nSPA:\n${s}\n\nF&B:\n${f}\n\nACTIVITIES:\n${a}`;
+}
+
+function linkCatalogBlock(links: LinkCatalogRow[]): string {
+  if (!links.length) return '(no internal links catalogued — use ONLY mailto:)';
+  return links.map(l => {
+    const bits: string[] = [];
+    if (l.section) bits.push(`section=${l.section}`);
+    if (l.anchor_hint) bits.push(`anchor="${l.anchor_hint}"`);
+    return `  - ${l.url}\n    title: ${l.title ?? ''}\n    ${bits.join(' · ')}${l.description ? `\n    ${l.description}` : ''}`;
+  }).join('\n');
+}
+
+// Validators: return array of violation strings. Empty = clean.
+function validateBodyMd(bodyMd: string, catalogUrls: Set<string>): string[] {
+  const problems: string[] = [];
+  const linkRe = /\[[^\]]+\]\(([^)]+)\)/g;
+  const imageRe = /!\[[^\]]*\]\(([^)]+)\)/g;
+  // Links (excluding images — image regex fires first with leading !)
+  let m: RegExpExecArray | null;
+  // Iterate all bracketed refs, skip those that are preceded by !
+  for (const match of Array.from(bodyMd.matchAll(linkRe))) {
+    const idx = match.index ?? 0;
+    if (idx > 0 && bodyMd[idx - 1] === '!') continue; // it's an image
+    const u = (match[1] || '').trim();
+    if (u.startsWith('mailto:')) continue;
+    if (u.startsWith('#')) continue; // in-doc anchors are fine
+    if (!catalogUrls.has(u)) problems.push(`invalid link URL: ${u} (not in internal_link_catalog)`);
+  }
+  // Images must be a supabase-storage media-* URL
+  while ((m = imageRe.exec(bodyMd)) !== null) {
+    const u = (m[1] || '').trim();
+    if (!/\/storage\/v1\/object\/public\/media-(raw|master|ai|renders)\//.test(u)) {
+      problems.push(`invalid image URL: ${u} (must be a supabase media-* public URL)`);
+    }
+  }
+  return problems;
 }
 
 function rulesBlock(rules: RuleRow[]): string {
@@ -127,7 +203,12 @@ async function refineSequence(kind: 'sequence_step' | 'sequence_all', id: string
   const sb = getSupabaseAdmin();
   // For sequence_step, `id` is step_id; look up funnel_id.
   // For sequence_all,  `id` is funnel_id.
-  const [rules, media] = await Promise.all([loadRules(DEFAULT_PROPERTY_ID), loadMediaCandidates(DEFAULT_PROPERTY_ID)]);
+  const [rules, media, linkCatalog, upsells] = await Promise.all([
+    loadRules(DEFAULT_PROPERTY_ID),
+    loadMediaCandidates(DEFAULT_PROPERTY_ID),
+    loadLinkCatalog(DEFAULT_PROPERTY_ID),
+    loadUpsellProducts(DEFAULT_PROPERTY_ID),
+  ]);
 
   let steps: StepRow[] = [];
   if (kind === 'sequence_step') {
@@ -168,12 +249,19 @@ ${rulesBlock(rules)}
 HERO PHOTO SHORTLIST:
 ${mediaBlock(media)}
 
+INTERNAL LINK CATALOG (only these URLs are allowed for booking/legal links; never invent):
+${linkCatalogBlock(linkCatalog)}
+
+AVAILABLE UPSELL PRODUCTS (use REAL name + duration + price; never invent. Pre-arrival emails MUST weave ≥3 upsells):
+${upsellBlock(upsells)}
+
 CURRENT ${kind === 'sequence_all' ? 'STEPS' : 'STEP'}:
 ${stepsBlock}
 
 Return ONLY valid JSON:
 ${jsonShape}
-Preserve step_id and step_no exactly. hero_asset_id MUST be one of the asset_id values above, or null.`;
+Preserve step_id and step_no exactly. hero_asset_id MUST be one of the asset_id values above, or null.
+Every markdown link URL MUST come from the INTERNAL LINK CATALOG (or be mailto:) — invalid URLs will be rejected at save.`;
 
   const raw = await callClaude(prompt);
   const urlMap = new Map(media.map(m => [m.asset_id, m.public_url]));
@@ -189,9 +277,11 @@ Preserve step_id and step_no exactly. hero_asset_id MUST be one of the asset_id 
 
 async function refineNewsletter(campaignId: string, instruction: string) {
   const sb = getSupabaseAdmin();
-  const [rules, media, r] = await Promise.all([
+  const [rules, media, linkCatalog, upsells, r] = await Promise.all([
     loadRules(DEFAULT_PROPERTY_ID),
     loadMediaCandidates(DEFAULT_PROPERTY_ID),
+    loadLinkCatalog(DEFAULT_PROPERTY_ID),
+    loadUpsellProducts(DEFAULT_PROPERTY_ID),
     sb.from('guest.campaigns')
       .select('campaign_id, subject, body_md, blocks_json, from_name, from_email')
       .eq('campaign_id', campaignId).limit(1),
@@ -208,8 +298,14 @@ ${instruction}
 GENERAL EMAIL RULES (must still be satisfied):
 ${rulesBlock(rules)}
 
-HERO PHOTO SHORTLIST (if the user asks to swap the hero, pick the best asset_id and put it as the first line of body_md in ![](public_url) form):
+HERO PHOTO SHORTLIST (if the user asks to swap the hero, pick the best asset_id and put it as the first line of body_md in ![](public_url) form; use the ACTUAL public_url from the shortlist, never invent):
 ${mediaBlock(media)}
+
+INTERNAL LINK CATALOG (only these URLs are allowed for booking/legal links; never invent):
+${linkCatalogBlock(linkCatalog)}
+
+AVAILABLE UPSELL PRODUCTS (use REAL name + duration + price; never invent):
+${upsellBlock(upsells)}
 
 CURRENT CAMPAIGN (campaign_id=${c.campaign_id}):
 subject: ${c.subject ?? ''}
@@ -219,11 +315,10 @@ ${c.body_md ?? ''}
 
 Return ONLY valid JSON:
 { "campaign_id": string, "subject": string, "body_md": string }
-Preserve campaign_id exactly. body_md is markdown; keep any leading hero image as ![](url) on its own line.`;
+Preserve campaign_id exactly. body_md is markdown; keep any leading hero image as ![](public_url) on its own line.
+Every markdown link URL MUST come from the INTERNAL LINK CATALOG (or be mailto:) — invalid URLs will be rejected at save.`;
 
   const raw = await callClaude(prompt) as ProposalCampaign;
-  // Optional: if the AI referenced a shortlist asset_id in text form, replace with public URL.
-  // For now we trust the model to embed the URL itself.
   return raw;
 }
 
@@ -244,7 +339,19 @@ export async function POST(req: NextRequest) {
     } else {
       proposal = await refineSequence(kind, id, instruction);
     }
-    return NextResponse.json({ ok: true, kind, proposal });
+    // Compute violations up-front so the UI can warn (POST returns even when dirty; PUT hard-blocks).
+    const catalog = await loadLinkCatalog(DEFAULT_PROPERTY_ID);
+    const catalogUrls = new Set(catalog.map(l => l.url));
+    const violations: Record<string, string[]> = {};
+    const items: Array<{ step_id?: string; campaign_id?: string; body_md?: string | null }> = Array.isArray(proposal)
+      ? (proposal as Array<{ step_id?: string; body_md?: string | null }>)
+      : [proposal as { step_id?: string; campaign_id?: string; body_md?: string | null }];
+    for (const p of items) {
+      const key = p.step_id ?? p.campaign_id ?? '(unknown)';
+      const bad = validateBodyMd(p.body_md ?? '', catalogUrls);
+      if (bad.length) violations[key] = bad;
+    }
+    return NextResponse.json({ ok: true, kind, proposal, violations });
   } catch (e) {
     const em = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ ok: false, error: em }, { status: 502 });
@@ -258,6 +365,27 @@ export async function PUT(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'invalid_json' }, { status: 400 }); }
   const { kind, updates } = body;
   if (!kind || !Array.isArray(updates) || !updates.length) return NextResponse.json({ ok: false, error: 'kind and updates required' }, { status: 400 });
+
+  // Pre-validation: link + image URLs. Reject the whole batch if any violation.
+  const linkCatalog = await loadLinkCatalog(DEFAULT_PROPERTY_ID);
+  const catalogUrls = new Set(linkCatalog.map(l => l.url));
+  const preViolations: Record<string, string[]> = {};
+  for (const u of updates) {
+    const md = 'body_md' in u ? (u.body_md ?? '') : '';
+    if (!md) continue;
+    const bad = validateBodyMd(md, catalogUrls);
+    if (bad.length) {
+      const id = ('step_id' in u && u.step_id) ? u.step_id : ('campaign_id' in u && u.campaign_id) ? u.campaign_id : '(unknown)';
+      preViolations[id] = bad;
+    }
+  }
+  if (Object.keys(preViolations).length) {
+    return NextResponse.json({
+      ok: false,
+      error: 'AI proposed invalid image/link URLs — refused save',
+      violations: preViolations,
+    }, { status: 400 });
+  }
 
   const sb = getSupabaseAdmin();
   const results: Array<{ id: string; ok: boolean; error?: string }> = [];
@@ -284,6 +412,8 @@ export async function PUT(req: NextRequest) {
         p_subject: u.subject ?? null,
         p_body_md: u.body_md ?? null,
         p_blocks_json: (u.blocks_json ?? null) as unknown,
+        p_hero_asset_id: null,
+        p_clear_hero: false,
       });
       if (error) results.push({ id: u.campaign_id, ok: false, error: error.message });
       else results.push({ id: u.campaign_id, ok: true });

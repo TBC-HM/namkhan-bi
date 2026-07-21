@@ -37,6 +37,9 @@ export function renderEmailFrame(opts: EmailFrameOpts): string {
   const propWebsite = opts.propertyWebsite ?? 'thenamkhan.com';
   const unsub = opts.unsubscribeUrl ?? '#';
   const heroAlt = esc(opts.heroAlt ?? propName);
+  // Hero slot is REQUIRED at send-time (enforced by fn_campaign_body_update /
+  // fn_funnel_step_update RPCs). If missing here in preview, render a loud
+  // placeholder so PBS immediately sees "this email will fail to save".
   const hero = opts.heroImageUrl
     ? `<tr><td style="padding:0;">
          <div style="max-width:600px;margin:0 auto;background:${CREAM};">
@@ -45,7 +48,12 @@ export function renderEmailFrame(opts: EmailFrameOpts): string {
            </div>
          </div>
        </td></tr>`
-    : '';
+    : `<tr><td style="padding:0;">
+         <div style="max-width:600px;margin:0 auto;background:#FFF3F0;border-top:1px solid #B03826;border-bottom:1px solid #B03826;padding:32px 24px;text-align:center;color:#B03826;font-family:Georgia,serif;">
+           <div style="font-weight:700;font-size:14px;letter-spacing:0.06em;">NO HERO IMAGE</div>
+           <div style="font-size:11px;margin-top:6px;color:${INK_M};">Every email must have a hero. This will be rejected at save. Pick a photo from the Media Library, or set a property default in Settings &gt; Audience &gt; Email Chrome.</div>
+         </div>
+       </td></tr>`;
 
   const signature = opts.senderName
     ? `<div style="margin-top:22px;padding-top:14px;border-top:1px solid ${HAIR};font-family:Georgia,serif;font-size:13px;color:${INK};">

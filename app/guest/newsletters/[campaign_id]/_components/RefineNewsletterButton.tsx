@@ -29,6 +29,7 @@ export default function RefineNewsletterButton(props: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<CampaignProposal | null>(null);
+  const [violations, setViolations] = useState<Record<string, string[]>>({});
 
   async function submit() {
     if (!instruction.trim()) return;
@@ -46,6 +47,7 @@ export default function RefineNewsletterButton(props: Props) {
       const j = await res.json();
       if (!j?.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
       setProposal(j.proposal as CampaignProposal);
+      setViolations(j.violations ?? {});
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
@@ -54,7 +56,7 @@ export default function RefineNewsletterButton(props: Props) {
   function accept() {
     if (!proposal) return;
     props.onAccept(proposal.subject ?? null, proposal.body_md ?? null);
-    setOpen(false); setProposal(null); setInstruction('');
+    setOpen(false); setProposal(null); setInstruction(''); setViolations({});
   }
 
   return (
@@ -98,6 +100,18 @@ export default function RefineNewsletterButton(props: Props) {
             </div>
 
             {error && <div style={{ marginTop: 10, fontSize: 12, color: RED }}>Error: {error}</div>}
+
+            {Object.keys(violations).length > 0 && (
+              <div style={{ marginTop: 10, padding: 8, fontSize: 11, background: '#FFF3F0', border: '1px solid ' + RED, borderRadius: 4, color: RED }}>
+                <strong>URL guardrail violations (SAVE will be rejected until fixed):</strong>
+                {Object.entries(violations).map(([k, arr]) => (
+                  <div key={k} style={{ marginTop: 4 }}>
+                    <div style={{ fontWeight: 600 }}>{k}</div>
+                    <ul style={{ margin: '2px 0 0 18px', padding: 0 }}>{arr.map((v, i) => <li key={i}>{v}</li>)}</ul>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {proposal && (
               <div style={{ marginTop: 14, borderTop: '1px solid ' + HAIR, paddingTop: 14 }}>
