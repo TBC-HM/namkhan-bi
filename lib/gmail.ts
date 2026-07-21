@@ -15,6 +15,7 @@
 //   GOOGLE_OAUTH_REDIRECT_URI = https://namkhan-bi.vercel.app/api/auth/gmail/callback
 //   CRON_SECRET                = secret used by Vercel cron + manual trigger
 
+import * as crypto from 'crypto';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -198,4 +199,160 @@ export function extractBodies(p: GmailPayload | undefined): { text: string; html
   }
   walk(p);
   return { text, html };
+}
+
+// ---------- Google Workspace Domain-Wide Delegation (DWD) ----------
+// PBS 2026-07-21 — Impersonate any @thenamkhan.com mailbox via JWT-bearer flow.
+//
+// Prereq (already done in Google Cloud + Workspace admin):
+//   1. Service account created: namkhan-gmail-extractor@namkhan-bi.iam.gserviceaccount.com
+//   2. DWD authorized in admin.google.com/ac/owl/domainwidedelegation for scopes:
+//        https://www.googleapis.com/auth/gmail.readonly
+//        https://www.googleapis.com/auth/gmail.metadata
+//   3. Service account JSON stored in Supabase vault as GMAIL_SERVICE_ACCOUNT_JSON
+//
+// Reads the JSON via SECURITY DEFINER RPC fn_get_secret (never via vault-direct).
+// Signs a JWT with the private key using Node's built-in crypto (no new deps).
+
+const DWD_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.metadata',
+].join(' ');
+
+interface ServiceAccountKey {
+  client_email: string;
+  private_key: string;
+  token_uri?: string;
+}
+
+// In-memory access-token cache (per mailbox) — tokens are valid 3600s.
+// Cached across invocations WITHIN the same warm Lambda; a cold start re-mints.
+const _accessCache = new Map<string, { token: string; exp: number }>();
+
+function b64url(input: Buffer | string): string {
+  const buf = typeof input === 'string' ? Buffer.from(input) : input;
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function loadServiceAccountKey(): Promise<ServiceAccountKey> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb.rpc('fn_get_secret', { p_name: 'GMAIL_SERVICE_ACCOUNT_JSON' });
+  if (error) throw new Error('dwd_vault_read_failed: ' + error.message);
+  const raw = typeof data === 'string' ? data : (Array.isArray(data) ? data[0] : null);
+  if (!raw || typeof raw !== 'string') throw new Error('dwd_vault_empty');
+  let parsed: ServiceAccountKey;
+  try {
+    parsed = JSON.parse(raw) as ServiceAccountKey;
+  } catch (e) {
+    throw new Error('dwd_vault_parse_failed: ' + (e instanceof Error ? e.message : String(e)));
+  }
+  if (!parsed.client_email || !parsed.private_key) {
+    throw new Error('dwd_vault_missing_fields');
+  }
+  return parsed;
+}
+
+/**
+ * Mint an OAuth2 access token for `mailbox` via the JWT-bearer flow.
+ * Returns { access_token, expires_at_ms }.
+ */
+export async function mintImpersonationToken(mailbox: string): Promise<{ access_token: string; expires_at_ms: number }> {
+  const now = Math.floor(Date.now() / 1000);
+  const cached = _accessCache.get(mailbox);
+  if (cached && cached.exp > now + 60) {
+    return { access_token: cached.token, expires_at_ms: cached.exp * 1000 };
+  }
+
+  const key = await loadServiceAccountKey();
+  const tokenUri = key.token_uri || GOOGLE_TOKEN_URL;
+
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const claims = {
+    iss: key.client_email,
+    sub: mailbox,
+    scope: DWD_SCOPES,
+    aud: tokenUri,
+    iat: now,
+    exp: now + 3600,
+  };
+  const signingInput = b64url(JSON.stringify(header)) + '.' + b64url(JSON.stringify(claims));
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(signingInput);
+  signer.end();
+  const signature = b64url(signer.sign(key.private_key));
+  const assertion = signingInput + '.' + signature;
+
+  const r = await fetch(tokenUri, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }),
+  });
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error('dwd_token_exchange_failed_' + r.status + ': ' + body);
+  }
+  const j = (await r.json()) as { access_token: string; expires_in: number };
+  if (!j.access_token) throw new Error('dwd_no_access_token');
+  const expSec = now + (j.expires_in ?? 3600);
+  _accessCache.set(mailbox, { token: j.access_token, exp: expSec });
+  return { access_token: j.access_token, expires_at_ms: expSec * 1000 };
+}
+
+export interface GmailImpersonationClient {
+  mailbox: string;
+  access_token: string;
+  getProfile(): Promise<{ emailAddress: string; messagesTotal: number; threadsTotal: number; historyId: string }>;
+  listMessageIds(opts?: { q?: string; pageToken?: string; maxResults?: number }): Promise<GmailMessageList>;
+  getMessageMetadata(id: string, headers?: string[]): Promise<{
+    id: string;
+    labelIds?: string[];
+    payload?: { headers?: Array<{ name: string; value: string }> };
+  } | null>;
+}
+
+/**
+ * Impersonate a Workspace mailbox and return a lightweight Gmail client.
+ * Test vector: `await (await impersonateGmail('pb@thenamkhan.com')).getProfile()`
+ * returns { emailAddress, messagesTotal, threadsTotal, historyId }.
+ */
+export async function impersonateGmail(mailbox: string): Promise<GmailImpersonationClient> {
+  const { access_token } = await mintImpersonationToken(mailbox);
+
+  return {
+    mailbox,
+    access_token,
+    async getProfile() {
+      const r = await fetch(`${GMAIL_API}/users/me/profile`, {
+        headers: { authorization: 'Bearer ' + access_token },
+      });
+      if (!r.ok) throw new Error('dwd_profile_failed_' + r.status + ': ' + (await r.text()));
+      return (await r.json()) as { emailAddress: string; messagesTotal: number; threadsTotal: number; historyId: string };
+    },
+    async listMessageIds(opts = {}) {
+      const u = new URL(`${GMAIL_API}/users/me/messages`);
+      if (opts.q) u.searchParams.set('q', opts.q);
+      if (opts.pageToken) u.searchParams.set('pageToken', opts.pageToken);
+      u.searchParams.set('maxResults', String(opts.maxResults ?? 500));
+      const r = await fetch(u.toString(), { headers: { authorization: 'Bearer ' + access_token } });
+      if (!r.ok) throw new Error('dwd_list_failed_' + r.status + ': ' + (await r.text()));
+      return (await r.json()) as GmailMessageList;
+    },
+    async getMessageMetadata(id, headers = ['From', 'To', 'Cc', 'Bcc', 'Date']) {
+      const params = new URLSearchParams();
+      params.set('format', 'metadata');
+      for (const h of headers) params.append('metadataHeaders', h);
+      const r = await fetch(`${GMAIL_API}/users/me/messages/${id}?${params.toString()}`, {
+        headers: { authorization: 'Bearer ' + access_token },
+      });
+      if (!r.ok) return null;
+      return (await r.json()) as {
+        id: string;
+        labelIds?: string[];
+        payload?: { headers?: Array<{ name: string; value: string }> };
+      };
+    },
+  };
 }
