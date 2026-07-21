@@ -147,13 +147,12 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
   // ─── Marketing ────────────────────────────────────────────
-  // PBS 2026-07-21: /marketing/{content,channels,digital} become nav-hubs.
-  // Their bodies are empty (link-card grids removed); the sub-strip IS the nav.
-  // Order matters — findSubGroup returns FIRST match. Digital MUST precede
-  // Channels so /marketing/digital lands on Digital's sub-strip (Web/Funnels/SEO)
-  // instead of Channels' three-tab strip. Content is placed first because its
-  // members (offers/compiler/campaigns/newsletter/media) must beat the legacy
-  // /marketing/acquisition subgroup below on /marketing/campaigns.
+  // PBS 2026-07-21 · IA v2: Channels top tab killed; Socials + Digital promoted
+  // to top-strip peers. YouTube moved into Digital sub-strip. SEO dropped from nav.
+  // /marketing/{content,digital} are nav-hubs — their bodies are empty; the sub-strip
+  // IS the nav. Order matters — findSubGroup returns FIRST match. Content is placed
+  // first because its members (offers/compiler/campaigns/newsletter/media) must beat
+  // the legacy /marketing/acquisition subgroup below on /marketing/campaigns.
   {
     // PBS 2026-07-21 · Content sub-strip · replaces box grid on /marketing/content hub
     parentHref: '/marketing/content',
@@ -173,32 +172,30 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Media',             href: '/marketing/media'      },
     ],
   },
+  // PBS 2026-07-21 · Digital sub-strip · YouTube moved here from Channels · SEO restored as 4th tab per PBS
   {
-    // PBS 2026-07-21 · Digital sub-sub-strip · MUST come before Channels so
-    // /marketing/digital resolves to Digital's Web/Funnels/SEO — not Channels'.
     parentHref: '/marketing/digital',
-    members: ['/marketing/digital', '/marketing/digital/web', '/marketing/web', '/marketing/funnels', '/marketing/seo'],
-    tabs: [
-      { label: 'Web',     href: '/marketing/digital/web' },
-      { label: 'Funnels', href: '/marketing/funnels'     },
-      { label: 'SEO',     href: '/marketing/seo'         },
-    ],
-  },
-  {
-    // PBS 2026-07-21 · Channels sub-strip · replaces box grid on /marketing/channels hub
-    parentHref: '/marketing/channels',
     members: [
-      '/marketing/channels',
-      '/marketing/social',
+      '/marketing/digital',
+      '/marketing/digital/web',
+      '/marketing/web',
+      '/marketing/funnels',
       '/marketing/youtube',
       '/marketing/youtube/dashboard',
+      '/marketing/youtube/playlists',
+      '/marketing/youtube/planning',
+      '/marketing/youtube/production',
+      '/marketing/youtube/analytics',
+      '/marketing/seo',
     ],
     tabs: [
-      { label: 'Socials', href: '/marketing/social'            },
+      { label: 'Web',     href: '/marketing/digital/web'       },
+      { label: 'Funnels', href: '/marketing/funnels'           },
       { label: 'YouTube', href: '/marketing/youtube/dashboard' },
-      { label: 'Digital', href: '/marketing/digital'           },
+      { label: 'SEO',     href: '/marketing/seo'               },
     ],
   },
+  // PBS 2026-07-21 · Channels subgroup deleted — Socials + Digital are now top-strip peers.
   // PBS 2026-07-07 night: Overview lands on /marketing/library. Info sub-tab
   // removed; Library + Docs sit directly under Overview alongside Reports.
   // PBS 2026-07-09 pm: Gallery folded under Overview (was Content top-strip · same DB source as Library).

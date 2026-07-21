@@ -540,15 +540,15 @@ const MARKETING_CFG: DeptCfg = {
   //   Library           → Docs
   // Parent tab links to the first child so clicking always lands somewhere useful.
   subPages: [
-    // PBS 2026-07-21 night · IA restructure — top nav grouped by intent.
-    // Old strip (Overview / Campaigns / Offers / Digital / Media / Socials / Subscribers)
-    // collapsed into 4 hub landings. Every existing /marketing/* URL still resolves
-    // — subscribers, prospects, compiler, campaigns, media, social, youtube, funnels, seo
-    // are all reached via the new hub landings (Audience / Content / Channels).
-    { label: 'Overview',  href: '/marketing/overview' },
-    { label: 'Audience',  href: '/marketing/audience' },
-    { label: 'Content',   href: '/marketing/content'  },
-    { label: 'Channels',  href: '/marketing/channels' },
+    // PBS 2026-07-21 · IA v2 — killed Channels top tab; promoted Socials + Digital
+    // to top-strip peers. YouTube moved under Digital sub-strip. SEO dropped from
+    // nav (URL /marketing/seo still resolves — just no longer surfaced). Socials
+    // label with singular /marketing/social href preserves existing page path.
+    { label: 'Overview', href: '/marketing/overview' },
+    { label: 'Audience', href: '/marketing/audience' },
+    { label: 'Content',  href: '/marketing/content'  },
+    { label: 'Socials',  href: '/marketing/social'   },
+    { label: 'Digital',  href: '/marketing/digital'  },
   ],
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
