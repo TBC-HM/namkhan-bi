@@ -115,6 +115,58 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
   // ─── Marketing ────────────────────────────────────────────
+  // PBS 2026-07-21: /marketing/{content,channels,digital} become nav-hubs.
+  // Their bodies are empty (link-card grids removed); the sub-strip IS the nav.
+  // Order matters — findSubGroup returns FIRST match. Digital MUST precede
+  // Channels so /marketing/digital lands on Digital's sub-strip (Web/Funnels/SEO)
+  // instead of Channels' three-tab strip. Content is placed first because its
+  // members (offers/compiler/campaigns/newsletter/media) must beat the legacy
+  // /marketing/acquisition subgroup below on /marketing/campaigns.
+  {
+    // PBS 2026-07-21 · Content sub-strip · replaces box grid on /marketing/content hub
+    parentHref: '/marketing/content',
+    members: [
+      '/marketing/content',
+      '/marketing/offers',
+      '/marketing/compiler',
+      '/marketing/campaigns',
+      '/marketing/newsletter',
+      '/marketing/media',
+    ],
+    tabs: [
+      { label: 'Products & Offers', href: '/marketing/offers'     },
+      { label: 'Compiler',          href: '/marketing/compiler'   },
+      { label: 'Campaigns',         href: '/marketing/campaigns'  },
+      { label: 'Newsletter',        href: '/marketing/newsletter' },
+      { label: 'Media',             href: '/marketing/media'      },
+    ],
+  },
+  {
+    // PBS 2026-07-21 · Digital sub-sub-strip · MUST come before Channels so
+    // /marketing/digital resolves to Digital's Web/Funnels/SEO — not Channels'.
+    parentHref: '/marketing/digital',
+    members: ['/marketing/digital', '/marketing/digital/web', '/marketing/web', '/marketing/funnels', '/marketing/seo'],
+    tabs: [
+      { label: 'Web',     href: '/marketing/digital/web' },
+      { label: 'Funnels', href: '/marketing/funnels'     },
+      { label: 'SEO',     href: '/marketing/seo'         },
+    ],
+  },
+  {
+    // PBS 2026-07-21 · Channels sub-strip · replaces box grid on /marketing/channels hub
+    parentHref: '/marketing/channels',
+    members: [
+      '/marketing/channels',
+      '/marketing/social',
+      '/marketing/youtube',
+      '/marketing/youtube/dashboard',
+    ],
+    tabs: [
+      { label: 'Socials', href: '/marketing/social'            },
+      { label: 'YouTube', href: '/marketing/youtube/dashboard' },
+      { label: 'Digital', href: '/marketing/digital'           },
+    ],
+  },
   // PBS 2026-07-07 night: Overview lands on /marketing/library. Info sub-tab
   // removed; Library + Docs sit directly under Overview alongside Reports.
   // PBS 2026-07-09 pm: Gallery folded under Overview (was Content top-strip · same DB source as Library).
@@ -125,41 +177,28 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     // Library UI lives inside the Media Hub as a sub-tab. Kept Gallery/Social/Docs
     // accessible from a slim strip, but they no longer share a parent with Library.
     parentHref: '/marketing/gallery',
-    members: ['/marketing/gallery', '/marketing/social', '/marketing/docs'],
+    members: ['/marketing/gallery', '/marketing/docs'],
     tabs: [
       { label: 'Gallery', href: '/marketing/gallery' },
-      { label: 'Social',  href: '/marketing/social'  },
       { label: 'Docs',    href: '/marketing/docs'    },
     ],
   },
   {
     parentHref: '/marketing/acquisition',
-    members: ['/marketing/acquisition', '/marketing/campaigns', '/marketing/funnels', '/marketing/prospects', '/guest/prospects'],
+    // PBS 2026-07-21: /marketing/campaigns + /marketing/funnels removed from
+    // this subgroup — they now belong to Content and Digital respectively.
+    // Kept acquisition landing itself + prospects references.
+    members: ['/marketing/acquisition', '/marketing/prospects', '/guest/prospects'],
     tabs: [
       { label: 'Campaigns', href: '/marketing/campaigns' },
       { label: 'Funnels',   href: '/marketing/funnels'   },
       { label: 'Prospects', href: '/guest/prospects'     },
     ],
   },
-  {
-    parentHref: '/marketing/offers',
-    members: ['/marketing/offers', '/marketing/compiler'],
-    tabs: [
-      { label: 'Compiler', href: '/marketing/compiler' },
-    ],
-  },
-  // PBS 2026-07-09 pm: dead standalone gallery subgroup removed — never triggered
-  // because Overview above claims /marketing/gallery first. Social now lives in Overview.
-  {
-    parentHref: '/marketing/digital',
-    // PBS 2026-07-11 pm: YouTube added as second Digital sub-tab.
-    // Landing at /marketing/youtube reads marketing.yt_* via public.v_yt_* bridges.
-    members: ['/marketing/digital', '/marketing/web', '/marketing/youtube'],
-    tabs: [
-      { label: 'Web',     href: '/marketing/web'     },
-      { label: 'YouTube', href: '/marketing/youtube' },
-    ],
-  },
+  // PBS 2026-07-21: standalone /marketing/offers subgroup removed — its only
+  // sub-tab (Compiler) is now part of the Content sub-strip above.
+  // PBS 2026-07-21: standalone /marketing/digital (Web + YouTube) subgroup
+  // removed — replaced by the new Digital sub-sub-strip declared above.
   // (The old /marketing/library standalone subgroup is now merged into Overview
   //  above — Library + Docs live directly under Overview.)
 

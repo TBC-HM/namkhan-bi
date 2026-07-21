@@ -1,48 +1,25 @@
 // app/marketing/digital/page.tsx
-// PBS 2026-07-21 · Digital hub — web, funnels, SEO.
-// Was a placeholder stub, now a hub of 3 link cards. Every URL preserved.
+// PBS 2026-07-21 · Digital hub — nav-only. Sub-strip renders automatically via
+// NAV_SUBGROUPS lookup in DashboardPage. The old link-card grid is gone; the
+// sub-strip [Web · Funnels · SEO] IS the nav. Digital is a child of Channels,
+// so the top strip highlights Channels while the sub-strip surfaces Digital's children.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
-import { DEPT_CFG } from '@/lib/dept-cfg';
+import { MARKETING_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 
-const WHITE = '#FFFFFF';
-const HAIR  = '#E6DFCC';
-const INK   = '#1B1B1B';
-const INK_S = '#5A5A5A';
-
-interface Card { label: string; href: string; footer: string }
-
-const CARDS: Card[] = [
-  { label: 'Web',     href: '/marketing/digital/web', footer: 'Website surfaces + Bluehost' },
-  { label: 'Funnels', href: '/marketing/funnels',    footer: 'Conversion funnels + tracking' },
-  { label: 'SEO',     href: '/marketing/seo',        footer: 'Search visibility + keywords' },
-];
-
 export default function DigitalHubPage() {
-  const cfg = DEPT_CFG.marketing;
-  const tabs: DashboardTab[] = cfg.subPages.map(s => ({
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map(s => ({
     key: s.href, label: s.label, href: s.href,
-    active: s.href === '/marketing/digital',
+    active: s.href === '/marketing/channels', // Digital sits under Channels
   }));
-
   return (
-    <DashboardPage title="Marketing · Digital" subtitle="Website, funnels, SEO — the always-on digital surfaces." tabs={tabs}>
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        {CARDS.map(card => (
-          <a
-            key={card.href}
-            href={card.href}
-            style={{
-              display: 'block', padding: 20, background: WHITE, border: `1px solid ${HAIR}`,
-              borderRadius: 4, textDecoration: 'none', color: INK,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 500 }}>{card.label}</div>
-            <div style={{ fontSize: 11, color: INK_S, marginTop: 6 }}>{card.footer}</div>
-          </a>
-        ))}
-      </div>
+    <DashboardPage
+      title="Marketing · Digital"
+      subtitle="Web, Funnels, SEO — the acquisition surface."
+      tabs={tabs}
+    >
+      {/* Empty body — sub-strip is the nav. */}
     </DashboardPage>
   );
 }
