@@ -28,10 +28,27 @@ function chip(kind: string) {
   const c = map[kind]; if (!c) return null;
   return <span style={{ fontSize: 10, color: c[0], background: c[1], padding: '1px 7px', borderRadius: 99, marginLeft: 6 }}>{c[2]}</span>;
 }
+// PBS 2026-07-21: sub-strip pulled up so it sits directly under the top strip
+// instead of floating inside the body grid ~16px below the top-strip's
+// border-bottom (was the "positioning off" complaint). Matches the visual
+// weight of DashboardPage's SubTabStrip (marginTop:2, border-bottom hairline).
 function SubTabs({ active }: { active: string }) {
   const tabs: [string, string][] = [['menus', 'Menus'], ['catalog', 'POS Catalog (reference)'], ['import', 'New / Import']];
   return (
-    <nav style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }} role="tablist" aria-label="Menu Studio sections">
+    <nav
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+        marginTop: -6,
+        marginBottom: 6,
+        paddingBottom: 4,
+        borderBottom: '1px solid var(--hairline, #E6DFCC)',
+      }}
+      role="tablist"
+      aria-label="Menu Studio sections"
+    >
       {tabs.map(([k, l]) => {
         const on = active === k;
         return (
@@ -209,8 +226,14 @@ export default async function MenuStudio({ searchParams }: { searchParams?: Reco
 
   return (
     <DashboardPage title="Menu Studio" tabs={opsTabs}>
-      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* PBS 2026-07-21: SubTabs on its own row hugging the top strip, view
+          in a separate row below — was previously stacked inside a single
+          gap:12 flex-column wrapper which added ~16px of dead space above
+          the sub-tabs, disconnecting them from the main strip. */}
+      <div style={{ gridColumn: '1 / -1' }}>
         <SubTabs active={tab} />
+      </div>
+      <div style={{ gridColumn: '1 / -1' }}>
         {view}
       </div>
     </DashboardPage>
