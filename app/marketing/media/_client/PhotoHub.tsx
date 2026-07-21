@@ -19,9 +19,11 @@ import SettingsTab from './SettingsTab';
 import CoverageTab, { type CoverageRow } from './CoverageTab';
 import ReviewTab, { type ReviewRow } from './ReviewTab';
 import ProfilesTab from './ProfilesTab';
+// PBS 2026-07-21 · Archive is now a PhotoHub sub-tab (was Library headline tile)
+import ArchiveTab from './ArchiveTab';
 import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy, GuardrailsData, AreaTaxonomyRow, LibraryCountsRow } from './MediaHub';
 
-type Sub = 'library' | 'ai' | 'clarify' | 'review' | 'coverage' | 'profiles' | 'settings';
+type Sub = 'library' | 'ai' | 'clarify' | 'review' | 'coverage' | 'profiles' | 'archive' | 'settings';
 
 interface Props {
   propertyId: number;
@@ -72,6 +74,11 @@ export default function PhotoHub(props: Props) {
   const clarifyCount = (props as any).libraryCounts?.to_clarify
     ?? photoRows.filter((r: any) => r.property_area == null || r.primary_tier == null).length;
   const reviewCount = (props.reviewRows ?? []).length;
+  // PBS 2026-07-21 · Archive sub-tab badge. Primary source =
+  // v_media_library_counts.archive (added to LibraryCountsRow same day).
+  // Falls back to byTier tier_archive row if the counts prop hasn't loaded yet.
+  const archiveCount = props.libraryCounts?.archive
+    ?? Number((props.byTier ?? []).find((r: any) => r.primary_tier === 'tier_archive')?.total ?? 0);
 
   const TABS: Array<{ key: Sub; label: string; badge?: number; badgeColor?: string }> = [
     { key: 'library',  label: 'Photo Library'   },
@@ -80,6 +87,7 @@ export default function PhotoHub(props: Props) {
     { key: 'review',   label: 'Review',         badge: reviewCount,  badgeColor: AMBER },
     { key: 'coverage', label: 'Coverage'        },
     { key: 'profiles', label: 'Profiles'         },
+    { key: 'archive',  label: 'Archive',        badge: archiveCount },  // PBS 2026-07-21 · new sub-tab (between Profiles + Photo Settings)
     { key: 'settings', label: 'Photo Settings'  },
   ];
 
@@ -163,6 +171,20 @@ export default function PhotoHub(props: Props) {
       )}
       {sub === 'profiles' && (
         <ProfilesTab propertyId={props.propertyId} totalRooms={props.rooms.length || 10} />
+      )}
+      {sub === 'archive' && (
+        <ArchiveTab
+          propertyId={props.propertyId}
+          byTier={props.byTier}
+          mediaPage={props.mediaPage}
+          channelSpecs={props.channelSpecs}
+          onSendToAi={handleSendToAi}
+          areaOptions={props.areaOptions}
+          rooms={props.rooms}
+          taxonomy={props.taxonomy}
+          areaTaxonomy={props.areaTaxonomy}
+          libraryCounts={props.libraryCounts ?? null}
+        />
       )}
       {sub === 'settings' && (
         <SettingsTab

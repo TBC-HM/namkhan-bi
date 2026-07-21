@@ -76,6 +76,10 @@ interface Props {
   taxonomy?: DrawerTaxonomy;
   areaTaxonomy?: LibraryAreaTaxonomyRow[];
   libraryCounts?: LibraryCountsProp | null;
+  // PBS 2026-07-21 · scope='archive' surfaces tier_archive assets only (used by
+  // ArchiveTab sub-tab in PhotoHub). Default 'library' keeps the normal grid,
+  // which now EXCLUDES tier_archive at the useMemo layer.
+  scope?: 'library' | 'archive';
 }
 
 const WHITE  = '#FFFFFF';
@@ -104,7 +108,7 @@ const TIER_CHIPS: Array<{ key: string; label: string }> = [
 
 function n(v: any): number { return Number(v ?? 0); }
 
-export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [], taxonomy, areaTaxonomy = [], libraryCounts: libraryCountsProp = null }: Props) {
+export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs, onSendToAi, areaOptions = [], rooms = [], taxonomy, areaTaxonomy = [], libraryCounts: libraryCountsProp = null, scope = 'library' }: Props) {
   const [tier, setTier] = useState<string>('');
   const [page, setPage] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
@@ -205,13 +209,13 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
 
   const filtered = useMemo(() => {
     // PBS 2026-07-21 · exclude tier_archive from the default Library grid.
-    // Archive gets its own PhotoHub sub-tab in a follow-up commit; keeping
-    // archived assets in the main grid clutters the working surface.
+    // Archive has its own PhotoHub sub-tab (ArchiveTab passes scope='archive'
+    // which INVERTS this rule — archive rows only). Keeps a single primitive.
     let out = mediaPage.filter(r =>
       ((r.asset_type ?? '').toLowerCase() !== 'video') &&
       !((r.mime_type ?? '').toLowerCase().startsWith('video/')) &&
       isFullyTagged(r) &&
-      r.primary_tier !== 'tier_archive'
+      (r.primary_tier !== 'tier_archive' || scope === 'archive')
     );
     if (tier)         out = out.filter(r => r.primary_tier === tier);
     if (areaFilter) {
@@ -293,7 +297,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       out = [...bucketed.values()].flat();
     }
     return out;
-  }, [mediaPage, tier, areaFilter, aiOnly, searchText, topFilter]);
+  }, [mediaPage, tier, areaFilter, aiOnly, searchText, topFilter, scope]);
 
   const visible = filtered.filter(r => !localDismiss.has(r.asset_id));
   const pageRows = visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
