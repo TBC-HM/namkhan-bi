@@ -91,8 +91,11 @@ export interface ClarifyReviewRow {
 // → low_quality, else 'other'.
 type FilterKey = 'all' | 'non_hotel' | 'low_quality' | 'junk';
 
-function reasonKind(row: { content_class?: string | null; review_reason?: string | null }): 'non_hotel' | 'low_quality' | 'junk' | 'other' {
-  if ((row.content_class ?? '').toLowerCase() === 'junk') return 'junk';
+function reasonKind(row: { content_class?: string | null; review_reason?: string | null; quality_index?: number | null }): 'non_hotel' | 'low_quality' | 'junk' | 'other' {
+  // PBS 2026-07-21 · Junk = ONLY quality_index < 25 (was content_class='junk').
+  // Iris's semantic "not our hotel" label lives on review_reason ('non-hotel') now.
+  const q = Number(row.quality_index ?? 0);
+  if (q > 0 && q < 25) return 'junk';
   const r = (row.review_reason ?? '').toLowerCase();
   if (r.includes('hotel')) return 'non_hotel';
   if (r.includes('low quality') || r.includes('low-quality') || r.includes('quality')) return 'low_quality';
@@ -385,7 +388,9 @@ export default function ClarifyTab({ mediaPage, areaOptions, rooms = [], taxonom
       if (localDismiss.has(r.asset_id)) return false;
       const unclassified = r.property_area == null || r.primary_tier == null;
       const flagged      = r.needs_review === true;
-      const isJunk       = (r.content_class ?? '').toLowerCase() === 'junk';
+      // PBS 2026-07-21 · Junk = quality < 25 ONLY (never content_class).
+      const q = Number(r.quality_index ?? 0);
+      const isJunk       = q > 0 && q < 25;
       return unclassified || flagged || isJunk;
     });
   }, [unified, localDismiss]);
