@@ -7,6 +7,7 @@
 
 import { useCallback, useState, useTransition } from 'react';
 import EmailChromePanel, { type EmailChromeSettings } from './EmailChromePanel';
+import EditorialGoalsPanel, { type GoalRow as EditorialGoalRow } from './EditorialGoalsPanel';
 
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
@@ -79,7 +80,10 @@ interface Props {
   initialRoutingRules: RoutingRuleRow[];
 }
 
-export default function AudienceSettingsClient(props: Props & { initialEmailChrome?: EmailChromeSettings | null }) {
+export default function AudienceSettingsClient(props: Props & {
+  initialEmailChrome?: EmailChromeSettings | null;
+  initialEditorialGoals?: EditorialGoalRow[];
+}) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <SenderIdentityPanel
@@ -103,6 +107,12 @@ export default function AudienceSettingsClient(props: Props & { initialEmailChro
         propertyId={props.propertyId}
         initial={props.initialEmailChrome ?? null}
       />
+      <div id="editorial-goals">
+        <EditorialGoalsPanel
+          propertyId={props.propertyId}
+          initial={props.initialEditorialGoals ?? []}
+        />
+      </div>
     </div>
   );
 }

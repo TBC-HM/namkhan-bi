@@ -21,6 +21,7 @@ import AudienceSettingsClient, {
   type EmailSettingsRow, type RoutingRuleRow,
 } from './_components/AudienceSettingsClient';
 import type { EmailChromeSettings } from './_components/EmailChromePanel';
+import type { GoalRow as EditorialGoalRow } from './_components/EditorialGoalsPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,7 @@ export default async function AudienceSettingsPage() {
     );
   }
 
-  const [sectionsRes, blocklistRes, groupsRes, groupRulesRes, emailRes, routingRes, chromeRes] = await Promise.all([
+  const [sectionsRes, blocklistRes, groupsRes, groupRulesRes, emailRes, routingRes, chromeRes, goalsRes] = await Promise.all([
     admin.schema('marketing').from('v_settings_sections_live').select('*').order('display_order'),
     admin.from('v_marketing_subscriber_blocklist').select('*').limit(500),
     admin.from('v_subscriber_groups').select('id, slug, name, description, color, is_system, sort_order, member_count').order('sort_order'),
@@ -52,6 +53,7 @@ export default async function AudienceSettingsPage() {
     admin.from('v_marketing_property_email_settings')
       .select('property_id, header_logo_asset_id, header_logo_public_url, header_tagline, default_hero_asset_id, default_hero_public_url, footer_address_lines, footer_social_links, footer_disclaimer_text, footer_unsubscribe_wording')
       .eq('property_id', PROPERTY_ID).maybeSingle(),
+    admin.from('v_director_goals').select('*').eq('property_id', PROPERTY_ID).order('weight', { ascending: false }),
   ]);
 
   const sections: SectionRow[] = (sectionsRes.data ?? []) as SectionRow[];
@@ -61,8 +63,9 @@ export default async function AudienceSettingsPage() {
   const emailSettings: EmailSettingsRow | null = (emailRes.data ?? null) as EmailSettingsRow | null;
   const routingRules: RoutingRuleRow[] = (routingRes.data ?? []) as RoutingRuleRow[];
   const chrome: EmailChromeSettings | null = (chromeRes.data ?? null) as EmailChromeSettings | null;
+  const editorialGoals: EditorialGoalRow[] = (goalsRes.data ?? []) as EditorialGoalRow[];
 
-  const dbErr = blocklistRes.error || groupsRes.error || groupRulesRes.error || emailRes.error || routingRes.error || chromeRes.error;
+  const dbErr = blocklistRes.error || groupsRes.error || groupRulesRes.error || emailRes.error || routingRes.error || chromeRes.error || goalsRes.error;
 
   return (
     <Page
@@ -91,6 +94,7 @@ export default async function AudienceSettingsPage() {
             initialEmailSettings={emailSettings}
             initialRoutingRules={routingRules}
             initialEmailChrome={chrome}
+            initialEditorialGoals={editorialGoals}
           />
         </Card>
       </div>
