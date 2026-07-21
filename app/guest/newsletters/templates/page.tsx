@@ -9,6 +9,7 @@ import { GUEST_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import AiProposeTemplateButton from './_components/AiProposeTemplateButton';
+import NewslettersSubStrip from '../_components/NewslettersSubStrip';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -70,6 +71,8 @@ export default async function TemplatesListPage() {
         subtitle="Locked chrome (header + footer) · restrained templates to avoid garbage"
         tabs={tabs}
       >
+        <NewslettersSubStrip active="templates" />
+
         {/* Actions row */}
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
           <div>
