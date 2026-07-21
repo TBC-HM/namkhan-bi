@@ -104,6 +104,12 @@ export interface LibraryCountsRow {
   ota: number;
   social: number;
   internal: number;
+  // PBS 2026-07-21 · v_media_library_counts gained two columns:
+  //   archive = COUNT(*) FILTER (WHERE primary_tier = 'tier_archive')
+  //   logos   = COUNT(*) FILTER (WHERE primary_tier = 'tier_logos')
+  // Needed by upcoming Archive sub-tab; already selected in page.tsx.
+  archive: number;
+  logos: number;
 }
 
 interface Props {
