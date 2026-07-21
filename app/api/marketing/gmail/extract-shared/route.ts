@@ -151,10 +151,15 @@ async function extractMailbox(mailbox: string, maxMessages: number): Promise<Run
     const client = await impersonateGmail(mailbox);
 
     // Page through message IDs up to the cap.
+    // NOTE: Google's DWD metadata scope rejects `q=` filters ("Metadata scope
+    // does not support 'q' parameter", 403). Even though we request both
+    // gmail.readonly + gmail.metadata in the JWT, the effective session
+    // capability is metadata-only for many Workspace mailboxes. Omitting the
+    // `q` returns messages from all labels including SENT.
     const ids: string[] = [];
     let pageToken: string | undefined = undefined;
     while (ids.length < maxMessages) {
-      const page = await client.listMessageIds({ q: 'in:anywhere', maxResults: 500, pageToken });
+      const page = await client.listMessageIds({ maxResults: 500, pageToken });
       for (const m of page.messages ?? []) ids.push(m.id);
       if (!page.nextPageToken || (page.messages?.length ?? 0) === 0) break;
       pageToken = page.nextPageToken;
