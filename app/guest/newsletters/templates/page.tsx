@@ -1,12 +1,14 @@
 // app/guest/newsletters/templates/page.tsx
 // PBS 2026-07-03: newsletter templates management.
 // Lists all templates for the property. Edit / Duplicate / Create new.
+// PBS 2026-07-21 pm (Add 3): AI Propose Template button added to page header.
 
 import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
+import AiProposeTemplateButton from './_components/AiProposeTemplateButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -75,17 +77,20 @@ export default async function TemplatesListPage() {
               ← Back to newsletters overview
             </TenantLink>
           </div>
-          <TenantLink href="/guest/newsletters/templates/new" style={{
-            padding:'6px 14px', fontSize:12, fontWeight:600,
-            background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none',
-          }}>+ New template</TenantLink>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <AiProposeTemplateButton propertyId={PROPERTY_ID} />
+            <TenantLink href="/guest/newsletters/templates/new" style={{
+              padding:'6px 14px', fontSize:12, fontWeight:600,
+              background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none',
+            }}>+ New template</TenantLink>
+          </div>
         </div>
 
         {/* Templates grid */}
         <div style={{ gridColumn:'1 / -1', display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(360px, 1fr))', gap:12 }}>
           {templates.length === 0 ? (
             <div style={{ padding:'40px 24px', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, textAlign:'center', color:INK_M, fontSize:12 }}>
-              No templates yet — click "New template" to create one.
+              No templates yet — click &quot;New template&quot; or &quot;AI Propose Template&quot; to create one.
             </div>
           ) : (
             templates.map((t) => {

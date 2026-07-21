@@ -3,6 +3,10 @@
 // Replaces the phase-1 link-card hub. Reads public.v_marketing_audience (subscribers UNION prospects)
 // plus v_subscriber_groups. Pre-scopes filter state from ?source= / ?tab= searchParams.
 // Design: paper white (#FFFFFF) — never var(--paper-warm) per Namkhan token burn.
+//
+// 2026-07-21 pm · Tiles now also read purged_bounced + purged_unsubscribed from
+// public.v_marketing_audience_tiles so the headline strip shows the auto-purge status
+// alongside the mailable universe.
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
@@ -38,13 +42,15 @@ export default async function AudienceUnifiedPage({ searchParams }: PageProps) {
 
   // Authoritative tile counts — bypasses the 3000-row rows[] cap so tiles
   // never look stale on large audiences. Fed by public.v_marketing_audience_tiles.
+  // Also surfaces purged_bounced + purged_unsubscribed (marketing.subscriber_blocklist).
   const tilesQ = await sb
     .from('v_marketing_audience_tiles')
-    .select('total_subs, mailable, guests, returning_guests, dmc, responders, prospects')
+    .select('total_subs, mailable, guests, returning_guests, dmc, responders, prospects, purged_bounced, purged_unsubscribed')
     .maybeSingle();
   const initialTiles: AudienceTiles = (tilesQ.data as AudienceTiles) ?? {
     total_subs: 0, mailable: 0, guests: 0, returning_guests: 0,
     dmc: 0, responders: 0, prospects: 0,
+    purged_bounced: 0, purged_unsubscribed: 0,
   };
 
   const sp = (await searchParams) ?? {};

@@ -2,8 +2,14 @@
 // app/marketing/audience/_components/AudienceUnifiedClient.tsx
 // PBS 2026-07-21 · Phase 2 unified audience directory.
 // One table for subscribers + prospects · KPI headline strip · scrape embed ·
-// filters (source / status / MX / group) · search · bulk group assign (subscribers only).
+// filters (source / status / MX / group multi-select) · search · bulk group assign (subscribers only).
 // Design: paper white #FFFFFF, hairline #E6DFCC — no var(--paper-warm).
+//
+// 2026-07-21 pm · Restore group multi-select dropdown regression (Bug 1). Keeps the
+// authoritative TileCompact headline strip introduced by 97d2d6f2, but brings back
+// the top group multi-select filter with UNASSIGNED sentinel and dismissible chips.
+// Also extends AudienceTiles with purged_bounced + purged_unsubscribed so the tile
+// row shows the auto-purge status alongside the mailable universe.
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
 
@@ -13,6 +19,11 @@ const INK    = '#1B1B1B';
 const INK_S  = '#5A5A5A';
 const BRAND  = '#084838';
 const WARM   = '#F5F0E1';
+
+// Sentinel slug for the "Unassigned (no group)" pseudo-option. Rows are treated
+// as unassigned when (groups ?? []).length === 0. Mutually exclusive: picking it
+// clears every real group selection, and picking any real group clears it.
+const UNASSIGNED_SLUG = '__unassigned__';
 
 export interface AudienceRow {
   audience_id: string;              // 'subscriber:123' | 'prospect:<uuid>'
@@ -48,6 +59,8 @@ export interface GroupRow {
 
 // Authoritative tile counts from public.v_marketing_audience_tiles.
 // Independent of the 3000-row rows[] sample so the headline strip never looks stale.
+// purged_bounced + purged_unsubscribed count marketing.subscriber_blocklist entries
+// added by the auto-purge triggers.
 export interface AudienceTiles {
   total_subs: number;
   mailable: number;
@@ -56,6 +69,8 @@ export interface AudienceTiles {
   dmc: number;
   responders: number;
   prospects: number;
+  purged_bounced: number;
+  purged_unsubscribed: number;
 }
 
 type SourceFilter = 'all' | 'subscribers' | 'prospects';
@@ -83,7 +98,9 @@ export default function AudienceUnifiedClient({
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSource);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('any');
   const [mxFilter, setMxFilter]         = useState<MxFilter>('any');
-  const [groupFilter, setGroupFilter]   = useState<string | null>(null);
+  // Multi-select group filter (UNION semantics; UNASSIGNED_SLUG sentinel exclusive)
+  const [groupFilters, setGroupFilters] = useState<string[]>([]);
+  const [groupDdOpen, setGroupDdOpen]   = useState(false);
   const [query, setQuery]               = useState('');
   const [page, setPage]                 = useState(0);
   const [selected, setSelected]         = useState<Set<string>>(new Set());
@@ -111,8 +128,16 @@ export default function AudienceUnifiedClient({
     return m;
   }, [rows]);
 
+  // Count of unassigned subscriber rows across the whole dataset.
+  const unassignedCount = useMemo(
+    () => rows.filter(r => r.source === 'subscriber' && (r.groups ?? []).length === 0).length,
+    [rows],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const wantUnassigned = groupFilters.includes(UNASSIGNED_SLUG);
+    const realGroupSet   = new Set(groupFilters.filter(s => s !== UNASSIGNED_SLUG));
     return rows.filter((r) => {
       if (sourceFilter === 'subscribers' && r.source !== 'subscriber') return false;
       if (sourceFilter === 'prospects' && r.source !== 'prospect') return false;
@@ -131,14 +156,22 @@ export default function AudienceUnifiedClient({
       } else {
         if (mxFilter !== 'any' && sourceFilter !== 'subscribers') return false;
       }
-      if (groupFilter && !(r.groups ?? []).includes(groupFilter)) return false;
+      // Group filter — Unassigned sentinel is EXCLUSIVE.
+      if (wantUnassigned) {
+        if ((r.groups ?? []).length !== 0) return false;
+      } else if (realGroupSet.size > 0) {
+        const rg = r.groups ?? [];
+        let hit = false;
+        for (const g of rg) { if (realGroupSet.has(g)) { hit = true; break; } }
+        if (!hit) return false;
+      }
       if (q) {
         const hay = (r.email + ' ' + (r.name ?? '') + ' ' + (r.company ?? '')).toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [rows, sourceFilter, statusFilter, mxFilter, groupFilter, query]);
+  }, [rows, sourceFilter, statusFilter, mxFilter, groupFilters, query]);
 
   const paged = useMemo(
     () => filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
@@ -264,26 +297,42 @@ export default function AudienceUnifiedClient({
     }
   };
 
+  // Group filter toggles. Unassigned sentinel is mutually exclusive with real groups.
+  const toggleGroupFilter = (slug: string) => {
+    setGroupFilters((prev) => {
+      const isUnassigned = slug === UNASSIGNED_SLUG;
+      const has = prev.includes(slug);
+      if (has) return prev.filter((s) => s !== slug);
+      if (isUnassigned) return [UNASSIGNED_SLUG];             // exclusive
+      // Picking any real group clears the unassigned sentinel.
+      return [...prev.filter((s) => s !== UNASSIGNED_SLUG), slug];
+    });
+    setPage(0);
+  };
+  const resetGroupFilters = () => { setGroupFilters([]); setPage(0); };
+
   const resetFilters = () => {
     setSourceFilter('all'); setStatusFilter('any'); setMxFilter('any');
-    setGroupFilter(null); setQuery(''); setPage(0);
+    setGroupFilters([]); setQuery(''); setPage(0);
   };
   const setGroupOnly = (slug: string) => {
     setSourceFilter('all'); setStatusFilter('any'); setMxFilter('any');
-    setGroupFilter(slug); setPage(0);
+    setGroupFilters([slug]); setPage(0);
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Authoritative headline tiles — DB-sourced, always fresh */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, minmax(0, 1fr))', gap: 8 }}>
         <TileCompact label="Total"           value={initialTiles.total_subs}       onClick={resetFilters} />
         <TileCompact label="Mailable"        value={initialTiles.mailable}         onClick={resetFilters} />
-        <TileCompact label="Guests"          value={initialTiles.guests}           onClick={() => setGroupOnly('guests')}           active={groupFilter === 'guests'} />
-        <TileCompact label="Returning Guests" value={initialTiles.returning_guests} onClick={() => setGroupOnly('returning-guests')} active={groupFilter === 'returning-guests'} />
-        <TileCompact label="DMC Contracted" value={initialTiles.dmc}               onClick={() => setGroupOnly('dmc-contracted')}   active={groupFilter === 'dmc-contracted'} />
+        <TileCompact label="Guests"          value={initialTiles.guests}           onClick={() => setGroupOnly('guests')}           active={groupFilters.length === 1 && groupFilters[0] === 'guests'} />
+        <TileCompact label="Returning Guests" value={initialTiles.returning_guests} onClick={() => setGroupOnly('returning-guests')} active={groupFilters.length === 1 && groupFilters[0] === 'returning-guests'} />
+        <TileCompact label="DMC Contracted" value={initialTiles.dmc}               onClick={() => setGroupOnly('dmc-contracted')}   active={groupFilters.length === 1 && groupFilters[0] === 'dmc-contracted'} />
         <TileCompact label="Prospects"       value={initialTiles.prospects}        onClick={() => { setSourceFilter('prospects'); setPage(0); }} active={sourceFilter === 'prospects'} />
-        <TileCompact label="Responders"      value={initialTiles.responders}       onClick={() => setGroupOnly('responders')}       active={groupFilter === 'responders'} />
+        <TileCompact label="Responders"      value={initialTiles.responders}       onClick={() => setGroupOnly('responders')}       active={groupFilters.length === 1 && groupFilters[0] === 'responders'} />
+        <TileCompact label="Bounced (purged)"      value={initialTiles.purged_bounced}      />
+        <TileCompact label="Unsubscribed (purged)" value={initialTiles.purged_unsubscribed} />
       </div>
 
       {/* KPI headline strip */}
@@ -297,8 +346,8 @@ export default function AudienceUnifiedClient({
             label={g.name}
             value={groupCounts[g.slug] ?? g.member_count ?? 0}
             color={g.color}
-            onClick={() => { setGroupFilter((cur) => (cur === g.slug ? null : g.slug)); setPage(0); }}
-            active={groupFilter === g.slug}
+            onClick={() => toggleGroupFilter(g.slug)}
+            active={groupFilters.includes(g.slug)}
           />
         ))}
       </div>
@@ -395,11 +444,105 @@ export default function AudienceUnifiedClient({
             </FilterChip>
           ))}
         </FilterGroup>
-        {groupFilter && (
-          <FilterChip active onClick={() => setGroupFilter(null)}>
-            Group: {groupFilter} ✕
-          </FilterChip>
+
+        {/* Group multi-select dropdown (RESTORED) */}
+        <FilterGroup label="Groups">
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setGroupDdOpen((v) => !v)}
+              style={{
+                padding: '4px 10px', fontSize: 11, cursor: 'pointer',
+                background: groupFilters.length ? BRAND : WHITE,
+                color: groupFilters.length ? WHITE : INK,
+                border: `1px solid ${groupFilters.length ? BRAND : HAIR}`, borderRadius: 3,
+              }}
+            >
+              {groupFilters.length ? `${groupFilters.length} selected` : 'Any group'} {groupDdOpen ? '▲' : '▼'}
+            </button>
+            {groupDdOpen && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 10,
+                background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 3,
+                padding: 8, minWidth: 260, maxHeight: 320, overflowY: 'auto',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, color: INK_S, textTransform: 'uppercase', letterSpacing: 0.4 }}>Union · in ANY selected</span>
+                  <button
+                    onClick={resetGroupFilters}
+                    style={{ fontSize: 10, color: BRAND, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                  >Reset</button>
+                </div>
+
+                {/* Unassigned (no group) - first option, exclusive */}
+                {(() => {
+                  const checked = groupFilters.includes(UNASSIGNED_SLUG);
+                  return (
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px',
+                      fontSize: 12, color: INK, cursor: 'pointer',
+                      background: checked ? WARM : 'transparent', borderRadius: 3,
+                      borderBottom: `1px dashed ${HAIR}`, marginBottom: 4,
+                    }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleGroupFilter(UNASSIGNED_SLUG)} />
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: INK_S, display: 'inline-block' }} />
+                      <span style={{ flex: 1, fontStyle: 'italic' }}>&mdash; Unassigned (no group)</span>
+                      <span style={{ fontSize: 10, color: INK_S }}>{unassignedCount}</span>
+                    </label>
+                  );
+                })()}
+
+                {groups.map((g) => {
+                  const checked = groupFilters.includes(g.slug);
+                  return (
+                    <label key={g.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px',
+                      fontSize: 12, color: INK, cursor: 'pointer',
+                      background: checked ? WARM : 'transparent', borderRadius: 3,
+                    }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleGroupFilter(g.slug)} />
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: g.color, display: 'inline-block' }} />
+                      <span style={{ flex: 1 }}>{g.name}</span>
+                      <span style={{ fontSize: 10, color: INK_S }}>{groupCounts[g.slug] ?? g.member_count ?? 0}</span>
+                    </label>
+                  );
+                })}
+                {groups.length === 0 && (
+                  <div style={{ fontSize: 11, color: INK_S, padding: 6 }}>No groups defined.</div>
+                )}
+              </div>
+            )}
+          </div>
+        </FilterGroup>
+
+        {groupFilters.length > 0 && (
+          <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+            {groupFilters.map((slug) => {
+              if (slug === UNASSIGNED_SLUG) {
+                return (
+                  <span key={slug} style={{
+                    padding: '3px 8px', background: INK_S, color: WHITE,
+                    borderRadius: 3, fontSize: 10, display: 'inline-flex', gap: 4, alignItems: 'center',
+                  }}>
+                    Unassigned
+                    <button onClick={() => toggleGroupFilter(slug)} style={{ background: 'transparent', border: 'none', color: WHITE, cursor: 'pointer', padding: 0, fontSize: 10 }}>&times;</button>
+                  </span>
+                );
+              }
+              const g = groups.find((x) => x.slug === slug);
+              return (
+                <span key={slug} style={{
+                  padding: '3px 8px', background: g?.color ?? INK_S, color: WHITE,
+                  borderRadius: 3, fontSize: 10, display: 'inline-flex', gap: 4, alignItems: 'center',
+                }}>
+                  {g?.name ?? slug}
+                  <button onClick={() => toggleGroupFilter(slug)} style={{ background: 'transparent', border: 'none', color: WHITE, cursor: 'pointer', padding: 0, fontSize: 10 }}>x</button>
+                </span>
+              );
+            })}
+          </div>
         )}
+
         <input
           value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }}
           placeholder="Search email · name · company"

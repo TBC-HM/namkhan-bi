@@ -1,20 +1,20 @@
-// app/guest/newsletters/page.tsx
-// PBS 2026-07-04 v4: Planned date column · Schedule button on drafts · Halt button on scheduled.
-// PBS 2026-07-21 pm (Add 2): NewslettersSubStrip (Broadcasts / Lifecycle / Templates) at top +
-// ProposeNewsletterButton in top row so the "✨ Propose Newsletter" affordance is
-// visible on both Broadcasts and Lifecycle views. Default kind = 'broadcast'.
+// app/guest/newsletters/lifecycle/page.tsx
+// PBS 2026-07-21 pm (Add 2, Newsletter Engine v2): Lifecycle campaigns tab.
+// Filters guest.campaigns to campaign_kind='lifecycle' — anticipation, post-stay
+// gratitude, birthday, winback, etc. Same chrome as Broadcasts.
+// Mounts <ProposeNewsletterButton defaultKind='lifecycle' /> in the top row.
 
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
-import { GUEST_SUBPAGES } from '../_subpages';
+import { GUEST_SUBPAGES } from '../../_subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import ScheduleDrawer from './_components/ScheduleDrawer';
-import HaltButton from './_components/HaltButton';
-import RecipientsButton from './_components/RecipientsButton';
-import DeleteCampaignButton from './_components/DeleteCampaignButton';
-import NewslettersSubStrip from './_components/NewslettersSubStrip';
-import ProposeNewsletterButton from './_components/ProposeNewsletterButton';
+import ScheduleDrawer from '../_components/ScheduleDrawer';
+import HaltButton from '../_components/HaltButton';
+import RecipientsButton from '../_components/RecipientsButton';
+import DeleteCampaignButton from '../_components/DeleteCampaignButton';
+import NewslettersSubStrip from '../_components/NewslettersSubStrip';
+import ProposeNewsletterButton from '../_components/ProposeNewsletterButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,6 +29,8 @@ type CampaignRow = {
   created_by: string | null; created_at: string; updated_at: string; archived_at: string | null;
   planned_date: string | null;
   campaign_kind?: string | null;
+  audience_type?: string | null;
+  goal_tag?: string | null;
 };
 
 function fmtDateTime(iso: string | null): string {
@@ -41,30 +43,31 @@ function fmtDate(iso: string | null): string {
   try { return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }); }
   catch { return '—'; }
 }
-function fmtRelSchedule(row: CampaignRow): string {
-  if (row.relative_kind === 'before_checkin' && row.relative_days != null) return `${row.relative_days}d before check-in · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`;
-  if (row.relative_kind === 'after_checkout' && row.relative_days != null) return `${row.relative_days}d after check-out · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`;
-  if (row.planned_date) return fmtDate(row.planned_date) + ' · 10:00';
-  if (row.schedule_kind && row.schedule_kind !== 'once') return `Repeats ${row.schedule_kind}`;
-  if (row.scheduled_at) return fmtDateTime(row.scheduled_at);
-  return '—';
+function fmtLifecycleTrigger(row: CampaignRow): string {
+  if (row.relative_kind === 'before_checkin' && row.relative_days != null)
+    return `${row.relative_days}d before check-in · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`;
+  if (row.relative_kind === 'after_checkout' && row.relative_days != null)
+    return `${row.relative_days}d after check-out · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`;
+  if (row.schedule_kind === 'birthday') return 'On guest birthday · 10:00';
+  if (row.schedule_kind === 'winback') return 'Auto · Winback trigger';
+  if (row.planned_date) return fmtDate(row.planned_date);
+  return row.schedule_kind ?? '—';
 }
 function pctOr(n: number, d: number): string { if (!d) return '—'; return `${((n / d) * 100).toFixed(0)}%`; }
 
 interface PageProps { propertyId?: number }
 
-export default async function NewslettersPage({ propertyId }: PageProps = {}) {
+export default async function LifecyclePage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const { data, error } = await supabase.from('v_guest_campaigns').select('*')
     .eq('property_id', pid).is('archived_at', null)
-    .order('planned_date', { ascending: true, nullsFirst: false })
     .order('updated_at', { ascending: false });
   const allRows: CampaignRow[] = (data as CampaignRow[]) ?? [];
-  // Broadcasts view = everything that is not explicitly a lifecycle campaign.
-  const rows = allRows.filter((r) => (r.campaign_kind ?? 'broadcast') !== 'lifecycle');
-  const drafts   = rows.filter(r => r.status === 'draft');
-  const upcoming = rows.filter(r => r.status === 'scheduled' || r.status === 'sending');
-  const sent     = rows.filter(r => r.status === 'sent');
+  const rows = allRows.filter((r) => (r.campaign_kind ?? 'broadcast') === 'lifecycle');
+
+  const active = rows.filter(r => r.status === 'scheduled' || r.status === 'sending');
+  const drafts = rows.filter(r => r.status === 'draft');
+  const sent   = rows.filter(r => r.status === 'sent');
 
   const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/guest/newsletters',
@@ -72,74 +75,40 @@ export default async function NewslettersPage({ propertyId }: PageProps = {}) {
 
   return (
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
-      <DashboardPage title="Contacts · Newsletters"
-        subtitle={`${rows.length} campaign${rows.length === 1 ? '' : 's'} — Drafts, Scheduled and Sent.`} tabs={tabs}>
-        <NewslettersSubStrip active="broadcasts" />
+      <DashboardPage title="Contacts · Lifecycle emails"
+        subtitle={`${rows.length} lifecycle campaign${rows.length === 1 ? '' : 's'} — anticipation, gratitude, birthday, winback.`} tabs={tabs}>
+        <NewslettersSubStrip active="lifecycle" />
 
+        {/* Top row — filters/CTAs. Matches Broadcasts view position. */}
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center' }}>
           <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
-          <ProposeNewsletterButton propertyId={pid} defaultKind="broadcast" />
-          <TenantLink href="/guest/directory" style={ctaButton}>+ Compose from Directory</TenantLink>
+          <ProposeNewsletterButton propertyId={pid} defaultKind="lifecycle" />
+          <TenantLink href="/guest/directory" style={ctaButton}>+ New lifecycle campaign</TenantLink>
         </div>
 
-        {error && <div style={{ ...errorBox, gridColumn:'1 / -1' }}>Could not load campaigns: {error.message}</div>}
+        {error && <div style={{ ...errorBox, gridColumn:'1 / -1' }}>Could not load lifecycle campaigns: {error.message}</div>}
 
-        {/* DRAFTS */}
+        {/* ACTIVE */}
         <div style={{ gridColumn:'1 / -1' }}>
-          <div style={sectionHeader}>Drafts</div>
-          {drafts.length === 0 ? <div style={emptyState}>No drafts yet. Compose from Directory or start from a template.</div> : (
+          <div style={sectionHeader}>Active lifecycle triggers</div>
+          {active.length === 0 ? <div style={emptyState}>No active lifecycle triggers yet.</div> : (
             <div style={tableWrap}>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th><th style={th}>Template</th><th style={th}>Planned date</th>
-                  <th style={th}>Author</th><th style={th}>Last edit</th>
-                  <th style={{ ...th, textAlign:'right', width:290 }}>Actions</th>
-                </tr></thead>
-                <tbody>
-                  {drafts.map((r) => (
-                    <tr key={r.campaign_id} style={{ borderBottom:'1px solid #E6DFCC', background:'#FFFFFF' }}>
-                      <td style={{ ...tdL, maxWidth:280 }}>
-                        <div style={{ fontWeight:600 }}>{r.name}</div>
-                        <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
-                      </td>
-                      <td style={tdL}>{r.template_key ?? '—'}</td>
-                      <td style={{ ...tdL, fontWeight: r.planned_date ? 600 : 400, color: r.planned_date ? '#084838' : '#5A5A5A' }}>{fmtDate(r.planned_date)}</td>
-                      <td style={tdL}>{r.created_by ?? '—'}</td>
-                      <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
-                      <td style={{ ...tdR, textAlign:'right' }}>
-                        <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</TenantLink>
-                        <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
-                        <ScheduleDrawer campaign_id={r.campaign_id} campaign_name={r.name} planned_date={r.planned_date} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* SCHEDULED */}
-        <div style={{ gridColumn:'1 / -1' }}>
-          <div style={sectionHeader}>Scheduled</div>
-          {upcoming.length === 0 ? <div style={emptyState}>No scheduled campaigns.</div> : (
-            <div style={tableWrap}>
-              <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th><th style={th}>Send schedule</th>
+                  <th style={th}>Campaign</th><th style={th}>Trigger</th>
                   <th style={{ ...th, textAlign:'right' }}>Recipients</th>
                   <th style={{ ...th, textAlign:'right' }}>Pending</th>
                   <th style={th}>Last edit</th>
-                  <th style={{ ...th, textAlign:'right', width:250 }}>Actions</th>
+                  <th style={{ ...th, textAlign:'right', width:260 }}>Actions</th>
                 </tr></thead>
                 <tbody>
-                  {upcoming.map((r) => (
+                  {active.map((r) => (
                     <tr key={r.campaign_id} style={{ borderBottom:'1px solid #E6DFCC', background:'#FFFFFF' }}>
                       <td style={{ ...tdL, maxWidth:260 }}>
                         <div style={{ fontWeight:600 }}>{r.name}</div>
                         <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
                       </td>
-                      <td style={tdL}>{fmtRelSchedule(r)}</td>
+                      <td style={tdL}>{fmtLifecycleTrigger(r)}</td>
                       <td style={tdR}><RecipientsButton campaign_id={r.campaign_id} campaign_name={r.name} count={r.recipients_count} /></td>
                       <td style={tdR}>{r.pending_count}</td>
                       <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
@@ -156,20 +125,52 @@ export default async function NewslettersPage({ propertyId }: PageProps = {}) {
           )}
         </div>
 
-        {/* SENT */}
+        {/* DRAFTS */}
         <div style={{ gridColumn:'1 / -1' }}>
-          <div style={sectionHeader}>Sent</div>
-          {sent.length === 0 ? <div style={emptyState}>No campaigns have been sent yet.</div> : (
+          <div style={sectionHeader}>Drafts</div>
+          {drafts.length === 0 ? <div style={emptyState}>No lifecycle drafts.</div> : (
             <div style={tableWrap}>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th><th style={th}>Sent at</th>
+                  <th style={th}>Campaign</th><th style={th}>Trigger</th>
+                  <th style={th}>Author</th><th style={th}>Last edit</th>
+                  <th style={{ ...th, textAlign:'right', width:290 }}>Actions</th>
+                </tr></thead>
+                <tbody>
+                  {drafts.map((r) => (
+                    <tr key={r.campaign_id} style={{ borderBottom:'1px solid #E6DFCC', background:'#FFFFFF' }}>
+                      <td style={{ ...tdL, maxWidth:280 }}>
+                        <div style={{ fontWeight:600 }}>{r.name}</div>
+                        <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
+                      </td>
+                      <td style={tdL}>{fmtLifecycleTrigger(r)}</td>
+                      <td style={tdL}>{r.created_by ?? '—'}</td>
+                      <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
+                      <td style={{ ...tdR, textAlign:'right' }}>
+                        <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</TenantLink>
+                        <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
+                        <ScheduleDrawer campaign_id={r.campaign_id} campaign_name={r.name} planned_date={r.planned_date} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* SENT */}
+        <div style={{ gridColumn:'1 / -1' }}>
+          <div style={sectionHeader}>Sent</div>
+          {sent.length === 0 ? <div style={emptyState}>No lifecycle campaigns sent yet.</div> : (
+            <div style={tableWrap}>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
+                  <th style={th}>Campaign</th><th style={th}>Last sent</th>
                   <th style={{ ...th, textAlign:'right' }}>Sent</th>
                   <th style={{ ...th, textAlign:'right' }}>Opens</th>
                   <th style={{ ...th, textAlign:'right' }}>Clicks</th>
                   <th style={{ ...th, textAlign:'right' }}>Bookings</th>
-                  <th style={{ ...th, textAlign:'right' }}>Unsubs</th>
-                  <th style={th}>Code</th>
                   <th style={{ ...th, textAlign:'right', width:200 }}>Actions</th>
                 </tr></thead>
                 <tbody>
@@ -184,8 +185,6 @@ export default async function NewslettersPage({ propertyId }: PageProps = {}) {
                       <td style={tdR}>{r.opens_count} <span style={pctSub}>({pctOr(r.opens_count, r.send_count)})</span></td>
                       <td style={tdR}>{r.clicks_count} <span style={pctSub}>({pctOr(r.clicks_count, r.send_count)})</span></td>
                       <td style={tdR}>{r.booking_count}</td>
-                      <td style={tdR}>{r.unsub_count}</td>
-                      <td style={{ ...tdL, fontFamily:'ui-monospace, SFMono-Regular, monospace', fontSize:11 }}>{r.booking_code ?? '—'}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
                         <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</TenantLink>
                         <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
