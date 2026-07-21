@@ -391,7 +391,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
           { label: 'OTA / Website',  value: (libCounts?.ota ?? totals.ota) + (libCounts?.website ?? totals.hero),                  filterTier: 'tier_ota_profile' },
           { label: 'Social',         value: libCounts?.social       ?? totals.social,                                             filterTier: 'tier_social_pool' },
           { label: 'Logos',          value: n(byTier.find(r => r.primary_tier === 'tier_logos')?.total),                          filterTier: 'tier_logos' },
-          { label: 'Archive',        value: libCounts?.archive ?? n(byTier.find(r => r.primary_tier === 'tier_archive')?.total),  filterTier: 'tier_archive', sub: 'auto: quality < 50 or any sub-score < 5 · or manual' },
+          { label: 'Archive',        value: libCounts?.archive ?? n(byTier.find(r => r.primary_tier === 'tier_archive')?.total),  filterTier: 'tier_archive', sub: 'auto: quality 25-49 or any sub-score < 5 · below 25 → Junk · or manual' },
         ] as Array<{ label: string; value: number | undefined; filterTier: string | null; action?: 'clear'|'coverage'|'clarify'; sub?: string }>).map((t, i) => {
           const isActive    = t.filterTier !== null && tier === t.filterTier;
           const isClickable = t.filterTier !== null || !!t.action;
