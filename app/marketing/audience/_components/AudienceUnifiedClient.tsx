@@ -311,6 +311,16 @@ export default function AudienceUnifiedClient({
     return ids;
   }, [selected]);
 
+  // 2026-07-22 · Audience-id-string counterpart. Used by optimistic-patch code
+  // paths (bulk delete + assign + unsub) that need to match against
+  // row.audience_id which is the full "subscriber:{n}" string, not the raw
+  // integer id. Kept as a separate memo so the RPC/API payload dependency
+  // above stays untouched.
+  const selectedSubscriberAudienceIds = useMemo(
+    () => Array.from(selected).filter((id) => id.startsWith('subscriber:')),
+    [selected],
+  );
+
   const refreshGroups = useCallback(async () => {
     const r = await fetch('/api/marketing/subscribers/groups', { cache: 'no-store' });
     const j = await r.json().catch(() => ({}));
@@ -318,7 +328,8 @@ export default function AudienceUnifiedClient({
   }, []);
 
   const doBulkAssignGroup = useCallback((groupId: string) => {
-    const ids = selectedSubscriberIds;
+    const ids     = selectedSubscriberIds;
+    const audIds  = selectedSubscriberAudienceIds;
     const g = groups.find((x) => x.id === groupId);
     if (!ids.length || !g) { setMsg('Select subscriber rows first (prospects not supported yet).'); return; }
     startTransition(async () => {
@@ -334,16 +345,16 @@ export default function AudienceUnifiedClient({
       // refreshGroups() re-hydrates the row-level `groups` array, so PBS saw
       // no visual feedback. Patch here so the Groups column chip appears
       // immediately for every selected subscriber row.
-      const idSet = new Set(ids);
+      const audSet = new Set(audIds);
       setRows((prev) => prev.map((row) =>
-        idSet.has(row.audience_id)
+        audSet.has(row.audience_id)
           ? { ...row, groups: Array.from(new Set([...(row.groups ?? []), g.slug])) }
           : row,
       ));
       setMsg(`Assigned ${j.affected ?? ids.length} subscribers to ${g.name}.`);
       refreshGroups();
     });
-  }, [selectedSubscriberIds, groups, refreshGroups]);
+  }, [selectedSubscriberIds, selectedSubscriberAudienceIds, groups, refreshGroups]);
 
   // 2026-07-22 · Bulk delete for subscriber rows only. Prospects are excluded.
   // Calls SECURITY DEFINER RPC public.fn_bulk_delete_subscribers(p_audience_ids text[])
@@ -353,9 +364,9 @@ export default function AudienceUnifiedClient({
   // If the RPC doesn't exist yet (PBS creates it out-of-band), fall back to a
   // friendly alert() rather than crashing the page.
   const doBulkDelete = useCallback(() => {
-    const ids = selectedSubscriberIds;
-    if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} addresses from newsletter subscribers? They will be auto-added to the blocklist so future imports cannot re-add them.`)) return;
+    const audIds = selectedSubscriberAudienceIds;
+    if (audIds.length === 0) return;
+    if (!confirm(`Delete ${audIds.length} addresses from newsletter subscribers? They will be auto-added to the blocklist so future imports cannot re-add them.`)) return;
     const url  = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !anon) { alert('Delete failed: Supabase env not available in browser.'); return; }
@@ -368,7 +379,7 @@ export default function AudienceUnifiedClient({
             Authorization: `Bearer ${anon}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ p_audience_ids: ids }),
+          body: JSON.stringify({ p_audience_ids: audIds }),
         });
         if (r.status === 404) {
           alert('Delete RPC (fn_bulk_delete_subscribers) not deployed yet.');
@@ -380,20 +391,22 @@ export default function AudienceUnifiedClient({
           return;
         }
         // RPC returns TABLE(deleted int, blocklisted int) or scalar; be flexible.
-        const deleted = Array.isArray(j) ? (j[0]?.deleted ?? ids.length) : (j?.deleted ?? ids.length);
+        const deleted = Array.isArray(j) ? (j[0]?.deleted ?? audIds.length) : (j?.deleted ?? audIds.length);
         setMsg(`Deleted ${deleted} subscribers. Refresh to see updated counts.`);
         // Remove deleted rows from local view + clear selection so the UI doesn't
         // show phantom "N selected" against rows that no longer exist.
-        setRows((prev) => prev.filter((r) => !ids.includes(r.audience_id)));
+        const audSet = new Set(audIds);
+        setRows((prev) => prev.filter((row) => !audSet.has(row.audience_id)));
         setSelected(new Set());
       } catch (e) {
         setMsg(`Delete failed: ${(e as Error).message}`);
       }
     });
-  }, [selectedSubscriberIds]);
+  }, [selectedSubscriberAudienceIds]);
 
   const doBulkUnsubscribe = useCallback(() => {
-    const ids = selectedSubscriberIds;
+    const ids    = selectedSubscriberIds;
+    const audIds = selectedSubscriberAudienceIds;
     if (!ids.length) { setMsg('Select subscriber rows first.'); return; }
     if (!confirm(`Unsubscribe ${ids.length} subscribers? This sets unsubscribed_at.`)) return;
     startTransition(async () => {
@@ -409,15 +422,15 @@ export default function AudienceUnifiedClient({
       // null in state so filters like STATUS=unsub still miss it. Stamp the
       // client rows immediately.
       const nowIso = new Date().toISOString();
-      const idSet = new Set(ids);
+      const audSet = new Set(audIds);
       setRows((prev) => prev.map((row) =>
-        idSet.has(row.audience_id) && !row.unsubscribed_at
+        audSet.has(row.audience_id) && !row.unsubscribed_at
           ? { ...row, unsubscribed_at: nowIso }
           : row,
       ));
       setMsg(`Unsubscribed ${j.affected ?? ids.length}.`);
     });
-  }, [selectedSubscriberIds]);
+  }, [selectedSubscriberIds, selectedSubscriberAudienceIds]);
 
   const exportCsv = () => {
     const target = selected.size ? filtered.filter(r => selected.has(r.audience_id)) : filtered;
