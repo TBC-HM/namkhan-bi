@@ -69,11 +69,18 @@ export default async function LifecyclePage({ propertyId }: PageProps = {}) {
   const [campaignsRes, groupsRes] = await Promise.all([
     supabase.from('v_guest_campaigns').select('*').eq('property_id', pid).is('archived_at', null)
       .order('updated_at', { ascending: false }),
-    supabase.from('v_subscriber_groups').select('slug, name, color, sort_order').order('sort_order'),
+    supabase.from('v_subscriber_groups').select('slug, name, color, sort_order, member_count').order('sort_order'),
   ]);
   const allRows: CampaignRow[] = (campaignsRes.data as CampaignRow[]) ?? [];
   const rows = allRows.filter((r) => (r.campaign_kind ?? 'broadcast') === 'lifecycle');
-  const groups: GroupMeta[] = (groupsRes.data as GroupMeta[]) ?? [];
+  const groups: (GroupMeta & { member_count?: number })[] = (groupsRes.data as any) ?? [];
+
+  // Membership of the 3 groups that feed the "Real Guest" bucket
+  const memCount = (slug: string) => groups.find(g => g.slug === slug)?.member_count ?? 0;
+  const seaCount = memCount('guests-sea');
+  const intCount = memCount('guests-int');
+  const retCount = memCount('returning-guests');
+  const realTotal = seaCount + intCount + retCount;
 
   // bucket rows by group_slug ('__real__' = NULL bucket)
   const byGroup = new Map<string, CampaignRow[]>();
@@ -84,7 +91,7 @@ export default async function LifecyclePage({ propertyId }: PageProps = {}) {
 
   // canonical order: Real Guest bucket first, then subscriber_groups by sort_order
   const boxOrder: GroupMeta[] = [
-    { slug: '__real__', name: 'Real Guest · guests-sea + guests-int + returning', color: '#4A6A3A', sort_order: -1 },
+    { slug: '__real__', name: 'Real Guest', color: '#4A6A3A', sort_order: -1 },
     ...groups,
   ];
 
@@ -108,19 +115,37 @@ export default async function LifecyclePage({ propertyId }: PageProps = {}) {
 
         {boxOrder.map((g) => {
           const groupRows = byGroup.get(g.slug) ?? [];
-          if (groupRows.length === 0) return null;
+          const isRealGuest = g.slug === '__real__';
+          const otaCount = g.slug === 'ota-traveller' ? memCount('ota-traveller') : 0;
+          if (groupRows.length === 0 && !isRealGuest && g.slug !== 'ota-traveller') return null;
           const active = groupRows.filter(r => r.status === 'scheduled' || r.status === 'sending');
           const drafts = groupRows.filter(r => r.status === 'draft');
           const sent   = groupRows.filter(r => r.status === 'sent');
 
           return (
             <div key={g.slug} style={{ ...groupBox, borderTopColor: g.color, gridColumn:'1 / -1' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderBottom:`1px solid ${HAIR}`, background:'#FAFAF7' }}>
-                <span style={{ width:12, height:12, borderRadius:2, background:g.color, border:`1px solid ${HAIR}` }} />
-                <div style={{ fontSize:13, fontWeight:700, color:INK }}>{g.name}</div>
-                <div style={{ marginLeft:'auto', fontSize:11, color:INK_S }}>
-                  {groupRows.length} campaign{groupRows.length === 1 ? '' : 's'} · {active.length} active · {drafts.length} draft · {sent.length} sent
+              <div style={{ padding:'10px 14px', borderBottom:`1px solid ${HAIR}`, background:'#FAFAF7' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <span style={{ width:12, height:12, borderRadius:2, background:g.color, border:`1px solid ${HAIR}` }} />
+                  <div style={{ fontSize:13, fontWeight:700, color:INK }}>{g.name}</div>
+                  <div style={{ marginLeft:'auto', fontSize:11, color:INK_S }}>
+                    {groupRows.length} campaign{groupRows.length === 1 ? '' : 's'} · {active.length} active · {drafts.length} draft · {sent.length} sent
+                  </div>
                 </div>
+                {isRealGuest && (
+                  <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:6, fontSize:11, color:INK_S, paddingLeft:22, flexWrap:'wrap' }}>
+                    <span style={{ color:INK_S }}>Fires for reservation guests in:</span>
+                    <span style={pillStyle('#E88B3B')}>Guests SEA · {seaCount.toLocaleString()}</span>
+                    <span style={pillStyle('#3B78E8')}>Guests Int · {intCount.toLocaleString()}</span>
+                    <span style={pillStyle('#8AC479')}>Returning · {retCount.toLocaleString()}</span>
+                    <span style={{ marginLeft:'auto', fontWeight:600, color:INK }}>Total audience: {realTotal.toLocaleString()}</span>
+                  </div>
+                )}
+                {g.slug === 'ota-traveller' && (
+                  <div style={{ marginTop:6, fontSize:11, color:INK_S, paddingLeft:22 }}>
+                    Fires for OTA-relay emails only (@guest.booking.com · @m.expediapartnercentral.com · @stayntouch.com · @guest.airbnb) · <strong style={{ color:INK }}>{otaCount.toLocaleString()}</strong> subscribers · plain text · no links.
+                  </div>
+                )}
               </div>
 
               <div style={{ padding:'8px 14px 14px' }}>
@@ -256,6 +281,14 @@ const HAIR  = '#E6DFCC';
 const INK   = '#1B1B1B';
 const INK_S = '#5A5A5A';
 const BRAND = '#1F3A2E';
+
+function pillStyle(bg: string): CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    padding: '2px 8px', fontSize: 10, fontWeight: 600,
+    background: bg + '22', color: bg, border: `1px solid ${bg}66`, borderRadius: 10,
+  };
+}
 
 const groupBox: CSSProperties = { border: `1px solid ${HAIR}`, borderTop:'3px solid #4A6A3A', borderRadius:6, background:'#FFFFFF', marginBottom:14 };
 const subHeader: CSSProperties = { fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_S, fontWeight:600, margin:'10px 2px 6px' };
