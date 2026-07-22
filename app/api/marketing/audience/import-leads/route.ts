@@ -265,7 +265,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'parse_failed', detail: (e as Error).message }, { status: 400 });
   }
 
-  const source_file = 'upload:' + name;
+  const customName = String(form.get('source_name') ?? '').trim();
+  const source_file = customName.length > 0 ? customName : 'upload:' + name;
 
   // 2. Claude extraction
   let leads: ExtractedLead[] = [];
