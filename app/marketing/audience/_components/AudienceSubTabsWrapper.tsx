@@ -24,7 +24,8 @@ import ScrapeEngineTab from './ScrapeEngineTab';
 const ZERO_TILES: AudienceTiles = {
   total_subs: 0,
   mailable: 0,
-  guests: 0,
+  guests_sea: 0,
+  guests_int: 0,
   returning_guests: 0,
   dmc: 0,
   responders: 0,
