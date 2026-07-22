@@ -60,6 +60,11 @@ export interface AudienceRow {
   booking_count: number | null;
   is_pinned: boolean;
   ingest_source: string | null;
+  // Optional: some upstream views (v_marketing_audience) expose a finer-grain
+  // origin label. Used as a fallback for the SOURCE column when ingest_source
+  // is null. Prospect rows from gmail_contacts_extracted that haven't been
+  // promoted typically have both null → we show "prospect" then.
+  source_detail?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -125,6 +130,12 @@ export default function AudienceUnifiedClient({
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSource);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('any');
   const [mxFilter, setMxFilter]         = useState<MxFilter>('any');
+  // 2026-07-22 · Source/Status/MX converted from segmented button rows to
+  // single-select dropdowns to match the GROUPS filter shape (chevron trigger
+  // + popover list). State + filter logic unchanged; JSX only.
+  const [sourceDdOpen, setSourceDdOpen] = useState(false);
+  const [statusDdOpen, setStatusDdOpen] = useState(false);
+  const [mxDdOpen,     setMxDdOpen]     = useState(false);
   // Multi-select group filter (UNION semantics; UNASSIGNED_SLUG sentinel exclusive)
   const [groupFilters, setGroupFilters] = useState<string[]>([]);
   const [groupDdOpen, setGroupDdOpen]   = useState(false);
@@ -585,25 +596,34 @@ export default function AudienceUnifiedClient({
       {/* Filters */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         <FilterGroup label="Source">
-          {(['all','subscribers','prospects'] as SourceFilter[]).map((k) => (
-            <FilterChip key={k} active={sourceFilter === k} onClick={() => { setSourceFilter(k); setPage(0); }}>
-              {k}
-            </FilterChip>
-          ))}
+          <SingleSelectDropdown
+            open={sourceDdOpen}
+            setOpen={setSourceDdOpen}
+            value={sourceFilter}
+            defaultValue="all"
+            options={['all','subscribers','prospects'] as SourceFilter[]}
+            onSelect={(k) => { setSourceFilter(k); setPage(0); setSourceDdOpen(false); }}
+          />
         </FilterGroup>
         <FilterGroup label="Status (subs)">
-          {(['any','active','pending','unsub','bounced'] as StatusFilter[]).map((k) => (
-            <FilterChip key={k} active={statusFilter === k} onClick={() => { setStatusFilter(k); setPage(0); }}>
-              {k}
-            </FilterChip>
-          ))}
+          <SingleSelectDropdown
+            open={statusDdOpen}
+            setOpen={setStatusDdOpen}
+            value={statusFilter}
+            defaultValue="any"
+            options={['any','active','pending','unsub','bounced'] as StatusFilter[]}
+            onSelect={(k) => { setStatusFilter(k); setPage(0); setStatusDdOpen(false); }}
+          />
         </FilterGroup>
         <FilterGroup label="MX (prospects)">
-          {(['any','valid','invalid'] as MxFilter[]).map((k) => (
-            <FilterChip key={k} active={mxFilter === k} onClick={() => { setMxFilter(k); setPage(0); }}>
-              {k}
-            </FilterChip>
-          ))}
+          <SingleSelectDropdown
+            open={mxDdOpen}
+            setOpen={setMxDdOpen}
+            value={mxFilter}
+            defaultValue="any"
+            options={['any','valid','invalid'] as MxFilter[]}
+            onSelect={(k) => { setMxFilter(k); setPage(0); setMxDdOpen(false); }}
+          />
         </FilterGroup>
 
         {/* Group multi-select dropdown (RESTORED) */}
@@ -791,11 +811,21 @@ export default function AudienceUnifiedClient({
                 <td style={tdStyle}>{r.name ?? '—'}</td>
                 <td style={tdStyle}>{r.company ?? '—'}</td>
                 <td style={tdStyle}>
-                  <span style={{
-                    padding: '2px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600,
-                    background: r.source === 'subscriber' ? '#EEF7F0' : '#F5EEDC',
-                    color:      r.source === 'subscriber' ? BRAND : '#8A6A2E',
-                  }}>{r.source}</span>
+                  {/* 2026-07-22 · SOURCE column now shows origin (ingest_source),
+                      not the row-type ("subscriber"/"prospect") which was
+                      redundant with the top SOURCE filter. gmail_extract shortened
+                      to "gmail" for readability. Fallback: source_detail → "prospect". */}
+                  {(() => {
+                    const raw = r.ingest_source ?? r.source_detail ?? (r.source === 'prospect' ? 'prospect' : null);
+                    const display = raw === 'gmail_extract' ? 'gmail' : (raw ?? '—');
+                    return (
+                      <span style={{
+                        padding: '2px 6px', borderRadius: 3, fontSize: 10, fontWeight: 600,
+                        background: r.source === 'subscriber' ? '#EEF7F0' : '#F5EEDC',
+                        color:      r.source === 'subscriber' ? BRAND : '#8A6A2E',
+                      }}>{display}</span>
+                    );
+                  })()}
                 </td>
                 <td style={tdStyle}>{r.lifecycle_stage ?? '—'}</td>
                 <td style={tdStyle}>
@@ -1016,5 +1046,68 @@ function FilterChip({ active, onClick, children }: { active: boolean; onClick: (
       background: active ? BRAND : WHITE, color: active ? WHITE : INK,
       border: `1px solid ${active ? BRAND : HAIR}`, borderRadius: 3,
     }}>{children}</button>
+  );
+}
+
+// 2026-07-22 · Chevron-anchored single-select popover, mirroring the visual
+// grammar of the multi-select Groups dropdown (BRAND fill when non-default,
+// paper white + hairline when default). Used for SOURCE / STATUS (SUBS) /
+// MX (PROSPECTS) filters. Kept generic over the string-literal filter types.
+function SingleSelectDropdown<T extends string>({
+  open, setOpen, value, defaultValue, options, onSelect,
+}: {
+  open: boolean;
+  setOpen: (v: boolean | ((prev: boolean) => boolean)) => void;
+  value: T;
+  defaultValue: T;
+  options: readonly T[];
+  onSelect: (v: T) => void;
+}) {
+  const isNonDefault = value !== defaultValue;
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          padding: '4px 10px', fontSize: 11, cursor: 'pointer',
+          background: isNonDefault ? BRAND : WHITE,
+          color: isNonDefault ? WHITE : INK,
+          border: `1px solid ${isNonDefault ? BRAND : HAIR}`, borderRadius: 3,
+          minWidth: 96, textAlign: 'left',
+        }}
+      >
+        {value} {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 10,
+          background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 3,
+          padding: 4, minWidth: 140, maxHeight: 320, overflowY: 'auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+        }}>
+          {options.map((k) => {
+            const checked = value === k;
+            return (
+              <button
+                key={k}
+                onClick={() => onSelect(k)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px',
+                  width: '100%', fontSize: 12, color: INK, cursor: 'pointer',
+                  background: checked ? WARM : 'transparent', borderRadius: 3,
+                  border: 'none', textAlign: 'left',
+                }}
+              >
+                <span style={{
+                  width: 8, height: 8, borderRadius: 2,
+                  background: checked ? BRAND : HAIR, display: 'inline-block',
+                }} />
+                <span style={{ flex: 1 }}>{k}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
