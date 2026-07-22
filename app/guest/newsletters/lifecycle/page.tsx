@@ -117,7 +117,7 @@ export default async function LifecyclePage({ propertyId }: PageProps = {}) {
           const groupRows = byGroup.get(g.slug) ?? [];
           const isRealGuest = g.slug === '__real__';
           const otaCount = g.slug === 'ota-traveller' ? memCount('ota-traveller') : 0;
-          if (groupRows.length === 0 && !isRealGuest && g.slug !== 'ota-traveller') return null;
+          // PBS 2026-07-22 late-EOD: render every subscriber_group box always, empty state when no lifecycle campaigns
           const active = groupRows.filter(r => r.status === 'scheduled' || r.status === 'sending');
           const drafts = groupRows.filter(r => r.status === 'draft');
           const sent   = groupRows.filter(r => r.status === 'sent');
