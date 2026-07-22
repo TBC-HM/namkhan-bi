@@ -329,10 +329,68 @@ export default function AudienceUnifiedClient({
       });
       const j = await r.json().catch(() => ({}));
       if (!j.ok) { setMsg('Assign failed: ' + (j.error ?? 'unknown')); return; }
-      setMsg(`Assigned ${j.affected ?? ids.length} subscribers to ${g.name}. Refresh to see chips.`);
+      // 2026-07-22 · Optimistic row patch. The API call succeeds (rows land in
+      // marketing.subscriber_group_members) but nothing in initialRows or
+      // refreshGroups() re-hydrates the row-level `groups` array, so PBS saw
+      // no visual feedback. Patch here so the Groups column chip appears
+      // immediately for every selected subscriber row.
+      const idSet = new Set(ids);
+      setRows((prev) => prev.map((row) =>
+        idSet.has(row.audience_id)
+          ? { ...row, groups: Array.from(new Set([...(row.groups ?? []), g.slug])) }
+          : row,
+      ));
+      setMsg(`Assigned ${j.affected ?? ids.length} subscribers to ${g.name}.`);
       refreshGroups();
     });
   }, [selectedSubscriberIds, groups, refreshGroups]);
+
+  // 2026-07-22 · Bulk delete for subscriber rows only. Prospects are excluded.
+  // Calls SECURITY DEFINER RPC public.fn_bulk_delete_subscribers(p_audience_ids text[])
+  // which parses the "subscriber:{id}" prefix, deletes from
+  // marketing.newsletter_subscribers by id, and lets the auto-blocklist trigger
+  // populate marketing.newsletter_blocklist so future imports can't re-add them.
+  // If the RPC doesn't exist yet (PBS creates it out-of-band), fall back to a
+  // friendly alert() rather than crashing the page.
+  const doBulkDelete = useCallback(() => {
+    const ids = selectedSubscriberIds;
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} addresses from newsletter subscribers? They will be auto-added to the blocklist so future imports cannot re-add them.`)) return;
+    const url  = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anon) { alert('Delete failed: Supabase env not available in browser.'); return; }
+    startTransition(async () => {
+      try {
+        const r = await fetch(`${url}/rest/v1/rpc/fn_bulk_delete_subscribers`, {
+          method: 'POST',
+          headers: {
+            apikey: anon,
+            Authorization: `Bearer ${anon}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ p_audience_ids: ids }),
+        });
+        if (r.status === 404) {
+          alert('Delete RPC (fn_bulk_delete_subscribers) not deployed yet.');
+          return;
+        }
+        const j = await r.json().catch(() => null);
+        if (!r.ok) {
+          setMsg(`Delete failed: ${(j && (j.message || j.error)) ?? r.statusText}`);
+          return;
+        }
+        // RPC returns TABLE(deleted int, blocklisted int) or scalar; be flexible.
+        const deleted = Array.isArray(j) ? (j[0]?.deleted ?? ids.length) : (j?.deleted ?? ids.length);
+        setMsg(`Deleted ${deleted} subscribers. Refresh to see updated counts.`);
+        // Remove deleted rows from local view + clear selection so the UI doesn't
+        // show phantom "N selected" against rows that no longer exist.
+        setRows((prev) => prev.filter((r) => !ids.includes(r.audience_id)));
+        setSelected(new Set());
+      } catch (e) {
+        setMsg(`Delete failed: ${(e as Error).message}`);
+      }
+    });
+  }, [selectedSubscriberIds]);
 
   const doBulkUnsubscribe = useCallback(() => {
     const ids = selectedSubscriberIds;
@@ -346,7 +404,18 @@ export default function AudienceUnifiedClient({
       });
       const j = await r.json().catch(() => ({}));
       if (!j.ok) { setMsg('Unsubscribe failed: ' + (j.error ?? 'unknown')); return; }
-      setMsg(`Unsubscribed ${j.affected ?? ids.length}. Refresh to see status.`);
+      // 2026-07-22 · Optimistic row patch. Same invisibility bug as the assign
+      // path: server-side unsubscribed_at is set, but the row-level flag stays
+      // null in state so filters like STATUS=unsub still miss it. Stamp the
+      // client rows immediately.
+      const nowIso = new Date().toISOString();
+      const idSet = new Set(ids);
+      setRows((prev) => prev.map((row) =>
+        idSet.has(row.audience_id) && !row.unsubscribed_at
+          ? { ...row, unsubscribed_at: nowIso }
+          : row,
+      ));
+      setMsg(`Unsubscribed ${j.affected ?? ids.length}.`);
     });
   }, [selectedSubscriberIds]);
 
@@ -761,6 +830,19 @@ export default function AudienceUnifiedClient({
             onClick={doBulkUnsubscribe} disabled={busy || selectedSubscriberIds.length === 0}
             style={btnStyle}
           >Unsubscribe (subs)</button>
+          {/* 2026-07-22 · Destructive bulk delete. Subscriber rows only; prospects
+              are counted separately and excluded from the RPC payload. */}
+          <button
+            onClick={doBulkDelete}
+            disabled={busy || selectedSubscriberIds.length === 0}
+            title={selectedSubscriberIds.length === 0 ? 'Prospect rows cannot be deleted here' : `Delete ${selectedSubscriberIds.length} subscribers (auto-blocklist)`}
+            style={{
+              ...btnStyle,
+              background: WHITE,
+              color: '#B04A2F',
+              border: '1px solid #B04A2F',
+            }}
+          >Delete ({selectedSubscriberIds.length})</button>
           <button onClick={exportCsv} style={btnStyle}>Export CSV</button>
           <button onClick={() => setSelected(new Set())} style={{ ...btnStyle, background: 'transparent', color: INK_S }}>
             Clear
