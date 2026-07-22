@@ -30,6 +30,7 @@ type Body = {
   group_slug?: string | null;
   audience_types?: string[];
   regenerate_empty_only?: boolean;
+  direction?: string;
 };
 
 function ymd(d: Date): string {
