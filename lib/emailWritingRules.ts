@@ -122,7 +122,15 @@ CAMPAIGN KIND = before_checkin (sent T-7 days before arrival)
 - Weave 2–3 practical notes into prose — do NOT dump a bullet list unless one item is safety-critical.
 - Notes that matter: how they reach us (car from Luang Prabang airport ~45 min, or the boat), weather layers (evenings on the river are cool even in dry season), the pace here (a workshop at the farm, a spa treatment, a boat morning — offered, not required).
 - Season awareness: green season (Jun–Oct) is warm rains, wild river; dry (Nov–May) is warmer days, cool nights on the river.
-- Length: 170–230 words. Give the reader time. Practical notes can be prose, not lists.`,
+- MANDATORY MERCHANDISING BLOCK: include a short bullet list titled "A few experiences worth pre-booking" (or equivalent) that names AT LEAST 4 of these products, each as a Markdown link using the exact URL from the LINK CATALOG:
+  * airport pickup (transport section)
+  * private river morning (i-Mekong)
+  * Baci ceremony
+  * candlelight dinner on the deck
+  * private yoga OR private trainer session
+  * Jungle Spa
+- Never sell hard. Frame each as "worth holding now" — reason first, then the link. If a product is not in the CATALOG do not invent it.
+- Length: 220–320 words. Merchandising costs words. Give the reader room to imagine each.`,
   after_checkout: `
 CAMPAIGN KIND = after_checkout (sent T+1 day after departure)
 - Anchor in something specific FROM a Namkhan stay — the sound of the boat's engine cutting out at the jetty; the taste of the ginger tea; the last swim; the wood-smoke of Roots.
