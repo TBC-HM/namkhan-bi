@@ -58,7 +58,7 @@ export default async function PropertyAudienceSettingsPage({
 
   const [blocklistRes, groupsRes, groupRulesRes, emailRes, routingRes, chromeRes, goalsRes] = await Promise.all([
     admin.from('v_marketing_subscriber_blocklist').select('*').limit(500),
-    admin.from('v_subscriber_groups').select('id, slug, name, description, color, is_system, sort_order, member_count, newsletter_cadence_per_month').order('sort_order'),
+    admin.from('v_subscriber_groups').select('id, slug, name, description, color, is_system, sort_order, member_count, newsletter_cadence_per_month, voice_type, voice_summary').order('sort_order'),
     admin.from('v_marketing_subscriber_group_rules').select('*').limit(1000),
     admin.from('v_marketing_property_email_settings').select('*').eq('property_id', propertyId).maybeSingle(),
     admin.from('v_marketing_import_routing_rules').select('*').limit(500),
