@@ -1,7 +1,11 @@
 // app/marketing/social/[platform]/page.tsx
+// PBS 2026-07-23: YouTube + Threads dropped from SOCIAL_ALLOW (YouTube owns
+//                 its own area under /marketing/digital; Threads not used).
+//                 Direct hits to /marketing/social/youtube or /threads will
+//                 now 404 as expected.
 // PBS 2026-07-05: Migrated to new paper-white design (DashboardPage + KpiTile
 // + MARKETING_SUBPAGES tabs). Same data source: marketing.social_accounts via
-// getSocialAccounts(). 8-platform allow-list preserved.
+// getSocialAccounts().
 
 import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
@@ -21,24 +25,22 @@ const FOREST = '#084838';
 const CREAM = '#F5F0E1';
 
 const SOCIAL_ALLOW = new Set([
-  'instagram', 'facebook', 'tiktok', 'youtube',
-  'x', 'twitter', 'linkedin', 'pinterest', 'threads',
+  'instagram', 'facebook', 'tiktok',
+  'x', 'twitter', 'linkedin', 'pinterest',
 ]);
 
 const PLATFORM_LABEL: Record<string, string> = {
-  instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube',
-  linkedin: 'LinkedIn', x: 'X / Twitter', twitter: 'X / Twitter', threads: 'Threads', pinterest: 'Pinterest',
+  instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok',
+  linkedin: 'LinkedIn', x: 'X / Twitter', twitter: 'X / Twitter', pinterest: 'Pinterest',
 };
 
 const HANDLE_TO_URL: Record<string, (h: string) => string> = {
   instagram: (h) => `https://www.instagram.com/${h.replace(/^@/, '')}/`,
   facebook:  (h) => `https://www.facebook.com/${h.replace(/^@/, '')}/`,
   tiktok:    (h) => `https://www.tiktok.com/@${h.replace(/^@/, '')}`,
-  youtube:   (h) => h.startsWith('@') ? `https://www.youtube.com/${h}` : `https://www.youtube.com/@${h}`,
   linkedin:  (h) => `https://www.linkedin.com/company/${h.replace(/^@/, '')}/`,
   x:         (h) => `https://x.com/${h.replace(/^@/, '')}`,
   twitter:   (h) => `https://x.com/${h.replace(/^@/, '')}`,
-  threads:   (h) => `https://www.threads.net/@${h.replace(/^@/, '')}`,
   pinterest: (h) => `https://www.pinterest.com/${h.replace(/^@/, '')}/`,
 };
 
