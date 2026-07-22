@@ -2,6 +2,8 @@
 // PBS 2026-07-18 v3 · adds spa_treatments + fnb_menus (+ items) fetches; rooms ORDER BY display_order.
 // PBS 2026-07-20 · Rate Plans moved to its own top-level Settings sub-page —
 // ratePlans fetch removed here + rate_plans tab inserted between Media and Guardrails.
+// PBS 2026-07-22 · Newsletter tab restored between Rate Plans and Guardrails (mirrors
+//                  the restored /h/[pid]/settings/property/audience page tabs strip).
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
@@ -111,6 +113,7 @@ export default async function PropertySettingsPage({
         { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`,   active: true },
         { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
         { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
+        { key: 'audience',   label: 'Newsletter', href: `/h/${propertyId}/settings/property/audience` },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
