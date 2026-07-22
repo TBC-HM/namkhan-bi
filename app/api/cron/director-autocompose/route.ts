@@ -33,7 +33,16 @@ type SlotRow = {
   body_md: string | null;
   status: string;
   group_slug: string | null;
+  ai_notes: string | null;
 };
+
+// generate-plan stamps `direction=<free text>` into ai_notes when PBS gives a hint.
+// Pull it out here so Claude's compose step honours the direction.
+function extractDirection(ai_notes: string | null): string | null {
+  if (!ai_notes) return null;
+  const m = ai_notes.match(/direction=(.+)$/);
+  return m ? m[1].trim() : null;
+}
 
 async function handle(req: Request) {
   const url = new URL(req.url);
@@ -46,7 +55,7 @@ async function handle(req: Request) {
 
   const { data, error } = await sb
     .from('v_director_calendar')
-    .select('id, slot_date, audience_type, campaign_kind, goal_tag, title, body_md, status, group_slug')
+    .select('id, slot_date, audience_type, campaign_kind, goal_tag, title, body_md, status, group_slug, ai_notes')
     .eq('property_id', NAMKHAN_ID)
     .gte('slot_date', today)
     .lte('slot_date', horizon)
@@ -66,11 +75,13 @@ async function handle(req: Request) {
 
   for (const s of slots) {
     try {
+      const direction = extractDirection(s.ai_notes);
       const seed_text = [
         `Newsletter target date: ${s.slot_date}`,
         s.group_slug ? `Audience group: ${s.group_slug}` : null,
         s.title ? `Working title: ${s.title}` : null,
         s.goal_tag ? `Editorial goal: ${s.goal_tag}` : null,
+        direction ? `Editorial direction from PBS: ${direction}` : null,
       ].filter(Boolean).join('\n');
 
       const r = await fetch(`${origin}/api/marketing/newsletter/propose-one`, {
