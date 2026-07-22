@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
     ? body!.audience_types!.map(String)
     : ['b2c'];
   const regenerate_empty_only = body?.regenerate_empty_only !== false;
+  const direction = body?.direction ? String(body.direction).trim().slice(0, 500) : '';
 
   if (!property_id || !start_date || !end_date) {
     return NextResponse.json({ ok: false, error: 'property_id + start_date + end_date required' }, { status: 400 });
@@ -177,7 +178,7 @@ export async function POST(req: NextRequest) {
         p_subject: subject,
         p_body_md: body_md,
         p_status: 'proposed',
-        p_ai_notes: `tone=${tone}`,
+        p_ai_notes: direction ? `tone=${tone} · direction=${direction}` : `tone=${tone}`,
         p_group_slug: group_slug,
         p_parent_plan_run_id: parent_plan_run_id,
       });
