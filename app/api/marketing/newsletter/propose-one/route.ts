@@ -1,30 +1,32 @@
 // app/api/marketing/newsletter/propose-one/route.ts
-// PBS 2026-07-22 · Grounded proposer v2.
+// PBS 2026-07-23 · Grounded proposer v3 — Liam → Saya → Veda chain.
 //
-// v1 fed Claude just the seed text + a hardcoded identity paragraph — Claude was
-// inventing prices, links, and property facts. v2 injects the real DB context so
-// the model has to stay factual:
+// v2 was a single Claude call with rich context.
+// v3 splits the work across 3 identities from cockpit_agent_identity:
 //
-//   - v_marketing_email_general_rules · the 15+ active guardrails
-//   - v_marketing_internal_link_catalog · the 4 pinned Cloudbeds URLs + T&Cs
-//   - v_group_email_policy · per-group constraints (OTA Traveller only gets 3
-//     lifecycle types, plain text, no links, fixed schedules — enforced here)
-//   - v_director_goals · per-group weights (falls back to global) so tone matches
-//   - v_property_retreats + v_activities_catalog · real upsell inventory
-//   - marketing.property_email_settings · sender identity + footer
+//   Liam (curator) — picks 3 approved photos with captions from v_marketing_media_page
+//                    matching the group's story area. Feeds visual+caption anchor to Saya.
+//   Saya (writer)  — the primary draft call. Same context v2 loaded + Liam's picks.
+//   Veda (critic)  — scores the draft against a rubric (sensory anchor · forbidden
+//                    phrases · URL only from catalog · signature · length · voice).
+//                    On score < 60, Saya gets one retry with Veda's critique injected.
 //
-// The route still returns { ok, proposal: { subject, body_md, goal_tag } } to
-// stay backward-compatible with the Director autocompose cron + the Refine flow.
-// PUT (save-as-draft) is unchanged from v1.
+// Response adds agent_trace[] + veda so /needs-review can show reasoning.
+// Backward-compatible: still returns { ok, proposal: { subject, body_md, goal_tag } }.
+// PUT (save-as-draft) unchanged from v2.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime  = 'nodejs';
 export const dynamic  = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 const NAMKHAN_ID = 260955;
+
+const AGENT_LIAM = 'e4178c65-7314-4be6-aab3-8aa008b73e0f';
+const AGENT_SAYA = '6eb7653c-1db1-4ccf-b688-04327c433111';
+const AGENT_VEDA = '5dc1d7ab-a671-4946-8f09-3d08d3602dbc';
 
 const IDENTITY = [
   'You are the marketing writer for The Namkhan Luang Prabang, a 30-key riverside',
@@ -50,9 +52,6 @@ const OUTPUT_PLAIN_RULES = [
   '  goal_tag (short slug · optional)',
 ].join(' ');
 
-// Extra SYSTEM rules layered on when the group policy forces plain text + blocks links.
-// Goal: pass OTA-sourced inbox filters (Booking.com / Airbnb / Expedia / Ctrip / Agoda relays).
-// These filters flag standard marketing signals — strip them upfront.
 const ANTI_SPAM_FILTER_RULES = [
   'Constraints for maximum inbox deliverability (OTA-sourced address filters):',
   '- Do NOT use marketing verbs: book, reserve, buy, order, offer, discount, save, exclusive, limited, hurry, act now, click, tap, register, subscribe.',
@@ -104,6 +103,20 @@ type Policy = {
   notes: string | null;
 };
 
+// Group → preferred property_area for Liam's photo pick.
+// Order matters — first match wins in the SQL filter.
+const GROUP_AREA_HINT: Record<string, string[]> = {
+  'retreats':            ['retreats', 'jungle-spa', 'organic-farm', 'roots'],
+  'dmc-contracted':      ['hotel-property', 'accommodation', 'roots'],
+  'ota-traveller':       ['hotel-property', 'accommodation'],
+  'guests-sea':          ['accommodation', 'organic-farm', 'roots'],
+  'guests-int':          ['accommodation', 'jungle-spa', 'roots', 'organic-farm'],
+  'returning-guests':    ['jungle-spa', 'roots', 'accommodation'],
+  'weddings-events':     ['hotel-property', 'facilities'],
+};
+
+type PhotoPick = { caption: string; alt_text: string | null; property_area: string | null; asset_id: string };
+
 async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: string | null) {
   const [rulesR, linksR, retreatsR, activitiesR, sendersR, goalsR, policyR, groupR] = await Promise.all([
     sb.from('v_marketing_email_general_rules').select('rule_type, rule_text, group_slug').limit(50),
@@ -120,12 +133,10 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: 
       : Promise.resolve({ data: null, error: null }),
   ]);
 
-  // Guardrails: prefer group-scoped when present, else global (NULL group_slug).
   type RuleRow = { rule_type: string; rule_text: string; group_slug: string | null };
   const allRules = (rulesR.data as RuleRow[] | null) ?? [];
   const rules = allRules.filter(r => r.group_slug === group_slug || r.group_slug === null);
 
-  // Editorial goals: per-group override wins, global fallback
   type GoalRow = { goal_key: string; goal_label: string; weight: number; group_slug: string | null };
   const allGoals = (goalsR.data as GoalRow[] | null) ?? [];
   const byKey = new Map<string, GoalRow>();
@@ -139,7 +150,6 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: 
     .slice(0, 5);
 
   const policy: Policy | null = ((policyR as { data?: Policy | null }).data) ?? null;
-
   type GroupVoice = { slug: string; name: string; voice_type: 'b2c'|'b2b'|'mixed' | null; voice_summary: string | null };
   const group: GroupVoice | null = ((groupR as { data?: GroupVoice | null }).data) ?? null;
 
@@ -155,9 +165,33 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: 
   };
 }
 
+// Liam · pick 3 approved photos with captions, ordered by qc_score.
+// Skipped when policy blocks images (OTA path) — but captions still inform Saya's
+// sensory anchor even if the image itself isn't attached.
+async function liamPickPhotos(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+  group_slug: string | null,
+): Promise<PhotoPick[]> {
+  const areas = (group_slug && GROUP_AREA_HINT[group_slug]) || ['hotel-property', 'accommodation', 'roots', 'jungle-spa'];
+  const { data } = await sb
+    .from('v_marketing_media_page')
+    .select('asset_id, caption, alt_text, property_area, qc_score')
+    .eq('status', 'approved')
+    .in('property_area', areas)
+    .not('caption', 'is', null)
+    .order('qc_score', { ascending: false, nullsFirst: false })
+    .limit(3);
+  const rows = (data as Array<{ asset_id: string; caption: string | null; alt_text: string | null; property_area: string | null }> | null) ?? [];
+  return rows
+    .filter(r => r.caption && r.caption.trim().length > 0)
+    .map(r => ({ asset_id: r.asset_id, caption: (r.caption ?? '').trim(), alt_text: r.alt_text, property_area: r.property_area }));
+}
+
 function assembleUserPrompt(
   body: ProposeBody,
   ctx: Awaited<ReturnType<typeof loadContext>>,
+  photos: PhotoPick[],
+  vedaCritique?: string | null,
 ): string {
   const parts: string[] = [];
   parts.push('### CAMPAIGN');
@@ -195,6 +229,13 @@ function assembleUserPrompt(
     for (const l of ctx.links) {
       parts.push(`- [${l.section}] "${l.anchor_hint}" → ${l.url}${l.description ? ` (${l.description})` : ''}`);
     }
+  }
+
+  if (photos.length > 0) {
+    parts.push('');
+    parts.push('### LIAM · PHOTO ANCHOR SUGGESTIONS (real photos from our library — pick ONE for your sensory anchor)');
+    for (const p of photos) parts.push(`- [${p.property_area ?? '—'}] "${p.caption}"${p.alt_text ? ` · alt: ${p.alt_text}` : ''}`);
+    parts.push('(Do not include the URLs of these photos in the email body — the send layer attaches the hero separately.)');
   }
 
   if (ctx.retreats.length > 0) {
@@ -235,10 +276,16 @@ function assembleUserPrompt(
     parts.push(`Refine instruction: ${body.instruction}`);
   }
 
+  if (vedaCritique) {
+    parts.push('');
+    parts.push('### VEDA · REVIEW OF YOUR PREVIOUS DRAFT — rewrite to fix these issues');
+    parts.push(vedaCritique);
+  }
+
   return parts.join('\n');
 }
 
-async function callAnthropic(system: string, userPrompt: string): Promise<{ subject: string; body_md: string; goal_tag: string | null }> {
+async function callAnthropic(system: string, userPrompt: string, maxTokens = 1600): Promise<string> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error('anthropic_api_key_missing');
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -246,7 +293,7 @@ async function callAnthropic(system: string, userPrompt: string): Promise<{ subj
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-7',
-      max_tokens: 1600,
+      max_tokens: maxTokens,
       system,
       messages: [{ role: 'user', content: userPrompt }],
     }),
@@ -256,13 +303,68 @@ async function callAnthropic(system: string, userPrompt: string): Promise<{ subj
     throw new Error('anthropic_' + res.status + ' ' + t.slice(0, 200));
   }
   const j = await res.json();
-  const text = j?.content?.[0]?.text || '{}';
+  return j?.content?.[0]?.text || '';
+}
+
+type SayaDraft = { subject: string; body_md: string; goal_tag: string | null };
+
+async function sayaDraft(system: string, userPrompt: string): Promise<SayaDraft> {
+  const text = await callAnthropic(system, userPrompt, 1600);
   const parsed = JSON.parse(text);
   return {
     subject: String(parsed.subject || '').slice(0, 120),
     body_md: String(parsed.body_md || ''),
     goal_tag: parsed.goal_tag ? String(parsed.goal_tag).slice(0, 80) : null,
   };
+}
+
+type VedaResult = { score: number; issues: string[]; critique: string };
+
+const VEDA_SYSTEM = [
+  'You are Veda, editorial critic for The Namkhan newsletter team.',
+  'You score drafts against a rubric (each 0-20, sum 0-100):',
+  '  1. sensory_anchor · does it open with ONE specific Namkhan sensory detail (kingfisher, wood-fire, ginger tea, river light, boat engine, etc)? Not a summary.',
+  '  2. forbidden_absent · no "We are excited/delighted", no "Book now/Reserve", no "Amazing/Incredible", no emojis, no ALL CAPS, no more than one !.',
+  '  3. url_discipline · every URL matches an entry in the LINK CATALOG (or there are no URLs when policy blocks them).',
+  '  4. signature_present · closes with a real signature ("Warm regards · The Namkhan Team" or a named person + role + address for OTA-safe).',
+  '  5. voice_match · calm, understated, warm, written by someone who knows the property.',
+  'Return STRICT JSON: { "score": <0-100>, "issues": [<short strings>], "critique": "<one paragraph of what to fix, worded as instruction to the writer>" }',
+  'If score >= 80, "critique" can be empty. If score < 60, be very specific about fixes.',
+].join('\n');
+
+async function vedaScore(draft: SayaDraft, contextSummary: string, plainText: boolean, blockLinks: boolean): Promise<VedaResult> {
+  const userPrompt = [
+    `POLICY: plain_text=${plainText} · block_links=${blockLinks}`,
+    '',
+    'CONTEXT SUMMARY (what Saya was given):',
+    contextSummary,
+    '',
+    'DRAFT SUBJECT:',
+    draft.subject,
+    '',
+    'DRAFT BODY:',
+    draft.body_md,
+  ].join('\n');
+  const text = await callAnthropic(VEDA_SYSTEM, userPrompt, 700);
+  try {
+    const parsed = JSON.parse(text);
+    return {
+      score: Math.max(0, Math.min(100, Number(parsed.score) || 0)),
+      issues: Array.isArray(parsed.issues) ? parsed.issues.slice(0, 8).map((s: unknown) => String(s).slice(0, 200)) : [],
+      critique: String(parsed.critique || '').slice(0, 1500),
+    };
+  } catch {
+    return { score: 50, issues: ['veda_json_unparseable'], critique: '' };
+  }
+}
+
+function summarizeContext(ctx: Awaited<ReturnType<typeof loadContext>>, photos: PhotoPick[]): string {
+  const bits: string[] = [];
+  bits.push(`rules=${ctx.rules.length} · links=${ctx.links.length} · retreats=${ctx.retreats.length} · activities=${ctx.activities.length} · goals=${ctx.goals.length} · photos=${photos.length}`);
+  if (ctx.policy) bits.push(`policy: plain_text=${ctx.policy.force_plain_text} · block_links=${ctx.policy.block_links} · block_images=${ctx.policy.block_images}`);
+  if (ctx.group) bits.push(`group: ${ctx.group.slug} (${ctx.group.voice_type})`);
+  if (ctx.links.length > 0) bits.push('valid_urls: ' + ctx.links.map(l => l.url).join(' | '));
+  return bits.join('\n');
 }
 
 export async function POST(req: NextRequest) {
@@ -274,8 +376,11 @@ export async function POST(req: NextRequest) {
   if (!seed) return NextResponse.json({ ok: false, error: 'seed_text_required' }, { status: 400 });
 
   const group_slug = body.group_slug ? String(body.group_slug) : null;
-
   const sb = getSupabaseAdmin();
+
+  const trace: Array<{ step: string; agent_id: string; latency_ms: number; ok: boolean; note?: string }> = [];
+
+  // Load context (rules, links, retreats, activities, goals, policy, group voice)
   const ctx = await loadContext(sb, group_slug);
 
   // Enforce group policy · reject a broadcast for an audience that only allows lifecycle
@@ -287,34 +392,78 @@ export async function POST(req: NextRequest) {
     }, { status: 400 });
   }
 
-  const outputRules = ctx.policy?.force_plain_text ? OUTPUT_PLAIN_RULES : OUTPUT_JSON_RULES;
-  // Layer the anti-spam-filter rules on top when policy forces plain text + blocks links
-  // (OTA Traveller path today · could apply to any future group with the same pattern).
-  const antiSpam = (ctx.policy?.force_plain_text && ctx.policy?.block_links) ? `\n\n${ANTI_SPAM_FILTER_RULES}` : '';
-  const system = `${IDENTITY}\n\n${outputRules}${antiSpam}`;
-  const userPrompt = assembleUserPrompt(body, ctx);
+  // 1. Liam · pick photo anchors
+  const tLiam = Date.now();
+  let photos: PhotoPick[] = [];
+  try { photos = await liamPickPhotos(sb, group_slug); trace.push({ step: 'curator', agent_id: AGENT_LIAM, latency_ms: Date.now() - tLiam, ok: true, note: `picked=${photos.length}` }); }
+  catch (e) { trace.push({ step: 'curator', agent_id: AGENT_LIAM, latency_ms: Date.now() - tLiam, ok: false, note: (e as Error).message }); }
 
+  const outputRules = ctx.policy?.force_plain_text ? OUTPUT_PLAIN_RULES : OUTPUT_JSON_RULES;
+  const antiSpam = (ctx.policy?.force_plain_text && ctx.policy?.block_links) ? `\n\n${ANTI_SPAM_FILTER_RULES}` : '';
+  const sayaSystem = `${IDENTITY}\n\n${outputRules}${antiSpam}`;
+
+  // 2. Saya · first draft
+  let draft: SayaDraft;
+  const tSaya = Date.now();
   try {
-    const proposal = await callAnthropic(system, userPrompt);
-    return NextResponse.json({
-      ok: true,
-      proposal,
-      context_used: {
-        rules: ctx.rules.length,
-        links: ctx.policy?.block_links ? 0 : ctx.links.length,
-        retreats: ctx.retreats.length,
-        activities: ctx.activities.length,
-        goals: ctx.goals.length,
-        policy_applied: !!ctx.policy,
-      },
-    });
+    const userPrompt = assembleUserPrompt(body, ctx, photos);
+    draft = await sayaDraft(sayaSystem, userPrompt);
+    trace.push({ step: 'writer', agent_id: AGENT_SAYA, latency_ms: Date.now() - tSaya, ok: true });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+    trace.push({ step: 'writer', agent_id: AGENT_SAYA, latency_ms: Date.now() - tSaya, ok: false, note: (e as Error).message });
+    return NextResponse.json({ ok: false, error: (e as Error).message, agent_trace: trace }, { status: 500 });
   }
+
+  // 3. Veda · score
+  const tVeda = Date.now();
+  const ctxSummary = summarizeContext(ctx, photos);
+  let veda: VedaResult;
+  try {
+    veda = await vedaScore(draft, ctxSummary, !!ctx.policy?.force_plain_text, !!ctx.policy?.block_links);
+    trace.push({ step: 'critic', agent_id: AGENT_VEDA, latency_ms: Date.now() - tVeda, ok: true, note: `score=${veda.score}` });
+  } catch (e) {
+    veda = { score: 50, issues: ['veda_failed'], critique: '' };
+    trace.push({ step: 'critic', agent_id: AGENT_VEDA, latency_ms: Date.now() - tVeda, ok: false, note: (e as Error).message });
+  }
+
+  // 4. Retry once if Veda flagged a real problem — not in refine mode (refine is PBS-directed).
+  const isRefine = !!(body.instruction && body.prior);
+  if (!isRefine && veda.score < 60 && veda.critique) {
+    const tRetry = Date.now();
+    try {
+      const userPrompt = assembleUserPrompt(body, ctx, photos, veda.critique);
+      const retried = await sayaDraft(sayaSystem, userPrompt);
+      const vedaRetry = await vedaScore(retried, ctxSummary, !!ctx.policy?.force_plain_text, !!ctx.policy?.block_links);
+      if (vedaRetry.score > veda.score) {
+        draft = retried;
+        veda = vedaRetry;
+        trace.push({ step: 'writer_retry', agent_id: AGENT_SAYA, latency_ms: Date.now() - tRetry, ok: true, note: `score=${veda.score}` });
+      } else {
+        trace.push({ step: 'writer_retry', agent_id: AGENT_SAYA, latency_ms: Date.now() - tRetry, ok: false, note: `no_improvement (${vedaRetry.score} vs ${veda.score})` });
+      }
+    } catch (e) {
+      trace.push({ step: 'writer_retry', agent_id: AGENT_SAYA, latency_ms: Date.now() - tRetry, ok: false, note: (e as Error).message });
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    proposal: draft,
+    veda: { score: veda.score, issues: veda.issues, critique: veda.critique },
+    agent_trace: trace,
+    context_used: {
+      rules: ctx.rules.length,
+      links: ctx.policy?.block_links ? 0 : ctx.links.length,
+      retreats: ctx.retreats.length,
+      activities: ctx.activities.length,
+      goals: ctx.goals.length,
+      photos: photos.length,
+      policy_applied: !!ctx.policy,
+    },
+  });
 }
 
-// PUT unchanged · save proposal as guest.campaigns draft
+// PUT unchanged from v2 · save proposal as guest.campaigns draft
 export async function PUT(req: NextRequest) {
   let body: SaveBody;
   try { body = await req.json(); }
