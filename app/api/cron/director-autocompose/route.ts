@@ -88,10 +88,11 @@ async function handle(req: Request) {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           property_id: NAMKHAN_ID,
-          kind: 'broadcast',
+          kind: s.campaign_kind ?? 'broadcast',
           seed_text,
           target_date: s.slot_date,
           audience_type: s.audience_type,
+          group_slug: s.group_slug,   // v2 propose-one · loads per-group policy + goals
         }),
       });
       const j = await r.json().catch(() => ({}));
