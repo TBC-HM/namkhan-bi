@@ -1,12 +1,15 @@
 // app/marketing/audience/page.tsx
 // PBS 2026-07-21 · Phase 2 — Unified people directory.
-// Replaces the phase-1 link-card hub. Reads public.v_marketing_audience (subscribers UNION prospects)
-// plus v_subscriber_groups. Pre-scopes filter state from ?source= / ?tab= searchParams.
+// Reads public.v_marketing_audience (subscribers UNION prospects) + v_subscriber_groups.
+// Pre-scopes filter state from ?source= / ?tab= searchParams.
 // Design: paper white (#FFFFFF) — never var(--paper-warm) per Namkhan token burn.
 //
 // 2026-07-21 pm · Tiles now also read purged_bounced + purged_unsubscribed from
-// public.v_marketing_audience_tiles so the headline strip shows the auto-purge status
-// alongside the mailable universe.
+// public.v_marketing_audience_tiles so the headline strip shows the auto-purge status.
+//
+// 2026-07-22 · Chunked .range() fetch replaces .limit(3000) — PostgREST caps at 1000
+// silently, so prospects (sorted after subscribers by created_at) never loaded and the
+// PROSPECTS tile click showed "No rows match filters" for a 1,224-row group.
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
@@ -23,16 +26,34 @@ interface PageProps {
   searchParams?: Promise<{ source?: string; tab?: string }>;
 }
 
+async function fetchAllAudience(sb: ReturnType<typeof getSupabaseAdmin>): Promise<AudienceRow[]> {
+  const CHUNK = 1000;
+  const HARD_CAP = 20000;
+  const out: AudienceRow[] = [];
+  let offset = 0;
+  while (offset < HARD_CAP) {
+    const { data, error } = await sb
+      .from('v_marketing_audience')
+      .select('*')
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false, nullsFirst: false })
+      .range(offset, offset + CHUNK - 1);
+    if (error) {
+      console.error('[audience] chunk fetch failed at offset', offset, error);
+      break;
+    }
+    const chunk = (data ?? []) as AudienceRow[];
+    out.push(...chunk);
+    if (chunk.length < CHUNK) break;
+    offset += CHUNK;
+  }
+  return out;
+}
+
 export default async function AudienceUnifiedPage({ searchParams }: PageProps) {
   const sb = getSupabaseAdmin();
 
-  const audienceQ = await sb
-    .from('v_marketing_audience')
-    .select('*')
-    .order('is_pinned', { ascending: false })
-    .order('created_at', { ascending: false, nullsFirst: false })
-    .limit(3000);
-  const rows: AudienceRow[] = (audienceQ.data ?? []) as AudienceRow[];
+  const rows = await fetchAllAudience(sb);
 
   const groupsQ = await sb
     .from('v_subscriber_groups')
@@ -40,9 +61,7 @@ export default async function AudienceUnifiedPage({ searchParams }: PageProps) {
     .order('sort_order', { ascending: true });
   const groups: GroupRow[] = (groupsQ.data ?? []) as GroupRow[];
 
-  // Authoritative tile counts — bypasses the 3000-row rows[] cap so tiles
-  // never look stale on large audiences. Fed by public.v_marketing_audience_tiles.
-  // Also surfaces purged_bounced + purged_unsubscribed (marketing.subscriber_blocklist).
+  // Authoritative tile counts — bypasses the row cap so tiles never look stale.
   const tilesQ = await sb
     .from('v_marketing_audience_tiles')
     .select('total_subs, mailable, guests, returning_guests, dmc, responders, prospects, purged_bounced, purged_unsubscribed')
