@@ -54,14 +54,9 @@ const STATUS_BADGE: Record<SlotRow['status'], { bg: string; fg: string; brd: str
   skipped:   { bg:'#FBE8E4', fg:'#8A2419', brd:'#E8B7AB' },
 };
 
-function fmtMonth(d: Date): string { return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }); }
 function fmtDate(iso: string): string {
   try { return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short' }); }
   catch { return iso; }
-}
-function monthKey(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
 }
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace('#','');
@@ -73,7 +68,9 @@ function hexToRgba(hex: string, alpha: number): string {
 export default function DirectorClient({ propertyId, initialGoals, initialSlots, groups }: Props) {
   const [goals, setGoals] = useState<GoalRow[]>(initialGoals);
   const [slots, setSlots] = useState<SlotRow[]>(initialSlots);
-  const [openMonth, setOpenMonth] = useState<string | null>(null);
+  const [currentMonth, setCurrentMonth] = useState<Date>(() => {
+    const d = new Date(); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+  });
   const [drawerSlot, setDrawerSlot] = useState<SlotRow | null>(null);
   const [refineText, setRefineText] = useState('');
   const [busy, setBusy] = useState<string>('');
@@ -103,30 +100,10 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
     return 'Unassigned';
   }
 
-  const months = useMemo(() => {
-    const arr: { key: string; label: string; date: Date }[] = [];
-    const start = new Date(genFrom || new Date().toISOString().slice(0,10));
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1));
-      arr.push({ key: `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`, label: fmtMonth(d), date: d });
-    }
-    return arr;
-  }, [genFrom]);
-
   const filteredSlots = useMemo(() => {
     if (groupFilter === 'all') return slots;
     return slots.filter(s => (s.group_slug ?? '') === groupFilter);
   }, [slots, groupFilter]);
-
-  const slotsByMonth = useMemo(() => {
-    const m = new Map<string, SlotRow[]>();
-    for (const s of filteredSlots) {
-      const k = monthKey(s.slot_date);
-      if (!m.has(k)) m.set(k, []);
-      m.get(k)!.push(s);
-    }
-    return m;
-  }, [filteredSlots]);
 
   // Groups that actually appear in current slots (for the legend)
   const legendGroups = useMemo(() => {
@@ -325,90 +302,140 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
         </div>
       </section>
 
-      {/* MONTH GRID */}
+      {/* REVIEW QUEUE — drafts within 14d needing PBS attention */}
+      {(() => {
+        const now = Date.now();
+        const in14d = now + 14 * 24 * 3600 * 1000;
+        const needsReview = filteredSlots.filter(s => {
+          const t = new Date(s.slot_date).getTime();
+          if (isNaN(t) || t < now || t > in14d) return false;
+          return s.status === 'proposed' || s.status === 'refined';
+        }).sort((a,b) => a.slot_date.localeCompare(b.slot_date));
+        if (needsReview.length === 0) return null;
+        return (
+          <section style={panel}>
+            <h3 style={h3}>Needs review · next 14 days <span style={{ color:INK_M, fontWeight:500, fontSize:11, marginLeft:6 }}>({needsReview.length})</span></h3>
+            <p style={muted}>Auto-composed by Director. Approve or refine before scheduled send.</p>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {needsReview.slice(0, 8).map(s => {
+                const c = STATUS_BADGE[s.status];
+                return (
+                  <button key={s.id} onClick={()=>{ setDrawerSlot(s); setRefineText(''); }}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', border:`1px solid ${HAIR}`, borderRadius:4, background:'#FFFFFF', textAlign:'left', cursor:'pointer', fontFamily:'inherit' }}>
+                    <span style={{ display:'inline-block', width:8, height:8, borderRadius:2, background:colorForSlot(s), border:`1px solid ${HAIR}`, flexShrink:0 }} />
+                    <span style={{ fontSize:11, color:INK_M, minWidth:70 }}>{fmtDate(s.slot_date)}</span>
+                    <span style={{ fontSize:12, fontWeight:500, color:INK, flex:1 }}>{s.title}</span>
+                    <span style={{ fontSize:10, color:INK_M }}>{labelForSlot(s)}</span>
+                    <span style={{ padding:'2px 8px', fontSize:10, fontWeight:600, borderRadius:10, background:c.bg, color:c.fg, border:`1px solid ${c.brd}` }}>{s.status}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* MONTHLY CALENDAR — real week grid */}
       <section style={panel}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-          <h3 style={h3}>3 · 12-month calendar {groupFilter!=='all' && <span style={{ color:INK_M, fontWeight:500, fontSize:11, marginLeft:6 }}>· {groupsBySlug.get(groupFilter)?.name}</span>}</h3>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+          <h3 style={h3}>3 · Calendar {groupFilter!=='all' && <span style={{ color:INK_M, fontWeight:500, fontSize:11, marginLeft:6 }}>· {groupsBySlug.get(groupFilter)?.name}</span>}</h3>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <button type="button" onClick={()=>{
+              const d = new Date(currentMonth); d.setUTCMonth(d.getUTCMonth()-1);
+              setCurrentMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
+            }} style={navBtn}>◀</button>
+            <span style={{ fontSize:13, fontWeight:600, color:INK, minWidth:130, textAlign:'center' }}>
+              {currentMonth.toLocaleDateString('en-GB', { month:'long', year:'numeric', timeZone:'UTC' })}
+            </span>
+            <button type="button" onClick={()=>{
+              const d = new Date(currentMonth); d.setUTCMonth(d.getUTCMonth()+1);
+              setCurrentMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
+            }} style={navBtn}>▶</button>
+            <button type="button" onClick={()=>{
+              const d = new Date(); setCurrentMonth(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)));
+            }} style={{...navBtn, marginLeft:6}}>Today</button>
+          </div>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:8 }}>
-          {months.map((m) => {
-            const s = slotsByMonth.get(m.key) ?? [];
-            const isOpen = openMonth === m.key;
-            const solidTint = groupFilter !== 'all' && s.length > 0 ? hexToRgba(colorForSlot(s[0]), 0.10) : null;
-            return (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => setOpenMonth(isOpen ? null : m.key)}
-                style={{
-                  ...monthCell,
-                  background: isOpen ? '#F5F1E6' : (solidTint ?? '#FFFFFF'),
-                  borderColor: isOpen ? PRIMARY : HAIR,
-                }}
-              >
-                <div style={{ fontWeight:600, fontSize:12 }}>{m.label}</div>
-                <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>{s.length} slot{s.length===1?'':'s'}</div>
-                {s.length > 0 && (
-                  <div style={{ marginTop:6, display:'flex', flexWrap:'wrap', gap:2 }}>
-                    {s.map((x) => (
-                      <span key={x.id} title={`${x.title} (${x.status}) · ${labelForSlot(x)}`}
-                        style={{ display:'inline-block', width:8, height:8, borderRadius:2, background: colorForSlot(x), border:`1px solid ${HAIR}` }} />
-                    ))}
-                  </div>
-                )}
-              </button>
-            );
-          })}
+
+        {/* Weekday headers · Mon-first */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7, minmax(0, 1fr))', gap:6, marginBottom:4 }}>
+          {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+            <div key={d} style={{ fontSize:10, textTransform:'uppercase', letterSpacing:'.06em', color:INK_M, fontWeight:600, padding:'4px 6px' }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Week grid · 6 rows × 7 cols */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7, minmax(0, 1fr))', gap:6 }}>
+          {(() => {
+            const year = currentMonth.getUTCFullYear();
+            const month = currentMonth.getUTCMonth();
+            const firstOfMonth = new Date(Date.UTC(year, month, 1));
+            // Monday-first: shift so Monday=0
+            const dow = (firstOfMonth.getUTCDay() + 6) % 7;
+            const gridStart = new Date(Date.UTC(year, month, 1 - dow));
+            const cells: Array<{ date: Date; iso: string; inMonth: boolean }> = [];
+            for (let i = 0; i < 42; i++) {
+              const d = new Date(gridStart); d.setUTCDate(gridStart.getUTCDate() + i);
+              cells.push({
+                date: d,
+                iso: d.toISOString().slice(0,10),
+                inMonth: d.getUTCMonth() === month,
+              });
+            }
+            // Precompute slots per iso date for O(1) lookup
+            const byDate = new Map<string, SlotRow[]>();
+            for (const s of filteredSlots) {
+              const k = s.slot_date;
+              if (!byDate.has(k)) byDate.set(k, []);
+              byDate.get(k)!.push(s);
+            }
+            const today = new Date().toISOString().slice(0,10);
+            return cells.map(cell => {
+              const daySlots = byDate.get(cell.iso) ?? [];
+              const isToday = cell.iso === today;
+              return (
+                <div key={cell.iso} style={{
+                  minHeight: 92,
+                  border: `1px solid ${isToday ? PRIMARY : HAIR}`,
+                  borderRadius: 4,
+                  padding: 6,
+                  background: cell.inMonth ? '#FFFFFF' : '#FAFAF7',
+                  display: 'flex', flexDirection: 'column', gap: 3,
+                }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 600,
+                    color: !cell.inMonth ? '#B0A48C' : (isToday ? PRIMARY : INK),
+                  }}>{cell.date.getUTCDate()}</div>
+                  {daySlots.map(s => {
+                    const c = STATUS_BADGE[s.status];
+                    return (
+                      <button key={s.id} onClick={()=>{ setDrawerSlot(s); setRefineText(''); }}
+                        title={`${s.title} · ${labelForSlot(s)} · ${s.status}`}
+                        style={{
+                          textAlign:'left', border:`1px solid ${c.brd}`, borderRadius:3,
+                          background: hexToRgba(colorForSlot(s), 0.12), padding:'3px 5px',
+                          cursor:'pointer', display:'flex', alignItems:'center', gap:4, fontFamily:'inherit', width:'100%',
+                        }}>
+                        <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%', background:colorForSlot(s), flexShrink:0 }} />
+                        <span style={{ fontSize:10, color:INK, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            });
+          })()}
         </div>
 
         {/* LEGEND */}
         {legendGroups.length > 0 && (
-          <div style={{ display:'flex', gap:16, flexWrap:'wrap', marginTop:12, paddingTop:12, borderTop:`1px dashed ${HAIR}` }}>
+          <div style={{ display:'flex', gap:16, flexWrap:'wrap', marginTop:14, paddingTop:12, borderTop:`1px dashed ${HAIR}` }}>
             {legendGroups.map(lg => (
               <span key={lg.slug} style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, color:INK_M }}>
                 <span style={{ display:'inline-block', width:10, height:10, borderRadius:2, background: lg.color, border:`1px solid ${HAIR}` }} />
                 {lg.name}
               </span>
             ))}
-          </div>
-        )}
-
-        {openMonth && (
-          <div style={{ marginTop:16, border:`1px solid ${HAIR}`, borderRadius:6, background:'#FFFFFF' }}>
-            <div style={{ padding:'8px 12px', background:'#FAFAF7', borderBottom:`1px solid ${HAIR}`, fontSize:11, textTransform:'uppercase', letterSpacing:'.06em', color:INK_M, fontWeight:600 }}>
-              {months.find(x=>x.key===openMonth)?.label} · slots
-            </div>
-            <table style={{ width:'100%', borderCollapse:'collapse' }}>
-              <thead>
-                <tr style={{ background:'#FAFAF7', borderBottom:`1px solid ${HAIR}` }}>
-                  <th style={th}>Date</th><th style={th}>Title</th><th style={th}>Group</th><th style={th}>Goal</th><th style={th}>Status</th><th style={{...th, textAlign:'right', width:120}}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {(slotsByMonth.get(openMonth) ?? []).map((s) => {
-                  const c = STATUS_BADGE[s.status];
-                  return (
-                    <tr key={s.id} style={{ borderBottom:`1px solid ${HAIR}` }}>
-                      <td style={tdL}>{fmtDate(s.slot_date)}</td>
-                      <td style={{ ...tdL, fontWeight:500 }}>{s.title}</td>
-                      <td style={tdL}>
-                        <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
-                          <span style={{ display:'inline-block', width:8, height:8, borderRadius:2, background: colorForSlot(s), border:`1px solid ${HAIR}` }} />
-                          {labelForSlot(s)}
-                        </span>
-                      </td>
-                      <td style={tdL}><span style={{ fontFamily:'ui-monospace, monospace', fontSize:11 }}>{s.goal_tag}</span></td>
-                      <td style={tdL}>
-                        <span style={{ padding:'2px 8px', fontSize:10, fontWeight:600, borderRadius:10, background:c.bg, color:c.fg, border:`1px solid ${c.brd}` }}>{s.status}</span>
-                      </td>
-                      <td style={{ ...tdR, textAlign:'right' }}>
-                        <button onClick={()=>{ setDrawerSlot(s); setRefineText(''); }} style={actionBtnLight}>Open</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           </div>
         )}
       </section>
@@ -479,7 +506,6 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
 const panel: CSSProperties = { border:`1px solid ${HAIR}`, borderRadius:6, background:'#FFFFFF', padding:16 };
 const h3: CSSProperties    = { margin:'0 0 4px', fontSize:13, fontWeight:700, color:INK };
 const muted: CSSProperties = { margin:'0 0 12px', fontSize:11, color:INK_M };
-const monthCell: CSSProperties = { textAlign:'left', padding:10, border:`1px solid ${HAIR}`, borderRadius:6, cursor:'pointer', fontFamily:'inherit' };
 const fieldWrap: CSSProperties = { display:'flex', flexDirection:'column', gap:4 };
 const fieldLabel: CSSProperties = { fontSize:10, textTransform:'uppercase', letterSpacing:'.06em', color:INK_M, fontWeight:600 };
 const input: CSSProperties = { border:`1px solid ${HAIR}`, borderRadius:4, padding:'4px 8px', fontSize:12, fontFamily:'inherit' };
@@ -490,7 +516,4 @@ const preBox: CSSProperties = { padding:10, border:`1px solid ${HAIR}`, borderRa
 const ctaButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:PRIMARY, color:'#FFFFFF', border:`1px solid ${PRIMARY}`, borderRadius:4, cursor:'pointer', textDecoration:'none', display:'inline-block' };
 const secondaryButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:PRIMARY, border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer' };
 const rejectButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:'#8A2419', border:`1px solid #E8B7AB`, borderRadius:4, cursor:'pointer' };
-const actionBtnLight: CSSProperties = { padding:'4px 10px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#3A3A3A', border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer' };
-const th: CSSProperties = { padding:'8px 10px', fontSize:10, fontWeight:600, letterSpacing:'.06em', textTransform:'uppercase', color:INK, textAlign:'left' };
-const tdL: CSSProperties = { padding:'8px 10px', fontSize:12, color:INK };
-const tdR: CSSProperties = { padding:'8px 10px', fontSize:12, textAlign:'right' };
+const navBtn: CSSProperties = { padding:'4px 10px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:INK, border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer', fontFamily:'inherit' };
