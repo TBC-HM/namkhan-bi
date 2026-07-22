@@ -28,7 +28,8 @@ type CampaignRow = {
 // Map campaign to a group slug via the linked director slot, or fall back to audience_type.
 function audienceFallbackSlug(audience_type: string | null | undefined): string | null {
   if (!audience_type) return null;
-  if (audience_type === 'b2c') return 'guests';
+  // parent 'guests' slug RETIRED 2026-07-22 — default b2c fallback → guests-int
+  if (audience_type === 'b2c') return 'guests-int';
   if (audience_type === 'b2b') return 'dmc-contracted';
   return null;
 }
