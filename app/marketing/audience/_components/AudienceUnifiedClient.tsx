@@ -89,7 +89,8 @@ export interface GroupRow {
 export interface AudienceTiles {
   total_subs: number;
   mailable: number;
-  guests: number;
+  guests_sea: number;
+  guests_int: number;
   returning_guests: number;
   dmc: number;
   responders: number;
@@ -636,10 +637,11 @@ export default function AudienceUnifiedClient({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Authoritative headline tiles — DB-sourced, always fresh */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, minmax(0, 1fr))', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, minmax(0, 1fr))', gap: 8 }}>
         <TileCompact label="Total"           value={initialTiles.total_subs}       onClick={resetFilters} />
         <TileCompact label="Mailable"        value={initialTiles.mailable}         onClick={resetFilters} />
-        <TileCompact label="Guests"          value={initialTiles.guests}           onClick={() => setGroupOnly('guests')}           active={groupFilters.length === 1 && groupFilters[0] === 'guests'} />
+        <TileCompact label="Guests SEA"      value={initialTiles.guests_sea}       onClick={() => setGroupOnly('guests-sea')}       active={groupFilters.length === 1 && groupFilters[0] === 'guests-sea'} />
+        <TileCompact label="Guests Int."     value={initialTiles.guests_int}       onClick={() => setGroupOnly('guests-int')}       active={groupFilters.length === 1 && groupFilters[0] === 'guests-int'} />
         <TileCompact label="Returning Guests" value={initialTiles.returning_guests} onClick={() => setGroupOnly('returning-guests')} active={groupFilters.length === 1 && groupFilters[0] === 'returning-guests'} />
         <TileCompact label="DMC Contracted" value={initialTiles.dmc}               onClick={() => setGroupOnly('dmc-contracted')}   active={groupFilters.length === 1 && groupFilters[0] === 'dmc-contracted'} />
         <TileCompact label="Prospects"       value={initialTiles.prospects}        onClick={() => { setSourceFilter('prospect'); setPage(0); }} active={sourceFilter === 'prospect'} />
