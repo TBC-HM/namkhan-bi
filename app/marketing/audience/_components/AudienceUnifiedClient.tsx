@@ -50,6 +50,8 @@ export interface AudienceRow {
   name: string | null;
   company: string | null;
   country: string | null;
+  phone: string | null;
+  icp_score: number | null;
   lifecycle_stage: string | null;
   opted_in_at: string | null;
   unsubscribed_at: string | null;
@@ -472,11 +474,13 @@ export default function AudienceUnifiedClient({
 
   const exportCsv = () => {
     const target = selected.size ? filtered.filter(r => selected.has(r.audience_id)) : filtered;
-    const header = ['audience_id','source','email','name','company','country','lifecycle_stage','opted_in_at','unsubscribed_at','bounced_at','mx_valid','booking_count','groups','tags','ingest_source','created_at'];
+    const header = ['audience_id','source','email','name','company','country','phone','icp_score','lifecycle_stage','opted_in_at','unsubscribed_at','bounced_at','mx_valid','booking_count','groups','tags','ingest_source','created_at'];
     const lines = [header.join(',')];
     for (const r of target) {
       const row = [
         r.audience_id, r.source, r.email, r.name ?? '', r.company ?? '', r.country ?? '',
+        r.phone ?? '',
+        r.icp_score == null ? '' : String(r.icp_score),
         r.lifecycle_stage ?? '',
         r.opted_in_at ?? '', r.unsubscribed_at ?? '', r.bounced_at ?? '',
         r.mx_valid === null ? '' : String(r.mx_valid),
@@ -925,6 +929,9 @@ export default function AudienceUnifiedClient({
               <th style={thStyle}>Source</th>
               <th style={thStyle}>Lifecycle</th>
               <th style={thStyle}>Groups</th>
+              <th style={thStyle}>Phone</th>
+              <th style={thStyle}>Country</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>ICP</th>
               <th style={thStyle}>Opted in</th>
               <th style={thStyle}>Created</th>
               <th style={thStyle}>Actions</th>
@@ -973,6 +980,15 @@ export default function AudienceUnifiedClient({
                     );
                   })}
                 </td>
+                <td style={{ ...tdStyle, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>
+                  {r.phone ?? '—'}
+                </td>
+                <td style={tdStyle}>
+                  {r.country ? <span style={{ textTransform: 'uppercase' }}>{r.country}</span> : '—'}
+                </td>
+                <td style={{ ...tdStyle, textAlign: 'right', color: r.icp_score == null ? INK_S : INK }}>
+                  {r.icp_score ?? '—'}
+                </td>
                 <td style={tdStyle}>{fmtDate(r.opted_in_at)}</td>
                 <td style={tdStyle}>{fmtDate(r.created_at)}</td>
                 <td style={tdStyle}>
@@ -998,7 +1014,7 @@ export default function AudienceUnifiedClient({
               </tr>
             ))}
             {paged.length === 0 && (
-              <tr><td colSpan={10} style={{ ...tdStyle, textAlign: 'center', color: INK_S, padding: 24 }}>
+              <tr><td colSpan={13} style={{ ...tdStyle, textAlign: 'center', color: INK_S, padding: 24 }}>
                 No rows match filters.
               </td></tr>
             )}
