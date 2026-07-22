@@ -1,4 +1,11 @@
 // app/guest/reputation/page.tsx
+// PBS 2026-07-23: Reputation page = reviews only. The Google Business Profile
+//                 "channel" content (Maps insights, discovery, competitor
+//                 benchmarks, GBP posts, Q&A) has moved to a dedicated landing
+//                 at /marketing/social/google-business. Reputation now shows
+//                 review KPIs + per-source ratings + review list + reply UI +
+//                 sentiment/report containers only. When GBP is connected we
+//                 render a compact pointer to the GBP dashboard.
 // PBS 2026-07-04 v7 clean rewrite: source cards driven by
 // marketing.review_source_summary (real rating + reviews-on-platform + ranking).
 // Sorted by importance: Google · TripAdvisor · Booking · Expedia · Trip.com.
@@ -27,10 +34,6 @@ interface ReviewRow {
   rating_norm: number | null; title: string | null; body: string | null;
   reviewed_at: string | null; response_status: string | null; response_text: string | null;
 }
-interface MapsRow {
-  date: string; impressions_search: number | null; impressions_maps: number | null;
-  direction_requests: number | null; phone_taps: number | null; website_clicks: number | null;
-}
 interface ListingRow {
   channel: string; url: string | null; admin_url: string | null;
   external_id: string | null; is_active: boolean; category: string;
@@ -57,12 +60,6 @@ function fmtDate(d: string | null): string {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 }
-function sumWindow(rows: MapsRow[], days: number, field: keyof MapsRow) {
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
-  const cutoffStr = cutoff.toISOString().slice(0,10);
-  return rows.filter(r => r.date >= cutoffStr).reduce((s,r) => s + (Number(r[field]) || 0), 0);
-}
-function fmtNum(n: number): string { return n.toLocaleString('en-US'); }
 
 interface PageProps { searchParams: Record<string, string | string[] | undefined>; propertyId?: number }
 
@@ -82,17 +79,17 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
   // No-op if token still valid; RPC uses stored refresh_token + vault client creds.
   try { await sb.rpc('fn_google_oauth_refresh_if_expired', { p_property_id: pid }); } catch { /* silent — banner will prompt reconnect if truly dead */ }
 
-  const [oauthR, reviewsR, mapsR, listingsR, summaryR] = await Promise.all([
+  // PBS 2026-07-23: Maps insights fetch dropped — moved to
+  // /marketing/social/google-business. Reputation page = reviews only.
+  const [oauthR, reviewsR, listingsR, summaryR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', pid).order('reviewed_at', { ascending: false }).limit(50),
-    sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', pid).order('date', { ascending: false }).limit(400),
     sb.from('v_external_listings').select('*').eq('property_id', pid).eq('category','reputation'),
     sb.from('v_review_source_summary').select('*').eq('property_id', pid),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
   const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
-  const mapsRows: MapsRow[] = (mapsR.data as MapsRow[]) ?? [];
   const listings: ListingRow[] = ((listingsR.data as ListingRow[]) ?? [])
     .slice().sort((a, b) => (SOURCE_PRIORITY[a.channel] ?? 99) - (SOURCE_PRIORITY[b.channel] ?? 99));
   const summaryArr: SummaryRow[] = (summaryR.data as SummaryRow[]) ?? [];
@@ -152,14 +149,6 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
   const stepParam   = (Array.isArray(searchParams.step)   ? searchParams.step[0]   : searchParams.step)   ?? null;
   const locationParam = (Array.isArray(searchParams.location) ? searchParams.location[0] : searchParams.location) ?? null;
 
-  const mapsWindows = [7, 30, 90, 365].map(w => ({
-    days: w,
-    impressions: sumWindow(mapsRows, w, 'impressions_search') + sumWindow(mapsRows, w, 'impressions_maps'),
-    directions:  sumWindow(mapsRows, w, 'direction_requests'),
-    phone:       sumWindow(mapsRows, w, 'phone_taps'),
-    website:     sumWindow(mapsRows, w, 'website_clicks'),
-  }));
-
   return (
     <div style={{ background: WHITE, minHeight: '100vh' }}>
       <DashboardPage title="Contacts · Reputation" subtitle="Every review, every reply — one place." tabs={tabs}>
@@ -194,42 +183,23 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
           </div>
         )}
 
+        {/* PBS 2026-07-23: Google Business Profile "channel" content (Maps insights,
+            profile actions, discovery, competitor benchmarks) moved to
+            /marketing/social/google-business. This page now stays narrow on
+            reputation only. When connected we still surface a compact pointer
+            so operators can jump from a review to the full GBP dashboard. */}
         {oauth && oauth.location_id && (
-          <div style={{ gridColumn:'1 / -1', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'14px 16px' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', flexWrap:'wrap', gap:8, marginBottom:12 }}>
+          <div style={{ gridColumn:'1 / -1', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'12px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <SourceBadge source="google" size="md" />
               <div>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
-                  <SourceBadge source="google" size="md" />
-                  <span style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M }}>Google Business Profile</span>
-                </div>
-                <div style={{ fontSize:16, fontWeight:600, color:INK }}>{oauth.location_name ?? 'Location auto-detection pending'}</div>
-                <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>Connected {fmtDate(oauth.connected_at)}</div>
-              </div>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={{ padding:'5px 12px', fontSize:11, fontWeight:500, background:WHITE, color:INK, border:'1px solid '+HAIR, borderRadius:4, textDecoration:'none' }}>Reconnect</TenantLink>
-                <TenantLink href={`/api/google/pull-now?property=${pid}`} style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>Pull latest</TenantLink>
+                <div style={{ fontSize:12, fontWeight:600, color:INK }}>{oauth.location_name ?? 'Google Business Profile connected'}</div>
+                <div style={{ fontSize:10, color:INK_M }}>Connected {fmtDate(oauth.connected_at)} · analytics + posts + Q&amp;A live on dedicated channel page</div>
               </div>
             </div>
-            <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600, marginBottom:6 }}>Maps insights</div>
-            {mapsRows.length === 0 ? (
-              <div style={{ padding:'20px 12px', background:'#FAFAF7', border:'1px dashed '+HAIR, borderRadius:4, textAlign:'center', color:INK_M, fontSize:11 }}>
-                No Maps insights yet. First pull happens within the minute after Google API access is approved.
-              </div>
-            ) : (
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:8 }}>
-                {mapsWindows.map(w => (
-                  <div key={w.days} style={{ padding:'10px 12px', border:'1px solid '+HAIR, borderRadius:4 }}>
-                    <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600, marginBottom:4 }}>Last {w.days}d</div>
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:'2px 8px', fontSize:11 }}>
-                      <span style={{ color:INK_M }}>Impressions</span>   <span style={{ color:INK, textAlign:'right', fontWeight:500 }}>{fmtNum(w.impressions)}</span>
-                      <span style={{ color:INK_M }}>Direction reqs</span> <span style={{ color:INK, textAlign:'right', fontWeight:500 }}>{fmtNum(w.directions)}</span>
-                      <span style={{ color:INK_M }}>Phone taps</span>    <span style={{ color:INK, textAlign:'right', fontWeight:500 }}>{fmtNum(w.phone)}</span>
-                      <span style={{ color:INK_M }}>Website clicks</span> <span style={{ color:INK, textAlign:'right', fontWeight:500 }}>{fmtNum(w.website)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <TenantLink href="/marketing/social/google-business" style={{ padding:'6px 14px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none', letterSpacing:'0.04em', textTransform:'uppercase' }}>Open GBP dashboard →</TenantLink>
+            </div>
           </div>
         )}
 
