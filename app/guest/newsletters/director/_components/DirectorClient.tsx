@@ -78,7 +78,8 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
   const [toast, setToast] = useState<{ text: string; href?: string } | null>(null);
   const [genFrom, setGenFrom] = useState<string>(() => new Date().toISOString().slice(0,10));
   const [genTo, setGenTo] = useState<string>('2026-12-31');
-  const [cadencePerWeek, setCadencePerWeek] = useState<number>(1);
+  const [cadencePerMonth, setCadencePerMonth] = useState<number>(4);
+  const [genDirection, setGenDirection] = useState<string>('');
   const [regenerateEmptyOnly, setRegenerateEmptyOnly] = useState(true);
   const [groupFilter, setGroupFilter] = useState<string>('all'); // 'all' | slug
   const [, startT] = useTransition();
@@ -144,10 +145,11 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
           property_id: propertyId,
           start_date: genFrom,
           end_date: genTo,
-          cadence_per_week: cadencePerWeek,
+          cadence_per_week: cadencePerMonth / 4.33,   // convert month → week for the backend
           group_slug: groupFilter === 'all' ? null : groupFilter,
           audience_types: ['b2c'],
           regenerate_empty_only: regenerateEmptyOnly,
+          direction: genDirection.trim() || null,     // optional hint for later auto-compose
         }),
       });
       if (!res.ok) { setMsg(`Generate failed: ${await res.text()}`); return; }
@@ -284,15 +286,25 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
             <input type="date" value={genTo} onChange={e=>setGenTo(e.target.value)} style={input} />
           </label>
           <label style={fieldWrap}>
-            <span style={fieldLabel}>Cadence / week</span>
-            <input type="number" min={0} max={7} step={1} value={cadencePerWeek}
-              onChange={e=>setCadencePerWeek(Math.max(0, Math.min(7, Number(e.target.value) || 0)))}
+            <span style={fieldLabel}>Cadence / month</span>
+            <input type="number" min={0} max={30} step={0.5} value={cadencePerMonth}
+              onChange={e=>setCadencePerMonth(Math.max(0, Math.min(30, Number(e.target.value) || 0)))}
               style={{ ...input, width:80 }} />
           </label>
           <label style={{ fontSize:12, color: INK, display:'flex', alignItems:'center', gap:4 }}>
             <input type="checkbox" checked={regenerateEmptyOnly} onChange={e=>setRegenerateEmptyOnly(e.target.checked)} />
             Only fill empty slots
           </label>
+        </div>
+        <label style={{ ...fieldWrap, marginTop:12 }}>
+          <span style={fieldLabel}>Direction / hints (optional)</span>
+          <textarea value={genDirection} onChange={e=>setGenDirection(e.target.value)}
+            rows={2}
+            placeholder="e.g. focus this batch on Green Season fill · lean B2B partnership · include a new-year retreat push"
+            style={{ ...input, width:'100%', fontFamily:'inherit', boxSizing:'border-box' }}
+          />
+        </label>
+        <div style={{ display:'flex', gap:8, marginTop:10 }}>
           <button onClick={generatePlan} disabled={busy!==''} style={ctaButton}>
             {busy==='generate'
               ? 'Generating…'
