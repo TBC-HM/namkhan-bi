@@ -112,12 +112,22 @@ export async function POST(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
 
-  // Load active goals
+  // Load goals · prefer per-group override, fall back to global (group_slug IS NULL).
+  // Merge in JS: pull both scopes, then per goal_key pick the group-scoped row if present.
   const { data: goalsData, error: goalsErr } = await sb
-    .from('v_director_goals').select('goal_key, goal_label, weight, active')
-    .eq('property_id', property_id).order('weight', { ascending: false });
+    .from('v_director_goals').select('goal_key, goal_label, weight, active, group_slug')
+    .eq('property_id', property_id)
+    .or(group_slug ? `group_slug.eq.${group_slug},group_slug.is.null` : 'group_slug.is.null');
   if (goalsErr) return NextResponse.json({ ok: false, error: `load goals failed: ${goalsErr.message}` }, { status: 500 });
-  const goals = (goalsData as Array<{ goal_key: string; goal_label: string; weight: number; active: boolean }> | null) ?? [];
+  type GoalRow = { goal_key: string; goal_label: string; weight: number; active: boolean; group_slug: string | null };
+  const allGoals = (goalsData as GoalRow[] | null) ?? [];
+  const byKey = new Map<string, GoalRow>();
+  for (const g of allGoals) {
+    const existing = byKey.get(g.goal_key);
+    // Prefer per-group row (group_slug=our group) over global (NULL)
+    if (!existing || (g.group_slug === group_slug && existing.group_slug === null)) byKey.set(g.goal_key, g);
+  }
+  const goals = Array.from(byKey.values()).sort((a, b) => b.weight - a.weight);
 
   // Existing slots in range (for regenerate_empty_only)
   let existingKeys = new Set<string>();
