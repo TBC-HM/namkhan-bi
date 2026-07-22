@@ -1,8 +1,8 @@
+'use server';
 // app/guest/newsletters/lifecycle/page.tsx
-// PBS 2026-07-21 pm (Add 2, Newsletter Engine v2): Lifecycle campaigns tab.
-// Filters guest.campaigns to campaign_kind='lifecycle' — anticipation, post-stay
-// gratitude, birthday, winback, etc. Same chrome as Broadcasts.
-// Mounts <ProposeNewsletterButton defaultKind='lifecycle' /> in the top row.
+// PBS 2026-07-22 EOD · Group-boxed layout — one visual box per group.
+// Real Guest bucket first (group_slug=NULL), then OTA Traveller + any others with rows.
+// Each box: color-chip header + inline campaign list (compact table).
 
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
@@ -31,7 +31,10 @@ type CampaignRow = {
   campaign_kind?: string | null;
   audience_type?: string | null;
   goal_tag?: string | null;
+  group_slug?: string | null;
 };
+
+type GroupMeta = { slug: string; name: string; color: string; sort_order: number };
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '—';
@@ -44,6 +47,10 @@ function fmtDate(iso: string | null): string {
   catch { return '—'; }
 }
 function fmtLifecycleTrigger(row: CampaignRow): string {
+  if (row.relative_kind === 'booking_confirm' && row.relative_days != null)
+    return row.relative_days === 0
+      ? `On booking · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`
+      : `${row.relative_days}d after booking · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`;
   if (row.relative_kind === 'before_checkin' && row.relative_days != null)
     return `${row.relative_days}d before check-in · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`;
   if (row.relative_kind === 'after_checkout' && row.relative_days != null)
@@ -59,15 +66,28 @@ interface PageProps { propertyId?: number }
 
 export default async function LifecyclePage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? PROPERTY_ID;
-  const { data, error } = await supabase.from('v_guest_campaigns').select('*')
-    .eq('property_id', pid).is('archived_at', null)
-    .order('updated_at', { ascending: false });
-  const allRows: CampaignRow[] = (data as CampaignRow[]) ?? [];
-  const rows = allRows.filter((r) => (r.campaign_kind ?? 'broadcast') === 'lifecycle');
 
-  const active = rows.filter(r => r.status === 'scheduled' || r.status === 'sending');
-  const drafts = rows.filter(r => r.status === 'draft');
-  const sent   = rows.filter(r => r.status === 'sent');
+  const [campaignsRes, groupsRes] = await Promise.all([
+    supabase.from('v_guest_campaigns').select('*').eq('property_id', pid).is('archived_at', null)
+      .order('updated_at', { ascending: false }),
+    supabase.from('v_subscriber_groups').select('slug, name, color, sort_order').order('sort_order'),
+  ]);
+  const allRows: CampaignRow[] = (campaignsRes.data as CampaignRow[]) ?? [];
+  const rows = allRows.filter((r) => (r.campaign_kind ?? 'broadcast') === 'lifecycle');
+  const groups: GroupMeta[] = (groupsRes.data as GroupMeta[]) ?? [];
+
+  // bucket rows by group_slug ('__real__' = NULL bucket)
+  const byGroup = new Map<string, CampaignRow[]>();
+  for (const r of rows) {
+    const key = r.group_slug ?? '__real__';
+    (byGroup.get(key) ?? byGroup.set(key, []).get(key)!).push(r);
+  }
+
+  // canonical order: Real Guest bucket first, then subscriber_groups by sort_order
+  const boxOrder: GroupMeta[] = [
+    { slug: '__real__', name: 'Real Guest · guests-sea + guests-int + returning', color: '#4A6A3A', sort_order: -1 },
+    ...groups,
+  ];
 
   const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/guest/newsletters',
@@ -76,140 +96,178 @@ export default async function LifecyclePage({ propertyId }: PageProps = {}) {
   return (
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title="Contacts · Lifecycle emails"
-        subtitle={`${rows.length} lifecycle campaign${rows.length === 1 ? '' : 's'} — anticipation, gratitude, birthday, winback.`} tabs={tabs}>
+        subtitle={`${rows.length} lifecycle campaign${rows.length === 1 ? '' : 's'} · one box per audience group.`} tabs={tabs}>
         <NewslettersSubStrip active="lifecycle" />
 
-        {/* Top row — filters/CTAs. Matches Broadcasts view position. */}
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center' }}>
           <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
           <ProposeNewsletterButton propertyId={pid} defaultKind="lifecycle" />
           <TenantLink href="/guest/directory" style={ctaButton}>+ New lifecycle campaign</TenantLink>
         </div>
 
-        {error && <div style={{ ...errorBox, gridColumn:'1 / -1' }}>Could not load lifecycle campaigns: {error.message}</div>}
+        {campaignsRes.error && <div style={{ ...errorBox, gridColumn:'1 / -1' }}>Could not load: {campaignsRes.error.message}</div>}
 
-        {/* ACTIVE */}
-        <div style={{ gridColumn:'1 / -1' }}>
-          <div style={sectionHeader}>Active lifecycle triggers</div>
-          {active.length === 0 ? <div style={emptyState}>No active lifecycle triggers yet.</div> : (
-            <div style={tableWrap}>
-              <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th><th style={th}>Trigger</th>
-                  <th style={{ ...th, textAlign:'right' }}>Recipients</th>
-                  <th style={{ ...th, textAlign:'right' }}>Pending</th>
-                  <th style={th}>Last edit</th>
-                  <th style={{ ...th, textAlign:'right', width:260 }}>Actions</th>
-                </tr></thead>
-                <tbody>
-                  {active.map((r) => (
-                    <tr key={r.campaign_id} style={{ borderBottom:'1px solid #E6DFCC', background:'#FFFFFF' }}>
-                      <td style={{ ...tdL, maxWidth:260 }}>
-                        <div style={{ fontWeight:600 }}>{r.name}</div>
-                        <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
-                      </td>
-                      <td style={tdL}>{fmtLifecycleTrigger(r)}</td>
-                      <td style={tdR}><RecipientsButton campaign_id={r.campaign_id} campaign_name={r.name} count={r.recipients_count} /></td>
-                      <td style={tdR}>{r.pending_count}</td>
-                      <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
-                      <td style={{ ...tdR, textAlign:'right' }}>
-                        <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
-                        <HaltButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
-                        <DeleteCampaignButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        {boxOrder.map((g) => {
+          const groupRows = byGroup.get(g.slug) ?? [];
+          if (groupRows.length === 0) return null;
+          const active = groupRows.filter(r => r.status === 'scheduled' || r.status === 'sending');
+          const drafts = groupRows.filter(r => r.status === 'draft');
+          const sent   = groupRows.filter(r => r.status === 'sent');
 
-        {/* DRAFTS */}
-        <div style={{ gridColumn:'1 / -1' }}>
-          <div style={sectionHeader}>Drafts</div>
-          {drafts.length === 0 ? <div style={emptyState}>No lifecycle drafts.</div> : (
-            <div style={tableWrap}>
-              <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th><th style={th}>Trigger</th>
-                  <th style={th}>Author</th><th style={th}>Last edit</th>
-                  <th style={{ ...th, textAlign:'right', width:290 }}>Actions</th>
-                </tr></thead>
-                <tbody>
-                  {drafts.map((r) => (
-                    <tr key={r.campaign_id} style={{ borderBottom:'1px solid #E6DFCC', background:'#FFFFFF' }}>
-                      <td style={{ ...tdL, maxWidth:280 }}>
-                        <div style={{ fontWeight:600 }}>{r.name}</div>
-                        <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
-                      </td>
-                      <td style={tdL}>{fmtLifecycleTrigger(r)}</td>
-                      <td style={tdL}>{r.created_by ?? '—'}</td>
-                      <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
-                      <td style={{ ...tdR, textAlign:'right' }}>
-                        <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</TenantLink>
-                        <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
-                        <ScheduleDrawer campaign_id={r.campaign_id} campaign_name={r.name} planned_date={r.planned_date} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+          return (
+            <div key={g.slug} style={{ ...groupBox, borderTopColor: g.color, gridColumn:'1 / -1' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 14px', borderBottom:`1px solid ${HAIR}`, background:'#FAFAF7' }}>
+                <span style={{ width:12, height:12, borderRadius:2, background:g.color, border:`1px solid ${HAIR}` }} />
+                <div style={{ fontSize:13, fontWeight:700, color:INK }}>{g.name}</div>
+                <div style={{ marginLeft:'auto', fontSize:11, color:INK_S }}>
+                  {groupRows.length} campaign{groupRows.length === 1 ? '' : 's'} · {active.length} active · {drafts.length} draft · {sent.length} sent
+                </div>
+              </div>
 
-        {/* SENT */}
-        <div style={{ gridColumn:'1 / -1' }}>
-          <div style={sectionHeader}>Sent</div>
-          {sent.length === 0 ? <div style={emptyState}>No lifecycle campaigns sent yet.</div> : (
-            <div style={tableWrap}>
-              <table style={{ width:'100%', borderCollapse:'collapse' }}>
-                <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th><th style={th}>Last sent</th>
-                  <th style={{ ...th, textAlign:'right' }}>Sent</th>
-                  <th style={{ ...th, textAlign:'right' }}>Opens</th>
-                  <th style={{ ...th, textAlign:'right' }}>Clicks</th>
-                  <th style={{ ...th, textAlign:'right' }}>Bookings</th>
-                  <th style={{ ...th, textAlign:'right', width:200 }}>Actions</th>
-                </tr></thead>
-                <tbody>
-                  {sent.map((r) => (
-                    <tr key={r.campaign_id} style={{ borderBottom:'1px solid #E6DFCC', background:'#FFFFFF' }}>
-                      <td style={{ ...tdL, maxWidth:280 }}>
-                        <div style={{ fontWeight:600 }}>{r.name}</div>
-                        <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
-                      </td>
-                      <td style={tdL}>{fmtDate(r.last_run_at ?? r.scheduled_at ?? r.planned_date)}</td>
-                      <td style={tdR}>{r.send_count}</td>
-                      <td style={tdR}>{r.opens_count} <span style={pctSub}>({pctOr(r.opens_count, r.send_count)})</span></td>
-                      <td style={tdR}>{r.clicks_count} <span style={pctSub}>({pctOr(r.clicks_count, r.send_count)})</span></td>
-                      <td style={tdR}>{r.booking_count}</td>
-                      <td style={{ ...tdR, textAlign:'right' }}>
-                        <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</TenantLink>
-                        <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div style={{ padding:'8px 14px 14px' }}>
+                {active.length > 0 && (<>
+                  <div style={subHeader}>Active</div>
+                  <MiniTableActive rows={active} />
+                </>)}
+                {drafts.length > 0 && (<>
+                  <div style={subHeader}>Drafts</div>
+                  <MiniTableDrafts rows={drafts} />
+                </>)}
+                {sent.length > 0 && (<>
+                  <div style={subHeader}>Sent</div>
+                  <MiniTableSent rows={sent} />
+                </>)}
+              </div>
             </div>
-          )}
-        </div>
+          );
+        })}
+
+        {rows.length === 0 && (
+          <div style={{ ...emptyState, gridColumn:'1 / -1' }}>No lifecycle campaigns yet. Use + New lifecycle campaign to add one.</div>
+        )}
       </DashboardPage>
     </div>
   );
 }
 
-const ctaButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:'#1F3A2E', color:'#FFFFFF', border:'1px solid #1F3A2E', borderRadius:4, textDecoration:'none' };
-const secondaryButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:'#1F3A2E', border:'1px solid #E6DFCC', borderRadius:4, textDecoration:'none' };
-const sectionHeader: CSSProperties = { fontSize:11, letterSpacing:'0.06em', textTransform:'uppercase', color:'#5A5A5A', fontWeight:600, margin:'8px 2px 8px' };
-const emptyState: CSSProperties = { padding:'16px 20px', fontSize:12, color:'#5A5A5A', background:'#FFFFFF', border:'1px solid #E6DFCC', borderRadius:6 };
-const tableWrap: CSSProperties = { border:'1px solid #E6DFCC', borderRadius:6, overflow:'hidden', background:'#FFFFFF' };
+function MiniTableActive({ rows }: { rows: CampaignRow[] }) {
+  return (
+    <div style={tableWrap}>
+      <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <thead><tr style={{ background:'#FFFFFF', borderBottom:`1px solid ${HAIR}` }}>
+          <th style={th}>Campaign</th><th style={th}>Trigger</th>
+          <th style={{ ...th, textAlign:'right' }}>Recipients</th>
+          <th style={{ ...th, textAlign:'right' }}>Pending</th>
+          <th style={th}>Last edit</th>
+          <th style={{ ...th, textAlign:'right', width:260 }}>Actions</th>
+        </tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.campaign_id} style={{ borderBottom:`1px solid ${HAIR}`, background:'#FFFFFF' }}>
+              <td style={{ ...tdL, maxWidth:260 }}>
+                <div style={{ fontWeight:600 }}>{r.name}</div>
+                <div style={{ fontSize:11, color:INK_S, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
+              </td>
+              <td style={tdL}>{fmtLifecycleTrigger(r)}</td>
+              <td style={tdR}><RecipientsButton campaign_id={r.campaign_id} campaign_name={r.name} count={r.recipients_count} /></td>
+              <td style={tdR}>{r.pending_count}</td>
+              <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
+              <td style={{ ...tdR, textAlign:'right' }}>
+                <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
+                <HaltButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
+                <DeleteCampaignButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MiniTableDrafts({ rows }: { rows: CampaignRow[] }) {
+  return (
+    <div style={tableWrap}>
+      <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <thead><tr style={{ background:'#FFFFFF', borderBottom:`1px solid ${HAIR}` }}>
+          <th style={th}>Campaign</th><th style={th}>Trigger</th>
+          <th style={th}>Author</th><th style={th}>Last edit</th>
+          <th style={{ ...th, textAlign:'right', width:290 }}>Actions</th>
+        </tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.campaign_id} style={{ borderBottom:`1px solid ${HAIR}`, background:'#FFFFFF' }}>
+              <td style={{ ...tdL, maxWidth:280 }}>
+                <div style={{ fontWeight:600 }}>{r.name}</div>
+                <div style={{ fontSize:11, color:INK_S, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
+              </td>
+              <td style={tdL}>{fmtLifecycleTrigger(r)}</td>
+              <td style={tdL}>{r.created_by ?? '—'}</td>
+              <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
+              <td style={{ ...tdR, textAlign:'right' }}>
+                <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</TenantLink>
+                <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
+                <ScheduleDrawer campaign_id={r.campaign_id} campaign_name={r.name} planned_date={r.planned_date} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function MiniTableSent({ rows }: { rows: CampaignRow[] }) {
+  return (
+    <div style={tableWrap}>
+      <table style={{ width:'100%', borderCollapse:'collapse' }}>
+        <thead><tr style={{ background:'#FFFFFF', borderBottom:`1px solid ${HAIR}` }}>
+          <th style={th}>Campaign</th><th style={th}>Last sent</th>
+          <th style={{ ...th, textAlign:'right' }}>Sent</th>
+          <th style={{ ...th, textAlign:'right' }}>Opens</th>
+          <th style={{ ...th, textAlign:'right' }}>Clicks</th>
+          <th style={{ ...th, textAlign:'right' }}>Bookings</th>
+          <th style={{ ...th, textAlign:'right', width:200 }}>Actions</th>
+        </tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.campaign_id} style={{ borderBottom:`1px solid ${HAIR}`, background:'#FFFFFF' }}>
+              <td style={{ ...tdL, maxWidth:280 }}>
+                <div style={{ fontWeight:600 }}>{r.name}</div>
+                <div style={{ fontSize:11, color:INK_S, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
+              </td>
+              <td style={tdL}>{fmtDate(r.last_run_at ?? r.scheduled_at ?? r.planned_date)}</td>
+              <td style={tdR}>{r.send_count}</td>
+              <td style={tdR}>{r.opens_count} <span style={pctSub}>({pctOr(r.opens_count, r.send_count)})</span></td>
+              <td style={tdR}>{r.clicks_count} <span style={pctSub}>({pctOr(r.clicks_count, r.send_count)})</span></td>
+              <td style={tdR}>{r.booking_count}</td>
+              <td style={{ ...tdR, textAlign:'right' }}>
+                <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</TenantLink>
+                <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const HAIR  = '#E6DFCC';
+const INK   = '#1B1B1B';
+const INK_S = '#5A5A5A';
+const BRAND = '#1F3A2E';
+
+const groupBox: CSSProperties = { border: `1px solid ${HAIR}`, borderTop:'3px solid #4A6A3A', borderRadius:6, background:'#FFFFFF', marginBottom:14 };
+const subHeader: CSSProperties = { fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_S, fontWeight:600, margin:'10px 2px 6px' };
+const ctaButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:BRAND, color:'#FFFFFF', border:`1px solid ${BRAND}`, borderRadius:4, textDecoration:'none' };
+const secondaryButton: CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:BRAND, border:`1px solid ${HAIR}`, borderRadius:4, textDecoration:'none' };
+const emptyState: CSSProperties = { padding:'16px 20px', fontSize:12, color:INK_S, background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6 };
+const tableWrap: CSSProperties = { border:`1px solid ${HAIR}`, borderRadius:4, overflow:'hidden', background:'#FFFFFF', marginBottom:6 };
 const errorBox: CSSProperties = { padding:12, background:'#FBE8E4', color:'#8A2419', border:'1px solid #E8B7AB', borderRadius:4, marginBottom:16, fontSize:13 };
-const th: CSSProperties = { padding:'8px 10px', fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'#1B1B1B', textAlign:'left' };
-const tdL: CSSProperties = { padding:'8px 10px', fontSize:12, color:'#1B1B1B' };
-const tdR: CSSProperties = { padding:'8px 10px', fontSize:12, textAlign:'right', fontVariantNumeric:'tabular-nums', color:'#1B1B1B' };
-const pctSub: CSSProperties = { fontSize:10, color:'#5A5A5A', marginLeft:4 };
-const actionBtnGreen: CSSProperties = { display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600, background:'#1F3A2E', color:'#FFFFFF', border:'none', borderRadius:4, textDecoration:'none' };
-const actionBtnLight: CSSProperties = { display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#3A3A3A', border:'1px solid #E6DFCC', borderRadius:4, textDecoration:'none' };
+const th: CSSProperties = { padding:'8px 10px', fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK, textAlign:'left' };
+const tdL: CSSProperties = { padding:'8px 10px', fontSize:12, color:INK };
+const tdR: CSSProperties = { padding:'8px 10px', fontSize:12, textAlign:'right', fontVariantNumeric:'tabular-nums', color:INK };
+const pctSub: CSSProperties = { fontSize:10, color:INK_S, marginLeft:4 };
+const actionBtnGreen: CSSProperties = { display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600, background:BRAND, color:'#FFFFFF', border:'none', borderRadius:4, textDecoration:'none' };
+const actionBtnLight: CSSProperties = { display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#3A3A3A', border:`1px solid ${HAIR}`, borderRadius:4, textDecoration:'none' };
