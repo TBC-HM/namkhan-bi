@@ -43,12 +43,28 @@ const OUTPUT_JSON_RULES = [
 
 const OUTPUT_PLAIN_RULES = [
   'Return STRICT JSON with keys:',
-  '  subject  (string, <= 65 chars, no exclamation marks, no special characters)',
+  '  subject  (string, <= 55 chars, no exclamation marks, no special characters, no ALL CAPS)',
   '  body_md  (string, PLAIN TEXT ONLY · no Markdown, no HTML, no bullet points,',
-  '           no URLs, no images, no formatting. 4-6 short paragraphs.',
-  '           Greet with "Dear {{first_name}}," and sign off with the sender name.)',
+  '           no URLs, no images, no formatting, 3-5 short paragraphs.',
+  '           Greet with "Dear {{first_name}}," and sign off with the sender name + role.)',
   '  goal_tag (short slug · optional)',
 ].join(' ');
+
+// Extra SYSTEM rules layered on when the group policy forces plain text + blocks links.
+// Goal: pass OTA-sourced inbox filters (Booking.com / Airbnb / Expedia / Ctrip / Agoda relays).
+// These filters flag standard marketing signals — strip them upfront.
+const ANTI_SPAM_FILTER_RULES = [
+  'Constraints for maximum inbox deliverability (OTA-sourced address filters):',
+  '- Do NOT use marketing verbs: book, reserve, buy, order, offer, discount, save, exclusive, limited, hurry, act now, click, tap, register, subscribe.',
+  '- Do NOT include prices, promo codes, percentages, currency symbols, or the words "free", "gift", "bonus".',
+  '- Do NOT use ALL CAPS words, multiple exclamation marks, or multiple question marks.',
+  '- Do NOT mention the OTA brand (Booking.com, Airbnb, Expedia, Agoda, Ctrip, etc.) by name.',
+  '- Do NOT include tracking pixels, unsubscribe text, or any URL — the send layer adds compliance footer separately.',
+  '- Use short warm sentences. Indicative mood, not imperative.',
+  '- Sign off with a real named person + role + hotel physical address on the last line — improves sender reputation.',
+  '- Reference the guest\'s stay dates naturally where relevant. Do not say "your reservation".',
+  '- Keep under ~180 words total. Long emails flag more heavily.',
+].join('\n');
 
 type ProposeBody = {
   property_id?: number;
@@ -89,7 +105,7 @@ type Policy = {
 };
 
 async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: string | null) {
-  const [rulesR, linksR, retreatsR, activitiesR, sendersR, goalsR, policyR] = await Promise.all([
+  const [rulesR, linksR, retreatsR, activitiesR, sendersR, goalsR, policyR, groupR] = await Promise.all([
     sb.from('v_marketing_email_general_rules').select('rule_type, rule_text, group_slug').limit(50),
     sb.from('v_marketing_internal_link_catalog').select('section, anchor_hint, url, title, description').eq('property_id', NAMKHAN_ID).limit(20),
     sb.from('v_property_retreats').select('name, short_description, focus_notes').eq('property_id', NAMKHAN_ID).eq('is_active', true).limit(10),
@@ -98,6 +114,9 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: 
     sb.from('v_director_goals').select('goal_key, goal_label, weight, group_slug').eq('property_id', NAMKHAN_ID).eq('active', true),
     group_slug
       ? sb.from('v_group_email_policy').select('*').eq('group_slug', group_slug).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    group_slug
+      ? sb.from('v_subscriber_groups').select('slug, name, voice_type, voice_summary').eq('slug', group_slug).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
   ]);
 
@@ -121,6 +140,9 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: 
 
   const policy: Policy | null = ((policyR as { data?: Policy | null }).data) ?? null;
 
+  type GroupVoice = { slug: string; name: string; voice_type: 'b2c'|'b2b'|'mixed' | null; voice_summary: string | null };
+  const group: GroupVoice | null = ((groupR as { data?: GroupVoice | null }).data) ?? null;
+
   return {
     rules,
     links: (linksR.data as Array<{ section: string; anchor_hint: string; url: string; title: string | null; description: string | null }> | null) ?? [],
@@ -129,6 +151,7 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: 
     sender: (sendersR.data as { from_name: string | null; from_email: string | null; footer_text: string | null; unsubscribe_url: string | null } | null) ?? null,
     goals,
     policy,
+    group,
   };
 }
 
@@ -143,6 +166,13 @@ function assembleUserPrompt(
   parts.push(`audience_type: ${body.audience_type ?? 'b2c'}`);
   if (body.group_slug) parts.push(`audience_group: ${body.group_slug}`);
   parts.push(`seed_text: ${(body.seed_text ?? '').trim()}`);
+
+  if (ctx.group?.voice_summary) {
+    parts.push('');
+    parts.push(`### GROUP VOICE · ${ctx.group.name} (${ctx.group.voice_type ?? 'b2c'})`);
+    parts.push('Read this before writing. It defines who they are and how to speak to them.');
+    parts.push(ctx.group.voice_summary);
+  }
 
   if (ctx.policy) {
     parts.push('');
@@ -258,7 +288,10 @@ export async function POST(req: NextRequest) {
   }
 
   const outputRules = ctx.policy?.force_plain_text ? OUTPUT_PLAIN_RULES : OUTPUT_JSON_RULES;
-  const system = `${IDENTITY}\n\n${outputRules}`;
+  // Layer the anti-spam-filter rules on top when policy forces plain text + blocks links
+  // (OTA Traveller path today · could apply to any future group with the same pattern).
+  const antiSpam = (ctx.policy?.force_plain_text && ctx.policy?.block_links) ? `\n\n${ANTI_SPAM_FILTER_RULES}` : '';
+  const system = `${IDENTITY}\n\n${outputRules}${antiSpam}`;
   const userPrompt = assembleUserPrompt(body, ctx);
 
   try {
