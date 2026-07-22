@@ -96,7 +96,15 @@ export interface AudienceTiles {
   purged_unsubscribed: number;
 }
 
-type SourceFilter = 'all' | 'subscribers' | 'prospects';
+// 2026-07-22 · SourceFilter is now the ORIGIN of the row (`ingest_source`
+// value, normalized so gmail_extract → gmail; prospect: rows without an
+// ingest_source render as 'prospect'), not the ROW TYPE. Options are computed
+// dynamically from rows[] plus a leading 'any' sentinel. Kept as a plain
+// string so future custom source names Just Work.
+type SourceFilter = string;
+// Legacy row-type filter values still arrive from the URL (?source=prospects
+// tile-click, ?source=subscribers, ?source=all). See normalizeInitialSource.
+type LegacySourceFilter = 'all' | 'subscribers' | 'prospects';
 type StatusFilter = 'any' | 'active' | 'pending' | 'unsub' | 'bounced';
 type MxFilter = 'any' | 'valid' | 'invalid';
 type TabKey = 'table' | 'scrape';
@@ -106,9 +114,20 @@ const PAGE_SIZE = 50;
 interface Props {
   initialRows: AudienceRow[];
   initialGroups: GroupRow[];
-  initialSource: SourceFilter;
+  // Server still passes the legacy row-type token from ?source=… on the URL.
+  // We normalize it into the new origin-scoped SourceFilter at mount below.
+  initialSource: LegacySourceFilter;
   initialTab: TabKey;
   initialTiles: AudienceTiles;
+}
+
+// Map the legacy ?source=… URL token onto the new origin-scoped SourceFilter.
+// 'prospects' → 'prospect' (single origin bucket); 'subscribers' → 'any'
+// (subscribers are the union of pms/gmail/dmc/manual/…, no single value);
+// 'all' or unknown → 'any'.
+function normalizeInitialSource(legacy: LegacySourceFilter): SourceFilter {
+  if (legacy === 'prospects') return 'prospect';
+  return 'any';
 }
 
 export default function AudienceUnifiedClient({
@@ -127,7 +146,7 @@ export default function AudienceUnifiedClient({
   const [groups, setGroups] = useState<GroupRow[]>(initialGroups);
   const [tab, setTab] = useState<TabKey>(initialTab);
 
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSource);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(() => normalizeInitialSource(initialSource));
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('any');
   const [mxFilter, setMxFilter]         = useState<MxFilter>('any');
   // 2026-07-22 · Source/Status/MX converted from segmented button rows to
@@ -238,13 +257,31 @@ export default function AudienceUnifiedClient({
     [rows],
   );
 
+  // 2026-07-22 · Dynamically compute the SOURCE dropdown options from the
+  // rows currently loaded — no hardcoded list. gmail_extract collapses to
+  // 'gmail'; prospect: rows without an ingest_source contribute 'prospect'.
+  // Any new custom source uploaded in future will just appear.
+  const sourceOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      const norm = r.ingest_source === 'gmail_extract' ? 'gmail' : r.ingest_source;
+      const eff  = norm ?? (r.audience_id.startsWith('prospect:') ? 'prospect' : null);
+      if (eff) set.add(eff);
+    }
+    return ['any', ...Array.from(set).sort()];
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const wantUnassigned = groupFilters.includes(UNASSIGNED_SLUG);
     const realGroupSet   = new Set(groupFilters.filter(s => s !== UNASSIGNED_SLUG));
     return rows.filter((r) => {
-      if (sourceFilter === 'subscribers' && r.source !== 'subscriber') return false;
-      if (sourceFilter === 'prospects' && r.source !== 'prospect') return false;
+      // 2026-07-22 · SOURCE filter now matches by origin (ingest_source),
+      // normalized so gmail_extract → gmail, and prospect: rows without an
+      // ingest_source render/count as 'prospect'.
+      const normalizedIngest = r.ingest_source === 'gmail_extract' ? 'gmail' : r.ingest_source;
+      const effectiveSource = normalizedIngest ?? (r.audience_id.startsWith('prospect:') ? 'prospect' : null);
+      if (sourceFilter !== 'any' && effectiveSource !== sourceFilter) return false;
       if (r.source === 'subscriber') {
         if (statusFilter === 'active'  && !(r.opted_in_at && !r.unsubscribed_at)) return false;
         if (statusFilter === 'pending' && !(!r.opted_in_at && !r.unsubscribed_at)) return false;
@@ -252,13 +289,14 @@ export default function AudienceUnifiedClient({
         if (statusFilter === 'bounced' && !r.bounced_at) return false;
       } else {
         // Status filter is subscribers-only. When active on prospect view, hide prospects.
-        if (statusFilter !== 'any' && sourceFilter !== 'prospects') return false;
+        if (statusFilter !== 'any' && sourceFilter !== 'prospect') return false;
       }
       if (r.source === 'prospect') {
         if (mxFilter === 'valid' && r.mx_valid !== true) return false;
         if (mxFilter === 'invalid' && r.mx_valid !== false) return false;
       } else {
-        if (mxFilter !== 'any' && sourceFilter !== 'subscribers') return false;
+        // MX filter is prospect-only. When active on non-prospect origin, hide non-prospects.
+        if (mxFilter !== 'any' && sourceFilter === 'any') return false;
       }
       // Group filter — Unassigned sentinel is EXCLUSIVE.
       if (wantUnassigned) {
@@ -583,11 +621,11 @@ export default function AudienceUnifiedClient({
   }, [closePicker]);
 
   const resetFilters = () => {
-    setSourceFilter('all'); setStatusFilter('any'); setMxFilter('any');
+    setSourceFilter('any'); setStatusFilter('any'); setMxFilter('any');
     setGroupFilters([]); setQuery(''); setPage(0);
   };
   const setGroupOnly = (slug: string) => {
-    setSourceFilter('all'); setStatusFilter('any'); setMxFilter('any');
+    setSourceFilter('any'); setStatusFilter('any'); setMxFilter('any');
     setGroupFilters([slug]); setPage(0);
   };
 
@@ -600,7 +638,7 @@ export default function AudienceUnifiedClient({
         <TileCompact label="Guests"          value={initialTiles.guests}           onClick={() => setGroupOnly('guests')}           active={groupFilters.length === 1 && groupFilters[0] === 'guests'} />
         <TileCompact label="Returning Guests" value={initialTiles.returning_guests} onClick={() => setGroupOnly('returning-guests')} active={groupFilters.length === 1 && groupFilters[0] === 'returning-guests'} />
         <TileCompact label="DMC Contracted" value={initialTiles.dmc}               onClick={() => setGroupOnly('dmc-contracted')}   active={groupFilters.length === 1 && groupFilters[0] === 'dmc-contracted'} />
-        <TileCompact label="Prospects"       value={initialTiles.prospects}        onClick={() => { setSourceFilter('prospects'); setPage(0); }} active={sourceFilter === 'prospects'} />
+        <TileCompact label="Prospects"       value={initialTiles.prospects}        onClick={() => { setSourceFilter('prospect'); setPage(0); }} active={sourceFilter === 'prospect'} />
         <TileCompact label="Responders"      value={initialTiles.responders}       onClick={() => setGroupOnly('responders')}       active={groupFilters.length === 1 && groupFilters[0] === 'responders'} />
         <TileCompact label="Bounced (purged)"      value={initialTiles.purged_bounced}      />
         <TileCompact label="Unsubscribed (purged)" value={initialTiles.purged_unsubscribed} />
@@ -682,8 +720,8 @@ export default function AudienceUnifiedClient({
             open={sourceDdOpen}
             setOpen={setSourceDdOpen}
             value={sourceFilter}
-            defaultValue="all"
-            options={['all','subscribers','prospects'] as SourceFilter[]}
+            defaultValue="any"
+            options={sourceOptions}
             onSelect={(k) => { setSourceFilter(k); setPage(0); setSourceDdOpen(false); }}
           />
         </FilterGroup>
