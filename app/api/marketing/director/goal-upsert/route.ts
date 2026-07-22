@@ -17,6 +17,9 @@ export async function POST(req: NextRequest) {
   const goal_label = String(body?.goal_label ?? '').trim();
   const weight     = Number.isFinite(Number(body?.weight)) ? Number(body.weight) : 0;
   const active     = body?.active !== false;
+  // Optional per-group override: when set, this weight applies to plans generated for
+  // that group only (falls back to global weight when the group has no override).
+  const group_slug = body?.group_slug ? String(body.group_slug).trim() : null;
 
   if (!property_id || !Number.isFinite(property_id)) {
     return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
@@ -32,6 +35,7 @@ export async function POST(req: NextRequest) {
     p_goal_label: goal_label,
     p_weight: weight,
     p_active: active,
+    p_group_slug: group_slug,
   });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
