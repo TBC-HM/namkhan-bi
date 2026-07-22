@@ -23,9 +23,10 @@
 //     so DMC members that live past row 1000 are pulled into the view.
 //     Server pagination stays as-is — no 4,384-row client load.
 //   Item 1: per-row Newsletter + Sequence action buttons. Each opens a small
-//     Drawer picker for scheduled campaigns / active funnels. Enrollment RPCs
-//     are TODO (fn_campaign_recipient_add_one + fn_funnel_enroll_one) —
-//     buttons currently console.log the intent.
+//     Drawer picker for scheduled campaigns / active funnels. Enrollment wires
+//     to public RPCs fn_campaign_recipient_add_one (p_campaign_id uuid,
+//     p_audience_id text) and fn_funnel_enroll_one (p_funnel_key text,
+//     p_audience_id text) — both resolve subscriber:{id} internally.
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { Drawer } from '@/app/(cockpit)/_design';
@@ -447,24 +448,45 @@ export default function AudienceUnifiedClient({
     setFunnels([]);
   }, []);
 
-  // Enroll a single audience row into a campaign draft or funnel.
-  // TODO — RPCs `fn_campaign_recipient_add_one(p_campaign_id uuid, p_audience_id text)`
-  // and `fn_funnel_enroll_one(p_funnel_key text, p_audience_id text)` do not yet
-  // exist. `guest.fn_schedule_campaign` takes text[] guest_ids (different id
-  // space) and `prospects.fn_enroll_subscriber` takes uuid subscriber_id (our
-  // subscribers table has integer ids). Wire to console.log until proposed
-  // RPCs land.
-  const enrollRow = useCallback((kind: 'newsletter' | 'sequence', row: AudienceRow, targetId: string, targetLabel: string) => {
-    // eslint-disable-next-line no-console
-    console.log('[TODO fn_*]', {
-      action: kind === 'newsletter' ? 'campaign_recipient_add_one' : 'funnel_enroll_one',
-      audience_id: row.audience_id,
-      email: row.email,
-      target_id: targetId,
-      target_label: targetLabel,
-    });
-    setMsg(`Queued ${row.email} → ${targetLabel} (dry-run: awaiting fn_${kind === 'newsletter' ? 'campaign_recipient_add_one' : 'funnel_enroll_one'} RPC).`);
-    closePicker();
+  // Enroll a single audience row into a campaign draft or funnel via the
+  // public RPCs `fn_campaign_recipient_add_one(p_campaign_id uuid, p_audience_id text)`
+  // and `fn_funnel_enroll_one(p_funnel_key text, p_audience_id text)`. Both
+  // resolve the audience_id (`subscriber:{bigint}`) internally against
+  // marketing.newsletter_subscribers.id and return TABLE(ok, ..., note).
+  const enrollRow = useCallback(async (kind: 'newsletter' | 'sequence', row: AudienceRow, targetId: string, targetLabel: string) => {
+    const url  = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anon) { alert('Enroll failed: Supabase env not available in browser.'); return; }
+    const fn   = kind === 'newsletter' ? 'fn_campaign_recipient_add_one' : 'fn_funnel_enroll_one';
+    const body = kind === 'newsletter'
+      ? { p_campaign_id: targetId, p_audience_id: row.audience_id }
+      : { p_funnel_key: targetId,  p_audience_id: row.audience_id };
+    try {
+      const r = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: {
+          apikey: anon,
+          Authorization: `Bearer ${anon}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => '');
+        alert(`Enroll failed: ${r.status} ${txt || r.statusText}`);
+        return;
+      }
+      const data = await r.json().catch(() => null);
+      const res  = Array.isArray(data) ? data[0] : data;
+      if (!res?.ok) { alert(`Not enrolled: ${res?.note ?? 'unknown'}`); return; }
+      const who = res.email ?? row.email;
+      setMsg(kind === 'newsletter'
+        ? `Added ${who} to campaign · ${res.note ?? targetLabel}`
+        : `Enrolled ${who} in ${targetLabel} · ${res.note ?? 'ok'}`);
+      closePicker();
+    } catch (e) {
+      alert(`Enroll failed: ${(e as Error).message}`);
+    }
   }, [closePicker]);
 
   const resetFilters = () => {
