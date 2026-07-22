@@ -18,7 +18,7 @@ export default async function DirectorPage() {
   const [{ data: goalRows }, { data: slotRows }, { data: groupRows }] = await Promise.all([
     supabase.from('v_director_goals').select('*').eq('property_id', pid).order('weight', { ascending: false }),
     supabase.from('v_director_calendar').select('*').eq('property_id', pid).order('slot_date', { ascending: true }),
-    supabase.from('subscriber_groups' as never).select('slug,name,color,sort_order')
+    supabase.from('v_subscriber_groups').select('slug,name,color,sort_order')
       .order('sort_order', { ascending: true, nullsFirst: false }).order('name', { ascending: true }),
   ]);
 
