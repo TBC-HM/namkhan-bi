@@ -201,6 +201,9 @@ const SOURCE_ALIASES: Record<string, string> = {
   'arza travel (lao challenger travel)': 'arza',
   'discover laos.today': 'discoverlaostoday',
   'discoverlaos.today': 'discoverlaostoday',
+  // PBS 2026-07-22: alias fixes so /sales/b2b matches these correctly (plural/singular + missing 's')
+  'tiger trails': 'tiger trail',
+  'lao autrement': 'laos autrement',
 };
 
 const STOPWORDS = new Set([
