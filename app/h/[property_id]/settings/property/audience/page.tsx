@@ -58,14 +58,14 @@ export default async function PropertyAudienceSettingsPage({
 
   const [blocklistRes, groupsRes, groupRulesRes, emailRes, routingRes, chromeRes, goalsRes] = await Promise.all([
     admin.from('v_marketing_subscriber_blocklist').select('*').limit(500),
-    admin.from('v_subscriber_groups').select('id, slug, name, description, color, is_system, sort_order, member_count').order('sort_order'),
+    admin.from('v_subscriber_groups').select('id, slug, name, description, color, is_system, sort_order, member_count, newsletter_cadence_per_month').order('sort_order'),
     admin.from('v_marketing_subscriber_group_rules').select('*').limit(1000),
     admin.from('v_marketing_property_email_settings').select('*').eq('property_id', propertyId).maybeSingle(),
     admin.from('v_marketing_import_routing_rules').select('*').limit(500),
     admin.from('v_marketing_property_email_settings')
       .select('property_id, header_logo_asset_id, header_logo_public_url, header_tagline, default_hero_asset_id, default_hero_public_url, footer_address_lines, footer_social_links, footer_disclaimer_text, footer_unsubscribe_wording')
       .eq('property_id', propertyId).maybeSingle(),
-    admin.from('v_director_goals').select('*').eq('property_id', propertyId).order('weight', { ascending: false }),
+    admin.from('v_director_goals').select('*').eq('property_id', propertyId).is('group_slug', null).order('weight', { ascending: false }),
   ]);
 
   const blocklist: BlocklistRow[]        = (blocklistRes.data ?? []) as BlocklistRow[];
