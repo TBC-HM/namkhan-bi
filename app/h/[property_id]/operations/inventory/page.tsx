@@ -2,15 +2,16 @@
 //
 // Canonical Namkhan (+ Donna) Inventory landing.
 // Registry-driven from public.v_cockpit_inventory WHERE page_slug='inventory'.
-// New design system (DashboardPage / Container / KpiTile / MetricRow +
-// InventoryStockList client wrapper for the ListContainer with its render fns).
+// New design system (DashboardPage + top strip via OPERATIONS_SUBPAGES,
+// sub-strip auto-picked from NAV_SUBGROUPS by pathname).
 //
 // Server component. Client concerns (render fns, columns, ListContainer) live
 // in ./InventoryStockList — passing function props from a server component to
-// a "use client" ListContainer crashes RSC serialisation (digest 3224079219).
+// a "use client" ListContainer crashes RSC serialisation.
 
 import { redirect } from 'next/navigation';
-import { DashboardPage, Container, MetricRow } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, MetricRow, type DashboardTab } from '@/app/(cockpit)/_design';
+import { OPERATIONS_SUBPAGES } from '@/app/operations/_subpages';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import InventoryStockList, { type StockRow } from './InventoryStockList';
@@ -104,8 +105,18 @@ export default async function InventoryPage({ params }: Props) {
   const locationsInUse = stock.reduce((a, r) => a + (r.locations_with_stock > 0 ? 1 : 0), 0);
   const isZeroState = unitsOnHand === 0;
 
+  // Top strip · same OPERATIONS_SUBPAGES the Restaurant / Rooms / Spa pages use.
+  // Sub-strip (Overview · Assets · Capex · Catalog · ...) is auto-picked by
+  // DashboardPage from lib/nav-subgroups.ts via findSubGroup(pathname).
+  const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href.endsWith('/inventory'),
+  }));
+
   return (
-    <DashboardPage title="Inventory">
+    <DashboardPage title="Inventory" tabs={tabs}>
       <div style={{ gridColumn: '1 / -1' }}>
         <MetricRow
           size="sm"
