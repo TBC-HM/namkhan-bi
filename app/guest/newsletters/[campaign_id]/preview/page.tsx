@@ -32,9 +32,14 @@ function renderMarkdown(md: string): string {
     .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g,'<em>$1</em>')
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1" style="max-width:100%;height:auto;display:block;margin:14px 0 4px;border-radius:2px" />')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" style="display:inline-block;color:#FFFFFF;background:#084838;padding:8px 18px;border-radius:2px;text-decoration:none;font-weight:600;font-size:13px;letter-spacing:0.04em;margin:6px 0">$1</a>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" style="color:#084838;text-decoration:underline;font-weight:600">$1</a>')
     .replace(/^---$/gm,'<hr style="border:none;border-top:1px solid #C79A6B;width:60px;margin:32px auto" />');
-  const paragraphs = html.split(/\n\n+/).map((p) => {
+  // Convert simple "- " bullet rows into <ul> blocks
+  const withLists = html.replace(/(?:^|\n)((?:- .+(?:\n|$))+)/g, (_m, block: string) => {
+    const items = block.trim().split(/\n/).map(l => l.replace(/^-\s*/, '')).map(l => `<li style="margin:8px 0">${l}</li>`).join('');
+    return '\n<ul style="margin:12px 0 12px 20px;padding:0;list-style:disc;color:#1B1B1B;font-family:Georgia,serif;font-size:14px;line-height:1.65">' + items + '</ul>';
+  });
+  const paragraphs = withLists.split(/\n\n+/).map((p) => {
     if (p.startsWith('<h1') || p.startsWith('<h2') || p.startsWith('<h3') || p.startsWith('<hr') || p.startsWith('<img')) return p;
     return '<p style="margin:14px 0">' + p + '</p>';
   });
