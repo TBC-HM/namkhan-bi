@@ -7,6 +7,9 @@
     },
     "app/api/cron/briefing-evaluate/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/cron/director-autopilot/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -21,6 +24,10 @@
     {
       "path": "/api/cron/briefing-evaluate",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/director-autopilot",
+      "schedule": "0 23 * * 0"
     }
   ]
 }
