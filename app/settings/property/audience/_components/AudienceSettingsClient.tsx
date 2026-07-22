@@ -8,6 +8,7 @@
 import { useCallback, useState, useTransition } from 'react';
 import EmailChromePanel, { type EmailChromeSettings } from './EmailChromePanel';
 import EditorialGoalsPanel, { type GoalRow as EditorialGoalRow } from './EditorialGoalsPanel';
+import GroupCadencePanel, { type CadenceGroupRow } from './GroupCadencePanel';
 
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
@@ -37,6 +38,7 @@ export interface GroupRow {
   is_system: boolean;
   sort_order: number;
   member_count: number;
+  newsletter_cadence_per_month?: number | string | null;
 }
 export interface GroupRuleRow {
   id: number;
@@ -107,6 +109,17 @@ export default function AudienceSettingsClient(props: Props & {
         propertyId={props.propertyId}
         initial={props.initialEmailChrome ?? null}
       />
+      <div id="group-cadence">
+        <GroupCadencePanel
+          groups={props.initialGroups.map(g => ({
+            slug: g.slug,
+            name: g.name,
+            color: g.color,
+            newsletter_cadence_per_month: g.newsletter_cadence_per_month ?? 1.0,
+            member_count: g.member_count,
+          }))}
+        />
+      </div>
       <div id="editorial-goals">
         <EditorialGoalsPanel
           propertyId={props.propertyId}
