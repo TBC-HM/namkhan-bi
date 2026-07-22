@@ -9,6 +9,7 @@ import { useCallback, useState, useTransition } from 'react';
 import EmailChromePanel, { type EmailChromeSettings } from './EmailChromePanel';
 import EditorialGoalsPanel, { type GoalRow as EditorialGoalRow } from './EditorialGoalsPanel';
 import GroupCadencePanel, { type CadenceGroupRow } from './GroupCadencePanel';
+import GroupVoicePanel, { type VoiceGroupRow } from './GroupVoicePanel';
 
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
@@ -39,6 +40,8 @@ export interface GroupRow {
   sort_order: number;
   member_count: number;
   newsletter_cadence_per_month?: number | string | null;
+  voice_type?: 'b2c' | 'b2b' | 'mixed' | null;
+  voice_summary?: string | null;
 }
 export interface GroupRuleRow {
   id: number;
@@ -117,6 +120,17 @@ export default function AudienceSettingsClient(props: Props & {
             color: g.color,
             newsletter_cadence_per_month: g.newsletter_cadence_per_month ?? 1.0,
             member_count: g.member_count,
+          }))}
+        />
+      </div>
+      <div id="group-voice">
+        <GroupVoicePanel
+          groups={props.initialGroups.map<VoiceGroupRow>(g => ({
+            slug: g.slug,
+            name: g.name,
+            color: g.color,
+            voice_type: g.voice_type ?? null,
+            voice_summary: g.voice_summary ?? null,
           }))}
         />
       </div>
