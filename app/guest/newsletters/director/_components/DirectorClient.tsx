@@ -210,6 +210,55 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
     } finally { setBusy(''); setTimeout(()=>setMsg(''), 2000); }
   }
 
+  // AI regenerate · runs the same compose pipeline as the autocompose cron for a single slot.
+  // Calls the propose-one route (Claude) with slot context, then persists via refine-slot.
+  async function regenerateSlot(slot: SlotRow) {
+    setBusy('regenerate');
+    setMsg(`Regenerating slot for ${new Date(slot.slot_date).toLocaleDateString('en-GB')}…`);
+    try {
+      const seed = [
+        `Newsletter target date: ${slot.slot_date}`,
+        slot.group_slug ? `Audience group: ${slot.group_slug}` : null,
+        slot.title ? `Working title: ${slot.title}` : null,
+        slot.goal_tag ? `Editorial goal: ${slot.goal_tag}` : null,
+        slot.ai_notes ? `Notes: ${slot.ai_notes}` : null,
+      ].filter(Boolean).join('\n');
+      const r = await fetch('/api/marketing/newsletter/propose-one', {
+        method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({
+          property_id: propertyId,
+          kind: 'broadcast',
+          seed_text: seed,
+          target_date: slot.slot_date,
+          audience_type: slot.audience_type,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.proposal?.subject || !j?.proposal?.body_md) {
+        setMsg(`Regenerate failed: ${j?.error ?? r.status}`); return;
+      }
+      const rr = await fetch('/api/marketing/director/refine-slot', {
+        method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({
+          slot_id: slot.id,
+          instruction: 'regenerated from Needs review',
+          subject_override: j.proposal.subject,
+          body_md_override: j.proposal.body_md,
+        }),
+      });
+      if (!rr.ok) { setMsg(`Save failed: ${await rr.text()}`); return; }
+      const updated: SlotRow = {
+        ...slot,
+        subject: j.proposal.subject,
+        body_md: j.proposal.body_md,
+        status: 'refined',
+        updated_at: new Date().toISOString(),
+      };
+      setSlots(prev => prev.map(x => x.id===slot.id ? updated : x));
+      setMsg('Slot regenerated.');
+    } finally { setBusy(''); setTimeout(()=>setMsg(''), 2500); }
+  }
+
   async function bulkAccept(schedule: boolean) {
     setBusy('bulk');
     try {
@@ -332,14 +381,28 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
               {needsReview.slice(0, 8).map(s => {
                 const c = STATUS_BADGE[s.status];
                 return (
-                  <button key={s.id} onClick={()=>{ setDrawerSlot(s); setRefineText(''); }}
-                    style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', border:`1px solid ${HAIR}`, borderRadius:4, background:'#FFFFFF', textAlign:'left', cursor:'pointer', fontFamily:'inherit' }}>
+                  <div key={s.id}
+                    style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', border:`1px solid ${HAIR}`, borderRadius:4, background:'#FFFFFF' }}>
                     <span style={{ display:'inline-block', width:8, height:8, borderRadius:2, background:colorForSlot(s), border:`1px solid ${HAIR}`, flexShrink:0 }} />
                     <span style={{ fontSize:11, color:INK_M, minWidth:70 }}>{fmtDate(s.slot_date)}</span>
-                    <span style={{ fontSize:12, fontWeight:500, color:INK, flex:1 }}>{s.title}</span>
+                    <button type="button" onClick={()=>{ setDrawerSlot(s); setRefineText(''); }}
+                      title="Open slot"
+                      style={{ fontSize:12, fontWeight:500, color:INK, flex:1, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
+                      {s.title}
+                    </button>
                     <span style={{ fontSize:10, color:INK_M }}>{labelForSlot(s)}</span>
                     <span style={{ padding:'2px 8px', fontSize:10, fontWeight:600, borderRadius:10, background:c.bg, color:c.fg, border:`1px solid ${c.brd}` }}>{s.status}</span>
-                  </button>
+                    <button type="button" onClick={()=>regenerateSlot(s)} disabled={busy!==''}
+                      title="AI regenerate subject + body"
+                      style={{ padding:'4px 8px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:PRIMARY, border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer' }}>
+                      ✨ Regenerate
+                    </button>
+                    <button type="button" onClick={()=>rejectSlot(s)} disabled={busy!==''}
+                      title="Dismiss — mark as skipped, won't be sent"
+                      style={{ padding:'4px 8px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#8A2419', border:`1px solid #E8B7AB`, borderRadius:4, cursor:'pointer' }}>
+                      🗑 Dismiss
+                    </button>
+                  </div>
                 );
               })}
             </div>
