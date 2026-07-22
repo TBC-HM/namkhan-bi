@@ -42,7 +42,24 @@ async function handle(req: Request) {
 
   const results: Array<{ group_slug: string; inserted?: number; error?: string; skipped?: boolean }> = [];
 
+  // Per-group email policies · load once, use to gate broadcast generation.
+  // If a group's policy allowed_kinds excludes 'broadcast', we skip it here (its
+  // emails are lifecycle-only · they get enqueued by fn_enqueue_relative_recipients
+  // and don't need calendar slots).
+  const { data: policyRows } = await sb
+    .from('v_group_email_policy').select('group_slug, allowed_kinds');
+  const policyByGroup = new Map<string, string[]>();
+  for (const p of (policyRows as Array<{ group_slug: string; allowed_kinds: string[] }> | null) ?? []) {
+    policyByGroup.set(p.group_slug, p.allowed_kinds ?? []);
+  }
+
   for (const g of groups) {
+    // Skip if the group's policy forbids broadcast (autopilot only creates broadcast slots).
+    const allowed = policyByGroup.get(g.slug);
+    if (allowed && allowed.length > 0 && !allowed.includes('broadcast')) {
+      results.push({ group_slug: g.slug, skipped: true }); continue;
+    }
+
     // Skip if the group has no active goals at all (per-group override where every weight=0
     // AND no global fallback that reaches non-zero for it). Cheap check via v_director_goals.
     const { data: goalCheck } = await sb
