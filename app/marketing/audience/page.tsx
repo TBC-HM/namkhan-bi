@@ -64,10 +64,10 @@ export default async function AudienceUnifiedPage({ searchParams }: PageProps) {
   // Authoritative tile counts — bypasses the row cap so tiles never look stale.
   const tilesQ = await sb
     .from('v_marketing_audience_tiles')
-    .select('total_subs, mailable, guests, returning_guests, dmc, responders, prospects, purged_bounced, purged_unsubscribed')
+    .select('total_subs, mailable, guests_sea, guests_int, returning_guests, dmc, responders, prospects, purged_bounced, purged_unsubscribed')
     .maybeSingle();
   const initialTiles: AudienceTiles = (tilesQ.data as AudienceTiles) ?? {
-    total_subs: 0, mailable: 0, guests: 0, returning_guests: 0,
+    total_subs: 0, mailable: 0, guests_sea: 0, guests_int: 0, returning_guests: 0,
     dmc: 0, responders: 0, prospects: 0,
     purged_bounced: 0, purged_unsubscribed: 0,
   };
