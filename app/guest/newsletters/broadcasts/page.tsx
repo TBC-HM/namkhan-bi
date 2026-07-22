@@ -93,7 +93,9 @@ export default async function BroadcastsPage() {
   const subtitle = `${totalDrafts} draft${totalDrafts===1?'':'s'} · ${totalScheduled} scheduled — grouped by audience segment.`;
 
   // Preserve group order from subscriber_groups (sort_order), then always append Unassigned last
-  const orderedGroups = groups.filter(g => byGroup.has(g.slug));
+  // PBS 2026-07-22 late-EOD · render EVERY subscriber_group as a box (empty when no drafts).
+  // Add/remove a group in Settings → box appears/vanishes here on next render.
+  const orderedGroups = groups;
   const unassigned = byGroup.get('__unassigned__');
 
   return (
