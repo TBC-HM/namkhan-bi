@@ -10,8 +10,25 @@
 // the top group multi-select filter with UNASSIGNED sentinel and dismissible chips.
 // Also extends AudienceTiles with purged_bounced + purged_unsubscribed so the tile
 // row shows the auto-purge status alongside the mailable universe.
+//
+// 2026-07-22 · Newsletter Module §12 backlog items 8 + 1 (course-corrected).
+//   Item 8 (real bug): dropdown counts + group-filter membership both worked
+//     off the 1000-row initial payload (PostgREST db-max-rows cap). Screenshot
+//     showed Guests=1000 (capped), Returning=59, OTA Traveller=2, and picking
+//     DMC Contracted (13 real members, all past row 1000) returned zero rows.
+//     Fix (a) dropdown labels + tile-adjacent counts now prefer
+//     v_subscriber_groups.member_count (DB truth) over the client-derived
+//     groupCounts fallback; (b) selecting a real group triggers a scoped
+//     browser-anon fetch against v_marketing_audience with groups=cs.{slug}
+//     so DMC members that live past row 1000 are pulled into the view.
+//     Server pagination stays as-is — no 4,384-row client load.
+//   Item 1: per-row Newsletter + Sequence action buttons. Each opens a small
+//     Drawer picker for scheduled campaigns / active funnels. Enrollment RPCs
+//     are TODO (fn_campaign_recipient_add_one + fn_funnel_enroll_one) —
+//     buttons currently console.log the intent.
 
-import { useCallback, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { Drawer } from '@/app/(cockpit)/_design';
 
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
@@ -91,7 +108,16 @@ interface Props {
 export default function AudienceUnifiedClient({
   initialRows, initialGroups, initialSource, initialTab, initialTiles,
 }: Props) {
-  const [rows] = useState<AudienceRow[]>(initialRows);
+  const [rows, setRows] = useState<AudienceRow[]>(initialRows);
+  const [hydrating, setHydrating] = useState<boolean>(false);
+  const [hydrateNote, setHydrateNote] = useState<string | null>(null);
+
+  // Row-action drawer state (Item 1)
+  const [pickerOpen, setPickerOpen] = useState<null | { kind: 'newsletter' | 'sequence'; row: AudienceRow }>(null);
+  const [campaigns, setCampaigns] = useState<Array<{ campaign_id: string; name: string; subject: string | null; scheduled_at: string | null; status: string }>>([]);
+  const [funnels, setFunnels]     = useState<Array<{ funnel_id: string; funnel_key: string; name: string; status: string }>>([]);
+  const [pickerLoading, setPickerLoading] = useState<boolean>(false);
+  const [pickerError, setPickerError]     = useState<string | null>(null);
   const [groups, setGroups] = useState<GroupRow[]>(initialGroups);
   const [tab, setTab] = useState<TabKey>(initialTab);
 
@@ -117,11 +143,77 @@ export default function AudienceUnifiedClient({
   const [scrapeResult, setScrapeResult] = useState<{ok:boolean; msg:string} | null>(null);
   const [scrapeRunning, setScrapeRunning] = useState(false);
 
+  // ---- Item 8 course-correct (2026-07-22): server-scoped group-filter refetch.
+  // The old client-only architecture computes group counts + filter membership
+  // off the 1000-row initial payload (PostgREST db-max-rows). Client counts
+  // like Guests=1000, Returning=59, OTA=2 are coincidental slices of the
+  // capped 1000 rows — the real values (v_subscriber_groups.member_count) are
+  // 3154 / 299 / 59. DMC-contracted has 13 real members, none in the first
+  // 1000 rows, so the client filter shows zero.
+  //
+  // Fix: dropdown labels now read g.member_count (DB truth) first — see line
+  // where groupCounts lookup happens. When any real group filter is applied,
+  // fire a scoped PostgREST query (groups=cs.{...}) so rows that live past
+  // row 1000 come back. Loading state renders inline next to the counter.
+  useEffect(() => {
+    const realSlugs = groupFilters.filter((s) => s !== UNASSIGNED_SLUG);
+    // No real group selected → show the initial 1000-row sample.
+    if (realSlugs.length === 0) {
+      setRows(initialRows);
+      setHydrateNote(null);
+      return;
+    }
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anon) return;
+    let cancelled = false;
+    (async () => {
+      setHydrating(true);
+      setHydrateNote(null);
+      try {
+        // PostgREST array-contains-any = or=(groups.cs.{slug1},groups.cs.{slug2}, ...)
+        // For a single slug, groups=cs.{slug} is enough. Multi-slug = UNION via OR.
+        const or = realSlugs.map((s) => `groups.cs.{${s}}`).join(',');
+        const qs = realSlugs.length === 1
+          ? `groups=cs.{${realSlugs[0]}}`
+          : `or=(${or})`;
+        const r = await fetch(
+          `${url}/rest/v1/v_marketing_audience?select=*&${qs}&order=is_pinned.desc,created_at.desc.nullslast&limit=5000`,
+          { headers: { apikey: anon, Authorization: `Bearer ${anon}`, Prefer: 'count=none' } },
+        );
+        if (!r.ok) { setHydrateNote(`Group fetch failed (${r.status}).`); return; }
+        const chunk: AudienceRow[] = await r.json().catch(() => [] as AudienceRow[]);
+        if (cancelled) return;
+        if (Array.isArray(chunk)) {
+          // Merge scoped rows with initialRows so other filters (source/status/mx/query)
+          // still work over the full picture. De-dupe by audience_id.
+          const seen = new Set<string>();
+          const merged: AudienceRow[] = [];
+          for (const row of [...chunk, ...initialRows]) {
+            if (seen.has(row.audience_id)) continue;
+            seen.add(row.audience_id);
+            merged.push(row);
+          }
+          setRows(merged);
+          setHydrateNote(`Loaded ${chunk.length.toLocaleString()} group-scoped rows.`);
+        }
+      } catch (e) {
+        if (!cancelled) setHydrateNote(`Group fetch error: ${(e as Error).message}`);
+      } finally {
+        if (!cancelled) setHydrating(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [groupFilters, initialRows]);
+
   const totalCount = rows.length;
   const subCount   = useMemo(() => rows.filter(r => r.source === 'subscriber').length, [rows]);
   const proCount   = useMemo(() => rows.filter(r => r.source === 'prospect').length, [rows]);
 
-  // Per-group counts across the whole dataset (subscribers only currently carry groups)
+  // Per-group counts across the loaded rows[]. FALLBACK ONLY — the dropdown
+  // and tiles now prefer v_subscriber_groups.member_count (DB truth) because
+  // the loaded rows[] is capped by PostgREST db-max-rows at 1000 and would
+  // undercount Guests (3154), Returning Guests (299), OTA Traveller (59).
   const groupCounts = useMemo(() => {
     const m: Record<string, number> = {};
     for (const r of rows) for (const g of r.groups ?? []) m[g] = (m[g] ?? 0) + 1;
@@ -311,6 +403,70 @@ export default function AudienceUnifiedClient({
   };
   const resetGroupFilters = () => { setGroupFilters([]); setPage(0); };
 
+  // ---- Item 1: row-action picker (Newsletter + Sequence) ----
+  const openPicker = useCallback((kind: 'newsletter' | 'sequence', row: AudienceRow) => {
+    setPickerOpen({ kind, row });
+    setPickerError(null);
+    const url  = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anon) { setPickerError('Supabase env not available in browser.'); return; }
+    setPickerLoading(true);
+    (async () => {
+      try {
+        if (kind === 'newsletter') {
+          // v_guest_campaigns filtered to scheduled / draft broadcasts.
+          const r = await fetch(
+            `${url}/rest/v1/v_guest_campaigns?select=campaign_id,name,subject,scheduled_at,status,campaign_kind&or=(status.eq.scheduled,status.eq.draft)&order=scheduled_at.desc.nullslast&limit=20`,
+            { headers: { apikey: anon, Authorization: `Bearer ${anon}` } },
+          );
+          const j = await r.json().catch(() => []);
+          if (!Array.isArray(j)) { setPickerError('Failed to load campaigns.'); return; }
+          setCampaigns(j);
+        } else {
+          // v_marketing_funnels — active only.
+          const r = await fetch(
+            `${url}/rest/v1/v_marketing_funnels?select=funnel_id,funnel_key,name,status&status=eq.active&order=name.asc&limit=50`,
+            { headers: { apikey: anon, Authorization: `Bearer ${anon}` } },
+          );
+          const j = await r.json().catch(() => []);
+          if (!Array.isArray(j)) { setPickerError('Failed to load funnels.'); return; }
+          setFunnels(j);
+        }
+      } catch (e) {
+        setPickerError((e as Error).message);
+      } finally {
+        setPickerLoading(false);
+      }
+    })();
+  }, []);
+
+  const closePicker = useCallback(() => {
+    setPickerOpen(null);
+    setPickerError(null);
+    setCampaigns([]);
+    setFunnels([]);
+  }, []);
+
+  // Enroll a single audience row into a campaign draft or funnel.
+  // TODO — RPCs `fn_campaign_recipient_add_one(p_campaign_id uuid, p_audience_id text)`
+  // and `fn_funnel_enroll_one(p_funnel_key text, p_audience_id text)` do not yet
+  // exist. `guest.fn_schedule_campaign` takes text[] guest_ids (different id
+  // space) and `prospects.fn_enroll_subscriber` takes uuid subscriber_id (our
+  // subscribers table has integer ids). Wire to console.log until proposed
+  // RPCs land.
+  const enrollRow = useCallback((kind: 'newsletter' | 'sequence', row: AudienceRow, targetId: string, targetLabel: string) => {
+    // eslint-disable-next-line no-console
+    console.log('[TODO fn_*]', {
+      action: kind === 'newsletter' ? 'campaign_recipient_add_one' : 'funnel_enroll_one',
+      audience_id: row.audience_id,
+      email: row.email,
+      target_id: targetId,
+      target_label: targetLabel,
+    });
+    setMsg(`Queued ${row.email} → ${targetLabel} (dry-run: awaiting fn_${kind === 'newsletter' ? 'campaign_recipient_add_one' : 'funnel_enroll_one'} RPC).`);
+    closePicker();
+  }, [closePicker]);
+
   const resetFilters = () => {
     setSourceFilter('all'); setStatusFilter('any'); setMxFilter('any');
     setGroupFilters([]); setQuery(''); setPage(0);
@@ -486,7 +642,7 @@ export default function AudienceUnifiedClient({
                       <input type="checkbox" checked={checked} onChange={() => toggleGroupFilter(g.slug)} />
                       <span style={{ width: 8, height: 8, borderRadius: 2, background: g.color, display: 'inline-block' }} />
                       <span style={{ flex: 1 }}>{g.name}</span>
-                      <span style={{ fontSize: 10, color: INK_S }}>{groupCounts[g.slug] ?? g.member_count ?? 0}</span>
+                      <span style={{ fontSize: 10, color: INK_S }}>{g.member_count ?? groupCounts[g.slug] ?? 0}</span>
                     </label>
                   );
                 })}
@@ -534,8 +690,10 @@ export default function AudienceUnifiedClient({
             background: WHITE, color: INK, fontSize: 12, minWidth: 240,
           }}
         />
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: INK_S }}>
-          {filtered.length.toLocaleString()} rows · page {page + 1} / {totalPages}
+        <div style={{ marginLeft: 'auto', fontSize: 11, color: INK_S, display: 'flex', gap: 8, alignItems: 'center' }}>
+          {hydrating && <span style={{ color: BRAND }}>Loading group members&hellip;</span>}
+          {hydrateNote && !hydrating && <span title={hydrateNote} style={{ color: INK_S }}>&#10003; {hydrateNote}</span>}
+          <span>{filtered.length.toLocaleString()} rows &middot; page {page + 1} / {totalPages}</span>
         </div>
       </div>
 
@@ -633,10 +791,24 @@ export default function AudienceUnifiedClient({
                 <td style={tdStyle}>{fmtDate(r.opted_in_at)}</td>
                 <td style={tdStyle}>{fmtDate(r.created_at)}</td>
                 <td style={tdStyle}>
-                  <a href={`/marketing/prospects/sequences?email=${encodeURIComponent(r.email)}`}
-                     style={{ fontSize: 11, color: BRAND, textDecoration: 'none' }}>
-                    → Sequence
-                  </a>
+                  <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => openPicker('newsletter', r)}
+                      title="Enroll into a scheduled newsletter draft"
+                      style={rowBtnStyle}
+                    >&#9993; Newsletter</button>
+                    <button
+                      type="button"
+                      onClick={() => openPicker('sequence', r)}
+                      title="Enroll into an active sequence funnel"
+                      style={rowBtnStyle}
+                    >&#9863; Sequence</button>
+                    <a href={`/marketing/prospects/sequences?email=${encodeURIComponent(r.email)}`}
+                       style={{ fontSize: 11, color: BRAND, textDecoration: 'none' }}>
+                      &rarr;
+                    </a>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -657,6 +829,64 @@ export default function AudienceUnifiedClient({
           <button style={btnStyle} disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>Next →</button>
         </div>
       )}
+
+      {/* Row-action pickers (Item 1) */}
+      <Drawer
+        open={pickerOpen?.kind === 'newsletter'}
+        onClose={closePicker}
+        title="Add to newsletter"
+        subtitle={pickerOpen ? `${pickerOpen.row.email} · pick a scheduled or draft campaign` : undefined}
+        width="sm"
+      >
+        {pickerLoading && <p style={{ fontSize: 12, color: INK_S }}>Loading campaigns&hellip;</p>}
+        {pickerError && <p style={{ fontSize: 12, color: '#B04A2F' }}>{pickerError}</p>}
+        {!pickerLoading && !pickerError && campaigns.length === 0 && (
+          <p style={{ fontSize: 12, color: INK_S }}>No draft or scheduled campaigns found.</p>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {campaigns.map((c) => (
+            <button
+              key={c.campaign_id}
+              type="button"
+              onClick={() => pickerOpen && enrollRow('newsletter', pickerOpen.row, c.campaign_id, c.name || c.subject || c.campaign_id)}
+              style={pickerRowStyle}
+            >
+              <div style={{ fontSize: 12, fontWeight: 600, color: INK }}>{c.name || '(untitled)'}</div>
+              <div style={{ fontSize: 11, color: INK_S }}>
+                {c.subject || '(no subject)'} &middot; {c.status}
+                {c.scheduled_at ? ` · ${new Date(c.scheduled_at).toISOString().slice(0,10)}` : ''}
+              </div>
+            </button>
+          ))}
+        </div>
+      </Drawer>
+
+      <Drawer
+        open={pickerOpen?.kind === 'sequence'}
+        onClose={closePicker}
+        title="Enroll in sequence"
+        subtitle={pickerOpen ? `${pickerOpen.row.email} · pick an active funnel` : undefined}
+        width="sm"
+      >
+        {pickerLoading && <p style={{ fontSize: 12, color: INK_S }}>Loading funnels&hellip;</p>}
+        {pickerError && <p style={{ fontSize: 12, color: '#B04A2F' }}>{pickerError}</p>}
+        {!pickerLoading && !pickerError && funnels.length === 0 && (
+          <p style={{ fontSize: 12, color: INK_S }}>No active funnels found.</p>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {funnels.map((f) => (
+            <button
+              key={f.funnel_id}
+              type="button"
+              onClick={() => pickerOpen && enrollRow('sequence', pickerOpen.row, f.funnel_key, f.name || f.funnel_key)}
+              style={pickerRowStyle}
+            >
+              <div style={{ fontSize: 12, fontWeight: 600, color: INK }}>{f.name || f.funnel_key}</div>
+              <div style={{ fontSize: 11, color: INK_S }}>{f.funnel_key} &middot; {f.status}</div>
+            </button>
+          ))}
+        </div>
+      </Drawer>
 
       {/* silence unused warnings */}
       <span style={{ display: 'none' }}>{String(tab)}{String(setTab)}</span>
@@ -684,6 +914,18 @@ const btnStyle: React.CSSProperties = {
 const selectStyle: React.CSSProperties = { ...btnStyle, background: WHITE };
 const thStyle: React.CSSProperties = { padding: '8px 10px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: INK_S, borderBottom: `1px solid ${HAIR}` };
 const tdStyle: React.CSSProperties = { padding: '8px 10px', verticalAlign: 'top' };
+// Row-action buttons (Item 1) — compact so Actions column still fits.
+const rowBtnStyle: React.CSSProperties = {
+  padding: '3px 6px', fontSize: 10, cursor: 'pointer',
+  background: WHITE, color: INK, border: `1px solid ${HAIR}`, borderRadius: 3,
+  whiteSpace: 'nowrap',
+};
+// Picker row inside the Drawer — full-width clickable card.
+const pickerRowStyle: React.CSSProperties = {
+  display: 'block', width: '100%', textAlign: 'left',
+  padding: '8px 10px', background: WHITE, color: INK,
+  border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer',
+};
 
 // TileCompact — small headline tile (22px number, 10px uppercase label).
 // Renders authoritative DB counts above the derived KpiCell strip.
