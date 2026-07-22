@@ -23,7 +23,7 @@ async function callAnthropic(system: string, userPrompt: string): Promise<{ subj
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-7',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1800,
       system,
       messages: [{ role: 'user', content: userPrompt }],
