@@ -1,4 +1,3 @@
-'use server';
 // app/guest/newsletters/lifecycle/page.tsx
 // PBS 2026-07-22 EOD · Group-boxed layout — one visual box per group.
 // Real Guest bucket first (group_slug=NULL), then OTA Traveller + any others with rows.
