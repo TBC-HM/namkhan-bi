@@ -19,7 +19,9 @@ export const maxDuration = 120;
 
 const NAMKHAN_ID = 260955;
 const HORIZON_DAYS = 30;
-const DEFAULT_CADENCE_PER_WEEK = 1.0;
+const DEFAULT_CADENCE_PER_MONTH = 4.0;
+// generate-plan expects cadence_per_week; convert per-month → per-week (÷ 4.33).
+const WEEKS_PER_MONTH = 4.33;
 
 async function handle(req: Request) {
   const url = new URL(req.url);
@@ -28,11 +30,11 @@ async function handle(req: Request) {
 
   const sb = getSupabaseAdmin();
 
-  // Groups to plan for (skip parent-only / archived slugs). Cadence is per-group.
+  // Groups to plan for (skip parent-only / archived slugs). Cadence is per-group (per month).
   const { data: groupRows, error: gErr } = await sb
-    .from('v_subscriber_groups').select('slug, name, newsletter_cadence_per_week').order('sort_order', { nullsFirst: false });
+    .from('v_subscriber_groups').select('slug, name, newsletter_cadence_per_month').order('sort_order', { nullsFirst: false });
   if (gErr) return NextResponse.json({ ok: false, error: gErr.message }, { status: 500 });
-  const groups = (groupRows as Array<{ slug: string; name: string; newsletter_cadence_per_week: number | string | null }> | null) ?? [];
+  const groups = (groupRows as Array<{ slug: string; name: string; newsletter_cadence_per_month: number | string | null }> | null) ?? [];
 
   const start = new Date();
   const end   = new Date(start.getTime() + HORIZON_DAYS * 24 * 3600 * 1000);
@@ -52,10 +54,11 @@ async function handle(req: Request) {
 
     if (dry) { results.push({ group_slug: g.slug, skipped: true }); continue; }
 
-    const cadence = Number(g.newsletter_cadence_per_week ?? DEFAULT_CADENCE_PER_WEEK);
-    if (!Number.isFinite(cadence) || cadence <= 0) {
+    const perMonth = Number(g.newsletter_cadence_per_month ?? DEFAULT_CADENCE_PER_MONTH);
+    if (!Number.isFinite(perMonth) || perMonth <= 0) {
       results.push({ group_slug: g.slug, skipped: true }); continue;
     }
+    const cadencePerWeek = perMonth / WEEKS_PER_MONTH;
 
     // Fire the same generate-plan route so logic stays single-sourced.
     try {
@@ -65,7 +68,7 @@ async function handle(req: Request) {
           property_id: NAMKHAN_ID,
           start_date: ymd(start),
           end_date: ymd(end),
-          cadence_per_week: cadence,
+          cadence_per_week: cadencePerWeek,
           group_slug: g.slug,
           regenerate_empty_only: true,
         }),
