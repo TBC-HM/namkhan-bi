@@ -82,15 +82,20 @@ export default async function LifecyclePage({ propertyId }: PageProps = {}) {
   const retCount = memCount('returning-guests');
   const realTotal = seaCount + intCount + retCount;
 
-  // bucket rows by group_slug ('__real__' = NULL bucket)
+  // Bucket rows.
+  //  · `__annual__` = big-mailings (Happy NY, Sabaidee Pi Mai) — separated from per-group boxes.
+  //  · `__real__`   = NULL group_slug, non-annual (Real Guest lifecycle).
+  //  · else         = subscriber group slug.
   const byGroup = new Map<string, CampaignRow[]>();
   for (const r of rows) {
-    const key = r.group_slug ?? '__real__';
+    const key = r.relative_kind === 'annual' ? '__annual__' : (r.group_slug ?? '__real__');
     (byGroup.get(key) ?? byGroup.set(key, []).get(key)!).push(r);
   }
 
-  // canonical order: Real Guest bucket first, then subscriber_groups by sort_order
+  // canonical order: Annual big-mailings first (if any), then Real Guest, then subscriber_groups by sort_order
+  const annualRows = byGroup.get('__annual__') ?? [];
   const boxOrder: GroupMeta[] = [
+    ...(annualRows.length > 0 ? [{ slug: '__annual__', name: 'Annual big-mailings · calendar-recurring', color: '#B48A3A', sort_order: -2 }] : []),
     { slug: '__real__', name: 'Real Guest', color: '#4A6A3A', sort_order: -1 },
     ...groups,
   ];
