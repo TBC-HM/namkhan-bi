@@ -1,4 +1,11 @@
 // app/marketing/social/page.tsx
+// PBS 2026-07-23: (1) Removed YouTube (owns its own area under /marketing/digital)
+//                 and Threads (not used) from the platform strip.
+//                 (2) Added Google Business Profile as a first-class LIVE channel
+//                     that clicks through to /marketing/social/google-business.
+//                 (3) Every other platform card renders a "Coming soon" pill and
+//                     no click-through — kept in view so PBS can prioritise which
+//                     platform to wire next once analytics APIs are approved.
 // PBS 2026-07-05: Migrated to new paper-white design (DashboardPage + KpiTile
 // + MARKETING_SUBPAGES tabs). Live data: marketing.social_accounts via
 // getSocialAccounts(). Everything else (proposed posts, concept flow, boost
@@ -27,16 +34,30 @@ const AMBER  = '#C28F2C';
 
 // ─── Platforms ────────────────────────────────────────────────────────────
 
-const PLATFORMS = ['instagram', 'pinterest', 'tiktok', 'youtube', 'facebook', 'linkedin', 'threads', 'x'] as const;
+// PBS 2026-07-23: YouTube removed (owns /marketing/digital); Threads removed (not used).
+// google_business is the ONLY platform with a live landing page right now.
+const PLATFORMS = ['google_business', 'instagram', 'pinterest', 'tiktok', 'facebook', 'linkedin', 'x'] as const;
 type Platform = (typeof PLATFORMS)[number];
 
+// Which platforms have a real landing page today. Others render "Coming soon".
+const LIVE_PLATFORMS = new Set<Platform>(['google_business']);
+
 const PLATFORM_LABEL: Record<Platform, string> = {
-  instagram: 'Instagram', pinterest: 'Pinterest', tiktok: 'TikTok', youtube: 'YouTube',
-  facebook: 'Facebook',   linkedin: 'LinkedIn',   threads: 'Threads', x: 'X / Twitter',
+  google_business: 'Google Business Profile',
+  instagram: 'Instagram', pinterest: 'Pinterest', tiktok: 'TikTok',
+  facebook: 'Facebook',   linkedin: 'LinkedIn',   x: 'X / Twitter',
 };
 const PLATFORM_GLYPH: Record<Platform, string> = {
-  instagram: 'IG', pinterest: 'PI', tiktok: 'TT', youtube: 'YT',
-  facebook: 'FB', linkedin: 'LI', threads: 'TH', x: 'X',
+  google_business: 'GBP',
+  instagram: 'IG', pinterest: 'PI', tiktok: 'TT',
+  facebook: 'FB', linkedin: 'LI', x: 'X',
+};
+// URL slug used on the [platform] detail route (no landing yet for placeholder ones,
+// but the sub-route uses these slugs).
+const PLATFORM_SLUG: Record<Platform, string> = {
+  google_business: 'google-business',
+  instagram: 'instagram', pinterest: 'pinterest', tiktok: 'tiktok',
+  facebook: 'facebook', linkedin: 'linkedin', x: 'x',
 };
 
 // ─── ICPs ─────────────────────────────────────────────────────────────────
@@ -82,20 +103,20 @@ function buildProposedPosts(): ProposedPost[] {
     { offset: -10, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',   brief: '4am river silence',           hook: 'Why monks sweep at 4am',         status: 'Published', reach: 38_200, saves: 1240, engagement: '8.4%' },
     { offset:  -9, platform: 'pinterest', format: 'Photo',    icp: 'EU Wellness Women',   brief: 'Spa massage · brass + linen', hook: 'A ritual older than Europe',     status: 'Published', reach: 22_400, saves:  890, engagement: '6.1%' },
     { offset:  -7, platform: 'tiktok',    format: 'Reel',     icp: 'Luxury Couples',      brief: 'Candle dinner on the deck',   hook: 'Found the only river restaurant', status: 'Published', reach: 91_300, saves: 2780, engagement: '11.2%' },
-    { offset:  -6, platform: 'youtube',   format: 'YT Short', icp: 'Mystique Explorers',  brief: '60s walk through Wat Xieng',  hook: '4am temple sweep',               status: 'Published', reach: 14_800, saves:  340, engagement: '5.2%' },
+    { offset:  -6, platform: 'instagram', format: 'Reel',     icp: 'Mystique Explorers',  brief: '60s walk through Wat Xieng',  hook: '4am temple sweep',               status: 'Published', reach: 14_800, saves:  340, engagement: '5.2%' },
     { offset:  -4, platform: 'instagram', format: 'Carousel', icp: 'Conscious Food',      brief: '6-card foraging trip',        hook: 'Galangal harvest at dawn',       status: 'Published', reach: 28_900, saves: 1480, engagement: '9.7%' },
     { offset:  -3, platform: 'pinterest', format: 'Photo',    icp: 'Mystique Explorers',  brief: 'Saffron robes · golden hour', hook: 'Quiet wonder',                   status: 'Published', reach: 19_200, saves:  720, engagement: '5.8%' },
-    { offset:  -2, platform: 'youtube',   format: 'YT Long',  icp: 'Conscious Food',      brief: '8-min farm-to-table docu',    hook: 'Where dinner walks before dawn', status: 'Published', reach: 42_100, saves: 1850, engagement: '12.4%' },
+    { offset:  -2, platform: 'instagram', format: 'Carousel', icp: 'Conscious Food',      brief: '8-min farm-to-table docu',    hook: 'Where dinner walks before dawn', status: 'Published', reach: 42_100, saves: 1850, engagement: '12.4%' },
     { offset:  -1, platform: 'instagram', format: 'Reel',     icp: 'Digital Detox EU',    brief: 'Phone in a drawer 3 days',    hook: 'Your brain on no Wi-Fi',         status: 'Published', reach: 31_700, saves:  990, engagement: '7.9%' },
     { offset:  1, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',  brief: 'Spa morning prep · BTS',          hook: 'Spa morning prep',                              status: 'Awaiting Approval' },
     { offset:  1, platform: 'pinterest', format: 'Photo',    icp: 'EU Wellness Women',  brief: 'Brass coffee service still',      hook: 'Slow mornings still exist',                     status: 'Scheduled' },
     { offset:  2, platform: 'tiktok',    format: 'Reel',     icp: 'Luxury Couples',     brief: 'Sunset boat ride · slow-mo',      hook: 'One boat, one couple, one river',               status: 'Approved' },
-    { offset:  2, platform: 'youtube',   format: 'YT Short', icp: 'Mystique Explorers', brief: 'Almsgiving ceremony 60s',         hook: '4am gold of Luang Prabang',                     status: 'Draft' },
+    { offset:  2, platform: 'instagram', format: 'Reel',     icp: 'Mystique Explorers', brief: 'Almsgiving ceremony 60s',         hook: '4am gold of Luang Prabang',                     status: 'Draft' },
     { offset:  3, platform: 'instagram', format: 'Carousel', icp: 'Conscious Food',     brief: '6-card herb-garden trip',         hook: 'Wild ginger at 6am',                            status: 'Awaiting Approval' },
     { offset:  3, platform: 'pinterest', format: 'Photo',    icp: 'Luxury Couples',     brief: 'Suite balcony · sunset',          hook: "A view that doesn't exist on Booking.com",     status: 'Scheduled' },
     { offset:  4, platform: 'tiktok',    format: 'Reel',     icp: 'Digital Detox EU',   brief: '3-day phone-fast testimonial',    hook: 'I left my phone in Frankfurt',                  status: 'Awaiting Approval' },
     { offset:  4, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',  brief: 'Herbal tea morning ritual',       hook: 'Morning silence is the new luxury',             status: 'Reality Flag' },
-    { offset:  5, platform: 'youtube',   format: 'YT Long',  icp: 'Conscious Food',     brief: '12-min foraging documentary',     hook: 'Where the chef walks at dawn',                  status: 'Draft' },
+    { offset:  5, platform: 'instagram', format: 'Carousel', icp: 'Conscious Food',     brief: '12-min foraging documentary',     hook: 'Where the chef walks at dawn',                  status: 'Draft' },
     { offset:  6, platform: 'instagram', format: 'Reel',     icp: 'Asia Source Markets',brief: 'Songkran water blessing · TH VO', hook: 'น้ำพร — water blessing in Laos',               status: 'Awaiting Approval' },
     { offset:  6, platform: 'linkedin',  format: 'Photo',    icp: 'Yoga Teachers · B2B',brief: 'Host-your-retreat deck cover',     hook: 'A 7-room retreat is easier than you think',     status: 'Approved' },
     { offset:  7, platform: 'tiktok',    format: 'Reel',     icp: 'EU Wellness Women',  brief: 'Full moon ceremony montage',       hook: 'The moon over the Namkhan',                     status: 'Scheduled' },
@@ -103,10 +124,10 @@ function buildProposedPosts(): ProposedPost[] {
     { offset:  9, platform: 'pinterest', format: 'Photo',    icp: 'Conscious Food',     brief: 'Fermentation jars · clay + brass', hook: 'Slow fermentation, fast taste',                 status: 'Scheduled' },
     { offset: 10, platform: 'tiktok',    format: 'Reel',     icp: 'Digital Detox EU',   brief: 'Hammock + river + silence',        hook: '3 minutes of nothing',                          status: 'Approved' },
     { offset: 11, platform: 'instagram', format: 'Reel',     icp: 'Luxury Couples',     brief: 'Brass coffee service slow-mo',     hook: 'Slow mornings still exist',                     status: 'Scheduled' },
-    { offset: 12, platform: 'youtube',   format: 'YT Long',  icp: 'Mystique Explorers', brief: '12-min heritage walk',             hook: 'A living UNESCO museum',                        status: 'Draft' },
+    { offset: 12, platform: 'instagram', format: 'Reel',     icp: 'Mystique Explorers', brief: '12-min heritage walk',             hook: 'A living UNESCO museum',                        status: 'Draft' },
     { offset: 14, platform: 'facebook',  format: 'Carousel', icp: 'Asia Source Markets',brief: 'Lao culinary trail · 8 stops',     hook: '8 dishes you only find here',                   status: 'Approved' },
     { offset: 16, platform: 'instagram', format: 'Carousel', icp: 'Luxury Couples',     brief: 'Anniversary package · 8 cards',    hook: "The 10-year anniversary that wasn't Paris",     status: 'Scheduled' },
-    { offset: 18, platform: 'youtube',   format: 'YT Short', icp: 'Asia Source Markets',brief: 'JP-narrated welcome ritual',       hook: 'ラオスの朝',                                    status: 'Awaiting Approval' },
+    { offset: 18, platform: 'tiktok',    format: 'Reel',     icp: 'Asia Source Markets',brief: 'JP-narrated welcome ritual',       hook: 'ラオスの朝',                                    status: 'Awaiting Approval' },
     { offset: 19, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',  brief: 'Sound bath under stars',           hook: 'Silence is a sound too',                        status: 'Approved' },
     { offset: 20, platform: 'tiktok',    format: 'Reel',     icp: 'Mystique Explorers', brief: 'Lao alphabet hand-lettering',      hook: 'How Lao writes the river',                      status: 'Scheduled' },
     { offset: 22, platform: 'pinterest', format: 'Photo',    icp: 'EU Wellness Women',  brief: 'Yoga deck overlooking the river',  hook: 'A studio without walls',                        status: 'Scheduled' },
@@ -115,13 +136,13 @@ function buildProposedPosts(): ProposedPost[] {
     { offset: 32, platform: 'instagram', format: 'Reel',     icp: 'Luxury Couples',     brief: 'Private river dinner',            hook: 'One table, one river, one night',               status: 'Draft' },
     { offset: 35, platform: 'pinterest', format: 'Photo',    icp: 'Conscious Food',     brief: 'Garden harvest still-life',        hook: "Today's dinner walked at sunrise",             status: 'Draft' },
     { offset: 38, platform: 'tiktok',    format: 'Reel',     icp: 'Mystique Explorers', brief: 'Monk almsgiving extended cut',      hook: 'The 4am gold extended',                         status: 'Draft' },
-    { offset: 41, platform: 'youtube',   format: 'YT Long',  icp: 'EU Wellness Women',  brief: '15-min retreat-day documentary',    hook: 'A day at the Namkhan',                          status: 'Draft' },
+    { offset: 41, platform: 'instagram', format: 'Carousel', icp: 'EU Wellness Women',  brief: '15-min retreat-day documentary',    hook: 'A day at the Namkhan',                          status: 'Draft' },
     { offset: 45, platform: 'instagram', format: 'Carousel', icp: 'Asia Source Markets',brief: 'Lao-script hospitality cards · TH', hook: 'Hospitality in Lao',                            status: 'Draft' },
     { offset: 49, platform: 'instagram', format: 'Reel',     icp: 'Digital Detox EU',   brief: 'Sunrise without alarms',           hook: 'The body still knows',                          status: 'Draft' },
     { offset: 52, platform: 'linkedin',  format: 'Photo',    icp: 'Yoga Teachers · B2B',brief: 'Retreat layout · floorplan',        hook: 'How 14 retreats ran here last year',            status: 'Draft' },
     { offset: 56, platform: 'pinterest', format: 'Photo',    icp: 'Luxury Couples',     brief: 'Candle-lit suite at dusk',          hook: 'A room that knows the river',                   status: 'Draft' },
     { offset: 62, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',  brief: 'Spa ritual chain · slow',          hook: 'Six rituals in one morning',                    status: 'Draft' },
-    { offset: 66, platform: 'youtube',   format: 'YT Short', icp: 'Mystique Explorers', brief: 'Sunset boat on the Nam Khan',       hook: 'Where the river turns gold',                    status: 'Draft' },
+    { offset: 66, platform: 'tiktok',    format: 'Reel',     icp: 'Mystique Explorers', brief: 'Sunset boat on the Nam Khan',       hook: 'Where the river turns gold',                    status: 'Draft' },
     { offset: 70, platform: 'pinterest', format: 'Photo',    icp: 'Conscious Food',     brief: 'Wild-honey breakfast still',        hook: 'Honey from the temple beekeeper',                status: 'Draft' },
     { offset: 75, platform: 'instagram', format: 'Carousel', icp: 'Luxury Couples',     brief: 'Anniversary package · refined',     hook: 'An anniversary worth telling',                  status: 'Draft' },
     { offset: 80, platform: 'facebook',  format: 'Carousel', icp: 'Asia Source Markets',brief: 'Wellness in Lao · TH-narrated',     hook: 'การพักผ่อนแบบลาว',                              status: 'Draft' },
@@ -146,13 +167,12 @@ interface ChannelMeta {
 }
 
 const CHANNEL_META: Record<Platform, ChannelMeta> = {
+  google_business: { platform: 'google_business', followers: 0, growth30d: '—', engagementRate: '—', postsMtd: 0, bestPost: { hook: '—', reach: 0, engagement: '—' }, autonomyPhase: 'A', frequencyCap: 'max 2 posts/wk · reviews replied within 24h', bannedTopics: ['none'] },
   instagram: { platform: 'instagram', followers: 28_400, growth30d: '+4.8%', engagementRate: '7.2%', postsMtd: 14, bestPost: { hook: 'Why monks sweep at 4am', reach: 38_200, engagement: '8.4%' }, autonomyPhase: 'A', frequencyCap: 'max 1/day · min 18h gap', bannedTopics: ['political', 'religious commentary'] },
   pinterest: { platform: 'pinterest', followers:  6_900, growth30d: '+18.4%', engagementRate: '6.1%', postsMtd: 22, bestPost: { hook: 'A ritual older than Europe', reach: 22_400, engagement: '6.1%' }, autonomyPhase: 'B', frequencyCap: 'max 3/day',          bannedTopics: ['none'] },
   tiktok:    { platform: 'tiktok',    followers: 11_200, growth30d: '+12.1%', engagementRate: '11.2%', postsMtd: 8, bestPost: { hook: 'Found the only river restaurant', reach: 91_300, engagement: '11.2%' }, autonomyPhase: 'A', frequencyCap: 'max 1/day',          bannedTopics: ['trend lip-sync · off-brand'] },
-  youtube:   { platform: 'youtube',   followers:  4_800, growth30d: '+6.2%',  engagementRate: '5.8%',  postsMtd: 4, bestPost: { hook: 'Where dinner walks before dawn', reach: 42_100, engagement: '12.4%' }, autonomyPhase: 'A', frequencyCap: 'max 2 shorts + 1 long/wk', bannedTopics: ['unscripted talking-head'] },
   facebook:  { platform: 'facebook',  followers: 18_700, growth30d: '+0.4%',  engagementRate: '1.8%',  postsMtd: 6, bestPost: { hook: '8 dishes you only find here', reach: 12_400, engagement: '2.1%' }, autonomyPhase: 'B', frequencyCap: 'max 3/wk',          bannedTopics: ['none'] },
   linkedin:  { platform: 'linkedin',  followers:  1_200, growth30d: '+11.0%', engagementRate: '4.4%',  postsMtd: 5, bestPost: { hook: 'A 7-room retreat is easier than you think', reach: 6_200, engagement: '5.7%' }, autonomyPhase: 'A', frequencyCap: 'max 2/wk',          bannedTopics: ['leisure tone'] },
-  threads:   { platform: 'threads',   followers:    480, growth30d: '+62.0%', engagementRate: '9.4%',  postsMtd: 9, bestPost: { hook: 'Slow mornings still exist', reach: 3_400, engagement: '9.4%' }, autonomyPhase: 'C', frequencyCap: 'max 3/day',          bannedTopics: ['none'] },
   x:         { platform: 'x',         followers:    310, growth30d: '+1.2%',  engagementRate: '0.9%',  postsMtd: 0, bestPost: { hook: '—', reach: 0, engagement: '—' }, autonomyPhase: 'A', frequencyCap: 'paused',         bannedTopics: ['all · channel paused'] },
 };
 
@@ -173,7 +193,7 @@ interface BoostCandidate {
 
 const BOOST_CANDIDATES: BoostCandidate[] = [
   { hook: 'Found the only river restaurant', platform: 'tiktok',    organicReach: 91_300, organicEngagement: '11.2%', signal: 'Top 1% organic · viral coefficient 1.4 · 312 shares', proposedBudget: '$240 · 7 days',  projectedReach: '480k–720k',  projectedCpe: '$0.04', icp: 'Luxury Couples',    verdict: 'Strong Boost' },
-  { hook: 'Where dinner walks before dawn',  platform: 'youtube',   organicReach: 42_100, organicEngagement: '12.4%', signal: 'Top 5% YT · long retention (74%) · saves up',       proposedBudget: '$180 · TrueView', projectedReach: '95k–140k',   projectedCpe: '$0.18', icp: 'Conscious Food',    verdict: 'Strong Boost' },
+  { hook: 'Where dinner walks before dawn',  platform: 'instagram', organicReach: 42_100, organicEngagement: '12.4%', signal: 'Top 5% carousel · long retention (74%) · saves up', proposedBudget: '$180 · Boost',    projectedReach: '95k–140k',   projectedCpe: '$0.18', icp: 'Conscious Food',    verdict: 'Strong Boost' },
   { hook: 'Why monks sweep at 4am',          platform: 'instagram', organicReach: 38_200, organicEngagement: '8.4%',  signal: 'Saves climbing · DM intent · 4 booking clicks',     proposedBudget: '$120 · 5 days',   projectedReach: '180k–260k',  projectedCpe: '$0.07', icp: 'EU Wellness Women', verdict: 'Strong Boost' },
   { hook: 'Galangal harvest at dawn',        platform: 'instagram', organicReach: 28_900, organicEngagement: '9.7%',  signal: 'Strong saves · weak DMs · needs CTA tweak',         proposedBudget: '$80 · A/B test',  projectedReach: '90k–130k',   projectedCpe: '$0.09', icp: 'Conscious Food',    verdict: 'Moderate Boost' },
   { hook: 'Your brain on no Wi-Fi',          platform: 'instagram', organicReach: 31_700, organicEngagement: '7.9%',  signal: 'High reach · low booking-page clicks',              proposedBudget: '—',               projectedReach: '—',           projectedCpe: '—',     icp: 'Digital Detox EU',  verdict: 'Test First' },
@@ -187,7 +207,7 @@ type ConceptColumn = 'Idea' | 'Briefed' | 'Generated' | 'Reality-checked' | 'App
 
 const CONCEPT_CARDS: ConceptCard[] = [
   { hook: 'Monsoon arrives — green explosion',        platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',   column: 'Idea' },
-  { hook: 'Bee-keeper monk at sunrise',               platform: 'youtube',   format: 'YT Short', icp: 'Mystique Explorers',  column: 'Idea' },
+  { hook: 'Bee-keeper monk at sunrise',               platform: 'instagram', format: 'Reel',     icp: 'Mystique Explorers',  column: 'Idea' },
   { hook: 'Solo female detox — 5 days',               platform: 'tiktok',    format: 'Reel',     icp: 'Digital Detox EU',    column: 'Idea' },
   { hook: 'Why monks sweep at 4am',                   platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',   column: 'Briefed' },
   { hook: 'Galangal harvest at dawn',                 platform: 'instagram', format: 'Carousel', icp: 'Conscious Food',      column: 'Briefed' },
@@ -529,40 +549,87 @@ function ConceptFlowView() {
 function ChannelsView({ dbByPlatform }: { dbByPlatform: Map<string, any> }) {
   return (
     <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Section title="Channels · live inventory" note={`${PLATFORMS.length} platforms · marketing.social_accounts`}>
+      <Section title="Channels · live inventory" note={`${PLATFORMS.length} platforms · google business live · rest coming soon`}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
           {PLATFORMS.map((p) => {
             const meta = CHANNEL_META[p];
+            const isLive = LIVE_PLATFORMS.has(p);
             const dbRow = dbByPlatform.get(p);
-            const liveFollowers = dbRow?.followers ?? meta.followers;
+            const liveFollowers = (dbRow?.followers ?? meta.followers) as number;
             const liveHandle = dbRow?.handle as string | undefined;
             const liveUrl = dbRow?.url as string | undefined;
+            const landingHref = isLive ? `/marketing/social/${PLATFORM_SLUG[p]}` : null;
+
+            // Two visual states:
+            //  · LIVE (currently only Google Business Profile): full card + click-through
+            //  · COMING SOON (all others): dimmed card with a "Coming soon" pill and no CTA
+            const cardStyle: React.CSSProperties = {
+              background: WHITE,
+              border: `1px solid ${HAIR}`,
+              borderRadius: 4,
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              opacity: isLive ? 1 : 0.7,
+              position: 'relative',
+            };
+
             return (
-              <div key={p} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>{PLATFORM_LABEL[p]}</span>
-                  <span style={autonomyPillSt(meta.autonomyPhase)}>Phase {meta.autonomyPhase}</span>
+              <div key={p} style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>
+                    <span style={{ fontSize: 9, color: FOREST, background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 2, padding: '1px 4px', letterSpacing: '0.08em', marginRight: 6, verticalAlign: 'middle', fontWeight: 700 }}>{PLATFORM_GLYPH[p]}</span>
+                    {PLATFORM_LABEL[p]}
+                  </span>
+                  {isLive ? (
+                    <span style={livePillSt}>LIVE</span>
+                  ) : (
+                    <span style={comingSoonPillSt}>COMING SOON</span>
+                  )}
                 </div>
-                <div style={{ fontSize: 11, color: INK_M }}>
-                  {liveUrl ? <a href={liveUrl} target="_blank" rel="noopener noreferrer" style={{ color: FOREST }}>{liveHandle ?? 'open ↗'} ↗</a>
-                    : liveHandle ? <span>{liveHandle}</span>
-                    : <span style={{ fontStyle: 'italic' }}>handle not set</span>}
-                </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <Stat label="Followers" value={liveFollowers.toLocaleString('en-US')} />
-                  <Stat label="Growth 30d" value={meta.growth30d} />
-                  <Stat label="Eng rate" value={meta.engagementRate} />
-                  <Stat label="Posts MTD" value={String(meta.postsMtd)} />
-                </div>
-                <div style={{ background: CREAM, borderLeft: `2px solid ${FOREST}`, padding: '6px 8px', marginTop: 2 }}>
-                  <div style={{ fontSize: 9, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Best post · last 30d</div>
-                  <div style={{ fontSize: 11, color: INK, fontStyle: 'italic' }}>&quot;{meta.bestPost.hook}&quot;</div>
-                  <div style={{ fontSize: 10, color: INK_M }}>{meta.bestPost.reach.toLocaleString('en-US')} reach · {meta.bestPost.engagement} eng</div>
-                </div>
-                <div style={{ fontSize: 10, color: INK_M }}>
-                  <div>Freq: <strong>{meta.frequencyCap}</strong></div>
-                  <div>Banned: <span>{meta.bannedTopics.join(' · ')}</span></div>
-                </div>
+
+                {isLive ? (
+                  <>
+                    <div style={{ fontSize: 11, color: INK_M }}>
+                      {liveUrl ? <a href={liveUrl} target="_blank" rel="noopener noreferrer" style={{ color: FOREST }}>{liveHandle ?? 'open ↗'} ↗</a>
+                        : liveHandle ? <span>{liveHandle}</span>
+                        : <span style={{ fontStyle: 'italic' }}>listing auto-detects on OAuth connect</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <Stat label="Rating" value="—" />
+                      <Stat label="Reviews" value="—" />
+                      <Stat label="Actions 30d" value="—" />
+                      <Stat label="Photo views" value="—" />
+                    </div>
+                    <div style={{ background: CREAM, borderLeft: `2px solid ${FOREST}`, padding: '6px 8px', marginTop: 2 }}>
+                      <div style={{ fontSize: 9, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Landing</div>
+                      <div style={{ fontSize: 11, color: INK }}>Full analytics + review management + Q&amp;A + posts + competitor benchmarks.</div>
+                    </div>
+                    <div style={{ fontSize: 10, color: INK_M }}>
+                      <div>Freq: <strong>{meta.frequencyCap}</strong></div>
+                    </div>
+                    {landingHref && (
+                      <a href={landingHref} style={{ ...ctaLinkSt, marginTop: 4 }}>Open Google Business dashboard →</a>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 11, color: INK_M }}>
+                      {liveHandle ? <span>{liveHandle}</span> : <span style={{ fontStyle: 'italic' }}>handle not set</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <Stat label="Followers" value={liveFollowers > 0 ? liveFollowers.toLocaleString('en-US') : '—'} />
+                      <Stat label="Growth 30d" value="—" />
+                      <Stat label="Eng rate" value="—" />
+                      <Stat label="Posts MTD" value="—" />
+                    </div>
+                    <div style={{ background: CREAM, borderLeft: `2px solid ${HAIR}`, padding: '6px 8px', marginTop: 2 }}>
+                      <div style={{ fontSize: 9, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Landing</div>
+                      <div style={{ fontSize: 11, color: INK_M, fontStyle: 'italic' }}>Coming soon — this platform's dashboard lights up once the analytics API grant lands.</div>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
@@ -745,3 +812,6 @@ const agentCardSt: React.CSSProperties = { background: CREAM, border: `1px solid
 const signalPillSt: React.CSSProperties = { fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: FOREST, border: `1px solid ${FOREST}`, padding: '1px 5px', borderRadius: 2 };
 const btnPrimary: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 600, background: FOREST, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer' };
 const btnSecondary: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 500, background: WHITE, color: INK_S, border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer' };
+const livePillSt: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.10em', color: '#1F5C2C', background: '#E4F1E0', border: '1px solid #A9CFA0', padding: '1px 6px', borderRadius: 2 };
+const comingSoonPillSt: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.10em', color: INK_M, background: CREAM, border: `1px solid ${HAIR}`, padding: '1px 6px', borderRadius: 2 };
+const ctaLinkSt: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: WHITE, background: FOREST, padding: '5px 10px', borderRadius: 3, textDecoration: 'none', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'inline-block' };
