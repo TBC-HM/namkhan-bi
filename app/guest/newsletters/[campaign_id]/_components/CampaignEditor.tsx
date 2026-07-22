@@ -30,7 +30,12 @@ export default function CampaignEditor({ initial }: Props) {
     campaign_id: string; name?: string; subject?: string; body_md?: string; from_name?: string;
     from_email?: string; reply_to?: string; booking_code?: string; booking_url?: string;
     status?: string; template_key?: string | null; created_at: string; planned_date?: string | null;
+    campaign_kind?: string | null;
+    relative_kind?: 'booking_confirm' | 'before_checkin' | 'after_checkout' | null;
+    relative_days?: number | null;
+    relative_hour?: number | null;
   };
+  const isLifecycle = (init.campaign_kind ?? 'broadcast') === 'lifecycle';
   const [name,     setName]     = useState<string>(init.name ?? '');
   const [subject,  setSubject]  = useState<string>(init.subject ?? '');
   const [bodyMd,   setBodyMd]   = useState<string>(init.body_md ?? '');
@@ -41,6 +46,10 @@ export default function CampaignEditor({ initial }: Props) {
   const [bookUrl,  setBookUrl]  = useState<string>(init.booking_url ?? '');
   const [status,   setStatus]   = useState<string>(init.status ?? 'draft');
   const [plannedDate, setPlannedDate] = useState<string>(init.planned_date ?? '');
+  // Lifecycle trigger fields
+  const [relKind, setRelKind]   = useState<'booking_confirm'|'before_checkin'|'after_checkout'>(init.relative_kind ?? 'before_checkin');
+  const [relDays, setRelDays]   = useState<number>(init.relative_days ?? (init.relative_kind === 'booking_confirm' ? 0 : init.relative_kind === 'after_checkout' ? 1 : 7));
+  const [relHour, setRelHour]   = useState<number>(init.relative_hour ?? 10);
   const [saving,   setSaving]   = useState(false);
   const [msg,      setMsg]      = useState<string | null>(null);
   const [pickerMode, setPickerMode] = useState<null | 'insert' | 'replace-hero'>(null);
@@ -55,16 +64,20 @@ export default function CampaignEditor({ initial }: Props) {
         p_from_name: fromName, p_from_email: fromEmail, p_reply_to: replyTo,
         p_booking_code: bookCode, p_booking_url: bookUrl,
         p_status: status, p_scheduled_at: null,
-        p_relative_kind: null, p_relative_days: null, p_relative_hour: null,
+        p_relative_kind: isLifecycle ? relKind : null,
+        p_relative_days: isLifecycle ? relDays : null,
+        p_relative_hour: isLifecycle ? relHour : null,
       });
       if (error) throw error;
 
-      // planned_date via separate RPC
-      const { error: err2 } = await supabase.rpc('fn_set_campaign_planned_date', {
-        p_campaign_id: init.campaign_id,
-        p_planned_date: plannedDate ? plannedDate : null,
-      });
-      if (err2) throw err2;
+      // planned_date only applies to broadcast campaigns
+      if (!isLifecycle) {
+        const { error: err2 } = await supabase.rpc('fn_set_campaign_planned_date', {
+          p_campaign_id: init.campaign_id,
+          p_planned_date: plannedDate ? plannedDate : null,
+        });
+        if (err2) throw err2;
+      }
 
       setMsg('Saved.'); router.refresh();
     } catch (e) {
@@ -130,15 +143,45 @@ export default function CampaignEditor({ initial }: Props) {
         <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'16px 18px' }}>
           {field('Campaign name', <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={ip} />)}
           {field('Subject', <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} style={ip} />)}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-            {field('Planned send date', <input type="date" value={plannedDate ?? ''} onChange={(e) => setPlannedDate(e.target.value)} style={ip} />)}
-            {field('Status',
-              <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ ...ip, background:WHITE }}>
-                <option value="draft">draft</option>
-                <option value="scheduled">scheduled</option>
-                <option value="archived">archived</option>
-              </select>)}
-          </div>
+          {isLifecycle ? (
+            <>
+              <div style={{ fontSize:11, color:INK_M, marginBottom:6 }}>
+                Lifecycle send is <strong style={{ color:INK }}>event-driven</strong> — this email fires for each guest at their own trigger date.
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', gap:12 }}>
+                {field('Trigger event',
+                  <select value={relKind}
+                    onChange={(e) => setRelKind(e.target.value as 'booking_confirm'|'before_checkin'|'after_checkout')}
+                    style={{ ...ip, background:WHITE }}>
+                    <option value="booking_confirm">On booking (booking_date + N days)</option>
+                    <option value="before_checkin">Before check-in (arrival − N days)</option>
+                    <option value="after_checkout">After check-out (departure + N days)</option>
+                  </select>)}
+                {field('Days offset',
+                  <input type="number" min={0} max={365} value={relDays}
+                    onChange={(e) => setRelDays(Math.max(0, Math.min(365, Number(e.target.value) || 0)))} style={ip} />)}
+                {field('Send hour (Vientiane)',
+                  <input type="number" min={0} max={23} value={relHour}
+                    onChange={(e) => setRelHour(Math.max(0, Math.min(23, Number(e.target.value) || 0)))} style={ip} />)}
+                {field('Status',
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ ...ip, background:WHITE }}>
+                    <option value="draft">draft</option>
+                    <option value="scheduled">scheduled</option>
+                    <option value="archived">archived</option>
+                  </select>)}
+              </div>
+            </>
+          ) : (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              {field('Planned send date', <input type="date" value={plannedDate ?? ''} onChange={(e) => setPlannedDate(e.target.value)} style={ip} />)}
+              {field('Status',
+                <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ ...ip, background:WHITE }}>
+                  <option value="draft">draft</option>
+                  <option value="scheduled">scheduled</option>
+                  <option value="archived">archived</option>
+                </select>)}
+            </div>
+          )}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {field('From name', <input type="text" value={fromName} onChange={(e) => setFromName(e.target.value)} style={ip} />)}
             {field('From email', <input type="text" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} style={ip} />)}
