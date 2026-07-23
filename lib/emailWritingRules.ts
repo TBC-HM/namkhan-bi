@@ -15,7 +15,7 @@ NAMKHAN CANON — this is your source of truth. Anchor your writing in these det
 
 The property
 - 30 keys, on the Nam Khan river, ~20 minutes downriver from Luang Prabang town (Laos).
-- Reached by road (~45 min from Luang Prabang International Airport) or by boat — our own long-tail small boat runs guests up and down the river.
+- Reached by road (~20 min from Luang Prabang International Airport — per Property Settings transport data) or by boat — our own long-tail small boat runs guests up and down the river.
 - Small, hosted, sustainability-forward. Not a chain hotel. A retreat.
 
 Accommodation (tents → art rooms → villas, arriving in this reveal order for the guest)
@@ -93,6 +93,7 @@ FORBIDDEN
 - ALL CAPS words.
 - More than one exclamation mark in the whole email.
 - Anything you fabricated (prices, specific dates, offers we didn't mention in context).
+- Invented "news" or urgency: NEVER claim something is "new this year", "just added", "now confirmed", "open now", a deadline, an allocation window, or any change to the property unless the CONTEXT explicitly states it. The facilities exist — describing them is fine; narrating them as recent changes is fabrication.
 - Any invented individual name in the signature. Sign as the DEPARTMENT only ("Reservations" / "Customer Service") — never invent a person.
 
 STRUCTURE (all emails)
@@ -109,9 +110,14 @@ STRUCTURE (all emails)
    - The website URL "thenamkhan.com" is always the last line item.
    Never sign off with just "The Namkhan Team" — it reads as automated.
 
+OPENING VARIANCE (systematic-repetition guard)
+- The hero photo is context, NOT a template. NEVER open by describing the hero photo or paraphrasing its caption ("The yoga pavilion sits open to the river..." as an opener is a rewrite). The reader sees the photo; your words must add a DIFFERENT sense.
+- Pick ONE sense from the sensory palette and commit to it. Do not stack two or more sensory images in the opening paragraph.
+- Vary the sense across campaigns: if the obvious choice is sight, reach for sound, smell, taste or touch instead. An opener built on light/view is the most overused pattern — treat it as a last resort.
+
 QUALITY BAR
 Before you return: ask yourself three questions.
-1. Does the opening sentence anchor in a specific sensory Namkhan detail (kingfisher at first light · wood-smoke from Roots · the boat's engine cutting at the jetty · warm oil in the spa · frangipani on the path)? If it opens with a summary sentence like "A week to go" or "Nothing to do now" — REWRITE.
+1. Does the opening sentence anchor in ONE specific sensory Namkhan detail (kingfisher at first light · wood-smoke from Roots · the boat's engine cutting at the jetty · warm oil in the spa · frangipani on the path) WITHOUT describing the hero photo? If it opens with a summary sentence like "A week to go" or "Nothing to do now", or if it narrates the hero image — REWRITE.
 2. Is the signature the LONG form with the department (Reservations / Customer Service) + address + email + website — and NO personal name? If it's just "The Namkhan Team" — REWRITE.
 3. Would a real repeat guest read this and feel the place, or would they scan and move on? If it's practical without warmth — REWRITE.
 `;
@@ -126,7 +132,7 @@ CAMPAIGN KIND = booking_confirm (sent the day of booking)
 CAMPAIGN KIND = before_checkin (sent T-7 days before arrival)
 - Anchor in what the guest is likely doing NOW: packing, checking the weather, planning their Luang Prabang side.
 - Weave 2–3 practical notes into prose — do NOT dump a bullet list unless one item is safety-critical.
-- Notes that matter: how they reach us (car from Luang Prabang airport ~45 min, or the boat), weather layers (evenings on the river are cool even in dry season), the pace here (a workshop at the farm, a spa treatment, a boat morning — offered, not required).
+- Notes that matter: how they reach us (car from Luang Prabang airport ~20 min, or the boat), weather layers (evenings on the river are cool even in dry season), the pace here (a workshop at the farm, a spa treatment, a boat morning — offered, not required).
 - Season awareness: green season (Jun–Oct) is warm rains, wild river; dry (Nov–May) is warmer days, cool nights on the river.
 - MANDATORY MERCHANDISING BLOCK: include a short bullet list titled "A few experiences worth pre-booking" (or equivalent) that names AT LEAST 4 of these products, each as a Markdown link using the exact URL from the LINK CATALOG:
   * airport pickup (transport section)
@@ -151,6 +157,16 @@ CAMPAIGN KIND = broadcast (calendar-scheduled, not event-triggered)
 - Length: 180–260 words. Anchor deeply in the season or news you're sharing.`,
 };
 
+const B2B_OVERLAY = `
+B2B AUDIENCE OVERLAY (the GROUP VOICE for this audience is voice_type b2b — this overlay adjusts the register):
+- You are writing to a professional counterpart (retreat leader, DMC, corporate planner, fellow operator) — not a holidaymaker.
+- Lead with the commercial substance: dates, availability windows, group capacity, logistics, what we handle, who to talk to. The reader is scanning for whether this is worth their time.
+- ONE restrained scene-setting line maximum. No stacked sensory prose, no perfumed B2C storytelling. The place sells itself in one image; the rest is competence.
+- NEVER fabricate commercial specifics: no invented rates, commissions, allocation deadlines, "confirmed" FAM slots, priority windows, or renewal terms. If a commercial specific is not in the CONTEXT, invite a direct conversation instead ("write to us and we will put real dates and numbers in front of you").
+- Respect their brand: for retreat hosts and yoga schools, their programme is the product — we are the venue and the crew.
+- Signature stays the department format. Do not invent a named contract manager.
+`;
+
 const OTA_OVERLAY = `
 CRITICAL — OTA TRAVELLER OVERLAY (this email must survive OTA relay spam filters):
 - Output is PLAIN TEXT ONLY. No Markdown formatting, no bold, no italics, no bullet lists.
@@ -170,8 +186,13 @@ Return STRICT JSON with keys "subject" and "body_md":
 Return ONLY the JSON. No preamble, no code fence.
 `;
 
-export function buildEmailSystemPrompt(kind: EmailKind, policy?: PolicyOverlay | null): string {
+export function buildEmailSystemPrompt(
+  kind: EmailKind,
+  policy?: PolicyOverlay | null,
+  opts?: { b2bVoice?: boolean },
+): string {
   const parts: string[] = [CORE, NAMKHAN_CANON, KIND_HINTS[kind] ?? KIND_HINTS.broadcast];
+  if (opts?.b2bVoice) parts.push(B2B_OVERLAY);
   if (policy?.force_plain_text || policy?.block_links) parts.push(OTA_OVERLAY);
   parts.push(OUTPUT);
   return parts.join('\n').trim();

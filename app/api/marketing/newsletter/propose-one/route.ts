@@ -1,6 +1,22 @@
 // app/api/marketing/newsletter/propose-one/route.ts
 // PBS 2026-07-23 · Grounded proposer v4 — deterministic envelope + Saya → Veda chain.
 //
+// v4.3 (2026-07-23, content-quality loop):
+//   - loadContext: retreats + activities selects fixed (previous column names never
+//     existed on the views → both surfaces were silently empty in every prod call).
+//     NOTE: v_marketing_email_general_rules select is STILL broken the same way
+//     (rule_type/group_slug vs actual rule_kind, no group column) — left as-is on
+//     purpose: several stored rules (named-person sign-offs, mandatory
+//     thenamkhan.com link) directly contradict the newer emailWritingRules canon.
+//     PBS to arbitrate before that surface is re-enabled.
+//   - assembleDraft: primary CTA only on broadcasts (lifecycle guests already
+//     booked); CTA URL picked by context (Members / Retreat / Standard pinned row);
+//     signature drops email·website line under OTA block_links/plain policy.
+//   - assembleUserPrompt: products not offered to the writer when policy blocks links.
+//   - buildEmailSystemPrompt gains a B2B overlay (group voice_type b2b).
+//   - VEDA_SYSTEM: render-contract notes ([[CTA]] token, deterministic signature)
+//     so the critic stops penalising correct deterministic output.
+//
 // v3 drafted the whole email freehand from a local 60-word identity prompt.
 // v4 changes:
 //   1. System prompt = buildEmailSystemPrompt() from lib/emailWritingRules —
@@ -82,6 +98,7 @@ const ANTI_SPAM_FILTER_RULES = [
   '- Do NOT use ALL CAPS words, multiple exclamation marks, or multiple question marks.',
   '- Do NOT mention the OTA brand (Booking.com, Airbnb, Expedia, Agoda, Ctrip, etc.) by name.',
   '- Do NOT include tracking pixels, unsubscribe text, or any URL — the send layer adds compliance footer separately.',
+  '- Do NOT write any email address or web address anywhere in your prose ("gm@..." included). If you want to invite contact, say "simply reply to this note" — replies reach us.',
   '- Use short warm sentences. Indicative mood, not imperative.',
   '- The signature is the department (Reservations / Customer Service) + hotel physical address — never a personal name.',
   "- Reference the guest's stay dates naturally where relevant. Do not say \"your reservation\".",
@@ -148,8 +165,10 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, group_slug: 
       .select('section, anchor_hint, url, title, description, is_pinned')
       .eq('property_id', NAMKHAN_ID).eq('active', true)
       .order('is_pinned', { ascending: false }),
-    sb.from('v_property_retreats').select('name, short_description, focus_notes').eq('property_id', NAMKHAN_ID).eq('is_active', true).limit(10),
-    sb.from('v_activities_catalog').select('activity_name, short_description, price_incl_taxes_usd').eq('property_id', NAMKHAN_ID).limit(15),
+    // 2026-07-23 fix: these two views never had the previously-selected columns
+    // (42703 → surface silently empty in every prod call). Alias the real columns.
+    sb.from('v_property_retreats').select('name:display_name, short_description:short_pitch, focus_notes:ideal_for').eq('property_id', NAMKHAN_ID).eq('is_active', true).limit(10),
+    sb.from('v_activities_catalog').select('activity_name:name, short_description:description, price_incl_taxes_usd:price_amount').eq('property_id', NAMKHAN_ID).eq('is_active', true).order('display_order', { ascending: true }).limit(15),
     sb.from('v_marketing_property_email_settings').select('from_name, from_email, footer_text, unsubscribe_url').eq('property_id', NAMKHAN_ID).maybeSingle(),
     sb.from('v_director_goals').select('goal_key, goal_label, weight, group_slug').eq('property_id', NAMKHAN_ID).eq('active', true),
     group_slug
@@ -357,7 +376,9 @@ function assembleUserPrompt(
   } else {
     parts.push('hero photo: none');
   }
-  if (env.products.length > 0) {
+  // 2026-07-23 fix: when policy blocks links the product blocks can never render —
+  // don't ask for blurbs that get discarded (and that the critic then penalises).
+  if (env.products.length > 0 && !ctx.policy?.block_links) {
     parts.push('product blocks (links inserted automatically — write ONE 1-sentence blurb per product, same order, in product_blurbs):');
     env.products.forEach((p, i) => {
       parts.push(`${i + 1}. [${p.section ?? '—'}] ${p.product_name ?? p.link_anchor ?? ''} · anchor "${p.link_anchor ?? ''}"${p.caption ? ` · photo: "${p.caption}"` : ''}`);
@@ -564,16 +585,43 @@ function assembleDraft(slots: SayaSlots, env: Envelope, policy: Policy | null, k
   if (slots.closing_md.trim()) parts.push(slots.closing_md.trim());
 
   // THE one primary CTA (renderer convention [[CTA]] → bulletproof button):
-  // first pinned catalog row. Never on link-blocked / plain-text policies.
-  if (!policy?.block_links && !policy?.force_plain_text && extras?.pinned?.url) {
+  // context-picked pinned catalog row (see pickPinnedCta). Broadcasts only —
+  // lifecycle emails (booking_confirm / before_checkin / after_checkout) go to
+  // guests who ALREADY booked; a booking button there is tonally wrong and the
+  // product cards carry their own links. Never on link-blocked / plain-text policies.
+  if (kind === 'broadcast' && !policy?.block_links && !policy?.force_plain_text && extras?.pinned?.url) {
     const ctaLabel = (extras.pinned.anchor_hint || extras.pinned.title || 'Reserve your stay').slice(0, 40);
     parts.push(`[[CTA]] [${ctaLabel}](${extras.pinned.url})`);
   }
 
+  // 2026-07-23 fix: under OTA plain/no-link policy the signature must not carry
+  // email/website — those read as links to OTA relay spam filters.
   const s = env.signature;
-  parts.push(`Warm regards,\n\n${s.role} · ${s.org}\n${s.address_lines.join(', ')}\n${s.email} · ${s.website}`);
+  const sigContact = (policy?.block_links || policy?.force_plain_text) ? '' : `\n${s.email} · ${s.website}`;
+  parts.push(`Warm regards,\n\n${s.role} · ${s.org}\n${s.address_lines.join(', ')}${sigContact}`);
 
   return { subject: slots.subject, body_md: parts.join('\n\n'), goal_tag: slots.goal_tag };
+}
+
+// Context-aware primary-CTA pick from the pinned booking rows:
+//   returning-guests / loyalty context → Members rate URL
+//   retreat / yoga / wellness context  → Retreat promo URL
+//   otherwise                          → Standard booking URL
+// (The three pinned booking rows are the ONLY valid booking CTAs per link_hygiene rules.)
+type LinkRow = { section: string; anchor_hint: string; url: string; title: string | null; description: string | null; is_pinned: boolean | null };
+function pickPinnedCta(links: LinkRow[], group_slug: string | null, seedAndConcept: string): LinkRow | null {
+  const pinned = links.filter(l => l.is_pinned && l.url);
+  if (pinned.length === 0) return null;
+  const booking = pinned.filter(l => l.section === 'booking');
+  const txt = `${group_slug ?? ''} ${seedAndConcept}`.toLowerCase();
+  const find = (re: RegExp) => booking.find(l => re.test(`${l.title ?? ''} ${l.anchor_hint ?? ''} ${l.url}`.toLowerCase())) ?? null;
+  if (group_slug === 'returning-guests' || /\bmembers?\b|loyal|welcome back/.test(txt)) {
+    const m = find(/member/); if (m) return m;
+  }
+  if (/retreat|yoga|wellness|detox|mindfulness/.test(txt)) {
+    const r = find(/retreat/); if (r) return r;
+  }
+  return find(/standard|reserve/) ?? booking[0] ?? pinned[0];
 }
 
 type VedaResult = { score: number; issues: string[]; critique: string };
@@ -585,8 +633,14 @@ const VEDA_SYSTEM = [
   '  1. sensory_anchor · does the first paragraph after the greeting open with ONE specific Namkhan sensory detail (kingfisher, wood-fire, ginger tea, river light, boat engine, etc)? Not a summary.',
   '  2. forbidden_absent · no "We are excited/delighted", no "Book now/Reserve", no "Amazing/Incredible", no emojis, no ALL CAPS, no more than one exclamation mark, nothing from the REALITY PROFILE forbidden list.',
   '  3. url_discipline · every URL matches the LINK CATALOG or the DETERMINISTIC ENVELOPE product blocks (or there are no URLs when policy blocks them).',
-  '  4. signature_discipline · closes with the department signature (Reservations or Customer Service · The Namkhan + address + gm@thenamkhan.com + thenamkhan.com). NEVER a personal name.',
+  '  4. signature_discipline · closes with the department signature (Reservations or Customer Service · The Namkhan + address + gm@thenamkhan.com + thenamkhan.com). NEVER a personal name. EXCEPTION: under a block_links / plain-text policy the signature correctly omits the email and website lines (they read as links to OTA spam filters) — address-only is the REQUIRED form there, score it full.',
   '  5. voice_match · calm, understated, warm, grounded in real property facts from the context — not generic hotel copy.',
+  'RENDER CONTRACT — deterministic tokens you must NOT penalise:',
+  '- "[[CTA]] [label](url)" on its own line is a renderer token that becomes THE one primary button. It is correct output, not an artifact.',
+  '- "Warm regards," followed by the department signature block is appended deterministically and is the required sign-off format.',
+  '- Markdown images and "**[anchor](url)** — blurb" lines are envelope-assembled product cards; their URLs and photos come from the system, not the writer.',
+  'Judge the prose slots (opening, practical, blurbs, closing), the subject, and policy compliance — not these deterministic tokens.',
+  'B2B AUDIENCES (GROUP VOICE voice_type b2b): sensory_anchor means ONE restrained scene-setting line — score register match (professional, logistics-forward, no perfumed prose, no fabricated commercial specifics) under voice_match instead of demanding B2C sensory writing.',
   'Return STRICT JSON: { "score": <0-100>, "issues": [<short strings>], "critique": "<one paragraph of what to fix, worded as instruction to the writer>" }',
   'If score >= 80, "critique" can be empty. If score < 60, be very specific about fixes.',
   'Return ONLY the JSON object. No code fences, no preamble.',
@@ -743,18 +797,20 @@ export async function POST(req: NextRequest) {
   // 3. System prompt: shared writing rules (voice + canon + kind + OTA overlay)
   //    + route slot contract (+ anti-spam specifics on the OTA path).
   const isOta = !!(ctx.policy?.force_plain_text && ctx.policy?.block_links);
-  const sayaSystem = [buildEmailSystemPrompt(emailKind, ctx.policy), SLOT_OUTPUT_CONTRACT]
+  const isB2b = ctx.group?.voice_type === 'b2b' || body.audience_type === 'b2b';
+  const sayaSystem = [buildEmailSystemPrompt(emailKind, ctx.policy, { b2bVoice: isB2b }), SLOT_OUTPUT_CONTRACT]
     .concat(isOta ? [ANTI_SPAM_FILTER_RULES] : [])
     .join('\n\n');
 
   const userPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept);
 
   // 4. Saya · prose slots → deterministic assembly
+  const pinnedCta = pickPinnedCta(ctx.links, group_slug, `${concept} ${seed}`);
   let draft: SayaDraft;
   const tSaya = Date.now();
   try {
     const slots = await sayaSlots(sayaSystem, userPrompt);
-    draft = assembleDraft(slots, envelope, ctx.policy, emailKind, { goals: ctx.goals, pinned: ctx.links.find(l => l.is_pinned && l.url) ?? null });
+    draft = assembleDraft(slots, envelope, ctx.policy, emailKind, { goals: ctx.goals, pinned: pinnedCta });
     trace.push({ step: 'writer', agent_id: AGENT_SAYA, latency_ms: Date.now() - tSaya, ok: true });
   } catch (e) {
     trace.push({ step: 'writer', agent_id: AGENT_SAYA, latency_ms: Date.now() - tSaya, ok: false, note: (e as Error).message });
@@ -780,7 +836,7 @@ export async function POST(req: NextRequest) {
     try {
       const retryPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, veda.critique);
       const retriedSlots = await sayaSlots(sayaSystem, retryPrompt);
-      const retried = assembleDraft(retriedSlots, envelope, ctx.policy, emailKind, { goals: ctx.goals, pinned: ctx.links.find(l => l.is_pinned && l.url) ?? null });
+      const retried = assembleDraft(retriedSlots, envelope, ctx.policy, emailKind, { goals: ctx.goals, pinned: pinnedCta });
       const vedaRetry = await vedaScore(retried, retryPrompt, !!ctx.policy?.force_plain_text, !!ctx.policy?.block_links);
       if (vedaRetry.score > veda.score) {
         draft = retried;
