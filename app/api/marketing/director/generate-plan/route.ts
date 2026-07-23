@@ -76,11 +76,17 @@ function pickSlotDates(all: Date[], cadencePerWeek: number): Date[] {
 
 // Rotate through active goals weighted by weight. Higher weight = more slots.
 function planGoalRotation(goals: Array<{ goal_key: string; goal_label: string; weight: number; active: boolean }>, count: number): string[] {
-  const pool: string[] = [];
-  for (const g of goals) if (g.active && g.weight > 0) for (let i=0;i<g.weight;i++) pool.push(g.goal_key);
-  if (pool.length === 0 && goals[0]) return Array(count).fill(goals[0].goal_key);
+  const active = goals.filter(g => g.active && g.weight > 0);
+  if (active.length === 0) return Array(count).fill(goals[0]?.goal_key ?? 'general');
+  const acc = active.map(g => ({ key: g.goal_key, w: g.weight, credit: 0 }));
+  const total = acc.reduce((s, a) => s + a.w, 0);
   const out: string[] = [];
-  for (let i = 0; i < count; i++) out.push(pool[i % pool.length]);
+  for (let i = 0; i < count; i++) {
+    for (const a of acc) a.credit += a.w;
+    acc.sort((x, y) => y.credit - x.credit || x.key.localeCompare(y.key));
+    out.push(acc[0].key);
+    acc[0].credit -= total;
+  }
   return out;
 }
 
@@ -135,10 +141,10 @@ export async function POST(req: NextRequest) {
   let existingKeys = new Set<string>();
   if (regenerate_empty_only) {
     const { data: existing } = await sb
-      .from('v_director_calendar').select('slot_date, audience_type, goal_tag')
+      .from('v_director_calendar').select('slot_date, audience_type, goal_tag, group_slug')
       .eq('property_id', property_id).gte('slot_date', start_date).lte('slot_date', end_date);
-    for (const e of (existing as Array<{ slot_date: string; audience_type: string; goal_tag: string }> | null) ?? []) {
-      existingKeys.add(`${e.slot_date}|${e.audience_type}|${e.goal_tag}`);
+    for (const e of (existing as Array<{ slot_date: string; audience_type: string; goal_tag: string; group_slug?: string | null }> | null) ?? []) {
+      existingKeys.add(`${e.slot_date}|${e.audience_type}|${e.goal_tag}|${e.group_slug ?? ''}`);
     }
   }
 
@@ -159,14 +165,14 @@ export async function POST(req: NextRequest) {
   for (const audience of audience_types) {
     for (const d of dates) {
       const goal_tag = goalCycle[idx++] ?? 'general';
-      const key = `${ymd(d)}|${audience}|${goal_tag}`;
+      const key = `${ymd(d)}|${audience}|${goal_tag}|${group_slug ?? ''}`;
       if (regenerate_empty_only && existingKeys.has(key)) { skipped++; continue; }
 
       const goalLabel = goals.find(g => g.goal_key === goal_tag)?.goal_label ?? goal_tag;
       const title = group_slug
         ? `${goalLabel} · ${group_slug}`
         : `${goalLabel}`;
-      const subject = `${goalLabel} — Namkhan Retreat`;
+      const subject = `${goalLabel} — The Namkhan`;
       const body_md = `Placeholder body. Tone: ${tone}. Goal: ${goalLabel}. Group: ${group_slug ?? 'all'}. Use Refine to generate AI copy tailored to this audience.`;
 
       const { error: upErr } = await sb.rpc('fn_director_slot_upsert', {
