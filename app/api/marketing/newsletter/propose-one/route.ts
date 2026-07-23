@@ -1,6 +1,20 @@
 // app/api/marketing/newsletter/propose-one/route.ts
 // PBS 2026-07-23 · Grounded proposer v4 — deterministic envelope + Saya → Veda chain.
 //
+// v4.4 (2026-07-23, owner FINAL PASS — "no story, wrong pics, go deeper"):
+//   - CONCEPT-DRIVEN DEEP GROUNDING: concept keywords (same stoplist/lexicon as
+//     composer v2.3) select the top ~3 entities per domain — activities (full
+//     description, price, times), retreats (programme), rooms (long description),
+//     facilities (full ai_description) — injected as a DEEP DIVE section above
+//     the shallow lists; the story must be built from them with >=2 concrete
+//     specifics woven into prose.
+//   - LP_CANON (emailWritingRules): Luang Prabang town facts, included for every
+//     broadcast or when the concept mentions town/culture/Laos/Luang Prabang.
+//   - STORY ARC rule in CORE + matching Veda narrative-thread check.
+//   - DB side: marketing.compose_newsletter_email v2.3 — word-boundary keyword
+//     matching + signal lexicon + length-ordered cap (fixes the motorbike-farm
+//     hero on the green-season river concept, campaign 7c536a7f).
+//
 // v4.3 (2026-07-23, content-quality loop):
 //   - loadContext: retreats + activities selects fixed (previous column names never
 //     existed on the views → both surfaces were silently empty in every prod call).
@@ -305,12 +319,109 @@ async function fallbackPhotoPick(sb: ReturnType<typeof getSupabaseAdmin>): Promi
     .map(r => ({ asset_id: r.asset_id, caption: (r.caption ?? '').trim(), alt_text: r.alt_text, property_area: r.property_area }));
 }
 
+// ── Concept-driven deep grounding (v4.4) ─────────────────────────────────────
+// The concept/seed keywords select the top ~3 entities per domain (activities,
+// retreats, rooms, facilities) whose FULL detail is injected as a DEEP DIVE
+// section — the story is built from these, not from the shallow catalog lists.
+// Stoplist + signal lexicon mirror marketing.compose_newsletter_email v2.3 so
+// prose grounding and envelope photo/product selection key off the same terms.
+const KEYWORD_STOP = new Set(('with from your yours have will they them their when what where which then than been were into over just some more most only very here there about after before while this that these those something anything namkhan luang prabang laos property guest guests ' +
+  'stay stays open know make like next come back week weeks year years already until itself enough also ever even each much many other others being feels feel ' +
+  'case having yourself feeling choice corner rather almost wider away short fewer fuller deeper considered compromise travelling travel building buildings southeast asia worth means sense invite consider lean describe readers understand story connect frame ideal whether without busier challenge assumption traveller travellers region actually performed every shapes shape chosen tell origin heart beating backdrop world things thing particular different moment moments rare listed landscape texture version postcard honest months month').split(' '));
+const KEYWORD_SIGNAL = new Set(('river green jungle rain rains monsoon farm organic harvest garden spa wellness massage sauna yoga retreat retreats roots kitchen dining food dish chef boat cruise mekong pool unesco temple temples monk monks market waterfall kuang phousi villa villas tent tents glamping suite suites family couples romance honeymoon detox mindfulness meditation sunset sunrise morning evening dawn quiet private exclusive buyout group groups workshop workshops corporate offsite partner partners trade bangkok flight flights airport season water fish tea ginger restoration almsgiving').split(' '));
+
+function extractConceptKeywords(text: string): string[] {
+  const words = (text.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter(w => !KEYWORD_STOP.has(w));
+  return Array.from(new Set(words))
+    .sort((a, b) => (Number(KEYWORD_SIGNAL.has(b)) - Number(KEYWORD_SIGNAL.has(a))) || b.length - a.length)
+    .slice(0, 16);
+}
+
+function keywordScore(text: string, kws: string[]): number {
+  const t = ' ' + text.toLowerCase().replace(/[^a-z]+/g, ' ') + ' ';
+  let s = 0;
+  for (const w of kws) if (t.includes(' ' + w)) s += KEYWORD_SIGNAL.has(w) ? 3 : 1;
+  return s;
+}
+
+type DeepActivity = { name: string; description: string | null; price_amount: number | null; price_currency: string | null; duration_min: number | null; service_time_from: string | null; service_time_to: string | null };
+type DeepRetreat = { display_name: string; short_pitch: string | null; long_description: string | null; ideal_for: unknown; min_nights: number | null; max_nights: number | null };
+type DeepRoom = { room_type_name: string; positioning_label: string | null; short_pitch: string | null; long_description: string | null; size_sqm: number | null; view_type: unknown };
+type DeepFacility = { facility_name: string; category: string | null; ai_description: string | null; facility_description: string | null; hours: string | null };
+type DeepDive = { activities: DeepActivity[]; retreats: DeepRetreat[]; rooms: DeepRoom[]; facilities: DeepFacility[] };
+
+function pickTop<T>(rows: T[] | null | undefined, kws: string[], textOf: (r: T) => string, n = 3): T[] {
+  return (rows ?? [])
+    .map(r => ({ r, s: keywordScore(textOf(r), kws) }))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, n)
+    .map(x => x.r);
+}
+
+async function loadDeepDive(sb: ReturnType<typeof getSupabaseAdmin>, kws: string[]): Promise<DeepDive> {
+  const empty: DeepDive = { activities: [], retreats: [], rooms: [], facilities: [] };
+  if (kws.length === 0) return empty;
+  const [aR, rR, roR, fR] = await Promise.all([
+    sb.from('v_activities_catalog').select('name, description, price_amount, price_currency, duration_min, service_time_from, service_time_to').eq('property_id', NAMKHAN_ID).eq('is_active', true).limit(30),
+    sb.from('v_property_retreats').select('display_name, short_pitch, long_description, ideal_for, min_nights, max_nights').eq('property_id', NAMKHAN_ID).eq('is_active', true).limit(10),
+    sb.from('v_room_grounding').select('room_type_name, positioning_label, short_pitch, long_description, size_sqm, view_type').eq('property_id', NAMKHAN_ID).eq('active', true).limit(12),
+    sb.from('v_facility_grounding').select('facility_name, category, ai_description, facility_description, hours').eq('property_id', NAMKHAN_ID).eq('active', true).limit(25),
+  ]);
+  return {
+    activities: pickTop((aR.data as DeepActivity[] | null), kws, r => `${r.name} ${r.description ?? ''}`),
+    retreats: pickTop((rR.data as DeepRetreat[] | null), kws, r => `${r.display_name} ${r.short_pitch ?? ''} ${r.long_description ?? ''}`),
+    rooms: pickTop((roR.data as DeepRoom[] | null), kws, r => `${r.room_type_name} ${r.positioning_label ?? ''} ${r.short_pitch ?? ''} ${r.long_description ?? ''}`),
+    facilities: pickTop((fR.data as DeepFacility[] | null), kws, r => `${r.facility_name} ${r.ai_description ?? ''} ${r.facility_description ?? ''}`),
+  };
+}
+
+const squash = (s: string | null | undefined, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+const arrJoin = (v: unknown) => Array.isArray(v) ? v.map(x => String(x)).join(', ') : '';
+
+function renderDeepDive(deep: DeepDive): string[] {
+  const total = deep.activities.length + deep.retreats.length + deep.rooms.length + deep.facilities.length;
+  if (total === 0) return [];
+  const parts: string[] = [];
+  parts.push('');
+  parts.push('### DEEP DIVE — write from these specifics (concept-matched property truth)');
+  parts.push('The email\'s story must be BUILT from these entities — they are the development of your story arc. Weave AT LEAST 2 concrete specifics (a price, a time, a dish, a room feature, a duration, a distance) naturally into the prose. Never list them; never write a brochure line.');
+  for (const a of deep.activities) {
+    const bits = [squash(a.description, 400)];
+    if (a.price_amount != null) bits.push(`${a.price_currency ?? 'USD'} ${a.price_amount} pp`);
+    if (a.duration_min) bits.push(`~${a.duration_min} min`);
+    if (a.service_time_from) bits.push(`from ${String(a.service_time_from).slice(0, 5)}${a.service_time_to ? ` to ${String(a.service_time_to).slice(0, 5)}` : ''}`);
+    parts.push(`- [activity] ${a.name} — ${bits.filter(Boolean).join(' · ')}`);
+  }
+  for (const r of deep.retreats) {
+    const bits = [squash(r.long_description || r.short_pitch, 450)];
+    if (r.min_nights) bits.push(`${r.min_nights}${r.max_nights && r.max_nights !== r.min_nights ? `–${r.max_nights}` : ''} nights`);
+    const ideal = arrJoin(r.ideal_for);
+    if (ideal) bits.push(`ideal for: ${ideal}`);
+    parts.push(`- [retreat] ${r.display_name} — ${bits.filter(Boolean).join(' · ')}`);
+  }
+  for (const ro of deep.rooms) {
+    const bits = [squash(ro.long_description || ro.short_pitch, 400)];
+    if (ro.size_sqm) bits.push(`${ro.size_sqm} sqm`);
+    const views = arrJoin(ro.view_type);
+    if (views) bits.push(`views: ${views}`);
+    parts.push(`- [room] ${ro.room_type_name}${ro.positioning_label ? ` (${ro.positioning_label})` : ''} — ${bits.filter(Boolean).join(' · ')}`);
+  }
+  for (const f of deep.facilities) {
+    const bits = [squash(f.ai_description || f.facility_description, 350)];
+    if (f.hours) bits.push(`hours: ${squash(f.hours, 60)}`);
+    parts.push(`- [facility] ${f.facility_name}${f.category ? ` (${f.category})` : ''} — ${bits.filter(Boolean).join(' · ')}`);
+  }
+  return parts;
+}
+
 function assembleUserPrompt(
   body: ProposeBody,
   ctx: Awaited<ReturnType<typeof loadContext>>,
   env: Envelope,
   fallbackPhotos: PhotoPick[],
   concept: string,
+  deep: DeepDive,
   vedaCritique?: string | null,
 ): string {
   const parts: string[] = [];
@@ -395,9 +506,12 @@ function assembleUserPrompt(
     parts.push('(Do not include photo URLs in the email body — the send layer attaches imagery separately.)');
   }
 
+  // DEEP DIVE sits ABOVE the shallow catalog lists — the story is built from it.
+  parts.push(...renderDeepDive(deep));
+
   if (ctx.rooms.length > 0) {
     parts.push('');
-    parts.push('### PROPERTY · ROOMS (names + one-liners · facts only from here)');
+    parts.push('### PROPERTY · ROOMS (shallow catalog — context only; the story comes from DEEP DIVE)');
     for (const r of ctx.rooms) {
       parts.push(`- ${r.room_type_name}${r.positioning_label ? ` (${r.positioning_label})` : ''}${r.short_pitch ? ` — ${r.short_pitch}` : ''}`);
     }
@@ -634,7 +748,7 @@ const VEDA_SYSTEM = [
   '  2. forbidden_absent · no "We are excited/delighted", no "Book now/Reserve", no "Amazing/Incredible", no emojis, no ALL CAPS, no more than one exclamation mark, nothing from the REALITY PROFILE forbidden list.',
   '  3. url_discipline · every URL matches the LINK CATALOG or the DETERMINISTIC ENVELOPE product blocks (or there are no URLs when policy blocks them).',
   '  4. signature_discipline · closes with the department signature (Reservations or Customer Service · The Namkhan + address + gm@thenamkhan.com + thenamkhan.com). NEVER a personal name. EXCEPTION: under a block_links / plain-text policy the signature correctly omits the email and website lines (they read as links to OTA spam filters) — address-only is the REQUIRED form there, score it full.',
-  '  5. voice_match · calm, understated, warm, grounded in real property facts from the context — not generic hotel copy.',
+  '  5. voice_match · calm, understated, warm, grounded in real property facts from the context — not generic hotel copy. CRITICAL: does a SINGLE narrative thread run start to finish (opening scene → development built on the DEEP DIVE specifics → an invitation that closes the same story)? Disconnected atmospheric fragments, generic property re-description, or specifics dumped as a list = major deduction. When a DEEP DIVE section exists, at least 2 concrete specifics (a price, a time, a dish, a room feature, a duration, a distance) must be woven into the prose.',
   'RENDER CONTRACT — deterministic tokens you must NOT penalise:',
   '- "[[CTA]] [label](url)" on its own line is a renderer token that becomes THE one primary button. It is correct output, not an artifact.',
   '- "Warm regards," followed by the department signature block is appended deterministically and is the required sign-off format.',
@@ -798,11 +912,18 @@ export async function POST(req: NextRequest) {
   //    + route slot contract (+ anti-spam specifics on the OTA path).
   const isOta = !!(ctx.policy?.force_plain_text && ctx.policy?.block_links);
   const isB2b = ctx.group?.voice_type === 'b2b' || body.audience_type === 'b2b';
-  const sayaSystem = [buildEmailSystemPrompt(emailKind, ctx.policy, { b2bVoice: isB2b }), SLOT_OUTPUT_CONTRACT]
+  const lpCanon = /\b(town|culture|laos|luang|prabang)\b/i.test(`${concept} ${seed}`);
+  const sayaSystem = [buildEmailSystemPrompt(emailKind, ctx.policy, { b2bVoice: isB2b, lpCanon }), SLOT_OUTPUT_CONTRACT]
     .concat(isOta ? [ANTI_SPAM_FILTER_RULES] : [])
     .join('\n\n');
 
-  const userPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept);
+  // Concept-driven deep grounding: full detail for the top concept-matched entities.
+  const tDeep = Date.now();
+  const conceptKeywords = extractConceptKeywords(concept || seed);
+  const deep = await loadDeepDive(sb, conceptKeywords);
+  trace.push({ step: 'deep_dive', agent_id: AGENT_LIAM, latency_ms: Date.now() - tDeep, ok: true, note: `kw=${conceptKeywords.length} act=${deep.activities.length} ret=${deep.retreats.length} rooms=${deep.rooms.length} fac=${deep.facilities.length}` });
+
+  const userPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, deep);
 
   // 4. Saya · prose slots → deterministic assembly
   const pinnedCta = pickPinnedCta(ctx.links, group_slug, `${concept} ${seed}`);
@@ -834,7 +955,7 @@ export async function POST(req: NextRequest) {
   if (!isRefine && veda.score < 60 && veda.critique) {
     const tRetry = Date.now();
     try {
-      const retryPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, veda.critique);
+      const retryPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, deep, veda.critique);
       const retriedSlots = await sayaSlots(sayaSystem, retryPrompt);
       const retried = assembleDraft(retriedSlots, envelope, ctx.policy, emailKind, { goals: ctx.goals, pinned: pinnedCta });
       const vedaRetry = await vedaScore(retried, retryPrompt, !!ctx.policy?.force_plain_text, !!ctx.policy?.block_links);

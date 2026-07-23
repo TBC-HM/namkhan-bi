@@ -73,6 +73,17 @@ Sensory palette (pick ONE per email — don't stack them)
 - Touch: cool tile floor at dawn; warm oil in the spa; the boat's wooden seat under your legs.
 `;
 
+const LP_CANON = `
+LUANG PRABANG CANON — town + region facts. Use ONLY these; never invent attractions, distances or schedules.
+- Luang Prabang: UNESCO World Heritage old town at the confluence of the Mekong and the Nam Khan — royal-era wats, French-colonial shophouses, riverside lanes.
+- Tak bat: the dawn alms-giving — lines of monks in saffron collect sticky rice at first light. Guests observe quietly, shoulders covered, from a respectful distance.
+- Kuang Si falls: tiered turquoise waterfalls outside town — a day trip by road, or woven into a private boat morning.
+- Mount Phousi: the stair-climb viewpoint above the old town — sunset over the Mekong from the top.
+- The night market: handwoven textiles, paper lanterns, Hmong crafts — every evening along the main street.
+- Wat culture: Wat Xieng Thong and dozens of working temples; drums and chanting mark the hours of the day.
+- Getting here: direct flights from Bangkok (~1 hour) and regional hubs; The Namkhan is ~20 minutes by road from Luang Prabang International Airport, or arrive by boat on the Nam Khan.
+`;
+
 const CORE = `
 You are the marketing writer for The Namkhan — a 30-key riverside boutique retreat 20 minutes downriver from Luang Prabang, Laos.
 
@@ -109,6 +120,12 @@ STRUCTURE (all emails)
    - The reply email MUST be on the signature line, taken from CONTEXT.sender.reply_to (currently gm@thenamkhan.com) — never omit it.
    - The website URL "thenamkhan.com" is always the last line item.
    Never sign off with just "The Namkhan Team" — it reads as automated.
+
+STORY ARC (one story per email — non-negotiable)
+- Every email is ONE story: an opening scene (one paragraph, one sense), a development that carries the concept through the middle — this is where the DEEP DIVE specifics live — and a closing that lands the invitation as the natural end of that same story.
+- The reader must be able to say in one sentence what happened in this email. If they can't, it isn't a story — rewrite.
+- BANNED: sequences of disconnected atmospheric sentences; re-describing the property in general terms ("a riverside retreat with a farm, a spa and a pool"); more than ONE scene-setting paragraph.
+- Concrete beats atmospheric: a named dish, a price, a time of day, a room feature, a distance carries more story than any amount of mood.
 
 OPENING VARIANCE (systematic-repetition guard)
 - The hero photo is context, NOT a template. NEVER open by describing the hero photo or paraphrasing its caption ("The yoga pavilion sits open to the river..." as an opener is a rewrite). The reader sees the photo; your words must add a DIFFERENT sense.
@@ -189,9 +206,10 @@ Return ONLY the JSON. No preamble, no code fence.
 export function buildEmailSystemPrompt(
   kind: EmailKind,
   policy?: PolicyOverlay | null,
-  opts?: { b2bVoice?: boolean },
+  opts?: { b2bVoice?: boolean; lpCanon?: boolean },
 ): string {
   const parts: string[] = [CORE, NAMKHAN_CANON, KIND_HINTS[kind] ?? KIND_HINTS.broadcast];
+  if (opts?.lpCanon || kind === 'broadcast') parts.push(LP_CANON);
   if (opts?.b2bVoice) parts.push(B2B_OVERLAY);
   if (policy?.force_plain_text || policy?.block_links) parts.push(OTA_OVERLAY);
   parts.push(OUTPUT);
