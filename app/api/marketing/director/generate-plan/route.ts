@@ -63,7 +63,7 @@ function pickSlotDates(all: Date[], cadencePerWeek: number): Date[] {
   }
   // Preferred day indexes (Sun=0..Sat=6): Tue=2, Thu=4, Mon=1, Wed=3, Fri=5
   const preferred: number[][] = [[2],[2,4],[1,3,5],[1,3,5,4],[1,2,3,4,5],[1,2,3,4,5,0],[1,2,3,4,5,0,6]];
-  const wanted = preferred[Math.min(cadencePerWeek, 7) - 1];
+  const wanted = preferred[Math.min(cadencePerWeek, 7) - 1] ?? [2];
   const picked: Date[] = [];
   for (const week of byWeek.values()) {
     for (const dow of wanted) {
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
   const property_id = Number(body?.property_id);
   const start_date = String(body?.start_date || '').trim();
   const end_date = String(body?.end_date || '').trim();
-  const cadence_per_week = Math.max(0, Math.min(7, Number(body?.cadence_per_week ?? 1)));
+  const cadence_per_week = Math.max(0, Math.min(7, Math.round(Number(body?.cadence_per_week ?? 1))));
   const group_slug = body?.group_slug ? String(body.group_slug) : null;
   const audience_types = Array.isArray(body?.audience_types) && body!.audience_types!.length > 0
     ? body!.audience_types!.map(String)
