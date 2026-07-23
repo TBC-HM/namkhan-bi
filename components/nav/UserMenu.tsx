@@ -125,6 +125,11 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
               <span className="user-dropdown-icon">📈</span>Mail Analytics
             </TenantLink>
           )}
+          {/* TBC University · 2026-07-23 — help portal + ask window. Plain <a>
+              (not TenantLink): /university is platform-wide, never /h/-prefixed. */}
+          <a href="/university" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
+            <span className="user-dropdown-icon">🎓</span>TBC University
+          </a>
           <TenantLink href="/settings" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
             <span className="user-dropdown-icon">⚙</span>Settings
           </TenantLink>
