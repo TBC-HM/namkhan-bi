@@ -1,50 +1,49 @@
 // app/cockpit-v2/_components/tokens.ts
 //
-// PBS 2026-07-23: swapped from Beyond Circle dark palette to Namkhan
-// canonical paper-white. Key names unchanged so every existing consumer
-// (10 legacy pages · GroupedTabBar · TabBar · Pill) modernizes with a
-// single file change. Structural rewrites to canonical primitives
-// (DashboardPage / Container / KpiTile) happen page-by-page after this.
+// PBS 2026-07-23 (2nd pass): aligned with canonical `.cockpit-design` tokens
+// from app/(cockpit)/_design/internal/tokens.css. Previous pass over-goldened
+// the palette (#C79A6B brass + #084838 forest) — canonical is muted sand
+// #B8A878 + deep forest #1F3A2E on cream page #F4EFE2 with white paper cards.
 //
-// Colour rules follow design_system v6/v7 + token-ladder burn rule
-// (var(--paper-warm) resolves DARK on Namkhan — always hardcode #FFFFFF).
+// Source of truth: documentation.documents doc_type='design_system' v11
+// + reference_design_system_v6_v7 memory + /cockpit/tasks live page.
 
 export const TOKENS = {
-  // ── surfaces (paper white + hairline neutrals) ───────────────────────
-  bg:         '#FFFFFF',        // paper white — primary background
-  bgRaised:   '#FAFAF7',        // very slight off-white for raised strips
-  bgDeep:     '#F5F0E1',        // cream — elevated cards / code blocks
+  // ── surfaces ──────────────────────────────────────────────────────────
+  bg:         '#F4EFE2',        // canonical cream page bg (--bg)
+  bgRaised:   '#FFFFFF',        // paper white for raised cards (--paper)
+  bgDeep:     '#F4EFE2',        // cream deep
 
-  // ── text (dark ink on paper) ─────────────────────────────────────────
-  ink:        '#1B1B1B',        // primary text
-  inkSoft:    '#5A5A5A',        // secondary text
+  // ── text ──────────────────────────────────────────────────────────────
+  ink:        '#1B1B1B',        // primary text (--ink)
+  inkSoft:    '#5A5A5A',        // secondary text (--ink-soft)
   text:       '#1B1B1B',
   text2:      '#5A5A5A',
-  text3:      '#8A8A8A',        // muted / captions
+  text3:      '#8A8A8A',        // status-grey (--status-grey)
 
-  // ── borders / lines ──────────────────────────────────────────────────
-  border:     '#E6DFCC',        // canonical hairline
-  borderSoft: '#F0EBDD',        // even softer hairline
+  // ── borders / hairlines ───────────────────────────────────────────────
+  border:     '#E6DFCC',        // canonical hairline (--hairline)
+  borderSoft: '#E6DFCC',        // same — canon has one hairline
 
-  // ── Namkhan signature accents (gold + forest) ────────────────────────
-  brass:      '#C79A6B',        // Namkhan gold — primary accent
-  sand:       '#E8D3A9',        // light sand for gradients
-  ochre:      '#C79A6B',        // alias of brass (back-compat)
+  // ── canonical accents (muted sand + deep forest) ─────────────────────
+  brass:      '#B8A878',        // canonical sand (--sand) — NOT bright gold
+  sand:       '#B8A878',
+  ochre:      '#B8A878',
 
-  forest:     '#084838',        // Namkhan forest — secondary accent
-  moss:       '#084838',        // alias of forest
-  sky:        '#084838',        // alias of forest
+  forest:     '#1F3A2E',        // canonical primary (--primary)
+  moss:       '#1F3A2E',
+  sky:        '#1F3A2E',
 
-  // ── status colours (contrast-adjusted for light background) ──────────
-  terracotta: '#B85A3A',        // muted warning — deeper for legibility on white
-  oxblood:    '#8E3A35',        // deep error red
+  // ── status ────────────────────────────────────────────────────────────
+  terracotta: '#B8542A',        // canonical warning (--terracotta / --status-red)
+  oxblood:    '#8E3A35',
 
   // ── tinted accents ───────────────────────────────────────────────────
-  accentSoft: '#C79A6B22',      // gold @ ~13% alpha
-  accentLine: '#C79A6B55',      // gold @ ~33% alpha
-  blueSoft:   '#08483822',      // forest @ ~13% alpha
-  blueLine:   '#08483855',      // forest @ ~33% alpha
-  deepInk:    '#083830',        // deep forest — for "press"/active states
+  accentSoft: '#B8A87822',
+  accentLine: '#B8A87855',
+  blueSoft:   '#1F3A2E22',
+  blueLine:   '#1F3A2E55',
+  deepInk:    '#1F3A2E',
 };
 
 export const SERIF = '"Fraunces", "Times New Roman", serif';
