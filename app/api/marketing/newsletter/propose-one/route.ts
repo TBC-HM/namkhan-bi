@@ -386,6 +386,7 @@ function renderDeepDive(deep: DeepDive): string[] {
   parts.push('');
   parts.push('### DEEP DIVE — write from these specifics (concept-matched property truth)');
   parts.push('The email\'s story must be BUILT from these entities — they are the development of your story arc. Weave AT LEAST 2 concrete specifics (a price, a time, a dish, a room feature, a duration, a distance) naturally into the prose. Never list them; never write a brochure line.');
+  parts.push('ACCURACY: attribute every price/time/duration to the EXACT entity it belongs to — never transfer a price across variants (a shared class price is not the private class price). If unsure which variant a number belongs to, leave the number out.');
   for (const a of deep.activities) {
     const bits = [squash(a.description, 400)];
     if (a.price_amount != null) bits.push(`${a.price_currency ?? 'USD'} ${a.price_amount} pp`);
