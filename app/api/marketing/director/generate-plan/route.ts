@@ -1,19 +1,28 @@
 // app/api/marketing/director/generate-plan/route.ts
-// PBS 2026-07-21 pm (Newsletter Calendar v2): AI-generated per-group plan.
+// PBS 2026-07-23 · Plan generator v3 — AI propose stage.
 // Body: { property_id, start_date, end_date, cadence_per_week?, group_slug?,
-//         audience_types?, regenerate_empty_only? }
+//         audience_types?, regenerate_empty_only?, direction? }
 //
-// If group_slug is set, generates slots targeted at that group (adjusts cadence
-// + tone accordingly) and stamps group_slug on each slot. If group_slug is
-// omitted/null, cross-group cadence (existing behaviour) is used.
+// v2 was a rule-based scaffolder: direction text was only stamped into
+// p_ai_notes and influenced nothing.
+// v3: after dates + goal rotation are computed, ONE Anthropic call per
+// generation (chunked at 60 slots per call when larger) produces per-slot
+// { title, concept } grounded in: the owner's direction text, the group's
+// voice_type/voice_summary (v_subscriber_groups), the slot's goal
+// (label + weight), the slot month/season, and a one-line brand anchor
+// (v_reality_profile location/positioning). Then per slot:
+//   p_title   = AI title
+//   p_subject = AI title + ' — The Namkhan'
+//   p_body_md = concept  (the concept IS the brief — flows into the draft
+//               campaign on accept via fn_director_slot_approve, and from
+//               there into propose-one's SLOT CONCEPT prompt section)
+// FALLBACK: any AI failure (call error, unparseable/incomplete JSON) falls
+// back to the v2 rule-based title/subject/body for the affected slots and the
+// response carries ai: { fallback: true, error }. Plan generation never 500s
+// on AI failure.
 //
-// Slots are written via public.fn_director_slot_upsert (SECURITY DEFINER RPC)
-// which now accepts p_group_slug + p_parent_plan_run_id. Every call in this
-// invocation shares one parent_plan_run_id (uuid) so a plan can be traced back.
-//
-// LLM: currently rule-based scaffolder — deterministic, respects goal weights,
-// distributes N slots-per-week evenly across working days. AI copywriting hop
-// is performed by /api/marketing/director/refine-slot on demand.
+// Slots are written via public.fn_director_slot_upsert (SECURITY DEFINER RPC).
+// Every call in this invocation shares one parent_plan_run_id (uuid).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
@@ -21,6 +30,9 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 90;
+
+const AI_CHUNK_SIZE = 60;
 
 type Body = {
   property_id?: number;
@@ -101,6 +113,143 @@ function toneForGroup(slug: string | null | undefined): string {
   return 'informative';
 }
 
+// Green season May–Oct · dry season Nov–Apr (matches emailWritingRules canon).
+function seasonFor(dateISO: string): string {
+  const m = Number(dateISO.slice(5, 7));
+  return (m >= 5 && m <= 10)
+    ? 'green season (warm rains, the river full and wild, quieter, retreat-friendly)'
+    : 'dry season (warm sunny days, cool evenings on the river, peak months)';
+}
+
+// ── AI propose stage ─────────────────────────────────────────────────────────
+
+type SlotSeed = {
+  date: string;
+  audience: string;
+  goal_tag: string;
+  goal_label: string;
+  goal_weight: number;
+};
+
+type SlotIdea = { title: string; concept: string };
+
+async function callAnthropic(system: string, userPrompt: string, maxTokens = 4000): Promise<string> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('anthropic_api_key_missing');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error('anthropic_' + res.status + ' ' + t.slice(0, 200));
+  }
+  const j = await res.json();
+  return j?.content?.[0]?.text || '';
+}
+
+function stripCodeFences(text: string): string {
+  let s = text.trim();
+  const fenced = s.match(/^```[a-zA-Z]*\s*([\s\S]*?)\s*```\s*$/);
+  if (fenced) return fenced[1].trim();
+  if (s.startsWith('```')) s = s.replace(/^```[a-zA-Z]*\s*/, '');
+  if (s.endsWith('```')) s = s.slice(0, -3);
+  return s.trim();
+}
+
+const PLAN_SYSTEM = [
+  'You are the newsletter planning editor for The Namkhan — a 30-key riverside boutique retreat 20 minutes downriver from Luang Prabang, Laos.',
+  'For each campaign slot you receive, you write an email TITLE and a 1-2 sentence CONCEPT (the creative brief a copywriter will follow later).',
+  'TITLE rules: <= 60 chars · specific and evocative, never generic ("Retreats · guests-int" is what you are replacing) · no exclamation marks · no ALL CAPS · no emoji.',
+  'CONCEPT rules: 1-2 sentences · name the angle, the seasonal/sensory hook, and what the reader should feel or do · grounded in the property and the audience voice · never salesy, no prices, no invented events or offers.',
+  'Vary the angles across slots — consecutive slots must not repeat the same hook, even for the same goal.',
+  'Return STRICT JSON only: an array with EXACTLY one object per slot, same order as given:',
+  '[{ "date": "YYYY-MM-DD", "goal_tag": "...", "title": "...", "concept": "..." }]',
+  'No code fences, no preamble, no trailing text.',
+].join('\n');
+
+function buildPlanPrompt(
+  slots: SlotSeed[],
+  direction: string,
+  tone: string,
+  group: { slug: string; name: string; voice_type: string | null; voice_summary: string | null } | null,
+  brandAnchor: string,
+): string {
+  const parts: string[] = [];
+  parts.push('### PROPERTY');
+  parts.push(brandAnchor);
+  parts.push('Seasons: green season May–October (warm rains, wild river, quieter) · dry season November–April (warm days, cool river evenings, peak).');
+
+  parts.push('');
+  parts.push('### AUDIENCE');
+  if (group) {
+    parts.push(`group: ${group.name} (${group.slug} · ${group.voice_type ?? 'b2c'})`);
+    if (group.voice_summary) parts.push(`voice: ${group.voice_summary}`);
+  } else {
+    parts.push('group: all subscriber groups (mixed)');
+  }
+  parts.push(`tone: ${tone}`);
+
+  parts.push('');
+  parts.push("### DIRECTION FROM THE OWNER (steer every title and concept with this — it outranks everything below)");
+  parts.push(direction || '(none given — plan from goals, season and audience voice)');
+
+  parts.push('');
+  parts.push('### SLOTS (one line each · write one title + concept per line, same order)');
+  slots.forEach((s, i) => {
+    parts.push(`${i + 1}. ${s.date} · audience ${s.audience} · goal ${s.goal_tag} (weight ${s.goal_weight}) — "${s.goal_label}" · ${seasonFor(s.date)}`);
+  });
+
+  parts.push('');
+  parts.push(`### OUTPUT`);
+  parts.push(`STRICT JSON array of exactly ${slots.length} objects, same order: [{ "date", "goal_tag", "title", "concept" }]. Nothing else.`);
+  return parts.join('\n');
+}
+
+// One call per chunk of <= AI_CHUNK_SIZE slots. Returns ideas aligned by index
+// (null where the AI response was missing/invalid for that slot).
+async function proposeSlotIdeas(
+  slots: SlotSeed[],
+  direction: string,
+  tone: string,
+  group: { slug: string; name: string; voice_type: string | null; voice_summary: string | null } | null,
+  brandAnchor: string,
+): Promise<{ ideas: Array<SlotIdea | null>; error: string | null }> {
+  const ideas: Array<SlotIdea | null> = Array(slots.length).fill(null);
+  let firstError: string | null = null;
+
+  for (let offset = 0; offset < slots.length; offset += AI_CHUNK_SIZE) {
+    const chunk = slots.slice(offset, offset + AI_CHUNK_SIZE);
+    try {
+      const prompt = buildPlanPrompt(chunk, direction, tone, group, brandAnchor);
+      const text = await callAnthropic(PLAN_SYSTEM, prompt, 4000);
+      const parsed = JSON.parse(stripCodeFences(text));
+      if (!Array.isArray(parsed)) throw new Error('plan_json_not_array');
+      for (let i = 0; i < chunk.length; i++) {
+        const item = parsed[i] as { date?: unknown; goal_tag?: unknown; title?: unknown; concept?: unknown } | undefined;
+        if (!item || typeof item !== 'object') continue;
+        const title = String(item.title ?? '').trim().slice(0, 120);
+        const concept = String(item.concept ?? '').trim().slice(0, 600);
+        if (!title || !concept) continue;
+        // Sanity: date/goal must match the slot we asked for (order guard).
+        if (String(item.date ?? '') !== chunk[i].date) continue;
+        if (String(item.goal_tag ?? '') !== chunk[i].goal_tag) continue;
+        ideas[offset + i] = { title, concept };
+      }
+    } catch (e) {
+      if (!firstError) firstError = (e as Error).message;
+      // leave this chunk's ideas as null → rule-based fallback per slot
+    }
+  }
+  return { ideas, error: firstError };
+}
+
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Body;
   const property_id = Number(body?.property_id);
@@ -137,8 +286,23 @@ export async function POST(req: NextRequest) {
   }
   const goals = Array.from(byKey.values()).sort((a, b) => b.weight - a.weight);
 
+  // Group voice + brand anchor for the AI propose stage (both optional — failures degrade to rule-based).
+  let group: { slug: string; name: string; voice_type: string | null; voice_summary: string | null } | null = null;
+  if (group_slug) {
+    const { data } = await sb.from('v_subscriber_groups').select('slug, name, voice_type, voice_summary').eq('slug', group_slug).maybeSingle();
+    group = (data as { slug: string; name: string; voice_type: string | null; voice_summary: string | null } | null) ?? null;
+  }
+  let brandAnchor = 'The Namkhan — 30-key riverside boutique retreat on the Nam Khan river, 20 minutes downriver from Luang Prabang, Laos.';
+  {
+    const { data } = await sb.from('v_reality_profile').select('location, positioning').eq('property_id', property_id).maybeSingle();
+    const reality = (data as { location: string | null; positioning: string | null } | null) ?? null;
+    if (reality?.location) {
+      brandAnchor = `The Namkhan — 30-key riverside boutique retreat · ${reality.location}${reality.positioning ? ` · ${reality.positioning}` : ''}`;
+    }
+  }
+
   // Existing slots in range (for regenerate_empty_only)
-  let existingKeys = new Set<string>();
+  const existingKeys = new Set<string>();
   if (regenerate_empty_only) {
     const { data: existing } = await sb
       .from('v_director_calendar').select('slot_date, audience_type, goal_tag, group_slug')
@@ -156,42 +320,71 @@ export async function POST(req: NextRequest) {
   // Distribute goals across dates
   const goalCycle = planGoalRotation(goals, dates.length * audience_types.length);
 
+  // Build the flat slot list in the SAME order the write loop consumes it.
+  const slotSeeds: SlotSeed[] = [];
+  {
+    let i = 0;
+    for (const audience of audience_types) {
+      for (const d of dates) {
+        const goal_tag = goalCycle[i++] ?? 'general';
+        const g = goals.find(x => x.goal_key === goal_tag);
+        slotSeeds.push({
+          date: ymd(d),
+          audience,
+          goal_tag,
+          goal_label: g?.goal_label ?? goal_tag,
+          goal_weight: g?.weight ?? 0,
+        });
+      }
+    }
+  }
+
+  // AI propose stage — one Anthropic call per <=60-slot chunk. Never fatal.
+  const { ideas, error: aiError } = slotSeeds.length > 0
+    ? await proposeSlotIdeas(slotSeeds, direction, tone, group, brandAnchor)
+    : { ideas: [] as Array<SlotIdea | null>, error: null };
+  const aiUsed = ideas.filter(Boolean).length;
+
   const parent_plan_run_id = randomUUID();
   let created = 0;
   let skipped = 0;
   const errors: string[] = [];
 
-  let idx = 0;
-  for (const audience of audience_types) {
-    for (const d of dates) {
-      const goal_tag = goalCycle[idx++] ?? 'general';
-      const key = `${ymd(d)}|${audience}|${goal_tag}|${group_slug ?? ''}`;
-      if (regenerate_empty_only && existingKeys.has(key)) { skipped++; continue; }
+  for (let i = 0; i < slotSeeds.length; i++) {
+    const s = slotSeeds[i];
+    const key = `${s.date}|${s.audience}|${s.goal_tag}|${group_slug ?? ''}`;
+    if (regenerate_empty_only && existingKeys.has(key)) { skipped++; continue; }
 
-      const goalLabel = goals.find(g => g.goal_key === goal_tag)?.goal_label ?? goal_tag;
-      const title = group_slug
-        ? `${goalLabel} · ${group_slug}`
-        : `${goalLabel}`;
-      const subject = `${goalLabel} — The Namkhan`;
-      const body_md = `Placeholder body. Tone: ${tone}. Goal: ${goalLabel}. Group: ${group_slug ?? 'all'}. Use Refine to generate AI copy tailored to this audience.`;
+    const idea = ideas[i];
+    const title = idea
+      ? idea.title
+      : (group_slug ? `${s.goal_label} · ${group_slug}` : s.goal_label);
+    const subject = idea
+      ? `${idea.title} — The Namkhan`
+      : `${s.goal_label} — The Namkhan`;
+    const body_md = idea
+      ? idea.concept
+      : `Placeholder body. Tone: ${tone}. Goal: ${s.goal_label}. Group: ${group_slug ?? 'all'}. Use Refine to generate AI copy tailored to this audience.`;
+    const noteBits = [`tone=${tone}`];
+    if (direction) noteBits.push(`direction=${direction}`);
+    noteBits.push(idea ? 'concept=ai' : 'concept=fallback');
 
-      const { error: upErr } = await sb.rpc('fn_director_slot_upsert', {
-        p_property_id: property_id,
-        p_slot_date: ymd(d),
-        p_audience_type: audience,
-        p_campaign_kind: 'broadcast',
-        p_goal_tag: goal_tag,
-        p_title: title,
-        p_subject: subject,
-        p_body_md: body_md,
-        p_status: 'proposed',
-        p_ai_notes: direction ? `tone=${tone} · direction=${direction}` : `tone=${tone}`,
-        p_group_slug: group_slug,
-        p_parent_plan_run_id: parent_plan_run_id,
-      });
-      if (upErr) { errors.push(`${ymd(d)}: ${upErr.message}`); continue; }
-      created++;
-    }
+    const { error: upErr } = await sb.rpc('fn_director_slot_upsert', {
+      p_property_id: property_id,
+      p_slot_date: s.date,
+      p_audience_type: s.audience,
+      p_campaign_kind: 'broadcast',
+      p_goal_tag: s.goal_tag,
+      p_title: title,
+      p_subject: subject,
+      p_body_md: body_md,
+      p_status: 'proposed',
+      p_ai_notes: noteBits.join(' · '),
+      p_group_slug: group_slug,
+      p_parent_plan_run_id: parent_plan_run_id,
+    });
+    if (upErr) { errors.push(`${s.date}: ${upErr.message}`); continue; }
+    created++;
   }
 
   return NextResponse.json({
@@ -205,6 +398,12 @@ export async function POST(req: NextRequest) {
       cadence_per_week,
       group_slug,
       tone,
+    },
+    ai: {
+      used: aiUsed,
+      total: slotSeeds.length,
+      ai_fallback: aiUsed < slotSeeds.length,
+      ...(aiError ? { error: aiError } : {}),
     },
     errors,
   });
