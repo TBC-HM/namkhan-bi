@@ -81,14 +81,20 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
 
   // PBS 2026-07-23: Maps insights fetch dropped — moved to
   // /marketing/social/google-business. Reputation page = reviews only.
-  const [oauthR, reviewsR, listingsR, summaryR] = await Promise.all([
+  const [oauthR, reviewsR, listingsR, summaryR, allowlistR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', pid).order('reviewed_at', { ascending: false }).limit(50),
     sb.from('v_external_listings').select('*').eq('property_id', pid).eq('category','reputation'),
     sb.from('v_review_source_summary').select('*').eq('property_id', pid),
+    sb.schema('marketing').from('google_api_allowlist_state').select('*').eq('property_id', pid).maybeSingle(),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
+  const allowlist = (allowlistR?.data as {
+    case_id: string; applied_at: string; expected_by_earliest: string | null; expected_by_latest: string | null; status: string; approved_at: string | null;
+  } | null) ?? null;
+  const allowlistApproved = allowlist?.status === 'approved';
+  const allowlistPending = !!allowlist && !allowlistApproved;
   const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
   const listings: ListingRow[] = ((listingsR.data as ListingRow[]) ?? [])
     .slice().sort((a, b) => (SOURCE_PRIORITY[a.channel] ?? 99) - (SOURCE_PRIORITY[b.channel] ?? 99));
@@ -153,7 +159,7 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
     <div style={{ background: WHITE, minHeight: '100vh' }}>
       <DashboardPage title="Contacts · Reputation" subtitle="Every review, every reply — one place." tabs={tabs}>
 
-        {googleParam === 'connected' && (
+        {googleParam === 'connected' && !allowlistPending && (
           <div style={{ gridColumn:'1 / -1', padding:'10px 14px', borderRadius:4, background:'#E4F1E0', border:'1px solid #A9CFA0', color:GREEN, fontSize:12 }}>
             <strong>Google Business Profile connected</strong>{locationParam ? ' — ' + locationParam : ''}. First review + Maps pull will run automatically within a minute.
           </div>
@@ -176,10 +182,23 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
             <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={{ padding:'6px 14px', background:GREEN, color:WHITE, borderRadius:4, fontSize:11, fontWeight:600, textDecoration:'none', letterSpacing:'0.04em', textTransform:'uppercase' }}>Connect Google →</TenantLink>
           </div>
         )}
-        {oauth && !oauth.location_id && (
+        {oauth && !oauth.location_id && allowlistPending && (
+          <div style={{ gridColumn:'1 / -1', padding:'12px 16px', borderRadius:6, background:'#EEF3FB', border:'1px solid #B8CDE8', color:'#1D3E76', fontSize:12, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
+            <div style={{ flex:1, minWidth:260 }}>
+              <div><strong>Google OAuth connected · Business Profile API allowlist pending.</strong></div>
+              <div style={{ fontSize:11, marginTop:4, color:'#3A5A85', lineHeight:1.5 }}>
+                Case <code>{allowlist!.case_id}</code> · submitted {fmtDate(allowlist!.applied_at)} · typical review 7–10 business days
+                {allowlist!.expected_by_earliest && allowlist!.expected_by_latest ? ` · expected ${fmtDate(allowlist!.expected_by_earliest)}–${fmtDate(allowlist!.expected_by_latest)}` : ''}.
+                <br/>
+                Reviews / velocity / competitors are LIVE below via public scrape. Individual Google review bodies, discovery search terms, photo performance, Q&amp;A, posts, and location auto-detection light up automatically once approved. No action needed until then.
+              </div>
+            </div>
+          </div>
+        )}
+        {oauth && !oauth.location_id && !allowlistPending && !allowlistApproved && (
           <div style={{ gridColumn:'1 / -1', padding:'12px 16px', borderRadius:6, background:'#FDF7E6', border:'1px solid #E8CB84', color:'#8B6914', fontSize:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
-            <div><strong>Google connected but no location detected.</strong> Reconnect to grant Gmail + business.manage scopes and complete Business Profile setup.</div>
-            <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={{ padding:'6px 14px', background:GREEN, color:WHITE, borderRadius:4, fontSize:11, fontWeight:600, textDecoration:'none', letterSpacing:'0.04em', textTransform:'uppercase' }}>Reconnect Google →</TenantLink>
+            <div><strong>Google connected · Business Profile API access not requested yet.</strong> Apply for API allowlist to unlock official reviews + Insights.</div>
+            <a href="https://support.google.com/business/workflow/16726127" target="_blank" rel="noopener noreferrer" style={{ padding:'6px 14px', background:GREEN, color:WHITE, borderRadius:4, fontSize:11, fontWeight:600, textDecoration:'none', letterSpacing:'0.04em', textTransform:'uppercase' }}>Apply for API access →</a>
           </div>
         )}
 
@@ -256,7 +275,10 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
                     </div>
                   )}
                   {!rankPos && rankCtx && (
-                    <div style={{ fontSize:10, color:INK_M, fontStyle:'italic', lineHeight:1.3 }}>{rankCtx}</div>
+                    <div style={{ fontSize:10, color:INK_M, fontStyle:'italic', lineHeight:1.3 }}>
+                      {/* strip Google's non-ASCII localized suffix e.g. "(เยี่ยมยอด)" */}
+                      {rankCtx.replace(/\s*\([^\x00-\x7F]+\)\s*/g, ' ').trim()}
+                    </div>
                   )}
                 </div>
               );
