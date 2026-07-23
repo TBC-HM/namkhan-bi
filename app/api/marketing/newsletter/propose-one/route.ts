@@ -518,7 +518,12 @@ function mdImage(alt: string | null, url: string): string {
 // preview + CampaignEditor both take the FIRST ![](url) in body_md as the hero)
 // + greeting + Saya prose slots + product blocks (photo + exact catalog link +
 // blurb) + department signature. AI never writes links, images or the signature.
-function assembleDraft(slots: SayaSlots, env: Envelope, policy: Policy | null, kind: EmailKind): SayaDraft {
+type AssembleExtras = {
+  goals?: Array<{ goal_key: string; goal_label: string }>;
+  pinned?: { url: string; anchor_hint?: string | null; title?: string | null } | null;
+};
+
+function assembleDraft(slots: SayaSlots, env: Envelope, policy: Policy | null, kind: EmailKind, extras?: AssembleExtras): SayaDraft {
   const parts: string[] = [];
   const allowImages = !policy?.block_images && !policy?.force_plain_text;
   const usedAssets = new Set<string>();
@@ -527,6 +532,10 @@ function assembleDraft(slots: SayaSlots, env: Envelope, policy: Policy | null, k
     parts.push(mdImage(env.hero.alt_text || env.hero.caption, env.hero.primary_render));
     if (env.hero.asset_id) usedAssets.add(env.hero.asset_id);
   }
+
+  // Eyebrow/kicker from the matched director-goal label (renderer convention ^^...^^)
+  const eyebrowLabel = extras?.goals?.find(g => g.goal_key === slots.goal_tag)?.goal_label || null;
+  if (eyebrowLabel) parts.push(`^^${eyebrowLabel.toUpperCase()}^^`);
 
   parts.push(env.greeting);
   if (slots.opening_md.trim()) parts.push(slots.opening_md.trim());
@@ -553,6 +562,13 @@ function assembleDraft(slots: SayaSlots, env: Envelope, policy: Policy | null, k
   }
 
   if (slots.closing_md.trim()) parts.push(slots.closing_md.trim());
+
+  // THE one primary CTA (renderer convention [[CTA]] → bulletproof button):
+  // first pinned catalog row. Never on link-blocked / plain-text policies.
+  if (!policy?.block_links && !policy?.force_plain_text && extras?.pinned?.url) {
+    const ctaLabel = (extras.pinned.anchor_hint || extras.pinned.title || 'Reserve your stay').slice(0, 40);
+    parts.push(`[[CTA]] [${ctaLabel}](${extras.pinned.url})`);
+  }
 
   const s = env.signature;
   parts.push(`Warm regards,\n\n${s.role} · ${s.org}\n${s.address_lines.join(', ')}\n${s.email} · ${s.website}`);
@@ -738,7 +754,7 @@ export async function POST(req: NextRequest) {
   const tSaya = Date.now();
   try {
     const slots = await sayaSlots(sayaSystem, userPrompt);
-    draft = assembleDraft(slots, envelope, ctx.policy, emailKind);
+    draft = assembleDraft(slots, envelope, ctx.policy, emailKind, { goals: ctx.goals, pinned: ctx.links.find(l => l.is_pinned && l.url) ?? null });
     trace.push({ step: 'writer', agent_id: AGENT_SAYA, latency_ms: Date.now() - tSaya, ok: true });
   } catch (e) {
     trace.push({ step: 'writer', agent_id: AGENT_SAYA, latency_ms: Date.now() - tSaya, ok: false, note: (e as Error).message });
@@ -764,7 +780,7 @@ export async function POST(req: NextRequest) {
     try {
       const retryPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, veda.critique);
       const retriedSlots = await sayaSlots(sayaSystem, retryPrompt);
-      const retried = assembleDraft(retriedSlots, envelope, ctx.policy, emailKind);
+      const retried = assembleDraft(retriedSlots, envelope, ctx.policy, emailKind, { goals: ctx.goals, pinned: ctx.links.find(l => l.is_pinned && l.url) ?? null });
       const vedaRetry = await vedaScore(retried, retryPrompt, !!ctx.policy?.force_plain_text, !!ctx.policy?.block_links);
       if (vedaRetry.score > veda.score) {
         draft = retried;
