@@ -1,6 +1,10 @@
 'use client';
 // app/guest/newsletters/[campaign_id]/_components/CampaignEditor.tsx
 // PBS 2026-07-05 v2 · 2026-07-21 v3: shared renderEmailFrame() for live preview.
+// PBS 2026-07-23 v4: canonical renderer (lib/emailRenderer renderNewsletterEmail)
+// — the exact renderer vendored into the send edge functions, so the live
+// preview IS the sent email. Chrome comes from the server page
+// (v_marketing_property_email_settings) via the `chrome` prop.
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -8,23 +12,14 @@ import TenantLink from '@/components/nav/TenantLink';
 import { supabase } from '@/lib/supabase';
 import MediaPicker from './MediaPicker';
 import RefineNewsletterButton from './RefineNewsletterButton';
-import { renderEmailFrame, markdownToInlineHtml } from '@/lib/emailFrame';
+import { renderNewsletterEmail, type EmailChrome } from '@/lib/emailRenderer';
 
-interface Props { initial: Record<string, unknown>; }
+interface Props { initial: Record<string, unknown>; chrome?: EmailChrome | null; }
 
 const WHITE='#FFFFFF'; const HAIR='#E6DFCC'; const INK='#1B1B1B';
 const INK_M='#5A5A5A'; const GREEN='#1F3A2E'; const RED='#B03826';
 
-// Extract first ![](url) as hero, strip it from body_md before rendering the frame.
-function splitHeroAndBody(md: string): { heroUrl: string | null; bodyMd: string } {
-  const m = /!\[[^\]]*\]\(([^)]+)\)/m.exec(md);
-  if (!m) return { heroUrl: null, bodyMd: md };
-  const url = m[1];
-  const bodyMd = md.replace(m[0], '').replace(/^\s*\n+/, '');
-  return { heroUrl: url, bodyMd };
-}
-
-export default function CampaignEditor({ initial }: Props) {
+export default function CampaignEditor({ initial, chrome }: Props) {
   const router = useRouter();
   const init = initial as {
     campaign_id: string; name?: string; subject?: string; body_md?: string; from_name?: string;
@@ -114,16 +109,13 @@ export default function CampaignEditor({ initial }: Props) {
     else setBodyMd(`![](${url})\n\n` + bodyMd);
   }
 
-  // Live preview via shared frame
-  const { heroUrl, bodyMd: bodyWithoutHero } = splitHeroAndBody(bodyMd);
-  const previewHtml = renderEmailFrame({
-    heroImageUrl: heroUrl,
-    heroAlt: subject || name,
-    bodyHtml: markdownToInlineHtml(bodyWithoutHero),
-    propertyName: 'THE NAMKHAN',
-    propertyEmail: fromEmail || 'info@thenamkhan.com',
-    propertyWebsite: 'thenamkhan.com',
-    unsubscribeUrl: '#unsubscribe',
+  // Live preview via THE canonical renderer — identical to the send path.
+  // No vars passed: tokens like {{first_name}} stay visible in previews.
+  const previewHtml = renderNewsletterEmail({
+    subjectForTitle: subject || name,
+    bodyMd,
+    chrome: chrome ?? null,
+    mode: 'full',
   });
 
   return (
@@ -224,12 +216,12 @@ export default function CampaignEditor({ initial }: Props) {
         </div>
 
         <div>
-          <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:8 }}>Live preview (shared frame)</div>
+          <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:8 }}>Live preview (canonical renderer — what guests receive)</div>
           <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:6, overflow:'hidden' }}>
             <div style={{ padding:'8px 12px', background:'#F5F0E1', borderBottom:'1px solid '+HAIR, fontSize:11, color:INK_M }}>
               Subject: <strong style={{ color:INK }}>{subject || '(no subject)'}</strong>
             </div>
-            <iframe title="campaign-preview" srcDoc={previewHtml} style={{ width:'100%', height:720, border:'none', background:'#F0EBE1', display:'block' }} />
+            <iframe title="campaign-preview" srcDoc={previewHtml} style={{ width:'100%', height:720, border:'none', background:'#FFFFFF', display:'block' }} />
           </div>
         </div>
       </div>
