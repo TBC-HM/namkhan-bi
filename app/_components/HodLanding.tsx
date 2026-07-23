@@ -44,6 +44,10 @@ interface Props {
   propertyId?: number;
   liveTiles?: KpiTileProps[];
   extraContainers?: React.ReactNode;
+  /** PBS 2026-07-23: 4-col grid slot rendered directly below the top row of 4
+   *  (Shortcuts / My Reports / My Tasks / External Links). Used on /holding/it
+   *  for the Module Documentation panel — same-size sits under Shortcuts. */
+  secondRow?: React.ReactNode;
   conclusions?: {
     insights: Insight[];
     title?: string;
@@ -54,7 +58,7 @@ interface Props {
   settingsHref?: string;
 }
 
-export default async function HodLanding({ slug, propertyId, liveTiles, extraContainers, conclusions, settingsHref }: Props) {
+export default async function HodLanding({ slug, propertyId, liveTiles, extraContainers, secondRow, conclusions, settingsHref }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg = pid === PROPERTY_ID ? DEPT_CFG[slug] : getDeptCfg(slug, pid);
 
@@ -188,6 +192,13 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
           <ExternalLinksPanel initial={externalLinks} propertyId={pid} deptSlug={slug} userEmail={DEFAULT_USER_EMAIL} />
         </Container>
       </div>
+
+      {/* PBS 2026-07-23 · optional 2nd row · same 4-col grid so caller's Container sits under Shortcuts */}
+      {secondRow && (
+        <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+          {secondRow}
+        </div>
+      )}
 
       {conclusions && (
         <div style={fullRow}>
