@@ -5,7 +5,7 @@
 // Author: IT-team agent · 2026-05-13 · #58.
 
 import { NextResponse } from 'next/server';
-import { fetchCostBreakdown } from '@/app/cockpit-v2/_lib/data-port';
+import { fetchCostBreakdown } from '@/app/holding/it/cockpit/_lib/data-port';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;

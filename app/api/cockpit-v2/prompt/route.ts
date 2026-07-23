@@ -15,7 +15,7 @@
 // public.cockpit_audit_log.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sbCockpit } from '@/app/cockpit-v2/_lib/supabase-cockpit';
+import { sbCockpit } from '@/app/holding/it/cockpit/_lib/supabase-cockpit';
 import { getSessionScope } from '@/lib/session-scope';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 

@@ -142,7 +142,7 @@ type Block =
 
 const IMG_ONLY_RE = /^!\[([^\]]*)\]\(([^)]+)\)\s*$/;
 const CTA_LINE_RE = /^\[\[CTA\]\]\s*\[([^\]]+)\]\(([^)]+)\)\s*$/;
-const CARD_LINE_RE = /^\*\*\[([^\]]+)\]\(([^)]+)\)\*\*\s*(?:[—–-]\s*(.*))?$/s;
+const CARD_LINE_RE = /^\*\*\[([^\]]+)\]\(([^)]+)\)\*\*\s*(?:[—–-]\s*([\s\S]*))?$/;
 
 function parseBlocks(md: string): Block[] {
   const raw = (md || '').replace(/\r\n/g, '\n').split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);

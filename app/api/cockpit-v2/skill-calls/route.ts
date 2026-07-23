@@ -10,7 +10,7 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { fetchAgentArchive } from '@/app/cockpit-v2/_lib/data';
+import { fetchAgentArchive } from '@/app/holding/it/cockpit/_lib/data';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

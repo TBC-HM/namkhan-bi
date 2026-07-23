@@ -8,7 +8,7 @@
 // the property themes (Namkhan / Donna) from the parent app shell.
 
 import Link from 'next/link';
-import { sbCockpit } from '@/app/cockpit-v2/_lib/supabase-cockpit';
+import { sbCockpit } from '@/app/holding/it/cockpit/_lib/supabase-cockpit';
 import styles from './_styles.module.css';
 
 export const dynamic = 'force-dynamic';

@@ -10,7 +10,7 @@
 // Author: IT-team agent · 2026-05-13 · #77.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchActivityEvents } from '@/app/cockpit-v2/_lib/data';
+import { fetchActivityEvents } from '@/app/holding/it/cockpit/_lib/data';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
