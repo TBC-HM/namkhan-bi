@@ -148,21 +148,29 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
     await sb.rpc('fn_google_oauth_refresh_if_expired', { p_property_id: pid });
   } catch { /* silent — banner will prompt reconnect if truly dead */ }
 
-  const [oauthR, reviewsR, mapsR, summaryR, compR] = await Promise.all([
+  const [oauthR, reviewsR, mapsR, summaryR, compR, allowlistR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', pid).eq('source', 'google').order('reviewed_at', { ascending: false }).limit(500),
     sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', pid).order('date', { ascending: false }).limit(400),
     sb.from('v_review_source_summary').select('*').eq('property_id', pid).eq('source', 'google').maybeSingle(),
     sb.from('v_compset_competitor_property_detail').select('comp_id, property_name, star_rating, is_self, is_active, city').eq('is_active', true).order('star_rating', { ascending: false }).limit(10),
+      sb.schema('marketing').from('google_api_allowlist_state').select('*').eq('property_id', pid).maybeSingle(),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
+  const allowlist = (allowlistR?.data as {
+    case_id: string; applied_at: string; expected_by_earliest: string | null; expected_by_latest: string | null; status: string; approved_at: string | null;
+  } | null) ?? null;
+  const allowlistPending = !!allowlist && allowlist.status !== 'approved';
+  const allowlistApproved = allowlist?.status === 'approved';
+  const oauthLive = !!oauth;
+  const locationDetected = !!(oauth && oauth.location_id);
   const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
   const mapsRows: MapsRow[] = (mapsR.data as MapsRow[]) ?? [];
   const summary: SummaryRow | null = (summaryR.data as SummaryRow | null) ?? null;
   const competitors: CompetitorRow[] = (compR.data as CompetitorRow[]) ?? [];
 
-  const connected = !!(oauth && oauth.location_id);
+  const connected = oauthLive; // oauth row present = connected. Location detect gated on GBP API allowlist.
 
   // Google-source rating from summary view (weighted by review count on platform).
   const rating = summary?.score_overall != null ? Number(summary.score_overall) : null;
@@ -224,7 +232,18 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
       >
         {/* Header row — connection state + actions */}
         <div style={{ gridColumn: '1 / -1' }}>
-          <ConnectionHeader oauth={oauth} pid={pid} />
+          <ConnectionHeader oauth={oauth} pid={pid} allowlist={allowlist} />
+          {oauthLive && allowlistPending && (
+            <div style={{ padding:'12px 16px', borderRadius:6, background:'#EEF3FB', border:'1px solid #B8CDE8', color:'#1D3E76', fontSize:12 }}>
+              <div><strong>Google OAuth connected · Business Profile API allowlist pending.</strong></div>
+              <div style={{ fontSize:11, marginTop:4, color:'#3A5A85', lineHeight:1.5 }}>
+                Case <code>{allowlist!.case_id}</code> · submitted {fmtDate(allowlist!.applied_at)} · typical review 7–10 business days
+                {allowlist!.expected_by_earliest && allowlist!.expected_by_latest ? ` · expected ${fmtDate(allowlist!.expected_by_earliest)}–${fmtDate(allowlist!.expected_by_latest)}` : ''}.
+                <br/>
+                Reviews / insights / Q&amp;A / posts / photo performance will populate automatically once Google approves. No reconnect needed — the token stays valid.
+              </div>
+            </div>
+          )}
           {connectedParam === 'connected' && (
             <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 4, background: '#E4F1E0', border: '1px solid #A9CFA0', color: GREEN, fontSize: 12 }}>
               <strong>Google Business Profile connected.</strong> First insights pull runs within the minute.
@@ -350,21 +369,22 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
 
 // ─── Sub-components ───────────────────────────────────────────────────────
 
-function ConnectionHeader({ oauth, pid }: { oauth: OAuthRow | null; pid: number }) {
-  const connected = !!(oauth && oauth.location_id);
-  if (!connected) {
+function ConnectionHeader({ oauth, pid, allowlist }: { oauth: OAuthRow | null; pid: number; allowlist: { case_id: string; applied_at: string; expected_by_earliest: string|null; expected_by_latest: string|null; status: string; approved_at: string|null } | null }) {
+  const oauthLive = !!oauth;
+  const locationDetected = !!(oauth && oauth.location_id);
+  const allowlistPending = !!allowlist && allowlist.status !== 'approved';
+  const allowlistApproved = allowlist?.status === 'approved';
+  if (!oauthLive) {
     return (
       <div style={{ padding: '14px 16px', borderRadius: 6, background: '#FDF7E6', border: '1px solid #E8CB84', color: '#8B6914', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginBottom: 3 }}>Connect Google Business Profile</div>
           <div style={{ color: '#8B6914', lineHeight: 1.5 }}>
-            {oauth && !oauth.location_id
-              ? 'OAuth is granted but no business location was detected. Reconnect to complete Business Profile setup.'
-              : 'One-time OAuth grants Namkhan the business.manage scope so reviews, Q&A, posts and insights sync automatically.'}
+            One-time OAuth grants Namkhan the business.manage scope so reviews, Q&A, posts and insights sync automatically.
           </div>
         </div>
         <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={btnPrimary}>
-          {oauth ? 'Reconnect Google →' : 'Connect Google Business →'}
+          Connect Google Business →
         </TenantLink>
       </div>
     );
@@ -375,12 +395,14 @@ function ConnectionHeader({ oauth, pid }: { oauth: OAuthRow | null; pid: number 
         <SourceBadge source="google" size="md" />
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>{oauth?.location_name ?? 'The Namkhan · Luang Prabang'}</div>
-          <div style={{ fontSize: 10, color: INK_M }}>Connected {fmtDate(oauth?.connected_at ?? null)} · scope: business.manage</div>
+          <div style={{ fontSize: 10, color: INK_M }}>
+            Connected {fmtDate(oauth?.connected_at ?? null)} · {locationDetected ? 'location detected · ready' : (allowlistPending ? 'awaiting Google API allowlist' : (allowlistApproved ? 'ready — location detection pending' : 'API access not yet requested'))}
+          </div>
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <TenantLink href={`/api/google/pull-now?property=${pid}`} style={btnPrimary}>Pull latest</TenantLink>
-        <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={btnGhost}>Reconnect</TenantLink>
+        {!allowlistPending && (<TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={btnGhost}>Reconnect</TenantLink>)}
         <TenantLink href="/marketing/social" style={btnGhost}>← Socials hub</TenantLink>
       </div>
     </div>
