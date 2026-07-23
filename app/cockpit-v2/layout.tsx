@@ -1,37 +1,22 @@
 // app/cockpit-v2/layout.tsx
 //
-// PBS 2026-07-23 (5th pass — canonical match with /holding/it):
-// Kill the giant Fraunces italic title from Page shell.
-// Kill the bespoke GroupedTabBar (chunky serif tabs with fat gold underline).
-// Each page inside cockpit-v2 now uses <DashboardPage title=... tabs=...>
-// which renders the canonical sticky-top pattern (thin sans-serif tabs,
-// sand underline on active, action slot on right).
+// PBS 2026-07-23 (6th pass): drop the Page shell entirely. It was rendering
+// its own eyebrow ("COCKPIT · V2") + HeaderPills strip, and DashboardPage
+// (used by each page inside) renders its OWN sticky top with the same
+// HeaderPills — so pills appeared twice + an empty dark band sat between.
 //
-// The 6 groups (Home / Fleet / Knowledge / Inventory / Ops / Build) become
-// the `tabs` prop passed by each page. The current-group's sub-tabs get
-// registered via nav-subgroups (or passed inline if simpler).
+// Global BC/CEO/Revenue/… top nav lives ABOVE the Page shell in the app
+// layout, so removing Page doesn't remove that. What we get: pure white body,
+// canonical DashboardPage owns the header, one FX pills row, no eyebrow.
 
-import { GROUPS } from './_lib/groups';
-import Page from '@/components/page/Page';
 import '@/app/(cockpit)/_design/internal/tokens.css';
 
 export const dynamic = 'force-dynamic';
 
-// Groups metadata is now co-located with _lib so pages can import + build
-// their own DashboardPage tabs prop. See _lib/groups.ts.
-export { GROUPS };
-
 export default function CockpitV2Layout({ children }: { children: React.ReactNode }) {
   return (
-    <Page
-      /* No `title` — DashboardPage on each page renders the real title. */
-      eyebrow="cockpit · v2"
-      hideWeather={false}
-    >
-      {/* Canonical .cockpit-design scope + cream body per tokens.css --bg. */}
-      <div className="cockpit-design" style={{ minHeight: '100vh' }}>
-        {children}
-      </div>
-    </Page>
+    <div className="cockpit-design" style={{ minHeight: '100vh', background: '#FFFFFF' }}>
+      {children}
+    </div>
   );
 }
