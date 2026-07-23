@@ -24,6 +24,12 @@
 //      in context_used.surfaces. New grounding surfaces: v_reality_profile,
 //      v_room_grounding, v_facility_grounding, v_transport_options, v_boat_cruises.
 //      Link catalog: active only, pinned first, no 20-row cap.
+//   6. SLOT CONCEPT (plan v3): when the request carries a concept — explicit
+//      body.concept, or a short prior.body_md that is the accepted slot's
+//      creative brief (draft campaigns created from Director slots carry the
+//      concept as body_md) — it is injected at the TOP of Saya's user prompt
+//      as a creative brief and takes precedence as the composer's p_seed_text
+//      so product/photo matching keys off the concept.
 //
 // Backward-compatible: still returns { ok, proposal: { subject, body_md, goal_tag } }.
 // PUT (save-as-draft) unchanged except it now accepts an optional hero_asset_id.
@@ -85,6 +91,7 @@ type ProposeBody = {
   group_slug?: string | null;
   instruction?: string;
   prior?: { subject?: string; body_md?: string };
+  concept?: string;
 };
 
 type SaveBody = {
@@ -277,9 +284,16 @@ function assembleUserPrompt(
   ctx: Awaited<ReturnType<typeof loadContext>>,
   env: Envelope,
   fallbackPhotos: PhotoPick[],
+  concept: string,
   vedaCritique?: string | null,
 ): string {
   const parts: string[] = [];
+  if (concept) {
+    parts.push('### SLOT CONCEPT — creative brief (follow this)');
+    parts.push('This concept was approved at plan level. Your opening, practical notes, blurbs and closing must execute THIS angle — do not drift to a different theme.');
+    parts.push(concept);
+    parts.push('');
+  }
   parts.push('### CAMPAIGN');
   parts.push(`kind: ${body.kind ?? 'broadcast'}`);
   parts.push(`target_date: ${body.target_date ?? 'flexible'}`);
@@ -570,7 +584,22 @@ export async function POST(req: NextRequest) {
   catch { return NextResponse.json({ ok: false, error: 'bad_json' }, { status: 400 }); }
 
   const seed = String(body.seed_text ?? '').trim();
-  if (!seed) return NextResponse.json({ ok: false, error: 'seed_text_required' }, { status: 400 });
+
+  // SLOT CONCEPT (plan v3): explicit body.concept wins; otherwise a short
+  // prior.body_md that isn't an assembled email (no signature) is treated as
+  // the slot's creative brief — draft campaigns created from accepted Director
+  // slots carry the concept as their body_md.
+  const explicitConcept = String(body.concept ?? '').trim();
+  const priorBody = String(body.prior?.body_md ?? '').trim();
+  const priorLooksLikeConcept =
+    !explicitConcept &&
+    priorBody.length > 0 &&
+    priorBody.length <= 600 &&
+    !priorBody.includes('Warm regards') &&
+    !priorBody.toLowerCase().startsWith('placeholder body');
+  const concept = (explicitConcept || (priorLooksLikeConcept ? priorBody : '')).slice(0, 1000);
+
+  if (!seed && !concept) return NextResponse.json({ ok: false, error: 'seed_text_required' }, { status: 400 });
 
   const group_slug = body.group_slug ? String(body.group_slug) : null;
   const sb = getSupabaseAdmin();
@@ -593,6 +622,8 @@ export async function POST(req: NextRequest) {
   const emailKind: EmailKind = normaliseKind(body.kind);
 
   // 1. Deterministic composer — hero photo, product blocks, greeting, signature.
+  //    The concept (when present) takes precedence as the seed so product/photo
+  //    matching keys off the approved angle.
   const tComposer = Date.now();
   let envelope: Envelope = parseEnvelope(null, emailKind);
   let composerOk = false;
@@ -600,7 +631,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await sb.rpc('fn_compose_newsletter_email', {
       p_campaign_kind: emailKind,
       p_group_slug: group_slug,
-      p_seed_text: seed,
+      p_seed_text: concept || seed,
       p_target_date: body.target_date ? String(body.target_date).slice(0, 10) : null,
       p_max_products: 4,
       p_requested_by: 'propose-one',
@@ -629,7 +660,7 @@ export async function POST(req: NextRequest) {
     .concat(isOta ? [ANTI_SPAM_FILTER_RULES] : [])
     .join('\n\n');
 
-  const userPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos);
+  const userPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept);
 
   // 4. Saya · prose slots → deterministic assembly
   let draft: SayaDraft;
@@ -660,7 +691,7 @@ export async function POST(req: NextRequest) {
   if (!isRefine && veda.score < 60 && veda.critique) {
     const tRetry = Date.now();
     try {
-      const retryPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, veda.critique);
+      const retryPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, veda.critique);
       const retriedSlots = await sayaSlots(sayaSystem, retryPrompt);
       const retried = assembleDraft(retriedSlots, envelope, ctx.policy, emailKind);
       const vedaRetry = await vedaScore(retried, retryPrompt, !!ctx.policy?.force_plain_text, !!ctx.policy?.block_links);
@@ -702,6 +733,7 @@ export async function POST(req: NextRequest) {
       reality_profile: !!ctx.reality,
       photos: envelopePhotoCount + fallbackPhotos.length,
       policy_applied: !!ctx.policy,
+      concept_used: !!concept,
     },
   });
 }
