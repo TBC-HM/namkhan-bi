@@ -415,6 +415,7 @@ function assembleUserPrompt(
   fallbackPhotos: PhotoPick[],
   concept: string,
   deep: DeepDive,
+  keyDates: string[] = [],
   vedaCritique?: string | null,
 ): string {
   const parts: string[] = [];
@@ -430,6 +431,13 @@ function assembleUserPrompt(
   parts.push(`audience_type: ${body.audience_type ?? 'b2c'}`);
   if (body.group_slug) parts.push(`audience_group: ${body.group_slug}`);
   parts.push(`seed_text: ${(body.seed_text ?? '').trim()}`);
+
+  if (keyDates.length > 0) {
+    parts.push('');
+    parts.push('### KEY DATES near the send date (source-market holidays — angle toward them where natural)');
+    parts.push('A holiday within two weeks of this email = a weekend-getaway hook for that market (Bangkok ~1h flight, Hanoi short direct flight, Vientiane ~2h by rail). Use it only if it fits the concept — never force it.');
+    for (const k of keyDates) parts.push(`- ${k}`);
+  }
 
   if (ctx.group?.voice_summary) {
     parts.push('');
@@ -909,7 +917,11 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
   const isOta = !!(ctx.policy?.force_plain_text && ctx.policy?.block_links);
   const isB2b = ctx.group?.voice_type === 'b2b' || body.audience_type === 'b2b';
   const lpCanon = /\b(town|culture|laos|luang|prabang)\b/i.test(`${concept} ${seed}`);
-  const sayaSystem = [buildEmailSystemPrompt(emailKind, ctx.policy, { b2bVoice: isB2b, lpCanon }), SLOT_OUTPUT_CONTRACT]
+  // SEA getaway canon (owner strategy 2026-07-23): always for guests-sea / fit /
+  // yoga-sea; any group when the concept speaks SEA-getaway language.
+  const seaGetaway = ['guests-sea', 'fit', 'yoga-sea'].includes(group_slug ?? '')
+    || /\b(bangkok|hanoi|vientiane|singapore|getaway|weekend)\b/i.test(`${concept} ${seed}`);
+  const sayaSystem = [buildEmailSystemPrompt(emailKind, ctx.policy, { b2bVoice: isB2b, lpCanon, seaGetaway }), SLOT_OUTPUT_CONTRACT]
     .concat(isOta ? [ANTI_SPAM_FILTER_RULES] : [])
     .join('\n\n');
 
@@ -919,7 +931,27 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
   const deep = await loadDeepDive(sb, conceptKeywords);
   trace.push({ step: 'deep_dive', agent_id: AGENT_LIAM, latency_ms: Date.now() - tDeep, ok: true, note: `kw=${conceptKeywords.length} act=${deep.activities.length} ret=${deep.retreats.length} rooms=${deep.rooms.length} fac=${deep.facilities.length}` });
 
-  const userPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, deep);
+  // KEY DATES (owner 2026-07-23): source-market holidays within +/-14 days of the
+  // campaign's planned/target date, injected into the writer prompt.
+  let keyDates: string[] = [];
+  if (body.target_date) {
+    try {
+      const t = new Date(String(body.target_date).slice(0, 10) + 'T00:00:00Z').getTime();
+      if (Number.isFinite(t)) {
+        const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+        const { data } = await sb.schema('core').from('public_holidays')
+          .select('country_code, holiday_date, name_en, name_local')
+          .in('country_code', ['LA', 'TH', 'VN', 'CN', 'SG'])
+          .gte('holiday_date', iso(t - 14 * 86400000))
+          .lte('holiday_date', iso(t + 14 * 86400000))
+          .order('holiday_date');
+        keyDates = ((data as Array<{ country_code: string; holiday_date: string; name_en: string | null; name_local: string | null }> | null) ?? [])
+          .map(h => `${h.holiday_date} · ${h.country_code} · ${h.name_en ?? h.name_local ?? 'holiday'}`);
+      }
+    } catch { /* key dates are additive — never fatal */ }
+  }
+
+  const userPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, deep, keyDates);
 
   // 4. Saya · prose slots → deterministic assembly
   const pinnedCta = pickPinnedCta(ctx.links, group_slug, `${concept} ${seed}`);
@@ -951,7 +983,7 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
   if (!isRefine && veda.score < 60 && veda.critique) {
     const tRetry = Date.now();
     try {
-      const retryPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, deep, veda.critique);
+      const retryPrompt = assembleUserPrompt(body, ctx, envelope, fallbackPhotos, concept, deep, keyDates, veda.critique);
       const retriedSlots = await sayaSlots(sayaSystem, retryPrompt);
       const retried = assembleDraft(retriedSlots, envelope, ctx.policy, emailKind, { goals: ctx.goals, pinned: pinnedCta });
       const vedaRetry = await vedaScore(retried, retryPrompt, !!ctx.policy?.force_plain_text, !!ctx.policy?.block_links);

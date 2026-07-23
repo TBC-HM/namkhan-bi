@@ -38,11 +38,20 @@ type Body = {
   property_id?: number;
   start_date?: string;
   end_date?: string;
-  cadence_per_week?: number;
+  cadence_per_week?: number;      // legacy (weekly model) — back-compat only
+  cadence_per_month?: number;     // owner cadence, fractional OK (e.g. 1.5 = every ~3 weeks)
   group_slug?: string | null;
   audience_types?: string[];
   regenerate_empty_only?: boolean;
   direction?: string;
+};
+
+type HolidayRow = {
+  country_code: string;
+  holiday_date: string;
+  name_en: string | null;
+  name_local: string | null;
+  is_national: boolean | null;
 };
 
 function ymd(d: Date): string {
@@ -84,6 +93,48 @@ function pickSlotDates(all: Date[], cadencePerWeek: number): Date[] {
     }
   }
   return picked;
+}
+
+// ── Day-interval cadence (owner 2026-07-23: "1.5/month must mean every ~3 weeks") ──
+// The old week-integer model could not express monthly cadences: the client sent
+// round(cadence_per_month / 4.33) which turned anything <= ~4.3/month into 1/WEEK.
+// New model: start at the first preferred weekday (Tuesday) on/after start_date,
+// step interval_days = round(30.44 / cadence_per_month), snap each raw step date
+// to the NEAREST Tue/Thu (tie → earlier), clamp to range, dedupe.
+function snapToTueThu(d: Date): Date {
+  let best: Date | null = null;
+  let bestDist = 99;
+  for (let off = -3; off <= 3; off++) {
+    const c = new Date(d.getTime() + off * 86400000);
+    const dow = c.getUTCDay();
+    if (dow !== 2 && dow !== 4) continue;
+    const dist = Math.abs(off);
+    if (dist < bestDist || (dist === bestDist && best !== null && c.getTime() < best.getTime())) {
+      best = c; bestDist = dist;
+    }
+  }
+  return best ?? d;
+}
+
+function pickSlotDatesByMonthCadence(startISO: string, endISO: string, cadencePerMonth: number): { dates: Date[]; intervalDays: number } {
+  if (!(cadencePerMonth > 0)) return { dates: [], intervalDays: 0 };
+  const start = new Date(startISO + 'T00:00:00Z');
+  const end = new Date(endISO + 'T00:00:00Z');
+  if (!(end.getTime() >= start.getTime())) return { dates: [], intervalDays: 0 };
+  const intervalDays = Math.max(1, Math.round(30.44 / cadencePerMonth));
+  const first = new Date(start);
+  while (first.getUTCDay() !== 2) first.setUTCDate(first.getUTCDate() + 1); // first Tuesday on/after start
+  const out: Date[] = [];
+  const seen = new Set<string>();
+  for (let t = first.getTime(); t <= end.getTime(); t += intervalDays * 86400000) {
+    const snapped = snapToTueThu(new Date(t));
+    if (snapped.getTime() < start.getTime() || snapped.getTime() > end.getTime()) continue;
+    const key = ymd(snapped);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(snapped);
+  }
+  return { dates: out, intervalDays };
 }
 
 // Rotate through active goals weighted by weight. Higher weight = more slots.
@@ -174,17 +225,37 @@ const PLAN_SYSTEM = [
   'No code fences, no preamble, no trailing text.',
 ].join('\n');
 
+// Long-weekend note: holiday on Mon/Fri, or part of a consecutive same-country run.
+function holidayNote(h: HolidayRow, all: HolidayRow[]): string {
+  const d = new Date(h.holiday_date + 'T00:00:00Z');
+  const dow = d.getUTCDay();
+  const adjacent = all.some(o => o.country_code === h.country_code && o.holiday_date !== h.holiday_date
+    && Math.abs(new Date(o.holiday_date + 'T00:00:00Z').getTime() - d.getTime()) <= 86400000);
+  if (dow === 1 || dow === 5 || adjacent) return ' · long weekend';
+  return '';
+}
+
 function buildPlanPrompt(
   slots: SlotSeed[],
   direction: string,
   tone: string,
   group: { slug: string; name: string; voice_type: string | null; voice_summary: string | null } | null,
   brandAnchor: string,
+  holidays: HolidayRow[] = [],
 ): string {
   const parts: string[] = [];
   parts.push('### PROPERTY');
   parts.push(brandAnchor);
   parts.push('Seasons: green season May–October (warm rains, wild river, quieter) · dry season November–April (warm days, cool river evenings, peak).');
+
+  if (holidays.length > 0) {
+    parts.push('');
+    parts.push('### KEY DATES (source-market holidays in/near the plan window)');
+    parts.push('Any slot within ±10 days of a key date should ANGLE toward it — weekend-getaway framing for that market (Bangkok ~1h flight, Hanoi short direct flight, Vientiane ~2h by the Laos–China Railway). A slot ~3 weeks BEFORE a major date is the booking window — use it to plant the trip.');
+    for (const h of holidays) {
+      parts.push(`- ${h.holiday_date} · ${h.country_code} · ${h.name_en ?? h.name_local ?? 'holiday'}${holidayNote(h, holidays)}`);
+    }
+  }
 
   parts.push('');
   parts.push('### AUDIENCE');
@@ -220,6 +291,7 @@ async function proposeSlotIdeas(
   tone: string,
   group: { slug: string; name: string; voice_type: string | null; voice_summary: string | null } | null,
   brandAnchor: string,
+  holidays: HolidayRow[] = [],
 ): Promise<{ ideas: Array<SlotIdea | null>; error: string | null }> {
   const ideas: Array<SlotIdea | null> = Array(slots.length).fill(null);
   let firstError: string | null = null;
@@ -227,7 +299,7 @@ async function proposeSlotIdeas(
   for (let offset = 0; offset < slots.length; offset += AI_CHUNK_SIZE) {
     const chunk = slots.slice(offset, offset + AI_CHUNK_SIZE);
     try {
-      const prompt = buildPlanPrompt(chunk, direction, tone, group, brandAnchor);
+      const prompt = buildPlanPrompt(chunk, direction, tone, group, brandAnchor, holidays);
       const text = await callAnthropic(PLAN_SYSTEM, prompt, 4000);
       const parsed = JSON.parse(stripCodeFences(text));
       if (!Array.isArray(parsed)) throw new Error('plan_json_not_array');
@@ -256,6 +328,7 @@ export async function POST(req: NextRequest) {
   const start_date = String(body?.start_date || '').trim();
   const end_date = String(body?.end_date || '').trim();
   const cadence_per_week = Math.max(0, Math.min(7, Math.round(Number(body?.cadence_per_week ?? 1))));
+  const cadence_per_month = Number(body?.cadence_per_month ?? 0);
   const group_slug = body?.group_slug ? String(body.group_slug) : null;
   const audience_types = Array.isArray(body?.audience_types) && body!.audience_types!.length > 0
     ? body!.audience_types!.map(String)
@@ -312,10 +385,51 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Compute slot dates
-  const allDays = daysBetween(start_date, end_date);
-  const dates = pickSlotDates(allDays, cadence_per_week);
+  // Compute slot dates — day-interval model when cadence_per_month is given
+  // (owner cadence; fractional OK), legacy weekly model otherwise.
+  let dates: Date[];
+  let interval_days = 0;
+  if (cadence_per_month > 0) {
+    const picked = pickSlotDatesByMonthCadence(start_date, end_date, cadence_per_month);
+    dates = picked.dates;
+    interval_days = picked.intervalDays;
+  } else {
+    dates = pickSlotDates(daysBetween(start_date, end_date), cadence_per_week);
+  }
   const tone = toneForGroup(group_slug);
+
+  // KEY DATES: source-market holidays in the window (+35d lookahead so the
+  // booking-window logic can see dates just past the range). core is PostgREST-exposed.
+  let holidays: HolidayRow[] = [];
+  {
+    const endPlus = ymd(new Date(new Date(end_date + 'T00:00:00Z').getTime() + 35 * 86400000));
+    const { data } = await sb.schema('core').from('public_holidays')
+      .select('country_code, holiday_date, name_en, name_local, is_national')
+      .in('country_code', ['LA', 'TH', 'VN', 'CN', 'SG'])
+      .gte('holiday_date', start_date)
+      .lte('holiday_date', endPlus)
+      .order('holiday_date');
+    holidays = ((data as HolidayRow[] | null) ?? []).filter(h => h.is_national !== false);
+  }
+
+  // Booking-window pull: for each major key date, the Tuesday ~3 weeks before is
+  // the moment to plant the trip — move the NEAREST slot (within 10 days) onto it.
+  if (cadence_per_month > 0 && dates.length > 0 && holidays.length > 0) {
+    const startT = new Date(start_date + 'T00:00:00Z').getTime();
+    const endT = new Date(end_date + 'T00:00:00Z').getTime();
+    for (const h of holidays) {
+      const target = snapToTueThu(new Date(new Date(h.holiday_date + 'T00:00:00Z').getTime() - 21 * 86400000));
+      if (target.getTime() < startT || target.getTime() > endT) continue;
+      if (dates.some(d => ymd(d) === ymd(target))) continue;
+      let bestIdx = -1; let bestDist = Infinity;
+      dates.forEach((d, i) => {
+        const dist = Math.abs(d.getTime() - target.getTime());
+        if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+      });
+      if (bestIdx >= 0 && bestDist <= 10 * 86400000 && bestDist > 0) dates[bestIdx] = target;
+    }
+    dates.sort((a, b) => a.getTime() - b.getTime());
+  }
 
   // Distribute goals across dates
   const goalCycle = planGoalRotation(goals, dates.length * audience_types.length);
@@ -341,7 +455,7 @@ export async function POST(req: NextRequest) {
 
   // AI propose stage — one Anthropic call per <=60-slot chunk. Never fatal.
   const { ideas, error: aiError } = slotSeeds.length > 0
-    ? await proposeSlotIdeas(slotSeeds, direction, tone, group, brandAnchor)
+    ? await proposeSlotIdeas(slotSeeds, direction, tone, group, brandAnchor, holidays)
     : { ideas: [] as Array<SlotIdea | null>, error: null };
   const aiUsed = ideas.filter(Boolean).length;
 
@@ -396,6 +510,9 @@ export async function POST(req: NextRequest) {
       dates_considered: dates.length,
       audiences: audience_types,
       cadence_per_week,
+      cadence_per_month: cadence_per_month > 0 ? cadence_per_month : null,
+      interval_days: interval_days || null,
+      key_dates_loaded: holidays.length,
       group_slug,
       tone,
     },

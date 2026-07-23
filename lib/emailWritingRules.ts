@@ -73,6 +73,16 @@ Sensory palette (pick ONE per email — don't stack them)
 - Touch: cool tile floor at dawn; warm oil in the spa; the boat's wooden seat under your legs.
 `;
 
+const SEA_GETAWAY = `
+SEA GETAWAY CANON — regional positioning (owner strategy 2026-07-23). Facts only from this list; NEVER invent flight schedules, airlines, frequencies or train times beyond these anchors.
+- Bangkok: ~1 hour direct flight to Luang Prabang.
+- Hanoi: short direct flight to Luang Prabang.
+- Vientiane: ~2 hours by the Laos–China Railway.
+- Positioning: The Namkhan is the weekend escape for the region — couples, families, small retreat groups from Bangkok, Hanoi, Vientiane and Singapore who want out of the city without a long haul.
+- The kitchen argument: farm-to-table from the property's OWN 10 hectares — the weekend tastes of what grew fifty metres from the table.
+- Register: SLH casual luxury in the jungle at the highest level — authentic and real, never formal. A barefoot-elegant weekend, not a resort programme.
+`;
+
 const LP_CANON = `
 LUANG PRABANG CANON — town + region facts. Use ONLY these; never invent attractions, distances or schedules.
 - Luang Prabang: UNESCO World Heritage old town at the confluence of the Mekong and the Nam Khan — royal-era wats, French-colonial shophouses, riverside lanes.
@@ -206,10 +216,11 @@ Return ONLY the JSON. No preamble, no code fence.
 export function buildEmailSystemPrompt(
   kind: EmailKind,
   policy?: PolicyOverlay | null,
-  opts?: { b2bVoice?: boolean; lpCanon?: boolean },
+  opts?: { b2bVoice?: boolean; lpCanon?: boolean; seaGetaway?: boolean },
 ): string {
   const parts: string[] = [CORE, NAMKHAN_CANON, KIND_HINTS[kind] ?? KIND_HINTS.broadcast];
   if (opts?.lpCanon || kind === 'broadcast') parts.push(LP_CANON);
+  if (opts?.seaGetaway || kind === 'broadcast') parts.push(SEA_GETAWAY);
   if (opts?.b2bVoice) parts.push(B2B_OVERLAY);
   if (policy?.force_plain_text || policy?.block_links) parts.push(OTA_OVERLAY);
   parts.push(OUTPUT);

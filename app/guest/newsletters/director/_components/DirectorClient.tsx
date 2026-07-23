@@ -148,7 +148,7 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
           property_id: propertyId,
           start_date: genFrom,
           end_date: genTo,
-          cadence_per_week: Math.max(1, Math.round(cadencePerMonth / 4.33)),   // month → week, integer (route indexes an array by this)
+          cadence_per_month: cadencePerMonth,   // owner cadence, fractional OK — route steps in DAYS (round(30.44/cadence))
           group_slug: groupFilter === 'all' ? null : groupFilter,
           audience_types: ['b2c'],
           regenerate_empty_only: regenerateEmptyOnly,
@@ -291,11 +291,28 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
     setMsg('Slot refined.'); setTimeout(()=>setMsg(''), 2500);
   }
 
+  // INSTANT bulk accept (owner 2026-07-23): local state only — no reload, no
+  // awaited per-email writes. The write-pending-drafts worker writes the emails
+  // in the background (~2-4 min per batch of 3).
+  // 2026-07-23 fix ("Bulk accept range does NOTHING"): candidates are now computed
+  // CLIENT-SIDE first — an empty range (e.g. the default From = today while the
+  // plan starts next month) previously round-tripped to the server, accepted 0,
+  // and silently optimistic-marked nothing visible. Now: zero candidates → clear
+  // message and no server call; server result drives the state update, and a
+  // 0-accepted response never fakes success.
   async function bulkAccept(schedule: boolean, range?: { from: string; to: string }) {
     setBusy('bulk');
     try {
       const from = range?.from ?? genFrom;
       const to = range?.to ?? genTo;
+      const candidates = filteredSlots.filter(s =>
+        s.slot_date >= from && s.slot_date <= to &&
+        (s.status === 'proposed' || s.status === 'refined') && !s.linked_campaign_id);
+      if (candidates.length === 0) {
+        setMsg(`No proposed slots between ${from} and ${to}${groupFilter === 'all' ? '' : ` for ${groupsBySlug.get(groupFilter)?.name ?? groupFilter}`}. Adjust the From/To dates above.`);
+        setTimeout(() => setMsg(''), 6000);
+        return;
+      }
       const res = await fetch('/api/marketing/director/bulk-accept', {
         method:'POST', headers:{'content-type':'application/json'},
         body: JSON.stringify({
@@ -307,23 +324,22 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
       });
       if (!res.ok) { setMsg(`Bulk accept failed: ${await res.text()}`); return; }
       const j = await res.json();
-      const n = j.accepted_count ?? j.approved_count ?? (Array.isArray(j.campaign_ids) ? j.campaign_ids.length : 0);
-      // INSTANT bulk accept (owner 2026-07-23): local state only — no reload, no
-      // awaited per-email writes. The write-pending-drafts worker writes the
-      // emails in the background (~2-4 min each batch of 3).
-      setSlots(prev => prev.map(s => {
-        const inRange = s.slot_date >= from && s.slot_date <= to;
-        const inGroup = groupFilter === 'all' || s.group_slug === groupFilter;
-        const acceptable = (s.status === 'proposed' || s.status === 'refined') && !s.linked_campaign_id;
-        return (inRange && inGroup && acceptable) ? { ...s, status: 'approved' as const } : s;
-      }));
-      setToast({ text: `Accepted ${n} slots — emails write automatically within ~2-4 min each (or open a draft and click Write email now).` , href: '/guest/newsletters/broadcasts' });
+      const n: number = j.accepted_count ?? j.approved_count ?? (Array.isArray(j.campaign_ids) ? j.campaign_ids.length : 0);
+      if (!j.ok || n === 0) {
+        setMsg(`Server accepted 0 of ${candidates.length} slots${Array.isArray(j.errors) && j.errors.length ? ` — ${String(j.errors[0]).slice(0, 140)}` : ''}.`);
+        setTimeout(() => setMsg(''), 8000);
+        return;
+      }
+      const candidateIds = new Set(candidates.map(s => s.id));
+      setSlots(prev => prev.map(s => candidateIds.has(s.id) ? { ...s, status: 'approved' as const } : s));
+      setToast({ text: `Accepted ${n} slots — emails write automatically within ~2-4 min each (or open a draft and click Write email now).`, href: '/guest/newsletters/broadcasts' });
       setTimeout(() => setToast(null), 12000);
     } finally { setBusy(''); }
   }
 
   // Owner 2026-07-23: one click accepts every currently-listed proposed/refined
-  // slot (whole plan horizon for the active group filter) via the bulk route.
+  // slot via the bulk route. Respects the active group filter (candidates come
+  // from filteredSlots AND bulkAccept passes group_slug to the server).
   async function acceptAllProposed(): Promise<void> {
     const candidates = filteredSlots.filter(s => (s.status === 'proposed' || s.status === 'refined') && !s.linked_campaign_id);
     if (candidates.length === 0) { setMsg('No proposed slots to accept.'); setTimeout(()=>setMsg(''), 2500); return; }
