@@ -239,7 +239,7 @@ export default async function BeyondCirclePage() {
             <a href="#approach" className={styles.navLink}>
               Approach
             </a>
-            <Link href="/cockpit-v2" className={styles.navCta}>
+            <Link href="/holding/it/cockpit" className={styles.navCta}>
               See the platform
             </Link>
           </div>
@@ -265,7 +265,7 @@ export default async function BeyondCirclePage() {
             design, brand, generative imagery, and more — paired with named human counterparts.
           </p>
           <div className={`${styles.ctaRow} ${styles.reveal} ${styles.reveal3}`}>
-            <Link href="/cockpit-v2" className={styles.ctaPrimary}>
+            <Link href="/holding/it/cockpit" className={styles.ctaPrimary}>
               See the platform →
             </Link>
             <a href="#disciplines" className={styles.ctaSecondary}>
@@ -532,7 +532,7 @@ export default async function BeyondCirclePage() {
         <h2>Want to see how it runs?</h2>
         <p>The cockpit is open. The architect-agent is on call.</p>
         <div className={styles.ctaBandRow}>
-          <Link href="/cockpit-v2" className={styles.ctaPrimary}>
+          <Link href="/holding/it/cockpit" className={styles.ctaPrimary}>
             Open the cockpit →
           </Link>
           <Link href="/cockpit/chat?dept=architect" className={styles.ctaSecondary}>
@@ -549,7 +549,7 @@ export default async function BeyondCirclePage() {
             <a href="#what">What we do</a>
             <a href="#disciplines">Disciplines</a>
             <a href="#agents">Agents</a>
-            <Link href="/cockpit-v2">Platform</Link>
+            <Link href="/holding/it/cockpit">Platform</Link>
           </div>
         </div>
       </footer>

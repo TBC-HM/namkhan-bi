@@ -78,7 +78,7 @@ export default async function FinanceAgentsPage() {
       <div style={{ marginTop: 18 }}>
         <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, marginBottom: 6 }}>Agents</div>
         <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginBottom: 10 }}>
-          Runtime cost + last-run status live on <a href="/cockpit-v2" style={{ color: 'var(--brass)' }}>/cockpit-v2</a> — the cockpit_agent_identity view doesn&apos;t expose agent_id, so a cross-join to governance.agent_runs needs schema work first.
+          Runtime cost + last-run status live on <a href="/holding/it/cockpit" style={{ color: 'var(--brass)' }}>/holding/it/cockpit</a> — the cockpit_agent_identity view doesn&apos;t expose agent_id, so a cross-join to governance.agent_runs needs schema work first.
         </div>
         <AgentsTable rows={rows} />
       </div>
