@@ -54,10 +54,23 @@ export async function POST(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
   const { data: camp, error: campErr } = await sb.schema('guest').from('campaigns')
-    .select('campaign_id, subject, body_md, campaign_kind, group_slug, template_key, relative_kind, relative_days, from_name')
+    .select('campaign_id, subject, body_md, campaign_kind, group_slug, template_key, relative_kind, relative_days, from_name, ai_prompt')
     .eq('campaign_id', id).maybeSingle();
   if (campErr) return NextResponse.json({ ok: false, error: `load_campaign_failed: ${campErr.message}` }, { status: 500 });
   if (!camp) return NextResponse.json({ ok: false, error: 'campaign_not_found' }, { status: 404 });
+
+  // Refine-prompt trail (owner 2026-07-23): every submitted instruction appends to
+  // the campaign's ai_prompt as a dated line — the style-memory feed. Cap 4000
+  // chars (oldest lines fall off first). Best-effort: a trail failure never
+  // blocks the refine itself.
+  try {
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    const trailLine = `\n[refine ${stamp}] ${instruction}`;
+    const next = `${String((camp as { ai_prompt?: string | null }).ai_prompt ?? '')}${trailLine}`;
+    await sb.schema('guest').from('campaigns')
+      .update({ ai_prompt: next.length > 4000 ? next.slice(-4000) : next })
+      .eq('campaign_id', id);
+  } catch { /* non-blocking */ }
 
   // Derive email kind: lifecycle → relative_kind; else broadcast
   const emailKind: EmailKind = (camp.campaign_kind === 'lifecycle' && camp.relative_kind)

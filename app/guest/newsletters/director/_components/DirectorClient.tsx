@@ -189,38 +189,19 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
       });
       if (!res.ok) { setMsg(`Accept failed: ${await res.text()}`); return; }
       const j = await res.json();
+      // INSTANT accept (owner 2026-07-23): update local state only — no reload,
+      // no awaited ~30s email write. The write-pending-drafts worker (pg_cron,
+      // every 2 min) writes the email in the background; WriteEmailButton on the
+      // draft stays as the manual instant path.
       const updated: SlotRow = { ...slot, status: 'approved', linked_campaign_id: j.campaign_id ?? slot.linked_campaign_id };
       setSlots(prev => prev.map(x => x.id===slot.id ? updated : x));
       setDrawerSlot(null);
-      if (j.campaign_id) {
-        // Auto-write: turn the accepted concept into a full email before the owner opens it.
-        setToast({ text: 'Accepted · writing the email… ~30s', href: j.edit_url ?? `/guest/newsletters/${j.campaign_id}` });
-        const wrote = await writeCampaignEmail(j.campaign_id);
-        setToast({
-          text: wrote
-            ? 'Email written and saved to the Broadcasts draft.'
-            : 'Accepted, but auto-write failed — open the draft and press Write email.',
-          href: j.edit_url ?? `/guest/newsletters/${j.campaign_id}`,
-        });
-      } else {
-        setToast({ text: 'Moved to Broadcasts draft. Click to edit.', href: j.edit_url ?? `/guest/newsletters/${j.campaign_id}` });
-      }
+      setToast({
+        text: 'Accepted — email writes automatically within ~2-4 min (or open the draft and click Write email now).',
+        href: j.edit_url ?? (j.campaign_id ? `/guest/newsletters/${j.campaign_id}` : undefined),
+      });
       setTimeout(() => setToast(null), 12000);
     } finally { setBusy(''); }
-  }
-
-  // Auto-write: POST propose-one with campaign_id — the route loads the concept
-  // from the campaign row, writes the full email (hero + prose + product blocks
-  // + signature) and persists it server-side. Takes ~30s per email.
-  async function writeCampaignEmail(campaignId: string): Promise<boolean> {
-    try {
-      const r = await fetch('/api/marketing/newsletter/propose-one', {
-        method:'POST', headers:{'content-type':'application/json'},
-        body: JSON.stringify({ property_id: propertyId, campaign_id: campaignId }),
-      });
-      const j = await r.json().catch(() => ({}));
-      return !!(r.ok && j?.ok && j?.persisted?.ok);
-    } catch { return false; }
   }
 
   async function rejectSlot(slot: SlotRow) {
@@ -310,29 +291,44 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
     setMsg('Slot refined.'); setTimeout(()=>setMsg(''), 2500);
   }
 
-  async function bulkAccept(schedule: boolean) {
+  async function bulkAccept(schedule: boolean, range?: { from: string; to: string }) {
     setBusy('bulk');
     try {
+      const from = range?.from ?? genFrom;
+      const to = range?.to ?? genTo;
       const res = await fetch('/api/marketing/director/bulk-accept', {
         method:'POST', headers:{'content-type':'application/json'},
         body: JSON.stringify({
           property_id: propertyId,
-          from: genFrom, to: genTo,
+          from, to,
           group_slug: groupFilter === 'all' ? null : groupFilter,
           schedule,
         }),
       });
       if (!res.ok) { setMsg(`Bulk accept failed: ${await res.text()}`); return; }
       const j = await res.json();
-      const ids: string[] = Array.isArray(j.campaign_ids) ? j.campaign_ids : [];
-      setMsg(`Accepted ${j.accepted_count ?? j.approved_count ?? 0} slots.`);
-      for (let i = 0; i < ids.length; i++) {
-        setMsg(`Accepted ${ids.length} slots · writing email ${i + 1}/${ids.length}… (~30s each)`);
-        await writeCampaignEmail(ids[i]);
-      }
-      if (ids.length > 0) setMsg(`Accepted ${ids.length} slots · emails written.`);
-      startT(() => { window.location.reload(); });
+      const n = j.accepted_count ?? j.approved_count ?? (Array.isArray(j.campaign_ids) ? j.campaign_ids.length : 0);
+      // INSTANT bulk accept (owner 2026-07-23): local state only — no reload, no
+      // awaited per-email writes. The write-pending-drafts worker writes the
+      // emails in the background (~2-4 min each batch of 3).
+      setSlots(prev => prev.map(s => {
+        const inRange = s.slot_date >= from && s.slot_date <= to;
+        const inGroup = groupFilter === 'all' || s.group_slug === groupFilter;
+        const acceptable = (s.status === 'proposed' || s.status === 'refined') && !s.linked_campaign_id;
+        return (inRange && inGroup && acceptable) ? { ...s, status: 'approved' as const } : s;
+      }));
+      setToast({ text: `Accepted ${n} slots — emails write automatically within ~2-4 min each (or open a draft and click Write email now).` , href: '/guest/newsletters/broadcasts' });
+      setTimeout(() => setToast(null), 12000);
     } finally { setBusy(''); }
+  }
+
+  // Owner 2026-07-23: one click accepts every currently-listed proposed/refined
+  // slot (whole plan horizon for the active group filter) via the bulk route.
+  async function acceptAllProposed(): Promise<void> {
+    const candidates = filteredSlots.filter(s => (s.status === 'proposed' || s.status === 'refined') && !s.linked_campaign_id);
+    if (candidates.length === 0) { setMsg('No proposed slots to accept.'); setTimeout(()=>setMsg(''), 2500); return; }
+    const dates = candidates.map(s => s.slot_date).sort();
+    await bulkAccept(false, { from: dates[0], to: dates[dates.length - 1] });
   }
 
   return (
@@ -417,6 +413,10 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
               : `✨ Generate plan for ${groupFilter==='all' ? 'all groups' : (groupsBySlug.get(groupFilter)?.name ?? groupFilter)}`}
           </button>
           <button onClick={()=>bulkAccept(false)} disabled={busy!==''} style={secondaryButton}>Bulk accept range</button>
+          <button onClick={acceptAllProposed} disabled={busy!==''} style={secondaryButton}
+            title="Accept every currently-listed proposed slot — refine later in Broadcasts drafts; emails write in the background.">
+            Accept ALL proposed
+          </button>
         </div>
       </section>
 
