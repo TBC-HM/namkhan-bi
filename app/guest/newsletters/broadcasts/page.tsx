@@ -14,6 +14,7 @@ import RecipientsButton from '../_components/RecipientsButton';
 import DeleteCampaignButton from '../_components/DeleteCampaignButton';
 import NewslettersSubStrip from '../_components/NewslettersSubStrip';
 import ProposeNewsletterButton from '../_components/ProposeNewsletterButton';
+import WriteEmailButton from '../_components/WriteEmailButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -24,6 +25,7 @@ type CampaignRow = {
   template_key: string | null; recipients_count: number; pending_count: number;
   send_count: number; opens_count: number; clicks_count: number; booking_count: number;
   created_by: string | null; updated_at: string; archived_at: string | null; planned_date: string | null;
+  body_md?: string | null;
   campaign_kind?: string | null; audience_type?: string | null; goal_tag?: string | null;
   director_slot_id?: number | null;
   group_slug?: string | null;
@@ -47,6 +49,13 @@ function fmtDate(iso: string | null): string {
   catch { return '—'; }
 }
 function pctOr(n: number, d: number): string { if (!d) return '—'; return `${((n / d) * 100).toFixed(0)}%`; }
+
+// A draft whose body is still the bare plan concept (no hero image markdown,
+// no signature) — offer the one-click AI "Write email" action.
+function isConceptOnly(r: CampaignRow): boolean {
+  const b = (r.body_md ?? '').trim();
+  return b.length > 0 && b.length <= 700 && !b.includes('Warm regards') && !b.includes('![');
+}
 
 function audienceFallbackSlug(audience_type: string | null | undefined): string | null {
   if (!audience_type) return null;
@@ -217,6 +226,7 @@ function MiniTableDrafts({ rows }: { rows: CampaignRow[] }) {
               <td style={{ ...tdR, textAlign:'right' }}>
                 <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</TenantLink>
                 <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
+                {isConceptOnly(r) && <WriteEmailButton campaign_id={r.campaign_id} property_id={r.property_id} />}
                 <ScheduleDrawer campaign_id={r.campaign_id} campaign_name={r.name} planned_date={r.planned_date} />
               </td>
             </tr>
