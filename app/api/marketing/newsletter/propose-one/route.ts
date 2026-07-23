@@ -30,6 +30,12 @@
 //      concept as body_md) — it is injected at the TOP of Saya's user prompt
 //      as a creative brief and takes precedence as the composer's p_seed_text
 //      so product/photo matching keys off the concept.
+//   7. AUTO-WRITE (accept → written email): POST { campaign_id } loads the
+//      campaign row (concept = its body_md), writes the email and PERSISTS
+//      subject/body_md/hero_asset_id back onto the row (draft/scheduled only).
+//      body_md now carries the render contract: leading ![](hero) + prose +
+//      product blocks with photo/link/blurb + department signature — exactly
+//      what [campaign_id]/preview and CampaignEditor's renderEmailFrame expect.
 //
 // Backward-compatible: still returns { ok, proposal: { subject, body_md, goal_tag } }.
 // PUT (save-as-draft) unchanged except it now accepts an optional hero_asset_id.
@@ -92,6 +98,7 @@ type ProposeBody = {
   instruction?: string;
   prior?: { subject?: string; body_md?: string };
   concept?: string;
+  campaign_id?: string;
 };
 
 type SaveBody = {
@@ -502,24 +509,46 @@ async function sayaSlots(system: string, userPrompt: string): Promise<SayaSlots>
   };
 }
 
-// Deterministic assembly: greeting + Saya prose slots + product blocks (exact
-// catalog links) + department signature. AI never writes links or the signature.
+function mdImage(alt: string | null, url: string): string {
+  const a = String(alt ?? '').replace(/[\[\]]/g, '').replace(/\s+/g, ' ').trim();
+  return `![${a}](${url})`;
+}
+
+// Deterministic assembly: leading hero image (the render path's hero contract:
+// preview + CampaignEditor both take the FIRST ![](url) in body_md as the hero)
+// + greeting + Saya prose slots + product blocks (photo + exact catalog link +
+// blurb) + department signature. AI never writes links, images or the signature.
 function assembleDraft(slots: SayaSlots, env: Envelope, policy: Policy | null, kind: EmailKind): SayaDraft {
-  const parts: string[] = [env.greeting];
+  const parts: string[] = [];
+  const allowImages = !policy?.block_images && !policy?.force_plain_text;
+  const usedAssets = new Set<string>();
+
+  if (allowImages && env.hero && env.hero.primary_render) {
+    parts.push(mdImage(env.hero.alt_text || env.hero.caption, env.hero.primary_render));
+    if (env.hero.asset_id) usedAssets.add(env.hero.asset_id);
+  }
+
+  parts.push(env.greeting);
   if (slots.opening_md.trim()) parts.push(slots.opening_md.trim());
   if (slots.practical_md.trim()) parts.push(slots.practical_md.trim());
 
   if (!policy?.block_links && env.products.length > 0) {
-    const lines: string[] = [];
+    const blocks: string[] = [];
     env.products.forEach((p, i) => {
       if (!p.link_url) return;
       const anchor = p.link_anchor || p.product_name || 'Read more';
       const blurb = (slots.product_blurbs[i] ?? '').trim();
-      lines.push(`- [${anchor}](${p.link_url})${blurb ? ` — ${blurb}` : ''}`);
+      let img = '';
+      if (allowImages && p.primary_render && p.asset_id && !usedAssets.has(p.asset_id)) {
+        img = `${mdImage(p.alt_text || p.caption, p.primary_render)}\n\n`;
+        usedAssets.add(p.asset_id);
+      }
+      blocks.push(`${img}**[${anchor}](${p.link_url})**${blurb ? ` — ${blurb}` : ''}`);
     });
-    if (lines.length > 0) {
-      if (kind === 'before_checkin') lines.unshift('A few experiences worth holding now:');
-      parts.push(lines.join('\n'));
+    if (blocks.length > 0) {
+      parts.push('---');
+      if (kind === 'before_checkin') parts.push('A few experiences worth holding now:');
+      parts.push(blocks.join('\n\n'));
     }
   }
 
@@ -578,31 +607,73 @@ async function vedaScore(draft: SayaDraft, sayaUserPrompt: string, plainText: bo
   throw new Error('veda_json_unparseable_after_retry');
 }
 
+// A body that reads as a plan concept, not an assembled email.
+function looksLikeConcept(text: string): boolean {
+  return text.length > 0 &&
+    text.length <= 600 &&
+    !text.includes('Warm regards') &&
+    !text.includes('![') &&
+    !text.toLowerCase().startsWith('placeholder body');
+}
+
+type CampaignRowLite = {
+  property_id: number;
+  name: string | null;
+  subject: string | null;
+  body_md: string | null;
+  group_slug: string | null;
+  campaign_kind: string | null;
+  planned_date: string | null;
+  audience_type: string | null;
+  status: string | null;
+};
+
 export async function POST(req: NextRequest) {
   let body: ProposeBody;
   try { body = await req.json(); }
   catch { return NextResponse.json({ ok: false, error: 'bad_json' }, { status: 400 }); }
 
-  const seed = String(body.seed_text ?? '').trim();
+  const sb = getSupabaseAdmin();
 
-  // SLOT CONCEPT (plan v3): explicit body.concept wins; otherwise a short
-  // prior.body_md that isn't an assembled email (no signature) is treated as
-  // the slot's creative brief — draft campaigns created from accepted Director
-  // slots carry the concept as their body_md.
+  // AUTO-WRITE MODE: when campaign_id is given, the route loads the campaign
+  // row itself (concept = its body_md when concept-shaped), fills the missing
+  // request fields from the row, and PERSISTS the finished email back onto the
+  // campaign at the end. This is what Accept-slot auto-write and the
+  // Broadcasts "Write email" button call.
+  const campaign_id = body.campaign_id ? String(body.campaign_id) : null;
+  let campaign: CampaignRowLite | null = null;
+  if (campaign_id) {
+    const { data, error } = await sb.schema('guest').from('campaigns')
+      .select('property_id, name, subject, body_md, group_slug, campaign_kind, planned_date, audience_type, status')
+      .eq('campaign_id', campaign_id).maybeSingle();
+    if (error) return NextResponse.json({ ok: false, error: `campaign_load_failed: ${error.message}` }, { status: 500 });
+    if (!data) return NextResponse.json({ ok: false, error: 'campaign_not_found' }, { status: 404 });
+    campaign = data as CampaignRowLite;
+    if (campaign.property_id !== NAMKHAN_ID) return NextResponse.json({ ok: false, error: 'campaign_not_found' }, { status: 404 });
+    if (!body.group_slug && campaign.group_slug) body.group_slug = campaign.group_slug;
+    if (!body.kind && campaign.campaign_kind) body.kind = campaign.campaign_kind;
+    if (!body.target_date && campaign.planned_date) body.target_date = campaign.planned_date;
+    if (!body.audience_type && campaign.audience_type === 'b2b') body.audience_type = 'b2b';
+  }
+
+  const seedRaw = String(body.seed_text ?? '').trim();
+  const seed = seedRaw || (campaign ? String(campaign.name ?? campaign.subject ?? '').trim() : '');
+
+  // SLOT CONCEPT (plan v3): explicit body.concept wins; then the campaign's own
+  // body_md (draft campaigns created from accepted Director slots carry the
+  // concept as body_md); then a concept-shaped prior.body_md from refine mode.
   const explicitConcept = String(body.concept ?? '').trim();
+  const campaignBody = String(campaign?.body_md ?? '').trim();
   const priorBody = String(body.prior?.body_md ?? '').trim();
-  const priorLooksLikeConcept =
-    !explicitConcept &&
-    priorBody.length > 0 &&
-    priorBody.length <= 600 &&
-    !priorBody.includes('Warm regards') &&
-    !priorBody.toLowerCase().startsWith('placeholder body');
-  const concept = (explicitConcept || (priorLooksLikeConcept ? priorBody : '')).slice(0, 1000);
+  const concept = (
+    explicitConcept ||
+    (looksLikeConcept(campaignBody) ? campaignBody : '') ||
+    (looksLikeConcept(priorBody) ? priorBody : '')
+  ).slice(0, 1000);
 
   if (!seed && !concept) return NextResponse.json({ ok: false, error: 'seed_text_required' }, { status: 400 });
 
   const group_slug = body.group_slug ? String(body.group_slug) : null;
-  const sb = getSupabaseAdmin();
 
   const trace: Array<{ step: string; agent_id: string; latency_ms: number; ok: boolean; note?: string }> = [];
 
@@ -707,9 +778,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // AUTO-WRITE persist: write the finished email back onto the campaign row.
+  // Draft/scheduled only — sent campaigns are never overwritten.
+  let persisted: { ok: boolean; error?: string } | null = null;
+  if (campaign_id) {
+    const heroAssetId = (!ctx.policy?.block_images && envelope.hero?.asset_id) ? envelope.hero.asset_id : null;
+    const { error: perr } = await sb.schema('guest').from('campaigns').update({
+      subject: draft.subject,
+      body_md: draft.body_md,
+      hero_asset_id: heroAssetId,
+      ai_prompt: (concept || seed).slice(0, 2000),
+      ai_model: 'claude-sonnet-4-6',
+      updated_at: new Date().toISOString(),
+    }).eq('campaign_id', campaign_id).in('status', ['draft', 'scheduled']);
+    persisted = perr ? { ok: false, error: perr.message } : { ok: true };
+    trace.push({ step: 'persist', agent_id: AGENT_SAYA, latency_ms: 0, ok: !perr, note: perr ? perr.message : `campaign=${campaign_id}` });
+  }
+
   return NextResponse.json({
     ok: true,
     proposal: draft,
+    persisted,
     veda: { score: veda.score, issues: veda.issues, critique: veda.critique },
     agent_trace: trace,
     composer: {
