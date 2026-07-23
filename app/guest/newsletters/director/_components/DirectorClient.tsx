@@ -337,7 +337,7 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
           <label style={fieldWrap}>
             <span style={fieldLabel}>Cadence / month</span>
             <input type="number" min={0} max={30} step={0.5} value={cadencePerMonth}
-              onChange={e=>setCadencePerMonth(Math.max(0, Math.min(30, Number(e.target.value) || 0)))}
+              onChange={e=>{ const n = Number(e.target.value.replace(',', '.')); setCadencePerMonth(prev => Number.isNaN(n) ? prev : Math.max(0, Math.min(30, n))); }}
               style={{ ...input, width:80 }} />
           </label>
           <label style={{ fontSize:12, color: INK, display:'flex', alignItems:'center', gap:4 }}>
