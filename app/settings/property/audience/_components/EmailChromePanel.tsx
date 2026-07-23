@@ -32,7 +32,7 @@ interface Props {
   initial: EmailChromeSettings | null;
 }
 
-const SUPPORTED_PLATFORMS = ['instagram','facebook','youtube','linkedin','tripadvisor','x'] as const;
+const SUPPORTED_PLATFORMS = ['instagram','facebook','youtube','tiktok','linkedin','tripadvisor','x'] as const;
 
 export default function EmailChromePanel({ propertyId, initial }: Props) {
   const [logoAssetId, setLogoAssetId] = useState<string | null>(initial?.header_logo_asset_id ?? null);
@@ -57,26 +57,45 @@ export default function EmailChromePanel({ propertyId, initial }: Props) {
     startTransition(async () => {
       const addressArr = addressLines.split('\n').map(s => s.trim()).filter(Boolean);
       const social = socialLinks.filter(s => s && s.url && s.platform);
+      const hydrated = initial != null;
+
+      // NON-DESTRUCTIVE CONTRACT (2026-07-23 fix · pairs with presence-based
+      // fn_email_chrome_upsert): a key ABSENT from the payload is never touched
+      // server-side. An empty value is sent as an explicit clear ONLY when this
+      // panel was hydrated with a previously-saved value — an unhydrated panel
+      // (legacy mount / failed fetch) can never wipe saved chrome again.
+      // Root cause of the 2026-07-22 social-links wipe: unhydrated state []
+      // was always included and the old RPC COALESCE treated [] as a value.
+      const payload: Record<string, unknown> = {};
+      if (logoAssetId) payload.header_logo_asset_id = logoAssetId;
+      else if (hydrated && initial!.header_logo_asset_id) payload.header_logo_asset_id = null;
+      if (tagline.trim()) payload.header_tagline = tagline.trim();
+      else if (hydrated && initial!.header_tagline) payload.header_tagline = null;
+      if (heroAssetId) payload.default_hero_asset_id = heroAssetId;
+      else if (hydrated && initial!.default_hero_asset_id) payload.default_hero_asset_id = null;
+      if (addressArr.length > 0) payload.footer_address_lines = addressArr;
+      else if (hydrated && (initial!.footer_address_lines?.length ?? 0) > 0) payload.footer_address_lines = [];
+      if (social.length > 0) payload.footer_social_links = social;
+      else if (hydrated && (initial!.footer_social_links?.length ?? 0) > 0) payload.footer_social_links = [];
+      if (disclaimer.trim()) payload.footer_disclaimer_text = disclaimer.trim();
+      else if (hydrated && initial!.footer_disclaimer_text) payload.footer_disclaimer_text = null;
+      if (unsubWording.trim()) payload.footer_unsubscribe_wording = unsubWording.trim();
+      else if (hydrated && initial!.footer_unsubscribe_wording) payload.footer_unsubscribe_wording = null;
+
+      if (Object.keys(payload).length === 0) {
+        setMsg({ ok: true, text: 'Nothing to save.' });
+        return;
+      }
+
       const res = await fetch('/api/marketing/audience/email-chrome-save', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          property_id: propertyId,
-          payload: {
-            header_logo_asset_id: logoAssetId,
-            header_tagline: tagline,
-            default_hero_asset_id: heroAssetId,
-            footer_address_lines: addressArr,
-            footer_social_links: social,
-            footer_disclaimer_text: disclaimer,
-            footer_unsubscribe_wording: unsubWording,
-          },
-        }),
+        body: JSON.stringify({ property_id: propertyId, payload }),
       });
       const j = await res.json();
       if (j?.ok) setMsg({ ok: true, text: 'Email chrome saved. Live in the next send.' });
       else setMsg({ ok: false, text: j?.error ?? 'save_failed' });
     });
-  }, [propertyId, logoAssetId, tagline, heroAssetId, addressLines, socialLinks, disclaimer, unsubWording]);
+  }, [propertyId, initial, logoAssetId, tagline, heroAssetId, addressLines, socialLinks, disclaimer, unsubWording]);
 
   const addSocial = () => setSocialLinks([...socialLinks, { platform: 'instagram', url: '' }]);
   const rmSocial  = (i: number) => setSocialLinks(socialLinks.filter((_, idx) => idx !== i));
