@@ -192,9 +192,35 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
       const updated: SlotRow = { ...slot, status: 'approved', linked_campaign_id: j.campaign_id ?? slot.linked_campaign_id };
       setSlots(prev => prev.map(x => x.id===slot.id ? updated : x));
       setDrawerSlot(null);
-      setToast({ text: 'Moved to Broadcasts draft. Click to edit.', href: j.edit_url ?? `/guest/newsletters/${j.campaign_id}` });
-      setTimeout(() => setToast(null), 8000);
+      if (j.campaign_id) {
+        // Auto-write: turn the accepted concept into a full email before the owner opens it.
+        setToast({ text: 'Accepted · writing the email… ~30s', href: j.edit_url ?? `/guest/newsletters/${j.campaign_id}` });
+        const wrote = await writeCampaignEmail(j.campaign_id);
+        setToast({
+          text: wrote
+            ? 'Email written and saved to the Broadcasts draft.'
+            : 'Accepted, but auto-write failed — open the draft and press Write email.',
+          href: j.edit_url ?? `/guest/newsletters/${j.campaign_id}`,
+        });
+      } else {
+        setToast({ text: 'Moved to Broadcasts draft. Click to edit.', href: j.edit_url ?? `/guest/newsletters/${j.campaign_id}` });
+      }
+      setTimeout(() => setToast(null), 12000);
     } finally { setBusy(''); }
+  }
+
+  // Auto-write: POST propose-one with campaign_id — the route loads the concept
+  // from the campaign row, writes the full email (hero + prose + product blocks
+  // + signature) and persists it server-side. Takes ~30s per email.
+  async function writeCampaignEmail(campaignId: string): Promise<boolean> {
+    try {
+      const r = await fetch('/api/marketing/newsletter/propose-one', {
+        method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({ property_id: propertyId, campaign_id: campaignId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      return !!(r.ok && j?.ok && j?.persisted?.ok);
+    } catch { return false; }
   }
 
   async function rejectSlot(slot: SlotRow) {
@@ -298,7 +324,13 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
       });
       if (!res.ok) { setMsg(`Bulk accept failed: ${await res.text()}`); return; }
       const j = await res.json();
+      const ids: string[] = Array.isArray(j.campaign_ids) ? j.campaign_ids : [];
       setMsg(`Accepted ${j.accepted_count ?? j.approved_count ?? 0} slots.`);
+      for (let i = 0; i < ids.length; i++) {
+        setMsg(`Accepted ${ids.length} slots · writing email ${i + 1}/${ids.length}… (~30s each)`);
+        await writeCampaignEmail(ids[i]);
+      }
+      if (ids.length > 0) setMsg(`Accepted ${ids.length} slots · emails written.`);
       startT(() => { window.location.reload(); });
     } finally { setBusy(''); }
   }
