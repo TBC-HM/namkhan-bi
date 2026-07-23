@@ -5,13 +5,11 @@
 // Inventory has no subs — clicking it goes straight to /cockpit/supabase
 // (middleware redirects to /h/260955/cockpit/supabase).
 //
-// PBS 2026-07-23 (2nd pass): canonical `.cockpit-design` scope. Wrap the
-// whole cockpit-v2 tree in the design-system class so children inherit
-// canonical tokens (cream #F4EFE2 bg · sand #B8A878 accent · primary
-// #1F3A2E · hairline #E6DFCC · paper #FFFFFF). Override --page-bg on Page
-// shell to cream too — cockpit-v2 is a Holding route (property 0) with no
-// Namkhan ThemeInjector, so without this the outer shell falls through to
-// dark #0a0a0a.
+// PBS 2026-07-23 (3rd pass · live-verified): match the pattern used on every
+// canonical page (/cockpit/tasks, /h/[pid]/revenue) — hard-wrap in
+// `<div style={{ background: '#FFFFFF' }}>`, which overrides the .cockpit-design
+// cream var(--bg) and produces the real live design: pure paper white + hairlines
+// + KPI tiles. .cockpit-design still applied so hairline/ink/primary vars work.
 
 import { fetchAgents, fetchDocs, fetchMemories } from './_lib/data';
 import { fetchOpenTaskCount, fetchUnseenNotifyCount } from './_lib/data-port';
@@ -80,20 +78,19 @@ export default async function CockpitV2Layout({ children }: { children: React.Re
         { k: 'MEMORY', v: String(memories.length), d: 'active rows' },
       ]}
     >
-      {/* Route-scoped canonical override. Cockpit-v2 is Holding-scope so
-         ThemeInjector doesn't set --page-bg — we point it at canonical
-         cream. */}
+      {/* Force Page shell (Holding route) + inner surface to pure white — same
+         pattern /cockpit/tasks uses to defeat any inherited cream. */}
       <style>{`
         :root {
-          --page-bg: #F4EFE2 !important;
+          --page-bg: #FFFFFF !important;
           --page-fg: #1B1B1B !important;
-          --topbar-bg: rgba(244, 239, 226, 0.92) !important;
+          --topbar-bg: rgba(255, 255, 255, 0.92) !important;
         }
         @keyframes cockpitv2blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
       `}</style>
-      <div className="cockpit-design" style={{ fontFamily: 'var(--sans)' }}>
+      <div className="cockpit-design" style={{ background: '#FFFFFF', minHeight: '100vh', color: '#1B1B1B' }}>
         <GroupedTabBar groups={groups} />
-        <main style={{ padding: '28px 32px', maxWidth: 1600, margin: '0 auto' }}>{children}</main>
+        <main style={{ padding: '28px 32px', maxWidth: 1600, margin: '0 auto', background: '#FFFFFF' }}>{children}</main>
       </div>
     </Page>
   );
