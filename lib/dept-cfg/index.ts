@@ -952,7 +952,7 @@ const HOLDING_CFG: DeptCfg = {
     { id: 'h4', label: 'Sherlock Tier 1 dossiers due in 48h',                            severity: 'medium', kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'hd1', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'hd1', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
     { id: 'hd2', label: 'TBC public homepage',          href: '/tbc'         },
     { id: 'hd3', label: 'Knowledge base',               href: '/knowledge'   },
   ],
@@ -969,7 +969,7 @@ const HOLDING_CFG: DeptCfg = {
     { matcher: 'payroll',  href: '/h/1000001/operations/staff' },
     { matcher: 'mews',     href: '/h/260955'               },
   ],
-  defaultDrilldown: '/cockpit-v2',
+  defaultDrilldown: '/holding/it/cockpit',
   kpiTiles: [
     { k: 'PROPERTIES', v: '2',     d: '1 live · 1 prospect'      },
     { k: 'AGENTS',     v: '65',    d: 'active across holding'    },
@@ -1052,9 +1052,9 @@ const HOLDING_IT_CFG: DeptCfg = {
     { label: 'HoD',         href: '/holding/it'               },
     { label: 'Bugs',        href: '/holding/bugs'             }, // PBS 2026-07-16 · site-wide bug widget list + CTAs + agent-payload
     { label: 'Tasks',       href: '/cockpit/tasks'            },
-    { label: 'Cockpit',     href: '/cockpit-v2'               },
-    { label: 'Agent Fleet', href: '/cockpit-v2?tab=team'      },
-    { label: 'Documentation', href: '/cockpit-v2?tab=docs'    },
+    { label: 'Cockpit',     href: '/holding/it/cockpit'               },
+    { label: 'Agent Fleet', href: '/holding/it/cockpit?tab=team'      },
+    { label: 'Documentation', href: '/holding/it/cockpit?tab=docs'    },
   ],
   quickChips: [],
   defaultAttn: [
@@ -1063,10 +1063,10 @@ const HOLDING_IT_CFG: DeptCfg = {
     { id: 'i3', label: 'Agent fleet healthy — push autonomous PRs',               severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'id1', label: 'Cockpit V2',                href: '/cockpit-v2'           },
+    { id: 'id1', label: 'Cockpit V2',                href: '/holding/it/cockpit'           },
     { id: 'id2', label: 'Tasks board',               href: '/cockpit/tasks'        },
     { id: 'id3', label: 'Knowledge base',            href: '/knowledge'            },
-    { id: 'id4', label: 'Claude operating manual',   href: '/cockpit-v2?tab=docs'  },
+    { id: 'id4', label: 'Claude operating manual',   href: '/holding/it/cockpit?tab=docs'  },
   ],
   defaultTasks: [
     { id: 'it1', label: 'Wait on Mews token reissue (push side works)', done: false, created: TODAY },
@@ -1075,11 +1075,11 @@ const HOLDING_IT_CFG: DeptCfg = {
   ],
   attentionRoutes: [
     { matcher: 'mews',   href: '/h/260955'      },
-    { matcher: 'deploy', href: '/cockpit-v2'    },
-    { matcher: 'agent',  href: '/cockpit-v2?tab=team' },
-    { matcher: 'pdf',    href: '/cockpit-v2?tab=docs' },
+    { matcher: 'deploy', href: '/holding/it/cockpit'    },
+    { matcher: 'agent',  href: '/holding/it/cockpit?tab=team' },
+    { matcher: 'pdf',    href: '/holding/it/cockpit?tab=docs' },
   ],
-  defaultDrilldown: '/cockpit-v2',
+  defaultDrilldown: '/holding/it/cockpit',
   kpiTiles: [
     { k: 'TICKETS', v: '8',   d: 'open · 2 awaits-user'  },
     { k: 'AGENTS',  v: '65',  d: 'active'                },
@@ -1105,12 +1105,12 @@ const HOLDING_STRATEGY_CFG: DeptCfg = {
   quickChips: [],
   defaultAttn: [],
   defaultDocs: [
-    { id: 'sd1', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'sd1', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
     { id: 'sd2', label: 'Knowledge base',               href: '/knowledge'   },
   ],
   defaultTasks: [],
   attentionRoutes: [],
-  defaultDrilldown: '/cockpit-v2',
+  defaultDrilldown: '/holding/it/cockpit',
   kpiTiles: [
     { k: 'PROJECTS', v: '—', d: 'group restructuring · ongoing' },
     { k: 'REVIEWS',  v: '—', d: 'contracts in queue'             },
@@ -1134,12 +1134,12 @@ const HOLDING_JOHN_CFG: DeptCfg = {
   quickChips: [],
   defaultAttn: [],
   defaultDocs: [
-    { id: 'jd1', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'jd1', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
     { id: 'jd2', label: 'Knowledge base',               href: '/knowledge'   },
   ],
   defaultTasks: [],
   attentionRoutes: [],
-  defaultDrilldown: '/cockpit-v2',
+  defaultDrilldown: '/holding/it/cockpit',
   kpiTiles: [
     { k: 'JURISDICTION', v: 'LAO', d: 'Namkhan + Luang Prabang' },
     { k: 'OPEN MATTERS', v: '—',   d: 'contracts in review'      },
@@ -1171,7 +1171,7 @@ const HOLDING_CEO_CFG: DeptCfg = {
     { id: 'ceo3', label: 'Q2 board pack due in 14 days',                                   severity: 'medium', kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'ceod1', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'ceod1', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
     { id: 'ceod2', label: 'Knowledge base',               href: '/knowledge'  },
     { id: 'ceod3', label: 'Holding overview',             href: '/holding'    },
   ],
@@ -1181,7 +1181,7 @@ const HOLDING_CEO_CFG: DeptCfg = {
     { matcher: 'pace',    href: '/h/260955/revenue/pace' },
     { matcher: 'board',   href: '/holding/finance' },
   ],
-  defaultDrilldown: '/cockpit-v2',
+  defaultDrilldown: '/holding/it/cockpit',
   kpiTiles: [
     { k: 'PROPERTIES', v: '2',     d: '1 live · 1 prospect'      },
     { k: 'PORTFOLIO',  v: '—',     d: 'consolidated revenue YTD' },
@@ -1216,7 +1216,7 @@ const HOLDING_FINANCE_CFG: DeptCfg = {
   defaultAttn: [],
   defaultDocs: [
     { id: 'hfd1', label: 'Invoice generator', href: '/holding/finance/invoices' },
-    { id: 'hfd2', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'hfd2', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
   ],
   defaultTasks: [],
   attentionRoutes: [],
