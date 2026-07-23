@@ -107,12 +107,12 @@ STRUCTURE (all emails)
    - Use the address from CONTEXT.sender.footer_address_lines — currently Ban Xieng Lom · Luang Prabang · Laos.
    - The reply email MUST be on the signature line, taken from CONTEXT.sender.reply_to (currently gm@thenamkhan.com) — never omit it.
    - The website URL "thenamkhan.com" is always the last line item.
-   Use "Marnie Southichack · Reservations" as the default named signer unless CONTEXT lists a different sender. Never sign off with just "The Namkhan Team" — it reads as automated.
+   Never sign off with just "The Namkhan Team" — it reads as automated.
 
 QUALITY BAR
 Before you return: ask yourself three questions.
 1. Does the opening sentence anchor in a specific sensory Namkhan detail (kingfisher at first light · wood-smoke from Roots · the boat's engine cutting at the jetty · warm oil in the spa · frangipani on the path)? If it opens with a summary sentence like "A week to go" or "Nothing to do now" — REWRITE.
-2. Is the signature the LONG form with a named person + address + email + website? If it's just "The Namkhan Team" — REWRITE.
+2. Is the signature the LONG form with the department (Reservations / Customer Service) + address + email + website — and NO personal name? If it's just "The Namkhan Team" — REWRITE.
 3. Would a real repeat guest read this and feel the place, or would they scan and move on? If it's practical without warmth — REWRITE.
 `;
 
