@@ -1,42 +1,42 @@
 // app/cockpit-v2/_components/tokens.ts
 //
-// PBS 2026-07-23 (3rd pass — live-verified): every canonical page (/cockpit/tasks,
-// /h/[pid]/revenue) wraps DashboardPage in `<div style={{ background: '#FFFFFF' }}>`,
-// hard-overriding the .cockpit-design cream. Ergo the actual live design surface is
-// pure paper white with hairlines, dark ink text, and primary #1F3A2E accents only
-// on active tabs / delta cells. No sand/gold in headline strips or containers.
+// PBS 2026-07-23 (4th pass — verified from /h/260955/revenue screenshot):
+// canonical is cream page bg + white KPI tiles + forest primary + dark top nav.
+// Matches .cockpit-design tokens.css. /cockpit/tasks special-cases itself to
+// white (page-level override); the default that /h/[pid]/revenue and every
+// HodLanding uses is CREAM.
 //
-// Deleted the assumption that --bg cream #F4EFE2 was the visible page — every real
-// page bypasses it. Keys unchanged for back-compat with legacy consumers.
+// PBS burn note: I flipped cream → white in the 3rd pass off the /cockpit/tasks
+// wrapper. That was a page-level override, not the canonical. Reverted here.
 
 export const TOKENS = {
-  // ── surfaces (paper white — the ONLY canonical background) ───────────
-  bg:         '#FFFFFF',
-  bgRaised:   '#FFFFFF',
-  bgDeep:     '#FFFFFF',
+  // ── surfaces ──────────────────────────────────────────────────────────
+  bg:         '#F4EFE2',        // cream page body (--bg)
+  bgRaised:   '#FFFFFF',        // white cards / KPI tile fills (--paper)
+  bgDeep:     '#F4EFE2',        // same as bg
 
   // ── text ──────────────────────────────────────────────────────────────
-  ink:        '#1B1B1B',
-  inkSoft:    '#5A5A5A',
+  ink:        '#1B1B1B',        // (--ink)
+  inkSoft:    '#5A5A5A',        // (--ink-soft)
   text:       '#1B1B1B',
   text2:      '#5A5A5A',
   text3:      '#8A8A8A',
 
   // ── borders / hairlines ───────────────────────────────────────────────
-  border:     '#E6DFCC',
+  border:     '#E6DFCC',        // (--hairline)
   borderSoft: '#E6DFCC',
 
-  // ── accents (used SPARINGLY: active-tab underline, primary CTA only) ─
-  brass:      '#B8A878',       // sand — reserved for status-amber, not decoration
+  // ── canonical accents ────────────────────────────────────────────────
+  brass:      '#B8A878',        // sand — status-amber, LY-chip fill (--sand)
   sand:       '#B8A878',
   ochre:      '#B8A878',
 
-  forest:     '#1F3A2E',       // primary — active state + primary CTA background
+  forest:     '#1F3A2E',        // primary — active tab, CTAs (--primary)
   moss:       '#1F3A2E',
   sky:        '#1F3A2E',
 
   // ── status ────────────────────────────────────────────────────────────
-  terracotta: '#B8542A',       // status-red (deltas / warnings)
+  terracotta: '#B8542A',        // (--status-red)
   oxblood:    '#8E3A35',
 
   // ── tinted accents ───────────────────────────────────────────────────
@@ -47,5 +47,5 @@ export const TOKENS = {
   deepInk:    '#1F3A2E',
 };
 
-export const SERIF = '"Inter Tight", system-ui, sans-serif';
+export const SERIF = '"Fraunces", "Times New Roman", serif';
 export const MONO = 'JetBrains Mono, ui-monospace, monospace';
