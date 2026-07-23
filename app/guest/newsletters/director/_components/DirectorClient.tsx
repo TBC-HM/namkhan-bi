@@ -145,7 +145,7 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
           property_id: propertyId,
           start_date: genFrom,
           end_date: genTo,
-          cadence_per_week: cadencePerMonth / 4.33,   // convert month → week for the backend
+          cadence_per_week: Math.max(1, Math.round(cadencePerMonth / 4.33)),   // month → week, integer (route indexes an array by this)
           group_slug: groupFilter === 'all' ? null : groupFilter,
           audience_types: ['b2c'],
           regenerate_empty_only: regenerateEmptyOnly,
