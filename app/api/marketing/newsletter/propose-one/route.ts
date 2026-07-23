@@ -303,15 +303,23 @@ function parseEnvelope(raw: unknown, kind: EmailKind): Envelope {
 }
 
 // Slim fallback — ONLY when the envelope returned zero photos.
+// 2026-07-23 tier ladder (owner rule): curated ota/web tiers first; widen to the
+// social pool ONLY when the curated pool returns nothing. NEVER archive /
+// internal / logos / untiered photos, under any fallback.
 async function fallbackPhotoPick(sb: ReturnType<typeof getSupabaseAdmin>): Promise<PhotoPick[]> {
-  const { data, error } = await sb
+  const query = (tiers: string[]) => sb
     .from('v_marketing_media_page')
     .select('asset_id, caption, alt_text, property_area')
     .eq('property_id', NAMKHAN_ID)
     .in('status', ['ready', 'qc_passed'])
+    .in('primary_tier', tiers)
     .not('caption', 'is', null)
     .order('quality_index', { ascending: false, nullsFirst: false })
     .limit(4);
+  let { data, error } = await query(['tier_ota_profile', 'tier_website_hero']);
+  if (!error && (data ?? []).length === 0) {
+    ({ data, error } = await query(['tier_social_pool']));
+  }
   if (error) return [];
   const rows = (data as Array<{ asset_id: string; caption: string | null; alt_text: string | null; property_area: string | null }> | null) ?? [];
   return rows
@@ -679,8 +687,14 @@ function assembleDraft(slots: SayaSlots, env: Envelope, policy: Policy | null, k
 
   if (!policy?.block_links && env.products.length > 0) {
     const blocks: string[] = [];
+    const seenUrls = new Set<string>();
     env.products.forEach((p, i) => {
       if (!p.link_url) return;
+      // 2026-07-23 duplicate-offering guard: never a product card that repeats the
+      // primary CTA's URL, and never two product cards with the same URL.
+      if (extras?.pinned?.url && p.link_url === extras.pinned.url) return;
+      if (seenUrls.has(p.link_url)) return;
+      seenUrls.add(p.link_url);
       const anchor = p.link_anchor || p.product_name || 'Read more';
       const blurb = (slots.product_blurbs[i] ?? '').trim();
       let img = '';
