@@ -1,7 +1,9 @@
 // app/h/[property_id]/operations/inventory/catalog/page.tsx
 //
-// Item catalog — 1,956 items today from public.v_inv_stock_on_hand.
-// Renders MetricRow + ListContainer via CatalogList client wrapper.
+// Item catalog — 602 approved items (1,381 dishes/services deprecated 2026-07-24).
+// Renders MetricRow + AddItemForm + ListContainer.
+// PBS 2026-07-24: added AddItemForm so staff can enter non-POS supply items
+// (maintenance, housekeeping, eco farm, activities, spa) directly from the UI.
 
 import { redirect } from 'next/navigation';
 import { DashboardPage, Container, MetricRow, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -9,6 +11,7 @@ import { OPERATIONS_SUBPAGES } from '@/app/operations/_subpages';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import CatalogList, { type CatalogItemRow } from './CatalogList';
+import AddItemForm, { type DropdownOption } from './AddItemForm';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -33,6 +36,19 @@ interface StockRaw {
   total_on_hand: number;
   value_usd_estimate: number;
   last_movement_at: string | null;
+}
+
+async function fetchFormOptions() {
+  const sb = getSupabaseAdmin();
+  const [catsRes, unitsRes, locsRes] = await Promise.all([
+    sb.schema('inv').from('categories').select('category_id, name').eq('is_active', true).order('name'),
+    sb.schema('inv').from('units').select('unit_id, name, code').eq('is_active', true).order('name'),
+    sb.schema('inv').from('locations').select('location_id, location_name').eq('is_active', true).order('location_name'),
+  ]);
+  const categories: DropdownOption[] = (catsRes.data ?? []).map((r: Record<string,unknown>) => ({ id: Number(r.category_id), name: String(r.name) }));
+  const units: DropdownOption[] = (unitsRes.data ?? []).map((r: Record<string,unknown>) => ({ id: Number(r.unit_id), name: String(r.name), code: String(r.code ?? '') }));
+  const locations: DropdownOption[] = (locsRes.data ?? []).map((r: Record<string,unknown>) => ({ id: Number(r.location_id), name: String(r.location_name) }));
+  return { categories, units, locations };
 }
 
 async function fetchCatalog(propertyId: number): Promise<StockRaw[]> {
@@ -64,7 +80,7 @@ export default async function CatalogPage({ params }: Props) {
     redirect(`/h/${NAMKHAN_PROPERTY_ID}/operations/inventory/catalog`);
   }
 
-  const raw = await fetchCatalog(propertyId);
+  const [raw, formOptions] = await Promise.all([fetchCatalog(propertyId), fetchFormOptions()]);
   const rows: CatalogItemRow[] = raw.map((r) => ({
     item_id: r.item_id,
     sku: r.sku ?? '—',
@@ -98,6 +114,15 @@ export default async function CatalogPage({ params }: Props) {
             { label: 'Estimated value (USD)', value: fmtUsd(valueUsd),   footnote: unitsOnHand === 0 ? 'Populates once counts entered' : 'Sum of value_usd_estimate' },
             { label: 'Distinct categories', value: fmtInt(categories),   footnote: 'Distinct category_name' },
           ]}
+        />
+      </div>
+
+      <div style={{ gridColumn: '1 / -1' }}>
+        <AddItemForm
+          propertyId={propertyId}
+          categories={formOptions.categories}
+          units={formOptions.units}
+          locations={formOptions.locations}
         />
       </div>
 
