@@ -1,10 +1,14 @@
 'use client';
 // app/guest/newsletters/templates/[key]/_components/TemplateEditor.tsx
 // PBS 2026-07-03: client-side template editor. Form + live markdown preview.
+// PBS 2026-07-23: preview now renders through THE canonical renderer
+// (lib/emailRenderer.renderNewsletterEmail) in an iframe — same output as the
+// campaign preview and the real send. Fake hardcoded chrome removed.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { renderNewsletterEmail } from '@/lib/emailRenderer';
 
 interface Props { initial: any | null; isNew: boolean; }
 
@@ -27,20 +31,6 @@ function fieldWrap(label: string, children: any, hint?: string) {
       {hint && <div style={{ fontSize:11, color:INK_M }}>{hint}</div>}
     </div>
   );
-}
-
-function renderMarkdownLite(md: string): string {
-  let html = md
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
-    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
-    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
-    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g,'<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2">$1</a>')
-    .replace(/^---$/gm,'<hr />')
-    .replace(/\n\n/g,'</p><p>');
-  return '<p>'+html+'</p>';
 }
 
 export default function TemplateEditor({ initial, isNew }: Props) {
@@ -88,6 +78,14 @@ export default function TemplateEditor({ initial, isNew }: Props) {
     }
   }
 
+  // Canonical preview: hero URL (if set) becomes the leading markdown image —
+  // the renderer's hero convention — so templates preview exactly like sends.
+  const previewHtml = renderNewsletterEmail({
+    subjectForTitle: subject || label || 'Template',
+    bodyMd: (heroImage ? `![](${heroImage})\n\n` : '') + (bodyMd || ''),
+    mode: 'full',
+  });
+
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
       <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'16px 18px' }}>
@@ -103,7 +101,7 @@ export default function TemplateEditor({ initial, isNew }: Props) {
         </div>
         {fieldWrap('Audience hint', <input type="text" value={audience} onChange={(e) => setAudience(e.target.value)} placeholder="Guests with upcoming arrival · 3–7 days" style={{ padding:'6px 10px', border:'1px solid '+HAIR, borderRadius:4, fontSize:13, color:INK }} />)}
         {fieldWrap('Hero image URL', <input type="text" value={heroImage} onChange={(e) => setHeroImage(e.target.value)} placeholder="https://..." style={{ padding:'6px 10px', border:'1px solid '+HAIR, borderRadius:4, fontSize:13, color:INK }} />)}
-        {fieldWrap('Body (Markdown)', <textarea rows={12} value={bodyMd} onChange={(e) => setBodyMd(e.target.value)} style={{ padding:'8px 10px', border:'1px solid '+HAIR, borderRadius:4, fontSize:12, color:INK, resize:'vertical', fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }} />, 'Use ## / ** ** / [link](url). Tokens: {{first_name}}, {{days_to_arrival}}, {{booking_code}}, {{weather_summary}}, {{transfer_status}}.')}
+        {fieldWrap('Body (Markdown)', <textarea rows={12} value={bodyMd} onChange={(e) => setBodyMd(e.target.value)} style={{ padding:'8px 10px', border:'1px solid '+HAIR, borderRadius:4, fontSize:12, color:INK, resize:'vertical', fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }} />, 'Conventions: # H1 · ## H2 · ^^EYEBROW^^ · > pull-quote · - lists · [[CTA]] [label](url) for THE one button · image then **[anchor](url)** — blurb for a product card. Tokens: {{first_name}}, {{days_to_arrival}}, {{booking_code}}.')}
         {fieldWrap('Variants JSON (advanced)', <textarea rows={8} value={variantsRaw} onChange={(e) => setVariantsRaw(e.target.value)} style={{ padding:'8px 10px', border:'1px solid '+HAIR, borderRadius:4, fontSize:11, color:INK, resize:'vertical', fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }} />, 'Override subject/copy for specific language/party/tier.')}
         <label style={{ display:'flex', gap:8, alignItems:'center', fontSize:12, color:INK_S, marginTop:6, marginBottom:12 }}>
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> Active
@@ -115,29 +113,12 @@ export default function TemplateEditor({ initial, isNew }: Props) {
         </div>
       </div>
       <div>
-        <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:8 }}>Preview</div>
+        <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:8 }}>Preview (canonical renderer)</div>
         <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:6, overflow:'hidden' }}>
-          <div style={{ padding:'18px', textAlign:'center', background:'#F5F0E1', borderBottom:'1px solid '+HAIR }}>
-            <div style={{ fontSize:16, fontWeight:600, letterSpacing:'0.08em', color:INK, fontFamily:'Georgia, serif' }}>THE NAMKHAN</div>
-            <div style={{ fontSize:10, color:INK_M, marginTop:4, letterSpacing:'0.06em' }}>Luang Prabang · Laos</div>
+          <div style={{ padding:'8px 12px', background:'#F5F0E1', borderBottom:'1px solid '+HAIR, fontSize:11, color:INK_M }}>
+            Subject: <strong style={{ color:INK }}>{subject || '(no subject)'}</strong>
           </div>
-          {heroImage && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={heroImage} alt="" style={{ width:'100%', height:200, objectFit:'cover', display:'block' }} />
-          )}
-          <div style={{ padding:'20px 24px', background:WHITE, color:INK, fontSize:14, lineHeight:1.6 }}>
-            <div style={{ fontSize:11, color:INK_M, marginBottom:8 }}>Subject preview:</div>
-            <div style={{ fontWeight:600, marginBottom:16, fontSize:15, color:INK }}>{subject || '(no subject)'}</div>
-            <div style={{ borderTop:'1px solid '+HAIR, paddingTop:12 }} dangerouslySetInnerHTML={{ __html: renderMarkdownLite(bodyMd || '_(empty body)_') }} />
-          </div>
-          <div style={{ padding:'18px 24px', background:'#F5F0E1', borderTop:'1px solid '+HAIR, textAlign:'center', fontSize:11, color:INK_M, lineHeight:1.6 }}>
-            <div style={{ fontWeight:600, color:INK, letterSpacing:'0.08em' }}>THE NAMKHAN</div>
-            <div>Ban Xieng Lom, Luang Prabang, Laos</div>
-            <div>hello@thenamkhan.com</div>
-            <div style={{ margin:'10px 0' }}>[ IG ] [ FB ] [ TikTok ] [ Website ]</div>
-            <div>You are receiving this because you stayed with us or booked an upcoming stay.</div>
-            <div style={{ marginTop:4 }}>Unsubscribe · Update preferences</div>
-          </div>
+          <iframe title="template-preview" srcDoc={previewHtml} style={{ width:'100%', height:760, border:'none', background:'#FFFFFF', display:'block' }} />
         </div>
       </div>
     </div>
