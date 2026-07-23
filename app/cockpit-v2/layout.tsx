@@ -4,6 +4,12 @@
 // (was buried as a Knowledge subitem — invisible until Knowledge clicked).
 // Inventory has no subs — clicking it goes straight to /cockpit/supabase
 // (middleware redirects to /h/260955/cockpit/supabase).
+//
+// PBS 2026-07-23: paper-white modernization. Cockpit-v2 is a Holding-scoped
+// route (property 0) so ThemeInjector never sets --page-bg, and the shared
+// Page shell falls through to dark #0a0a0a. We inject a route-scoped CSS var
+// override so the whole surface — outer shell, topbar, KPI popover — reads
+// paper-white per Namkhan canon (matches /guest/newsletters).
 
 import { fetchAgents, fetchDocs, fetchMemories } from './_lib/data';
 import { fetchOpenTaskCount, fetchUnseenNotifyCount } from './_lib/data-port';
@@ -72,12 +78,21 @@ export default async function CockpitV2Layout({ children }: { children: React.Re
         { k: 'MEMORY', v: String(memories.length), d: 'active rows' },
       ]}
     >
+      {/* PBS 2026-07-23: route-scoped light-mode override. Cascades to the
+         parent Page shell + topbar so the whole /cockpit-v2/* tree reads
+         paper-white on Namkhan canon. */}
       <style>{`
+        :root {
+          --page-bg: #FFFFFF !important;
+          --page-fg: #1B1B1B !important;
+          --topbar-bg: rgba(255, 255, 255, 0.92) !important;
+          --ink: #1B1B1B !important;
+        }
         @keyframes cockpitv2blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
       `}</style>
-      <div style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}>
+      <div style={{ fontFamily: 'var(--sans)', color: '#1B1B1B' }}>
         <GroupedTabBar groups={groups} />
-        <main style={{ padding: '28px 32px', maxWidth: 1600, margin: '0 auto' }}>{children}</main>
+        <main style={{ padding: '28px 32px', maxWidth: 1600, margin: '0 auto', background: '#FFFFFF' }}>{children}</main>
       </div>
     </Page>
   );
