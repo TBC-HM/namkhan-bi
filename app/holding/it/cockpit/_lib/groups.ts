@@ -1,8 +1,7 @@
 // app/holding/it/cockpit/_lib/groups.ts
 //
-// PBS 2026-07-23: canonical DashboardPage tabs metadata for cockpit-v2.
-// Each page imports this + marks the active tab, so the sub-strip renders
-// consistently across every page.
+// PBS 2026-07-23: canonical DashboardPage tabs metadata for cockpit.
+// PBS 2026-07-24: added Specs to Build group.
 
 import type { DashboardTab } from '@/app/(cockpit)/_design/types';
 
@@ -46,14 +45,14 @@ export const GROUPS: GroupSpec[] = [
   {
     key: 'build', label: 'Build', href: '/holding/it/cockpit/deploys',
     subs: [
-      { href: '/holding/it/cockpit/deploys', label: 'Deploys' },
-      { href: '/holding/it/cockpit/checks',  label: 'Checks' },
-      { href: '/holding/it/cockpit/cost',    label: 'Cost' },
+      { href: '/holding/it/cockpit/deploys',    label: 'Deploys' },
+      { href: '/holding/it/cockpit/checks',     label: 'Checks' },
+      { href: '/holding/it/cockpit/cost',       label: 'Cost' },
+      { href: '/holding/it/cockpit/specs/new',  label: '+ New spec' },
     ],
   },
 ];
 
-/** Build the DashboardPage tabs prop from GROUPS with `activeKey` marked. */
 export function groupsAsTabs(activeKey: CockpitGroupKey): DashboardTab[] {
   return GROUPS.map((g) => ({
     key: g.key,
