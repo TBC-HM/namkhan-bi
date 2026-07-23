@@ -82,6 +82,9 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
   const [genDirection, setGenDirection] = useState<string>('');
   const [regenerateEmptyOnly, setRegenerateEmptyOnly] = useState(true);
   const [groupFilter, setGroupFilter] = useState<string>('all'); // 'all' | slug
+  const [rowBusy, setRowBusy] = useState<number | null>(null);
+  const [refineOpenId, setRefineOpenId] = useState<number | null>(null);
+  const [rowRefineText, setRowRefineText] = useState('');
   const [, startT] = useTransition();
 
   const groupsBySlug = useMemo(() => {
@@ -259,6 +262,28 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
     } finally { setBusy(''); setTimeout(()=>setMsg(''), 2500); }
   }
 
+  // Row-level action wrapper — per-row busy so double-clicks don't double-fire.
+  async function rowAction(id: number, fn: () => Promise<void>) {
+    if (rowBusy !== null || busy !== '') return;
+    setRowBusy(id);
+    try { await fn(); } finally { setRowBusy(null); }
+  }
+
+  // Inline one-line refine on a proposal row → /api/marketing/director/refine-slot.
+  async function refineInline(slot: SlotRow, instruction: string) {
+    if (!instruction.trim()) { setMsg('Enter a refine instruction first.'); return; }
+    const res = await fetch('/api/marketing/director/refine-slot', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ slot_id: slot.id, instruction: instruction.trim() }),
+    });
+    if (!res.ok) { setMsg(`Refine failed: ${await res.text()}`); return; }
+    const j = await res.json();
+    const updated: SlotRow = { ...slot, title: j.title ?? slot.title, subject: j.subject ?? slot.subject, body_md: j.body_md ?? slot.body_md, status: 'refined', updated_at: new Date().toISOString() };
+    setSlots(prev => prev.map(x => x.id===slot.id ? updated : x));
+    setRefineOpenId(null); setRowRefineText('');
+    setMsg('Slot refined.'); setTimeout(()=>setMsg(''), 2500);
+  }
+
   async function bulkAccept(schedule: boolean) {
     setBusy('bulk');
     try {
@@ -363,46 +388,89 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
         </div>
       </section>
 
-      {/* REVIEW QUEUE — drafts within 14d needing PBS attention */}
+      {/* PROPOSAL CALENDAR — every proposed slot, whole timeframe */}
       {(() => {
-        const now = Date.now();
-        const in14d = now + 14 * 24 * 3600 * 1000;
-        const needsReview = filteredSlots.filter(s => {
-          const t = new Date(s.slot_date).getTime();
-          if (isNaN(t) || t < now || t > in14d) return false;
-          return s.status === 'proposed' || s.status === 'refined';
-        }).sort((a,b) => a.slot_date.localeCompare(b.slot_date));
-        if (needsReview.length === 0) return null;
+        const proposals = filteredSlots
+          .filter(s => s.status === 'proposed' || s.status === 'refined')
+          .sort((a,b) => a.slot_date.localeCompare(b.slot_date));
+        if (proposals.length === 0) return null;
+        const monthOf = (iso: string) => {
+          try { return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { month:'long', year:'numeric', timeZone:'UTC' }); }
+          catch { return iso.slice(0,7); }
+        };
+        let lastMonth = '';
         return (
           <section style={panel}>
-            <h3 style={h3}>Needs review · next 14 days <span style={{ color:INK_M, fontWeight:500, fontSize:11, marginLeft:6 }}>({needsReview.length})</span></h3>
-            <p style={muted}>Auto-composed by Director. Approve or refine before scheduled send.</p>
-            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-              {needsReview.slice(0, 8).map(s => {
+            <h3 style={h3}>Proposal calendar <span style={{ color:INK_M, fontWeight:500, fontSize:11, marginLeft:6 }}>· {proposals.length} proposed</span></h3>
+            <p style={muted}>Every proposed slot in the plan, oldest first. Accept creates the draft campaign; Refine edits the slot inline.</p>
+            <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:520, overflowY:'auto', paddingRight:4 }}>
+              {proposals.map(s => {
                 const c = STATUS_BADGE[s.status];
+                const m = monthOf(s.slot_date);
+                const showMonth = m !== lastMonth;
+                lastMonth = m;
+                const isRowBusy = rowBusy === s.id;
+                const rowDisabled = busy !== '' || rowBusy !== null;
                 return (
-                  <div key={s.id}
-                    style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', border:`1px solid ${HAIR}`, borderRadius:4, background:'#FFFFFF' }}>
-                    <span style={{ display:'inline-block', width:8, height:8, borderRadius:2, background:colorForSlot(s), border:`1px solid ${HAIR}`, flexShrink:0 }} />
-                    <span style={{ fontSize:11, color:INK_M, minWidth:70 }}>{fmtDate(s.slot_date)}</span>
-                    <button type="button" onClick={()=>{ setDrawerSlot(s); setRefineText(''); }}
-                      title="Open slot"
-                      style={{ fontSize:12, fontWeight:500, color:INK, flex:1, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0, fontFamily:'inherit' }}>
-                      {s.title}
-                    </button>
-                    <span style={{ fontSize:10, color:INK_M }}>{labelForSlot(s)}</span>
-                    <span style={{ padding:'2px 8px', fontSize:10, fontWeight:600, borderRadius:10, background:c.bg, color:c.fg, border:`1px solid ${c.brd}` }}>{s.status}</span>
-                    <button type="button" onClick={()=>regenerateSlot(s)} disabled={busy!==''}
-                      title="AI regenerate subject + body"
-                      style={{ padding:'4px 8px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:PRIMARY, border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer' }}>
-                      ✨ Regenerate
-                    </button>
-                    <button type="button" onClick={()=>rejectSlot(s)} disabled={busy!==''}
-                      title="Dismiss — mark as skipped, won't be sent"
-                      style={{ padding:'4px 8px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#8A2419', border:`1px solid #E8B7AB`, borderRadius:4, cursor:'pointer' }}>
-                      🗑 Dismiss
-                    </button>
-                  </div>
+                  <Fragment key={s.id}>
+                    {showMonth && (
+                      <div style={{ fontSize:10, textTransform:'uppercase', letterSpacing:'.08em', color:INK_M, fontWeight:700, padding:'8px 2px 2px', borderBottom:`1px solid ${HAIR}` }}>{m}</div>
+                    )}
+                    <div style={{ border:`1px solid ${HAIR}`, borderRadius:4, background:'#FFFFFF', padding:'8px 10px', opacity: isRowBusy ? 0.6 : 1 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <span style={{ fontSize:11, color:INK_M, minWidth:56, flexShrink:0 }}>{fmtDate(s.slot_date)}</span>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <button type="button" onClick={()=>{ setDrawerSlot(s); setRefineText(''); }}
+                            title="Open slot"
+                            style={{ fontSize:12, fontWeight:600, color:INK, background:'transparent', border:'none', textAlign:'left', cursor:'pointer', padding:0, fontFamily:'inherit', width:'100%' }}>
+                            {s.title}
+                          </button>
+                          {s.body_md && (
+                            <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>{s.body_md}</div>
+                          )}
+                        </div>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, color:INK_M, flexShrink:0 }}>
+                          <span style={{ display:'inline-block', width:8, height:8, borderRadius:2, background:colorForSlot(s), border:`1px solid ${HAIR}` }} />
+                          {labelForSlot(s)}
+                        </span>
+                        <span style={{ padding:'2px 8px', fontSize:10, fontWeight:600, borderRadius:10, background:c.bg, color:c.fg, border:`1px solid ${c.brd}`, flexShrink:0 }}>{s.status}</span>
+                        <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                          <button type="button" onClick={()=>rowAction(s.id, ()=>acceptSlot(s))} disabled={rowDisabled}
+                            title="Accept — create the draft campaign"
+                            style={{ padding:'4px 8px', fontSize:11, fontWeight:600, background:PRIMARY, color:'#FFFFFF', border:`1px solid ${PRIMARY}`, borderRadius:4, cursor:'pointer' }}>
+                            {isRowBusy ? '…' : 'Accept'}
+                          </button>
+                          <button type="button" onClick={()=>{ setRefineOpenId(refineOpenId === s.id ? null : s.id); setRowRefineText(''); }} disabled={rowDisabled}
+                            title="Refine — give a one-line instruction"
+                            style={{ padding:'4px 8px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:PRIMARY, border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer' }}>
+                            Refine
+                          </button>
+                          <button type="button" onClick={()=>rowAction(s.id, ()=>regenerateSlot(s))} disabled={rowDisabled}
+                            title="AI regenerate subject + body"
+                            style={{ padding:'4px 8px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:PRIMARY, border:`1px solid ${HAIR}`, borderRadius:4, cursor:'pointer' }}>
+                            ✨ Regenerate
+                          </button>
+                          <button type="button" onClick={()=>rowAction(s.id, ()=>rejectSlot(s))} disabled={rowDisabled}
+                            title="Dismiss — mark as skipped, won't be sent"
+                            style={{ padding:'4px 8px', fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#8A2419', border:`1px solid #E8B7AB`, borderRadius:4, cursor:'pointer' }}>
+                            🗑 Dismiss
+                          </button>
+                        </div>
+                      </div>
+                      {refineOpenId === s.id && (
+                        <div style={{ display:'flex', gap:6, marginTop:8 }}>
+                          <input type="text" value={rowRefineText} onChange={e=>setRowRefineText(e.target.value)}
+                            placeholder="e.g. more transactional · change the title · push the spa angle"
+                            onKeyDown={e=>{ if (e.key === 'Enter' && rowRefineText.trim() && !rowDisabled) rowAction(s.id, ()=>refineInline(s, rowRefineText)); }}
+                            style={{ ...input, flex:1 }} />
+                          <button type="button" onClick={()=>rowAction(s.id, ()=>refineInline(s, rowRefineText))} disabled={rowDisabled || !rowRefineText.trim()}
+                            style={{ padding:'4px 12px', fontSize:11, fontWeight:600, background:PRIMARY, color:'#FFFFFF', border:`1px solid ${PRIMARY}`, borderRadius:4, cursor:'pointer' }}>
+                            {isRowBusy ? '…' : 'Go'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </Fragment>
                 );
               })}
             </div>
