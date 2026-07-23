@@ -96,17 +96,24 @@ export default function CampaignEditor({ initial, chrome }: Props) {
 
   function insertImage(url: string) {
     const ta = bodyRef.current;
-    const markdown = `![](${url})`;
+    const markdown = `![](${mdSafeUrl(url)})`;
     if (!ta) { setBodyMd(bodyMd + '\n\n' + markdown + '\n'); return; }
     const start = ta.selectionStart; const end = ta.selectionEnd;
     setBodyMd(bodyMd.slice(0, start) + markdown + bodyMd.slice(end));
     setTimeout(() => { ta.focus(); ta.setSelectionRange(start + markdown.length, start + markdown.length); }, 0);
   }
+  // Markdown-safe URL: parentheses and spaces in storage paths (e.g. "Partner Folder/…(1).jpg")
+  // break the ![](url) syntax — the closing ")" of the URL is read as the end of the markdown link.
+  function mdSafeUrl(url: string): string {
+    return url.replace(/ /g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29');
+  }
   function replaceHero(url: string) {
-    // find first ![](...) and replace or prepend
-    const heroRe = /^!\[[^\]]*\]\([^)]*\)/m;
-    if (heroRe.test(bodyMd)) setBodyMd(bodyMd.replace(heroRe, `![](${url})`));
-    else setBodyMd(`![](${url})\n\n` + bodyMd);
+    // Replace the ENTIRE first image line (greedy to end of line) — also self-heals
+    // debris left by earlier replacements that cut an unencoded URL at its first ")".
+    const heroLineRe = /^!\[[^\]]*\]\(.*$/m;
+    const heroMd = `![](${mdSafeUrl(url)})`;
+    if (heroLineRe.test(bodyMd)) setBodyMd(bodyMd.replace(heroLineRe, heroMd));
+    else setBodyMd(heroMd + `\n\n` + bodyMd);
   }
 
   // Live preview via THE canonical renderer — identical to the send path.
