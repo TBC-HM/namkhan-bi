@@ -33,6 +33,7 @@ export default async function RatePlansSettingsPage({ params }: { params: { prop
         { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans`, active: true },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
+        { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
       ]}
     >

@@ -1,14 +1,13 @@
 // app/holding/it/brain/page.tsx
-// BRAIN v1 · Company Second Brain console — owner surface under Holding · IT.
-// Pipeline tiles + human review queue + "Ask the company brain" window.
-// Server component fetches nothing; the client component polls
-// /api/brain/review (service-role reads happen server-side in that route).
+// PBS 2026-07-24: the Brain is property-level, not holding-level — console
+// moved to /h/[property_id]/settings/brain (Settings strip · Brain tab).
+// This legacy path 307-redirects to the Namkhan brain. BrainClient.tsx stays
+// in this folder as the shared component (imported by the settings page).
 
-import BrainClient from './BrainClient';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 export default function BrainPage() {
-  return <BrainClient />;
+  redirect('/h/260955/settings/brain');
 }

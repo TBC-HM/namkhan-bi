@@ -25,6 +25,13 @@ interface BrainStatus {
   excluded: number; chunks_total: number; chunks_embedded: number; ocr_needed: number;
 }
 
+interface Resurface {
+  expiring?: Array<{ doc_id: string; title: string | null; expiry: string; days_left: number }>;
+  cases?: Array<{ case_ref: string; status: string | null; next_deadline: string | null; deadline_note: string | null; days_since_last_doc: number }>;
+  unanswered_questions?: Array<{ question: string; asked_at: string; reason: string | null }>;
+  counters?: { needs_human: number; ocr_backlog: number; distilled: number; distill_open: number };
+}
+
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 const FAMILY_LABEL: Record<string, string> = {
   hr_doc: 'HR', legal: 'Legal', qm: 'Quality', financial: 'Financial',
@@ -63,7 +70,7 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
   const today = new Date().toISOString().slice(0, 10);
   const in90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
 
-  const [totalRes, reviewRes, archivedRes, signedRes, expiringRes, casesRes, brainRes, docTypes] = await Promise.all([
+  const [totalRes, reviewRes, archivedRes, signedRes, expiringRes, casesRes, brainRes, docTypes, resurfaceRes] = await Promise.all([
     sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId),
     sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('needs_review', true),
     sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('is_archived', true),
@@ -72,12 +79,14 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
     sb.from('v_doc_cases').select('case_ref, status, n_docs').eq('property_id', propertyId).order('case_ref'),
     sb.from('v_brain_pipeline_status').select('*').single(),
     fetchAllDocTypes(sb, propertyId),
+    sb.rpc('fn_brain_resurface', { p_property_id: propertyId }),
   ]);
 
   const familyCounts = new Map<string, number>();
   for (const t of docTypes) familyCounts.set(t, (familyCounts.get(t) ?? 0) + 1);
   const families = [...familyCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
 
+  const resurface = (resurfaceRes.data ?? {}) as Resurface;
   const cases = ((casesRes.data ?? []) as Partial<CaseRow>[])
     .map((c) => ({ case_ref: c.case_ref ?? '', status: c.status ?? null, n_docs: typeof c.n_docs === 'number' ? c.n_docs : 0 }))
     .filter((c) => c.case_ref);
@@ -146,11 +155,51 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
         </Container>
       </div>
 
+      {/* Resurfaced · needs attention (BRAIN v3 — the "review loop" kernel) */}
+      <div style={fullRow}>
+        <Container title="Resurfaced · needs attention" subtitle="The brain proactively resurfaces what is about to matter — expiries, case deadlines, questions it could not answer" density="compact">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12.5 }}>
+            {(resurface.expiring ?? []).map((e) => (
+              <div key={e.doc_id}>
+                🟡 <a href={`/api/legal/docs/file/${e.doc_id}?mode=preview`} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>{e.title ?? e.doc_id.slice(0, 8)}</a>
+                <span style={{ opacity: 0.65 }}> — expires {e.expiry} ({e.days_left}d)</span>
+              </div>
+            ))}
+            {(resurface.cases ?? []).map((c) => (
+              <div key={c.case_ref}>
+                ⌛ <a href={`/h/${propertyId}/finance/legal/cases/${encodeURIComponent(c.case_ref)}`} style={{ textDecoration: 'underline' }}>{c.case_ref}</a>
+                <span style={{ opacity: 0.65 }}>
+                  {' — '}{c.next_deadline ? `next deadline ${c.next_deadline}${c.deadline_note ? ` (${c.deadline_note})` : ''} · ` : ''}
+                  {c.days_since_last_doc > 30 ? `no new document in ${c.days_since_last_doc} days` : `last document ${c.days_since_last_doc}d ago`}
+                </span>
+              </div>
+            ))}
+            {(resurface.unanswered_questions ?? []).length > 0 ? (
+              <div style={{ marginTop: 4 }}>
+                <span style={{ fontWeight: 600 }}>Questions the brain could not answer</span>{' '}
+                <span style={{ opacity: 0.6 }}>(content gaps — upload or OCR the missing docs):</span>
+                {(resurface.unanswered_questions ?? []).map((q, i) => (
+                  <div key={i} style={{ opacity: 0.8, paddingLeft: 14 }}>· {q.question}</div>
+                ))}
+              </div>
+            ) : null}
+            {(resurface.counters?.ocr_backlog ?? 0) > 0 ? (
+              <div style={{ opacity: 0.7 }}>
+                📄 {resurface.counters?.ocr_backlog} scanned PDFs await OCR — their content is invisible to the ask window until processed.
+              </div>
+            ) : null}
+            <div style={{ opacity: 0.6, fontSize: 11.5 }}>
+              Distilled key-terms summaries: {resurface.counters?.distilled ?? 0} done · {resurface.counters?.distill_open ?? 0} queued (contracts · legal · land · loans · financial)
+            </div>
+          </div>
+        </Container>
+      </div>
+
       {/* Quiet exits */}
       <div style={fullRow}>
         <div style={{ fontSize: 12, color: 'var(--ink-mute, #5A5A5A)', display: 'flex', gap: 18 }}>
           <a href={docsHref} style={{ textDecoration: 'underline' }}>Open the full document register (triage / edit / classify) →</a>
-          <a href="/holding/it/brain" style={{ textDecoration: 'underline' }}>Brain console (review queue · classifier rules) →</a>
+          <a href={`/h/${propertyId}/settings/brain`} style={{ textDecoration: 'underline' }}>Brain settings (review queue · classifier rules) →</a>
         </div>
       </div>
     </DashboardPage>
