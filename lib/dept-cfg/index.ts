@@ -759,6 +759,10 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'HR',              href: '/finance/hr'                       },
     { label: 'Finance',         href: '/finance/pnl'                      },
     { label: 'Legal',           href: '/finance/legal'                    },
+    // PBS 2026-07-24: Archive tab — brain-backed archive overview (prompt +
+    // headline stripes). Replaces the two "Open Docs register" links that
+    // lived on the Legal page.
+    { label: 'Archive',         href: '/finance/archive'                  },
   ],
   quickChips: [
     { label: 'HoD',            href: '/finance'             },

@@ -215,19 +215,11 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
         </Container>
       </div>
 
-      {/* Quick actions — upload + drop-to-translate + drop-to-summarize + chat */}
+      {/* Quick actions — upload + drop-to-translate + drop-to-summarize + chat.
+          PBS 2026-07-24: "Open Docs register" button removed — the register is
+          reached via the Archive tab (archive overview → quiet link). */}
       <div style={fullRow}>
-        <Container title="Quick actions" subtitle="Open the editable Docs register · drop a file to translate or summarize · upload a doc · chat with John" density="compact">
-          <div style={{ marginBottom: 10 }}>
-            <a href={`/h/${propertyId}/finance/legal/docs`} style={{
-              display: 'inline-block', padding: '6px 12px',
-              border: '1px solid #1B1B1B', borderRadius: 3,
-              background: '#1B1B1B', color: '#FFFFFF', textDecoration: 'none',
-              fontSize: 12, fontWeight: 500,
-            }}>
-              📋 Open Docs register →
-            </a>
-          </div>
+        <Container title="Quick actions" subtitle="Drop a file to translate or summarize · upload a doc · chat with John" density="compact">
           <LegalQuickActions propertyId={propertyId} />
         </Container>
       </div>
@@ -269,22 +261,8 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
         </Container>
       </div>
 
-      {/* Sublinks — docs register lives here now (removed from main strip) */}
-      <div style={fullRow}>
-        <Container title="Document register" subtitle="Triage / edit / classify every doc · property-scoped" density="compact">
-          <a href={`/h/${propertyId}/finance/legal/docs`} style={{
-            display: 'inline-block', padding: '6px 12px',
-            border: '1px solid #1B1B1B', borderRadius: 3,
-            background: '#1B1B1B', color: '#FFFFFF', textDecoration: 'none',
-            fontSize: 12, fontWeight: 500,
-          }}>
-            📋 Open Docs register →
-          </a>
-          <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 6 }}>
-            The full editable doc-triage page. Use the read-only registers below (Contracts / Insurance / Licenses) for share-with-counsel views.
-          </div>
-        </Container>
-      </div>
+      {/* PBS 2026-07-24: the "Document register" container (second Open Docs
+          register link) was removed — access moved to the Archive tab. */}
 
       {/* PBS 2026-07-20 pm · External counsel email containers (3-in-a-row).
              Reads public.v_legal_counsel_emails. Placed below Documents,
