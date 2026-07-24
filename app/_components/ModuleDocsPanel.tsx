@@ -28,7 +28,7 @@ export interface ModuleStatusRow {
 
 interface Props {
   docs: ModuleDocRow[];
-  statuses: ModuleStatusRow[];
+  statuses?: ModuleStatusRow[];
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -162,7 +162,7 @@ function shortDate(iso: string): string {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
-export default function ModuleDocsPanel({ docs, statuses }: Props) {
+export default function ModuleDocsPanel({ docs, statuses = [] }: Props) {
   const [q, setQ] = useState('');
   const [goalOverrides, setGoalOverrides] = useState<Record<string, string>>({});
 
