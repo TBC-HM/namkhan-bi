@@ -611,7 +611,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       title={`Revenue · ${cfg.hodName}`}
       subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
       tabs={hodTabs}
-      action={<TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</TenantLink>}
+      action={<TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask the Brain →`}</TenantLink>}
     >
       {tiles.length > 0 && (
         <div style={fullRow}>

@@ -122,7 +122,7 @@ export default async function MarketingHodPage() {
         title={`Marketing · ${cfg.hodName}`}
         subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         tabs={tabs}
-        action={<TenantLink href={chatHref} style={primaryBtn}>{`Ask ${cfg.hodName} →`}</TenantLink>}
+        action={<TenantLink href={chatHref} style={primaryBtn}>{`Ask the Brain →`}</TenantLink>}
       >
         {/* HARDCODED honesty banner — see PBS design contract. */}
         <div style={{ ...fullRow, ...banner }}>

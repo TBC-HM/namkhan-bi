@@ -143,7 +143,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       {settingsHref && (
         <a href={settingsHref} title="Settings" aria-label="Settings" style={gearBtnStyle}>⚙</a>
       )}
-      <TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</TenantLink>
+      <TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask the Brain →`}</TenantLink>
     </div>
   );
 
