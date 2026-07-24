@@ -1,7 +1,7 @@
 // app/holding/it/cockpit/_lib/groups.ts
-//
 // PBS 2026-07-23: canonical DashboardPage tabs metadata for cockpit.
 // PBS 2026-07-24 v2: Build group — added Module Docs sub-tab before + New spec.
+// PBS 2026-07-25 v3: Knowledge group — added Sitemap sub-tab.
 
 import type { DashboardTab } from '@/app/(cockpit)/_design/types';
 
@@ -27,9 +27,10 @@ export const GROUPS: GroupSpec[] = [
   {
     key: 'knowledge', label: 'Knowledge', href: '/holding/it/cockpit/docs',
     subs: [
-      { href: '/holding/it/cockpit/docs',      label: 'Docs' },
-      { href: '/holding/it/cockpit/schemas',   label: 'Schemas' },
-      { href: '/holding/it/cockpit/freshness', label: 'Freshness' },
+      { href: '/holding/it/cockpit/docs',     label: 'All Docs' },
+      { href: '/holding/it/cockpit/schemas',  label: 'Schemas' },
+      { href: '/holding/it/cockpit/freshness',label: 'Freshness' },
+      { href: '/holding/it/cockpit/sitemap',  label: 'Sitemap' },
     ],
   },
   { key: 'inventory', label: 'Inventory', href: '/cockpit/supabase', subs: [] },
