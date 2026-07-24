@@ -43,8 +43,7 @@ export async function GET() {
         return {
           sha: sha.slice(0, 8),
           sha_full: sha,
-          message: (c.commit?.message ?? '').split('
-')[0].slice(0, 90),
+          message: (c.commit?.message ?? '').split('\n')[0].slice(0, 90),
           author: c.commit?.author?.name ?? '',
           date: c.commit?.author?.date ?? '',
           checks: runs.map((r: any) => ({

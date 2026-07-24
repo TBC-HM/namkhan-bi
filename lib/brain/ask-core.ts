@@ -111,7 +111,7 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
   let qVec: number[] | null = null;
   try { const v = await embedTexts([question]); qVec = v?.[0] ?? null; } catch { /* fts-only */ }
 
-  const [hits, verifiedRes, registryRes, hrRes, sopRes] = await Promise.all([
+  const [hits, verifiedRes, registryRes, hrRes, sopRes, opsRes] = await Promise.all([
     brainRetrieve(question, tier, qVec, scope),
     sb.rpc('fn_brain_verified_search', {
       p_q: question, p_embedding: qVec ? JSON.stringify(qVec) : null,
@@ -127,6 +127,9 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
     scope === 'sops'
       ? sb.rpc('fn_brain_sop_search', { p_q: question, p_limit: 5 })
       : Promise.resolve({ data: [] }),
+    // BRAIN v7: ops live-data router v1 — KPIs (occ/ADR/RevPAR/revenue) from the
+    // same canonical views the dashboards use, fetched live, never stored.
+    sb.rpc('fn_brain_ops_context', { p_q: question, p_max_sensitivity: tier }),
   ]);
   const sops = ((sopRes.data ?? []) as SopHit[]).filter(s => s.score >= 1);
 
@@ -134,9 +137,11 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
   const registry = (registryRes.data ?? []) as RegistryHit[];
   const hrContext = (hrRes.data ?? {}) as Record<string, unknown>;
   const usedHr = Object.keys(hrContext).length > 0;
+  const opsContext = (opsRes.data ?? {}) as Record<string, unknown>;
+  const usedOps = Object.keys(opsContext).length > 0;
   const chunkIds = hits.map(h => h.chunk_id);
 
-  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr && sops.length === 0) {
+  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr && sops.length === 0 && !usedOps) {
     return { answered: false, answer: NOT_COVERED_REPLY, refusedReason: 'no_chunks_retrieved', sources: [], retrievedChunkIds: chunkIds, usedHr: false };
   }
 
@@ -193,6 +198,8 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
     '',
     '━━━ STRUCTURED SOPs (live from the SOP catalog) ━━━',
     sopBlock,
+    '━━━ LIVE OPERATIONAL DATA (KPIs from the canonical views — fetched live, cite as "(live data)") ━━━',
+    usedOps ? JSON.stringify(opsContext, null, 1).slice(0, 5000) : '(none — not a KPI/operations question)',
     '━━━ LIVE STRUCTURED HR DATA (owner/admin surface · fetched live, never stored in the brain) ━━━',
     usedHr ? JSON.stringify(hrContext, null, 1).slice(0, 6000) : '(none — either not an HR question or the asking tier has no HR access)',
     '━━━ OWNER-CONFIRMED VERIFIED ANSWERS (curated knowledge — prefer over raw excerpts when relevant) ━━━',

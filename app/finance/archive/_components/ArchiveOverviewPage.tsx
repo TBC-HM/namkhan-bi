@@ -99,7 +99,7 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
     <DashboardPage title={title} subtitle={subtitle} tabs={tabs.length ? tabs : undefined}>
       {/* Prompt window — the primary way in */}
       <div style={fullRow}>
-        <Container title="Ask the archive" subtitle="Answers come only from classified documents, with citations · access-tiered · HR/payroll excluded by policy" density="compact">
+        <Container title="Ask the archive" subtitle="Cited answers from the company archive · live KPIs · plain language" density="compact">
           <ArchiveAskClient />
         </Container>
       </div>
