@@ -7,6 +7,7 @@
 // page stays a server component.
 
 import { useCallback, useState } from 'react';
+import AskFeedback from '@/components/brain/AskFeedback';
 
 type Source = { doc_id: string; title: string; link: string };
 
@@ -92,6 +93,9 @@ export default function ArchiveAskClient() {
                 </span>
               ))}
             </div>
+          ) : null}
+          {!answer.startsWith('Error:') ? (
+            <AskFeedback question={question} answer={answer} sources={sources} />
           ) : null}
         </div>
       ) : null}

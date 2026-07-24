@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Container, KpiTile } from '@/app/(cockpit)/_design';
 import { BRAIN_DOC_KINDS, BRAIN_TIERS } from '@/lib/brain/taxonomy';
+import AskFeedback from '@/components/brain/AskFeedback';
 
 const DOC_KINDS: string[] = [...BRAIN_DOC_KINDS];
 const TIERS: string[] = [...BRAIN_TIERS];
@@ -204,6 +205,9 @@ export default function BrainClient() {
                   </span>
                 ))}
               </div>
+            ) : null}
+            {!answer.startsWith('Error:') ? (
+              <AskFeedback question={question} answer={answer} sources={sources} />
             ) : null}
           </div>
         ) : null}
