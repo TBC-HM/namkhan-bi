@@ -1,12 +1,11 @@
 // app/holding/it/page.tsx
-// PBS 2026-07-24: fetch module_status for traffic lights + progress bars.
+// PBS 2026-07-24: fetch module_status via public.v_module_status bridge view.
 
 import HodLanding from '@/app/_components/HodLanding';
 import { Container } from '@/app/(cockpit)/_design';
 import ModuleDocsPanel, { type ModuleDocRow, type ModuleStatusRow } from '@/app/_components/ModuleDocsPanel';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { supabase } from '@/lib/supabase';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export const dynamic = 'force-dynamic';
@@ -14,18 +13,9 @@ export const revalidate = 0;
 
 const HOLDING_PID = 0;
 const MODULE_DOC_TYPES = [
-  'bug_agent_module',
-  'compiler_module',
-  'gbp_module',
-  'inventory_module',
-  'media_module',
-  'newsletter_module',
-  'proposals_module',
-  'sales_module',
-  'socials_module',
-  'spec_builder_module',
-  'university_module',
-  'youtube_module',
+  'bug_agent_module', 'compiler_module', 'gbp_module', 'inventory_module',
+  'media_module', 'newsletter_module', 'proposals_module', 'sales_module',
+  'socials_module', 'spec_builder_module', 'university_module', 'youtube_module',
 ];
 
 function insightsFromCfg(): Insight[] {
@@ -35,7 +25,7 @@ function insightsFromCfg(): Insight[] {
     key: a.id,
     priority: a.severity === 'high' ? 'critical' : a.severity === 'medium' ? 'warning' : 'info',
     title: a.label,
-    body: a.kind === 'leakage' ? 'Infra / platform risk — Kit to unblock.' : 'Opportunity — ship autonomous fleet output.',
+    body: a.kind === 'leakage' ? 'Infra / platform risk — Kit to unblock.' : 'Opportunity.',
   }));
 }
 
@@ -46,14 +36,14 @@ export default async function HoldingItPage() {
     label: k.k, value: k.v, size: 'sm' as const, footnote: k.d,
   }));
 
-  const sb = getSupabaseAdmin();
   const [{ data: docsData }, { data: statusData }] = await Promise.all([
     supabase
       .from('v_documents_latest')
       .select('doc_type, title, version, status, last_updated_at, md_length')
       .in('doc_type', MODULE_DOC_TYPES)
       .order('doc_type'),
-    sb.schema('documentation' as any).from('module_status')
+    supabase
+      .from('v_module_status')
       .select('doc_type, goal_precise, completion_pct, is_live, claude_integrated, signed_off_at, signed_off_by')
       .in('doc_type', MODULE_DOC_TYPES),
   ]);
