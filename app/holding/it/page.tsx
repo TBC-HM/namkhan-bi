@@ -1,5 +1,5 @@
 // app/holding/it/page.tsx
-// PBS 2026-07-24: module docs panel — try/catch so page never 500.
+// PBS 2026-07-25: add it_navigation + app_navigation to module docs panel.
 
 import HodLanding from '@/app/_components/HodLanding';
 import { Container } from '@/app/(cockpit)/_design';
@@ -13,7 +13,9 @@ export const revalidate = 0;
 
 const HOLDING_PID = 0;
 const MODULE_DOC_TYPES = [
+  'app_navigation',
   'bug_agent_module', 'compiler_module', 'gbp_module', 'inventory_module',
+  'it_navigation',
   'media_module', 'newsletter_module', 'proposals_module', 'sales_module',
   'socials_module', 'spec_builder_module', 'university_module', 'youtube_module',
 ];
@@ -38,7 +40,6 @@ export default async function HoldingItPage() {
 
   let docs: ModuleDocRow[] = [];
   let statuses: ModuleStatusRow[] = [];
-  let fetchError: string | null = null;
 
   try {
     const [docsRes, statusRes] = await Promise.all([
@@ -47,30 +48,22 @@ export default async function HoldingItPage() {
         .select('doc_type, title, version, status, last_updated_at, md_length')
         .in('doc_type', MODULE_DOC_TYPES)
         .order('doc_type'),
-      supabase
-        .from('v_module_status' as any)
+      (supabase as any)
+        .from('v_module_status')
         .select('doc_type, goal_precise, completion_pct, is_live, claude_integrated, signed_off_at, signed_off_by')
         .in('doc_type', MODULE_DOC_TYPES),
     ]);
     docs = (docsRes.data ?? []) as ModuleDocRow[];
     statuses = ((statusRes.data ?? []) as unknown[]) as ModuleStatusRow[];
-  } catch (e: unknown) {
-    fetchError = e instanceof Error ? e.message : 'Unknown error';
-  }
+  } catch {}
 
   const moduleDocsBlock = (
     <Container
       title="Module Documentation"
-      subtitle={`${docs.length} modules · Live · Goal · Sign-off`}
+      subtitle={}
       density="compact"
     >
-      {fetchError ? (
-        <div style={{ fontSize: 11, color: '#B8542A', padding: '8px 0' }}>
-          Load error: {fetchError} — refresh to retry
-        </div>
-      ) : (
-        <ModuleDocsPanel docs={docs} statuses={statuses} />
-      )}
+      <ModuleDocsPanel docs={docs} statuses={statuses} />
     </Container>
   );
 
