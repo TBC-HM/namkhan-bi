@@ -33,6 +33,17 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  // TEMPORARY diagnostic bypass (404 incident 2026-07-24, remove after close):
+  // lets the ops probe request PAGE routes server-side, gated on the same
+  // shared secret that guards /api/cron/*. GET only.
+  {
+    const probe = req.headers.get('x-probe-secret')
+    const envSecret = process.env.CRON_SHARED_SECRET ?? process.env.CRON_SECRET ?? ''
+    if (probe && envSecret && probe === envSecret && req.method === 'GET') {
+      return NextResponse.next()
+    }
+  }
+
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/cron') ||
