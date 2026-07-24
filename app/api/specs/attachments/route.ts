@@ -9,7 +9,7 @@ export async function POST(req: Request) {
   try {
     const fd = await req.formData();
     const file = fd.get('file') as File | null;
-    const module = (fd.get('module') as string | null) ?? 'spec';
+    const moduleName = (fd.get('module') as string | null) ?? 'spec';
 
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     if (!allowed.includes(ext)) return NextResponse.json({ error: 'Image files only (png/jpg/webp/gif)' }, { status: 400 });
 
     const bytes = await file.arrayBuffer();
-    const path = `spec-attachments/${module.replace(/[^a-z0-9-]/gi, '-')}-${Date.now()}.${ext}`;
+    const path = `spec-attachments/${moduleName.replace(/[^a-z0-9-]/gi, '-')}-${Date.now()}.${ext}`;
 
     const sb = getSupabaseAdmin();
     const { error } = await sb.storage.from('documents-internal').upload(path, bytes, {
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
     const { data: urlData } = sb.storage.from('documents-internal').getPublicUrl(path);
     return NextResponse.json({ url: urlData.publicUrl, path }, { status: 201 });
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: 'Unexpected error' }, { status: 500 });
   }
 }
