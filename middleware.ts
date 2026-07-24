@@ -33,30 +33,6 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // TEMPORARY diagnostic bypass (404 incident 2026-07-24, remove after close):
-  // lets the ops probe request PAGE routes server-side, gated on the same
-  // shared secret that guards /api/cron/*. GET only.
-  {
-    const probe = req.headers.get('x-probe-secret')
-    const envSecret = process.env.CRON_SHARED_SECRET ?? process.env.CRON_SECRET ?? ''
-    if (probe && envSecret && probe === envSecret && req.method === 'GET') {
-      return NextResponse.next()
-    }
-  }
-
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api/cron') ||
-    pathname.startsWith('/api/cockpit/webhooks') ||
-    pathname.startsWith('/api/cockpit/docs/backup') || // CI pre-deploy backup
-    pathname.startsWith('/api/auth/') || // login / request-access / callback exchange
-    pathname.startsWith('/api/marketing/media/preview') || // PBS 2026-07-14
-    pathname.startsWith('/api/marketing/contacts/extract') || // PBS 2026-07-16 · cron+admin gate lives inside the route
-    pathname.startsWith('/api/public/') || // PBS 2026-07-16 (Feature B): public guest confirmation POST
-    pathname.startsWith('/api/p/') || // PBS 2026-07-16: guest-side /p/[token] view + block tracking
-    PUBLIC_PATHS.some(p => pathname.startsWith(p))
-  ) return NextResponse.next()
-
   let res = NextResponse.next({ request: { headers: req.headers } })
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
