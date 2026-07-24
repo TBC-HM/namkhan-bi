@@ -1,13 +1,12 @@
 // app/holding/it/page.tsx
-// PBS 2026-07-09 pm: Holding · IT — Kit's HoD landing on HodLanding v2.
-// PBS 2026-07-23: added Module Documentation panel.
-// PBS 2026-07-24: all 12 module doc types wired.
+// PBS 2026-07-24: fetch module_status for traffic lights + progress bars.
 
 import HodLanding from '@/app/_components/HodLanding';
 import { Container } from '@/app/(cockpit)/_design';
-import ModuleDocsPanel, { type ModuleDocRow } from '@/app/_components/ModuleDocsPanel';
+import ModuleDocsPanel, { type ModuleDocRow, type ModuleStatusRow } from '@/app/_components/ModuleDocsPanel';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export const dynamic = 'force-dynamic';
@@ -47,21 +46,28 @@ export default async function HoldingItPage() {
     label: k.k, value: k.v, size: 'sm' as const, footnote: k.d,
   }));
 
-  const { data: docsData } = await supabase
-    .from("v_documents_latest")
-    .select("doc_type, title, version, status, last_updated_at, md_length")
-    .in("doc_type", MODULE_DOC_TYPES)
-    .order("doc_type");
+  const sb = getSupabaseAdmin();
+  const [{ data: docsData }, { data: statusData }] = await Promise.all([
+    supabase
+      .from('v_documents_latest')
+      .select('doc_type, title, version, status, last_updated_at, md_length')
+      .in('doc_type', MODULE_DOC_TYPES)
+      .order('doc_type'),
+    sb.schema('documentation' as any).from('module_status')
+      .select('doc_type, goal_precise, completion_pct, is_live, claude_integrated, signed_off_at, signed_off_by')
+      .in('doc_type', MODULE_DOC_TYPES),
+  ]);
 
   const docs = (docsData ?? []) as ModuleDocRow[];
+  const statuses = (statusData ?? []) as ModuleStatusRow[];
 
   const moduleDocsBlock = (
     <Container
       title="Module Documentation"
-      subtitle={`${docs.length} module${docs.length === 1 ? '' : 's'} · latest version only · Preview to open`}
+      subtitle={`${docs.length} modules · Live · Goal · Sign-off status per card`}
       density="compact"
     >
-      <ModuleDocsPanel docs={docs} />
+      <ModuleDocsPanel docs={docs} statuses={statuses} />
     </Container>
   );
 
