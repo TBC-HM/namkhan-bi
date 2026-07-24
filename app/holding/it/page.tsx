@@ -1,12 +1,7 @@
 // app/holding/it/page.tsx
 // PBS 2026-07-09 pm: Holding · IT — Kit's HoD landing on HodLanding v2.
-// Was DeptEntry. Now mirrors /holding/ceo layout — headline tiles + Shortcuts /
-// Reports / Tasks / Links row. Kit owns platform infra + agent fleet.
-//
-// PBS 2026-07-23: added Module Documentation panel in the 2nd row (same size as
-// Shortcuts, sits directly under it). Filterable list of marketing module specs
-// with per-row Preview link → /holding/it/module/[docType].
-// PBS 2026-07-24: added inventory_module, university_module, spec_builder_module.
+// PBS 2026-07-23: added Module Documentation panel.
+// PBS 2026-07-24: all 12 module doc types wired.
 
 import HodLanding from '@/app/_components/HodLanding';
 import { Container } from '@/app/(cockpit)/_design';
@@ -20,13 +15,18 @@ export const revalidate = 0;
 
 const HOLDING_PID = 0;
 const MODULE_DOC_TYPES = [
+  'bug_agent_module',
+  'compiler_module',
   'gbp_module',
   'inventory_module',
   'media_module',
   'newsletter_module',
+  'proposals_module',
+  'sales_module',
   'socials_module',
   'spec_builder_module',
   'university_module',
+  'youtube_module',
 ];
 
 function insightsFromCfg(): Insight[] {
@@ -48,10 +48,10 @@ export default async function HoldingItPage() {
   }));
 
   const { data: docsData } = await supabase
-    .from('v_documents_latest')
-    .select('doc_type, title, version, status, last_updated_at, md_length')
-    .in('doc_type', MODULE_DOC_TYPES)
-    .order('doc_type');
+    .from("v_documents_latest")
+    .select("doc_type, title, version, status, last_updated_at, md_length")
+    .in("doc_type", MODULE_DOC_TYPES)
+    .order("doc_type");
 
   const docs = (docsData ?? []) as ModuleDocRow[];
 
