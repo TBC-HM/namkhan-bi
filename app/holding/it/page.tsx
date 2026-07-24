@@ -6,6 +6,7 @@
 // PBS 2026-07-23: added Module Documentation panel in the 2nd row (same size as
 // Shortcuts, sits directly under it). Filterable list of marketing module specs
 // with per-row Preview link → /holding/it/module/[docType].
+// PBS 2026-07-24: added inventory_module, university_module, spec_builder_module.
 
 import HodLanding from '@/app/_components/HodLanding';
 import { Container } from '@/app/(cockpit)/_design';
@@ -18,7 +19,15 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const HOLDING_PID = 0;
-const MODULE_DOC_TYPES = ['gbp_module', 'media_module', 'newsletter_module', 'socials_module'];
+const MODULE_DOC_TYPES = [
+  'gbp_module',
+  'inventory_module',
+  'media_module',
+  'newsletter_module',
+  'socials_module',
+  'spec_builder_module',
+  'university_module',
+];
 
 function insightsFromCfg(): Insight[] {
   const cfg = DEPT_CFG.holding_it;
