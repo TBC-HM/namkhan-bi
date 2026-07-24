@@ -194,8 +194,9 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       </div>
 
       {/* PBS 2026-07-23 · optional 2nd row · same 4-col grid so caller's Container sits under Shortcuts */}
+      {/* PBS 2026-07-24: full-width block, no inner grid — caller controls its own layout */}
       {secondRow && (
-        <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+        <div style={fullRow}>
           {secondRow}
         </div>
       )}
