@@ -37,7 +37,7 @@ function renderAnswer(md: string) {
   });
 }
 
-export default function BrainDeptChat({ scope }: { scope: string }) {
+export default function BrainDeptChat({ scope, standalone }: { scope: string; standalone?: boolean }) {
   const [q, setQ] = useState('');
   const [asking, setAsking] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export default function BrainDeptChat({ scope }: { scope: string }) {
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>Ask the brain</div>
       <div style={{ fontSize: 11.5, opacity: 0.65, marginBottom: 8 }}>
         Instant, cited answers from {SCOPE_LABEL[scope] ?? 'the company knowledge'} — department-bordered.
-        For actions (reports, changes, tickets) use the agent chat below.
+        {standalone ? ' Actions (adapt docs, reports, exports) are coming to this window next.' : ' For actions (reports, changes, tickets) use the agent chat below.'}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <input value={q} onChange={e => setQ(e.target.value)}

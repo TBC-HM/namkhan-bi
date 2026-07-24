@@ -128,13 +128,21 @@ export default async function CockpitChatPage({ searchParams }: Props) {
   };
   const brainScope = explicitRole ? undefined : BRAIN_SCOPE_BY_DEPT[deptKey];
 
-  const chatBody = (
+  // PBS 2026-07-24 (2nd decision): dept HoD chats REPLACED by the brain — the
+  // agent threads neither worked reliably nor executed beyond what the brain
+  // does. Platform agents with real execution (architect/Felix, it/Kit) and
+  // explicit ?role= links keep the agent thread. Reversal = delete this block.
+  const chatBody = brainScope ? (
+    <DashboardPage
+      title={`Ask the brain · ${fallback.dept}`}
+      subtitle={`${fallback.dept} · department-bordered knowledge window`}
+    >
+      <div style={fullRow}>
+        <BrainDeptChat scope={brainScope} standalone />
+      </div>
+    </DashboardPage>
+  ) : (
     <DashboardPage title={title} subtitle={subtitle}>
-      {brainScope ? (
-        <div style={fullRow}>
-          <BrainDeptChat scope={brainScope} />
-        </div>
-      ) : null}
       <div style={fullRow}>
         <Container
           title={`${persona.emoji} ${persona.displayName}`}
