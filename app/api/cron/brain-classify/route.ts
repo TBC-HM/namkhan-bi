@@ -17,6 +17,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callClaude, parseModelJson, embedTexts } from '@/lib/brain/llm';
 import { chunkMarkdown } from '@/lib/brain/normalize';
+import { BRAIN_DOC_KINDS, BRAIN_ENTITIES } from '@/lib/brain/taxonomy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,13 +28,8 @@ const MAX_CHUNK_DOCS = 5;
 const MAX_EMBED = 50;
 const CONFIDENCE_GATE = 0.75;
 
-export const BRAIN_DOC_KINDS = [
-  'dmc_contract','ota_agreement','supplier_contract','employment_doc','insurance_policy',
-  'license_permit','corporate_legal','litigation_legal','land_property_doc','loan_banking_doc',
-  'bank_statement','financial_statement','invoice_receipt','certification_audit','sop_source',
-  'factsheet','brand_asset_doc','partner_marketing','meeting_note_memo','other',
-] as const;
 const SENSITIVITIES = new Set(['staff_ok','management','owner_only','legal_confidential']);
+const ENTITIES = new Set<string>(BRAIN_ENTITIES);
 
 function checkCronSecret(req: NextRequest): boolean {
   const provided = req.headers.get('x-cron-secret') ?? '';
@@ -51,7 +47,7 @@ type ClassifyRow = {
 };
 
 type ModelClassification = {
-  doc_kind: string; sensitivity: string; brain_excluded: boolean;
+  doc_kind: string; entity: string; sensitivity: string; brain_excluded: boolean;
   parties: string[]; doc_date: string | null; language: string;
   summary_2_sentences: string; confidence: number;
 };
@@ -72,6 +68,8 @@ function classifierSystem(knowledgePack: string): string {
     '',
     'Respond with ONLY a strict JSON object, no fences, no commentary:',
     '{"doc_kind": one of the taxonomy doc_kind values,',
+    ' "entity": "green_tea"|"pll"|"namkhan_group"|"namkhan_ag"|"donna"|"owner_personal"|"multiple"|"external"|"unknown"',
+    '   (which owner-side company this document belongs to — see Corporate structure in the pack),',
     ' "sensitivity": "staff_ok"|"management"|"owner_only"|"legal_confidential",',
     ' "brain_excluded": boolean (true ONLY for employment_doc — always true there),',
     ' "parties": [array of counterparty/entity names found],',
@@ -120,8 +118,9 @@ async function stageClassify(sb: ReturnType<typeof getSupabaseAdmin>, knowledgeP
       const confidence = typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : 0;
       const needsHuman = confidence < CONFIDENCE_GATE || docKind === 'other';
 
+      const entity = ENTITIES.has(parsed.entity) ? parsed.entity : 'unknown';
       const classification = {
-        doc_kind: docKind, sensitivity, brain_excluded: excluded,
+        doc_kind: docKind, entity, sensitivity, brain_excluded: excluded,
         parties: Array.isArray(parsed.parties) ? parsed.parties.slice(0, 20) : [],
         doc_date: parsed.doc_date ?? null,
         language: parsed.language ?? null,

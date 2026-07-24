@@ -8,17 +8,13 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { BRAIN_DOC_KINDS, BRAIN_TIERS } from '@/lib/brain/taxonomy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const KINDS = new Set([
-  'dmc_contract','ota_agreement','supplier_contract','employment_doc','insurance_policy',
-  'license_permit','corporate_legal','litigation_legal','land_property_doc','loan_banking_doc',
-  'bank_statement','financial_statement','invoice_receipt','certification_audit','sop_source',
-  'factsheet','brand_asset_doc','partner_marketing','meeting_note_memo','other',
-]);
-const TIERS = new Set(['staff_ok','management','owner_only','legal_confidential']);
+const KINDS = new Set<string>(BRAIN_DOC_KINDS);
+const TIERS = new Set<string>(BRAIN_TIERS);
 
 export async function GET() {
   const sb = getSupabaseAdmin();

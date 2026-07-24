@@ -6,14 +6,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Container, KpiTile } from '@/app/(cockpit)/_design';
+import { BRAIN_DOC_KINDS, BRAIN_TIERS } from '@/lib/brain/taxonomy';
 
-const DOC_KINDS = [
-  'dmc_contract','ota_agreement','supplier_contract','employment_doc','insurance_policy',
-  'license_permit','corporate_legal','litigation_legal','land_property_doc','loan_banking_doc',
-  'bank_statement','financial_statement','invoice_receipt','certification_audit','sop_source',
-  'factsheet','brand_asset_doc','partner_marketing','meeting_note_memo','other',
-];
-const TIERS = ['staff_ok','management','owner_only','legal_confidential'];
+const DOC_KINDS: string[] = [...BRAIN_DOC_KINDS];
+const TIERS: string[] = [...BRAIN_TIERS];
 
 type PipelineStatus = {
   total_docs: number; extract_pending: number; extracted: number; ocr_needed: number;
@@ -65,6 +61,12 @@ export default function BrainClient() {
   const [answer, setAnswer] = useState<string | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
 
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rulesVersion, setRulesVersion] = useState<number | null>(null);
+  const [rulesText, setRulesText] = useState('');
+  const [rulesSaving, setRulesSaving] = useState(false);
+  const [rulesMsg, setRulesMsg] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/brain/review', { cache: 'no-store' });
@@ -96,6 +98,35 @@ export default function BrainClient() {
       else alert('Confirm failed: ' + (j.error ?? '?'));
     } finally { setBusy(null); }
   }, [edits, load]);
+
+  const openRules = useCallback(async () => {
+    setRulesOpen(o => !o);
+    if (rulesText) return; // already loaded
+    try {
+      const res = await fetch('/api/brain/rules', { cache: 'no-store' });
+      const j = await res.json();
+      if (j.ok) { setRulesText(j.content_md as string); setRulesVersion(j.version as number); }
+      else setRulesMsg('Load failed: ' + (j.error ?? '?'));
+    } catch (e) {
+      setRulesMsg('Load failed: ' + (e instanceof Error ? e.message : '?'));
+    }
+  }, [rulesText]);
+
+  const saveRules = useCallback(async () => {
+    if (rulesSaving || rulesText.trim().length < 500) return;
+    setRulesSaving(true); setRulesMsg(null);
+    try {
+      const res = await fetch('/api/brain/rules', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content_md: rulesText }),
+      });
+      const j = await res.json();
+      if (j.ok) { setRulesVersion(j.version as number); setRulesMsg(`Saved as version ${j.version}. Applies to every future classification — no redeploy needed.`); }
+      else setRulesMsg('Save failed: ' + (j.error ?? '?'));
+    } catch (e) {
+      setRulesMsg('Save failed: ' + (e instanceof Error ? e.message : '?'));
+    } finally { setRulesSaving(false); }
+  }, [rulesSaving, rulesText]);
 
   const ask = useCallback(async () => {
     const q = question.trim();
@@ -174,6 +205,36 @@ export default function BrainClient() {
                 ))}
               </div>
             ) : null}
+          </div>
+        ) : null}
+      </Container>
+
+      <Container
+        title={`Classifier rules${rulesVersion != null ? ` (v${rulesVersion})` : ''}`}
+        subtitle="The knowledge pack every classification is grounded in — companies, taxonomy, sensitivity defaults. Edit + save = new version, old versions kept."
+      >
+        <button onClick={() => void openRules()} style={{ ...selStyle, cursor: 'pointer', padding: '6px 12px' }}>
+          {rulesOpen ? 'Hide rules' : 'View / edit rules'}
+        </button>
+        {rulesOpen ? (
+          <div style={{ marginTop: 10 }}>
+            <textarea
+              value={rulesText}
+              onChange={e => setRulesText(e.target.value)}
+              rows={24}
+              spellCheck={false}
+              style={{ ...selStyle, width: '100%', fontFamily: 'ui-monospace, monospace', fontSize: 11.5, lineHeight: 1.5, padding: 10 }}
+            />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+              <button onClick={() => void saveRules()} disabled={rulesSaving || rulesText.trim().length < 500}
+                style={{ ...selStyle, cursor: 'pointer', padding: '6px 14px', opacity: rulesSaving ? 0.5 : 1 }}>
+                {rulesSaving ? 'Saving…' : 'Save as new version'}
+              </button>
+              <span style={{ fontSize: 12, opacity: 0.7 }}>
+                Live property-settings digest (identity, certifications, retreats, activities, facilities) is appended automatically — not edited here.
+              </span>
+            </div>
+            {rulesMsg ? <div style={{ marginTop: 6, fontSize: 12 }}>{rulesMsg}</div> : null}
           </div>
         ) : null}
       </Container>
