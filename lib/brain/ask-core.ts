@@ -44,17 +44,23 @@ export type AskResult = {
 const TOP_K = 8;
 const VERIFIED_MIN_SIM = 0.30;
 
-export async function brainRetrieve(question: string, tier: BrainTier, qVec?: number[] | null): Promise<BrainHit[]> {
+// BRAIN v6 · scopes: 'all' = full corpus; 'sops' = SOP/QA only (staff surface on
+// /operations/sops) — chunk search filtered to SOP/QA kinds + live knowledge.sop_content.
+export type BrainScope = 'all' | 'sops';
+const SOP_KINDS = ['sop_source', 'certification_audit', 'sustainability_esg'];
+
+export async function brainRetrieve(question: string, tier: BrainTier, qVec?: number[] | null, scope: BrainScope = 'all'): Promise<BrainHit[]> {
   const sb = getSupabaseAdmin();
+  const kinds = scope === 'sops' ? SOP_KINDS : null;
   const { data: ftsHits, error } = await sb.rpc('fn_brain_search', {
-    p_q: question, p_max_sensitivity: tier, p_limit: TOP_K,
+    p_q: question, p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds,
   });
   if (error) throw new Error('fn_brain_search: ' + error.message);
   const hits = (ftsHits ?? []) as BrainHit[];
   try {
     if (qVec) {
       const { data: vecHits } = await sb.rpc('fn_brain_search_vec', {
-        p_embedding: JSON.stringify(qVec), p_max_sensitivity: tier, p_limit: TOP_K,
+        p_embedding: JSON.stringify(qVec), p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds,
       });
       const seen = new Set(hits.map(h => h.chunk_id));
       for (const h of (vecHits ?? []) as BrainHit[]) {
@@ -65,23 +71,35 @@ export async function brainRetrieve(question: string, tier: BrainTier, qVec?: nu
   return hits.slice(0, TOP_K + 4);
 }
 
-export async function brainAsk(question: string, tier: BrainTier): Promise<AskResult> {
+export type SopHit = {
+  sop_code: string; title: string | null; dept_code: string | null; version: string | null;
+  status: string | null; short_summary: string | null; body_md: string | null; score: number;
+};
+
+export async function brainAsk(question: string, tier: BrainTier, scope: BrainScope = 'all'): Promise<AskResult> {
   const sb = getSupabaseAdmin();
 
   let qVec: number[] | null = null;
   try { const v = await embedTexts([question]); qVec = v?.[0] ?? null; } catch { /* fts-only */ }
 
-  const [hits, verifiedRes, registryRes, hrRes] = await Promise.all([
-    brainRetrieve(question, tier, qVec),
+  const [hits, verifiedRes, registryRes, hrRes, sopRes] = await Promise.all([
+    brainRetrieve(question, tier, qVec, scope),
     sb.rpc('fn_brain_verified_search', {
       p_q: question, p_embedding: qVec ? JSON.stringify(qVec) : null,
       p_max_sensitivity: tier, p_limit: 3,
     }),
-    sb.rpc('fn_brain_docfind', { p_q: question, p_max_sensitivity: tier, p_limit: 12 }),
+    scope === 'sops'
+      ? Promise.resolve({ data: [] })
+      : sb.rpc('fn_brain_docfind', { p_q: question, p_max_sensitivity: tier, p_limit: 12 }),
     // BRAIN v5: live structured HR source — SQL-gated to owner tiers, returns {} below.
     // Fetched fresh per question; NEVER chunked, embedded, or preserved.
     sb.rpc('fn_brain_hr_context', { p_q: question, p_max_sensitivity: tier }),
+    // BRAIN v6: live structured SOPs (knowledge.sop_content) — SOP scope only
+    scope === 'sops'
+      ? sb.rpc('fn_brain_sop_search', { p_q: question, p_limit: 5 })
+      : Promise.resolve({ data: [] }),
   ]);
+  const sops = ((sopRes.data ?? []) as SopHit[]).filter(s => s.score >= 1);
 
   const verified = ((verifiedRes.data ?? []) as VerifiedHit[]).filter(v => v.sim >= VERIFIED_MIN_SIM);
   const registry = (registryRes.data ?? []) as RegistryHit[];
@@ -89,7 +107,7 @@ export async function brainAsk(question: string, tier: BrainTier): Promise<AskRe
   const usedHr = Object.keys(hrContext).length > 0;
   const chunkIds = hits.map(h => h.chunk_id);
 
-  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr) {
+  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr && sops.length === 0) {
     return { answered: false, answer: NOT_COVERED_REPLY, refusedReason: 'no_chunks_retrieved', sources: [], retrievedChunkIds: chunkIds, usedHr: false };
   }
 
@@ -131,12 +149,23 @@ export async function brainAsk(question: string, tier: BrainTier): Promise<AskRe
       ).join('\n\n')
     : '(none)';
 
+  const sopBlock = sops.length
+    ? sops.map(s =>
+        `[SOP ${s.sop_code} · "${s.title ?? '?'}" · dept ${s.dept_code ?? '?'} · v${s.version ?? '?'} · ${s.status ?? '?'}]\n${(s.body_md ?? s.short_summary ?? '').slice(0, 4000)}`
+      ).join('\n\n')
+    : '(none)';
+
   const user = [
     `QUESTION: ${question}`,
+    scope === 'sops'
+      ? 'SCOPE: SOP & QUALITY ONLY — answer exclusively from SOPs and QA/certification material below. If the question is outside SOPs/quality, say this window only covers SOPs and quality standards. Cite SOPs as [SOP <code> · <title>](/operations/sops/<code>).'
+      : '',
     '',
     'AVAILABLE DOCUMENTS (cite ONLY these, with these exact links):',
     docList || '(none)',
     '',
+    '━━━ STRUCTURED SOPs (live from the SOP catalog) ━━━',
+    sopBlock,
     '━━━ LIVE STRUCTURED HR DATA (owner/admin surface · fetched live, never stored in the brain) ━━━',
     usedHr ? JSON.stringify(hrContext, null, 1).slice(0, 6000) : '(none — either not an HR question or the asking tier has no HR access)',
     '━━━ OWNER-CONFIRMED VERIFIED ANSWERS (curated knowledge — prefer over raw excerpts when relevant) ━━━',
