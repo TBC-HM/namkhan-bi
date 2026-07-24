@@ -38,6 +38,7 @@ export type AskResult = {
   refusedReason: string | null;
   sources: Array<{ doc_id: string; title: string; link: string }>;
   retrievedChunkIds: string[];
+  usedHr: boolean; // answer used the live structured HR source → confirm/preserve is disabled
 };
 
 const TOP_K = 8;
@@ -70,21 +71,26 @@ export async function brainAsk(question: string, tier: BrainTier): Promise<AskRe
   let qVec: number[] | null = null;
   try { const v = await embedTexts([question]); qVec = v?.[0] ?? null; } catch { /* fts-only */ }
 
-  const [hits, verifiedRes, registryRes] = await Promise.all([
+  const [hits, verifiedRes, registryRes, hrRes] = await Promise.all([
     brainRetrieve(question, tier, qVec),
     sb.rpc('fn_brain_verified_search', {
       p_q: question, p_embedding: qVec ? JSON.stringify(qVec) : null,
       p_max_sensitivity: tier, p_limit: 3,
     }),
     sb.rpc('fn_brain_docfind', { p_q: question, p_max_sensitivity: tier, p_limit: 12 }),
+    // BRAIN v5: live structured HR source — SQL-gated to owner tiers, returns {} below.
+    // Fetched fresh per question; NEVER chunked, embedded, or preserved.
+    sb.rpc('fn_brain_hr_context', { p_q: question, p_max_sensitivity: tier }),
   ]);
 
   const verified = ((verifiedRes.data ?? []) as VerifiedHit[]).filter(v => v.sim >= VERIFIED_MIN_SIM);
   const registry = (registryRes.data ?? []) as RegistryHit[];
+  const hrContext = (hrRes.data ?? {}) as Record<string, unknown>;
+  const usedHr = Object.keys(hrContext).length > 0;
   const chunkIds = hits.map(h => h.chunk_id);
 
-  if (hits.length === 0 && verified.length === 0 && registry.length === 0) {
-    return { answered: false, answer: NOT_COVERED_REPLY, refusedReason: 'no_chunks_retrieved', sources: [], retrievedChunkIds: chunkIds };
+  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr) {
+    return { answered: false, answer: NOT_COVERED_REPLY, refusedReason: 'no_chunks_retrieved', sources: [], retrievedChunkIds: chunkIds, usedHr: false };
   }
 
   const docLinks = new Map<string, { title: string; link: string }>();
@@ -131,6 +137,8 @@ export async function brainAsk(question: string, tier: BrainTier): Promise<AskRe
     'AVAILABLE DOCUMENTS (cite ONLY these, with these exact links):',
     docList || '(none)',
     '',
+    '━━━ LIVE STRUCTURED HR DATA (owner/admin surface · fetched live, never stored in the brain) ━━━',
+    usedHr ? JSON.stringify(hrContext, null, 1).slice(0, 6000) : '(none — either not an HR question or the asking tier has no HR access)',
     '━━━ OWNER-CONFIRMED VERIFIED ANSWERS (curated knowledge — prefer over raw excerpts when relevant) ━━━',
     verifiedBlock,
     '━━━ REGISTRY MATCHES (documents whose TITLE/metadata match — content may not be readable yet) ━━━',
@@ -143,11 +151,12 @@ export async function brainAsk(question: string, tier: BrainTier): Promise<AskRe
   const answer = await callClaude({ system: answerSystem(), user, maxTokens: 1200 });
 
   if (/^\s*NOT_COVERED\s*\.?\s*$/.test(answer) || answer.includes('NOT_COVERED')) {
-    return { answered: false, answer: NOT_COVERED_REPLY, refusedReason: 'not_covered', sources: [], retrievedChunkIds: chunkIds };
+    return { answered: false, answer: NOT_COVERED_REPLY, refusedReason: 'not_covered', sources: [], retrievedChunkIds: chunkIds, usedHr };
   }
   return {
     answered: true, answer, refusedReason: null,
     sources: [...docLinks.entries()].map(([doc_id, d]) => ({ doc_id, title: d.title, link: d.link })),
     retrievedChunkIds: chunkIds,
+    usedHr,
   };
 }

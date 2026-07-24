@@ -61,6 +61,7 @@ export default function BrainClient() {
   const [asking, setAsking] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
+  const [usedHr, setUsedHr] = useState(false);
 
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rulesVersion, setRulesVersion] = useState<number | null>(null);
@@ -139,7 +140,7 @@ export default function BrainClient() {
         body: JSON.stringify({ question: q }),
       });
       const j = await res.json();
-      if (j.ok) { setAnswer(j.answer as string); setSources((j.sources ?? []) as Source[]); }
+      if (j.ok) { setAnswer(j.answer as string); setSources((j.sources ?? []) as Source[]); setUsedHr(!!j.used_hr); }
       else setAnswer('Error: ' + (j.error ?? 'ask failed'));
     } catch (e) {
       setAnswer('Error: ' + (e instanceof Error ? e.message : 'ask failed'));
@@ -206,8 +207,13 @@ export default function BrainClient() {
                 ))}
               </div>
             ) : null}
-            {!answer.startsWith('Error:') ? (
+            {!answer.startsWith('Error:') && !usedHr ? (
               <AskFeedback question={question} answer={answer} sources={sources} />
+            ) : null}
+            {usedHr ? (
+              <div style={{ marginTop: 8, fontSize: 11.5, opacity: 0.6 }}>
+                Contains live HR data (owner surface) — not preservable, refetched fresh on every ask.
+              </div>
             ) : null}
           </div>
         ) : null}

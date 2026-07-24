@@ -57,7 +57,11 @@ export async function POST(req: NextRequest) {
         p_answered: result.answered, p_refused_reason: result.refusedReason,
       });
     } catch { /* logging must never block the answer */ }
-    return NextResponse.json({ ok: true, answered: result.answered, answer: result.answer, sources: result.sources });
+    return NextResponse.json({
+      ok: true, answered: result.answered, answer: result.answer, sources: result.sources,
+      // BRAIN v5: answers built on the live HR source must not be preserved/confirmed
+      used_hr: result.usedHr,
+    });
   } catch (e) {
     try {
       await sb.rpc('fn_brain_log_question', {
