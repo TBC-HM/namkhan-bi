@@ -1,12 +1,11 @@
 // app/holding/it/page.tsx
-// PBS 2026-07-24: module status via public.v_module_status bridge view.
+// PBS 2026-07-24: module docs panel — try/catch so page never 500.
 
 import HodLanding from '@/app/_components/HodLanding';
 import { Container } from '@/app/(cockpit)/_design';
 import ModuleDocsPanel, { type ModuleDocRow, type ModuleStatusRow } from '@/app/_components/ModuleDocsPanel';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { supabase } from '@/lib/supabase';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export const dynamic = 'force-dynamic';
@@ -37,30 +36,41 @@ export default async function HoldingItPage() {
     label: k.k, value: k.v, size: 'sm' as const, footnote: k.d,
   }));
 
-  // v_documents_latest is a public bridge view — safe for public supabase client
-  const { data: docsData } = await supabase
-    .from('v_documents_latest')
-    .select('doc_type, title, version, status, last_updated_at, md_length')
-    .in('doc_type', MODULE_DOC_TYPES)
-    .order('doc_type');
+  let docs: ModuleDocRow[] = [];
+  let statuses: ModuleStatusRow[] = [];
+  let fetchError: string | null = null;
 
-  // v_module_status is also public but new — cast to any to avoid stale generated types
-  const sb = getSupabaseAdmin();
-  const { data: statusData } = await (sb as any)
-    .from('v_module_status')
-    .select('doc_type, goal_precise, completion_pct, is_live, claude_integrated, signed_off_at, signed_off_by')
-    .in('doc_type', MODULE_DOC_TYPES);
-
-  const docs = (docsData ?? []) as ModuleDocRow[];
-  const statuses = ((statusData ?? []) as unknown[]) as ModuleStatusRow[];
+  try {
+    const [docsRes, statusRes] = await Promise.all([
+      supabase
+        .from('v_documents_latest')
+        .select('doc_type, title, version, status, last_updated_at, md_length')
+        .in('doc_type', MODULE_DOC_TYPES)
+        .order('doc_type'),
+      supabase
+        .from('v_module_status' as any)
+        .select('doc_type, goal_precise, completion_pct, is_live, claude_integrated, signed_off_at, signed_off_by')
+        .in('doc_type', MODULE_DOC_TYPES),
+    ]);
+    docs = (docsRes.data ?? []) as ModuleDocRow[];
+    statuses = ((statusRes.data ?? []) as unknown[]) as ModuleStatusRow[];
+  } catch (e: unknown) {
+    fetchError = e instanceof Error ? e.message : 'Unknown error';
+  }
 
   const moduleDocsBlock = (
     <Container
       title="Module Documentation"
-      subtitle={`${docs.length} modules · Live · Goal · Sign-off status per card`}
+      subtitle={`${docs.length} modules · Live · Goal · Sign-off`}
       density="compact"
     >
-      <ModuleDocsPanel docs={docs} statuses={statuses} />
+      {fetchError ? (
+        <div style={{ fontSize: 11, color: '#B8542A', padding: '8px 0' }}>
+          Load error: {fetchError} — refresh to retry
+        </div>
+      ) : (
+        <ModuleDocsPanel docs={docs} statuses={statuses} />
+      )}
     </Container>
   );
 
