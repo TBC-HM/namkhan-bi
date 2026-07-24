@@ -1,8 +1,8 @@
 'use client';
 
 // app/holding/it/cockpit/specs/new/SpecBuilderClient.tsx
-// v2 2026-07-24: added References section (URLs + screenshots)
-// + auto-injected agent context footer in generated brief
+// v4 2026-07-24: module type toggle + preview pane before save.
+// New build = no §3 current-state fields. Out-of-scope subtitle clarified.
 
 import { useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -66,7 +66,7 @@ const AGENT_CONTEXT = `
 - \`sb.schema('non_public').update()\` silently no-ops — use RPC for writes.
 
 ### Quality bar
-- All 10 acceptance criteria in §6 must pass before marking done.
+- All acceptance criteria in §5 must pass before marking done.
 - tsc --noEmit must pass. No any[] in new code without explicit justification.
 - Test on both Namkhan + Donna routes if the feature is multi-property.
 `.trim();
@@ -93,17 +93,19 @@ export default function SpecBuilderClient() {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
   // §1 Identity
+  const [moduleType, setModuleType] = useState<'existing' | 'new'>('existing');
   const [moduleName, setModuleName] = useState('');
   const [appPath, setAppPath] = useState('');
   const [priority, setPriority] = useState(PRIORITIES[1]);
   // §2 Goal
   const [goalStatement, setGoalStatement] = useState('');
   const [doneMetric, setDoneMetric] = useState('');
-  // §3 Current state
+  // §3 Current state (existing modules only)
   const [whatWorks, setWhatWorks] = useState('');
   const [bugs, setBugs] = useState([mkItem()]);
   const [missing, setMissing] = useState([mkItem()]);
@@ -144,20 +146,14 @@ export default function SpecBuilderClient() {
 
   // ── Build content_md ─────────────────────────────────────────────────────
   function buildContentMd(): string {
+    const isNew = moduleType === 'new';
     const fmt = (items: MultiItem[]) => items.map(i => i.value).filter(Boolean).map(v => `- ${v}`).join('\n') || '- (none specified)';
     const refsClean = refs.filter(r => r.url);
     const ssClean = screenshots;
 
-    return `# Spec: ${moduleName}
-*Generated via Spec Builder · ${new Date().toISOString().slice(0, 10)} · Priority: ${priority.split(' — ')[0]}*
-
-## §1 Goal
-> ${goalStatement}
-
-**Done-metric:** ${doneMetric || '(not specified)'}
-**App path:** \`${appPath || '(not specified)'}\`
-
-## §2 Current state
+    const currentStateSection = isNew
+      ? `## §3 Current state\n*New build — nothing exists yet. Agent starts from scratch.*`
+      : `## §3 Current state
 **What works:**
 ${whatWorks || '(not specified)'}
 
@@ -165,15 +161,31 @@ ${whatWorks || '(not specified)'}
 ${fmt(bugs)}
 
 **Missing entirely:**
-${fmt(missing)}
+${fmt(missing)}`;
 
-## §3 Data sources
+    return `# Spec: ${moduleName}
+*Generated via Spec Builder · ${new Date().toISOString().slice(0, 10)} · Priority: ${priority.split(' — ')[0]} · Type: ${isNew ? 'New build (no existing path)' : 'Existing module — finish / fix'}*
+
+## §1 Goal
+> ${goalStatement}
+
+**Done-metric:** ${doneMetric || '(not specified)'}
+**App path:** \`${appPath || (isNew ? '(not decided yet)' : '(not specified)')}\`
+
+## §2 Module identity
+**Name:** ${moduleName}
+**Type:** ${isNew ? 'New build' : 'Existing module'}
+**Priority:** ${priority}
+
+${currentStateSection}
+
+## §4 Data sources
 **Sources:** ${dataSources.join(', ') || 'Not specified'}
 
 **Details:**
 ${dataDetails || '(not specified)'}
 
-## §4 Expected UI
+## §5 Expected UI
 
 **Pages / sub-pages:**
 ${fmt(pages)}
@@ -187,13 +199,13 @@ ${fmt(columns)}
 **Filters needed:**
 ${fmt(filters)}
 
-## §5 Acceptance criteria (testable)
+## §6 Acceptance criteria (testable)
 ${acceptance.map((a, i) => a.value ? `${i + 1}. ${a.value}` : '').filter(Boolean).join('\n') || '1. (not specified)'}
 
-## §6 Out of scope (this iteration)
+## §7 Out of scope (this iteration)
 ${fmt(outOfScope)}
 
-## §7 References & Inspiration
+## §8 References & Inspiration
 ${refsClean.length ? refsClean.map(r => `- [${r.label || r.url}](${r.url})`).join('\n') : '- None provided'}
 
 ${ssClean.length ? `### Screenshots\n${ssClean.map(s => `![${s.name}](${s.url})`).join('\n')}` : ''}
@@ -244,6 +256,8 @@ ${AGENT_CONTEXT}
     );
   }
 
+  const isNew = moduleType === 'new';
+
   return (
     <form onSubmit={handleSubmit} style={{ maxWidth: 760, padding: '24px 0' }}>
 
@@ -251,8 +265,37 @@ ${AGENT_CONTEXT}
       <div style={S.section}>
         <h2 style={S.h}>1 · What are we building?</h2>
         <p style={S.sub}>Name the module and where it lives in the app.</p>
+
+        {/* Module type toggle */}
+        <div style={{ ...S.fieldGroup, marginBottom: 20 }}>
+          <label style={S.label}>Type</label>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button type="button" onClick={() => setModuleType('existing')} style={{
+              fontSize: 13, fontWeight: 600, padding: '10px 20px', borderRadius: 6, cursor: 'pointer', textAlign: 'left',
+              border: '2px solid', borderColor: moduleType === 'existing' ? '#1F3A2E' : '#E6DFCC',
+              background: moduleType === 'existing' ? '#1F3A2E' : '#FFFFFF',
+              color: moduleType === 'existing' ? '#FFFFFF' : '#5A5A5A',
+            }}>
+              🔧 Existing module
+              <div style={{ fontSize: 11, fontWeight: 400, marginTop: 3, opacity: 0.85 }}>has a path · has bugs or gaps to finish</div>
+            </button>
+            <button type="button" onClick={() => setModuleType('new')} style={{
+              fontSize: 13, fontWeight: 600, padding: '10px 20px', borderRadius: 6, cursor: 'pointer', textAlign: 'left',
+              border: '2px solid', borderColor: moduleType === 'new' ? '#1F3A2E' : '#E6DFCC',
+              background: moduleType === 'new' ? '#1F3A2E' : '#FFFFFF',
+              color: moduleType === 'new' ? '#FFFFFF' : '#5A5A5A',
+            }}>
+              ✨ New module
+              <div style={{ fontSize: 11, fontWeight: 400, marginTop: 3, opacity: 0.85 }}>doesn't exist yet · no path · build from scratch</div>
+            </button>
+          </div>
+        </div>
+
         <div style={S.fieldGroup}><label style={S.label}>Module name *</label><input style={S.input} value={moduleName} onChange={e => setModuleName(e.target.value)} placeholder="e.g. Social Media Posting Module" required /></div>
-        <div style={S.fieldGroup}><label style={S.label}>App path(s)</label><input style={S.input} value={appPath} onChange={e => setAppPath(e.target.value)} placeholder="e.g. /marketing/social" /></div>
+        <div style={S.fieldGroup}>
+          <label style={S.label}>{isNew ? 'Proposed path (optional — where will it live?)' : 'App path(s) — current URL'}</label>
+          <input style={S.input} value={appPath} onChange={e => setAppPath(e.target.value)} placeholder={isNew ? 'e.g. /marketing/social (leave blank if not decided)' : 'e.g. /marketing/social'} />
+        </div>
         <div style={S.fieldGroup}>
           <label style={S.label}>Priority</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: 4 }}>
@@ -262,7 +305,7 @@ ${AGENT_CONTEXT}
       </div>
       <div style={S.divider} />
 
-      {/* §2 */}
+      {/* §2 Goal */}
       <div style={S.section}>
         <h2 style={S.h}>2 · What's the goal?</h2>
         <p style={S.sub}>What can a user do when done that they can't do today? Be specific.</p>
@@ -271,16 +314,26 @@ ${AGENT_CONTEXT}
       </div>
       <div style={S.divider} />
 
-      {/* §3 */}
-      <div style={S.section}>
-        <h2 style={S.h}>3 · Where are we now?</h2>
-        <div style={S.fieldGroup}><label style={S.label}>What's working right now?</label><textarea style={S.textarea} value={whatWorks} onChange={e => setWhatWorks(e.target.value)} placeholder="e.g. The page loads. Basic form renders. Tab exists in nav." /></div>
-        <div style={S.fieldGroup}><label style={S.label}>Bugs / things I don't like (be specific)</label><MultiInput items={bugs} onChange={setBugs} placeholder="Bug" /></div>
-        <div style={S.fieldGroup}><label style={S.label}>What's completely missing?</label><MultiInput items={missing} onChange={setMissing} placeholder="Missing" /></div>
-      </div>
+      {/* §3 Current state — only for existing modules */}
+      {isNew ? (
+        <div style={{ ...S.section, padding: '16px 18px', background: '#F4EFE2', borderRadius: 6 }}>
+          <h2 style={{ ...S.h, marginBottom: 4 }}>3 · Current state</h2>
+          <p style={{ fontSize: 12, color: '#5A5A5A', margin: 0 }}>
+            New build — nothing exists yet. This section is skipped. The agent starts from scratch.
+          </p>
+        </div>
+      ) : (
+        <div style={S.section}>
+          <h2 style={S.h}>3 · Where are we now?</h2>
+          <p style={S.sub}>Describe what already exists — good and bad. The agent needs to know what to keep, what to fix, and what's missing.</p>
+          <div style={S.fieldGroup}><label style={S.label}>What's working right now?</label><textarea style={S.textarea} value={whatWorks} onChange={e => setWhatWorks(e.target.value)} placeholder="e.g. The page loads. Basic form renders. Tab exists in nav." /></div>
+          <div style={S.fieldGroup}><label style={S.label}>Bugs / things I don't like (be specific)</label><MultiInput items={bugs} onChange={setBugs} placeholder="Bug" /></div>
+          <div style={S.fieldGroup}><label style={S.label}>What's completely missing?</label><MultiInput items={missing} onChange={setMissing} placeholder="Missing" /></div>
+        </div>
+      )}
       <div style={S.divider} />
 
-      {/* §4 */}
+      {/* §4 Data */}
       <div style={S.section}>
         <h2 style={S.h}>4 · Where does the data come from?</h2>
         <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: 12 }}>
@@ -290,7 +343,7 @@ ${AGENT_CONTEXT}
       </div>
       <div style={S.divider} />
 
-      {/* §5 */}
+      {/* §5 UI */}
       <div style={S.section}>
         <h2 style={S.h}>5 · What should the UI look like?</h2>
         <div style={S.fieldGroup}><label style={S.label}>Pages / sub-pages that should exist</label><MultiInput items={pages} onChange={setPages} placeholder="Page" /></div>
@@ -300,7 +353,7 @@ ${AGENT_CONTEXT}
       </div>
       <div style={S.divider} />
 
-      {/* §6 */}
+      {/* §6 Acceptance */}
       <div style={S.section}>
         <h2 style={S.h}>6 · How do we know it's done?</h2>
         <p style={S.sub}>Write 3–5 testable pass/fail statements. Start with "When I…" or "The page shows…"</p>
@@ -308,14 +361,18 @@ ${AGENT_CONTEXT}
       </div>
       <div style={S.divider} />
 
-      {/* §7 */}
+      {/* §7 Out of scope */}
       <div style={S.section}>
-        <h2 style={S.h}>7 · What's out of scope for now?</h2>
+        <h2 style={S.h}>7 · What's NOT included in this iteration?</h2>
+        <p style={S.sub}>
+          Explicitly list what the agent should skip — even if it's related. This prevents scope creep and keeps the build focused.
+          {isNew ? ' e.g. "analytics dashboard", "mobile view", "multi-property support"' : ' e.g. "don\'t touch the email composer", "skip the Donna version for now"'}
+        </p>
         <MultiInput items={outOfScope} onChange={setOutOfScope} placeholder="Out of scope item" />
       </div>
       <div style={S.divider} />
 
-      {/* §8 References — NEW */}
+      {/* §8 References */}
       <div style={S.section}>
         <h2 style={S.h}>8 · References & Inspiration</h2>
         <p style={S.sub}>
@@ -351,11 +408,23 @@ ${AGENT_CONTEXT}
             ))}
             <button type="button" onClick={() => fileRef.current?.click()}
               style={{ width: 80, height: 60, border: '1px dashed #E6DFCC', borderRadius: 4, background: '#FAFAF7', color: '#5A5A5A', fontSize: 12, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-              {uploading ? '…' : <>📎<span style={{ fontSize: 10 }}>Upload</span></>}
+              {uploading ? '…' : <><span>📎</span><span style={{ fontSize: 10 }}>Upload</span></>}
             </button>
           </div>
           <div style={{ fontSize: 11, color: '#8A8A8A' }}>Uploaded images are stored in Supabase and linked in the brief. Agent can see them.</div>
         </div>
+      </div>
+
+      {/* Preview pane */}
+      <div style={{ borderTop: '1px solid #E6DFCC', paddingTop: 20, marginBottom: 20 }}>
+        <button type="button" onClick={() => setShowPreview(v => !v)} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 4, background: '#FAFAF7', color: '#1B1B1B', border: '1px solid #E6DFCC', cursor: 'pointer', marginBottom: showPreview ? 12 : 0 }}>
+          {showPreview ? '▼ Hide preview' : '▶ Preview full brief before saving'}
+        </button>
+        {showPreview && (
+          <pre style={{ fontSize: 11, lineHeight: 1.6, background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 4, padding: '14px 16px', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#1B1B1B', maxHeight: 480 }}>
+            {buildContentMd()}
+          </pre>
+        )}
       </div>
 
       <div style={{ padding: '12px 14px', background: '#F4EFE2', borderRadius: 4, marginBottom: 20, fontSize: 12, color: '#5A5A5A' }}>
