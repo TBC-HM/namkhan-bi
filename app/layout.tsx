@@ -23,6 +23,7 @@ import NDropdown from '@/components/nav/NDropdown';
 import CapacityResetOnPillarChange from '@/components/nav/CapacityResetOnPillarChange';
 import AgentEditModal from '@/components/agents/AgentEditModal';
 import BugWidget from '@/components/cockpit/BugWidget';
+import HelpButton from '@/components/university/HelpButton';
 import TopDeptStrip from '@/components/page/TopDeptStrip';
 import PropertyThemeWatcher from '@/components/PropertyThemeWatcher';
 
@@ -78,6 +79,7 @@ document.documentElement.setAttribute('data-property',v);}catch(e){}})();
         </div>
         <AgentEditModal />
         <BugWidget />
+        <HelpButton />
         <SpeedInsights />
       </body>
     </html>

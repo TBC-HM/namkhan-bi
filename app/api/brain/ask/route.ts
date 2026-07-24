@@ -8,7 +8,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { brainAsk, type BrainScope } from '@/lib/brain/ask-core';
+import { brainAsk, SCOPE_CFG, type BrainScope } from '@/lib/brain/ask-core';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,10 +44,11 @@ export async function POST(req: NextRequest) {
   const question = (body.question ?? '').trim().slice(0, 2000);
   if (!question) return NextResponse.json({ ok: false, error: 'question required' }, { status: 400 });
 
-  // BRAIN v6: 'sops' scope = staff-facing SOP/QA window on /operations/sops.
-  // Runs at staff_ok tier — no owner corpus, no HR, no legal.
-  const scope: BrainScope = body.scope === 'sops' ? 'sops' : 'all';
-  const tier = scope === 'sops' ? 'staff_ok' : V1_TIER;
+  // BRAIN v6: department-scoped windows ("universal chatter with borders").
+  // Each scope pins corpus kinds + max tier in SQL; 'all' = owner surface.
+  const scope: BrainScope = (['sops', 'marketing', 'revenue', 'operations', 'admin'] as const)
+    .includes(body.scope as never) ? (body.scope as BrainScope) : 'all';
+  const tier = scope === 'all' ? V1_TIER : SCOPE_CFG[scope].tier;
 
   const sb = getSupabaseAdmin();
   const asker = userEmailFromCookies();

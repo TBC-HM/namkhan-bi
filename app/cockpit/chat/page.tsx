@@ -6,6 +6,7 @@
 
 import Script from 'next/script';
 import ChatShell from '@/components/chat/ChatShell';
+import BrainDeptChat from '@/components/brain/BrainDeptChat';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import ThemeInjector from '@/components/ThemeInjector';
 import { createClient } from '@/lib/supabase/server';
@@ -119,8 +120,21 @@ export default async function CockpitChatPage({ searchParams }: Props) {
   const title = `Talk to ${persona.displayName}`;
   const subtitle = `${persona.dept} · open chat thread`;
 
+  // BRAIN v6 (PBS 2026-07-24): the brain is the default ANSWER layer per
+  // department — SQL-bordered scope; the agent below stays for ACTIONS.
+  const BRAIN_SCOPE_BY_DEPT: Record<string, string> = {
+    revenue: 'revenue', sales: 'revenue', marketing: 'marketing',
+    operations: 'operations', finance: 'admin', guest: 'operations',
+  };
+  const brainScope = explicitRole ? undefined : BRAIN_SCOPE_BY_DEPT[deptKey];
+
   const chatBody = (
     <DashboardPage title={title} subtitle={subtitle}>
+      {brainScope ? (
+        <div style={fullRow}>
+          <BrainDeptChat scope={brainScope} />
+        </div>
+      ) : null}
       <div style={fullRow}>
         <Container
           title={`${persona.emoji} ${persona.displayName}`}

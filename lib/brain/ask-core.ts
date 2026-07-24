@@ -44,14 +44,43 @@ export type AskResult = {
 const TOP_K = 8;
 const VERIFIED_MIN_SIM = 0.30;
 
-// BRAIN v6 · scopes: 'all' = full corpus; 'sops' = SOP/QA only (staff surface on
-// /operations/sops) — chunk search filtered to SOP/QA kinds + live knowledge.sop_content.
-export type BrainScope = 'all' | 'sops';
-const SOP_KINDS = ['sop_source', 'certification_audit', 'sustainability_esg'];
+// BRAIN v6 · scopes — the "universal chatter with borders" (PBS 2026-07-24):
+// one brain, department-scoped windows. Each scope pins the corpus (doc kinds),
+// the maximum sensitivity tier, and a behavioral note. Borders are enforced in
+// SQL (kind filter + tier ACL), not by prompt alone.
+export type BrainScope = 'all' | 'sops' | 'marketing' | 'revenue' | 'operations' | 'admin';
+
+export const SCOPE_CFG: Record<Exclude<BrainScope, 'all'>, { kinds: string[] | null; tier: BrainTier; note: string }> = {
+  sops: {
+    kinds: ['sop_source', 'certification_audit', 'sustainability_esg'],
+    tier: 'staff_ok',
+    note: 'SCOPE: SOP & QUALITY ONLY — answer exclusively from SOPs and QA/certification material. If the question is outside SOPs/quality, say this window only covers SOPs and quality standards. Cite SOPs as [SOP <code> · <title>](/operations/sops/<code>).',
+  },
+  marketing: {
+    kinds: ['partner_marketing', 'brand_asset_doc', 'factsheet', 'market_research', 'procurement_catalog', 'sustainability_esg'],
+    tier: 'management',
+    note: 'SCOPE: MARKETING — answer only from marketing, brand, factsheet and market-research material. Rates, legal, HR and finance are out of scope for this window.',
+  },
+  revenue: {
+    kinds: ['dmc_contract', 'ota_agreement', 'market_research', 'factsheet'],
+    tier: 'management',
+    note: 'SCOPE: REVENUE & DISTRIBUTION — answer only from DMC/OTA agreements, market research and factsheets. Legal disputes, HR and owner finance are out of scope for this window.',
+  },
+  operations: {
+    kinds: ['sop_source', 'certification_audit', 'sustainability_esg', 'factsheet', 'supplier_contract', 'procurement_catalog', 'insurance_policy', 'license_permit'],
+    tier: 'management',
+    note: 'SCOPE: OPERATIONS — SOPs, quality, suppliers, licenses, insurance, facilities. Legal disputes, HR pay and owner finance are out of scope for this window.',
+  },
+  admin: {
+    kinds: null, // full corpus at management tier — owner/legal docs still excluded by ACL
+    tier: 'management',
+    note: 'SCOPE: ADMINISTRATION — management-tier access across the corpus. Owner-only and legal-confidential material is not available in this window.',
+  },
+};
 
 export async function brainRetrieve(question: string, tier: BrainTier, qVec?: number[] | null, scope: BrainScope = 'all'): Promise<BrainHit[]> {
   const sb = getSupabaseAdmin();
-  const kinds = scope === 'sops' ? SOP_KINDS : null;
+  const kinds = scope === 'all' ? null : SCOPE_CFG[scope].kinds;
   const { data: ftsHits, error } = await sb.rpc('fn_brain_search', {
     p_q: question, p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds,
   });
@@ -157,9 +186,7 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
 
   const user = [
     `QUESTION: ${question}`,
-    scope === 'sops'
-      ? 'SCOPE: SOP & QUALITY ONLY — answer exclusively from SOPs and QA/certification material below. If the question is outside SOPs/quality, say this window only covers SOPs and quality standards. Cite SOPs as [SOP <code> · <title>](/operations/sops/<code>).'
-      : '',
+    scope === 'all' ? '' : SCOPE_CFG[scope].note,
     '',
     'AVAILABLE DOCUMENTS (cite ONLY these, with these exact links):',
     docList || '(none)',
