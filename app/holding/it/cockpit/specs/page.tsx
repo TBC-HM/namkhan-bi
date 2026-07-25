@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const MODULE_DOC_TYPES = [
-  'bug_agent_module', 'compiler_module', 'gbp_module', 'inventory_module',
+  'bug_agent_module', 'compiler_module', 'gbp_module', 'hr_scheduling_module', 'inventory_module',
   'media_module', 'newsletter_module', 'proposals_module', 'sales_module',
   'socials_module', 'spec_builder_module', 'university_module', 'youtube_module',
 ];
