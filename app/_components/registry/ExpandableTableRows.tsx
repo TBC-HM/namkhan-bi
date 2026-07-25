@@ -8,7 +8,9 @@ import { useState } from 'react';
 
 interface Col {
   key: string;
-  label: string;
+  // ADR-170: ReactNode so ContainerTable can pass server-rendered sort links
+  // (serializable JSX crosses the RSC boundary; no functions involved).
+  label: React.ReactNode;
   align?: 'left' | 'right' | 'center';
   format?: string;
 }
