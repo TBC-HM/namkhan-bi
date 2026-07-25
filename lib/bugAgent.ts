@@ -212,10 +212,12 @@ const PLANNER_SYSTEM = [
 
 // Extract a file path from planner output (for re-plan loop)
 function extractMissingFilePath(text: string): string | null {
-  const m = text.match(/(?:need|require|missing|fetch|read)[^`
-]*[`"]([a-zA-Z0-9/_.-]+\.(?:tsx?|js|json))[`"]/i)
-           ?? text.match(/[`"]([a-zA-Z0-9/_.-]+\.(?:tsx?|js|json))[`"]/);
-  return m ? m[1] : null;
+  // Match quoted paths like "lib/foo.ts" or 'app/bar.tsx'
+  const m = text.match(/["']([a-zA-Z0-9/_.-]+\.(?:tsx?|js|json))["']/);
+  if (m) return m[1];
+  // Match unquoted paths mentioned after keywords like "need", "missing", "fetch"
+  const m2 = text.match(/(?:need|require|missing|fetch|read|see|check)\s+([a-zA-Z][a-zA-Z0-9/_.-]*\.(?:tsx?|js|json))/i);
+  return m2 ? m2[1] : null;
 }
 
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null }): Promise<PlannerResult> {
