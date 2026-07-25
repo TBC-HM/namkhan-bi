@@ -271,13 +271,17 @@ function TreeNode({ node, depth }: { node: SitemapNode; depth: number }) {
       ) : box}
 
       {hasChildren && (
-        <ul className="tree-children">
-          {(node.children ?? []).map((child) => (
-            <li key={child.label + (child.href ?? '')} className="tree-child">
-              <TreeNode node={child} depth={depth + 1} />
-            </li>
-          ))}
-        </ul>
+        <>
+          {/* Explicit stem line — avoids :has() CSS selector */}
+          <div style={{ width: 1, height: 12, background: '#C8C0B0', margin: '0 auto' }} />
+          <ul className="tree-children">
+            {(node.children ?? []).map((child) => (
+              <li key={child.label + (child.href ?? '')} className="tree-child">
+                <TreeNode node={child} depth={depth + 1} />
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </div>
   );
@@ -359,15 +363,7 @@ export default function SitemapPage() {
           display: none;
         }
 
-        /* Vertical stem from parent node down to children row */
-        .tree-node-wrapper:has(.tree-children)::after {
-          content: '';
-          display: block;
-          width: 1px;
-          height: 12px;
-          background: #C8C0B0;
-          margin: 0 auto;
-        }
+        /* Stem is an explicit div in JSX — no :has() needed here */
       `}</style>
 
       <div style={{ marginBottom: 20 }}>
