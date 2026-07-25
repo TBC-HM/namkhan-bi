@@ -1,6 +1,6 @@
 // app/api/cockpit/walkthrough/route.ts
 // PBS 2026-07-25 — Walkthrough feedback engine (ADR-walkthrough-feedback-engine).
-// Three actions: start / close / finding — all write via SECURITY DEFINER RPCs.
+// Four actions: start / close / finding / summary — all write via SECURITY DEFINER RPCs.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { action, ...params } = body as { action: string; [k: string]: unknown };
 
-  // Resolve caller email from Authorization cookie if present
+  // Resolve caller email from session cookie if present
   let callerEmail: string | null = null;
   try {
     const { createServerClient } = await import('@supabase/ssr');
@@ -64,6 +64,14 @@ export async function POST(req: NextRequest) {
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ bug_id: data });
+  }
+
+  if (action === 'summary') {
+    const id = Number(params.walkthrough_id);
+    if (!id) return NextResponse.json({ error: 'walkthrough_id required' }, { status: 400 });
+    const { data, error } = await sb.rpc('fn_walkthrough_build_summary', { p_walkthrough_id: id });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data as object);
   }
 
   return NextResponse.json({ error: 'unknown action: ' + action }, { status: 400 });
