@@ -6,7 +6,10 @@
 // auto-filled with marketing.social_posts drafts created when calendar slots
 // are accepted. Actions reuse the existing post lifecycle RPCs via
 // POST /api/marketing/socials (op=set_status): draft → ready → cancelled.
-// Per-post / zip export (A5) lands next run — buttons are staged here.
+// Run 3 (A5/A7): Export wired — per-post zip, per-channel week/month zip via
+// POST /api/marketing/social/export (blob download), and the A7 sample-pack
+// email button (2 posts per channel & format → PBS) via
+// POST /api/marketing/social/send-samples.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -47,6 +50,7 @@ export default function SocialInbox({ posts, rules }: {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   const activePlatforms = rules.filter((r) => r.active).map((r) => r.platform);
   const open = posts.filter((p) => p.status === 'draft' || p.status === 'ready' || p.status === 'failed');
@@ -75,6 +79,51 @@ export default function SocialInbox({ posts, rules }: {
     }
   }
 
+  async function exportZip(scope: 'selection' | 'week' | 'month', opts: { postIds?: string[]; platform?: string }) {
+    const key = `export:${scope}:${opts.platform ?? opts.postIds?.[0] ?? 'all'}`;
+    setBusy(key); setErr(null); setNote(null);
+    try {
+      const res = await fetch('/api/marketing/social/export', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(scope === 'selection' ? { post_ids: opts.postIds } : { scope, platform: opts.platform }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error === 'no_posts_in_scope' ? 'No approved posts in this window — approve drafts first.' : (j.error ?? `export failed (${res.status})`));
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') ?? '';
+      const fname = cd.match(/filename="([^"]+)"/)?.[1] ?? 'social_export.zip';
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+      const warn = res.headers.get('X-Export-Warnings');
+      setNote(`Exported ${res.headers.get('X-Export-Posts') ?? '?'} post(s) → ${fname}${warn && warn !== '0' ? ` · ${warn} format warning(s) in manifest.json` : ''}`);
+    } catch (ex: any) {
+      setErr(ex?.message ?? 'export failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sendSamplePack() {
+    setBusy('samples'); setErr(null); setNote(null);
+    try {
+      const res = await fetch('/api/marketing/social/send-samples', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error ?? 'send failed');
+      setNote(`Sample pack sent to ${j.sent_to} — ${(j.channels ?? []).map((c: any) => c.platform).join(', ')}`);
+    } catch (ex: any) {
+      setErr(ex?.message ?? 'send failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const ruleFor = new Map(rules.map((r) => [r.platform, r]));
 
   return (
@@ -82,13 +131,22 @@ export default function SocialInbox({ posts, rules }: {
       <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>Channel inbox · draft posts awaiting sign-off</div>
-          <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            {open.length} open · one box per active channel
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button type="button" disabled={busy !== null} onClick={sendSamplePack} style={btnSecondary}
+              title="Email 2 sample posts per active channel & format to PBS (acceptance evidence)">
+              {busy === 'samples' ? 'sending…' : '✉ Sample pack → PBS'}
+            </button>
+            <span style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              {open.length} open · one box per active channel
+            </span>
           </div>
         </div>
 
         {err && (
           <div style={{ marginBottom: 8, padding: '6px 8px', border: `1px solid ${RED}`, borderRadius: 3, color: RED, fontSize: 11 }}>{err}</div>
+        )}
+        {note && (
+          <div style={{ marginBottom: 8, padding: '6px 8px', border: `1px solid ${FOREST}`, borderRadius: 3, color: FOREST, fontSize: 11 }}>{note}</div>
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
@@ -100,7 +158,17 @@ export default function SocialInbox({ posts, rules }: {
                   <span style={{ fontSize: 11, fontWeight: 700, color: FOREST, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                     {PRETTY[platform] ?? platform}
                   </span>
-                  <span style={{ fontSize: 10, color: INK_M }}>{list.length} open</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <button type="button" disabled={busy !== null} onClick={() => exportZip('week', { platform })}
+                      style={btnTiny} title={`Zip of this week's approved ${PRETTY[platform] ?? platform} posts`}>
+                      {busy === `export:week:${platform}` ? '…' : '⬇ wk'}
+                    </button>
+                    <button type="button" disabled={busy !== null} onClick={() => exportZip('month', { platform })}
+                      style={btnTiny} title={`Zip of this month's approved ${PRETTY[platform] ?? platform} posts`}>
+                      {busy === `export:month:${platform}` ? '…' : '⬇ mo'}
+                    </button>
+                    <span style={{ fontSize: 10, color: INK_M }}>{list.length} open</span>
+                  </span>
                 </div>
                 {rule && (
                   <div style={{ fontSize: 9, color: INK_M, marginBottom: 6 }}>
@@ -140,8 +208,10 @@ export default function SocialInbox({ posts, rules }: {
                               ↩ Back to draft
                             </button>
                           )}
-                          <button type="button" disabled style={{ ...btnSecondary, opacity: 0.5 }} title="Per-post export ships next run (A5)">
-                            ⬇ Export
+                          <button type="button" disabled={busy !== null}
+                            onClick={() => exportZip('selection', { postIds: [p.post_id] })}
+                            style={btnSecondary} title="Download this post as an upload-ready zip (caption + media, channel-formatted)">
+                            {busy === `export:selection:${p.post_id}` ? '…' : '⬇ Export'}
                           </button>
                           <button type="button" disabled={busy !== null} onClick={() => setStatus(p.post_id, 'cancelled')} style={btnDanger}>
                             Cancel
@@ -168,3 +238,4 @@ export default function SocialInbox({ posts, rules }: {
 const btnPrimary: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 600, background: FOREST, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer' };
 const btnSecondary: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 500, background: WHITE, color: INK_S, border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer' };
 const btnDanger: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 500, background: WHITE, color: RED, border: `1px solid ${RED}`, borderRadius: 3, cursor: 'pointer' };
+const btnTiny: React.CSSProperties = { padding: '2px 6px', fontSize: 10, fontWeight: 600, background: WHITE, color: FOREST, border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer' };
