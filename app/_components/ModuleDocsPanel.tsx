@@ -33,6 +33,7 @@ interface Props {
 
 const TYPE_LABEL: Record<string, string> = {
   bug_agent_module:    'Bug Agent',
+  hr_scheduling_module: 'HR Scheduling',
   compiler_module:     'Compiler',
   gbp_module:          'Google Business Profile',
   inventory_module:    'Inventory',
@@ -47,6 +48,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const DEFAULT_GOAL: Record<string, string> = {
+  hr_scheduling_module: 'HR manager generates a 30-day draft schedule, reviews it in a dept grid, edits with reason docs, and publishes to staff without leaving the app.',
   bug_agent_module:    'Every filed bug attempted automatically; ~20% resolved & merged within 1h of filing — no PBS touch required.',
   compiler_module:     'PBS selects date range + content type; system pulls from PMS/KPIs/media; ready-to-use copy blocks in one click.',
   gbp_module:          'PBS reviews, responds to Q&A, publishes posts, and reads impressions — all without logging into Google.',
@@ -63,6 +65,7 @@ const DEFAULT_GOAL: Record<string, string> = {
 
 const PILL_COLOR: Record<string, { bg: string; text: string }> = {
   bug_agent_module:    { bg: '#EDE7F6', text: '#4527A0' },
+  hr_scheduling_module: { bg: '#E8EAF6', text: '#1A237E' },
   compiler_module:     { bg: '#E8EAF6', text: '#283593' },
   gbp_module:          { bg: '#FCE4EC', text: '#880E4F' },
   inventory_module:    { bg: '#E8F5E9', text: '#1B5E20' },
