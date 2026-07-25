@@ -216,6 +216,32 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
     }
   }
 
+  // PBS 2026-07-26 (bug #84) — per-row Agent button fires THIS specific bug.
+  async function startAgentForBug(bugId: number) {
+    if (agentBusy) return;
+    setBusy(bugId);
+    setAgentMsg('Starting agent on bug #' + bugId + '…');
+    try {
+      const r = await fetch('/api/cockpit/bugs/agent-run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ bug_ids: [bugId], mode: 'one', max: 1, triggered_by: 'ui' }),
+      });
+      const j = await r.json();
+      setAgentMsg(r.ok
+        ? 'Bug #' + bugId + ' run started · ' + (j.processed?.[0]?.phase ?? 'queued')
+        : 'Bug #' + bugId + ' failed: ' + (j.error ?? r.status));
+    } catch (e) {
+      setAgentMsg('Network error · ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+      setTimeout(async () => {
+        const rr = await fetch('/api/cockpit/bugs/agent-run', { cache: 'no-store' });
+        if (rr.ok) { const jj = await rr.json(); if (Array.isArray(jj.runs)) setAgentRuns(jj.runs); }
+      }, 1500);
+    }
+  }
+
   const depts = useMemo(() => {
     const s = new Set<string>();
     for (const r of rows) if (r.dept_slug) s.add(r.dept_slug);
@@ -296,21 +322,10 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: T.ink, letterSpacing: 0.2 }}>Bug-agent</div>
             <div style={{ fontSize: 11, color: T.inkSoft, marginTop: 2 }}>
-              Phase A shell · walks planning → reviewing → shipping → verifying · <strong>no code pushed to main yet</strong> · Phase B ships real Anthropic planner next.
+              Phase B · real Anthropic planner + 3-round re-plan loop + ship to branch + verify CI. PR requires pull_requests:write token scope (currently blocked — see preflight).
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => startAgentRun('one', 1)}
-              disabled={agentBusy}
-              style={{ padding: '7px 14px', border: `1px solid ${T.hairline}`, background: T.paper, color: T.ink, borderRadius: 4, fontSize: 12, cursor: agentBusy ? 'wait' : 'pointer' }}
-            >{agentBusy ? '…' : '▶ Run 1 bug'}</button>
-            <button
-              onClick={() => startAgentRun('drain', 5)}
-              disabled={agentBusy}
-              style={{ padding: '7px 14px', border: 0, background: T.green, color: '#FFF', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: agentBusy ? 'wait' : 'pointer' }}
-            >{agentBusy ? 'Running…' : '▶ Start Agent Run (drain, max 5)'}</button>
-          </div>
+          {agentBusy && <div style={{ fontSize: 11, color: T.inkSoft }}>Agent running…</div>}
         </div>
         {agentMsg && (
           <div style={{ marginTop: 10, fontSize: 11, color: T.inkSoft, padding: '6px 10px', background: T.warm, borderRadius: 4 }}>{agentMsg}</div>
@@ -417,12 +432,11 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                     </td>
                     <td style={{ padding: '10px', whiteSpace: 'nowrap' }}>
                       {/* PBS 2026-07-17 · bug #51 — tooltips explain each CTA */}
-                      {s === 'open' && <Btn onClick={() => act(r.id, 'acknowledge')} disabled={busy === r.id} title="Acknowledge — you've seen it, moves it out of Open">Ack</Btn>}
+                      {s === 'open' && <Btn onClick={() => act(r.id, 'acknowledge')} disabled={busy === r.id} title="Mark as seen — runs nothing">Ack</Btn>}
                       {s === 'acknowledged' && <Btn onClick={() => act(r.id, 'start')} disabled={busy === r.id} title="Start work — moves it to In Progress">Start</Btn>}
                       {s === 'in_progress' && <Btn onClick={() => act(r.id, 'done')} disabled={busy === r.id} tone="green" title="Mark as Done — fix shipped">Done</Btn>}
-                      {s !== 'dismissed' && s !== 'done' && <Btn onClick={() => act(r.id, 'dismiss')} disabled={busy === r.id} tone="red" title="Dismiss — not a real bug or wont-fix">Dismiss</Btn>}
-                      <Btn onClick={() => del(r.id)} disabled={busy === r.id} tone="red" title="Delete permanently">🗑</Btn>
-                      <Btn onClick={() => copyForAgent(r)} tone="ghost" title="Copy JSON payload for the bug-agent">📋 Agent</Btn>
+                      {s !== 'dismissed' && s !== 'done' && <Btn onClick={() => act(r.id, 'dismiss')} disabled={busy === r.id} tone="red" title="Dismiss — gone from all lists (soft, audit trail kept)">Dismiss</Btn>}
+                      {s !== 'dismissed' && s !== 'done' && <Btn onClick={() => startAgentForBug(r.id)} disabled={busy === r.id || agentBusy} tone="ghost" title="Fire the full agent loop for THIS bug — plan → re-plan → ship → verify">{agentBusy ? '…' : '▶ Agent'}</Btn>}
                     </td>
                   </tr>
                   {isExpanded && (
