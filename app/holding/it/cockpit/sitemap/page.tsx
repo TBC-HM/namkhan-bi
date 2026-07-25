@@ -1,260 +1,401 @@
 // app/holding/it/cockpit/sitemap/page.tsx
-// Dynamic application sitemap — derived from live GROUPS config + known app tree.
-// PBS 2026-07-25. Lives under Knowledge → Sitemap.
+// Visual tree sitemap — top-down diagram with CSS branch lines.
+// PBS 2026-07-25. Knowledge → Sitemap.
 
 import Link from 'next/link';
-import { GROUPS } from '../_lib/groups';
 
-export const dynamic = 'force-dynamic';
+// ── Data ──────────────────────────────────────────────────────────────────────
 
-// ── Full app route tree (kept here, updated when routes change) ──────────────
-const APP_TREE = [
-  {
-    area: 'Holding', color: '#1F3A2E', prefix: '/holding',
-    routes: [
-      { url: '/holding/it', label: 'IT · HoD landing (Module Docs)' },
-      { url: '/holding/ceo', label: 'CEO dashboard' },
-      { url: '/holding/legal', label: 'Legal' },
-      { url: '/holding/finance', label: 'Finance (clients + invoices)' },
-      { url: '/holding/strategy', label: 'Strategy' },
-      { url: '/holding/bugs', label: 'Bugs' },
-      { url: '/holding/properties', label: 'Properties portfolio' },
-      { url: '/holding/users', label: 'Users & Access' },
-    ],
-  },
-  {
-    area: 'Revenue', color: '#1565C0', prefix: '/revenue',
-    note: 'Also at /h/[pid]/revenue/*',
-    routes: [
-      { url: '/revenue', label: 'HoD landing' },
-      { url: '/revenue/pulse', label: 'Pulse — live KPIs' },
-      { url: '/revenue/briefing', label: 'Briefing — guardrail conclusions' },
-      { url: '/revenue/pickup', label: 'Pickup matrix' },
-      { url: '/revenue/pace', label: 'Pace tracking' },
-      { url: '/revenue/demand', label: 'Demand analytics' },
-      { url: '/revenue/markets', label: 'Markets — nationality/room heatmaps' },
-      { url: '/revenue/compset', label: 'Competitive set' },
-      { url: '/revenue/parity', label: 'OTA parity' },
-      { url: '/revenue/channels', label: 'Channel mix' },
-      { url: '/revenue/channels/[source]', label: '→ Per-channel landing (dynamic)' },
-      { url: '/revenue/rateplans', label: 'Rate plans' },
-      { url: '/revenue/pricing', label: 'Pricing' },
-      { url: '/revenue/inventory', label: 'Room inventory' },
-      { url: '/revenue/rooms', label: 'Room type analytics' },
-      { url: '/revenue/reports', label: 'Reports' },
-      { url: '/revenue/leakage', label: 'Revenue leakage' },
-      { url: '/revenue/lighthouse', label: 'Lighthouse rate shop' },
-      { url: '/revenue/promotions', label: 'Promotions' },
-      { url: '/revenue/forecasts', label: 'Demand forecasting' },
-      { url: '/revenue/cancellations', label: 'Cancellations' },
-    ],
-  },
-  {
-    area: 'Marketing', color: '#E65100', prefix: '/marketing',
-    note: 'Also at /h/[pid]/marketing/*',
-    routes: [
-      { url: '/marketing', label: 'HoD landing' },
-      { url: '/marketing/overview', label: 'Overview — real KPIs' },
-      { url: '/marketing/audience', label: 'Audience — groups + subscribers' },
-      { url: '/marketing/campaigns', label: 'Campaigns' },
-      { url: '/marketing/media', label: 'Media — photos + videos + AI Studio' },
-      { url: '/marketing/media/profiles', label: '→ OTA media profiles' },
-      { url: '/marketing/social/google-business', label: 'Google Business Profile' },
-      { url: '/marketing/youtube', label: 'YouTube — dashboard + playlists + production' },
-      { url: '/marketing/subscribers', label: 'Newsletter subscribers' },
-      { url: '/marketing/compiler', label: 'Compiler ⚠️ legacy design' },
-      { url: '/guest/newsletters', label: 'Newsletters (under Guest)' },
-    ],
-  },
-  {
-    area: 'Operations', color: '#2E7D32', prefix: '/operations',
-    note: 'Also at /h/[pid]/operations/*',
-    routes: [
-      { url: '/operations', label: 'HoD landing' },
-      { url: '/operations/inventory', label: 'Inventory (12 sub-pages)' },
-      { url: '/operations/qa', label: 'QA proposals' },
-      { url: '/operations/sops', label: 'SOPs' },
-      { url: '/operations/restaurant', label: 'F&B' },
-      { url: '/operations/spa', label: 'Spa' },
-      { url: '/operations/retail', label: 'Retail' },
-      { url: '/operations/transport', label: 'Transport' },
-      { url: '/operations/rooms', label: 'Rooms' },
-      { url: '/operations/staff', label: 'Staff' },
-      { url: '/operations/maintenance', label: 'Maintenance' },
-      { url: '/operations/menus', label: 'Menus' },
-      { url: '/operations/today', label: 'Today' },
-    ],
-  },
-  {
-    area: 'Sales', color: '#6A1B9A', prefix: '/sales',
-    note: 'Also at /h/[pid]/sales/*',
-    routes: [
-      { url: '/sales', label: 'HoD — Create New · Pipeline · Accounts' },
-      { url: '/sales/pipeline', label: 'Pipeline' },
-      { url: '/sales/accounts', label: 'Accounts' },
-      { url: '/sales/inquiries', label: 'Inquiries' },
-      { url: '/sales/packages', label: 'Packages' },
-      { url: '/sales/leads', label: 'Leads' },
-      { url: '/sales/mails', label: 'Shared mailbox' },
-      { url: '/sales/proposals', label: 'Proposals' },
-    ],
-  },
-  {
-    area: 'Finance', color: '#880E4F', prefix: '/finance',
-    note: 'Also at /h/[pid]/finance/*',
-    routes: [
-      { url: '/finance', label: 'HoD landing' },
-      { url: '/finance/pnl', label: 'P&L' },
-      { url: '/finance/ledger', label: 'General ledger' },
-      { url: '/finance/budget', label: 'Budget' },
-      { url: '/finance/hr', label: 'HR & payroll (8 sub-pages)' },
-      { url: '/finance/pos', label: 'POS transactions' },
-      { url: '/finance/transactions', label: 'All transactions' },
-      { url: '/finance/reports', label: 'Reports' },
-    ],
-  },
-  {
-    area: 'Guest', color: '#004D40', prefix: '/guest',
-    note: 'Also at /h/[pid]/guest/*',
-    routes: [
-      { url: '/guest', label: 'HoD landing' },
-      { url: '/guest/reputation', label: 'Reputation (Google + TripAdvisor)' },
-      { url: '/guest/newsletters', label: 'Newsletter engine' },
-      { url: '/guest/reviews', label: 'Reviews' },
-      { url: '/guest/retreats', label: 'Retreats' },
-      { url: '/guest/loyalty', label: 'Loyalty' },
-      { url: '/guest/directory', label: 'Guest directory' },
-      { url: '/guest/behaviour', label: 'Behaviour analytics' },
-      { url: '/guest/journey', label: 'Guest journey' },
-    ],
-  },
-  {
-    area: 'Settings', color: '#5A5A5A', prefix: '/settings',
-    note: 'h/[pid]/settings/property has 12 tabs',
-    routes: [
-      { url: '/settings', label: 'Settings root' },
-      { url: '/settings/users', label: 'Users & roles' },
-      { url: '/h/[pid]/settings/property', label: 'Property (Rooms/Activities/Facilities/Transport/Imekong/Meeting/Identity/Team/Sidebar/Calendar/Audience)' },
-      { url: '/h/[pid]/settings/brain', label: 'AI brain settings' },
-      { url: '/h/[pid]/settings/media', label: 'Media settings (guardrails/channels/naming)' },
-      { url: '/h/[pid]/settings/rate-plans', label: 'Rate plans' },
-      { url: '/h/[pid]/settings/guardrails', label: 'Data quality rules' },
-    ],
-  },
-  {
-    area: 'University', color: '#283593', prefix: '/university',
-    routes: [
-      { url: '/university', label: 'Help engine' },
-      { url: '/university/[slug]', label: '→ Article (dynamic)' },
-      { url: '/university/ask', label: 'AI ask-window' },
-    ],
-  },
-  {
-    area: 'System / Legacy', color: '#8A8A8A', prefix: '/',
-    routes: [
-      { url: '/mail', label: 'Full-screen mail client' },
-      { url: '/cockpit', label: 'Old system cockpit ⚠️ legacy' },
-      { url: '/cockpit/supabase', label: 'DB management ⚠️ IT nav still links here' },
-      { url: '/admin/gmail-connect', label: 'Gmail OAuth setup' },
-    ],
-  },
-] as const;
+type SitemapNode = {
+  label: string;
+  href?: string;
+  warn?: boolean;
+  children?: SitemapNode[];
+};
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// Color palette: level 0=root, 1=area, 2=section, 3=page, 4=sub-page
+const LEVEL_COLORS = ['#E8476A', '#F5A623', '#26B5A8', '#5BB8D4', '#90CAD6'];
+const LEVEL_TEXT   = ['#fff',    '#fff',    '#fff',    '#fff',    '#1B1B1B'];
 
-function RouteRow({ url, label }: { url: string; label: string }) {
-  const isWarning = label.includes('⚠️') || label.includes('legacy');
-  const isDynamic = url.includes('[');
+const TREE: SitemapNode = {
+  label: 'namkhan-bi',
+  href: '/',
+  children: [
+    {
+      label: 'Holding', href: '/holding',
+      children: [
+        { label: 'CEO', href: '/holding/ceo' },
+        { label: 'Legal', href: '/holding/legal' },
+        { label: 'Finance', href: '/holding/finance', children: [
+          { label: 'Clients', href: '/holding/finance/clients' },
+          { label: 'Invoices', href: '/holding/finance/invoices' },
+        ]},
+        { label: 'Strategy', href: '/holding/strategy' },
+        {
+          label: 'IT', href: '/holding/it',
+          children: [
+            { label: 'Properties', href: '/holding/properties' },
+            { label: 'Users', href: '/holding/users' },
+            { label: 'Bugs', href: '/holding/bugs' },
+            {
+              label: 'IT Cockpit', href: '/holding/it/cockpit',
+              children: [
+                { label: 'Home', href: '/holding/it/cockpit' },
+                { label: 'Fleet', href: '/holding/it/cockpit/team', children: [
+                  { label: 'Team', href: '/holding/it/cockpit/team' },
+                  { label: 'Skills', href: '/holding/it/cockpit/skills' },
+                  { label: 'Memory', href: '/holding/it/cockpit/knowledge' },
+                ]},
+                { label: 'Knowledge', href: '/holding/it/cockpit/docs', children: [
+                  { label: 'All Docs', href: '/holding/it/cockpit/docs' },
+                  { label: 'Schemas', href: '/holding/it/cockpit/schemas' },
+                  { label: 'Freshness', href: '/holding/it/cockpit/freshness' },
+                  { label: 'Sitemap', href: '/holding/it/cockpit/sitemap' },
+                ]},
+                { label: 'Ops', href: '/holding/it/cockpit/tasks', children: [
+                  { label: 'Tasks', href: '/holding/it/cockpit/tasks' },
+                  { label: 'Activity', href: '/holding/it/cockpit/activity' },
+                  { label: 'Chat', href: '/holding/it/cockpit/chat' },
+                  { label: 'Health', href: '/holding/it/cockpit/health' },
+                ]},
+                { label: 'Build', href: '/holding/it/cockpit/deploys', children: [
+                  { label: 'Deploys', href: '/holding/it/cockpit/deploys' },
+                  { label: 'Checks', href: '/holding/it/cockpit/checks' },
+                  { label: 'Cost', href: '/holding/it/cockpit/cost' },
+                  { label: 'Module Docs', href: '/holding/it/cockpit/specs' },
+                  { label: '+ New spec', href: '/holding/it/cockpit/specs/new' },
+                ]},
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      label: 'Revenue', href: '/revenue',
+      children: [
+        { label: 'Pulse', href: '/revenue/pulse' },
+        { label: 'Briefing', href: '/revenue/briefing' },
+        { label: 'Pickup', href: '/revenue/pickup' },
+        { label: 'Pace', href: '/revenue/pace' },
+        { label: 'Demand', href: '/revenue/demand' },
+        { label: 'Markets', href: '/revenue/markets' },
+        { label: 'Compset', href: '/revenue/compset', children: [
+          { label: '[hotel]', href: '/revenue/compset' },
+        ]},
+        { label: 'Parity', href: '/revenue/parity' },
+        { label: 'Channels', href: '/revenue/channels', children: [
+          { label: '[source]', href: '/revenue/channels' },
+          { label: 'Promotions', href: '/revenue/promotions' },
+        ]},
+        { label: 'Rate Plans', href: '/revenue/rateplans' },
+        { label: 'Reports', href: '/revenue/reports', children: [
+          { label: 'Render', href: '/revenue/reports/render' },
+          { label: 'Scheduled', href: '/revenue/reports/scheduled' },
+        ]},
+        { label: 'Leakage', href: '/revenue/leakage' },
+        { label: 'Lighthouse', href: '/revenue/lighthouse' },
+      ],
+    },
+    {
+      label: 'Marketing', href: '/marketing',
+      children: [
+        { label: 'Overview', href: '/marketing/overview' },
+        { label: 'Audience', href: '/marketing/audience' },
+        { label: 'Campaigns', href: '/marketing/campaigns', children: [
+          { label: 'New', href: '/marketing/campaigns/new' },
+          { label: '[campaign]', href: '/marketing/campaigns' },
+        ]},
+        { label: 'Media', href: '/marketing/media', children: [
+          { label: 'Pics', href: '/marketing/media' },
+          { label: 'Videos', href: '/marketing/media' },
+          { label: 'Clarify', href: '/marketing/media' },
+          { label: 'Coverage', href: '/marketing/media' },
+          { label: 'OTA Profiles', href: '/marketing/media/profiles' },
+        ]},
+        { label: 'YouTube', href: '/marketing/youtube', children: [
+          { label: 'Dashboard', href: '/marketing/youtube' },
+          { label: 'Playlists', href: '/marketing/youtube/playlists' },
+          { label: 'Planning', href: '/marketing/youtube/planning' },
+          { label: 'Production', href: '/marketing/youtube/production' },
+        ]},
+        { label: 'GBP', href: '/marketing/social/google-business' },
+        { label: 'Subscribers', href: '/marketing/subscribers' },
+        { label: 'Compiler', href: '/marketing/compiler', warn: true },
+      ],
+    },
+    {
+      label: 'Operations', href: '/operations',
+      children: [
+        { label: 'Inventory', href: '/operations/inventory', children: [
+          { label: 'Items', href: '/operations/inventory/items' },
+          { label: 'Stock', href: '/operations/inventory/stock' },
+          { label: 'Movements', href: '/operations/inventory/movements' },
+          { label: 'Low Stock', href: '/operations/inventory/low-stock' },
+          { label: 'Suppliers', href: '/operations/inventory/suppliers' },
+          { label: 'POs', href: '/operations/inventory/purchase-orders' },
+        ]},
+        { label: 'QA', href: '/operations/qa', children: [
+          { label: 'Registry', href: '/operations/qa/registry' },
+        ]},
+        { label: 'SOPs', href: '/operations/sops', children: [
+          { label: '[sop]', href: '/operations/sops' },
+          { label: 'Preview', href: '/operations/sops' },
+        ]},
+        { label: 'Restaurant', href: '/operations/restaurant' },
+        { label: 'Spa', href: '/operations/spa' },
+        { label: 'Retail', href: '/operations/retail' },
+        { label: 'Transport', href: '/operations/transport' },
+        { label: 'Staff', href: '/operations/staff' },
+        { label: 'Attendance', href: '/operations/attendance' },
+        { label: 'Today', href: '/operations/today' },
+      ],
+    },
+    {
+      label: 'Sales', href: '/sales',
+      children: [
+        { label: 'Pipeline', href: '/sales/pipeline' },
+        { label: 'Accounts', href: '/sales/accounts' },
+        { label: 'Inquiries', href: '/sales/inquiries' },
+        { label: 'Leads', href: '/sales/leads' },
+        { label: 'Packages', href: '/sales/packages' },
+        { label: 'Proposals', href: '/sales/proposals' },
+        { label: 'Mails', href: '/sales/mails' },
+      ],
+    },
+    {
+      label: 'Finance', href: '/finance',
+      children: [
+        { label: 'P&L', href: '/finance/pnl' },
+        { label: 'Ledger', href: '/finance/ledger' },
+        { label: 'Budget', href: '/finance/budget' },
+        { label: 'HR', href: '/finance/hr', children: [
+          { label: 'Schedule', href: '/finance/hr/schedule' },
+          { label: 'Attendance', href: '/finance/hr/attendance' },
+          { label: 'Onboarding', href: '/finance/hr/onboarding' },
+          { label: 'Recruitment', href: '/finance/hr/recruitment' },
+        ]},
+        { label: 'POS', href: '/finance/pos' },
+        { label: 'Transactions', href: '/finance/transactions' },
+        { label: 'Reports', href: '/finance/reports' },
+      ],
+    },
+    {
+      label: 'Guest', href: '/guest',
+      children: [
+        { label: 'Newsletters', href: '/guest/newsletters', children: [
+          { label: 'Broadcasts', href: '/guest/newsletters' },
+          { label: 'Sequences', href: '/guest/newsletters' },
+          { label: 'Director', href: '/guest/newsletters' },
+        ]},
+        { label: 'Reputation', href: '/guest/reputation' },
+        { label: 'Retreats', href: '/guest/retreats', children: [
+          { label: '[program]', href: '/guest/retreats' },
+        ]},
+        { label: 'Reviews', href: '/guest/reviews' },
+        { label: 'Loyalty', href: '/guest/loyalty' },
+        { label: 'Directory', href: '/guest/directory' },
+        { label: 'Behaviour', href: '/guest/behaviour' },
+      ],
+    },
+    {
+      label: 'Settings', href: '/settings',
+      children: [
+        { label: 'Property', href: '/settings/property', children: [
+          { label: 'Rooms', href: '/settings/property' },
+          { label: 'Activities', href: '/settings/property' },
+          { label: 'Facilities', href: '/settings/property' },
+          { label: 'Transport', href: '/settings/property' },
+          { label: 'Audience', href: '/settings/property' },
+        ]},
+        { label: 'Users', href: '/settings/users' },
+        { label: 'Media', href: '/settings/media' },
+        { label: 'Brain', href: '/settings/brain' },
+        { label: 'Rate Plans', href: '/settings/rate-plans' },
+        { label: 'Guardrails', href: '/settings/guardrails' },
+      ],
+    },
+    {
+      label: 'University', href: '/university',
+      children: [
+        { label: 'Articles', href: '/university' },
+        { label: 'Ask Window', href: '/university/ask' },
+      ],
+    },
+    {
+      label: 'Mail', href: '/mail',
+      children: [
+        { label: 'Inbox', href: '/mail' },
+        { label: 'Analytics', href: '/mail/analytics' },
+        { label: 'Rules', href: '/mail/rules' },
+      ],
+    },
+  ],
+};
+
+// ── Tree renderer ─────────────────────────────────────────────────────────────
+
+function countNodes(node: SitemapNode): number {
+  return 1 + (node.children ?? []).reduce((n, c) => n + countNodes(c), 0);
+}
+
+function TreeNode({ node, depth }: { node: SitemapNode; depth: number }) {
+  const hasChildren = (node.children ?? []).length > 0;
+  const bg = LEVEL_COLORS[Math.min(depth, LEVEL_COLORS.length - 1)];
+  const fg = LEVEL_TEXT[Math.min(depth, LEVEL_TEXT.length - 1)];
+  const isWarn = node.warn;
+
+  const box = (
+    <div style={{
+      background: isWarn ? '#B8542A' : bg,
+      color: fg,
+      padding: depth === 0 ? '6px 16px' : '4px 10px',
+      borderRadius: 20,
+      fontSize: depth === 0 ? 13 : depth <= 2 ? 11 : 10,
+      fontWeight: depth <= 1 ? 700 : 600,
+      whiteSpace: 'nowrap',
+      cursor: node.href ? 'pointer' : 'default',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+      textDecoration: 'none',
+      display: 'block',
+      textAlign: 'center',
+    }}>
+      {node.label}{isWarn ? ' ⚠' : ''}
+    </div>
+  );
+
   return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'baseline',
-      padding: '4px 0', borderBottom: '1px solid #F4EFE2' }}>
-      <code style={{ fontSize: 11, color: isWarning ? '#B8542A' : isDynamic ? '#1565C0' : '#1F3A2E',
-        background: '#F9F7F2', padding: '1px 5px', borderRadius: 3, flexShrink: 0,
-        minWidth: 240, fontFamily: 'monospace' }}>
-        {url}
-      </code>
-      <span style={{ fontSize: 11, color: '#5A5A5A' }}>{label}</span>
-      {!isDynamic && !isWarning && (
-        <Link href={url} style={{ fontSize: 10, color: '#1F3A2E', marginLeft: 'auto',
-          textDecoration: 'none', flexShrink: 0 }}>→</Link>
+    <div className="tree-node-wrapper">
+      {node.href ? (
+        <Link href={node.href} style={{ textDecoration: 'none' }}>{box}</Link>
+      ) : box}
+
+      {hasChildren && (
+        <ul className="tree-children">
+          {(node.children ?? []).map((child) => (
+            <li key={child.label + (child.href ?? '')} className="tree-child">
+              <TreeNode node={child} depth={depth + 1} />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function SitemapPage() {
-  const totalRoutes = APP_TREE.reduce((n, a) => n + a.routes.length, 0)
-    + GROUPS.reduce((n, g) => n + 1 + g.subs.length, 0);
+  const total = countNodes(TREE);
 
   return (
-    <div style={{ maxWidth: 960, padding: '24px 24px 64px' }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1B1B1B', margin: '0 0 4px' }}>
+    <div style={{ padding: '24px', overflowX: 'auto', minWidth: 0 }}>
+      <style>{`
+        /* ── Tree structure ── */
+        .tree-node-wrapper {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+
+        /* Children row */
+        .tree-children {
+          display: flex;
+          flex-direction: row;
+          align-items: flex-start;
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          position: relative;
+          padding-top: 24px;
+        }
+
+        /* Each child item */
+        .tree-child {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 0 6px;
+          position: relative;
+        }
+
+        /* Vertical line going up from each child to the horizontal bar */
+        .tree-child::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 1px;
+          height: 12px;
+          background: #C8C0B0;
+        }
+
+        /* Horizontal bar connecting siblings */
+        .tree-child::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          height: 1px;
+          background: #C8C0B0;
+          left: 0;
+          right: 0;
+        }
+
+        /* First child: horizontal bar only on the right half */
+        .tree-child:first-child::after {
+          left: 50%;
+          right: 0;
+        }
+
+        /* Last child: horizontal bar only on the left half */
+        .tree-child:last-child::after {
+          left: 0;
+          right: 50%;
+        }
+
+        /* Only child: no horizontal bar at all */
+        .tree-child:first-child:last-child::after {
+          display: none;
+        }
+
+        /* Vertical stem from parent node down to children row */
+        .tree-node-wrapper:has(.tree-children)::after {
+          content: '';
+          display: block;
+          width: 1px;
+          height: 12px;
+          background: #C8C0B0;
+          margin: 0 auto;
+        }
+      `}</style>
+
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1B1B1B', margin: '0 0 4px' }}>
           Application Sitemap
         </h1>
-        <p style={{ fontSize: 12, color: '#5A5A5A', margin: 0 }}>
-          ~{totalRoutes}+ routes · dynamic = reading live nav config · updated when groups.ts changes
+        <p style={{ fontSize: 11, color: '#5A5A5A', margin: 0 }}>
+          {total} nodes · click any box to navigate · ⚠ = needs attention
         </p>
       </div>
 
-      {/* IT Cockpit — derived from live GROUPS array */}
-      <section style={{ marginBottom: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
-            textTransform: 'uppercase', color: '#1F3A2E' }}>IT Cockpit</span>
-          <span style={{ fontSize: 10, color: '#8A8A8A' }}>
-            from live groups.ts · {GROUPS.length} groups · {GROUPS.reduce((n,g)=>n+g.subs.length,0)} sub-tabs
-          </span>
-          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 99,
-            background: '#E8F5E9', color: '#2E7D32', fontWeight: 700 }}>LIVE</span>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {['App root', 'Area', 'Section', 'Page', 'Sub-page'].map((label, i) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 14, height: 14, borderRadius: 7, background: LEVEL_COLORS[i] }} />
+            <span style={{ fontSize: 10, color: '#5A5A5A' }}>{label}</span>
+          </div>
+        ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 14, height: 14, borderRadius: 7, background: '#B8542A' }} />
+          <span style={{ fontSize: 10, color: '#5A5A5A' }}>Needs attention</span>
         </div>
-        <div style={{ border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden' }}>
-          {GROUPS.map((g, gi) => (
-            <div key={g.key} style={{ borderBottom: gi < GROUPS.length - 1 ? '1px solid #E6DFCC' : 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 14px', background: '#FAFAF7' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#1B1B1B',
-                  minWidth: 80 }}>{g.label}</span>
-                <code style={{ fontSize: 11, color: '#1F3A2E', background: '#F4EFE2',
-                  padding: '1px 6px', borderRadius: 3 }}>{g.href}</code>
-                {g.href === '/cockpit/supabase' && (
-                  <span style={{ fontSize: 9, color: '#B8542A', fontWeight: 700 }}>⚠️ BROKEN LINK</span>
-                )}
-              </div>
-              {g.subs.map(s => (
-                <div key={s.href} style={{ display: 'flex', gap: 8, alignItems: 'center',
-                  padding: '5px 14px 5px 28px', borderTop: '1px solid #F4EFE2' }}>
-                  <span style={{ fontSize: 10, color: '#8A8A8A' }}>└</span>
-                  <Link href={s.href} style={{ fontSize: 11, color: '#1565C0',
-                    textDecoration: 'none', flex: 1 }}>{s.label}</Link>
-                  <code style={{ fontSize: 10, color: '#5A5A5A', background: '#F9F7F2',
-                    padding: '1px 5px', borderRadius: 3 }}>{s.href}</code>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </section>
+      </div>
 
-      {/* Full app tree */}
-      {APP_TREE.map(area => (
-        <section key={area.area} style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
-              textTransform: 'uppercase', color: area.color }}>{area.area}</span>
-            <span style={{ fontSize: 10, color: '#8A8A8A' }}>
-              {(area as any).note ?? ''}
-            </span>
-            <span style={{ fontSize: 10, color: '#8A8A8A', marginLeft: 4 }}>
-              · {area.routes.length} routes
-            </span>
-          </div>
-          <div style={{ border: '1px solid #E6DFCC', borderRadius: 6,
-            overflow: 'hidden', padding: '4px 8px' }}>
-            {area.routes.map((r: any) => <RouteRow key={r.url} url={r.url} label={r.label} />)}
-          </div>
-        </section>
-      ))}
+      <div style={{ display: 'inline-block', minWidth: '100%', paddingBottom: 48 }}>
+        <TreeNode node={TREE} depth={0} />
+      </div>
     </div>
   );
 }
