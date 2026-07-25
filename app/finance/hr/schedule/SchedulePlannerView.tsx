@@ -49,8 +49,8 @@ interface CellEdit {
 // ── Color map for shift templates ─────────────────────────────────────────────
 
 function shiftColor(code: string | null, status: string): { bg: string; text: string } {
-  if (!code || status === 'off')  return { bg: '#F5F5F5', text: '#9E9E9E' };
-  if (status === 'leave')         return { bg: '#FFF8E1', text: '#F57F17' };
+  if (!code || status === 'gap')  return { bg: '#FFF8E1', text: '#F57F17' };   // gap = leave
+  if (status === 'cancelled')     return { bg: '#F5F5F5', text: '#9E9E9E' };
   const c = code.toUpperCase();
   if (c.startsWith('S1') || c.startsWith('S2')) return { bg: '#E8F5E9', text: '#2E7D32' };
   if (c.startsWith('S3') || c.startsWith('S4')) return { bg: '#E3F2FD', text: '#1565C0' };
@@ -167,10 +167,10 @@ function CellPopover({ cell, templates, propertyId, onSave, onClose }: PopoverPr
           <div>
             <label style={labelStyle}>Status</label>
             <select value={status} onChange={e => setStatus(e.target.value)} style={inputStyle}>
-              <option value="planned">Planned</option>
+              <option value="scheduled">Scheduled (draft)</option>
               <option value="confirmed">Confirmed</option>
-              <option value="off">Day off</option>
-              <option value="leave">Leave</option>
+              <option value="gap">Leave / absence</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
 
@@ -291,8 +291,8 @@ export default function SchedulePlannerView({ propertyId, isReadOnly = false }: 
   const published = shifts.filter(s => s.is_published).length;
   const draft = totalShifts - published;
   const gaps = dateRange.filter(d => {
-    const count = shifts.filter(s => s.shift_date === d && s.status !== 'off' && s.status !== 'leave').length;
-    return count < 3; // less than 3 staff on any day = gap
+    const count = shifts.filter(s => s.shift_date === d && s.status !== 'gap' && s.status !== 'cancelled').length;
+    return count < 3; // less than 3 staff working any day = coverage gap
   }).length;
 
   async function generate() {
@@ -324,7 +324,7 @@ export default function SchedulePlannerView({ propertyId, isReadOnly = false }: 
     template_id?: string; status?: string; notes?: string; edit_reason?: string;
   }) {
     const effectiveTemplateId = data.template_id === '__leave__' ? undefined : data.template_id;
-    const effectiveStatus = data.template_id === '__leave__' ? 'leave' : (data.status ?? 'planned');
+    const effectiveStatus = data.template_id === '__leave__' ? 'gap' : (data.status ?? 'scheduled');
     await fetch('/api/schedule/shift', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...data, template_id: effectiveTemplateId, status: effectiveStatus, property_id: propertyId }),
@@ -502,9 +502,9 @@ export default function SchedulePlannerView({ propertyId, isReadOnly = false }: 
                               border: shift.is_published ? 'none' : '1px dashed ' + col.text,
                               opacity: shift.status === 'off' ? 0.5 : 1,
                             }}>
-                              {shift.status === 'leave' ? 'LEAVE'
-                                : shift.status === 'off' ? 'OFF'
-                                : (shift.template_code ?? '?')}
+                              {shift.status === 'gap' ? 'LEAVE'
+                                : shift.status === 'cancelled' ? 'OFF'
+                                : (shift.template_code ?? shift.status.toUpperCase().slice(0,3))}
                               {shift.edit_reason && (
                                 <span style={{ fontSize: 8, marginLeft: 2 }} title={shift.edit_reason}>✎</span>
                               )}
