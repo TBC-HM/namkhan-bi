@@ -60,7 +60,7 @@ export default async function HoldingItPage() {
   const moduleDocsBlock = (
     <Container
       title="Module Documentation"
-      subtitle={}
+      subtitle={docs.length + " docs · modules in dev + navigation specs"}
       density="compact"
     >
       <ModuleDocsPanel docs={docs} statuses={statuses} />
