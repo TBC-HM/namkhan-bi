@@ -1,346 +1,405 @@
 'use client';
 
 // app/holding/it/cockpit/sitemap/page.tsx
-// Before/After nav restructuring cockpit.
-// PBS 2026-07-25: toggle current vs proposed nav, execute with one button.
+// v3: clean indented accordion tree + property switcher (Holding | Namkhan | Donna)
+// Before/After restructuring panel preserved for IT Cockpit section.
+// PBS 2026-07-25.
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useMemo } from 'react';
 import Link from 'next/link';
-
-// ── Color palette ─────────────────────────────────────────────────────────────
-const LEVEL_COLORS = ['#E8476A', '#F5A623', '#26B5A8', '#5BB8D4', '#90CAD6'];
-const LEVEL_TEXT   = ['#fff',    '#fff',    '#fff',    '#fff',    '#1B1B1B'];
+import { GROUPS } from '../_lib/groups';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type NodeStatus = 'normal' | 'removed' | 'added' | 'renamed' | 'warn';
 
-type SitemapNode = {
+type PageStatus = 'ok' | 'warn' | 'new';
+
+type SitemapPage = {
   label: string;
-  href?: string;
-  status?: NodeStatus;
-  note?: string;
-  children?: SitemapNode[];
+  url: string;
+  desc?: string;
+  status?: PageStatus;
+  children?: SitemapPage[];
 };
 
-// ── BEFORE — current state ────────────────────────────────────────────────────
-const TREE_BEFORE: SitemapNode = {
-  label: 'namkhan-bi', href: '/',
-  children: [
-    {
-      label: 'Holding', href: '/holding',
-      children: [
-        { label: 'CEO', href: '/holding/ceo' },
-        { label: 'Legal', href: '/holding/legal' },
-        { label: 'Finance', href: '/holding/finance', children: [
-          { label: 'Clients' }, { label: 'Invoices' },
-        ]},
-        { label: 'Strategy', href: '/holding/strategy' },
-        { label: 'Properties', href: '/holding/properties' },
-        { label: 'Users', href: '/holding/users' },
-        {
-          label: 'IT', href: '/holding/it',
-          children: [
-            {
-              label: 'Cockpit', href: '/holding/it/cockpit',
-              children: [
-                { label: 'Home' },
-                { label: 'Fleet', children: [
-                  { label: 'Team' }, { label: 'Skills' }, { label: 'Memory' },
-                ]},
-                { label: 'Knowledge', children: [
-                  { label: 'All Docs' }, { label: 'Schemas' }, { label: 'Freshness' }, { label: 'Sitemap' },
-                ]},
-                { label: 'Inventory', status: 'warn', note: 'Broken link → /cockpit/supabase', children: [
-                  { label: '/cockpit/supabase', status: 'warn', note: '404' },
-                ]},
-                { label: 'Ops', children: [
-                  { label: 'Tasks' }, { label: 'Activity' }, { label: 'Chat' }, { label: 'Health' },
-                ]},
-                { label: 'Build', children: [
-                  { label: 'Deploys' }, { label: 'Checks' }, { label: 'Cost' },
-                  { label: 'Module Docs' }, { label: '+ New spec' },
-                ]},
-                { label: 'notify', href: '/holding/it/cockpit/notify', status: 'warn', note: 'Orphan — no nav link' },
-                { label: 'platform-map', href: '/holding/it/cockpit/platform-map', status: 'warn', note: 'Orphan — no nav link' },
-                { label: 'cockpit/users', href: '/holding/it/cockpit/users', status: 'warn', note: 'Duplicate of /holding/users' },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    {
-      label: 'Revenue', href: '/revenue',
-      children: [
-        { label: 'Pulse' }, { label: 'Briefing' }, { label: 'Pickup' }, { label: 'Pace' },
-        { label: 'Demand' }, { label: 'Markets' }, { label: 'Compset' }, { label: 'Parity' },
-        { label: 'Channels', children: [{ label: '[source]' }, { label: 'Promotions' }]},
-        { label: 'Rate Plans' }, { label: 'Reports', children: [{ label: 'Render' }, { label: 'Scheduled' }]},
-        { label: 'Leakage' }, { label: 'Lighthouse' },
-      ],
-    },
-    {
-      label: 'Marketing', href: '/marketing',
-      children: [
-        { label: 'Overview' }, { label: 'Audience' },
-        { label: 'Campaigns', children: [{ label: 'New' }, { label: '[id]' }]},
-        { label: 'Media', children: [
-          { label: 'Pics' }, { label: 'Videos' }, { label: 'Clarify' }, { label: 'Coverage' }, { label: 'OTA Profiles' },
-        ]},
-        { label: 'YouTube', children: [
-          { label: 'Dashboard' }, { label: 'Playlists' }, { label: 'Planning' }, { label: 'Production' },
-        ]},
-        { label: 'GBP' }, { label: 'Subscribers' },
-        { label: 'Compiler', status: 'warn', note: 'Legacy design' },
-      ],
-    },
-    {
-      label: 'Operations', href: '/operations',
-      children: [
-        { label: 'Inventory', children: [
-          { label: 'Items' }, { label: 'Stock' }, { label: 'Movements' },
-          { label: 'Low Stock' }, { label: 'Suppliers' }, { label: 'POs' },
-        ]},
-        { label: 'QA' }, { label: 'SOPs' },
-        { label: 'Restaurant' }, { label: 'Spa' }, { label: 'Retail' }, { label: 'Transport' },
-        { label: 'Staff' }, { label: 'Attendance' }, { label: 'Today' },
-      ],
-    },
-    {
-      label: 'Sales', href: '/sales',
-      children: [
-        { label: 'Pipeline' }, { label: 'Accounts' }, { label: 'Inquiries' },
-        { label: 'Leads' }, { label: 'Packages' }, { label: 'Proposals' }, { label: 'Mails' },
-      ],
-    },
-    {
-      label: 'Finance', href: '/finance',
-      children: [
-        { label: 'P&L' }, { label: 'Ledger' }, { label: 'Budget' },
-        { label: 'HR', children: [
-          { label: 'Schedule' }, { label: 'Attendance' }, { label: 'Onboarding' }, { label: 'Recruitment' },
-        ]},
-        { label: 'POS' }, { label: 'Transactions' }, { label: 'Reports' },
-      ],
-    },
-    {
-      label: 'Guest', href: '/guest',
-      children: [
-        { label: 'Newsletters', children: [{ label: 'Broadcasts' }, { label: 'Sequences' }, { label: 'Director' }]},
-        { label: 'Reputation' }, { label: 'Retreats' }, { label: 'Reviews' },
-        { label: 'Loyalty' }, { label: 'Directory' }, { label: 'Behaviour' },
-      ],
-    },
-    {
-      label: 'Settings', href: '/settings',
-      children: [
-        { label: 'Property', children: [
-          { label: 'Rooms' }, { label: 'Activities' }, { label: 'Facilities' },
-          { label: 'Transport' }, { label: 'Audience' },
-        ]},
-        { label: 'Users' }, { label: 'Media' }, { label: 'Brain' }, { label: 'Rate Plans' }, { label: 'Guardrails' },
-      ],
-    },
-    { label: 'University', href: '/university', children: [{ label: 'Articles' }, { label: 'Ask Window' }] },
-    { label: 'Mail', href: '/mail', children: [{ label: 'Inbox' }, { label: 'Analytics' }, { label: 'Rules' }] },
-  ],
+type SitemapArea = {
+  key: string;
+  label: string;
+  color: string;
+  pages: SitemapPage[];
 };
 
-// ── AFTER — proposed restructuring ────────────────────────────────────────────
-const TREE_AFTER: SitemapNode = {
-  label: 'namkhan-bi', href: '/',
-  children: [
-    {
-      label: 'Holding', href: '/holding',
-      children: [
-        { label: 'CEO' }, { label: 'Legal' },
-        { label: 'Finance', children: [{ label: 'Clients' }, { label: 'Invoices' }]},
-        { label: 'Strategy' }, { label: 'Properties' }, { label: 'Users' },
-        {
-          label: 'IT', href: '/holding/it',
-          children: [
-            {
-              label: 'Cockpit', href: '/holding/it/cockpit',
-              children: [
-                { label: 'Home' },
-                { label: 'Fleet', children: [{ label: 'Team' }, { label: 'Skills' }, { label: 'Memory' }]},
-                { label: 'Knowledge', children: [
-                  { label: 'All Docs' }, { label: 'Schemas' }, { label: 'Freshness' }, { label: 'Sitemap' },
-                  { label: 'Platform Map', status: 'added', note: 'Promoted from orphan' },
-                ]},
-                // Inventory group REMOVED
-                { label: 'Inventory (removed)', status: 'removed', note: 'Was broken → /cockpit/supabase' },
-                { label: 'Ops', children: [
-                  { label: 'Tasks' }, { label: 'Activity' }, { label: 'Chat' }, { label: 'Health' },
-                  { label: 'Alerts', status: 'added', note: 'Was orphan "notify" page' },
-                ]},
-                { label: 'Build', children: [
-                  { label: 'Deploys' }, { label: 'Checks' }, { label: 'Cost' },
-                  { label: 'Module Docs' }, { label: '+ New spec' },
-                ]},
-                { label: 'cockpit/users', status: 'removed', note: 'Redirects to /holding/users' },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    // Revenue, Marketing, Operations, Sales, Finance, Guest, Settings — unchanged
-    {
-      label: 'Revenue', href: '/revenue',
-      children: [
-        { label: 'Pulse' }, { label: 'Briefing' }, { label: 'Pickup' }, { label: 'Pace' },
-        { label: 'Demand' }, { label: 'Markets' }, { label: 'Compset' }, { label: 'Parity' },
-        { label: 'Channels', children: [{ label: '[source]' }, { label: 'Promotions' }]},
-        { label: 'Rate Plans' }, { label: 'Reports', children: [{ label: 'Render' }, { label: 'Scheduled' }]},
-        { label: 'Leakage' }, { label: 'Lighthouse' },
-      ],
-    },
-    {
-      label: 'Marketing', href: '/marketing',
-      children: [
-        { label: 'Overview' }, { label: 'Audience' },
-        { label: 'Campaigns', children: [{ label: 'New' }, { label: '[id]' }]},
-        { label: 'Media', children: [{ label: 'Pics' }, { label: 'Videos' }, { label: 'Clarify' }, { label: 'Coverage' }, { label: 'OTA Profiles' }]},
-        { label: 'YouTube', children: [{ label: 'Dashboard' }, { label: 'Playlists' }, { label: 'Planning' }, { label: 'Production' }]},
-        { label: 'GBP' }, { label: 'Subscribers' },
-        { label: 'Compiler', status: 'warn', note: 'Legacy design — modernize next' },
-      ],
-    },
-    {
-      label: 'Operations', href: '/operations',
-      children: [
-        { label: 'Inventory', children: [{ label: 'Items' }, { label: 'Stock' }, { label: 'Movements' }, { label: 'Low Stock' }, { label: 'Suppliers' }, { label: 'POs' }]},
-        { label: 'QA' }, { label: 'SOPs' }, { label: 'Restaurant' }, { label: 'Spa' },
-        { label: 'Retail' }, { label: 'Transport' }, { label: 'Staff' }, { label: 'Attendance' }, { label: 'Today' },
-      ],
-    },
-    { label: 'Sales', href: '/sales', children: [
-      { label: 'Pipeline' }, { label: 'Accounts' }, { label: 'Inquiries' },
-      { label: 'Leads' }, { label: 'Packages' }, { label: 'Proposals' }, { label: 'Mails' },
-    ]},
-    { label: 'Finance', href: '/finance', children: [
-      { label: 'P&L' }, { label: 'Ledger' }, { label: 'Budget' },
-      { label: 'HR', children: [{ label: 'Schedule' }, { label: 'Attendance' }, { label: 'Onboarding' }, { label: 'Recruitment' }]},
-      { label: 'POS' }, { label: 'Transactions' }, { label: 'Reports' },
-    ]},
-    { label: 'Guest', href: '/guest', children: [
-      { label: 'Newsletters', children: [{ label: 'Broadcasts' }, { label: 'Sequences' }, { label: 'Director' }]},
-      { label: 'Reputation' }, { label: 'Retreats' }, { label: 'Reviews' },
-      { label: 'Loyalty' }, { label: 'Directory' }, { label: 'Behaviour' },
-    ]},
-    { label: 'Settings', href: '/settings', children: [
-      { label: 'Property', children: [{ label: 'Rooms' }, { label: 'Activities' }, { label: 'Facilities' }, { label: 'Transport' }, { label: 'Audience' }]},
-      { label: 'Users' }, { label: 'Media' }, { label: 'Brain' }, { label: 'Rate Plans' }, { label: 'Guardrails' },
-    ]},
-    { label: 'University', children: [{ label: 'Articles' }, { label: 'Ask Window' }] },
-    { label: 'Mail', children: [{ label: 'Inbox' }, { label: 'Analytics' }, { label: 'Rules' }] },
-  ],
+// ── Area color palette ────────────────────────────────────────────────────────
+
+const AREA_COLOR: Record<string, string> = {
+  holding: '#1F3A2E',
+  revenue: '#1565C0',
+  marketing: '#E65100',
+  operations: '#2E7D32',
+  sales: '#6A1B9A',
+  finance: '#880E4F',
+  guest: '#004D40',
+  settings: '#5A5A5A',
+  university: '#283593',
+  mail: '#37474F',
+  cockpit: '#1F3A2E',
 };
 
-// ── Change summary ────────────────────────────────────────────────────────────
-const CHANGES = [
-  { type: 'remove', label: 'Remove Inventory group from cockpit nav', detail: 'Was pointing to /cockpit/supabase (404). Group removed entirely.' },
-  { type: 'add',    label: 'Add "Alerts" to Ops group', detail: 'Promotes orphan /cockpit/notify page. Renamed to "Alerts" — more descriptive.' },
-  { type: 'add',    label: 'Add "Platform Map" to Knowledge group', detail: 'Promotes orphan /cockpit/platform-map page into Knowledge nav.' },
-  { type: 'remove', label: 'Remove cockpit/users — redirect to /holding/users', detail: 'Duplicate of /holding/users. Add redirect page so old links still work.' },
+// ── HOLDING tree ──────────────────────────────────────────────────────────────
+
+const HOLDING_AREAS: SitemapArea[] = [
+  {
+    key: 'holding', label: 'Holding (BC)', color: AREA_COLOR.holding,
+    pages: [
+      { label: 'CEO dashboard', url: '/holding/ceo' },
+      { label: 'Legal', url: '/holding/legal', children: [
+        { label: 'Legal (Lao)', url: '/holding/legal-lao' },
+      ]},
+      { label: 'Finance', url: '/holding/finance', children: [
+        { label: 'Clients', url: '/holding/finance/clients' },
+        { label: 'Invoices', url: '/holding/finance/invoices' },
+      ]},
+      { label: 'Strategy', url: '/holding/strategy' },
+      { label: 'Properties', url: '/holding/properties', status: 'new' },
+      { label: 'Users & Access', url: '/holding/users', status: 'new' },
+      { label: 'Bugs', url: '/holding/bugs' },
+      { label: 'Settings', url: '/holding/settings' },
+    ],
+  },
+  {
+    key: 'cockpit', label: 'IT Cockpit', color: AREA_COLOR.cockpit,
+    pages: [
+      { label: 'Home — fleet at a glance', url: '/holding/it/cockpit' },
+      { label: 'Fleet', url: '/holding/it/cockpit/team', children: [
+        { label: 'Team', url: '/holding/it/cockpit/team' },
+        { label: 'Skills', url: '/holding/it/cockpit/skills' },
+        { label: 'Memory', url: '/holding/it/cockpit/knowledge' },
+      ]},
+      { label: 'Knowledge', url: '/holding/it/cockpit/docs', children: [
+        { label: 'All Docs', url: '/holding/it/cockpit/docs' },
+        { label: 'Schemas', url: '/holding/it/cockpit/schemas' },
+        { label: 'Freshness', url: '/holding/it/cockpit/freshness' },
+        { label: 'Sitemap', url: '/holding/it/cockpit/sitemap', status: 'new' },
+        { label: 'Platform Map', url: '/holding/it/cockpit/platform-map', status: 'new' },
+      ]},
+      { label: 'Inventory group', url: '/cockpit/supabase', status: 'warn', desc: 'Broken link — pending removal' },
+      { label: 'Ops', url: '/holding/it/cockpit/tasks', children: [
+        { label: 'Tasks', url: '/holding/it/cockpit/tasks' },
+        { label: 'Activity', url: '/holding/it/cockpit/activity' },
+        { label: 'Chat', url: '/holding/it/cockpit/chat' },
+        { label: 'Health', url: '/holding/it/cockpit/health' },
+        { label: 'Alerts', url: '/holding/it/cockpit/notify', status: 'new', desc: 'Promoted from orphan' },
+      ]},
+      { label: 'Build', url: '/holding/it/cockpit/deploys', children: [
+        { label: 'Deploys', url: '/holding/it/cockpit/deploys', desc: 'Live Vercel-style dashboard' },
+        { label: 'Checks', url: '/holding/it/cockpit/checks' },
+        { label: 'Cost', url: '/holding/it/cockpit/cost' },
+        { label: 'Module Docs', url: '/holding/it/cockpit/specs' },
+        { label: '+ New spec', url: '/holding/it/cockpit/specs/new' },
+      ]},
+    ],
+  },
 ];
 
-// ── Tree rendering ────────────────────────────────────────────────────────────
-function TreeNode({ node, depth }: { node: SitemapNode; depth: number }) {
-  const hasChildren = (node.children ?? []).length > 0;
-  const st = node.status ?? 'normal';
+// ── PROPERTY tree (shared structure, pid-parameterized) ───────────────────────
 
-  const bg = st === 'removed' ? '#FFEBEE'
-    : st === 'added'   ? '#E8F5E9'
-    : st === 'renamed' ? '#FFF8E1'
-    : st === 'warn'    ? '#FFF3E0'
-    : LEVEL_COLORS[Math.min(depth, LEVEL_COLORS.length - 1)];
+function propertyAreas(pid: number): SitemapArea[] {
+  const base = `/h/${pid}`;
+  return [
+    {
+      key: 'revenue', label: 'Revenue', color: AREA_COLOR.revenue,
+      pages: [
+        { label: 'HoD landing', url: base + '/revenue' },
+        { label: 'Pulse — live KPIs', url: base + '/revenue/pulse' },
+        { label: 'Briefing — guardrail conclusions', url: base + '/revenue/briefing' },
+        { label: 'Pickup matrix', url: base + '/revenue/pickup' },
+        { label: 'Pace tracking', url: base + '/revenue/pace' },
+        { label: 'Demand analytics', url: base + '/revenue/demand' },
+        { label: 'Markets — nationality / room heatmaps', url: base + '/revenue/markets' },
+        { label: 'Competitive set', url: base + '/revenue/compset', children: [
+          { label: '[hotel] deep landing', url: base + '/revenue/compset' },
+        ]},
+        { label: 'OTA parity', url: base + '/revenue/parity' },
+        { label: 'Channels', url: base + '/revenue/channels', children: [
+          { label: '[source] landing', url: base + '/revenue/channels/[source]' },
+          { label: 'Promotions', url: base + '/revenue/promotions' },
+          { label: 'Booking.com', url: base + '/revenue/channels/booking-com' },
+          { label: 'Expedia', url: base + '/revenue/channels/expedia' },
+        ]},
+        { label: 'Rate plans', url: base + '/revenue/rateplans' },
+        { label: 'Pricing', url: base + '/revenue/pricing', children: [
+          { label: 'Calendar view', url: base + '/revenue/pricing/calendar' },
+        ]},
+        { label: 'Room inventory', url: base + '/revenue/inventory' },
+        { label: 'Reports', url: base + '/revenue/reports', children: [
+          { label: 'Render', url: base + '/revenue/reports/render' },
+          { label: 'Scheduled', url: base + '/revenue/reports/scheduled' },
+        ]},
+        { label: 'Leakage analysis', url: base + '/revenue/leakage' },
+        { label: 'Lighthouse rate shop', url: base + '/revenue/lighthouse' },
+        { label: 'Forecasts', url: base + '/revenue/forecasts' },
+        { label: 'Cancellations', url: base + '/revenue/cancellations' },
+      ],
+    },
+    {
+      key: 'marketing', label: 'Marketing', color: AREA_COLOR.marketing,
+      pages: [
+        { label: 'HoD landing', url: base + '/marketing' },
+        { label: 'Overview — real KPIs', url: base + '/marketing/overview' },
+        { label: 'Audience groups', url: base + '/marketing/audience' },
+        { label: 'Campaigns', url: base + '/marketing/campaigns', children: [
+          { label: 'New campaign', url: base + '/marketing/campaigns/new' },
+          { label: '[id]', url: base + '/marketing/campaigns/[id]' },
+        ]},
+        { label: 'Media', url: base + '/marketing/media', children: [
+          { label: 'Pics (approved photos)', url: base + '/marketing/media' },
+          { label: 'Videos', url: base + '/marketing/media' },
+          { label: 'Clarify (triage)', url: base + '/marketing/media' },
+          { label: 'Coverage matrix', url: base + '/marketing/media' },
+          { label: 'OTA Profiles', url: base + '/marketing/media/profiles' },
+        ]},
+        { label: 'YouTube', url: base + '/marketing/youtube', children: [
+          { label: 'Dashboard', url: base + '/marketing/youtube' },
+          { label: 'Playlists', url: base + '/marketing/youtube/playlists' },
+          { label: 'Planning', url: base + '/marketing/youtube/planning' },
+          { label: 'Production', url: base + '/marketing/youtube/production' },
+        ]},
+        { label: 'Google Business Profile', url: base + '/marketing/social/google-business' },
+        { label: 'Subscribers', url: base + '/marketing/subscribers' },
+        { label: 'Compiler', url: base + '/marketing/compiler', status: 'warn', desc: 'Legacy design — pending modernize' },
+      ],
+    },
+    {
+      key: 'operations', label: 'Operations', color: AREA_COLOR.operations,
+      pages: [
+        { label: 'HoD landing', url: base + '/operations' },
+        { label: 'Inventory', url: base + '/operations/inventory', children: [
+          { label: 'Items', url: base + '/operations/inventory/items' },
+          { label: 'Stock levels', url: base + '/operations/inventory/stock' },
+          { label: 'Movements', url: base + '/operations/inventory/movements' },
+          { label: 'Low stock alerts', url: base + '/operations/inventory/low-stock' },
+          { label: 'Suppliers', url: base + '/operations/inventory/suppliers' },
+          { label: 'Purchase orders', url: base + '/operations/inventory/purchase-orders' },
+        ]},
+        { label: 'QA proposals', url: base + '/operations/qa', children: [
+          { label: 'Registry', url: base + '/operations/qa/registry' },
+        ]},
+        { label: 'SOPs', url: base + '/operations/sops', children: [
+          { label: '[sop] preview/edit', url: base + '/operations/sops/[id]' },
+          { label: 'Send as .doc', url: base + '/operations/sops/[id]/send' },
+        ]},
+        { label: 'Restaurant', url: base + '/operations/restaurant' },
+        { label: 'Spa', url: base + '/operations/spa' },
+        { label: 'Retail', url: base + '/operations/retail' },
+        { label: 'Transport', url: base + '/operations/transport' },
+        { label: 'Staff', url: base + '/operations/staff' },
+        { label: 'Attendance', url: base + '/operations/attendance' },
+        { label: 'Menus', url: base + '/operations/menus' },
+        { label: 'Maintenance', url: base + '/operations/maintenance' },
+        { label: 'Today tasks', url: base + '/operations/today' },
+      ],
+    },
+    {
+      key: 'sales', label: 'Sales', color: AREA_COLOR.sales,
+      pages: [
+        { label: 'HoD — Create New · Pipeline · Accounts', url: base + '/sales' },
+        { label: 'Pipeline', url: base + '/sales/pipeline' },
+        { label: 'Accounts', url: base + '/sales/accounts' },
+        { label: 'Inquiries', url: base + '/sales/inquiries' },
+        { label: 'Leads', url: base + '/sales/leads' },
+        { label: 'Packages', url: base + '/sales/packages' },
+        { label: 'Proposals', url: base + '/sales/proposals' },
+        { label: 'Shared mailbox (book@ gm@)', url: base + '/sales/mails' },
+      ],
+    },
+    {
+      key: 'finance', label: 'Finance', color: AREA_COLOR.finance,
+      pages: [
+        { label: 'HoD landing', url: base + '/finance' },
+        { label: 'P&L statement', url: base + '/finance/pnl' },
+        { label: 'General ledger', url: base + '/finance/ledger' },
+        { label: 'Budget', url: base + '/finance/budget' },
+        { label: 'HR & Payroll', url: base + '/finance/hr', children: [
+          { label: 'Schedule planner', url: base + '/finance/hr/schedule' },
+          { label: 'Attendance', url: base + '/finance/hr/attendance' },
+          { label: 'Onboarding', url: base + '/finance/hr/onboarding' },
+          { label: 'Recruitment', url: base + '/finance/hr/recruitment' },
+          { label: '[staff] payslip', url: base + '/finance/hr/[staffId]' },
+        ]},
+        { label: 'POS transactions', url: base + '/finance/pos' },
+        { label: 'All transactions', url: base + '/finance/transactions' },
+        { label: 'Reports', url: base + '/finance/reports' },
+        { label: 'Archive', url: base + '/finance/archive' },
+      ],
+    },
+    {
+      key: 'guest', label: 'Guest', color: AREA_COLOR.guest,
+      pages: [
+        { label: 'HoD landing', url: base + '/guest' },
+        { label: 'Newsletters — engine', url: base + '/guest/newsletters', children: [
+          { label: 'Broadcasts', url: base + '/guest/newsletters' },
+          { label: 'Sequences', url: base + '/guest/newsletters' },
+          { label: 'AI Director Studio', url: base + '/guest/newsletters' },
+        ]},
+        { label: 'Reputation (Google + TripAdvisor)', url: base + '/guest/reputation' },
+        { label: 'Retreats', url: base + '/guest/retreats', children: [
+          { label: '[program] landing', url: base + '/guest/retreats/[program]' },
+        ]},
+        { label: 'Reviews', url: base + '/guest/reviews' },
+        { label: 'Loyalty', url: base + '/guest/loyalty' },
+        { label: 'Guest directory', url: base + '/guest/directory' },
+        { label: 'Behaviour analytics', url: base + '/guest/behaviour' },
+      ],
+    },
+    {
+      key: 'settings', label: 'Settings', color: AREA_COLOR.settings,
+      pages: [
+        { label: 'Property config (12 tabs)', url: base + '/settings/property', children: [
+          { label: 'Rooms', url: base + '/settings/property' },
+          { label: 'Activities', url: base + '/settings/property' },
+          { label: 'Facilities', url: base + '/settings/property' },
+          { label: 'Transport', url: base + '/settings/property' },
+          { label: 'Imekong boats', url: base + '/settings/property' },
+          { label: 'Meeting spaces', url: base + '/settings/property' },
+          { label: 'Identity', url: base + '/settings/property' },
+          { label: 'Team', url: base + '/settings/property' },
+          { label: 'Audience', url: base + '/settings/property' },
+        ]},
+        { label: 'Brain (AI settings)', url: base + '/settings/brain' },
+        { label: 'Media (guardrails, channels, naming)', url: base + '/settings/media' },
+        { label: 'Rate plans', url: base + '/settings/rate-plans' },
+        { label: 'Guardrails', url: base + '/settings/guardrails' },
+      ],
+    },
+  ];
+}
 
-  const fg = (st === 'removed' || st === 'added' || st === 'renamed' || st === 'warn')
-    ? '#1B1B1B'
-    : LEVEL_TEXT[Math.min(depth, LEVEL_TEXT.length - 1)];
+// ── Properties ────────────────────────────────────────────────────────────────
 
-  const border = st === 'removed' ? '2px solid #D32F2F'
-    : st === 'added'   ? '2px solid #2E7D32'
-    : st === 'warn'    ? '2px dashed #F57F17'
-    : 'none';
+const PROPERTIES = [
+  { key: 'holding', label: 'Holding (BC)', areas: HOLDING_AREAS },
+  { key: 'namkhan', label: 'The Namkhan', areas: propertyAreas(260955) },
+  { key: 'donna',   label: 'Donna Mallorca', areas: propertyAreas(1000001) },
+];
 
-  const labelText = st === 'removed' ? `✕ ${node.label}`
-    : st === 'added'   ? `+ ${node.label}`
-    : st === 'warn'    ? `⚠ ${node.label}`
-    : node.label;
+// ── Restructuring changes (Before/After for Cockpit) ─────────────────────────
 
-  const box = (
-    <div title={node.note} style={{
-      background: bg, color: fg,
-      padding: depth === 0 ? '6px 16px' : '4px 10px',
-      borderRadius: 20,
-      fontSize: depth === 0 ? 13 : depth <= 2 ? 11 : 10,
-      fontWeight: depth <= 1 ? 700 : 600,
-      whiteSpace: 'nowrap',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-      textDecoration: st === 'removed' ? 'line-through' : 'none',
-      border,
-      cursor: node.href ? 'pointer' : 'default',
-      textAlign: 'center' as const,
-    }}>
-      {labelText}
-    </div>
-  );
+const CHANGES = [
+  { type: 'remove', label: 'Remove Inventory group', detail: 'Was linking to /cockpit/supabase (404).' },
+  { type: 'add',    label: 'Add "Alerts" to Ops', detail: 'Promotes orphan /cockpit/notify page.' },
+  { type: 'add',    label: 'Add "Platform Map" to Knowledge', detail: 'Promotes orphan page.' },
+  { type: 'remove', label: 'cockpit/users → redirect to /holding/users', detail: 'Duplicate page.' },
+];
+
+// ── Page row component ────────────────────────────────────────────────────────
+
+function PageRow({ page, depth }: { page: SitemapPage; depth: number }) {
+  const [open, setOpen] = useState(depth < 2);
+  const hasChildren = (page.children ?? []).length > 0;
+  const isDynamic = page.url.includes('[');
+
+  const statusColor = page.status === 'warn' ? '#B8542A' : page.status === 'new' ? '#2E7D32' : undefined;
+  const statusBg = page.status === 'warn' ? '#FFF3E0' : page.status === 'new' ? '#E8F5E9' : undefined;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {node.href && st !== 'removed' ? (
-        <Link href={node.href} style={{ textDecoration: 'none' }}>{box}</Link>
-      ) : box}
+    <div style={{ marginLeft: depth * 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', minHeight: 26 }}>
+        {/* Expand toggle */}
+        {hasChildren ? (
+          <button onClick={() => setOpen(v => !v)} style={{ width: 14, height: 14, border: 'none', background: 'none', cursor: 'pointer', color: '#8A8A8A', fontSize: 10, padding: 0, flexShrink: 0 }}>
+            {open ? '▾' : '▸'}
+          </button>
+        ) : (
+          <span style={{ width: 14, flexShrink: 0, fontSize: 10, color: '#C8C0B0' }}>└</span>
+        )}
 
-      {hasChildren && (
-        <>
-          <div style={{ width: 1, height: 12, background: '#C8C0B0', margin: '0 auto' }} />
-          <ul style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start',
-            listStyle: 'none', margin: 0, padding: 0, position: 'relative', paddingTop: 12 }}>
-            {(node.children ?? []).map((child, idx, arr) => {
-              const isFirst = idx === 0;
-              const isLast = idx === arr.length - 1;
-              const isOnly = arr.length === 1;
-              return (
-                <li key={child.label + idx} style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  padding: '0 6px', position: 'relative',
-                }}>
-                  {/* Vertical stem up */}
-                  <div style={{
-                    position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-                    width: 1, height: 12, background: '#C8C0B0',
-                  }} />
-                  {/* Horizontal connector */}
-                  {!isOnly && (
-                    <div style={{
-                      position: 'absolute', top: 0, height: 1, background: '#C8C0B0',
-                      left: isFirst ? '50%' : 0,
-                      right: isLast ? '50%' : 0,
-                    }} />
-                  )}
-                  <TreeNode node={child} depth={depth + 1} />
-                </li>
-              );
-            })}
-          </ul>
-        </>
+        {/* Link or text */}
+        {isDynamic ? (
+          <span style={{ fontSize: 12, color: '#1565C0', fontStyle: 'italic' }}>{page.label}</span>
+        ) : (
+          <Link href={page.url} style={{ fontSize: 12, color: statusColor ?? '#1B1B1B', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')}
+            onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>
+            {page.label}
+          </Link>
+        )}
+
+        {/* Status badge */}
+        {page.status && (
+          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 99, background: statusBg, color: statusColor, letterSpacing: '0.05em', textTransform: 'uppercase' as const, flexShrink: 0 }}>
+            {page.status === 'warn' ? '⚠' : page.status === 'new' ? 'new' : ''}
+          </span>
+        )}
+
+        {/* Description */}
+        {page.desc && <span style={{ fontSize: 10, color: '#8A8A8A' }}>{page.desc}</span>}
+
+        {/* URL chip */}
+        <code style={{ fontSize: 9, color: '#8A8A8A', background: '#F9F7F2', padding: '1px 4px', borderRadius: 3, fontFamily: 'monospace', marginLeft: 'auto', flexShrink: 0, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {page.url}
+        </code>
+      </div>
+
+      {/* Children */}
+      {open && hasChildren && (
+        <div style={{ borderLeft: '1px solid #F0EBE0', marginLeft: 7 }}>
+          {(page.children ?? []).map((child, i) => (
+            <PageRow key={i} page={child} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Area accordion ────────────────────────────────────────────────────────────
+
+function AreaSection({ area, defaultOpen = true }: { area: SitemapArea; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const totalPages = area.pages.reduce((n, p) => n + 1 + (p.children?.length ?? 0), 0);
+
+  return (
+    <div style={{ border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }}>
+      <button onClick={() => setOpen(v => !v)} style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px',
+        background: '#FAFAF7', border: 'none', cursor: 'pointer', textAlign: 'left',
+      }}>
+        <span style={{ fontSize: 14, color: area.color }}>{open ? '▾' : '▸'}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: area.color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          {area.label}
+        </span>
+        <span style={{ fontSize: 10, color: '#8A8A8A', marginLeft: 4 }}>{totalPages} pages</span>
+      </button>
+      {open && (
+        <div style={{ padding: '6px 14px 10px' }}>
+          {area.pages.map((page, i) => (
+            <PageRow key={i} page={page} depth={0} />
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function SitemapPage() {
-  const [view, setView] = useState<'before' | 'after'>('before');
+  const [property, setProperty] = useState('holding');
+  const [restructureView, setRestructureView] = useState<'current' | 'proposed'>('current');
+  const [search, setSearch] = useState('');
   const [executing, startExecute] = useTransition();
   const [done, setDone] = useState(false);
   const [execErr, setExecErr] = useState<string | null>(null);
 
-  const tree = view === 'before' ? TREE_BEFORE : TREE_AFTER;
+  const selectedProp = PROPERTIES.find(p => p.key === property) ?? PROPERTIES[0];
+
+  // Count total pages
+  const totalPages = useMemo(() => {
+    let n = 0;
+    for (const area of selectedProp.areas) {
+      for (const page of area.pages) { n++; n += (page.children?.length ?? 0); }
+    }
+    return n;
+  }, [selectedProp]);
 
   async function handleExecute() {
     startExecute(async () => {
@@ -354,112 +413,130 @@ export default function SitemapPage() {
   }
 
   return (
-    <div style={{ padding: '24px 24px 64px', background: '#FFFFFF', minHeight: '100vh' }}>
+    <div style={{ padding: '20px 24px 64px', background: '#FFFFFF', minHeight: '100vh' }}>
+
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1B1B1B', margin: '0 0 2px' }}>App Sitemap</h1>
+          <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1B1B1B', margin: '0 0 2px' }}>Application Sitemap</h1>
           <p style={{ fontSize: 11, color: '#5A5A5A', margin: 0 }}>
-            Toggle Before / After to see the proposed restructuring · click any node to navigate
+            {totalPages}+ pages · {selectedProp.areas.length} areas · click any row to navigate
           </p>
         </div>
 
-        {/* Toggle */}
-        <div style={{ display: 'flex', gap: 0, border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden', marginLeft: 'auto' }}>
-          {(['before', 'after'] as const).map(v => (
-            <button key={v} onClick={() => setView(v)} style={{
-              padding: '7px 20px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
-              background: view === v ? '#1F3A2E' : '#FFFFFF',
-              color: view === v ? '#FFFFFF' : '#5A5A5A',
-              letterSpacing: '0.05em', textTransform: 'uppercase' as const,
+        {/* Property switcher */}
+        <div style={{ display: 'flex', border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden', marginLeft: 'auto' }}>
+          {PROPERTIES.map(p => (
+            <button key={p.key} onClick={() => setProperty(p.key)} style={{
+              fontSize: 11, fontWeight: 700, padding: '7px 16px', border: 'none', cursor: 'pointer',
+              background: property === p.key ? '#1F3A2E' : '#FFFFFF',
+              color: property === p.key ? '#FFFFFF' : '#5A5A5A',
+              letterSpacing: '0.04em',
+              borderRight: p.key !== 'donna' ? '1px solid #E6DFCC' : 'none',
             }}>
-              {v === 'before' ? 'Current' : 'Proposed'}
+              {p.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: 14, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        {[
-          { color: LEVEL_COLORS[0], label: 'Root' },
-          { color: LEVEL_COLORS[1], label: 'Area' },
-          { color: LEVEL_COLORS[2], label: 'Section' },
-          { color: LEVEL_COLORS[3], label: 'Page' },
-        ].map(({ color, label }) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 12, height: 12, borderRadius: 6, background: color }} />
-            <span style={{ fontSize: 10, color: '#5A5A5A' }}>{label}</span>
-          </div>
-        ))}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 6, background: '#E8F5E9', border: '2px solid #2E7D32' }} />
-          <span style={{ fontSize: 10, color: '#2E7D32', fontWeight: 700 }}>+ Added</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 6, background: '#FFEBEE', border: '2px solid #D32F2F' }} />
-          <span style={{ fontSize: 10, color: '#D32F2F', fontWeight: 700 }}>✕ Removed</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 6, background: '#FFF3E0', border: '2px dashed #F57F17' }} />
-          <span style={{ fontSize: 10, color: '#F57F17', fontWeight: 700 }}>⚠ Issue</span>
-        </div>
-      </div>
+      {/* Search */}
+      <input
+        type="text" value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="Filter pages…"
+        style={{ fontSize: 12, padding: '7px 12px', border: '1px solid #E6DFCC', borderRadius: 4, background: '#FFFFFF', color: '#1B1B1B', outline: 'none', width: 260, marginBottom: 16 }}
+      />
 
-      {/* Proposed changes panel */}
-      {view === 'after' && (
-        <div style={{ marginBottom: 20, background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 6, padding: '14px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#1B1B1B', marginBottom: 10 }}>
-            Proposed changes ({CHANGES.length})
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {CHANGES.map((c, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, flexShrink: 0,
-                  background: c.type === 'remove' ? '#FFEBEE' : '#E8F5E9',
-                  color: c.type === 'remove' ? '#D32F2F' : '#2E7D32',
-                }}>
-                  {c.type === 'remove' ? '✕ remove' : '+ add'}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#1B1B1B' }}>{c.label}</span>
-                <span style={{ fontSize: 11, color: '#8A8A8A' }}>{c.detail}</span>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 14, display: 'flex', gap: 10, alignItems: 'center' }}>
-            {done ? (
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#2E7D32' }}>
-                ✓ Executed — changes pushed to GitHub, Vercel deploying
-              </div>
-            ) : (
-              <button onClick={handleExecute} disabled={executing} style={{
-                fontSize: 12, fontWeight: 700, padding: '8px 20px', borderRadius: 4,
-                background: executing ? '#5A5A5A' : '#1F3A2E', color: '#FFFFFF',
-                border: 'none', cursor: executing ? 'not-allowed' : 'pointer',
-                letterSpacing: '0.05em',
-              }}>
-                {executing ? 'Executing…' : 'Execute restructuring →'}
-              </button>
-            )}
-            {execErr && (
-              <span style={{ fontSize: 11, color: '#D32F2F' }}>{execErr}</span>
-            )}
-            {!done && (
-              <span style={{ fontSize: 11, color: '#5A5A5A' }}>
-                Pushes updated groups.ts + redirect page to GitHub → Vercel auto-deploys
-              </span>
-            )}
-          </div>
+      {/* Info note for Namkhan/Donna */}
+      {property !== 'holding' && (
+        <div style={{ padding: '8px 12px', background: '#F4EFE2', borderRadius: 4, marginBottom: 16, fontSize: 11, color: '#5A5A5A' }}>
+          Structure is identical across properties — only the property_id changes.
+          Use <strong>Holding Settings → Property Menu Matrix</strong> to hide specific areas per hotel.
+          {property === 'donna' && <span style={{ marginLeft: 6, color: '#1565C0', fontWeight: 600 }}>· Donna uses Factorial (HR Schedule = read-only)</span>}
         </div>
       )}
 
-      {/* Tree */}
-      <div style={{ overflowX: 'auto', paddingBottom: 32 }}>
-        <div style={{ display: 'inline-block', minWidth: '100%' }}>
-          <TreeNode node={tree} depth={0} />
+      {/* IT Cockpit restructuring panel — only on Holding */}
+      {property === 'holding' && (
+        <div style={{ marginBottom: 16, border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: '#FAFAF7', borderBottom: '1px solid #E6DFCC' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#5A5A5A', padding: '8px 14px', letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+              IT Cockpit nav restructuring
+            </div>
+            {[{ key: 'current', label: 'Current' }, { key: 'proposed', label: 'Proposed' }].map(v => (
+              <button key={v.key} onClick={() => setRestructureView(v.key as 'current' | 'proposed')} style={{
+                fontSize: 11, fontWeight: 700, padding: '8px 16px', border: 'none', borderLeft: '1px solid #E6DFCC',
+                cursor: 'pointer',
+                background: restructureView === v.key ? '#1F3A2E' : '#FFFFFF',
+                color: restructureView === v.key ? '#FFFFFF' : '#5A5A5A',
+              }}>{v.label}</button>
+            ))}
+          </div>
+
+          {restructureView === 'proposed' && (
+            <div style={{ padding: '10px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#1B1B1B', marginBottom: 8 }}>4 changes</div>
+              {CHANGES.map((c, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 5 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, flexShrink: 0,
+                    background: c.type === 'remove' ? '#FFEBEE' : '#E8F5E9',
+                    color: c.type === 'remove' ? '#D32F2F' : '#2E7D32' }}>
+                    {c.type === 'remove' ? '✕ remove' : '+ add'}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#1B1B1B' }}>{c.label}</span>
+                  <span style={{ fontSize: 10, color: '#8A8A8A' }}>{c.detail}</span>
+                </div>
+              ))}
+              <div style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
+                {done ? (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#2E7D32' }}>✓ Executed — Vercel deploying</span>
+                ) : (
+                  <button onClick={handleExecute} disabled={executing} style={{ fontSize: 11, fontWeight: 700, padding: '6px 16px', borderRadius: 4, background: '#1F3A2E', color: '#FFFFFF', border: 'none', cursor: 'pointer', opacity: executing ? 0.6 : 1 }}>
+                    {executing ? 'Executing…' : 'Execute restructuring →'}
+                  </button>
+                )}
+                {execErr && <span style={{ fontSize: 11, color: '#D32F2F' }}>{execErr}</span>}
+              </div>
+            </div>
+          )}
+          {restructureView === 'current' && (
+            <div style={{ padding: '8px 14px 4px', fontSize: 11, color: '#5A5A5A' }}>
+              ⚠ Inventory group has broken link · notify, platform-map, cockpit/users are orphan pages · switch to Proposed to review changes.
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Property menu matrix teaser */}
+      {property !== 'holding' && (
+        <div style={{ padding: '8px 12px', background: '#EEF4FF', border: '1px solid #C5D8F8', borderRadius: 4, marginBottom: 16, fontSize: 11, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: '#1565C0', fontWeight: 700 }}>📋 Property Menu Matrix</span>
+          <span style={{ color: '#5A5A5A' }}>Coming in Holding Settings — toggle any area on/off per property. Auto-applies to new hotels when onboarded.</span>
+          <Link href="/holding/settings" style={{ fontSize: 11, fontWeight: 700, color: '#1565C0', textDecoration: 'none', marginLeft: 'auto', flexShrink: 0 }}>Settings →</Link>
+        </div>
+      )}
+
+      {/* Area accordions — filter applied */}
+      {selectedProp.areas.map((area, i) => {
+        if (search) {
+          const lower = search.toLowerCase();
+          const matchingPages = area.pages.filter(p =>
+            p.label.toLowerCase().includes(lower) || p.url.toLowerCase().includes(lower) ||
+            p.children?.some(c => c.label.toLowerCase().includes(lower) || c.url.toLowerCase().includes(lower))
+          );
+          if (matchingPages.length === 0) return null;
+          return <AreaSection key={area.key} area={{ ...area, pages: matchingPages }} defaultOpen={true} />;
+        }
+        return <AreaSection key={area.key} area={area} defaultOpen={i < 2} />;
+      })}
+
+      {/* Legend */}
+      <div style={{ marginTop: 20, display: 'flex', gap: 16, fontSize: 10, color: '#8A8A8A', flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 700, color: '#1B1B1B' }}>Legend:</span>
+        <span><span style={{ fontStyle: 'italic', color: '#1565C0' }}>[brackets]</span> = dynamic route</span>
+        <span style={{ color: '#B8542A', fontWeight: 700 }}>⚠</span><span>needs attention</span>
+        <span style={{ color: '#2E7D32', fontWeight: 700 }}>new</span><span>recently added</span>
+        <span>▸ = collapsed · ▾ = expanded · click to toggle</span>
       </div>
     </div>
   );
