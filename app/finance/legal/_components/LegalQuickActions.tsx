@@ -13,7 +13,7 @@
 //   3. Translate + Summarize tiles keep single-file semantics (they need a
 //      concrete file to hand to the AI step). Now bulletproof click handlers.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type ActionMode = 'upload' | 'translate' | 'summarize';
 type RowStatus = 'queued' | 'signing' | 'uploading' | 'ingesting' | 'done' | 'error';
@@ -109,9 +109,13 @@ async function uploadOne(file: File, extra: { title?: string; doc_type?: string;
 //  Multi-upload modal
 // -------------------------------------------------------------------------
 
-function MultiUploadModal({ onClose, onDone }: { onClose: () => void; onDone: (results: { ok: number; failed: number }) => void }) {
+function MultiUploadModal({ onClose, onDone, initialFiles }: { onClose: () => void; onDone: (results: { ok: number; failed: number }) => void; initialFiles?: File[] }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<UploadRow[]>([]);
+  // Pre-populate from drag-and-drop on the tile
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) addFiles(initialFiles);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -399,6 +403,8 @@ export default function LegalQuickActions({ propertyId }: { propertyId: number }
   const [result, setResult] = useState<{ mode: ActionMode; ok: boolean; text?: string; doc_id?: string; error?: string } | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [batchToast, setBatchToast] = useState<{ ok: number; failed: number } | null>(null);
+  const [tileDragOver, setTileDragOver] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
 
   async function handleSingle(mode: 'translate' | 'summarize', file: File) {
     setBusy(mode);
@@ -429,11 +435,14 @@ export default function LegalQuickActions({ propertyId }: { propertyId: number }
           tabIndex={0}
           onClick={() => setUploadOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setUploadOpen(true); } }}
+          onDragOver={(e) => { e.preventDefault(); setTileDragOver(true); }}
+          onDragLeave={() => setTileDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setTileDragOver(false); const files = Array.from(e.dataTransfer.files); if (files.length) { setDroppedFiles(files); setUploadOpen(true); } }}
           style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
             gap: 4, padding: 12, minHeight: 84,
-            border: '2px dashed #B8B8B8', borderRadius: 6, cursor: 'pointer',
-            background: '#FFFFFF', color: '#1B1B1B', userSelect: 'none',
+            border: `2px dashed ${tileDragOver ? '#084838' : '#B8B8B8'}`, borderRadius: 6, cursor: 'pointer',
+            background: tileDragOver ? '#F0FAF6' : '#FFFFFF', color: '#1B1B1B', userSelect: 'none',
           }}>
           <div style={{ fontSize: 22, lineHeight: 1 }}>📤</div>
           <div style={{ fontWeight: 600, fontSize: 12 }}>Upload doc</div>
@@ -512,8 +521,9 @@ export default function LegalQuickActions({ propertyId }: { propertyId: number }
 
       {uploadOpen && (
         <MultiUploadModal
-          onClose={() => setUploadOpen(false)}
-          onDone={(res) => setBatchToast(res)}
+          onClose={() => { setUploadOpen(false); setDroppedFiles([]); }}
+          onDone={(res) => { setBatchToast(res); }}
+          initialFiles={droppedFiles}
         />
       )}
     </div>
