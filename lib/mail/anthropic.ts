@@ -60,18 +60,27 @@ export function polishSystemFor(mode: PolishMode): string {
   }
 }
 
+export interface MeterOpts {
+  property_id: number | null;
+  agent_handle: string;
+  source?: string;
+  run_ref?: string;
+}
+
 export interface CallOpts {
   system: string;
   prompt: string;
   maxTokens?: number;
+  meter?: MeterOpts;
 }
 
 interface AnthropicResp {
   content?: Array<{ type: string; text?: string }>;
+  usage?: { input_tokens?: number; output_tokens?: number };
   error?: { message?: string; type?: string };
 }
 
-export async function callAnthropic({ system, prompt, maxTokens = 800 }: CallOpts): Promise<string> {
+export async function callAnthropic({ system, prompt, maxTokens = 800, meter }: CallOpts): Promise<string> {
   const key = await getAnthropicKey();
 
   const r = await fetch(API_URL, {
@@ -95,6 +104,21 @@ export async function callAnthropic({ system, prompt, maxTokens = 800 }: CallOpt
   }
   const text = (j.content || []).map((b) => b.text || '').join('').trim();
   if (!text) throw new Error('anthropic_empty_response');
+  if (meter) {
+    const tokIn = j.usage?.input_tokens ?? 0;
+    const tokOut = j.usage?.output_tokens ?? 0;
+    if (tokIn || tokOut) {
+      getSupabaseAdmin().rpc('fn_record_token_use', {
+        p_property_id: meter.property_id,
+        p_agent_handle: meter.agent_handle,
+        p_model: MODEL,
+        p_tokens_in: tokIn,
+        p_tokens_out: tokOut,
+        p_source: meter.source ?? 'callAnthropic',
+        p_run_ref: meter.run_ref ?? null,
+      }).catch(() => {});
+    }
+  }
   return text;
 }
 
