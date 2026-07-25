@@ -5,6 +5,7 @@
 // data, locked token swatches, format law in action, per-property currency
 // behaviour, forbidden patterns. Contract version banner proves the doc is
 // read live from documentation.documents. PBS 2026-07-25.
+// v2 2026-07-25 pm: KpiTile section = HOUSE STANDARD sm + LY pill (PBS, screenshot /h/260955/revenue).
 
 import { Container, KpiTile, MetricRow } from '@/app/(cockpit)/_design';
 
@@ -108,23 +109,24 @@ export function DesignTemplateClient({ meta }: { meta: { version: number; title:
         </table>
       </Container>
 
-      <Container title="3 · KpiTile — the ONE way a number appears (delta inside the tile, never as side-cards)" density="compact">
+      <Container title="3 · KpiTile — the ONE way a number appears (HOUSE STANDARD: size sm + LY pill, PBS 2026-07-25)" density="compact">
         <MetricRow tiles={[
-          { label: 'Rooms revenue · MTD', value: '$48,210', size: 'md', status: 'green',
-            delta: { value: 12.3, period: 'vs prev month', direction: 'up', isGoodWhenUp: true },
-            compare: [
-              { label: 'vs STLY', value: 5.2, format: 'percent', direction: 'up' },
-              { label: 'vs Budget', value: -3.1, format: 'percent', direction: 'down' },
-            ],
-            footnote: 'Namkhan · USD · sample data' },
-          { label: 'Cancellation rate', value: '8.4%', size: 'md', status: 'amber',
+          { label: 'OCC · tonight', value: '40.00%', size: 'sm', stly: 'LY 0.00%',
+            footnote: '12 of 30 rooms' },
+          { label: 'ADR · today', value: '$151', size: 'sm', stly: 'LY —',
+            footnote: 'in-house · net' },
+          { label: 'REVPAR · today', value: '$60', size: 'sm', stly: 'LY $0',
+            footnote: 'vs capacity · net' },
+          { label: 'Cancellation rate', value: '8.4%', size: 'sm', stly: 'LY 11.1%',
             delta: { value: -2.2, period: 'vs prev month', direction: 'down', isGoodWhenUp: false },
-            footnote: 'DOWN is good → green arrow (polarity law §11.1)' },
-          { label: 'Donna occupancy · MTD', value: '74.0%', size: 'md',
-            delta: { value: 5.0, period: 'vs prev month', direction: 'up' },
-            compare: [ { label: 'vs Budget', value: 0, format: 'percent', status: 'pending' } ],
-            footnote: 'pending comparison renders as — (structure stays visible)' },
+            footnote: 'DOWN is good → green (polarity §11.1)' },
         ]} />
+        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 8 }}>
+          House standard (locked 2026-07-25, reference = /h/260955/revenue headline rows): tiles are size <b>sm</b> by default,
+          and every tile whose metric has a last-year value carries the <b>stly</b> pill (bottom-right "LY …" box, pre-formatted).
+          md/lg sizes only where a page has ≤3 hero numbers. STLY/Budget as compare[] lines stay for analytical tiles;
+          the LY pill is the compact default everywhere else.
+        </div>
       </Container>
 
       <Container title="4 · Format law (§11) in action — per property" density="compact">
