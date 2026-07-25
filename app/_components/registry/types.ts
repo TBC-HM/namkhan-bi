@@ -11,6 +11,15 @@ export interface ColumnSpec {
   label: string;
   format: FormatToken;
   align?: 'left' | 'right' | 'center';
+  // PBS 2026-05-26 (#249): column drives the year pill strip (yr_<cc>=YYYY)
+  year_filter?: boolean;
+  // ADR-170 (2026-07-25): table sort + filter contract
+  sortable?: boolean;        // default true; false opts the column OUT of click-sort
+  source_filter?: boolean;   // column drives a Source dropdown (src_<cc>=<value>)
+  month_filter?: boolean;    // column drives a Month dropdown (mo_<cc>=YYYY-MM)
+  // design_system §11.4 hooks (read by formatters/renderers)
+  good_direction?: 'up' | 'down';
+  is_comparison?: boolean;
 }
 
 export interface ContainerRegistryRow {
