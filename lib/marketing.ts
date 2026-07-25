@@ -641,3 +641,81 @@ export const STATUS_COLOR: Record<CampaignStatus, { bg: string; tx: string; labe
   archived:         { bg: 'var(--ink-mute)', tx: '#fff', label: 'archived' },
   cancelled:        { bg: 'var(--oxblood)',  tx: '#fff', label: 'cancelled' },
 };
+
+// ─── Social module (spec-social-media-module · 2026-07-25) ─────────────────
+// Reads go through public bridge views (PostgREST exposes only public):
+//   mkt_social_accounts · v_social_channel_rules · v_social_programs
+
+export interface SocialAccountRow extends SocialAccount {
+  property_id: number;
+  notes?: string | null;
+}
+
+export interface SocialChannelRule {
+  id: number;
+  property_id: number;
+  platform: string;
+  caption_max_chars: number | null;
+  hashtag_max: number | null;
+  hashtags_allowed: boolean;
+  formats: string[];
+  posting_frequency: string | null;
+  audience_notes: string | null;
+  banned_topics: string[];
+  autonomy_phase: 'A' | 'B' | 'C';
+  active: boolean;
+  updated_at: string;
+}
+
+export interface SocialProgram {
+  id: number;
+  property_id: number;
+  platform: string;
+  category_code: string;
+  label: string;
+  weekday_slots: number[];
+  posts_per_week: number;
+  active: boolean;
+  notes: string | null;
+}
+
+/** All account rows (incl. inactive) for one property — powers the channel manager. */
+export async function getSocialAccountsForProperty(propertyId: number): Promise<SocialAccountRow[]> {
+  const { data, error } = await supabase
+    .from('mkt_social_accounts')
+    .select('*')
+    .eq('property_id', propertyId)
+    .order('platform', { ascending: true });
+  if (error) {
+    console.error('getSocialAccountsForProperty error', error);
+    return [];
+  }
+  return (data ?? []) as SocialAccountRow[];
+}
+
+export async function getSocialChannelRules(propertyId: number): Promise<SocialChannelRule[]> {
+  const { data, error } = await supabase
+    .from('v_social_channel_rules')
+    .select('*')
+    .eq('property_id', propertyId)
+    .order('platform', { ascending: true });
+  if (error) {
+    console.error('getSocialChannelRules error', error);
+    return [];
+  }
+  return (data ?? []) as SocialChannelRule[];
+}
+
+export async function getSocialPrograms(propertyId: number): Promise<SocialProgram[]> {
+  const { data, error } = await supabase
+    .from('v_social_programs')
+    .select('*')
+    .eq('property_id', propertyId)
+    .eq('active', true)
+    .order('platform', { ascending: true });
+  if (error) {
+    console.error('getSocialPrograms error', error);
+    return [];
+  }
+  return (data ?? []) as SocialProgram[];
+}
