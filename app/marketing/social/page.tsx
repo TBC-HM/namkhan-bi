@@ -15,9 +15,22 @@
 // Five inner sections switched via ?view=:
 //   calendar · flow · channels · boost · inbox
 
+// PBS 2026-07-25 (spec-social-media-module · A1): Channels view is now fully
+// DB-backed — marketing.social_accounts (add/edit/delete via ChannelsManager)
+// + marketing.social_channel_rules (guardrails) + marketing.social_programs
+// (weekly content categories). Calendar / flow / boost / inbox remain Phase-1
+// hardcoded until the social_calendar loop ships (next build run).
+
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
-import { getSocialAccounts } from '@/lib/marketing';
+import {
+  getSocialAccountsForProperty, getSocialChannelRules, getSocialPrograms,
+} from '@/lib/marketing';
+import ChannelsManager from './_components/ChannelsManager';
 import { MARKETING_SUBPAGES } from '../_subpages';
+
+// Namkhan-only iteration (brief §7). /marketing/* legacy routes are
+// Namkhan-scoped by contract (claude_md §0.7).
+const NAMKHAN_PID = 260955;
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -152,30 +165,6 @@ function buildProposedPosts(): ProposedPost[] {
 
 const ALL_POSTS = buildProposedPosts();
 
-// ─── Channel meta ─────────────────────────────────────────────────────────
-
-interface ChannelMeta {
-  platform: Platform;
-  followers: number;
-  growth30d: string;
-  engagementRate: string;
-  postsMtd: number;
-  bestPost: { hook: string; reach: number; engagement: string };
-  autonomyPhase: 'A' | 'B' | 'C';
-  frequencyCap: string;
-  bannedTopics: string[];
-}
-
-const CHANNEL_META: Record<Platform, ChannelMeta> = {
-  google_business: { platform: 'google_business', followers: 0, growth30d: '—', engagementRate: '—', postsMtd: 0, bestPost: { hook: '—', reach: 0, engagement: '—' }, autonomyPhase: 'A', frequencyCap: 'max 2 posts/wk · reviews replied within 24h', bannedTopics: ['none'] },
-  instagram: { platform: 'instagram', followers: 28_400, growth30d: '+4.8%', engagementRate: '7.2%', postsMtd: 14, bestPost: { hook: 'Why monks sweep at 4am', reach: 38_200, engagement: '8.4%' }, autonomyPhase: 'A', frequencyCap: 'max 1/day · min 18h gap', bannedTopics: ['political', 'religious commentary'] },
-  pinterest: { platform: 'pinterest', followers:  6_900, growth30d: '+18.4%', engagementRate: '6.1%', postsMtd: 22, bestPost: { hook: 'A ritual older than Europe', reach: 22_400, engagement: '6.1%' }, autonomyPhase: 'B', frequencyCap: 'max 3/day',          bannedTopics: ['none'] },
-  tiktok:    { platform: 'tiktok',    followers: 11_200, growth30d: '+12.1%', engagementRate: '11.2%', postsMtd: 8, bestPost: { hook: 'Found the only river restaurant', reach: 91_300, engagement: '11.2%' }, autonomyPhase: 'A', frequencyCap: 'max 1/day',          bannedTopics: ['trend lip-sync · off-brand'] },
-  facebook:  { platform: 'facebook',  followers: 18_700, growth30d: '+0.4%',  engagementRate: '1.8%',  postsMtd: 6, bestPost: { hook: '8 dishes you only find here', reach: 12_400, engagement: '2.1%' }, autonomyPhase: 'B', frequencyCap: 'max 3/wk',          bannedTopics: ['none'] },
-  linkedin:  { platform: 'linkedin',  followers:  1_200, growth30d: '+11.0%', engagementRate: '4.4%',  postsMtd: 5, bestPost: { hook: 'A 7-room retreat is easier than you think', reach: 6_200, engagement: '5.7%' }, autonomyPhase: 'A', frequencyCap: 'max 2/wk',          bannedTopics: ['leisure tone'] },
-  x:         { platform: 'x',         followers:    310, growth30d: '+1.2%',  engagementRate: '0.9%',  postsMtd: 0, bestPost: { hook: '—', reach: 0, engagement: '—' }, autonomyPhase: 'A', frequencyCap: 'paused',         bannedTopics: ['all · channel paused'] },
-};
-
 // ─── Boost candidates ─────────────────────────────────────────────────────
 
 interface BoostCandidate {
@@ -283,9 +272,11 @@ export default async function SocialPage({ searchParams }: Props) {
   const channelFilter = parseChannelFilter(searchParams?.ch);
   const windowDays: Win = parseWindow(searchParams?.w);
 
-  const allAccounts = await getSocialAccounts();
-  const dbByPlatform = new Map<string, any>();
-  for (const a of allAccounts) dbByPlatform.set(String(a.platform).toLowerCase(), a);
+  const [accounts, rules, programs] = await Promise.all([
+    getSocialAccountsForProperty(NAMKHAN_PID),
+    getSocialChannelRules(NAMKHAN_PID),
+    getSocialPrograms(NAMKHAN_PID),
+  ]);
 
   const todayIso = new Date().toISOString().slice(0, 10);
 
@@ -317,7 +308,7 @@ export default async function SocialPage({ searchParams }: Props) {
         subtitle="AI social cockpit — calendar · flow · channels · boost · inbox"
         tabs={tabs}
       >
-        <Banner text="HARDCODED DATA — Phase 1 posts + concept flow + boost candidates + channel meta are static. Only marketing.social_accounts (follower counts + handles) is live. Phase 2 wires social_ai.posts + calendar + approvals + assets + boosts." />
+        <Banner text="CHANNELS + GUARDRAILS + PROGRAMS are live (marketing.social_accounts · social_channel_rules · social_programs — add/edit/delete in the Channels tab, rules in Property Settings). Calendar · flow · boost · inbox are still Phase-1 hardcoded — the social_calendar loop ships next." />
 
         {/* KPI band */}
         <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
@@ -338,7 +329,9 @@ export default async function SocialPage({ searchParams }: Props) {
           <CalendarView posts={ALL_POSTS} todayIso={todayIso} windowDays={windowDays} channelFilter={channelFilter} />
         )}
         {view === 'flow' && <ConceptFlowView />}
-        {view === 'channels' && <ChannelsView dbByPlatform={dbByPlatform} />}
+        {view === 'channels' && (
+          <ChannelsManager propertyId={NAMKHAN_PID} accounts={accounts} rules={rules} programs={programs} />
+        )}
         {view === 'boost' && <BoostView />}
         {view === 'inbox' && <InboxView posts={ALL_POSTS} />}
 
@@ -546,107 +539,6 @@ function ConceptFlowView() {
   );
 }
 
-function ChannelsView({ dbByPlatform }: { dbByPlatform: Map<string, any> }) {
-  return (
-    <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <Section title="Channels · live inventory" note={`${PLATFORMS.length} platforms · google business live · rest coming soon`}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
-          {PLATFORMS.map((p) => {
-            const meta = CHANNEL_META[p];
-            const isLive = LIVE_PLATFORMS.has(p);
-            const dbRow = dbByPlatform.get(p);
-            const liveFollowers = (dbRow?.followers ?? meta.followers) as number;
-            const liveHandle = dbRow?.handle as string | undefined;
-            const liveUrl = dbRow?.url as string | undefined;
-            const landingHref = isLive ? `/marketing/social/${PLATFORM_SLUG[p]}` : null;
-
-            // Two visual states:
-            //  · LIVE (currently only Google Business Profile): full card + click-through
-            //  · COMING SOON (all others): dimmed card with a "Coming soon" pill and no CTA
-            const cardStyle: React.CSSProperties = {
-              background: WHITE,
-              border: `1px solid ${HAIR}`,
-              borderRadius: 4,
-              padding: '10px 12px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-              opacity: isLive ? 1 : 0.7,
-              position: 'relative',
-            };
-
-            return (
-              <div key={p} style={cardStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>
-                    <span style={{ fontSize: 9, color: FOREST, background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 2, padding: '1px 4px', letterSpacing: '0.08em', marginRight: 6, verticalAlign: 'middle', fontWeight: 700 }}>{PLATFORM_GLYPH[p]}</span>
-                    {PLATFORM_LABEL[p]}
-                  </span>
-                  {isLive ? (
-                    <span style={livePillSt}>LIVE</span>
-                  ) : (
-                    <span style={comingSoonPillSt}>COMING SOON</span>
-                  )}
-                </div>
-
-                {isLive ? (
-                  <>
-                    <div style={{ fontSize: 11, color: INK_M }}>
-                      {liveUrl ? <a href={liveUrl} target="_blank" rel="noopener noreferrer" style={{ color: FOREST }}>{liveHandle ?? 'open ↗'} ↗</a>
-                        : liveHandle ? <span>{liveHandle}</span>
-                        : <span style={{ fontStyle: 'italic' }}>listing auto-detects on OAuth connect</span>}
-                    </div>
-                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <Stat label="Rating" value="—" />
-                      <Stat label="Reviews" value="—" />
-                      <Stat label="Actions 30d" value="—" />
-                      <Stat label="Photo views" value="—" />
-                    </div>
-                    <div style={{ background: CREAM, borderLeft: `2px solid ${FOREST}`, padding: '6px 8px', marginTop: 2 }}>
-                      <div style={{ fontSize: 9, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Landing</div>
-                      <div style={{ fontSize: 11, color: INK }}>Full analytics + review management + Q&amp;A + posts + competitor benchmarks.</div>
-                    </div>
-                    <div style={{ fontSize: 10, color: INK_M }}>
-                      <div>Freq: <strong>{meta.frequencyCap}</strong></div>
-                    </div>
-                    {landingHref && (
-                      <a href={landingHref} style={{ ...ctaLinkSt, marginTop: 4 }}>Open Google Business dashboard →</a>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontSize: 11, color: INK_M }}>
-                      {liveHandle ? <span>{liveHandle}</span> : <span style={{ fontStyle: 'italic' }}>handle not set</span>}
-                    </div>
-                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <Stat label="Followers" value={liveFollowers > 0 ? liveFollowers.toLocaleString('en-US') : '—'} />
-                      <Stat label="Growth 30d" value="—" />
-                      <Stat label="Eng rate" value="—" />
-                      <Stat label="Posts MTD" value="—" />
-                    </div>
-                    <div style={{ background: CREAM, borderLeft: `2px solid ${HAIR}`, padding: '6px 8px', marginTop: 2 }}>
-                      <div style={{ fontSize: 9, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Landing</div>
-                      <div style={{ fontSize: 11, color: INK_M, fontStyle: 'italic' }}>Coming soon — this platform's dashboard lights up once the analytics API grant lands.</div>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </Section>
-
-      <Section title="Autonomy ladder · per-channel" note="trust-threshold model">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <AutonomyRung phase="A" title="Human approves every post" desc="Default. Every Reel / Photo / Carousel / Video clears the Approval queue. Reality Agent flags caught before publish." />
-          <AutonomyRung phase="B" title="Human approves only Reality-flagged" desc="Pinterest + Facebook running here today. Brand-safe posts auto-publish per schedule; flagged content escalates." />
-          <AutonomyRung phase="C" title="Full-auto within guardrails" desc="Threads only. High-cadence, lower-stakes channel. Reality-flag still escalates. Frequency cap enforced." />
-        </div>
-      </Section>
-    </div>
-  );
-}
-
 function BoostView() {
   return (
     <div style={{ gridColumn: '1 / -1' }}>
@@ -727,18 +619,6 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AutonomyRung({ phase, title, desc }: { phase: 'A' | 'B' | 'C'; title: string; desc: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4 }}>
-      <span style={autonomyPillSt(phase)}>Phase {phase}</span>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, color: INK, fontWeight: 600 }}>{title}</div>
-        <div style={{ fontSize: 11, color: INK_M, lineHeight: 1.5 }}>{desc}</div>
-      </div>
-    </div>
-  );
-}
-
 function Callout({ tone, children }: { tone: 'brass' | 'soft' | 'warn'; children: React.ReactNode }) {
   const border = tone === 'brass' ? FOREST : tone === 'warn' ? AMBER : HAIR;
   return (
@@ -769,11 +649,6 @@ function statusPillSt(status: PostStatus): React.CSSProperties {
     status === 'Reality Flag'      ? RED :
     status === 'Published'         ? '#5DA46B' :
                                      INK_M;
-  return pillSt(color);
-}
-
-function autonomyPillSt(phase: 'A' | 'B' | 'C'): React.CSSProperties {
-  const color = phase === 'A' ? INK_M : phase === 'B' ? AMBER : FOREST;
   return pillSt(color);
 }
 
@@ -812,6 +687,3 @@ const agentCardSt: React.CSSProperties = { background: CREAM, border: `1px solid
 const signalPillSt: React.CSSProperties = { fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: FOREST, border: `1px solid ${FOREST}`, padding: '1px 5px', borderRadius: 2 };
 const btnPrimary: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 600, background: FOREST, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer' };
 const btnSecondary: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 500, background: WHITE, color: INK_S, border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer' };
-const livePillSt: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.10em', color: '#1F5C2C', background: '#E4F1E0', border: '1px solid #A9CFA0', padding: '1px 6px', borderRadius: 2 };
-const comingSoonPillSt: React.CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.10em', color: INK_M, background: CREAM, border: `1px solid ${HAIR}`, padding: '1px 6px', borderRadius: 2 };
-const ctaLinkSt: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: WHITE, background: FOREST, padding: '5px 10px', borderRadius: 3, textDecoration: 'none', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'inline-block' };
