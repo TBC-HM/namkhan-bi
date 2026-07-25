@@ -3,6 +3,9 @@
 // app/holding/it/cockpit/specs/new/SpecBuilderClient.tsx
 // v4 2026-07-24: module type toggle + preview pane before save.
 // New build = no §3 current-state fields. Out-of-scope subtitle clarified.
+// v5 2026-07-25: AGENT_CONTEXT v2 — design_system v14 (tokens win), ADR-166/167
+// deploy rules (bridge-only pushes, hot-file declare-read), URL law, goal_id
+// traceability (ADR-165), itemized-acceptance verify loop. Injected block is §9.
 
 import { useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -36,39 +39,41 @@ const DATA_SOURCES = ['PMS / Cloudbeds', 'POS / Poster', 'Google APIs', 'QuickBo
 const PRIORITIES = ['P1 — Critical (blocks operations)', 'P2 — Important (needed this week)', 'P3 — Enhancement (nice to have)'];
 
 const AGENT_CONTEXT = `
-## §8 Agent context (auto-injected — do not edit)
+## §9 Agent context (auto-injected v2 · 2026-07-25 — do not edit)
 
-### Design system
-- Read \`documentation.documents\` where \`doc_type='design_system'\` before touching any UI
+### Design system (v14 — tokens win)
+- Read \`documentation.documents\` where \`doc_type='design_system'\` (v14+) before touching any UI. Live gallery: /holding/it/cockpit/design
 - Primitives: \`@/app/(cockpit)/_design\` → \`DashboardPage\`, \`Container\`, \`KpiTile\`, \`MetricRow\`, \`ListContainer\`, \`SplitContainer\`
-- Page background: white (#FFFFFF hardcoded) · Hairline: #E6DFCC · Ink: #1B1B1B · Primary: #1F3A2E
-- Tab strip: thin sans-serif, active = primary underline. NO custom tab components.
-- var(--paper-warm) resolves DARK on Namkhan — always hardcode #FFFFFF for backgrounds
+- TOKENS ONLY: var(--paper) for surfaces, var(--ink), var(--hairline), var(--primary). Hex literals live ONLY in globals.css (memory 217). Never var(--paper-warm)/var(--paper-deep) on cells (resolves dark on Namkhan).
+- Tab strip: thin sans-serif, active = primary underline. NO custom tab components. No new component in _design without a contract entry.
 
 ### Architecture
 - Read \`documentation.documents\` where \`doc_type='architecture'\` for full system map
-- Read \`documentation.documents\` where \`doc_type='claude_md'\` for operating rules
+- Read \`documentation.documents\` where \`doc_type='claude_md'\` for operating rules (§0.65 push guard!)
 - Read \`documentation.documents\` where \`doc_type='data_model'\` for schema reference
 
-### Properties
-- Namkhan: property_id=260955 · The Namkhan Luang Prabang · USD
-- Donna: property_id=1000001 · Donna Mallorca · EUR
-- Holding: property_id=0 · Beyond Circle HQ
+### Properties + URL law (importance-10)
+- Namkhan: property_id=260955 · USD · TZ Asia/Vientiane. Donna: property_id=1000001 · EUR · TZ Europe/Madrid.
+- Holding surfaces live under /holding/* (synthetic, NO property_id).
+- EVERY url/link property-scoped: /h/[property_id]/<dept>/<sub> or /holding/*. Unprefixed links on multi-property surfaces are violations.
 
-### Deploy rules
-- GitHub push → main → Vercel auto-deploys. NO vercel CLI. NO /tmp staging.
-- Push via \`gh api PUT /repos/TBC-HM/namkhan-bi/contents/{path}\` with base64 content.
-- Guard every PUT: check CONTENT not empty before pushing.
+### Goal traceability (ADR-165)
+- Every brief carries goal_id → governance.goals (read public.v_goals). Orphan briefs get rejected at intake.
+
+### Deploy rules (ADR-166/167 — the ONLY sanctioned path)
+- Push via \`SELECT public.fn_gh_push_file('TBC-HM','namkhan-bi','main', path, content, message)\`. NEVER vercel CLI, NEVER raw gh api PUT.
+- HOT shared files (governance.push_hot_files: groups.ts, globals.css, hod_subpages_catalog.ts, nav-subgroups.ts): first re-fetch from main, then \`SELECT public.fn_gh_declare_read(path)\`, then push within 10 min (CAS enforced — stale base = 409).
+- Verify pushes via public.v_push_ledger / public.v_commit_mirror (NOT v_current_prod — dead).
 
 ### Schema access rules
-- PostgREST exposes ONLY public schema. Non-public schemas (inv, procurement, ops, media, marketing, documentation): use \`getSupabaseAdmin()\` or SECURITY DEFINER RPC.
+- PostgREST exposes ONLY public schema. Non-public schemas: use \`getSupabaseAdmin()\` or SECURITY DEFINER RPC bridges (public.v_* / public.fn_*).
 - New tables need GRANT to service_role or they 500 silently.
 - \`sb.schema('non_public').update()\` silently no-ops — use RPC for writes.
 
-### Quality bar
-- All acceptance criteria in §5 must pass before marking done.
+### Quality bar + verify loop
+- Acceptance criteria (§6) must be ITEMIZED and individually testable — the standing verifier runs them one by one against the live deploy before status can reach shipped.
 - tsc --noEmit must pass. No any[] in new code without explicit justification.
-- Test on both Namkhan + Donna routes if the feature is multi-property.
+- Test on both Namkhan + Donna routes if multi-property.
 `.trim();
 
 function MultiInput({ items, onChange, placeholder }: { items: MultiItem[]; onChange: (v: MultiItem[]) => void; placeholder: string }) {
@@ -428,7 +433,7 @@ ${AGENT_CONTEXT}
       </div>
 
       <div style={{ padding: '12px 14px', background: '#F4EFE2', borderRadius: 4, marginBottom: 20, fontSize: 12, color: '#5A5A5A' }}>
-        <strong style={{ color: '#1B1B1B' }}>Auto-injected for agents:</strong> design system · architecture · primitives · property setup · deploy rules · schema access rules. You don't need to explain these.
+        <strong style={{ color: '#1B1B1B' }}>Auto-injected for agents:</strong> design system v14 (tokens) · architecture · primitives · property setup + URL law · goal traceability · ADR-166/167 deploy rules · schema access rules. You don't need to explain these.
       </div>
 
       {err && <div style={{ fontSize: 12, color: '#B8542A', padding: '8px 12px', background: '#F7E2DC', borderRadius: 3, marginBottom: 16 }}>{err}</div>}
