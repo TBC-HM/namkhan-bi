@@ -3,6 +3,7 @@
 // PBS 2026-07-24 v2: Build group — added Module Docs sub-tab before + New spec.
 // PBS 2026-07-25 v3: Knowledge group — added Sitemap sub-tab.
 // PBS 2026-07-25 v4: Knowledge group — added Goals sub-tab (goal stack registry, ADR-165).
+// PBS 2026-07-25 v5: Knowledge group — added Design sub-tab (live contract template gallery).
 
 import type { DashboardTab } from '@/app/(cockpit)/_design/types';
 
@@ -30,6 +31,7 @@ export const GROUPS: GroupSpec[] = [
     subs: [
       { href: '/holding/it/cockpit/docs',     label: 'All Docs' },
       { href: '/holding/it/cockpit/goals',    label: 'Goals' },
+      { href: '/holding/it/cockpit/design',   label: 'Design' },
       { href: '/holding/it/cockpit/schemas',  label: 'Schemas' },
       { href: '/holding/it/cockpit/freshness',label: 'Freshness' },
       { href: '/holding/it/cockpit/sitemap',  label: 'Sitemap' },
