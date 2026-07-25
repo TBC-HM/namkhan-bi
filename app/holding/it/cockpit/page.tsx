@@ -3,6 +3,7 @@
 // PBS 2026-07-23 (5th pass — canonical): rewritten to use DashboardPage +
 // canonical KpiTile + Container primitives. Matches /holding/it aesthetic
 // (Image #5 reference).
+// PBS 2026-07-24 — AI cost MTD tile added (v_tenant_cost_monthly).
 
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -32,6 +33,7 @@ async function fetchHomeData() {
     { count: skillsActive },
     { count: memHigh },
     { count: freshness },
+    { data: costData },
   ] = await Promise.all([
     sb.from('cockpit_agent_prompts').select('*', { count: 'exact', head: true }).eq('active', true),
     sb.from('cockpit_audit_log').select('*', { count: 'exact', head: true }).gt('created_at', new Date(Date.now() - 86_400_000).toISOString()),
@@ -48,7 +50,12 @@ async function fetchHomeData() {
     sbCockpit.from('cap_skills').select('*', { count: 'exact', head: true }).eq('active', true),
     sb.from('cockpit_agent_memory').select('*', { count: 'exact', head: true }).gte('importance', 9),
     sb.from('v_tenant_data_coverage').select('*', { count: 'exact', head: true }),
+    sb.from('v_tenant_cost_monthly')
+      .select('property_id, month, cost_usd, runs')
+      .gte('month', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)),
   ]);
+
+  const totalCostThisMonth = (costData ?? []).reduce((s, r) => s + Number(r.cost_usd || 0), 0);
 
   const { data: recentByAgent } = await sb
     .from('cockpit_audit_log')
@@ -109,6 +116,7 @@ async function fetchHomeData() {
     consistencyByCheck: cByCheck,
     syncs: syncs ?? [],
     webhooks24h: webhooks24h ?? [],
+    totalCostThisMonth,
   };
 }
 
@@ -122,6 +130,7 @@ export default async function CockpitV2Home() {
     { label: 'Deploys 24h',   value: d.counts.builds24h,    size: 'sm', footnote: d.counts.errors24h > 0 ? `${d.counts.errors24h} errored` : 'all green', status: d.counts.errors24h > 0 ? 'red' : 'green' },
     { label: 'Docs (live)',   value: d.counts.docsPub,      size: 'sm', footnote: 'published', status: 'grey' },
     { label: 'Tables tracked', value: d.counts.freshness,   size: 'sm', footnote: 'coverage', status: 'grey' },
+    { label: 'AI cost MTD', value: '$' + d.totalCostThisMonth.toFixed(2), size: 'sm', footnote: 'all tenants', status: 'grey' },
   ];
 
   const agentHealthTiles: KpiTileProps[] = [
