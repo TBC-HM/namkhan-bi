@@ -51,6 +51,11 @@ export const SECTION_TO_TABLE: Record<
   retreats:          { table: 'retreat_programs', pk: 'retreat_id',  multiRow: true,  hasPropertyId: true },
   retreat_pricing:   { table: 'retreat_pricing',  pk: 'pricing_id',  multiRow: true,  hasPropertyId: true },
   seasons:           { table: 'seasons',          pk: 'season_id',   multiRow: true,  hasPropertyId: true },
+  // Social module (spec-social-media-module · 2026-07-25): per-channel output
+  // guardrails + weekly content programs. Both property-scoped (Namkhan forced
+  // by /api/settings/upsert while the editor is single-property).
+  social_rules:      { table: 'social_channel_rules', pk: 'id',      multiRow: true,  hasPropertyId: true },
+  social_programs:   { table: 'social_programs',  pk: 'id',          multiRow: true,  hasPropertyId: true },
 };
 
 // Field whitelists for sections that share a physical table (property_profile).
