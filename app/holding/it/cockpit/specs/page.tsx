@@ -1,6 +1,8 @@
 // app/holding/it/cockpit/specs/page.tsx
 // Module Docs hub — lists module specs + build briefs.
 // Uses public.v_documents_latest + public.v_build_briefs (bridge views over documentation schema).
+// v2 2026-07-25: pipeline lifecycle strip per module (Audit → Spec → Repair → Check → Frozen)
+// driven by public.v_module_completion_queue + brief statuses (standing pipeline, ADR-165/166).
 
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -9,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const MODULE_DOC_TYPES = [
-  'bug_agent_module', 'compiler_module', 'gbp_module', 'hr_scheduling_module', 'inventory_module',
+  'bug_agent_module', 'compiler_module', 'gbp_module', 'inventory_module',
   'media_module', 'newsletter_module', 'proposals_module', 'sales_module',
   'socials_module', 'spec_builder_module', 'university_module', 'youtube_module',
 ];
@@ -31,10 +33,59 @@ const BADGE: Record<string, { bg: string; color: string }> = {
 
 const BRIEF_STATUS: Record<string, { label: string; bg: string; color: string }> = {
   ready:       { label: 'ready for agent', bg: '#E3F2FD', color: '#1565C0' },
-  shipped:     { label: 'agent ran ✓',      bg: '#E8F5E9', color: '#2E7D32' },
-  in_progress: { label: 'agent running',    bg: '#FFF8E1', color: '#F57F17' },
-  draft:       { label: 'draft',            bg: '#F4EFE2', color: '#5A5A5A' },
+  research:    { label: 'research running', bg: '#FFF3E0', color: '#E65100' },
+  in_progress: { label: 'repair running',  bg: '#FFF8E1', color: '#F57F17' },
+  verifying:   { label: 'checking',        bg: '#EDE7F6', color: '#4527A0' },
+  needs_input: { label: '⚠ needs PBS',     bg: '#FFEBEE', color: '#B71C1C' },
+  shipped:     { label: 'shipped ✓',       bg: '#E8F5E9', color: '#2E7D32' },
+  draft:       { label: 'draft',           bg: '#F4EFE2', color: '#5A5A5A' },
+  archived:    { label: 'archived',        bg: '#F4EFE2', color: '#8A8A8A' },
 };
+
+const STAGES = ['Audit', 'Spec', 'Repair', 'Check', 'Frozen'];
+
+// Compute (doneUpTo index, active label, alert) from queue row + its brief status.
+function pipelineState(q: any, briefStatus: string | null): { done: number; active: string; alert: boolean } {
+  if (!q || q.status === 'skipped') return { done: -1, active: 'not queued', alert: false };
+  if (q.status === 'pending')   return { done: -1, active: 'queued for audit', alert: false };
+  if (q.status === 'auditing')  return { done: 0,  active: 'audit running', alert: false };
+  if (q.status === 'completed') return { done: 4,  active: 'FROZEN · finished', alert: false };
+  // spec_created / in_pipeline → refine from the brief
+  switch (briefStatus) {
+    case 'research':    return { done: 1, active: 'research running', alert: false };
+    case 'ready':       return { done: 1, active: 'repair queued', alert: false };
+    case 'in_progress': return { done: 2, active: 'repair running', alert: false };
+    case 'verifying':   return { done: 3, active: 'checking', alert: false };
+    case 'needs_input': return { done: 1, active: 'needs your input', alert: true };
+    case 'shipped':     return { done: 4, active: 'shipped — awaiting sign-off', alert: false };
+    default:            return { done: 1, active: 'spec created', alert: false };
+  }
+}
+
+function PipelineStrip({ q, briefStatus }: { q: any; briefStatus: string | null }) {
+  const st = pipelineState(q, briefStatus);
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+        {STAGES.map((label, i) => {
+          const isDone = i <= st.done;
+          const isNext = i === st.done + 1;
+          return (
+            <div key={label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              <div style={{ width: '100%', height: 3, borderRadius: 99,
+                background: isDone ? '#2E7D32' : isNext ? (st.alert ? '#B71C1C' : '#B8A878') : '#F0EBE0' }} />
+              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                color: isDone ? '#2E7D32' : isNext ? (st.alert ? '#B71C1C' : '#8A8A8A') : '#C9C2B2' }}>{label}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 9.5, fontWeight: 600, color: st.alert ? '#B71C1C' : '#5A5A5A', marginTop: 2 }}>
+        {st.active}{q?.completion_estimate != null ? ` · agent-audited: ${q.completion_estimate}% complete` : ''}
+      </div>
+    </div>
+  );
+}
 
 function TypePill({ docType }: { docType: string }) {
   const b = BADGE[docType] ?? { bg: '#F4EFE2', color: '#5A5A5A' };
@@ -48,7 +99,7 @@ function TypePill({ docType }: { docType: string }) {
 }
 
 async function fetchData() {
-  const [{ data: moduleDocs }, { data: briefs }, { data: statuses }] = await Promise.all([
+  const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }] = await Promise.all([
     supabase
       .from('v_documents_latest')
       .select('id, doc_type, title, status, version, last_updated_at')
@@ -63,10 +114,17 @@ async function fetchData() {
       .from('v_module_status')
       .select('doc_type, completion_pct, is_live, signed_off_at')
       .in('doc_type', MODULE_DOC_TYPES),
+    (supabase as any)
+      .from('v_module_completion_queue')
+      .select('module_doc_type, status, completion_estimate, brief_slug, priority'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
-  return { moduleDocs: moduleDocs ?? [], briefs: briefs ?? [], statusMap };
+  const queueMap: Record<string, any> = {};
+  for (const qr of (queue ?? [])) queueMap[qr.module_doc_type] = qr;
+  const briefStatusBySlug: Record<string, string> = {};
+  for (const b of (briefs ?? [])) briefStatusBySlug[b.slug] = b.status;
+  return { moduleDocs: moduleDocs ?? [], briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug };
 }
 
 function shortDate(iso: string): string {
@@ -74,7 +132,7 @@ function shortDate(iso: string): string {
 }
 
 export default async function SpecsPage() {
-  const { moduleDocs, briefs, statusMap } = await fetchData();
+  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug } = await fetchData();
 
   return (
     <div style={{ maxWidth: 960, padding: '28px 24px' }}>
@@ -83,7 +141,8 @@ export default async function SpecsPage() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1B1B1B', margin: 0 }}>Module Documentation</h1>
           <p style={{ fontSize: 12, color: '#5A5A5A', margin: '4px 0 0' }}>
-            Spec docs for all modules in development · % shows progress to goal · Signed off = 100% & tested
+            Spec docs for all modules · standing pipeline runs Audit → Spec → Repair → Check → Frozen automatically ·
+            auditor every 6h · builder + checker hourly · you are only asked when a GOAL is unclear
           </p>
         </div>
         <Link href="/holding/it/cockpit/specs/new" style={{
@@ -105,6 +164,8 @@ export default async function SpecsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
             {moduleDocs.map((doc: any) => {
               const st = statusMap[doc.doc_type];
+              const q = queueMap[doc.doc_type];
+              const briefStatus = q?.brief_slug ? (briefStatusBySlug[q.brief_slug] ?? null) : null;
               const pct = st?.completion_pct ?? 0;
               const live = st?.is_live ?? false;
               const signedOff = !!st?.signed_off_at;
@@ -130,6 +191,8 @@ export default async function SpecsPage() {
                     {live && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px',
                       borderRadius: 99, background: '#E8F5E9', color: '#2E7D32' }}>live</span>}
                   </div>
+                  {/* Pipeline lifecycle strip */}
+                  <PipelineStrip q={q} briefStatus={briefStatus} />
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#1B1B1B', lineHeight: 1.4 }}>{doc.title}</div>
                   <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 'auto', display: 'flex',
                     justifyContent: 'space-between', alignItems: 'center' }}>
@@ -153,7 +216,7 @@ export default async function SpecsPage() {
           BUILD BRIEFS ({briefs.length})
         </h2>
         <p style={{ fontSize: 11, color: '#5A5A5A', margin: '0 0 12px' }}>
-          Briefs written in + New spec · picked up by agents · "agent ran" means the agent completed its run (does not mean the module is 100% done)
+          Briefs from + New spec and the module auditor · lifecycle: ready → research → in_progress → verifying → shipped · "needs PBS" = the loop has a question only you can answer
         </p>
         <div style={{ border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden' }}>
           {briefs.length === 0 ? (
@@ -164,7 +227,7 @@ export default async function SpecsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#FAFAF7', borderBottom: '1px solid #E6DFCC' }}>
-                  {['TITLE', 'STATUS', 'CREATED', 'AGENT RAN'].map(h => (
+                  {['TITLE', 'STATUS', 'CREATED', 'LAST AGENT RUN'].map(h => (
                     <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700,
                       color: '#5A5A5A', fontSize: 11, letterSpacing: '0.05em' }}>{h}</th>
                   ))}
