@@ -212,12 +212,16 @@ const PLANNER_SYSTEM = [
 
 // Extract a file path from planner output (for re-plan loop)
 function extractMissingFilePath(text: string): string | null {
-  // Match quoted paths like "lib/foo.ts" or 'app/bar.tsx'
-  const m = text.match(/["']([a-zA-Z0-9/_.-]+\.(?:tsx?|js|json))["']/);
-  if (m) return m[1];
-  // Match unquoted paths mentioned after keywords like "need", "missing", "fetch"
-  const m2 = text.match(/(?:need|require|missing|fetch|read|see|check)\s+([a-zA-Z][a-zA-Z0-9/_.-]*\.(?:tsx?|js|json))/i);
-  return m2 ? m2[1] : null;
+  // 1. Quoted paths first (most precise)
+  const quoted = text.match(/["'`]([a-zA-Z][a-zA-Z0-9/_.-]{4,}\.(?:tsx?|js|json))["'`]/);
+  if (quoted) return quoted[1];
+  // 2. Unquoted full repo paths (app/..., lib/..., components/...)
+  const unquoted = text.match(/\b((?:app|lib|components|pages|hooks|utils|types)[/][a-zA-Z0-9/_.-]{4,}\.(?:tsx?|js|json))\b/);
+  if (unquoted) return unquoted[1];
+  // 3. Any PascalCase .tsx file name mentioned (e.g. GoalsView.tsx)
+  const pascal = text.match(/\b([A-Z][a-zA-Z0-9]+(?:View|Page|Client|Component|Panel|Modal|Card|Table|Row|List|Form)\.tsx)\b/);
+  if (pascal) return pascal[1];
+  return null;
 }
 
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null }): Promise<PlannerResult> {
