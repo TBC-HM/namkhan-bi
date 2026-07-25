@@ -13,8 +13,8 @@ import { callAnthropic } from '@/lib/mail/anthropic';
 const GH_REPO = 'TBC-HM/namkhan-bi';
 const GH_BASE_BRANCH = 'main';
 export const COST_CAP_USD = 2.0;
-const MAX_FILES_PER_PLAN = 2;   // PBS 2026-07-17 — reduced from 3 to keep run < 60s
-const MAX_FILE_BYTES = 20_000;  // reduced from 40k
+const MAX_FILES_PER_PLAN = 8;   // PBS 2026-07-26 (bug #84) — raised to feed more context
+const MAX_FILE_BYTES = 80_000;  // PBS 2026-07-26 (bug #84) — never truncate candidate files
 
 let __cachedGhToken: string | null = null;
 async function getGhToken(): Promise<string> {
@@ -181,6 +181,18 @@ function guessCandidateFiles(bug: { page_url: string | null; body: string | null
   if (body.includes('menu') || body.includes('nav') || body.includes('belong') || body.includes('subpage') || body.includes('sub-page') || body.includes('holding') || body.includes('namkhan')) {
     files.push('lib/dept-cfg/index.ts');
   }
+  // PBS 2026-07-26 (bug #84): always include structural context files
+  files.push('lib/dept-cfg.ts', 'lib/dept-cfg/index.ts');
+  files.push('app/(cockpit)/_design/index.ts');
+  // Derive API route from page_url
+  try {
+    const u = new URL(url ?? 'http://x');
+    const seg = u.pathname.replace(/^\/h\/\d+\//, '/').split('/').filter(Boolean);
+    if (seg.length > 0) {
+      files.push(`app/api/${seg.join('/')}/route.ts`);
+      files.push(`app/api/cockpit/${seg.join('/')}/route.ts`);
+    }
+  } catch { /* ignore */ }
   return Array.from(new Set(files)).slice(0, MAX_FILES_PER_PLAN);
 }
 
@@ -198,45 +210,81 @@ const PLANNER_SYSTEM = [
   'Respond with the JSON object only. No prose, no markdown fences.',
 ].join('\n');
 
+// Extract a file path from planner output (for re-plan loop)
+function extractMissingFilePath(text: string): string | null {
+  const m = text.match(/(?:need|require|missing|fetch|read)[^`
+]*[`"]([a-zA-Z0-9/_.-]+\.(?:tsx?|js|json))[`"]/i)
+           ?? text.match(/[`"]([a-zA-Z0-9/_.-]+\.(?:tsx?|js|json))[`"]/);
+  return m ? m[1] : null;
+}
+
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null }): Promise<PlannerResult> {
   const candidates = guessCandidateFiles(bug);
   const contexts: Array<{ path: string; content: string }> = [];
+  let fetchLog = '';
   for (const p of candidates) {
     try {
       const file = await ghGetFile(p);
       if (file) {
-        const trimmed = file.content.length > MAX_FILE_BYTES ? file.content.slice(0, MAX_FILE_BYTES) + '\n/* … truncated … */' : file.content;
-        contexts.push({ path: p, content: trimmed });
+        // PBS 2026-07-26 (bug #84): never truncate — use full file content
+        contexts.push({ path: p, content: file.content.slice(0, MAX_FILE_BYTES) });
+        fetchLog += `  fetched: ${p} (${file.content.length} bytes)\n`;
       }
     } catch { /* skip missing */ }
   }
-  const contextBlock = contexts.length === 0
-    ? '(no candidate files fetched — you may need to set skip_reason)'
-    : contexts.map((c) => `=== FILE: ${c.path} ===\n${c.content}\n=== END FILE ===`).join('\n\n');
 
-  const prompt = [
-    `BUG #${bug.id}`,
-    `URL: ${bug.page_url ?? '(none)'}`,
-    `REPORT: ${bug.body ?? '(empty)'}`,
-    '',
-    'CANDIDATE FILES:',
-    contextBlock,
-    '',
-    'Return the JSON plan.',
-  ].join('\n');
+  function buildPrompt(ctxs: typeof contexts): string {
+    const contextBlock = ctxs.length === 0
+      ? '(no candidate files fetched — you may need to set skip_reason)'
+      : ctxs.map((c) => `=== FILE: ${c.path} (${c.content.length} bytes) ===\n${c.content}\n=== END FILE ===`).join('\n\n');
+    return [
+      `BUG #${bug.id}`,
+      `URL: ${bug.page_url ?? '(none)'}`,
+      `REPORT: ${bug.body ?? '(empty)'}`,
+      '',
+      `CANDIDATE FILES (${ctxs.length} files fetched):`,
+      fetchLog.trim(),
+      contextBlock,
+      '',
+      'Return the JSON plan.',
+    ].join('\n');
+  }
 
-  const raw = await callAnthropic({ system: PLANNER_SYSTEM, prompt, maxTokens: 8000 });
-  const parsed = parseJsonLoose(raw);
-  const patches = Array.isArray(parsed.patches) ? (parsed.patches as unknown[]).filter((p): p is FilePatch => {
-    const px = p as Partial<FilePatch>;
-    return typeof px.path === 'string' && typeof px.new_content === 'string' && px.new_content.length > 0;
-  }) : [];
-  return {
-    plan_md: typeof parsed.plan_md === 'string' ? parsed.plan_md : '',
-    patches,
-    skip_reason: typeof parsed.skip_reason === 'string' && parsed.skip_reason ? parsed.skip_reason : undefined,
-    cost_usd: 0.05,
-  };
+  function parsePlan(raw: string): PlannerResult {
+    const parsed = parseJsonLoose(raw);
+    const patches = Array.isArray(parsed.patches) ? (parsed.patches as unknown[]).filter((p): p is FilePatch => {
+      const px = p as Partial<FilePatch>;
+      return typeof px.path === 'string' && typeof px.new_content === 'string' && px.new_content.length > 0;
+    }) : [];
+    return {
+      plan_md: typeof parsed.plan_md === 'string' ? parsed.plan_md : '',
+      patches,
+      skip_reason: typeof parsed.skip_reason === 'string' && parsed.skip_reason ? parsed.skip_reason : undefined,
+      cost_usd: 0.05,
+    };
+  }
+
+  // Initial plan
+  let plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000 }));
+
+  // PBS 2026-07-26 (bug #84): re-plan loop — if planner names a missing file, fetch + retry (max 3 rounds)
+  for (let round = 0; round < 3 && (plan.skip_reason || plan.patches.length === 0); round++) {
+    const mention = (plan.skip_reason ?? '') + ' ' + plan.plan_md;
+    const missingPath = extractMissingFilePath(mention);
+    if (!missingPath) break;
+    // Don't re-fetch already-fetched files
+    if (contexts.some((c) => c.path === missingPath)) break;
+    try {
+      const file = await ghGetFile(missingPath);
+      if (!file) break;
+      contexts.push({ path: missingPath, content: file.content.slice(0, MAX_FILE_BYTES) });
+      fetchLog += `  re-plan round ${round + 1}: fetched ${missingPath} (${file.content.length} bytes)\n`;
+      plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000 }));
+      plan.cost_usd += 0.05;
+    } catch { break; }
+  }
+
+  return plan;
 }
 
 const REVIEWER_SYSTEM = [
@@ -385,7 +433,7 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     const fixLink = ship.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${ship.branch}`;
     const fixLabel = ship.pr_number ? `PR #${ship.pr_number}` : `branch: ${ship.branch}`;
     if (success) {
-      await markBug(bug.id, { status: 'in_progress', started_at: new Date().toISOString(), fix_link: fixLink, fix_label: fixLabel });
+      await markBug(bug.id, { status: 'done', started_at: new Date().toISOString(), done_at: new Date().toISOString(), fix_link: fixLink, fix_label: fixLabel });
       await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, ship.pr_url ? `DONE · PR ready for merge` : `DONE · branch ready — open PR manually`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'done', cost_usd: costUsd };
     } else {
