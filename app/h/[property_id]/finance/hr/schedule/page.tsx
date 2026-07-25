@@ -3,7 +3,6 @@
 import ScheduleTabContent from '@/app/operations/staff/_components/ScheduleTabContent';
 import SchedulePlannerView from '@/app/finance/hr/schedule/SchedulePlannerView';
 import { FINANCE_SUBPAGES } from '@/app/finance/_subpages';
-import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
 export const dynamic = 'force-dynamic';
