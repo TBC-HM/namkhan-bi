@@ -6,6 +6,7 @@
 //
 // Full pipeline per bug: PLAN → REVIEW → SHIP → VERIFY → CLOSE.
 // See /api/cockpit/bugs/agent-run/route.ts for the surface docs.
+// PBS 2026-07-24 — token metering added to all callAnthropic calls.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropic } from '@/lib/mail/anthropic';
@@ -224,7 +225,7 @@ function extractMissingFilePath(text: string): string | null {
   return null;
 }
 
-async function planBugFix(bug: { id: number; body: string | null; page_url: string | null }): Promise<PlannerResult> {
+async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null }): Promise<PlannerResult> {
   const candidates = guessCandidateFiles(bug);
   const contexts: Array<{ path: string; content: string }> = [];
   let fetchLog = '';
@@ -271,7 +272,8 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
   }
 
   // Initial plan
-  let plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000 }));
+  let plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000,
+    meter: { property_id: bug.property_id ? Number(bug.property_id) : null, agent_handle: 'bug-agent', source: 'bug-agent', run_ref: String(bug.id) } }));
 
   // PBS 2026-07-26 (bug #84): re-plan loop — if planner names a missing file, fetch + retry (max 3 rounds)
   for (let round = 0; round < 3 && (plan.skip_reason || plan.patches.length === 0); round++) {
@@ -285,7 +287,8 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
       if (!file) break;
       contexts.push({ path: missingPath, content: file.content.slice(0, MAX_FILE_BYTES) });
       fetchLog += `  re-plan round ${round + 1}: fetched ${missingPath} (${file.content.length} bytes)\n`;
-      plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000 }));
+      plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000,
+        meter: { property_id: null, agent_handle: 'bug-agent', source: 'bug-agent', run_ref: String(bug.id) + '-replan' + round } }));
       plan.cost_usd += 0.05;
     } catch { break; }
   }
@@ -317,7 +320,8 @@ async function reviewPlan(bug: { id: number; body: string | null }, plan: Planne
     `PATCHES (${plan.patches.length}):`,
     patchSummary,
   ].join('\n');
-  const raw = await callAnthropic({ system: REVIEWER_SYSTEM, prompt, maxTokens: 500 });
+  const raw = await callAnthropic({ system: REVIEWER_SYSTEM, prompt, maxTokens: 500,
+    meter: { property_id: null, agent_handle: 'bug-agent-reviewer', source: 'bug-agent', run_ref: String(bug.id) } });
   const parsed = parseJsonLoose(raw);
   const verdict = ['approve', 'reject', 'needs_human'].includes(String(parsed.verdict))
     ? (parsed.verdict as 'approve' | 'reject' | 'needs_human')
@@ -392,7 +396,7 @@ async function verifyDeploy(commitSha: string, pageUrl: string | null): Promise<
   return { ci_ok: ciOk, curl_status: curlStatus, curl_body_ok: curlBodyOk, note };
 }
 
-export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null }, triggeredBy: string): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
+export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }, triggeredBy: string): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
   const sb = getSupabaseAdmin();
   const initialLog = `START · bug=${bug.id} url=${bug.page_url ?? '(none)'}`;
   const { data: rpcData, error: insErr } = await sb.rpc('fn_bug_agent_run_insert', {
@@ -455,18 +459,18 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
   }
 }
 
-export async function pickBugs(opts: { bug_ids?: number[]; mode: 'one' | 'drain'; max: number }): Promise<Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null }>> {
+export async function pickBugs(opts: { bug_ids?: number[]; mode: 'one' | 'drain'; max: number }): Promise<Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }>> {
   const sb = getSupabaseAdmin();
   // PBS 2026-07-17 — READ from public.cockpit_bugs view (cockpit schema not
   // PostgREST-exposed). View exposes agent_skip via the underlying table.
   // PBS 2026-07-17 — v_bugs_ready_for_agent excludes bugs attempted in the
   // last 4h so drain doesn't re-pick the same 3 bugs every call.
   let q = sb.from('v_bugs_ready_for_agent')
-    .select('id, body, page_url, dept_slug, status');
+    .select('id, body, page_url, dept_slug, status, property_id');
   if (opts.bug_ids && opts.bug_ids.length > 0) q = q.in('id', opts.bug_ids);
   q = q.order('created_at', { ascending: true }).limit(opts.mode === 'one' ? 1 : opts.max);
   const { data } = await q;
-  return ((data ?? []) as Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null }>);
+  return ((data ?? []) as Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }>);
 }
 
 export async function runAgentJob(opts: { bug_ids?: number[]; mode?: 'one' | 'drain'; max?: number; triggered_by?: string }): Promise<{ ok: boolean; mode: string; cost_usd: number; processed: Array<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> }> {
