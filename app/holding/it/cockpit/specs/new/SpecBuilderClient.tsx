@@ -6,6 +6,9 @@
 // v5 2026-07-25: AGENT_CONTEXT v2 — design_system v14 (tokens win), ADR-166/167
 // deploy rules (bridge-only pushes, hot-file declare-read), URL law, goal_id
 // traceability (ADR-165), itemized-acceptance verify loop. Injected block is §9.
+// v6 2026-07-26 (spec-builder completion): required Goal select (public.v_goals,
+// passed from the server page) — the form now obeys its own §9 intake law.
+// Dual save: "Save → ready" (primary, unchanged) + "Save as draft" (secondary).
 
 import { useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,6 +16,7 @@ import { useRouter } from 'next/navigation';
 interface MultiItem { id: string; value: string }
 interface RefItem { id: string; url: string; label: string }
 interface ScreenshotItem { id: string; url: string; name: string }
+export interface GoalOption { goal_id: number; slug: string; title: string; level: number }
 
 function mkId() { return Math.random().toString(36).slice(2) }
 function mkItem(v = ''): MultiItem { return { id: mkId(), value: v } }
@@ -93,10 +97,10 @@ function MultiInput({ items, onChange, placeholder }: { items: MultiItem[]; onCh
   );
 }
 
-export default function SpecBuilderClient() {
+export default function SpecBuilderClient({ goals }: { goals: GoalOption[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [saved, setSaved] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ slug: string; status: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -107,6 +111,7 @@ export default function SpecBuilderClient() {
   const [moduleName, setModuleName] = useState('');
   const [appPath, setAppPath] = useState('');
   const [priority, setPriority] = useState(PRIORITIES[1]);
+  const [goalId, setGoalId] = useState('');
   // §2 Goal
   const [goalStatement, setGoalStatement] = useState('');
   const [doneMetric, setDoneMetric] = useState('');
@@ -168,12 +173,15 @@ ${fmt(bugs)}
 **Missing entirely:**
 ${fmt(missing)}`;
 
+    const goal = goals.find(g => String(g.goal_id) === goalId);
+
     return `# Spec: ${moduleName}
 *Generated via Spec Builder · ${new Date().toISOString().slice(0, 10)} · Priority: ${priority.split(' — ')[0]} · Type: ${isNew ? 'New build (no existing path)' : 'Existing module — finish / fix'}*
 
 ## §1 Goal
 > ${goalStatement}
 
+**Linked goal:** ${goal ? `${goal.title} (\`${goal.slug}\`, goal_id ${goal.goal_id})` : '(not selected — will be rejected at intake)'}
 **Done-metric:** ${doneMetric || '(not specified)'}
 **App path:** \`${appPath || (isNew ? '(not decided yet)' : '(not specified)')}\`
 
@@ -220,9 +228,9 @@ ${AGENT_CONTEXT}
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function doSave(status: 'ready' | 'draft') {
     if (!moduleName.trim() || !goalStatement.trim()) { setErr('Module name and goal statement are required.'); return; }
+    if (!goalId) { setErr('Select a goal — every brief must link a governance goal (orphan briefs are rejected at intake).'); return; }
     setErr(null);
     startTransition(async () => {
       const res = await fetch('/api/specs', {
@@ -233,28 +241,37 @@ ${AGENT_CONTEXT}
           title: `Spec: ${moduleName}`,
           content_md: buildContentMd(),
           tags: ['spec', 'questionnaire', moduleName.toLowerCase().replace(/\s+/g, '-')],
-          status: 'ready',
+          status,
+          goal_id: Number(goalId),
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(json.error ?? 'Save failed'); return; }
-      setSaved(json.slug);
+      setSaved({ slug: json.slug, status: json.status ?? status });
     });
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    doSave('ready');
   }
 
   if (saved) {
     return (
       <div style={{ padding: '32px 24px', maxWidth: 720 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#2E7D32', marginBottom: 8 }}>✓ Spec saved · agent context auto-injected</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#2E7D32', marginBottom: 8 }}>
+          ✓ Spec saved as <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>{saved.status}</span> · agent context auto-injected
+        </div>
         <p style={{ fontSize: 13, color: '#5A5A5A', marginBottom: 6 }}>
-          Slug: <code style={{ background: '#F4EFE2', padding: '2px 6px', borderRadius: 3 }}>{saved}</code>
+          Slug: <code style={{ background: '#F4EFE2', padding: '2px 6px', borderRadius: 3 }}>{saved.slug}</code>
         </p>
         <p style={{ fontSize: 12, color: '#5A5A5A', marginBottom: 20 }}>
-          The brief includes your spec + full design-system context + architecture rules + property setup.
-          An agent can now run the goal-loop against this brief without further clarification.
+          {saved.status === 'draft'
+            ? 'Draft saved — it will NOT enter the agent queue until its status is set to ready.'
+            : 'The brief includes your spec + full design-system context + architecture rules + property setup. An agent can now run the goal-loop against this brief without further clarification.'}
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button style={S.submitBtn} onClick={() => { setSaved(null); setModuleName(''); setGoalStatement(''); setRefs([mkRef()]); setScreenshots([]); }}>New spec</button>
+          <button style={S.submitBtn} onClick={() => { setSaved(null); setModuleName(''); setGoalStatement(''); setGoalId(''); setRefs([mkRef()]); setScreenshots([]); }}>New spec</button>
           <button style={{ ...S.submitBtn, background: '#5A5A5A' }} onClick={() => router.push('/holding/it/cockpit/specs')}>View all specs</button>
         </div>
       </div>
@@ -305,6 +322,20 @@ ${AGENT_CONTEXT}
           <label style={S.label}>Priority</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: 4 }}>
             {PRIORITIES.map(p => <button key={p} type="button" style={S.pill(priority === p)} onClick={() => setPriority(p)}>{p.split(' — ')[0]}</button>)}
+          </div>
+        </div>
+        <div style={S.fieldGroup}>
+          <label style={S.label}>Goal (governance link) *</label>
+          <select style={{ ...S.input, appearance: 'auto' as const }} value={goalId} onChange={e => setGoalId(e.target.value)} required>
+            <option value="">— Select the goal this brief serves —</option>
+            {goals.map(g => (
+              <option key={g.goal_id} value={String(g.goal_id)}>
+                {' '.repeat(Math.max(0, (g.level - 2) * 2))}{g.title} ({g.slug})
+              </option>
+            ))}
+          </select>
+          <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 4 }}>
+            Every brief must link a governance goal (ADR-165). Orphan briefs are rejected at intake.
           </div>
         </div>
       </div>
@@ -437,10 +468,16 @@ ${AGENT_CONTEXT}
       </div>
 
       {err && <div style={{ fontSize: 12, color: '#B8542A', padding: '8px 12px', background: '#F7E2DC', borderRadius: 3, marginBottom: 16 }}>{err}</div>}
-      <button type="submit" disabled={isPending} style={{ ...S.submitBtn, opacity: isPending ? 0.6 : 1 }}>
-        {isPending ? 'Saving…' : 'Save spec → build brief'}
-      </button>
-      <span style={{ fontSize: 12, color: '#5A5A5A', marginLeft: 14 }}>Saves to documentation.build_briefs · status: ready</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button type="submit" disabled={isPending} style={{ ...S.submitBtn, opacity: isPending ? 0.6 : 1 }}>
+          {isPending ? 'Saving…' : 'Save → ready'}
+        </button>
+        <button type="button" disabled={isPending} onClick={() => doSave('draft')}
+          style={{ ...S.submitBtn, background: 'transparent', color: '#1F3A2E', border: '1px solid #1F3A2E', opacity: isPending ? 0.6 : 1 }}>
+          Save as draft
+        </button>
+        <span style={{ fontSize: 12, color: '#5A5A5A' }}>ready = enters agent queue · draft = parked for editing</span>
+      </div>
     </form>
   );
 }
