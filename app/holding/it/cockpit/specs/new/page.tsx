@@ -8,7 +8,8 @@
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { groupsAsTabs } from '@/app/holding/it/cockpit/_lib/groups';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import SpecBuilderClient, { type GoalOption } from './SpecBuilderClient';
+import SpecBuilderClient from './SpecBuilderClient';
+type GoalOption = { goal_id: number | null; slug: string; title: string; level: number };
 
 export const dynamic = 'force-dynamic';
 
