@@ -4,6 +4,9 @@
 // Goal stack manager: L1 vision -> L2 phases -> L3 capability goals -> L4 machine targets.
 // Ratification gates for proposed rows + founder intake questionnaire (governance.goal_intake_answers).
 // Design: cockpit tokens (--paper/--ink/--hairline/--primary/--ink-soft), University-style callouts.
+// Bug #82 (PBS 2026-07-25): added spec/doc traceability columns:
+//   - Goals table: version, last edit, status bulb (from v_goals_with_briefs)
+//   - Intake table: updated_at, answered_by per row
 
 import { useMemo, useState } from 'react';
 import { Container } from '@/app/(cockpit)/_design';
@@ -14,7 +17,12 @@ export type GoalRow = {
   target_operator: string | null; target_value: number | null; property_id: number | null;
   status: string; review_cadence: string | null; ratified_at: string | null; updated_at: string;
 };
-export type IntakeRow = { block: string; question: string; answer: string | null; updated_at: string };
+export type IntakeRow = { block: string; question: string; answer: string | null; updated_at: string; answered_by: string | null };
+export type BriefRow = {
+  goal_id: number; goal_slug: string; brief_slug: string | null;
+  brief_status: string | null; brief_version: string | null;
+  brief_last_edit: string | null; status_bulb: 'green' | 'yellow' | 'red' | 'grey' | null;
+};
 
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
 
@@ -34,6 +42,34 @@ function Pill({ status }: { status: string }) {
       padding: '2px 8px', borderRadius: 10, background: s.bg, color: s.fg, textTransform: 'uppercase' }}>
       {status}
     </span>
+  );
+}
+
+// PBS 2026-07-26 Bug #82: status bulb using design-system tokens only.
+// Mapping per owner mandate: green->--status-green, yellow->--status-amber,
+// red->--status-red, grey->--status-grey.
+const BULB_TOKEN: Record<string, string> = {
+  green:  'var(--status-green)',
+  yellow: 'var(--status-amber)',
+  red:    'var(--status-red)',
+  grey:   'var(--status-grey)',
+};
+
+function StatusBulb({ color }: { color: 'green' | 'yellow' | 'red' | 'grey' | null }) {
+  const token = BULB_TOKEN[color ?? 'grey'] ?? BULB_TOKEN.grey;
+  return (
+    <span
+      title={color ?? 'no brief'}
+      style={{
+        display: 'inline-block',
+        width: 9,
+        height: 9,
+        borderRadius: '50%',
+        background: token,
+        flexShrink: 0,
+        verticalAlign: 'middle',
+      }}
+    />
   );
 }
 
@@ -82,7 +118,7 @@ const INTAKE_BLOCKS: Array<{ block: string; intro: string; questions: string[] }
   ]},
 ];
 
-export function GoalsView({ goals, intake }: { goals: GoalRow[]; intake: IntakeRow[] }) {
+export function GoalsView({ goals, intake, briefs }: { goals: GoalRow[]; intake: IntakeRow[]; briefs: BriefRow[] }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [saved, setSaved] = useState<string>('');
   const initialAnswers = useMemo(() => {
@@ -92,6 +128,20 @@ export function GoalsView({ goals, intake }: { goals: GoalRow[]; intake: IntakeR
   }, [intake]);
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
+
+  // Build brief lookup keyed by goal_id for O(1) access in render
+  const briefByGoalId = useMemo(() => {
+    const m: Record<number, BriefRow> = {};
+    briefs.forEach((b) => { m[b.goal_id] = b; });
+    return m;
+  }, [briefs]);
+
+  // Build intake metadata lookup keyed by block+question
+  const intakeMeta = useMemo(() => {
+    const m: Record<string, { updated_at: string; answered_by: string | null }> = {};
+    intake.forEach((r) => { m[r.block + '||' + r.question] = { updated_at: r.updated_at, answered_by: r.answered_by }; });
+    return m;
+  }, [intake]);
 
   const byLevel = useMemo(() => {
     const m: Record<number, GoalRow[]> = { 1: [], 2: [], 3: [], 4: [] };
@@ -164,27 +214,50 @@ export function GoalsView({ goals, intake }: { goals: GoalRow[]; intake: IntakeR
       {[1, 2, 3, 4].map((lvl) => (
         <Container key={lvl} title={LEVEL_LABEL[lvl]} density="compact">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--hairline)' }}>
+                <th style={{ padding: '4px 8px 4px 0', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>Slug</th>
+                <th style={{ padding: '4px 8px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)' }}>Goal</th>
+                <th style={{ padding: '4px 8px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>Version</th>
+                <th style={{ padding: '4px 8px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>Last edit</th>
+                <th style={{ padding: '4px 8px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>Doc</th>
+                <th style={{ padding: '4px 0 4px 8px', textAlign: 'right', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>Status</th>
+              </tr>
+            </thead>
             <tbody>
-              {(byLevel[lvl] || []).map((g) => (
-                <tr key={g.goal_id} style={{ borderBottom: '1px solid var(--hairline)' }}>
-                  <td style={{ padding: '7px 8px 7px 0', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>{g.slug}</td>
-                  <td style={{ padding: '7px 8px' }}>
-                    <div style={{ fontWeight: lvl <= 2 ? 650 : 500 }}>{g.title}</div>
-                    {g.measurable_target && (
-                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', fontFamily: MONO }}>{g.measurable_target}</div>
-                    )}
-                    {lvl === 3 && childrenOf(g.goal_id).length > 0 && (
-                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>targets: {childrenOf(g.goal_id).map((c) => c.slug).join(' · ')}</div>
-                    )}
-                  </td>
-                  <td style={{ padding: '7px 0 7px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    {g.property_id ? <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink-soft)', marginRight: 8 }}>{String(g.property_id)}</span> : null}
-                    <Pill status={g.status} />
-                  </td>
-                </tr>
-              ))}
+              {(byLevel[lvl] || []).map((g) => {
+                const brief = briefByGoalId[g.goal_id];
+                const lastEdit = brief?.brief_last_edit ? brief.brief_last_edit.slice(0, 10) : null;
+                return (
+                  <tr key={g.goal_id} style={{ borderBottom: '1px solid var(--hairline)' }}>
+                    <td style={{ padding: '7px 8px 7px 0', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>{g.slug}</td>
+                    <td style={{ padding: '7px 8px' }}>
+                      <div style={{ fontWeight: lvl <= 2 ? 650 : 500 }}>{g.title}</div>
+                      {g.measurable_target && (
+                        <div style={{ fontSize: 12, color: 'var(--ink-soft)', fontFamily: MONO }}>{g.measurable_target}</div>
+                      )}
+                      {lvl === 3 && childrenOf(g.goal_id).length > 0 && (
+                        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>targets: {childrenOf(g.goal_id).map((c) => c.slug).join(' · ')}</div>
+                      )}
+                    </td>
+                    <td style={{ padding: '7px 8px', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                      {brief?.brief_version ?? <span style={{ color: 'var(--ink-soft)', opacity: 0.5 }}>—</span>}
+                    </td>
+                    <td style={{ padding: '7px 8px', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                      {lastEdit ?? <span style={{ opacity: 0.5 }}>—</span>}
+                    </td>
+                    <td style={{ padding: '7px 8px', textAlign: 'center' }}>
+                      <StatusBulb color={brief?.status_bulb ?? 'grey'} />
+                    </td>
+                    <td style={{ padding: '7px 0 7px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {g.property_id ? <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink-soft)', marginRight: 8 }}>{String(g.property_id)}</span> : null}
+                      <Pill status={g.status} />
+                    </td>
+                  </tr>
+                );
+              })}
               {(byLevel[lvl] || []).length === 0 && (
-                <tr><td style={{ padding: 8, color: 'var(--ink-soft)', fontSize: 12.5 }}>No rows — this layer is empty. That is a drift hole; add goals.</td></tr>
+                <tr><td colSpan={6} style={{ padding: 8, color: 'var(--ink-soft)', fontSize: 12.5 }}>No rows — this layer is empty. That is a drift hole; add goals.</td></tr>
               )}
             </tbody>
           </table>
@@ -202,6 +275,7 @@ export function GoalsView({ goals, intake }: { goals: GoalRow[]; intake: IntakeR
             <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 8 }}>{b.intro}</div>
             {b.questions.map((q) => {
               const k = b.block + '||' + q;
+              const meta = intakeMeta[k];
               return (
                 <div key={k} style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 12.5, marginBottom: 3 }}>{q}</div>
@@ -209,6 +283,16 @@ export function GoalsView({ goals, intake }: { goals: GoalRow[]; intake: IntakeR
                     onChange={(e) => { setAnswers({ ...answers, [k]: e.target.value }); setDirty({ ...dirty, [k]: true }); }}
                     style={{ width: '100%', fontSize: 13, padding: '6px 8px', border: '1px solid var(--hairline)',
                       borderRadius: 6, background: 'var(--paper)', color: 'var(--ink)', resize: 'vertical' }} />
+                  {meta && (meta.updated_at || meta.answered_by) && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 3, fontSize: 11, color: 'var(--ink-soft)', fontFamily: MONO }}>
+                      {meta.updated_at && (
+                        <span>last edit: {meta.updated_at.slice(0, 10)}</span>
+                      )}
+                      {meta.answered_by && (
+                        <span>by: {meta.answered_by}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
