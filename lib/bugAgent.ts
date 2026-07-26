@@ -30,7 +30,7 @@ async function getGhToken(): Promise<string> {
 }
 
 export interface FilePatch { path: string; new_content: string; reasoning: string }
-export interface PlannerResult { plan_md: string; patches: FilePatch[]; skip_reason?: string; cost_usd: number }
+export interface PlannerResult { plan_md: string; patches: FilePatch[]; skip_reason?: string; missing_files: string[]; cost_usd: number }
 export interface ReviewerResult { verdict: 'approve' | 'reject' | 'needs_human'; notes: string; cost_usd: number }
 
 interface RunPatch {
@@ -154,9 +154,19 @@ function bracketize(segments: string[]): string[] {
   });
 }
 
-function guessCandidateFiles(bug: { page_url: string | null; body: string | null }): string[] {
+async function ghListDir(dirPath: string): Promise<string[]> {
+  const r = await ghFetch(`/repos/${GH_REPO}/contents/${encodeURIComponent(dirPath)}`);
+  if (!r.ok) return [];
+  const items = await r.json() as Array<{ type: string; path: string }>;
+  if (!Array.isArray(items)) return [];
+  return items.filter((i) => i.type === 'file').map((i) => i.path);
+}
+
+async function guessCandidateFiles(bug: { page_url: string | null; body: string | null }): Promise<string[]> {
   const files: string[] = [];
   const url = bug.page_url ?? '';
+  // List ALL files in the bug's route directory (law 549 — no guessing)
+  const dirs: string[] = [];
   try {
     const u = new URL(url);
     const rawParts = u.pathname.split('/').filter(Boolean);
@@ -164,36 +174,21 @@ function guessCandidateFiles(bug: { page_url: string | null; body: string | null
     if (isPidRoute) {
       const rest = bracketize(rawParts.slice(2));
       if (rest.length > 0) {
-        files.push(`app/h/[propertyId]/${rest.join('/')}/page.tsx`);
-        files.push(`app/${rest.join('/')}/page.tsx`);
-        const cap = rest[rest.length - 1].replace(/[[\]]/g,'').split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-        if (cap) files.push(`app/h/[propertyId]/${rest.join('/')}/_components/${cap}Client.tsx`);
+        dirs.push(`app/h/[propertyId]/${rest.join('/')}`);
+        dirs.push(`app/${rest.join('/')}`);
       }
     } else {
       const seg = bracketize(rawParts);
-      if (seg.length > 0) {
-        files.push(`app/${seg.join('/')}/page.tsx`);
-        const cap = seg[seg.length - 1].replace(/[[\]]/g,'').split('-').map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('');
-        if (cap) files.push(`app/${seg.join('/')}/_components/${cap}Client.tsx`);
-      }
+      if (seg.length > 0) dirs.push(`app/${seg.join('/')}`);
     }
   } catch { /* ignore */ }
-  const body = (bug.body ?? '').toLowerCase();
-  if (body.includes('menu') || body.includes('nav') || body.includes('belong') || body.includes('subpage') || body.includes('sub-page') || body.includes('holding') || body.includes('namkhan')) {
-    files.push('lib/dept-cfg/index.ts');
+  for (const dir of dirs) {
+    const listed = await ghListDir(dir);
+    files.push(...listed);
+    if (files.length >= MAX_FILES_PER_PLAN) break;
   }
-  // PBS 2026-07-26 (bug #84): always include structural context files
-  files.push('lib/dept-cfg.ts', 'lib/dept-cfg/index.ts');
-  files.push('app/(cockpit)/_design/index.ts');
-  // Derive API route from page_url
-  try {
-    const u = new URL(url ?? 'http://x');
-    const seg = u.pathname.replace(/^\/h\/\d+\//, '/').split('/').filter(Boolean);
-    if (seg.length > 0) {
-      files.push(`app/api/${seg.join('/')}/route.ts`);
-      files.push(`app/api/cockpit/${seg.join('/')}/route.ts`);
-    }
-  } catch { /* ignore */ }
+  // Structural context always included
+  files.push('lib/dept-cfg.ts', 'lib/dept-cfg/index.ts', 'app/(cockpit)/_design/index.ts');
   return Array.from(new Set(files)).slice(0, MAX_FILES_PER_PLAN);
 }
 
@@ -201,32 +196,19 @@ const PLANNER_SYSTEM = [
   'You are a senior TypeScript engineer fixing a bug in a Next.js 15 App Router codebase for The Namkhan hotel BI.',
   'Design rules: paper-white #FFFFFF, hairlines #E6DFCC, ink #1B1B1B, ink-soft #5A5A5A, brand green #084838. NEVER use `var(--paper-warm)` (renders dark).',
   'You will be given the bug report + candidate source files. Output ONLY a JSON object matching this schema:',
-  '{ "plan_md": "1-3 sentence plan", "patches": [{"path": "app/x/y.tsx", "new_content": "FULL FILE CONTENT after your edit", "reasoning": "why"}], "skip_reason": null | "cannot fix without X" }',
+  '{ "plan_md": "1-3 sentence plan", "patches": [{"path": "app/x/y.tsx", "new_content": "FULL FILE CONTENT after your edit", "reasoning": "why"}], "skip_reason": null | "cannot fix without X", "missing_files": [] }',
   'CRITICAL RULES:',
   '- `new_content` must be the COMPLETE file content, not a diff. Preserve all imports, exports, unchanged code exactly.',
   '- Do NOT add features or refactor beyond what the bug asks. Minimal surgical change only.',
   '- If the bug is unclear, too big (page rewrite), or requires DB changes, set skip_reason and return patches: [].',
   '- Never touch server-side secrets, .env, package.json, or lock files.',
   '- Prefer editing files that were passed in as context. If none match, set skip_reason.',
+  '- `missing_files`: list every file path you need but was NOT given. Use [] when all needed files were provided. Do NOT explain in prose.',
   'Respond with the JSON object only. No prose, no markdown fences.',
 ].join('\n');
 
-// Extract a file path from planner output (for re-plan loop)
-function extractMissingFilePath(text: string): string | null {
-  // 1. Quoted paths first (most precise)
-  const quoted = text.match(/["'`]([a-zA-Z][a-zA-Z0-9/_.-]{4,}\.(?:tsx?|js|json))["'`]/);
-  if (quoted) return quoted[1];
-  // 2. Unquoted full repo paths (app/..., lib/..., components/...)
-  const unquoted = text.match(/\b((?:app|lib|components|pages|hooks|utils|types)[/][a-zA-Z0-9/_.-]{4,}\.(?:tsx?|js|json))\b/);
-  if (unquoted) return unquoted[1];
-  // 3. Any PascalCase .tsx file name mentioned (e.g. GoalsView.tsx)
-  const pascal = text.match(/\b([A-Z][a-zA-Z0-9]+(?:View|Page|Client|Component|Panel|Modal|Card|Table|Row|List|Form)\.tsx)\b/);
-  if (pascal) return pascal[1];
-  return null;
-}
-
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null }): Promise<PlannerResult> {
-  const candidates = guessCandidateFiles(bug);
+  const candidates = await guessCandidateFiles(bug);
   const contexts: Array<{ path: string; content: string }> = [];
   let fetchLog = '';
   for (const p of candidates) {
@@ -267,6 +249,7 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
       plan_md: typeof parsed.plan_md === 'string' ? parsed.plan_md : '',
       patches,
       skip_reason: typeof parsed.skip_reason === 'string' && parsed.skip_reason ? parsed.skip_reason : undefined,
+      missing_files: Array.isArray(parsed.missing_files) ? (parsed.missing_files as unknown[]).filter((f): f is string => typeof f === 'string') : [],
       cost_usd: 0.05,
     };
   }
@@ -275,13 +258,10 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
   let plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000,
     meter: { property_id: bug.property_id ? Number(bug.property_id) : null, agent_handle: 'bug-agent', source: 'bug-agent', run_ref: String(bug.id) } }));
 
-  // PBS 2026-07-26 (bug #84): re-plan loop — if planner names a missing file, fetch + retry (max 3 rounds)
-  for (let round = 0; round < 3 && (plan.skip_reason || plan.patches.length === 0); round++) {
-    const mention = (plan.skip_reason ?? '') + ' ' + plan.plan_md;
-    const missingPath = extractMissingFilePath(mention);
+  // Re-plan loop: use structured missing_files from planner JSON (law 549 — no prose regex)
+  for (let round = 0; round < 3 && (plan.skip_reason || plan.patches.length === 0) && plan.missing_files.length > 0; round++) {
+    const missingPath = plan.missing_files.find((p) => !contexts.some((c) => c.path === p));
     if (!missingPath) break;
-    // Don't re-fetch already-fetched files
-    if (contexts.some((c) => c.path === missingPath)) break;
     try {
       const file = await ghGetFile(missingPath);
       if (!file) break;
