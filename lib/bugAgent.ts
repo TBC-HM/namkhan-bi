@@ -31,7 +31,7 @@ async function getGhToken(): Promise<string> {
 
 export interface FilePatch { path: string; new_content: string; reasoning: string }
 export interface PlannerResult { plan_md: string; patches: FilePatch[]; skip_reason?: string; missing_files: string[]; cost_usd: number }
-export interface ReviewerResult { verdict: 'approve' | 'reject' | 'needs_human'; notes: string; cost_usd: number }
+export interface ReviewerResult { verdict: 'approve' | 'reject' | 'needs_human'; notes: string; reasons: string[]; cost_usd: number }
 
 interface RunPatch {
   phase?: string; branch?: string | null; pr_number?: number | null; pr_url?: string | null;
@@ -234,6 +234,7 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
       contextBlock,
       '',
       'Return the JSON plan.',
+      ...(bug.reviewFeedback ? ['', 'PREVIOUS REVIEWER FEEDBACK (fix these issues):', bug.reviewFeedback] : []),
     ].join('\n');
   }
 
@@ -381,7 +382,28 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     const review = await reviewPlan(bug, plan);
     costUsd += review.cost_usd;
     await updateRun(runId, { reviewer_out: review }, `REVIEW · verdict=${review.verdict} · ${review.notes}`);
-    if (review.verdict !== 'approve') {
+    await updateRun(runId, { reviewer_out: review }, (review as { _rawLog?: string })._rawLog ?? '');
+    if (review.verdict === 'reject' && review.reasons.length > 0) {
+      const feedback = `REVIEWER REJECTION:\n${review.notes}\nSpecific issues:\n${review.reasons.map((r) => `- ${r}`).join('\n')}\n\nFix all listed issues. Do not add unrelated changes.`;
+      await updateRun(runId, { phase: 'replanning' }, `REPLAN · fixing ${review.reasons.length} reviewer issue(s)`);
+      const repairedPlan = await planBugFix({ ...bug, reviewFeedback: feedback });
+      costUsd += repairedPlan.cost_usd;
+      if (repairedPlan.patches.length > 0) {
+        const repairedReview = await reviewPlan(bug, repairedPlan);
+        costUsd += repairedReview.cost_usd;
+        await updateRun(runId, { reviewer_out: repairedReview }, `REVIEW2 · verdict=${repairedReview.verdict} · ${repairedReview.notes}`);
+        if (repairedReview.verdict === 'approve') {
+          plan = repairedPlan;
+          review = repairedReview;
+        } else {
+          await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · second review: ${repairedReview.verdict}`);
+          return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
+        }
+      } else {
+        await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · replan produced no patches`);
+        return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
+      }
+    } else if (review.verdict !== 'approve') {
       await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · reviewer said ${review.verdict}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
     }
