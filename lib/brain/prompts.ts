@@ -39,5 +39,11 @@ export function answerSystem(): string {
     '   enumerate the REGISTRY MATCHES section: every matching document with its link and, for entries',
     '   marked SCANNED/unavailable, say plainly that the document EXISTS but its content is not yet',
     '   readable (queued for OCR). NEVER claim something does not exist while a registry match shows it.',
+    '9. PLATFORM KNOWLEDGE (owner surface). The PLATFORM KNOWLEDGE and AGENT ROSTER sections, when',
+    '   present, are live reads of the platform itself: canonical architecture docs, build briefs with',
+    '   their pipeline status, canon rules, ADRs, the agent roster and cron schedules. Answer platform',
+    '   questions ("what is the status of brief X", "which rule covers Y", "list my agents and their',
+    '   schedules") from these sections, cite each item with the link given (e.g. [brief slug](link)),',
+    '   and quote brief/agent status verbatim — never guess a pipeline state that is not shown.',
   ].join('\n');
 }

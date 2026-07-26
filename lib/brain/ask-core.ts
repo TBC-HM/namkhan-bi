@@ -105,13 +105,23 @@ export type SopHit = {
   status: string | null; short_summary: string | null; body_md: string | null; score: number;
 };
 
+// BRAIN v8: platform knowledge layer (PBS 2026-07-26) — live search over
+// documentation.documents, build_briefs, canon rules (imp>=8), ADRs.
+// Owner-only: platform internals never surface below owner tier.
+export type PlatformHit = {
+  kind: 'doc' | 'brief' | 'rule' | 'adr'; ref: string; title: string;
+  status: string; snippet: string; link: string; rank: number;
+};
+
+const AGENT_INTENT_RE = /\b(agents?|cron|schedul\w*|workflow|loop|felix|vector|lumen|intel|forge|mercer|sherlock|brain)\b/i;
+
 export async function brainAsk(question: string, tier: BrainTier, scope: BrainScope = 'all'): Promise<AskResult> {
   const sb = getSupabaseAdmin();
 
   let qVec: number[] | null = null;
   try { const v = await embedTexts([question]); qVec = v?.[0] ?? null; } catch { /* fts-only */ }
 
-  const [hits, verifiedRes, registryRes, hrRes, sopRes, opsRes] = await Promise.all([
+  const [hits, verifiedRes, registryRes, hrRes, sopRes, opsRes, platformRes, agentsRes] = await Promise.all([
     brainRetrieve(question, tier, qVec, scope),
     sb.rpc('fn_brain_verified_search', {
       p_q: question, p_embedding: qVec ? JSON.stringify(qVec) : null,
@@ -130,6 +140,14 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
     // BRAIN v7: ops live-data router v1 — KPIs (occ/ADR/RevPAR/revenue) from the
     // same canonical views the dashboards use, fetched live, never stored.
     sb.rpc('fn_brain_ops_context', { p_q: question, p_max_sensitivity: tier }),
+    // BRAIN v8: platform knowledge — docs/briefs/rules/ADRs. Owner tier only.
+    tier === 'owner_only'
+      ? sb.rpc('fn_brain_platform_search', { p_q: question, p_limit: 8 })
+      : Promise.resolve({ data: [] }),
+    // BRAIN v8b: live agent roster + cron schedules. Owner tier + agent-intent only.
+    tier === 'owner_only' && AGENT_INTENT_RE.test(question)
+      ? sb.rpc('fn_brain_agents_context')
+      : Promise.resolve({ data: null }),
   ]);
   const sops = ((sopRes.data ?? []) as SopHit[]).filter(s => s.score >= 1);
 
@@ -139,9 +157,12 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
   const usedHr = Object.keys(hrContext).length > 0;
   const opsContext = (opsRes.data ?? {}) as Record<string, unknown>;
   const usedOps = Object.keys(opsContext).length > 0;
+  const platform = (platformRes.data ?? []) as PlatformHit[];
+  const agentsContext = (agentsRes.data ?? null) as Record<string, unknown> | null;
+  const usedAgents = agentsContext !== null && Object.keys(agentsContext).length > 0;
   const chunkIds = hits.map(h => h.chunk_id);
 
-  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr && sops.length === 0 && !usedOps) {
+  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr && sops.length === 0 && !usedOps && platform.length === 0 && !usedAgents) {
     return { answered: false, answer: NOT_COVERED_REPLY, refusedReason: 'no_chunks_retrieved', sources: [], retrievedChunkIds: chunkIds, usedHr: false };
   }
 
@@ -183,6 +204,12 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
       ).join('\n\n')
     : '(none)';
 
+  const platformBlock = platform.length
+    ? platform.map(p =>
+        `[${p.kind.toUpperCase()} ${p.ref} · "${p.title.slice(0, 110)}" · ${p.status} · link: ${p.link}]\n${p.snippet.slice(0, 1200)}`
+      ).join('\n\n')
+    : '(none)';
+
   const sopBlock = sops.length
     ? sops.map(s =>
         `[SOP ${s.sop_code} · "${s.title ?? '?'}" · dept ${s.dept_code ?? '?'} · v${s.version ?? '?'} · ${s.status ?? '?'}]\n${(s.body_md ?? s.short_summary ?? '').slice(0, 4000)}`
@@ -200,6 +227,10 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
     sopBlock,
     '━━━ LIVE OPERATIONAL DATA (KPIs from the canonical views — fetched live, cite as "(live data)") ━━━',
     usedOps ? JSON.stringify(opsContext, null, 1).slice(0, 5000) : '(none — not a KPI/operations question)',
+    '━━━ PLATFORM KNOWLEDGE (owner surface · live: canonical docs, build briefs, canon rules, ADRs — cite each with its given link) ━━━',
+    platformBlock,
+    '━━━ AGENT ROSTER & SCHEDULES (owner surface · live from cockpit_agent_prompts + pg_cron — cite as "(live platform data)") ━━━',
+    usedAgents ? JSON.stringify(agentsContext, null, 1).slice(0, 7000) : '(none — not an agent/schedule question or below owner tier)',
     '━━━ LIVE STRUCTURED HR DATA (owner/admin surface · fetched live, never stored in the brain) ━━━',
     usedHr ? JSON.stringify(hrContext, null, 1).slice(0, 6000) : '(none — either not an HR question or the asking tier has no HR access)',
     '━━━ OWNER-CONFIRMED VERIFIED ANSWERS (curated knowledge — prefer over raw excerpts when relevant) ━━━',
