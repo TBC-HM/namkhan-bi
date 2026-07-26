@@ -2,10 +2,12 @@
 // Bug #83 (real build) — Build Briefs cockpit. Cockpit-native design (TOKENS).
 // Index: v_build_briefs_index sorted drafts-first, queue header, status filter.
 
+import React from 'react';
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '../_components/tokens';
 import BriefActions from './_components/BriefActions';
+import { BriefQuestionInline } from './_components/BriefQuestionPanel';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -14,10 +16,11 @@ type BriefRow = {
   slug: string; title: string; status: string; version: number;
   assigned_to: string | null; tags: string[] | null;
   last_updated_at: string | null; shipped_at: string | null; md_length: number | null;
+  open_question: { question: string; options: { label: string; consequence: string; recommended?: boolean }[]; asked_by?: string } | null;
 };
 
 const STATUS_ORDER: Record<string, number> = {
-  draft: 0, ready: 1, in_progress: 2, shipped: 4, archived: 5,
+  draft: 0, ready: 1, in_progress: 2, needs_input: 3, shipped: 4, archived: 5,
 };
 
 const STATUS_TOKEN: Record<string, string> = {
@@ -26,6 +29,7 @@ const STATUS_TOKEN: Record<string, string> = {
   in_progress: 'var(--status-green)',
   shipped:     'var(--status-green)',
   archived:    'var(--status-grey)',
+  needs_input: 'var(--status-amber)',
 };
 
 export default async function BriefsPage({
@@ -92,7 +96,8 @@ export default async function BriefsPage({
           </thead>
           <tbody>
             {filtered.map((b) => (
-              <tr key={b.slug} style={{ borderBottom: `1px solid ${TOKENS.border}` }}>
+              <React.Fragment key={b.slug}>
+              <tr style={{ borderBottom: b.status === 'needs_input' ? 'none' : `1px solid ${TOKENS.border}` }}>
                 <td style={{ padding: '10px 12px' }}>
                   <Link
                     href={`/holding/it/cockpit/briefs/${b.slug}`}
@@ -126,6 +131,14 @@ export default async function BriefsPage({
                   <BriefActions slug={b.slug} currentStatus={b.status} />
                 </td>
               </tr>
+              {b.status === 'needs_input' && (
+                <tr style={{ borderBottom: `1px solid ${TOKENS.border}` }}>
+                  <td colSpan={6} style={{ padding: '0 12px 10px', background: TOKENS.bg }}>
+                    <BriefQuestionInline slug={b.slug} question={b.open_question} />
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
             ))}
             {filtered.length === 0 && (
               <tr>
