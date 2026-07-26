@@ -30,6 +30,7 @@ async function loadBugs(): Promise<BugRow[]> {
   const { data } = await sb
     .from('v_bugs_with_agent_state')
     .select('id, dept_slug, body, status, fix_link, fix_label, created_by, page_url, viewport, user_agent, reporter_user_id, property_id, notes, created_at, acked_at, started_at, done_at, updated_at, agent_phase, agent_pr_url, agent_branch, agent_commit_sha')
+    .in('status', ['new', 'acked', 'processing'])
     .order('created_at', { ascending: false })
     .limit(500);
   return (data ?? []) as BugRow[];
@@ -86,7 +87,13 @@ export default async function HoldingBugsPage() {
             <div style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: T.inkSoft, marginBottom: 4 }}>
               Holding <span style={{ color: T.inkSoft, margin: '0 6px' }}>›</span> Bugs
             </div>
-            <div style={{ fontSize: 22, fontWeight: 600, color: T.ink }}>Bug reports</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 22, fontWeight: 600, color: T.ink }}>Bug reports</div>
+              <div style={{ display: 'flex', gap: 2, background: T.warm, borderRadius: 8, padding: 3, border: `1px solid ${T.hairline}` }}>
+                <span style={{ padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, color: T.green, background: T.paper, cursor: 'default' }}>Open</span>
+                <Link href="/holding/bugs/done" style={{ padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 500, color: T.inkSoft, textDecoration: 'none', background: 'transparent' }}>Done log</Link>
+              </div>
+            </div>
             <div style={{ fontSize: 13, color: T.inkSoft, marginTop: 4 }}>
               Every bug submitted via the site-wide widget. Use the CTAs to move through the lifecycle. &ldquo;Copy for agent&rdquo; emits a task payload for autonomous fixers.
             </div>
