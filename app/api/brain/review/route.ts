@@ -18,9 +18,12 @@ const TIERS = new Set<string>(BRAIN_TIERS);
 
 export async function GET() {
   const sb = getSupabaseAdmin();
-  const [statusRes, queueRes] = await Promise.all([
+  // BRAIN v5: + missing-file summary (D4b) + battery last runs (D7/A9)
+  const [statusRes, queueRes, missingRes, batteryRes] = await Promise.all([
     sb.from('v_brain_pipeline_status').select('*').single(),
     sb.from('v_brain_review_queue').select('*').limit(200),
+    sb.from('v_brain_missing_summary').select('*').single(),
+    sb.from('v_brain_battery_recent').select('*').limit(5),
   ]);
   if (statusRes.error) return NextResponse.json({ ok: false, error: statusRes.error.message }, { status: 500 });
   return NextResponse.json({
@@ -28,6 +31,8 @@ export async function GET() {
     status: statusRes.data,
     queue: queueRes.data ?? [],
     queueError: queueRes.error?.message ?? null,
+    missing: missingRes.data ?? null,
+    battery: batteryRes.data ?? [],
   });
 }
 
