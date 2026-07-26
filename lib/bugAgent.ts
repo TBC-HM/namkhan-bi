@@ -206,7 +206,7 @@ const PLANNER_SYSTEM = [
   '- Prefer editing files that were passed in as context. If none match, set skip_reason.',
   '- missing_files: list every file path you need but was NOT given. Use [] when all files provided.',
   '- Status/state indicators must use design-system data-status tokens — never hardcoded hex/rgba.',
-  '- Before using var(--status-success/warning/error/neutral), verify those custom properties are defined in app/(cockpit)/_design/internal/tokens.css. If missing, ADD them to that file in the same patch (e.g. --status-success: #084838; --status-warning: #B48A3A; --status-error: #C0392B; --status-neutral: #AEAEAE).',
+  '- Before using var(--status-*), read app/(cockpit)/_design/internal/tokens.css. If primitives like --status-green/amber/red/grey exist, alias semantic tokens to them (e.g. --status-success: var(--status-green)). If primitives are missing, add them with raw hex in the primitive layer, THEN alias semantics to those primitives — no raw hex in semantic tokens.',
 ].join('\n');
 
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null; reviewFeedback?: string }): Promise<PlannerResult> {
@@ -276,6 +276,7 @@ const REVIEWER_SYSTEM = [
   'verdict="needs_human" if: patches attempt a page rewrite, touch >3 files, or bug is ambiguous.',
   'Be adversarial. Default to needs_human when in doubt.',
   'SCOPE: Judge ONLY lines that this patch ADDS or MODIFIES. Pre-existing code that was untouched is NOT grounds for reject — mention it as a follow-up note only.',
+  'TOKEN LAYERS: Raw hex (#…) is ALLOWED in tokens.css palette-primitive definitions (e.g. --color-green-700: #2E7D32). It is FORBIDDEN in components, inline styles, and semantic token definitions only when an equivalent primitive already exists. Do not reject for hex in the palette layer.',
   'On reject: notes MUST quote the exact violating NEW code (e.g. the hex value or token name) and name the correct replacement. Minimum 30 words in notes.',
 ].join('\n');
 
@@ -391,23 +392,32 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     await updateRun(runId, { reviewer_out: review }, `REVIEW · verdict=${review.verdict} · ${review.notes}`);
     await updateRun(runId, { reviewer_out: review }, (review as { _rawLog?: string })._rawLog ?? '');
     if (review.verdict === 'reject') {
-      const feedback = `REVIEWER REJECTION:\n${review.notes}\nSpecific issues:\n${review.reasons.map((r) => `- ${r}`).join('\n')}\n\nFix all listed issues. Do not add unrelated changes.`;
-      await updateRun(runId, { phase: 'replanning' }, `REPLAN · fixing ${review.reasons.length} reviewer issue(s)`);
-      const repairedPlan = await planBugFix({ ...bug, reviewFeedback: feedback });
-      costUsd += repairedPlan.cost_usd;
-      if (repairedPlan.patches.length > 0) {
+      let currentPlan = plan;
+      let currentReview = review;
+      let converged = false;
+      for (let repairRound = 1; repairRound <= 2; repairRound++) {
+        const feedback = `REVIEWER REJECTION (round ${repairRound}):\n${currentReview.notes}\nSpecific issues:\n${currentReview.reasons.map((r) => `- ${r}`).join('\n')}\n\nFix all listed issues. Do not add unrelated changes.`;
+        await updateRun(runId, { phase: 'replanning' }, `REPLAN${repairRound} · fixing ${currentReview.reasons.length} reviewer issue(s)`);
+        const repairedPlan = await planBugFix({ ...bug, reviewFeedback: feedback });
+        costUsd += repairedPlan.cost_usd;
+        if (repairedPlan.patches.length === 0) {
+          await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · replan${repairRound} produced no patches`);
+          return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
+        }
         const repairedReview = await reviewPlan(bug, repairedPlan);
         costUsd += repairedReview.cost_usd;
-        await updateRun(runId, { reviewer_out: repairedReview }, `REVIEW2 · verdict=${repairedReview.verdict} · ${repairedReview.notes}`);
+        await updateRun(runId, { reviewer_out: repairedReview }, `REVIEW${repairRound + 1} · verdict=${repairedReview.verdict} · ${repairedReview.notes}`);
         if (repairedReview.verdict === 'approve') {
           plan = repairedPlan;
           review = repairedReview;
-        } else {
-          await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · second review: ${repairedReview.verdict}`);
-          return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
+          converged = true;
+          break;
         }
-      } else {
-        await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · replan produced no patches`);
+        currentPlan = repairedPlan;
+        currentReview = repairedReview;
+      }
+      if (!converged) {
+        await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · 2 repair rounds exhausted · last verdict: ${currentReview.verdict}`);
         return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
       }
     } else if (review.verdict !== 'approve') {
