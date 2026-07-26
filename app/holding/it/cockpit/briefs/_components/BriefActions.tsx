@@ -1,63 +1,56 @@
 'use client';
 // app/holding/it/cockpit/briefs/_components/BriefActions.tsx
-// Status-change buttons for a brief row.
-// Confirm = draft→ready ("release into pipeline").
-// Also surfaces Archive.
+// Status transition buttons for a build brief row.
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { TOKENS, MONO } from '../../_components/tokens';
 
-const TRANSITIONS: Record<string, string[]> = {
-  draft:       ['ready'],
-  ready:       ['in_progress', 'archived'],
-  in_progress: ['shipped', 'archived'],
-  shipped:     ['archived'],
-  archived:    ['ready'],
+const TRANSITIONS: Record<string, { label: string; next: string; primary?: boolean }[]> = {
+  draft:       [{ label: 'Confirm → build', next: 'ready', primary: true }, { label: 'Archive', next: 'archived' }],
+  ready:       [{ label: 'Start', next: 'in_progress', primary: true }, { label: 'Back to draft', next: 'draft' }],
+  in_progress: [{ label: 'Ship', next: 'shipped', primary: true }, { label: 'Pause', next: 'ready' }],
+  shipped:     [],
+  archived:    [{ label: 'Restore', next: 'draft' }],
 };
 
-const LABELS: Record<string, string> = {
-  ready:       'Confirm → build',
-  in_progress: 'Mark in-progress',
-  shipped:     'Mark shipped',
-  archived:    'Archive',
-};
+export default function BriefActions({ slug, currentStatus }: { slug: string; currentStatus: string }) {
+  const [status, setStatus] = useState(currentStatus);
+  const [busy, setBusy] = useState(false);
+  const transitions = TRANSITIONS[status] ?? [];
 
-export default function BriefActions({
-  slug, currentStatus,
-}: {
-  slug: string; currentStatus: string;
-}) {
-  const [loading, setLoading] = useState('');
-  const router = useRouter();
-  const next = TRANSITIONS[currentStatus] ?? [];
-
-  async function transition(newStatus: string) {
-    setLoading(newStatus);
-    await fetch('/api/cockpit/briefs/status', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ slug, status: newStatus }),
-    });
-    setLoading('');
-    router.refresh();
+  async function transition(next: string) {
+    setBusy(true);
+    try {
+      const r = await fetch('/api/cockpit/briefs/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, status: next }),
+      });
+      if (r.ok) setStatus(next);
+    } finally {
+      setBusy(false);
+    }
   }
+
+  if (transitions.length === 0) return null;
 
   return (
     <div style={{ display: 'flex', gap: 6 }}>
-      {next.map((s) => (
+      {transitions.map((t) => (
         <button
-          key={s}
-          onClick={() => transition(s)}
-          disabled={loading === s}
+          key={t.next}
+          onClick={() => transition(t.next)}
+          disabled={busy}
           style={{
-            fontSize: 10, padding: '3px 10px', borderRadius: 4,
-            background: s === 'ready' ? '#084838' : '#F4EFE2',
-            color: s === 'ready' ? '#fff' : '#5A5A5A',
-            border: '1px solid #E6DFCC', cursor: 'pointer',
-            opacity: loading ? 0.6 : 1,
+            fontSize: 11, padding: '3px 10px', borderRadius: 6, cursor: 'pointer',
+            fontFamily: MONO, fontWeight: t.primary ? 700 : 500,
+            border: `1px solid ${t.primary ? TOKENS.forest : TOKENS.border}`,
+            background: t.primary ? TOKENS.forest : TOKENS.bg,
+            color: t.primary ? '#fff' : TOKENS.text2,
+            opacity: busy ? 0.6 : 1,
           }}
         >
-          {loading === s ? '…' : LABELS[s] ?? s}
+          {busy ? '…' : t.label}
         </button>
       ))}
     </div>
