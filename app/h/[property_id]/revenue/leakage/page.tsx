@@ -10,6 +10,7 @@ import LeakageTrendSlim from '@/app/_components/registry/LeakageTrendSlim';
 import BedbankKpiStrip from '@/app/_components/registry/BedbankKpiStrip';
 import LeakageAdrMatrix from '@/app/_components/registry/LeakageAdrMatrix';
 import RateDisciplineTrio from '@/app/_components/registry/RateDisciplineTrio';
+import SourceAdrHonestyTile from '@/app/_components/registry/SourceAdrHonestyTile';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -36,6 +37,7 @@ export default function LeakagePage({ params, searchParams }: Props) {
           <LeakageMonthStrip propertyId={propertyId} />
           <LeakageTrendSlim propertyId={propertyId} />
           <BedbankKpiStrip propertyId={propertyId} />
+          <SourceAdrHonestyTile propertyId={propertyId} searchParams={searchParams} />
           <RateDisciplineTrio propertyId={propertyId} searchParams={searchParams} />
           <LeakageAdrMatrix propertyId={propertyId} searchParams={searchParams} />
         </>
