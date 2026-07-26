@@ -204,6 +204,7 @@ const PLANNER_SYSTEM = [
   '- Never touch server-side secrets, .env, package.json, or lock files.',
   '- Prefer editing files that were passed in as context. If none match, set skip_reason.',
   '- `missing_files`: list every file path you need but was NOT given. Use [] when all needed files were provided. Do NOT explain in prose.',
+  '- Status/state indicators MUST use design-system status-dot tokens (e.g. data-status="green"|"amber"|"red"|"grey" CSS classes) — NEVER hardcoded hex or rgba colours. The reviewer will REJECT any hardcoded colour in a status indicator.',
   'Respond with the JSON object only. No prose, no markdown fences.',
 ].join('\n');
 
@@ -288,12 +289,9 @@ const REVIEWER_SYSTEM = [
 async function reviewPlan(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<ReviewerResult> {
   if (plan.patches.length === 0) return { verdict: 'needs_human', notes: 'Planner produced no patches.', cost_usd: 0 };
   if (plan.patches.length > 3) return { verdict: 'needs_human', notes: `Too many files (${plan.patches.length}), needs human.`, cost_usd: 0 };
-  const patchSummary = plan.patches.map((p) => {
-    const content = p.new_content.length > 15000
-      ? p.new_content.slice(0, 15000) + '\n... (truncated at 15KB — file is ' + p.new_content.length + ' bytes total)'
-      : p.new_content;
-    return `--- ${p.path} (${p.new_content.length} bytes) ---\nRATIONALE: ${p.reasoning}\nFULL PATCHED CONTENT:\n${content}`;
-  }).join('\n\n');
+  const patchSummary = plan.patches.map((p) => (
+    `--- ${p.path} (${p.new_content.length} bytes) ---\nRATIONALE: ${p.reasoning}\nFULL PATCHED CONTENT:\n${p.new_content}`
+  )).join('\n\n');
   const prompt = [
     `BUG #${bug.id}: ${bug.body ?? '(empty)'}`,
     `PLAN: ${plan.plan_md}`,
