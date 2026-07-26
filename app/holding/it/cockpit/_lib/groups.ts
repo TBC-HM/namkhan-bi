@@ -55,6 +55,7 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it/cockpit/cost',       label: 'Cost' },
       { href: '/holding/it/cockpit/specs',      label: 'Module Docs' },
       { href: '/holding/it/cockpit/specs/new',  label: '+ New spec' },
+      { href: '/holding/it/cockpit/briefs',     label: 'Briefs' },
     ],
   },
 ];
