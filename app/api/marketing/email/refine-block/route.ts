@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
   const { data: camp, error: campErr } = await sb.schema('guest').from('campaigns')
-    .select('campaign_id, subject, body_md, campaign_kind, group_slug, template_key, relative_kind, relative_days, from_name, ai_prompt')
+    .select('campaign_id, property_id, subject, body_md, campaign_kind, group_slug, template_key, relative_kind, relative_days, from_name, ai_prompt')
     .eq('campaign_id', id).maybeSingle();
   if (campErr) return NextResponse.json({ ok: false, error: `load_campaign_failed: ${campErr.message}` }, { status: 500 });
   if (!camp) return NextResponse.json({ ok: false, error: 'campaign_not_found' }, { status: 404 });
@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
   let policy: { force_plain_text?: boolean | null; block_links?: boolean | null; block_images?: boolean | null } | null = null;
   let policyNote = '';
   if (camp.group_slug) {
-    const { data: pol } = await sb.from('v_group_email_policy').select('*').eq('group_slug', camp.group_slug).maybeSingle();
+    const { data: pol } = await sb.from('v_group_email_policy').select('*')
+      .eq('property_id', (camp as { property_id?: number }).property_id ?? 260955)
+      .eq('group_slug', camp.group_slug).maybeSingle();
     if (pol) {
       policy = pol as typeof policy;
       const bits: string[] = [];
