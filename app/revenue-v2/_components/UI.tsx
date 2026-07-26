@@ -1,12 +1,16 @@
+import KpiPopoverButton from '@/app/(cockpit)/_design/tile/KpiPopoverButton';
 // app/revenue-v2/_components/UI.tsx
 // Shared atomic components — server-safe (no client hooks). Used across all 9 pages.
 
 type Delta = { vs: string; t: string; c: string };
 
-export function KpiTile({ l, v, d }: { l: string; v: string; d?: Delta[] }) {
+export function KpiTile({ l, v, d, kpiKey }: { l: string; v: string; d?: Delta[]; kpiKey?: string }) {
   return (
-    <div className="kpi">
-      <div className="kpi-l">{l}</div>
+    <div className="kpi" style={{ position: 'relative' as const }}>
+      <div className="kpi-l" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {l}
+        <KpiPopoverButton kpiKey={kpiKey} label={l} />
+      </div>
       <div className="kpi-v">{v}</div>
       {d && d.length > 0 && (
         <div className="kpi-d">
