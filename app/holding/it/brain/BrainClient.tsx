@@ -19,6 +19,16 @@ type PipelineStatus = {
   docs_chunked: number;
 };
 
+type MissingSummary = {
+  no_source: number; storage_object_missing: number; empty_file: number;
+  ocr_terminal_failed: number; unsupported_format: number; total_missing: number;
+};
+
+type BatteryRun = {
+  run_id: number; ran_at: string; trigger: string; total: number;
+  passed: number; pass_rate: number; ok: boolean;
+};
+
 type QueueRow = {
   doc_id: string; filename: string | null; title: string | null; dms_doc_type: string | null;
   extract_snippet: string | null; guess_doc_kind: string | null; guess_sensitivity: string | null;
@@ -52,6 +62,8 @@ function renderAnswer(md: string) {
 
 export default function BrainClient() {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
+  const [missing, setMissing] = useState<MissingSummary | null>(null);
+  const [battery, setBattery] = useState<BatteryRun[]>([]);
   const [queue, setQueue] = useState<QueueRow[]>([]);
   const [edits, setEdits] = useState<Record<string, { doc_kind: string; sensitivity: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -75,6 +87,8 @@ export default function BrainClient() {
       const j = await res.json();
       if (!j.ok) { setLoadErr(j.error ?? 'load failed'); return; }
       setStatus(j.status as PipelineStatus);
+      setMissing((j.missing ?? null) as MissingSummary | null);
+      setBattery((j.battery ?? []) as BatteryRun[]);
       setQueue((j.queue ?? []) as QueueRow[]);
       setLoadErr(null);
     } catch (e) {
@@ -156,7 +170,16 @@ export default function BrainClient() {
     { label: 'Needs human', value: status.needs_human, footnote: 'review below' },
     { label: 'Excluded (HR etc.)', value: status.excluded, footnote: 'never retrievable' },
     { label: 'Chunks', value: status.chunks_total, footnote: `${status.chunks_embedded} embedded · ${status.docs_chunked} docs` },
-  ] : [], [status]);
+    // BRAIN v5 · D4b missing-file stripe + D7 battery tile
+    ...(missing ? [{
+      label: 'Missing file', value: missing.total_missing,
+      footnote: `${missing.no_source} no source · ${missing.storage_object_missing} object gone · ${missing.ocr_terminal_failed} OCR-dead`,
+    }] : []),
+    ...(battery.length > 0 ? [{
+      label: 'Battery (nightly)', value: `${battery[0].pass_rate}%`,
+      footnote: `${battery[0].ok ? 'green' : 'RED'} · ${battery[0].passed}/${battery[0].total} · ${new Date(battery[0].ran_at).toISOString().slice(0, 10)}`,
+    }] : [{ label: 'Battery (nightly)', value: '—', footnote: 'no scheduled run recorded yet' }]),
+  ] : [], [status, missing, battery]);
 
   const selStyle: React.CSSProperties = {
     background: 'var(--tbl-bg-elev, #1c1c1e)', color: 'var(--tbl-fg, #eee)',
@@ -179,6 +202,18 @@ export default function BrainClient() {
           <KpiTile key={t.label} label={t.label} value={t.value} size="sm" footnote={t.footnote} />
         ))}
       </div>
+
+      {missing && missing.total_missing > 0 ? (
+        <div style={{ fontSize: 12, opacity: 0.8, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span>
+            {missing.total_missing} registry rows have no readable file (never deleted — registry honesty).
+          </span>
+          <a href="/api/brain/missing-files" download
+             style={{ textDecoration: 'underline', color: 'var(--tbl-fg, #8ab4f8)' }}>
+            Download missing-file CSV
+          </a>
+        </div>
+      ) : null}
 
       <Container title="Ask the company brain" subtitle="Owner view · answers only from classified documents, with citations">
         <div style={{ display: 'flex', gap: 8 }}>
