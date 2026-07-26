@@ -239,9 +239,12 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
 
 
 
-  // Initial plan
-  let plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000,
-    meter: { property_id: bug.property_id ? Number(bug.property_id) : null, agent_handle: 'bug-agent', source: 'bug-agent', run_ref: String(bug.id) } }));
+  // Initial plan via tool-use — guaranteed schema-conformant output (law 549)
+  const bugMeterOpts = { property_id: bug.property_id ? Number(bug.property_id) : null, agent_handle: 'bug-agent', source: 'planner', run_ref: String(bug.id) };
+  type PlanInput = { plan_md: string; patches: FilePatch[]; missing_files: string[]; skip_reason: string | null };
+  const PLAN_SCHEMA = { type: 'object', properties: { plan_md: { type: 'string' }, patches: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, new_content: { type: 'string' }, reasoning: { type: 'string' } }, required: ['path', 'new_content', 'reasoning'] } }, missing_files: { type: 'array', items: { type: 'string' } }, skip_reason: { type: ['string', 'null'] } }, required: ['plan_md', 'patches', 'missing_files'] };
+  const planResult = await callAnthropicTool<PlanInput>({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), toolName: 'submit_plan', toolDescription: 'Submit the repair plan. Use skip_reason when you cannot fix the bug with the given files.', toolSchema: PLAN_SCHEMA, maxTokens: 8000, meter: bugMeterOpts });
+  let plan: PlannerResult = { plan_md: planResult.plan_md ?? '', patches: (planResult.patches ?? []).filter((p) => p.path && p.new_content), skip_reason: planResult.skip_reason ?? undefined, missing_files: planResult.missing_files ?? [], cost_usd: 0.05 };
 
   // Re-plan loop: use structured missing_files from planner JSON (law 549 — no prose regex)
   for (let round = 0; round < 3 && (plan.skip_reason || plan.patches.length === 0) && plan.missing_files.length > 0; round++) {
