@@ -1,11 +1,9 @@
 // app/holding/it/cockpit/briefs/[slug]/page.tsx
-// PBS 2026-07-26 (bug #83) — brief detail: content_md + status history + Re-audit
+// Bug #83 — brief detail: renders content_md + metadata + status actions.
 
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
-import { groupsAsTabs } from '../../_lib/groups';
+import { TOKENS, MONO } from '../../_components/tokens';
 import BriefActions from '../_components/BriefActions';
 
 export const dynamic = 'force-dynamic';
@@ -17,109 +15,93 @@ type BriefDetail = {
   shipped_commit: string | null; target_repo: string | null; target_branch: string | null;
 };
 
-async function fetchBrief(slug: string): Promise<BriefDetail | null> {
-  const sb = getSupabaseAdmin();
-  const { data } = await sb.rpc('fn_get_build_brief', { p_slug: slug });
-  return data as BriefDetail | null;
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  draft: '#B8542A', ready: '#F0A500', in_progress: '#084838',
-  shipped: '#2E7D32', archived: '#8A8A8A',
+const STATUS_TOKEN: Record<string, string> = {
+  draft:       'var(--status-red)',
+  ready:       'var(--status-amber)',
+  in_progress: 'var(--status-green)',
+  shipped:     'var(--status-green)',
+  archived:    'var(--status-grey)',
 };
 
-function renderMd(md: string) {
+function renderMd(md: string): string {
   return md
-    .replace(/^# (.+)$/gm, '<h2 style="font-size:15px;font-weight:700;margin:16px 0 6px;color:#1B1B1B">$1</h2>')
-    .replace(/^## (.+)$/gm, '<h3 style="font-size:13px;font-weight:600;margin:12px 0 4px;color:#1B1B1B">$1</h3>')
-    .replace(/^### (.+)$/gm, '<h4 style="font-size:12px;font-weight:600;margin:10px 0 2px;color:#5A5A5A">$1</h4>')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^# (.+)$/gm, '<h2 style="font-size:16px;font-weight:700;margin:20px 0 8px;color:#1B1B1B;border-bottom:1px solid #E6DFCC;padding-bottom:6px">$1</h2>')
+    .replace(/^## (.+)$/gm, '<h3 style="font-size:13px;font-weight:600;margin:14px 0 5px;color:#1B1B1B">$1</h3>')
+    .replace(/^### (.+)$/gm, '<h4 style="font-size:12px;font-weight:600;margin:10px 0 3px;color:#5A5A5A">$1</h4>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code style="background:#F4EFE2;padding:1px 4px;border-radius:3px;font-size:11px;font-family:monospace">$1</code>')
-    .replace(/^```[\s\S]*?^```/gm, (m) =>
-      `<pre style="background:#F9F6EF;padding:10px;border-radius:4px;font-size:11px;overflow-x:auto;border:1px solid #E6DFCC;margin:8px 0">${m.replace(/```\w*\n?/, '').replace(/```$/, '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`
-    )
-    .replace(/^- (.+)$/gm, '<li style="margin:2px 0;color:#1B1B1B">$1</li>')
-    .replace(/(<li[^>]*>.*<\/li>\n?)+/g, (m) => `<ul style="margin:6px 0 6px 18px;padding:0">${m}</ul>`)
-    .replace(/\n\n/g, '<br/>');
+    .replace(/`([^`\n]+)`/g, '<code style="background:#F4EFE2;padding:1px 5px;border-radius:3px;font-size:11px;font-family:JetBrains Mono,monospace">$1</code>')
+    .replace(/^- (.+)$/gm, '<li style="margin:2px 0;padding-left:4px">$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm, '<li style="margin:2px 0;list-style-type:decimal;padding-left:4px">$2</li>')
+    .replace(/\n\n/g, '</p><p style="margin:0 0 8px">')
+    .replace(/\n/g, '<br/>');
 }
 
-export default async function BriefDetailPage({ params }: { params: { slug: string } }) {
-  const brief = await fetchBrief(params.slug);
-  if (!brief) notFound();
+export default async function BriefDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.rpc('fn_get_build_brief', { p_slug: slug });
+  if (!data) notFound();
+  const brief = data as BriefDetail;
 
   return (
-    <DashboardPage title={brief.title} tabs={groupsAsTabs('build')}>
-      <div style={{ gridColumn: '1 / -1' }}>
-        {/* Back + meta strip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <Link href="/holding/it/cockpit/briefs" style={{ fontSize: 12, color: '#5A5A5A', textDecoration: 'none' }}>
-            ← Briefs
-          </Link>
-          <span style={{
-            fontSize: 10, padding: '2px 8px', borderRadius: 12, fontWeight: 600,
-            background: (STATUS_COLOR[brief.status] ?? '#ccc') + '18',
-            color: STATUS_COLOR[brief.status] ?? '#5A5A5A',
-            border: '1px solid ' + (STATUS_COLOR[brief.status] ?? '#ccc') + '44',
-          }}>
-            {brief.status}
-          </span>
-          <span style={{ fontSize: 11, color: '#8A8A8A' }}>v{brief.version}</span>
-          {brief.last_updated_at && (
-            <span style={{ fontSize: 11, color: '#8A8A8A' }}>
-              edited {new Date(brief.last_updated_at).toLocaleDateString()}
-            </span>
-          )}
-          {brief.shipped_commit && (
-            <span style={{ fontSize: 11, color: '#2E7D32', fontFamily: 'monospace' }}>
-              {brief.shipped_commit.slice(0, 10)}
-            </span>
-          )}
-          <div style={{ marginLeft: 'auto' }}>
-            <BriefActions slug={brief.slug} currentStatus={brief.status} />
+    <div style={{ padding: '20px 24px', maxWidth: 900, color: TOKENS.ink }}>
+      {/* Back */}
+      <a href="/holding/it/cockpit/briefs" style={{ fontSize: 11.5, color: TOKENS.text2, textDecoration: 'none', marginBottom: 12, display: 'inline-block' }}>
+        ← All briefs
+      </a>
+
+      {/* Header */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, margin: '4px 0 6px', color: TOKENS.ink }}>{brief.title}</h1>
+            <div style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text2 }}>{brief.slug}</div>
           </div>
+          <BriefActions slug={brief.slug} currentStatus={brief.status} />
+        </div>
+
+        {/* Metadata row */}
+        <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11.5, color: TOKENS.text2, flexWrap: 'wrap' }}>
+          <span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: STATUS_TOKEN[brief.status] ?? 'var(--status-grey)', display: 'inline-block' }} />
+              <span style={{ fontFamily: MONO, color: STATUS_TOKEN[brief.status] ?? TOKENS.text2 }}>{brief.status}</span>
+            </span>
+          </span>
+          <span style={{ fontFamily: MONO }}>v{brief.version}</span>
+          {brief.assigned_to && <span>→ {brief.assigned_to}</span>}
+          {brief.last_updated_at && <span>edited {brief.last_updated_at.slice(0, 10)}</span>}
+          {brief.shipped_at && <span style={{ color: 'var(--status-green)' }}>shipped {brief.shipped_at.slice(0, 10)}</span>}
+          {brief.shipped_commit && (
+            <span style={{ fontFamily: MONO, fontSize: 10 }}>
+              commit {brief.shipped_commit.slice(0, 8)}
+            </span>
+          )}
         </div>
 
         {/* Tags */}
         {(brief.tags ?? []).length > 0 && (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
             {(brief.tags ?? []).map((t) => (
               <span key={t} style={{
-                fontSize: 10, padding: '1px 8px', background: '#F4EFE2',
-                borderRadius: 6, color: '#5A5A5A', border: '1px solid #E6DFCC',
+                fontSize: 10, padding: '1px 6px', background: TOKENS.bg,
+                borderRadius: 4, color: TOKENS.text2, border: `1px solid ${TOKENS.border}`,
+                fontFamily: MONO,
               }}>{t}</span>
             ))}
           </div>
         )}
-
-        {/* Content */}
-        <Container title="Spec" density="compact">
-          <div
-            style={{ fontSize: 12, lineHeight: 1.7, color: '#1B1B1B' }}
-            dangerouslySetInnerHTML={{ __html: renderMd(brief.content_md ?? '') }}
-          />
-        </Container>
-
-        {/* Meta */}
-        <Container title="Metadata" density="compact">
-          <table style={{ fontSize: 12, borderCollapse: 'collapse', width: '100%' }}>
-            <tbody>
-              {[
-                ['Slug', brief.slug],
-                ['Assigned to', brief.assigned_to ?? '—'],
-                ['Repo', brief.target_repo ?? '—'],
-                ['Branch', brief.target_branch ?? 'main'],
-                ['Shipped', brief.shipped_at ? new Date(brief.shipped_at).toLocaleString() : '—'],
-                ['Shipped commit', brief.shipped_commit ?? '—'],
-              ].map(([k, v]) => (
-                <tr key={k} style={{ borderBottom: '1px solid #F0EBE0' }}>
-                  <td style={{ padding: '5px 8px', color: '#5A5A5A', fontWeight: 500, width: 140 }}>{k}</td>
-                  <td style={{ padding: '5px 8px', color: '#1B1B1B', fontFamily: k === 'Slug' || k.includes('commit') ? 'monospace' : undefined, fontSize: k === 'Slug' || k.includes('commit') ? 11 : 12 }}>{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Container>
       </div>
-    </DashboardPage>
+
+      {/* Content */}
+      <div
+        style={{
+          background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`,
+          borderRadius: 8, padding: '20px 24px', fontSize: 13, lineHeight: 1.65,
+        }}
+        dangerouslySetInnerHTML={{ __html: `<p style="margin:0 0 8px">${renderMd(brief.content_md ?? '')}</p>` }}
+      />
+    </div>
   );
 }
