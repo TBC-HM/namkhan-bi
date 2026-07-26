@@ -12,7 +12,11 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const ALLOWED = new Set(['media_module', 'newsletter_module', 'socials_module', 'gbp_module']);
+const ALLOWED = new Set([
+  'bug_agent_module', 'compiler_module', 'gbp_module', 'inventory_module',
+  'media_module', 'newsletter_module', 'proposals_module', 'sales_module',
+  'socials_module', 'spec_builder_module', 'university_module', 'youtube_module',
+]);
 
 const TYPE_LABEL: Record<string, string> = {
   gbp_module:        'Google Business Profile',
