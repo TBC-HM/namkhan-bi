@@ -8,6 +8,7 @@ import type { KpiTileProps, KpiComparison, TileSize } from '../types';
 import { directionColor, arrowFor, renderCompareLine, formatNumber, formatCurrency } from '../internal/format';
 import { statusColor } from '../internal/status';
 import Skeleton from '../internal/Skeleton';
+import KpiPopoverButton from './KpiPopoverButton';
 import '../internal/tokens.css';
 
 const SIZE_HEIGHT: Record<TileSize, number> = { sm: 88, md: 120, lg: 160 };
@@ -34,7 +35,7 @@ function valueFontSizeFor(value: KpiTileProps['value'], base: number): number {
 export default function KpiTile(props: KpiTileProps) {
   const {
     label, value, unit, currency, delta, compare, status, footnote, stly,
-    size = 'md', loading, onClick, comparisonsExpandable = true,
+    size = 'md', loading, onClick, comparisonsExpandable = true, kpiKey,
   } = props;
   const [tipOpen, setTipOpen] = useState(false);
   const height = SIZE_HEIGHT[size];
@@ -106,16 +107,19 @@ export default function KpiTile(props: KpiTileProps) {
     >
       <div style={S.headRow}>
         <span style={{ ...S.label, fontSize: isSm ? 11 : 12 }}>{label}</span>
-        {status && (
-          <span
-            aria-label={`status ${status}`}
-            style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: statusColor(status),
-              flexShrink: 0,
-            }}
-          />
-        )}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          {status && (
+            <span
+              aria-label={`status ${status}`}
+              style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: statusColor(status),
+                flexShrink: 0,
+              }}
+            />
+          )}
+          <KpiPopoverButton kpiKey={kpiKey} label={label} />
+        </span>
       </div>
 
       <div style={{ ...S.valueRow, fontSize: valueSize }}>
