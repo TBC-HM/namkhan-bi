@@ -125,6 +125,60 @@ export async function callAnthropic(opts: CallOpts): Promise<string> {
   return text;
 }
 
+// callAnthropicTool<T>: tool-use call that guarantees schema-conformant output.
+// The API forces the model to call the named tool — no text parsing, no prose drift.
+export async function callAnthropicTool<T>(opts: {
+  system: string;
+  prompt: string;
+  toolName: string;
+  toolDescription: string;
+  toolSchema: Record<string, unknown>;
+  maxTokens?: number;
+  meter?: MeterOpts;
+}): Promise<T> {
+  const key = await getAnthropicKey();
+  const r = await fetch(API_URL, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': API_VERSION,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: opts.maxTokens ?? 8000,
+      system: opts.system,
+      messages: [{ role: 'user', content: opts.prompt }],
+      tools: [{ name: opts.toolName, description: opts.toolDescription, input_schema: opts.toolSchema }],
+      tool_choice: { type: 'tool', name: opts.toolName },
+    }),
+  });
+  const j = (await r.json().catch(() => ({}))) as {
+    content?: Array<{ type: string; input?: T }>;
+    usage?: { input_tokens?: number; output_tokens?: number };
+    error?: { message?: string };
+  };
+  if (!r.ok) throw new Error(j.error?.message || ('anthropic_tool_' + r.status));
+  if (opts.meter) {
+    const tokIn = j.usage?.input_tokens ?? 0;
+    const tokOut = j.usage?.output_tokens ?? 0;
+    if (tokIn || tokOut) {
+      getSupabaseAdmin().rpc('fn_record_token_use', {
+        p_property_id: opts.meter.property_id,
+        p_agent_handle: opts.meter.agent_handle,
+        p_model: MODEL,
+        p_tokens_in: tokIn,
+        p_tokens_out: tokOut,
+        p_source: opts.meter.source ?? 'callAnthropicTool',
+        p_run_ref: opts.meter.run_ref ?? null,
+      }).catch(() => {});
+    }
+  }
+  const block = (j.content ?? []).find((b) => b.type === 'tool_use');
+  if (!block?.input) throw new Error('tool_use_block_missing: ' + opts.toolName);
+  return block.input as T;
+}
+
 // PBS 2026-07-15 · Convert-to-Lead + Create-Proposal from mail thread.
 // Extract structured lead info from a raw inbound email body — used by
 // /api/mail/convert-to-lead and /api/mail/create-proposal-from-mail routes.
