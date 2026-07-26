@@ -1,9 +1,13 @@
 'use client';
 // app/guest/newsletters/[campaign_id]/_components/RefineNewsletterButton.tsx
 // PBS 2026-07-21 pm: "Refine with AI" for a whole newsletter campaign body.
-// Hits unified endpoint /api/marketing/email/refine-block with kind='newsletter_campaign'.
+// A11 rewire (Newsletter Writer Team v1): hits /api/marketing/newsletter-v2/refine,
+// which reads NEWSLETTER_V2_ENABLED server-side — flag on = strict writer-team
+// engine, flag off = same legacy refine-block behavior as before (proxied).
 // On accept, calls onAccept(subject, body_md) so CampaignEditor updates local state
-// (PBS still hits "Save changes" to persist — same UX as regular editing).
+// (PBS still hits "Save changes" to persist — same UX as regular editing) and
+// fire-and-forget logs the accepted refine to Mira (marketing.email_learnings)
+// so the instruction feeds back into the writer's LEARNED PREFERENCES (A6).
 
 import { useState } from 'react';
 
@@ -34,12 +38,11 @@ export default function RefineNewsletterButton(props: Props) {
     if (!instruction.trim()) return;
     setLoading(true); setError(null); setProposal(null);
     try {
-      const res = await fetch('/api/marketing/email/refine-block', {
+      const res = await fetch('/api/marketing/newsletter-v2/refine', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          kind: 'newsletter_campaign',
-          id: props.campaignId,
+          campaign_id: props.campaignId,
           instruction: instruction.trim(),
         }),
       });
@@ -54,6 +57,26 @@ export default function RefineNewsletterButton(props: Props) {
   function accept() {
     if (!proposal) return;
     props.onAccept(proposal.subject ?? null, proposal.body_md ?? null);
+
+    // Mira auto-log (A6): the accepted instruction IS the owner preference.
+    // Fire-and-forget — a logging miss must never block the editor UX.
+    // property_id is derived server-side from campaign_id (URL LAW: no
+    // hardcoded property ids in client code).
+    fetch('/api/marketing/newsletter-v2/learnings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        campaign_id: props.campaignId,
+        source: 'refine_accept',
+        field: 'body_md',
+        before_text: props.currentBodyMd ?? null,
+        after_text: proposal.body_md ?? null,
+        edit_summary: instruction.trim().slice(0, 500),
+        learned_rule: instruction.trim().slice(0, 500),
+        created_by: 'pbs',
+      }),
+    }).catch(() => {});
+
     setOpen(false); setProposal(null); setInstruction('');
   }
 
