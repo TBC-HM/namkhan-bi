@@ -3,6 +3,8 @@
 // Filters + table + per-row CTAs (Acknowledge / Start / Done / Dismiss / Copy for agent).
 
 import { useEffect, useMemo, useState } from 'react';
+import QuestionPanel, { MissingOptionsFallback } from './QuestionPanel';
+import type { OpenQuestion } from './QuestionPanel';
 
 export interface BugRow {
   id: number;
@@ -28,6 +30,8 @@ export interface BugRow {
   agent_pr_url?: string | null;
   agent_branch?: string | null;
   agent_commit_sha?: string | null;
+  // PBS 2026-07-27 — open_question from bug agent needs_human
+  open_question?: OpenQuestion | null;
 }
 
 // PBS 2026-07-17 — machine phase → visible pill
@@ -306,6 +310,26 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
     setTimeout(() => setFlash(null), 2500);
   }
 
+  async function answerBugQuestion(id: number, choice: string) {
+    setBusy(id);
+    try {
+      const r = await fetch('/api/cockpit/bugs/answer', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ bug_id: id, choice }),
+      });
+      const j = await r.json();
+      if (r.ok) {
+        setRows((prev) => prev.map((x) => x.id === id ? { ...x, status: 'acked', open_question: null } : x));
+        setFlash(`Answered · #${id} → acked`);
+      } else {
+        setFlash(`Answer failed: ${j.error ?? r.status}`);
+      }
+    } finally {
+      setBusy(null);
+      setTimeout(() => setFlash(null), 3000);
+    }
+  }
+
   function toggle(id: number) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -453,6 +477,22 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                             {r.started_at && <>Started: {r.started_at}<br/></>}
                             {r.done_at && <>Done: {r.done_at}</>}
                           </div>
+                          {/* Question panel for needs_human */}
+                          {r.agent_phase === 'needs_human' && (
+                            <div>
+                              {r.open_question ? (
+                                <QuestionPanel
+                                  question={r.open_question}
+                                  answerUrl="/api/cockpit/bugs/answer"
+                                  answerBody={(choice) => ({ bug_id: r.id, choice })}
+                                  onAnswered={(choice) => answerBugQuestion(r.id, choice)}
+                                  compact
+                                />
+                              ) : (
+                                <MissingOptionsFallback notes={r.notes} />
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
