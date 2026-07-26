@@ -116,7 +116,7 @@ async function fetchData() {
       .in('doc_type', MODULE_DOC_TYPES),
     (supabase as any)
       .from('v_module_completion_queue')
-      .select('module_doc_type, status, completion_estimate, brief_slug, priority'),
+      .select('module_doc_type, status, completion_estimate, brief_slug, priority, updated_at'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
@@ -131,6 +131,45 @@ function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// ONE next action per card, derived from real pipeline state (PBS 2026-07-27:
+// "no CTAs, which input they need, when is a module finished").
+function nextAction(q: any, briefStatus: string | null, signedOff: boolean):
+  { label: string; href?: string; rpc?: 'sign_off' | 'reaudit'; tone: 'red' | 'green' | 'gold' | 'grey' } {
+  if (signedOff || q?.status === 'completed') return { label: 'FROZEN ✓', tone: 'grey' };
+  if (briefStatus === 'needs_input' && q?.brief_slug)
+    return { label: 'Answer question →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'red' };
+  if (briefStatus === 'ready' && q?.brief_slug)
+    return { label: 'Confirm & build →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'green' };
+  if (briefStatus === 'shipped')
+    return { label: 'Sign off → freeze', rpc: 'sign_off', tone: 'green' };
+  if (briefStatus && ['research', 'in_progress', 'verifying'].includes(briefStatus) && q?.brief_slug)
+    return { label: 'Agents running · watch →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'gold' };
+  // No estimate, or audit older than 3 days → the number on the card is not trustworthy
+  const auditAgeDays = q?.updated_at ? (Date.now() - new Date(q.updated_at).getTime()) / 86400000 : Infinity;
+  if (q?.completion_estimate == null || auditAgeDays > 3)
+    return { label: 'Re-audit now', rpc: 'reaudit', tone: 'gold' };
+  return { label: 'Queued — auditor runs every 6h', tone: 'grey' };
+}
+
+async function signOffAction(formData: FormData) {
+  'use server';
+  const docType = String(formData.get('doc_type') ?? '');
+  if (docType) await (supabase as any).rpc('fn_module_sign_off', { p_doc_type: docType, p_actor: 'PBS' });
+}
+
+async function reauditAction(formData: FormData) {
+  'use server';
+  const docType = String(formData.get('doc_type') ?? '');
+  if (docType) await (supabase as any).rpc('fn_module_reaudit', { p_doc_type: docType, p_actor: 'PBS' });
+}
+
+const CTA_TONE: Record<string, { bg: string; color: string }> = {
+  red:   { bg: '#B71C1C', color: '#FFFFFF' },
+  green: { bg: '#1F3A2E', color: '#FFFFFF' },
+  gold:  { bg: '#B8A878', color: '#1B1B1B' },
+  grey:  { bg: '#F0EBE0', color: '#5A5A5A' },
+};
+
 export default async function SpecsPage() {
   const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug } = await fetchData();
 
@@ -141,8 +180,11 @@ export default async function SpecsPage() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1B1B1B', margin: 0 }}>Module Documentation</h1>
           <p style={{ fontSize: 12, color: '#5A5A5A', margin: '4px 0 0' }}>
-            Spec docs for all modules · standing pipeline runs Audit → Spec → Repair → Check → Frozen automatically ·
-            auditor every 6h · builder + checker hourly · you are only asked when a GOAL is unclear
+            Spec docs for all modules · auditor every 6h · builder + checker hourly · each card shows ONE next action
+          </p>
+          <p style={{ fontSize: 11, color: '#1B1B1B', margin: '6px 0 0', fontWeight: 600 }}>
+            FINISHED = audit done → spec confirmed → all briefs shipped (commit) → re-audit clean → your sign-off = FROZEN.
+            The % is the agent&apos;s last audit estimate — it only moves when a re-audit runs after repairs ship.
           </p>
         </div>
         <Link href="/holding/it/cockpit/specs/new" style={{
@@ -166,9 +208,15 @@ export default async function SpecsPage() {
               const st = statusMap[doc.doc_type];
               const q = queueMap[doc.doc_type];
               const briefStatus = q?.brief_slug ? (briefStatusBySlug[q.brief_slug] ?? null) : null;
-              const pct = st?.completion_pct ?? 0;
+              // ONE number: the agent-audited estimate. The old module_status.completion_pct
+              // was a stale manual value shown next to it — that dual display is what made
+              // the page meaningless (PBS 2026-07-27). No estimate = say so, don't show 0%.
+              const pct = q?.completion_estimate ?? null;
+              const auditDate = q?.updated_at ? shortDate(q.updated_at) : null;
               const live = st?.is_live ?? false;
               const signedOff = !!st?.signed_off_at;
+              const cta = nextAction(q, briefStatus, signedOff);
+              const tone = CTA_TONE[cta.tone];
               return (
                 <div key={doc.doc_type} style={{
                   background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6,
@@ -181,27 +229,52 @@ export default async function SpecsPage() {
                       v{doc.version} · {signedOff ? 'signed off' : doc.status}
                     </span>
                   </div>
-                  {/* % progress bar */}
+                  {/* % progress bar — the agent-audited estimate with its audit date, or an honest "no audit" */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ flex: 1, height: 4, background: '#F0EBE0', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pct}%`, borderRadius: 99,
-                        background: pct >= 80 ? '#2E7D32' : pct >= 50 ? '#F57F17' : '#D32F2F' }} />
+                      <div style={{ height: '100%', width: `${pct ?? 0}%`, borderRadius: 99,
+                        background: (pct ?? 0) >= 80 ? '#2E7D32' : (pct ?? 0) >= 50 ? '#F57F17' : '#D32F2F' }} />
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#5A5A5A' }}>{pct}%</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: pct == null ? '#B71C1C' : '#5A5A5A' }}>
+                      {pct == null ? 'no audit yet' : `${pct}%`}
+                    </span>
                     {live && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px',
                       borderRadius: 99, background: '#E8F5E9', color: '#2E7D32' }}>live</span>}
                   </div>
+                  {auditDate && pct != null && (
+                    <div style={{ fontSize: 9, color: '#8A8A8A', marginTop: -4 }}>audited {auditDate}</div>
+                  )}
                   {/* Pipeline lifecycle strip */}
                   <PipelineStrip q={q} briefStatus={briefStatus} />
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#1B1B1B', lineHeight: 1.4 }}>{doc.title}</div>
+                  {/* ONE next action per card (CTA) + spec link */}
                   <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 'auto', display: 'flex',
-                    justifyContent: 'space-between', alignItems: 'center' }}>
+                    justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                     <span>{doc.last_updated_at ? shortDate(doc.last_updated_at) : '—'}</span>
-                    <Link href={`/holding/it/module/${encodeURIComponent(doc.doc_type)}`}
-                      style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 3,
-                        background: '#1F3A2E', color: '#FFFFFF', textDecoration: 'none' }}>
-                      Spec →
-                    </Link>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {cta.href ? (
+                        <Link href={cta.href} style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
+                          borderRadius: 3, background: tone.bg, color: tone.color, textDecoration: 'none' }}>
+                          {cta.label}
+                        </Link>
+                      ) : cta.rpc ? (
+                        <form action={cta.rpc === 'sign_off' ? signOffAction : reauditAction} style={{ margin: 0 }}>
+                          <input type="hidden" name="doc_type" value={doc.doc_type} />
+                          <button type="submit" style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
+                            borderRadius: 3, background: tone.bg, color: tone.color, border: 'none', cursor: 'pointer' }}>
+                            {cta.label}
+                          </button>
+                        </form>
+                      ) : (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
+                          borderRadius: 3, background: tone.bg, color: tone.color }}>{cta.label}</span>
+                      )}
+                      <Link href={`/holding/it/module/${encodeURIComponent(doc.doc_type)}`}
+                        style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
+                          border: '1px solid #E6DFCC', color: '#1B1B1B', textDecoration: 'none' }}>
+                        Spec →
+                      </Link>
+                    </div>
                   </div>
                 </div>
               );
