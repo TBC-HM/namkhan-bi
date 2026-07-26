@@ -204,7 +204,6 @@ const PLANNER_SYSTEM = [
   '- Never touch server-side secrets, .env, package.json, or lock files.',
   '- Prefer editing files that were passed in as context. If none match, set skip_reason.',
   '- `missing_files`: list every file path you need but was NOT given. Use [] when all needed files were provided. Do NOT explain in prose.',
-  '- Status/state indicators MUST use design-system status-dot tokens (e.g. data-status="green"|"amber"|"red"|"grey" CSS classes) — NEVER hardcoded hex or rgba colours. The reviewer will REJECT any hardcoded colour in a status indicator.',
   'Respond with the JSON object only. No prose, no markdown fences.',
 ].join('\n');
 
@@ -240,16 +239,23 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
     ].join('\n');
   }
 
-  function parsePlan(raw: string): PlannerResult {
+  function parsePlan(raw: string, logRaw?: (s: string) => void): PlannerResult {
+    // Log raw response for diagnostic purposes (law 549)
+    if (logRaw) logRaw(`RAW_PLANNER (${raw.length} chars): ${raw.slice(0, 800)}`);
     const parsed = parseJsonLoose(raw);
     const patches = Array.isArray(parsed.patches) ? (parsed.patches as unknown[]).filter((p): p is FilePatch => {
       const px = p as Partial<FilePatch>;
       return typeof px.path === 'string' && typeof px.new_content === 'string' && px.new_content.length > 0;
     }) : [];
+    // Enforce non-empty skip_reason when patches=0 (law 549: no silent swallowing)
+    let skip_reason: string | undefined = typeof parsed.skip_reason === 'string' && parsed.skip_reason ? parsed.skip_reason : undefined;
+    if (patches.length === 0 && !skip_reason) {
+      skip_reason = 'malformed_planner_response: patches=0 but skip_reason is null/empty — raw: ' + raw.slice(0, 200);
+    }
     return {
       plan_md: typeof parsed.plan_md === 'string' ? parsed.plan_md : '',
       patches,
-      skip_reason: typeof parsed.skip_reason === 'string' && parsed.skip_reason ? parsed.skip_reason : undefined,
+      skip_reason,
       missing_files: Array.isArray(parsed.missing_files) ? (parsed.missing_files as unknown[]).filter((f): f is string => typeof f === 'string') : [],
       cost_usd: 0.05,
     };
@@ -280,7 +286,7 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
 const REVIEWER_SYSTEM = [
   'You are a strict code reviewer for a Next.js hotel BI app. Given a bug + proposed patches, return ONLY JSON:',
   '{ "verdict": "approve" | "reject" | "needs_human", "notes": "1-3 sentences" }',
-  'APPROVE if: patches are minimal, safe, likely to fix the bug, no syntax issues, no design-token violations (no `var(--paper-warm)`).',
+  'APPROVE if: patches are minimal, safe, likely to fix the bug, no syntax issues, no design-token violations (no `var(--paper-warm)`, no hardcoded hex/rgba in status indicators — use data-status tokens or design-system CSS classes instead).',
   'REJECT if: patches introduce bugs, break TS, remove needed code, add features.',
   'NEEDS_HUMAN if: patches attempt a page rewrite, touch >3 files, or bug is ambiguous.',
   'Be adversarial. Default to needs_human when in doubt.',
