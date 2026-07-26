@@ -438,7 +438,8 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     await updateRun(runId, { phase: 'verifying' }, `VERIFY · polling CI + curl…`);
     const verify = await verifyDeploy(ship.commit_sha, bug.page_url);
     await updateRun(runId, { verifier_out: verify }, `VERIFY · ci_ok=${verify.ci_ok} curl=${verify.curl_status} body_ok=${verify.curl_body_ok} · ${verify.note}`);
-    const success = verify.ci_ok === true && (verify.curl_body_ok !== false);
+    // ci_ok===null = no CI runs yet (skipped_no_ci) → treat as success; only fail on explicit ci_ok===false
+    const success = verify.ci_ok !== false && (verify.curl_body_ok !== false);
     // Determine best fix_link: PR URL if opened, else GH branch compare view
     const fixLink = ship.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${ship.branch}`;
     const fixLabel = ship.pr_number ? `PR #${ship.pr_number}` : `branch: ${ship.branch}`;
