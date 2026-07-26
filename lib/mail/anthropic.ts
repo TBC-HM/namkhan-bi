@@ -119,7 +119,7 @@ export async function callAnthropic(opts: CallOpts): Promise<string> {
       p_tokens_out: j.usage.output_tokens ?? 0,
       p_source: opts.meter?.source ?? 'unknown',
       p_run_ref: opts.meter?.run_ref ?? null,
-    }).then(() => {}).catch(() => {}); // fire-and-forget
+    }).then(() => {}, () => {}); // fire-and-forget (PromiseLike has no .catch)
   }
 
   return text;
