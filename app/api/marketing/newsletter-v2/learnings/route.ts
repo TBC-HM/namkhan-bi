@@ -4,8 +4,9 @@
 // GET lists recent learnings. The read-side feed (last 10 active learnings →
 // LEARNED PREFERENCES block in every Saya call) lives in the shared engine's
 // refreshLiveContext — logging here is enough for the rule to reach the writer
-// on the very next call. UI wiring (auto-log on save-after-edit) lands with the
-// A11 rewire batch.
+// on the very next call. A11 rewire: RefineNewsletterButton auto-logs accepted
+// refines here; property_id may be omitted when campaign_id is given (derived
+// server-side from the campaign row — URL LAW: no hardcoded ids in client code).
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -31,7 +32,13 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); }
   catch { return NextResponse.json({ ok: false, error: 'bad_json' }, { status: 400 }); }
 
-  const pid = Number(body.property_id);
+  let pid = Number(body.property_id);
+  if ((!Number.isFinite(pid) || pid <= 0) && body.campaign_id) {
+    // Derive from the campaign row (client components must not hardcode ids).
+    const { data: camp } = await getSupabaseAdmin().schema('guest').from('campaigns')
+      .select('property_id').eq('campaign_id', String(body.campaign_id)).maybeSingle();
+    pid = Number(camp?.property_id);
+  }
   if (!Number.isFinite(pid) || pid <= 0) {
     return NextResponse.json({ ok: false, error: 'property_id_required' }, { status: 400 });
   }
