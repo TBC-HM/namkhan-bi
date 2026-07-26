@@ -171,7 +171,7 @@ export async function callAnthropicTool<T>(opts: {
         p_tokens_out: tokOut,
         p_source: opts.meter.source ?? 'callAnthropicTool',
         p_run_ref: opts.meter.run_ref ?? null,
-      }).catch(() => {});
+      }).then(undefined, () => {});
     }
   }
   const block = (j.content ?? []).find((b) => b.type === 'tool_use');
