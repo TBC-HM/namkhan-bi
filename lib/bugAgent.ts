@@ -9,7 +9,7 @@
 // PBS 2026-07-24 — token metering added to all callAnthropic calls.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { callAnthropic } from '@/lib/mail/anthropic';
+import { callAnthropic, callAnthropicTool } from '@/lib/mail/anthropic';
 
 const GH_REPO = 'TBC-HM/namkhan-bi';
 const GH_BASE_BRANCH = 'main';
@@ -195,16 +195,14 @@ async function guessCandidateFiles(bug: { page_url: string | null; body: string 
 const PLANNER_SYSTEM = [
   'You are a senior TypeScript engineer fixing a bug in a Next.js 15 App Router codebase for The Namkhan hotel BI.',
   'Design rules: paper-white #FFFFFF, hairlines #E6DFCC, ink #1B1B1B, ink-soft #5A5A5A, brand green #084838. NEVER use `var(--paper-warm)` (renders dark).',
-  'You will be given the bug report + candidate source files. Output ONLY a JSON object matching this schema:',
-  '{ "plan_md": "1-3 sentence plan", "patches": [{"path": "app/x/y.tsx", "new_content": "FULL FILE CONTENT after your edit", "reasoning": "why"}], "skip_reason": null | "cannot fix without X", "missing_files": [] }',
-  'CRITICAL RULES:',
-  '- `new_content` must be the COMPLETE file content, not a diff. Preserve all imports, exports, unchanged code exactly.',
+  'RULES:',
+  '- new_content must be the COMPLETE file content, not a diff. Preserve all imports, exports, unchanged code exactly.',
   '- Do NOT add features or refactor beyond what the bug asks. Minimal surgical change only.',
   '- If the bug is unclear, too big (page rewrite), or requires DB changes, set skip_reason and return patches: [].',
   '- Never touch server-side secrets, .env, package.json, or lock files.',
   '- Prefer editing files that were passed in as context. If none match, set skip_reason.',
-  '- `missing_files`: list every file path you need but was NOT given. Use [] when all needed files were provided. Do NOT explain in prose.',
-  'Respond with the JSON object only. No prose, no markdown fences.',
+  '- missing_files: list every file path you need but was NOT given. Use [] when all files provided.',
+  '- Status/state indicators must use design-system data-status tokens — never hardcoded hex/rgba.',
 ].join('\n');
 
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null }): Promise<PlannerResult> {
@@ -239,27 +237,7 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
     ].join('\n');
   }
 
-  function parsePlan(raw: string, logRaw?: (s: string) => void): PlannerResult {
-    // Log raw response for diagnostic purposes (law 549)
-    if (logRaw) logRaw(`RAW_PLANNER (${raw.length} chars): ${raw.slice(0, 800)}`);
-    const parsed = parseJsonLoose(raw);
-    const patches = Array.isArray(parsed.patches) ? (parsed.patches as unknown[]).filter((p): p is FilePatch => {
-      const px = p as Partial<FilePatch>;
-      return typeof px.path === 'string' && typeof px.new_content === 'string' && px.new_content.length > 0;
-    }) : [];
-    // Enforce non-empty skip_reason when patches=0 (law 549: no silent swallowing)
-    let skip_reason: string | undefined = typeof parsed.skip_reason === 'string' && parsed.skip_reason ? parsed.skip_reason : undefined;
-    if (patches.length === 0 && !skip_reason) {
-      skip_reason = 'malformed_planner_response: patches=0 but skip_reason is null/empty — raw: ' + raw.slice(0, 200);
-    }
-    return {
-      plan_md: typeof parsed.plan_md === 'string' ? parsed.plan_md : '',
-      patches,
-      skip_reason,
-      missing_files: Array.isArray(parsed.missing_files) ? (parsed.missing_files as unknown[]).filter((f): f is string => typeof f === 'string') : [],
-      cost_usd: 0.05,
-    };
-  }
+
 
   // Initial plan
   let plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000,
@@ -284,11 +262,10 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
 }
 
 const REVIEWER_SYSTEM = [
-  'You are a strict code reviewer for a Next.js hotel BI app. Given a bug + proposed patches, return ONLY JSON:',
-  '{ "verdict": "approve" | "reject" | "needs_human", "notes": "1-3 sentences" }',
-  'APPROVE if: patches are minimal, safe, likely to fix the bug, no syntax issues, no design-token violations (no `var(--paper-warm)`, no hardcoded hex/rgba in status indicators — use data-status tokens or design-system CSS classes instead).',
-  'REJECT if: patches introduce bugs, break TS, remove needed code, add features.',
-  'NEEDS_HUMAN if: patches attempt a page rewrite, touch >3 files, or bug is ambiguous.',
+  'You are a strict code reviewer for a Next.js hotel BI app. Review the bug + patches and call submit_review.',
+  'verdict="approve" if: patches are minimal, safe, likely to fix the bug, no syntax issues, no var(--paper-warm), no hardcoded hex/rgba in status indicators (use data-status tokens instead).',
+  'verdict="reject" if: patches introduce bugs, break TS, remove needed code, add features.',
+  'verdict="needs_human" if: patches attempt a page rewrite, touch >3 files, or bug is ambiguous.',
   'Be adversarial. Default to needs_human when in doubt.',
 ].join('\n');
 
@@ -313,14 +290,7 @@ async function reviewPlan(bug: { id: number; body: string | null }, plan: Planne
   return { verdict, notes: typeof parsed.notes === 'string' ? parsed.notes : '(no notes)', cost_usd: 0.01 };
 }
 
-function parseJsonLoose(text: string): Record<string, unknown> {
-  const t = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
-  try { return JSON.parse(t); } catch {
-    const s = t.indexOf('{'), e = t.lastIndexOf('}');
-    if (s >= 0 && e > s) { try { return JSON.parse(t.slice(s, e + 1)); } catch { /* fall through */ } }
-    return {};
-  }
-}
+
 
 async function shipPatches(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<{ branch: string; commit_sha: string; pr_number: number | null; pr_url: string | null; pr_error: string | null }> {
   const branch = `bots/bug-${bug.id}`;
