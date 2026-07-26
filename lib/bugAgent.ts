@@ -287,26 +287,15 @@ async function reviewPlan(bug: { id: number; body: string | null }, plan: Planne
   ].join('\n');
   const parsed = await callAnthropicTool<{ verdict: string; notes: string }>({
     system: REVIEWER_SYSTEM, prompt, toolName: 'submit_review',
-    toolDescription: 'Submit the code review verdict. Always populate notes ≥10 chars. On reject you MUST list specific reasons.',
-    toolSchema: {
-      type: 'object',
-      properties: {
-        verdict: { type: 'string', enum: ['approve', 'reject', 'needs_human'] },
-        notes: { type: 'string', minLength: 10, description: 'Mandatory justification — at least 10 characters' },
-        reasons: { type: 'array', items: { type: 'string', minLength: 5 }, description: 'Required on reject: one item per specific issue' },
-      },
-      required: ['verdict', 'notes'],
-      if: { properties: { verdict: { const: 'reject' } }, required: ['verdict'] },
-      then: { required: ['verdict', 'notes', 'reasons'] },
-    },
-    maxTokens: 1000,
-    meter: { property_id: bug.property_id ? Number(bug.property_id) : null, agent_handle: 'bug-agent', source: 'reviewer', run_ref: String(bug.id) },
+    toolDescription: 'Submit the review verdict for the proposed patches.',
+    toolSchema: { type: 'object', properties: { verdict: { type: 'string', enum: ['approve', 'reject', 'needs_human'] }, notes: { type: 'string' } }, required: ['verdict', 'notes'] },
+    maxTokens: 500,
+    meter: { property_id: null, agent_handle: 'bug-agent-reviewer', source: 'bug-agent', run_ref: String(bug.id) },
   });
-  const rawLog = `REVIEW_RAW: ${JSON.stringify(parsed)}`;
-  const verdict = (['approve', 'reject', 'needs_human'] as const).includes(parsed.verdict as 'approve' | 'reject' | 'needs_human')
+  const verdict = ['approve', 'reject', 'needs_human'].includes(String(parsed.verdict))
     ? (parsed.verdict as 'approve' | 'reject' | 'needs_human')
     : 'needs_human';
-  return { verdict, notes: parsed.notes ?? '(no notes)', reasons: (parsed as { reasons?: string[] }).reasons ?? [], cost_usd: 0.01, _rawLog: rawLog };
+  return { verdict, notes: typeof parsed.notes === 'string' ? parsed.notes : '(no notes)', cost_usd: 0.01 };
 }
 
 
@@ -394,7 +383,7 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     costUsd += review.cost_usd;
     await updateRun(runId, { reviewer_out: review }, `REVIEW · verdict=${review.verdict} · ${review.notes}`);
     await updateRun(runId, { reviewer_out: review }, (review as { _rawLog?: string })._rawLog ?? '');
-    if (review.verdict === 'reject' && review.reasons.length > 0) {
+    if (review.verdict === 'reject') {
       const feedback = `REVIEWER REJECTION:\n${review.notes}\nSpecific issues:\n${review.reasons.map((r) => `- ${r}`).join('\n')}\n\nFix all listed issues. Do not add unrelated changes.`;
       await updateRun(runId, { phase: 'replanning' }, `REPLAN · fixing ${review.reasons.length} reviewer issue(s)`);
       const repairedPlan = await planBugFix({ ...bug, reviewFeedback: feedback });
