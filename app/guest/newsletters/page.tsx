@@ -7,7 +7,7 @@
 
 import type { CSSProperties } from 'react';
 import TenantLink from '@/components/nav/TenantLink';
-import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
+import { DashboardPage, KpiTile, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import NewslettersSubStrip from './_components/NewslettersSubStrip';
@@ -36,22 +36,6 @@ function fmtDate(iso: string | null | undefined): string {
 }
 function pctOr(n: number, d: number): string { if (!d) return '—'; return `${((n/d)*100).toFixed(1)}%`; }
 
-// KPI tile primitive · gold accent · clean minimal
-function KpiTile({ label, value, sub, accent = '#B48A3A' }: { label: string; value: string; sub?: string; accent?: string }) {
-  const wrap: CSSProperties = {
-    background: '#FFFFFF', border: '1px solid #E6DFCC', borderTop: `3px solid ${accent}`,
-    borderRadius: 6, padding: '10px 12px', minHeight: 78,
-    display: 'flex', flexDirection: 'column', gap: 2,
-  };
-  return (
-    <div style={wrap}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A' }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700, color: '#1B1B1B', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: '#8A8A8A', marginTop: 'auto' }}>{sub}</div>}
-    </div>
-  );
-}
-
 interface PageProps { propertyId?: number }
 
 export default async function NewslettersPage({ propertyId }: PageProps = {}) {
@@ -65,12 +49,13 @@ export default async function NewslettersPage({ propertyId }: PageProps = {}) {
     supabase.from('v_guest_campaigns').select('*')
       .eq('property_id', pid).is('archived_at', null)
       .order('updated_at', { ascending: false }),
-    supabase.from('v_subscriber_groups').select('slug, name, color, member_count').order('sort_order'),
+    supabase.from('v_subscriber_groups').select('slug, name, color, member_count')
+      .eq('property_id', pid).order('sort_order'),
     supabase.from('v_marketing_email_send_history')
       .select('property_id, sent_at, delivery_status, campaign_id')
       .eq('property_id', pid).gte('sent_at', yearStart),
-    supabase.from('marketing.subscribers' as never)
-      .select('subscriber_id, created_at, status')
+    supabase.from('v_marketing_subscribers')
+      .select('id, created_at')
       .eq('property_id', pid).gte('created_at', past30d),
   ]);
 
@@ -120,16 +105,16 @@ export default async function NewslettersPage({ propertyId }: PageProps = {}) {
         tabs={tabs}>
         <NewslettersSubStrip active="broadcasts" />
 
-        {/* KPI stripe · gold accent · 8 human-first tiles */}
+        {/* KPI stripe · shared _design KpiTile (design_system §3.1) · 8 human-first tiles */}
         <div style={{ gridColumn:'1 / -1', display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10, marginBottom:6 }}>
-          <KpiTile label="Subscribers" value={subscribersTotal.toLocaleString()} sub={`across ${groups.length} groups`} />
-          <KpiTile label="Sent this year" value={sentThisYear.toLocaleString()} sub={`from ${new Date(yearStart).getFullYear()}-01-01`} />
-          <KpiTile label="Sent this month" value={sentThisMonth.toLocaleString()} sub="calendar month to date" />
-          <KpiTile label="In queue" value={inQueueTotal.toLocaleString()} sub="pending + queued recipients" accent="#084838" />
-          <KpiTile label="Unsubscribed" value={totalUnsub.toLocaleString()} sub="lifetime opt-outs" accent="#B03826" />
-          <KpiTile label="New emails · last 30d" value={newSubs30d.toLocaleString()} sub="net new subscribers" accent="#4A6A3A" />
-          <KpiTile label="Open rate" value={openRate.toFixed(1) + '%'} sub={`${totalOpens.toLocaleString()} opens / ${totalSent.toLocaleString()} sends`} />
-          <KpiTile label="Click rate" value={clickRate.toFixed(1) + '%'} sub={`${totalClicks.toLocaleString()} clicks · ${responseRate.toFixed(2)}% booked`} />
+          <KpiTile size="sm" label="Subscribers" value={subscribersTotal.toLocaleString()} footnote={`across ${groups.length} groups`} />
+          <KpiTile size="sm" label="Sent this year" value={sentThisYear.toLocaleString()} footnote={`from ${new Date(yearStart).getFullYear()}-01-01`} />
+          <KpiTile size="sm" label="Sent this month" value={sentThisMonth.toLocaleString()} footnote="calendar month to date" />
+          <KpiTile size="sm" label="In queue" value={inQueueTotal.toLocaleString()} footnote="pending + queued recipients" />
+          <KpiTile size="sm" label="Unsubscribed" value={totalUnsub.toLocaleString()} footnote="lifetime opt-outs" />
+          <KpiTile size="sm" label="New emails · last 30d" value={newSubs30d.toLocaleString()} footnote="net new subscribers" />
+          <KpiTile size="sm" label="Open rate" value={openRate.toFixed(1) + '%'} footnote={`${totalOpens.toLocaleString()} opens / ${totalSent.toLocaleString()} sends`} />
+          <KpiTile size="sm" label="Click rate" value={clickRate.toFixed(1) + '%'} footnote={`${totalClicks.toLocaleString()} clicks · ${responseRate.toFixed(2)}% booked`} />
         </div>
 
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center', marginTop:6 }}>
