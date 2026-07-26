@@ -9,7 +9,7 @@
 // PBS 2026-07-24 — token metering added to all callAnthropic calls.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { callAnthropic, callAnthropicTool } from '@/lib/mail/anthropic';
+import { callAnthropicTool } from '@/lib/mail/anthropic';
 
 const GH_REPO = 'TBC-HM/namkhan-bi';
 const GH_BASE_BRANCH = 'main';
@@ -255,9 +255,9 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
       if (!file) break;
       contexts.push({ path: missingPath, content: file.content.slice(0, MAX_FILE_BYTES) });
       fetchLog += `  re-plan round ${round + 1}: fetched ${missingPath} (${file.content.length} bytes)\n`;
-      plan = parsePlan(await callAnthropic({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), maxTokens: 8000,
-        meter: { property_id: null, agent_handle: 'bug-agent', source: 'bug-agent', run_ref: String(bug.id) + '-replan' + round } }));
-      plan.cost_usd += 0.05;
+      const replanResult = await callAnthropicTool<PlanInput>({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), toolName: 'submit_plan', toolDescription: 'Submit the repair plan. Use skip_reason when you cannot fix the bug with the given files.', toolSchema: PLAN_SCHEMA, maxTokens: 8000,
+        meter: { property_id: null, agent_handle: 'bug-agent', source: 'bug-agent', run_ref: String(bug.id) + '-replan' + round } });
+      plan = { plan_md: replanResult.plan_md ?? '', patches: (replanResult.patches ?? []).filter((p) => p.path && p.new_content), skip_reason: replanResult.skip_reason ?? undefined, missing_files: replanResult.missing_files ?? [], cost_usd: plan.cost_usd + 0.05 };
     } catch { break; }
   }
 
@@ -284,9 +284,13 @@ async function reviewPlan(bug: { id: number; body: string | null }, plan: Planne
     `PATCHES (${plan.patches.length}):`,
     patchSummary,
   ].join('\n');
-  const raw = await callAnthropic({ system: REVIEWER_SYSTEM, prompt, maxTokens: 500,
-    meter: { property_id: null, agent_handle: 'bug-agent-reviewer', source: 'bug-agent', run_ref: String(bug.id) } });
-  const parsed = parseJsonLoose(raw);
+  const parsed = await callAnthropicTool<{ verdict: string; notes: string }>({
+    system: REVIEWER_SYSTEM, prompt, toolName: 'submit_review',
+    toolDescription: 'Submit the review verdict for the proposed patches.',
+    toolSchema: { type: 'object', properties: { verdict: { type: 'string', enum: ['approve', 'reject', 'needs_human'] }, notes: { type: 'string' } }, required: ['verdict', 'notes'] },
+    maxTokens: 500,
+    meter: { property_id: null, agent_handle: 'bug-agent-reviewer', source: 'bug-agent', run_ref: String(bug.id) },
+  });
   const verdict = ['approve', 'reject', 'needs_human'].includes(String(parsed.verdict))
     ? (parsed.verdict as 'approve' | 'reject' | 'needs_human')
     : 'needs_human';
