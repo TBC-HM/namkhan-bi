@@ -30,7 +30,10 @@ import _MonthCalendar from './calendar/MonthCalendar';
 export const KpiTile = withCk(_KpiTile, 'KpiTile');
 export const Chart = withCk(_Chart, 'Chart');
 export const Container = withCk(_Container, 'Container');
-export const ListContainer = withCk(_ListContainer, 'ListContainer');
+// Cast preserves ListContainer's generic <T> call signature — withCk's
+// ComponentType<P> return erased it and broke every `<ListContainer<Row>>`
+// call site (TS2558 ×9). Runtime behavior identical.
+export const ListContainer = withCk(_ListContainer, 'ListContainer') as typeof _ListContainer;
 export const Drawer = withCk(_Drawer, 'Drawer');
 export const MonthCalendar = withCk(_MonthCalendar, 'MonthCalendar');
 export type { CalendarDay } from './calendar/MonthCalendar';
