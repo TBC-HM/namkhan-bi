@@ -47,7 +47,8 @@ async function handle(req: Request) {
   // emails are lifecycle-only · they get enqueued by fn_enqueue_relative_recipients
   // and don't need calendar slots).
   const { data: policyRows } = await sb
-    .from('v_group_email_policy').select('group_slug, allowed_kinds');
+    .from('v_group_email_policy').select('group_slug, allowed_kinds')
+    .eq('property_id', NAMKHAN_ID);
   const policyByGroup = new Map<string, string[]>();
   for (const p of (policyRows as Array<{ group_slug: string; allowed_kinds: string[] }> | null) ?? []) {
     policyByGroup.set(p.group_slug, p.allowed_kinds ?? []);
