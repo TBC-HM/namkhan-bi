@@ -10,6 +10,12 @@
 //
 // Safe to re-run: only touches slots whose body_md contains the placeholder
 // prefix, so accepted or human-refined slots are left alone.
+//
+// A11 rewire (Newsletter Writer Team v1): behind NEWSLETTER_V2_ENABLED the
+// compose call swaps to /api/marketing/newsletter-v2/write (strict Layer 0:
+// live-context refresh + stale guard + Veda loop) and every composed slot gets
+// a Narin gate row in marketing.email_proposals (gate_status from Veda score:
+// >=80 green · 60-79 amber · <60 red). Flag off → legacy path, byte-identical.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -19,6 +25,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 180;
 
 const NAMKHAN_ID = 260955;
+const V2_ENABLED = ['1', 'true', 'on'].includes(String(process.env.NEWSLETTER_V2_ENABLED ?? '').trim().toLowerCase());
 const HORIZON_DAYS = 7;
 const PLACEHOLDER_MARK = 'Placeholder body';
 const MAX_PER_RUN = 20; // cap Anthropic calls per fire
@@ -84,7 +91,10 @@ async function handle(req: Request) {
         direction ? `Editorial direction from PBS: ${direction}` : null,
       ].filter(Boolean).join('\n');
 
-      const r = await fetch(`${origin}/api/marketing/newsletter/propose-one`, {
+      const composeUrl = V2_ENABLED
+        ? `${origin}/api/marketing/newsletter-v2/write`   // A11: strict Layer 0 chain
+        : `${origin}/api/marketing/newsletter/propose-one`; // legacy (flag off)
+      const r = await fetch(composeUrl, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           property_id: NAMKHAN_ID,
@@ -114,6 +124,27 @@ async function handle(req: Request) {
         results.push({ slot_id: s.id, ok: false, error: refineErr.message });
         continue;
       }
+
+      // Narin gate ledger (v2 only — the v2 write response carries Veda's
+      // score). Never fatal: a ledger miss must not block composition.
+      if (V2_ENABLED && j?.veda && Number.isFinite(Number(j.veda.score))) {
+        const score = Number(j.veda.score);
+        const gate = score >= 80 ? 'green' : score >= 60 ? 'amber' : 'red';
+        const { error: gateErr } = await sb.schema('marketing').from('email_proposals').insert({
+          property_id: NAMKHAN_ID,
+          agent_handle: 'narin',
+          proposal_kind: 'director_slot',
+          director_slot_id: s.id,
+          subject: j.proposal.subject,
+          body_md: j.proposal.body_md,
+          payload: { slot_date: s.slot_date, goal_tag: s.goal_tag, group_slug: s.group_slug, veda_score: score },
+          rubric_json: j.veda,
+          gate_status: gate,
+          status: 'proposed',
+        });
+        if (gateErr) console.error('narin_gate_ledger_failed', s.id, gateErr.message);
+      }
+
       results.push({ slot_id: s.id, ok: true, subject: j.proposal.subject });
     } catch (e: unknown) {
       results.push({ slot_id: s.id, ok: false, error: e instanceof Error ? e.message : 'exception' });
