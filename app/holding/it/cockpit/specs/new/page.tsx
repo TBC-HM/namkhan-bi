@@ -1,14 +1,34 @@
 // app/holding/it/cockpit/specs/new/page.tsx
 // PBS 2026-07-24: Guided spec questionnaire — produces a complete build brief
 // that an autonomous agent can act on without further clarification.
+// v2 2026-07-26 (spec-builder completion): fetches active governance goals
+// (public.v_goals, level >= 2) server-side and passes them to the client so
+// every saved brief carries a goal_id (ADR-165).
 
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { groupsAsTabs } from '@/app/holding/it/cockpit/_lib/groups';
-import SpecBuilderClient from './SpecBuilderClient';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import SpecBuilderClient, { type GoalOption } from './SpecBuilderClient';
 
 export const dynamic = 'force-dynamic';
 
-export default function SpecNewPage() {
+export default async function SpecNewPage() {
+  let goals: GoalOption[] = [];
+  try {
+    const sb = getSupabaseAdmin();
+    const { data } = await sb
+      .from('v_goals')
+      .select('goal_id, slug, title, level, status')
+      .eq('status', 'active')
+      .gte('level', 2)
+      .order('goal_id', { ascending: true });
+    goals = (data ?? []).map(g => ({ goal_id: g.goal_id, slug: g.slug, title: g.title, level: g.level }));
+  } catch {
+    // Render the form anyway — the API rejects a missing goal_id, so nothing
+    // orphaned can slip through even if the goal list fails to load.
+    goals = [];
+  }
+
   return (
     <DashboardPage
       title="Spec Builder"
@@ -25,7 +45,7 @@ export default function SpecNewPage() {
           Be specific — vague descriptions lead to wrong implementations.
           You can edit the brief after saving.
         </div>
-        <SpecBuilderClient />
+        <SpecBuilderClient goals={goals} />
       </div>
     </DashboardPage>
   );
