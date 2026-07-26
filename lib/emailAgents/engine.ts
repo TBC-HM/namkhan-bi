@@ -12,9 +12,9 @@
 //   - Live-context additions: pace_state (mv_pace_otb for the target stay
 //     month) + sender chrome (tagline/address/disclaimer) + Mira learnings
 //     read-side (v_email_learnings last 10 active → LEARNED PREFERENCES block).
-//   - NOTE: marketing.compose_newsletter_email (envelope RPC) and
-//     v_group_email_policy are not yet property-scoped — documented limitation
-//     until their own re-scope pass; all other surfaces filter property_id.
+//   - v5.1 (run 4 property sweep): marketing.compose_newsletter_email now takes
+//     p_property_id and v_group_email_policy exposes property_id — both reads
+//     below are property-scoped. All surfaces now filter property_id.
 //
 // PBS 2026-07-23 · Shared writer engine — extracted verbatim from route.ts POST so the
 // background worker (/api/cron/write-pending-drafts) runs the SAME code path without
@@ -193,7 +193,7 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number,
     sb.from('v_marketing_property_email_settings').select('from_name, from_email, footer_text, unsubscribe_url, header_tagline, footer_address_lines, footer_disclaimer_text').eq('property_id', pid).maybeSingle(),
     sb.from('v_director_goals').select('goal_key, goal_label, weight, group_slug').eq('property_id', pid).eq('active', true),
     group_slug
-      ? sb.from('v_group_email_policy').select('*').eq('group_slug', group_slug).maybeSingle()
+      ? sb.from('v_group_email_policy').select('*').eq('property_id', pid).eq('group_slug', group_slug).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     group_slug
       ? sb.from('v_subscriber_groups').select('slug, name, voice_type, voice_summary').eq('property_id', pid).eq('slug', group_slug).maybeSingle()
@@ -1011,6 +1011,7 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
       p_target_date: body.target_date ? String(body.target_date).slice(0, 10) : null,
       p_max_products: 4,
       p_requested_by: 'propose-one',
+      p_property_id: pid,
     });
     if (error) throw new Error(error.message);
     envelope = parseEnvelope(data, emailKind);
