@@ -274,6 +274,7 @@ const REVIEWER_SYSTEM = [
   'verdict="reject" if: patches introduce bugs, break TS, remove needed code, add features.',
   'verdict="needs_human" if: patches attempt a page rewrite, touch >3 files, or bug is ambiguous.',
   'Be adversarial. Default to needs_human when in doubt.',
+  'On reject: notes MUST quote the exact violating code (e.g. the hex value or token name) and name the correct replacement. Minimum 30 words in notes.',
 ].join('\n');
 
 async function reviewPlan(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<ReviewerResult> {
@@ -291,8 +292,8 @@ async function reviewPlan(bug: { id: number; body: string | null }, plan: Planne
   const parsed = await callAnthropicTool<{ verdict: string; notes: string }>({
     system: REVIEWER_SYSTEM, prompt, toolName: 'submit_review',
     toolDescription: 'Submit the review verdict for the proposed patches.',
-    toolSchema: { type: 'object', properties: { verdict: { type: 'string', enum: ['approve', 'reject', 'needs_human'] }, notes: { type: 'string' } }, required: ['verdict', 'notes'] },
-    maxTokens: 500,
+    toolSchema: { type: 'object', properties: { verdict: { type: 'string', enum: ['approve', 'reject', 'needs_human'] }, notes: { type: 'string', minLength: 10 } }, required: ['verdict', 'notes'] },
+    maxTokens: 1000,
     meter: { property_id: null, agent_handle: 'bug-agent-reviewer', source: 'bug-agent', run_ref: String(bug.id) },
   });
   const verdict = ['approve', 'reject', 'needs_human'].includes(String(parsed.verdict))
