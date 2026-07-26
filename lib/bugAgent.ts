@@ -7,6 +7,9 @@
 // Full pipeline per bug: PLAN → REVIEW → SHIP → VERIFY → CLOSE.
 // See /api/cockpit/bugs/agent-run/route.ts for the surface docs.
 // PBS 2026-07-24 — token metering added to all callAnthropic calls.
+// 2026-07-26 (standing builder) — type repairs on the bug82 repair-loop push:
+// planBugFix accepts reviewFeedback, ReviewerResult.reasons populated at every
+// return site, plan/review are let (repair loop reassigns). Behavior unchanged.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropicTool } from '@/lib/mail/anthropic';
@@ -205,7 +208,7 @@ const PLANNER_SYSTEM = [
   '- Status/state indicators must use design-system data-status tokens — never hardcoded hex/rgba.',
 ].join('\n');
 
-async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null }): Promise<PlannerResult> {
+async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null; reviewFeedback?: string }): Promise<PlannerResult> {
   const candidates = await guessCandidateFiles(bug);
   const contexts: Array<{ path: string; content: string }> = [];
   let fetchLog = '';
@@ -274,8 +277,8 @@ const REVIEWER_SYSTEM = [
 ].join('\n');
 
 async function reviewPlan(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<ReviewerResult> {
-  if (plan.patches.length === 0) return { verdict: 'needs_human', notes: 'Planner produced no patches.', cost_usd: 0 };
-  if (plan.patches.length > 3) return { verdict: 'needs_human', notes: `Too many files (${plan.patches.length}), needs human.`, cost_usd: 0 };
+  if (plan.patches.length === 0) return { verdict: 'needs_human', notes: 'Planner produced no patches.', reasons: [], cost_usd: 0 };
+  if (plan.patches.length > 3) return { verdict: 'needs_human', notes: `Too many files (${plan.patches.length}), needs human.`, reasons: [], cost_usd: 0 };
   const patchSummary = plan.patches.map((p) => (
     `--- ${p.path} (${p.new_content.length} bytes) ---\nRATIONALE: ${p.reasoning}\nFULL PATCHED CONTENT:\n${p.new_content}`
   )).join('\n\n');
@@ -295,7 +298,8 @@ async function reviewPlan(bug: { id: number; body: string | null }, plan: Planne
   const verdict = ['approve', 'reject', 'needs_human'].includes(String(parsed.verdict))
     ? (parsed.verdict as 'approve' | 'reject' | 'needs_human')
     : 'needs_human';
-  return { verdict, notes: typeof parsed.notes === 'string' ? parsed.notes : '(no notes)', cost_usd: 0.01 };
+  const notes = typeof parsed.notes === 'string' ? parsed.notes : '(no notes)';
+  return { verdict, notes, reasons: verdict === 'reject' ? [notes] : [], cost_usd: 0.01 };
 }
 
 
@@ -371,7 +375,7 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
   let costUsd = 0;
   try {
     await updateRun(runId, { phase: 'planning' }, `PLAN · calling Anthropic…`);
-    const plan = await planBugFix(bug);
+    let plan = await planBugFix(bug);
     costUsd += plan.cost_usd;
     await updateRun(runId, { planner_out: plan }, `PLAN · patches=${plan.patches.length} skip=${plan.skip_reason ?? '—'}`);
     if (plan.skip_reason || plan.patches.length === 0) {
@@ -379,7 +383,7 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
     }
     await updateRun(runId, { phase: 'reviewing' }, `REVIEW · calling Anthropic…`);
-    const review = await reviewPlan(bug, plan);
+    let review = await reviewPlan(bug, plan);
     costUsd += review.cost_usd;
     await updateRun(runId, { reviewer_out: review }, `REVIEW · verdict=${review.verdict} · ${review.notes}`);
     await updateRun(runId, { reviewer_out: review }, (review as { _rawLog?: string })._rawLog ?? '');
