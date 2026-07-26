@@ -13,7 +13,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { extractText } from '@/lib/docs/extract';
 import { normalizeToMarkdown } from '@/lib/brain/normalize';
-import { classifyPdfWithVision } from '@/lib/docs/visionOcr';
+import { ocrPlainText, type OcrMediaKind } from '@/lib/docs/visionOcr';
+import { splitPdfForOcr, getPdfPageCount, OCR_MAX_PAGES, OCR_MAX_BYTES } from '@/lib/docs/pdfSplit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,25 @@ type ClaimRow = {
   mime: string | null; file_name: string | null; file_size_bytes: number | null;
   title: string | null; body_markdown: string | null;
 };
+
+// BRAIN v5 (D6): images Claude vision can read natively. heic/bmp/tiff/svg are
+// NOT supported — they stay skipped with a truthful reason.
+const OCR_IMAGE_MEDIA: Record<string, OcrMediaKind & { kind: 'image' }> = {
+  jpg: { kind: 'image', mediaType: 'image/jpeg' },
+  jpeg: { kind: 'image', mediaType: 'image/jpeg' },
+  png: { kind: 'image', mediaType: 'image/png' },
+  gif: { kind: 'image', mediaType: 'image/gif' },
+  webp: { kind: 'image', mediaType: 'image/webp' },
+};
+
+function imageMediaOf(fileName: string | null, mime: string | null): (OcrMediaKind & { kind: 'image' }) | null {
+  const m = (mime ?? '').toLowerCase();
+  if (m === 'image/jpeg' || m === 'image/png' || m === 'image/gif' || m === 'image/webp') {
+    return { kind: 'image', mediaType: m as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' };
+  }
+  const ext = (fileName ?? '').toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? '';
+  return OCR_IMAGE_MEDIA[ext] ?? null;
+}
 
 function kindOf(mime: string | null, fileName: string | null): string {
   const m = (mime ?? '').toLowerCase();
@@ -131,13 +151,21 @@ async function run(req: NextRequest): Promise<NextResponse> {
         continue;
       }
       const kind = kindOf(row.mime, row.file_name ?? row.storage_path);
-      if (kind === 'image') { await set('skipped', null, { reason: 'image_no_text' }); continue; }
+      if (kind === 'image') {
+        // BRAIN v5 (D6): supported images enter the vision-OCR queue instead of
+        // being dropped. Unsupported formats stay skipped, truthfully labeled.
+        const media = imageMediaOf(row.file_name ?? row.storage_path, row.mime);
+        if (media) { await set('ocr_needed', null, { reason: 'image_ocr_queued', media: media.mediaType }); }
+        else { await set('skipped', null, { reason: 'unsupported_format', mime: row.mime }); }
+        continue;
+      }
       if (kind === 'xlsx') { await set('skipped', null, { reason: 'xlsx_unsupported_v1' }); continue; }
       if (kind === 'doc_legacy') { await set('skipped', null, { reason: 'legacy_doc_unsupported' }); continue; }
 
       const { data: blob, error: dlErr } = await sb.storage.from(row.storage_bucket).download(row.storage_path);
       if (dlErr || !blob) { await set('failed', null, { reason: 'download_failed', detail: dlErr?.message }); continue; }
       const buffer = Buffer.from(await blob.arrayBuffer());
+      if (buffer.length === 0) { await set('skipped', null, { reason: 'empty_file', bytes: 0 }); continue; } // D3
       if (buffer.length > MAX_BYTES) { await set('skipped', null, { reason: 'too_large_gt_50mb', bytes: buffer.length }); continue; }
 
       if (kind === 'email_msg') { await set('skipped', null, { reason: 'outlook_msg_unsupported_v1' }); continue; }
@@ -152,7 +180,7 @@ async function run(req: NextRequest): Promise<NextResponse> {
       } else if (kind === 'unknown') {
         // octet-stream etc: try utf8 if mostly printable
         const probe = buffer.subarray(0, 4096).toString('utf8');
-        const printable = probe.replace(/[^\x20-\x7E\u00A0-\uFFFF\n\r\t]/g, '').length / Math.max(1, probe.length);
+        const printable = probe.replace(/[^\x20-\x7E -￿\n\r\t]/g, '').length / Math.max(1, probe.length);
         if (printable > 0.9) text = buffer.toString('utf8');
         else { await set('skipped', null, { reason: 'unknown_binary_format', mime: row.mime }); continue; }
       } else {
@@ -194,14 +222,50 @@ async function run(req: NextRequest): Promise<NextResponse> {
         const { data: blob, error: dlErr } = await sb.storage.from(row.storage_bucket).download(row.storage_path);
         if (dlErr || !blob) { await setOcr('ocr_needed', null, { ocr_attempts: row.attempts + 1, ocr_error: 'download_failed' }); continue; }
         const buffer = Buffer.from(await blob.arrayBuffer());
-        const vision = await classifyPdfWithVision({ pdfBuffer: buffer, fileName: row.file_name ?? row.storage_path });
-        const md = normalizeToMarkdown((vision.extracted_text ?? '').trim()).slice(0, 400_000);
+        if (buffer.length === 0) { await setOcr('skipped', null, { reason: 'empty_file', bytes: 0 }); continue; } // D3
+        const fileName = row.file_name ?? row.storage_path;
+        const media = imageMediaOf(fileName, null);
+
+        let text = '';
+        let segMeta: Record<string, unknown> = {};
+        if (media) {
+          // BRAIN v5 (D6): document photos / scans as images. Downscale via
+          // sharp (existing dep) when over the ~5MB image cap.
+          let img = buffer;
+          let mediaType = media.mediaType;
+          if (img.length > 4_500_000) {
+            const sharp = (await import('sharp')).default;
+            img = Buffer.from(await sharp(img).rotate().resize({ width: 3000, height: 3000, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer());
+            mediaType = 'image/jpeg';
+            segMeta.downscaled = true;
+          }
+          text = await ocrPlainText({ buffer: img, fileName, media: { kind: 'image', mediaType } });
+        } else {
+          // PDF path — split when over the Anthropic page/byte limits (D2).
+          let pageCount: number | null = null;
+          try { pageCount = await getPdfPageCount(buffer); } catch { pageCount = null; }
+          if (pageCount !== null && (pageCount > OCR_MAX_PAGES || buffer.length > OCR_MAX_BYTES)) {
+            const segments = await splitPdfForOcr(buffer);
+            const parts: string[] = [];
+            for (const seg of segments) {
+              const t = await ocrPlainText({ buffer: seg.buffer, fileName: `${fileName} (pages ${seg.pageFrom}-${seg.pageTo})`, media: { kind: 'pdf' } });
+              if (t.trim().length > 0) parts.push(t.trim());
+            }
+            text = parts.join('\n\n');
+            segMeta = { segments: segments.length, pages: pageCount };
+          } else {
+            text = await ocrPlainText({ buffer, fileName, media: { kind: 'pdf' } });
+            if (pageCount !== null) segMeta = { pages: pageCount };
+          }
+        }
+
+        const md = normalizeToMarkdown(text.trim()).slice(0, 400_000);
         if (md.length < 40) {
           const attempts = row.attempts + 1;
           await setOcr(attempts >= 3 ? 'failed' : 'ocr_needed', null, { ocr_attempts: attempts, ocr_error: 'vision_empty' });
           continue;
         }
-        await setOcr('extracted', md, { source: 'vision_ocr', chars: md.length, ocr_attempts: row.attempts + 1 });
+        await setOcr('extracted', md, { source: 'vision_ocr', chars: md.length, ocr_attempts: row.attempts + 1, ...segMeta });
       } catch (e) {
         const attempts = row.attempts + 1;
         await setOcr(attempts >= 3 ? 'failed' : 'ocr_needed', null, {
