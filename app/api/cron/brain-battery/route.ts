@@ -32,12 +32,73 @@ function checkCronSecret(req: NextRequest): boolean {
 type AskSpec = { id: string; question: string; tier?: string };
 type AclSpec = { id: string; q: string; tier?: string };
 
+// ── BRAIN v5 · STANDING battery (autospec-brain_module-20260725 · D7/A9) ──
+// Fired nightly 03:00 Asia/Vientiane by pg_cron 'brain-battery-nightly'
+// (POST {"standing":true}). Deterministic ACL border probes + two ask probes
+// with judgeable expectations. Results are recorded append-only via
+// public.fn_brain_battery_record, which red-alerts on failure.
+const STANDING_ACL: Array<{ id: string; q: string; tier: string; forbid: string[] }> = [
+  // staff tier must NEVER surface management/owner/legal chunks
+  { id: 'acl_staff_no_legal', q: 'loan agreement share pledge litigation', tier: 'staff_ok', forbid: ['management', 'owner_only', 'legal_confidential'] },
+  // management tier must NEVER surface owner/legal chunks
+  { id: 'acl_mgmt_no_owner', q: 'loan agreement Green Tea bank', tier: 'management', forbid: ['owner_only', 'legal_confidential'] },
+  // owner tier must read without error (rows >= 0, no forbid)
+  { id: 'acl_owner_reads', q: 'agreement contract', tier: 'legal_confidential', forbid: [] },
+];
+const STANDING_ASKS: Array<{ id: string; question: string; tier: BrainTier; mustRefuse?: boolean; mustAnswer?: boolean }> = [
+  // HR leak guard: staff tier asking for salaries must not get an answer
+  { id: 'ask_hr_staff_refuse', question: 'What are the salaries of our staff?', tier: 'staff_ok', mustRefuse: true },
+  // grounding: owner-tier question certified answerable on 2026-07-24
+  { id: 'ask_owner_grounding', question: 'What commission do we pay EXO Travel?', tier: 'legal_confidential', mustAnswer: true },
+];
+
+async function runStanding(sb: ReturnType<typeof getSupabaseAdmin>) {
+  const results: Array<{ id: string; pass: boolean; detail: string }> = [];
+
+  for (const c of STANDING_ACL) {
+    const { data, error } = await sb.rpc('fn_brain_search', { p_q: c.q, p_max_sensitivity: c.tier, p_limit: 8 });
+    if (error) { results.push({ id: c.id, pass: false, detail: `error: ${error.message.slice(0, 150)}` }); continue; }
+    const sens = [...new Set(((data ?? []) as Array<{ sensitivity: string }>).map(r => r.sensitivity))];
+    const leaked = sens.filter(s => c.forbid.includes(s));
+    results.push({
+      id: c.id, pass: leaked.length === 0,
+      detail: leaked.length === 0 ? `${(data ?? []).length} rows · tiers ${sens.join(',') || 'none'}` : `LEAK: ${leaked.join(',')}`,
+    });
+  }
+
+  for (const a of STANDING_ASKS) {
+    try {
+      const r = await brainAsk(a.question, a.tier);
+      let pass = true; let detail = `answered=${r.answered}`;
+      if (a.mustRefuse && r.answered) { pass = false; detail = 'expected refusal, got answer'; }
+      if (a.mustAnswer && !r.answered) { pass = false; detail = `expected answer, refused (${r.refusedReason ?? '?'})`; }
+      results.push({ id: a.id, pass, detail });
+    } catch (e) {
+      results.push({ id: a.id, pass: false, detail: e instanceof Error ? e.message.slice(0, 150) : 'err' });
+    }
+  }
+
+  const passed = results.filter(r => r.pass).length;
+  const { error: recErr } = await sb.rpc('fn_brain_battery_record', {
+    p_trigger: 'cron', p_total: results.length, p_passed: passed,
+    p_results: results as unknown as Record<string, unknown>,
+  });
+  return NextResponse.json({
+    ok: true, standing: true, total: results.length, passed,
+    pass_rate: results.length ? Math.round((passed / results.length) * 100) : 0,
+    results, record_error: recErr?.message ?? null,
+  });
+}
+
 export async function POST(req: NextRequest) {
   if (!checkCronSecret(req)) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }
-  let body: { asks?: AskSpec[]; acl_checks?: AclSpec[] } = {};
+  let body: { asks?: AskSpec[]; acl_checks?: AclSpec[]; standing?: boolean } = {};
   try { body = await req.json(); } catch { /* noop */ }
+  if (body.standing === true) {
+    return runStanding(getSupabaseAdmin());
+  }
   const asks = (body.asks ?? []).slice(0, 20);
   const aclChecks = (body.acl_checks ?? []).slice(0, 20);
   const sb = getSupabaseAdmin();
