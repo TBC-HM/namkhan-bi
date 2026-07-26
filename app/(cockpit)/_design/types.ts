@@ -41,6 +41,9 @@ export interface KpiTileProps {
   loading?: boolean;
   onClick?: () => void;
   comparisonsExpandable?: boolean;
+  /** kpi_name (snake_case) or gold_view from kpi.kpi_catalog for the University "?" popup.
+   * Falls back to auto-matching the label if omitted. Only shows "?" when a catalog match exists. */
+  kpiKey?: string;
   /** PBS 2026-07-15: compact "LY" pill in the bottom-right corner
    * (e.g. "LY 22%" / "LY $150"). Pre-formatted. Footnote reserves right
    * padding when this is set so text never overlaps the badge. */
