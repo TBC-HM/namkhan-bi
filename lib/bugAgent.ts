@@ -206,6 +206,7 @@ const PLANNER_SYSTEM = [
   '- Prefer editing files that were passed in as context. If none match, set skip_reason.',
   '- missing_files: list every file path you need but was NOT given. Use [] when all files provided.',
   '- Status/state indicators must use design-system data-status tokens — never hardcoded hex/rgba.',
+  '- Before using var(--status-success/warning/error/neutral), verify those custom properties are defined in app/(cockpit)/_design/internal/tokens.css. If missing, ADD them to that file in the same patch (e.g. --status-success: #084838; --status-warning: #B48A3A; --status-error: #C0392B; --status-neutral: #AEAEAE).',
 ].join('\n');
 
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null; reviewFeedback?: string }): Promise<PlannerResult> {
@@ -274,7 +275,8 @@ const REVIEWER_SYSTEM = [
   'verdict="reject" if: patches introduce bugs, break TS, remove needed code, add features.',
   'verdict="needs_human" if: patches attempt a page rewrite, touch >3 files, or bug is ambiguous.',
   'Be adversarial. Default to needs_human when in doubt.',
-  'On reject: notes MUST quote the exact violating code (e.g. the hex value or token name) and name the correct replacement. Minimum 30 words in notes.',
+  'SCOPE: Judge ONLY lines that this patch ADDS or MODIFIES. Pre-existing code that was untouched is NOT grounds for reject — mention it as a follow-up note only.',
+  'On reject: notes MUST quote the exact violating NEW code (e.g. the hex value or token name) and name the correct replacement. Minimum 30 words in notes.',
 ].join('\n');
 
 async function reviewPlan(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<ReviewerResult> {
