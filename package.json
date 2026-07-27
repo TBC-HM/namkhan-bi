@@ -12,6 +12,7 @@
     "@sparticuz/chromium": "^131.0.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.45.0",
+    "@vercel/functions": "^3.7.6",
     "@vercel/speed-insights": "^2.0.0",
     "date-fns": "^3.6.0",
     "jszip": "^3.10.1",
