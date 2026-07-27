@@ -9,12 +9,16 @@
 // query filters on status='new' / status='acked' so re-runs are safe.
 //
 // What it does, in order:
-//   1. STEP A — for every cockpit_bugs row with status='new':
-//        • create a cockpit_tickets row (source='cockpit_bugs',
-//          intent='triage', metadata.cockpit_bug_id = bug.id)
-//        • flip bug status='new' → 'acked' (sets acked_at)
-//      The existing chat/triage pipeline (pg_cron + agent/run loop) then
-//      processes that ticket via the standard Kit flow.
+//   1. STEP A — RETIRED 2026-07-27 (brief autospec-bug_agent_module-20260725,
+//      decision D3). Evidence: in ~11 weeks of 5-min crons, ZERO
+//      cockpit_tickets rows with source='cockpit_bugs' were ever created,
+//      while 36 bugs sat status='new' — the bridge never worked and competed
+//      with the live pipeline for the same bugs. The single bug pipeline of
+//      record is lib/bugAgent.ts (plan→review→ship→verify on cockpit_bugs +
+//      cockpit.bug_agent_runs), triggered by the ▶ Agent button on
+//      /holding/bugs (PBS ruling bug #84: the button is the ONLY trigger).
+//      status='new' bugs now stay 'new' until an agent run picks them up.
+//      REUSE-FIRST (memory 539): retired, not fixed.
 //
 //   2. STEP B — for every cockpit_bugs row with status='acked' that has a
 //      linked ticket via metadata.cockpit_bug_id:
@@ -68,7 +72,7 @@ const FAILED_TICKET_STATUSES = new Set<string>([
   "rolled_back",
 ]);
 
-const SWEEP_LIMIT = 10;
+// SWEEP_LIMIT removed 2026-07-27 with STEP A (D3) — STEP B has its own limit(50).
 
 type SweepResult = {
   ok: true;
@@ -78,90 +82,21 @@ type SweepResult = {
 };
 
 async function runSweep(): Promise<SweepResult> {
-  // ── STEP A ────────────────────────────────────────────────────────────
-  // Pull the oldest 'new' bugs, create a triage ticket per bug, then ack.
-  const { data: newBugs, error: newErr } = await supabase
+  // ── STEP A — RETIRED (D3, 2026-07-27) ─────────────────────────────────
+  // The bug→ticket bridge is dead code by evidence (0 tickets ever created,
+  // 36 bugs stuck 'new'). lib/bugAgent.ts is the single pipeline of record;
+  // it picks status='new' bugs directly via v_bugs_ready_for_agent when PBS
+  // presses ▶ on /holding/bugs. The sweep only counts 'new' bugs now
+  // (informational, keeps the response shape UI-stable) and never acks,
+  // never creates tickets, never kicks the old agent loop.
+  const { count: newCount, error: newErr } = await supabase
     .from("cockpit_bugs")
-    .select("id, dept_slug, body, created_at")
-    .eq("status", "new")
-    .order("created_at", { ascending: true })
-    .limit(SWEEP_LIMIT);
+    .select("id", { count: "exact", head: true })
+    .eq("status", "new");
 
   if (newErr) throw new Error(`scan new bugs failed: ${newErr.message}`);
 
   const acked: SweepResult["acked"] = [];
-
-  for (const bug of newBugs ?? []) {
-    // Insert a ticket exactly like the chat-route triage flow does
-    // (source/arm/intent/status/parsed_summary/iterations) plus
-    // metadata.cockpit_bug_id so STEP B can later cross-reference.
-    const summary = `[bug #${bug.id} · ${bug.dept_slug}] ${String(bug.body ?? "").slice(0, 460)}`;
-    const { data: ticket, error: tErr } = await supabase
-      .from("cockpit_tickets")
-      .insert({
-        source: "cockpit_bugs",
-        arm: bug.dept_slug ?? "ops",
-        intent: "triage",
-        // PBS 2026-05-09: status='new' (not 'triaging') — the agent/run POST
-        // queue scanner filters status IN ('new','triaged') and skips
-        // 'triaging'. Using 'triaging' here meant bug-spawned tickets sat
-        // forever and were never picked up for triage. The chain was: bug→
-        // ticket(triaging)→[NOTHING]. Fix: bug→ticket(new)→queue drainer
-        // triages → triaged → agent-runner cron writes code.
-        status: "new",
-        parsed_summary: summary,
-        email_subject: summary.slice(0, 140),
-        email_body: bug.body ?? "",
-        iterations: 0,
-        metadata: { cockpit_bug_id: bug.id, dept_slug: bug.dept_slug, source_kind: "dept_bugs_box" },
-      })
-      .select("id")
-      .single();
-
-    if (tErr) {
-      acked.push({ bug_id: bug.id, ticket_id: null, error: tErr.message });
-      continue;
-    }
-
-    const nowIso = new Date().toISOString();
-    const { error: bErr } = await supabase
-      .from("cockpit_bugs")
-      .update({ status: "acked", acked_at: nowIso, updated_at: nowIso })
-      .eq("id", bug.id)
-      .eq("status", "new"); // race-safe: only flip if still 'new'
-
-    if (bErr) {
-      acked.push({ bug_id: bug.id, ticket_id: ticket?.id ?? null, error: bErr.message });
-      continue;
-    }
-
-    // Audit-log so the sweep is visible alongside Kit's other actions.
-    await supabase.from("cockpit_audit_log").insert({
-      ticket_id: ticket?.id ?? null,
-      agent: "bugs_sweep",
-      action: "ack_and_route",
-      target: `bug:${bug.id}`,
-      success: true,
-      metadata: { bug_id: bug.id, dept_slug: bug.dept_slug },
-      reasoning: `cockpit_bugs id=${bug.id} flipped new→acked; ticket #${ticket?.id} created for Kit triage`,
-    });
-
-    // Fire-and-forget kick to /api/cockpit/agent/run so the role-specific
-    // worker starts inside seconds rather than waiting for pg_cron. Same
-    // pattern as the chat route. Safe to ignore failure — the agent loop
-    // and the next sweep both pick the ticket up.
-    const agentToken = process.env.COCKPIT_AGENT_TOKEN;
-    if (agentToken && ticket?.id) {
-      void fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://namkhan-bi.vercel.app"}/api/cockpit/agent/run?id=${ticket.id}`,
-        { method: "POST", headers: { Authorization: `Bearer ${agentToken}` } },
-      ).catch(() => {
-        /* swallow — pg_cron is the safety net */
-      });
-    }
-
-    acked.push({ bug_id: bug.id, ticket_id: ticket?.id ?? null });
-  }
 
   // ── STEP B ────────────────────────────────────────────────────────────
   // For 'acked' or 'processing' bugs whose linked ticket has progressed,
@@ -342,7 +277,7 @@ async function runSweep(): Promise<SweepResult> {
     ok: true,
     acked,
     promoted,
-    scanned: { new: newBugs?.length ?? 0, acked: liveBugs?.length ?? 0 },
+    scanned: { new: newCount ?? 0, acked: liveBugs?.length ?? 0 },
   };
 }
 
