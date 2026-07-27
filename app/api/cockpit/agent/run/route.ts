@@ -20,6 +20,7 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { automationGuard } from "@/lib/cron/guard";
 import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, type AgentToolDef } from "@/lib/cockpit-tools";
 
 export const runtime = "nodejs";
@@ -677,6 +678,9 @@ function checkBearer(req: Request): boolean {
 
 export async function POST(req: Request) {
   noStore();
+  // GLOBAL KILL SWITCH (brief ops-scheduler-console-v1 A3)
+  const blocked = await automationGuard("/api/cockpit/agent/run");
+  if (blocked) return blocked;
   if (!checkBearer(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -723,6 +727,8 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  const blockedByKill = await automationGuard("/api/cockpit/agent/run");
+  if (blockedByKill) return blockedByKill;
   // PBS 2026-05-09: Vercel cron hits this every 5 min via x-vercel-cron
   // header (no Authorization possible from cron config). When called by cron,
   // drain the queue — same logic as POST. Manual GET callers (with a Bearer
