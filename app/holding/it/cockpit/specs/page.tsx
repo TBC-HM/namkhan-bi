@@ -150,6 +150,8 @@ function nextAction(q: any, briefStatus: string | null, signedOff: boolean):
     return { label: 'Confirm & build →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'green' };
   if (briefStatus === 'shipped')
     return { label: 'Sign off → freeze', rpc: 'sign_off', tone: 'green' };
+  if (briefStatus === 'draft' && q?.brief_slug)
+    return { label: 'Confirm & build →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'green' };
   if (briefStatus && ['research', 'in_progress', 'verifying'].includes(briefStatus) && q?.brief_slug)
     return { label: 'Agents running · watch →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'gold' };
   // No estimate, or audit older than 3 days → the number on the card is not trustworthy
