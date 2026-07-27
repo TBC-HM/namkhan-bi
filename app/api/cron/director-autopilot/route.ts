@@ -12,6 +12,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { automationGuard } from '@/lib/cron/guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,10 @@ const DEFAULT_CADENCE_PER_MONTH = 4.0;
 const WEEKS_PER_MONTH = 4.33;
 
 async function handle(req: Request) {
+  // GLOBAL KILL SWITCH (brief ops-scheduler-console-v1 A3): exit early when automation is OFF.
+  const blocked = await automationGuard('/api/cron/director-autopilot');
+  if (blocked) return blocked;
+
   const url = new URL(req.url);
   const dry = url.searchParams.get('dry') === '1';
   const origin = new URL(req.url).origin;
