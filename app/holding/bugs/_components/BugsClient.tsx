@@ -2,7 +2,7 @@
 // app/holding/bugs/_components/BugsClient.tsx
 // Filters + table + per-row CTAs (Acknowledge / Start / Done / Dismiss / Copy for agent).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import QuestionPanel, { MissingOptionsFallback } from './QuestionPanel';
 import type { OpenQuestion } from './QuestionPanel';
 
@@ -60,10 +60,12 @@ const T = {
 type StatusKey = 'open' | 'acknowledged' | 'in_progress' | 'done' | 'dismissed';
 
 function statusOf(r: BugRow): StatusKey {
-  if (r.status === 'dismissed') return 'dismissed';
-  if (r.done_at) return 'done';
-  if (r.started_at) return 'in_progress';
-  if (r.acked_at) return 'acknowledged';
+  // PBS 2026-07-27 (bug-106) — DB canonical vocabulary is
+  // new/acked/processing/done/wont_fix. 'dismissed' kept for legacy rows.
+  if (r.status === 'wont_fix' || r.status === 'dismissed') return 'dismissed';
+  if (r.status === 'done' || r.done_at) return 'done';
+  if (r.status === 'processing' || r.started_at) return 'in_progress';
+  if (r.status === 'acked' || r.acked_at) return 'acknowledged';
   return 'open';
 }
 
@@ -161,6 +163,10 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentRuns, setAgentRuns] = useState<AgentRunLatest[]>([]);
   const [agentMsg, setAgentMsg] = useState<string | null>(null);
+  // PBS 2026-07-27 — fire-and-forget: which bug we're watching to terminal
+  // phase (-1 = drain mode, watch until the whole queue is quiet).
+  const [watchedBug, setWatchedBug] = useState<number | null>(null);
+  const watchStartRef = useRef<number>(0);
   const runsByBug = useMemo(() => {
     const m = new Map<number, AgentRunLatest>();
     for (const r of agentRuns) m.set(r.bug_id, r);
@@ -185,6 +191,42 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
     return () => { cancelled = true; clearInterval(iv); };
   }, [agentBusy]);
 
+  // PBS 2026-07-27 — watch the fired run to its terminal phase, then report
+  // the outcome and stop polling. 20-min ceiling so a stalled run can't spin
+  // the poll forever.
+  useEffect(() => {
+    if (watchedBug === null) return;
+    const TERMINAL = new Set(['done', 'failed', 'needs_human']);
+    const elapsed = Date.now() - watchStartRef.current;
+    if (elapsed > 20 * 60 * 1000) {
+      setAgentMsg('Run still not finished after 20 min — likely stalled. Check the runs pane below or refresh.');
+      setWatchedBug(null);
+      setAgentBusy(false);
+      return;
+    }
+    if (watchedBug === -1) {
+      // Drain mode: stop once nothing is active (10s grace so the new run
+      // row has time to appear before we conclude the queue is empty).
+      const active = agentRuns.filter((r) => !r.ended_at && !TERMINAL.has(r.phase));
+      if (elapsed > 10_000 && active.length === 0) {
+        setAgentMsg('Queue drained — all runs finished. Details per bug in the runs pane.');
+        setWatchedBug(null);
+        setAgentBusy(false);
+      }
+      return;
+    }
+    const run = runsByBug.get(watchedBug);
+    if (run && (run.ended_at || TERMINAL.has(run.phase))) {
+      const label = PHASE_TONE[run.phase]?.label ?? run.phase;
+      setAgentMsg(`Bug #${watchedBug} — agent finished: ${label}${run.pr_url ? ' · PR ready' : ''}${run.error ? ' · ' + run.error.slice(0, 120) : ''}`);
+      setWatchedBug(null);
+      setAgentBusy(false);
+    }
+  }, [agentRuns, watchedBug, runsByBug]);
+
+  // PBS 2026-07-27 — fire-and-forget. The POST now returns 202 instantly with
+  // queue position + ETA (the run itself continues server-side via waitUntil).
+  // The 2s poll (above) watches the run to its terminal phase, then reports.
   async function startAgentRun(mode: 'one' | 'drain', max = 5) {
     if (agentBusy) return;
     setAgentBusy(true);
@@ -197,34 +239,27 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
       });
       const j = await r.json();
       if (r.ok) {
-        setAgentMsg(`Processed ${j.processed?.length ?? 0} bug(s) · ${j.note ?? ''}`);
+        watchStartRef.current = Date.now();
+        setWatchedBug(-1); // drain sentinel — stop when queue is empty
+        setAgentMsg(`Run accepted — position ${j.queue_position ?? '?'} in queue · expect ~${j.eta_minutes ?? '?'} min · phases update live below`);
       } else {
         setAgentMsg(`Run failed: ${j.error ?? r.status}`);
+        setAgentBusy(false);
       }
     } catch (e) {
       setAgentMsg(`Network error · ${(e as Error).message}`);
-    } finally {
       setAgentBusy(false);
-      // One final poll to catch the last phase transitions after busy=false
-      // stops the interval.
-      try {
-        const rr = await fetch('/api/cockpit/bugs/agent-run', { cache: 'no-store' });
-        if (rr.ok) {
-          const jj = await rr.json();
-          if (Array.isArray(jj.runs)) setAgentRuns(jj.runs);
-        }
-      } catch { /* silent */ }
-      // PBS 2026-07-17 — bugs table state doesn't change in Phase A (no bug
-      // moves to 'in_progress' or 'done'). Phase B: router.refresh() here to
-      // re-fetch server-rendered rows once real shipping/verification lands.
     }
   }
 
   // PBS 2026-07-26 (bug #84) — per-row Agent button fires THIS specific bug.
+  // PBS 2026-07-27 — fire-and-forget + queue/ETA feedback (his ask: "when i
+  // fire a agent there is no indication like queued or when to expect
+  // termination according current queue").
   async function startAgentForBug(bugId: number) {
     if (agentBusy) return;
     setBusy(bugId);
-    setAgentMsg('Starting agent on bug #' + bugId + '…');
+    setAgentMsg('Firing agent on bug #' + bugId + '…');
     try {
       const r = await fetch('/api/cockpit/bugs/agent-run', {
         method: 'POST',
@@ -232,17 +267,18 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
         body: JSON.stringify({ bug_ids: [bugId], mode: 'one', max: 1, triggered_by: 'ui' }),
       });
       const j = await r.json();
-      setAgentMsg(r.ok
-        ? 'Bug #' + bugId + ' run started · ' + (j.processed?.[0]?.phase ?? 'queued')
-        : 'Bug #' + bugId + ' failed: ' + (j.error ?? r.status));
+      if (r.ok) {
+        watchStartRef.current = Date.now();
+        setWatchedBug(bugId);
+        setAgentBusy(true); // keeps the 2s poll alive until terminal phase
+        setAgentMsg(`Bug #${bugId} queued — position ${j.queue_position ?? '?'} · expect ~${j.eta_minutes ?? '?'} min · phase pill on the row updates live`);
+      } else {
+        setAgentMsg('Bug #' + bugId + ' failed to queue: ' + (j.error ?? r.status));
+      }
     } catch (e) {
       setAgentMsg('Network error · ' + (e as Error).message);
     } finally {
       setBusy(null);
-      setTimeout(async () => {
-        const rr = await fetch('/api/cockpit/bugs/agent-run', { cache: 'no-store' });
-        if (rr.ok) { const jj = await rr.json(); if (Array.isArray(jj.runs)) setAgentRuns(jj.runs); }
-      }, 1500);
     }
   }
 
@@ -286,16 +322,19 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action }),
       });
+      const j = await r.json().catch(() => ({} as { row?: BugRow; error?: string }));
       if (r.ok) {
-        const j = await r.json();
         setRows((prev) => prev.map((x) => x.id === id ? { ...x, ...j.row } : x));
         setFlash(`Marked ${action} · #${id}`);
+        setTimeout(() => setFlash(null), 2500);
       } else {
-        setFlash(`Failed: ${r.status}`);
+        // PBS 2026-07-27 (bug-106) — never swallow the real error. The old
+        // `Failed: 500` vanished in 2.5s and the click looked like it worked.
+        setFlash(`${action} FAILED on #${id}: ${j.error ?? r.status} — nothing was saved`);
+        setTimeout(() => setFlash(null), 10000);
       }
     } finally {
       setBusy(null);
-      setTimeout(() => setFlash(null), 2500);
     }
   }
 

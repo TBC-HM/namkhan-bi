@@ -42,7 +42,9 @@ export default async function HoldingBugsPage() {
   const oneDayAgo = now - 24 * 3600 * 1000;
   const sevenDaysAgo = now - 7 * 24 * 3600 * 1000;
 
-  const openCount = rows.filter((r) => !r.done_at && r.status !== 'dismissed').length;
+  // PBS 2026-07-27 — DB canonical dismiss status is 'wont_fix' ('dismissed'
+  // kept for any legacy rows written before the bug-106 fix).
+  const openCount = rows.filter((r) => !r.done_at && r.status !== 'wont_fix' && r.status !== 'dismissed').length;
   const todayNew = rows.filter((r) => new Date(r.created_at).getTime() >= oneDayAgo).length;
   const inProgress = rows.filter((r) => r.started_at && !r.done_at).length;
   const done7d = rows.filter((r) => r.done_at && new Date(r.done_at).getTime() >= sevenDaysAgo).length;

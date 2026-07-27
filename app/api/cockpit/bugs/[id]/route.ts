@@ -39,12 +39,17 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const body = (await req.json().catch(() => ({}))) as { action?: string; notes?: string };
   const action = body.action;
 
+  // PBS 2026-07-27 (bug-106 root cause) — cockpit.exec_bugs has a CHECK
+  // constraint: status IN ('new','acked','processing','done','wont_fix').
+  // This route used to write 'acknowledged' / 'in_progress' / 'dismissed',
+  // which Postgres rejected → 500 → the click did NOTHING while the UI flash
+  // vanished after 2.5s. Map UI verbs to the DB's canonical vocabulary.
   const patch: Record<string, string | null> = { updated_at: new Date().toISOString() };
   switch (action) {
-    case 'acknowledge': patch.acked_at = new Date().toISOString(); patch.status = 'acknowledged'; break;
-    case 'start':       patch.started_at = new Date().toISOString(); patch.status = 'in_progress'; break;
+    case 'acknowledge': patch.acked_at = new Date().toISOString(); patch.status = 'acked'; break;
+    case 'start':       patch.started_at = new Date().toISOString(); patch.status = 'processing'; break;
     case 'done':        patch.done_at = new Date().toISOString(); patch.status = 'done'; break;
-    case 'dismiss':     patch.status = 'dismissed'; break;
+    case 'dismiss':     patch.status = 'wont_fix'; break;
     default:
       if (typeof body.notes === 'string') patch.notes = body.notes;
       else return NextResponse.json({ error: 'invalid_action' }, { status: 400 });
