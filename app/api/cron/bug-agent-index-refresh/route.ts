@@ -13,7 +13,7 @@
 // Vercel cron: nightly 19:30 UTC (02:30 Asia/Vientiane) — see vercel.json.
 // Middleware whitelists /api/cron/*. GET + POST for manual smoke tests.
 
-import { NextResponse } from '@/node_modules/next/server';
+import { NextResponse } from 'next/server';
 import { refreshCodeIndex } from '@/lib/bugAgent';
 
 export const runtime = 'nodejs';
