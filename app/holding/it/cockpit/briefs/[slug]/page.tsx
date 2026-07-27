@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '../../_components/tokens';
 import BriefActions from '../_components/BriefActions';
 import { BriefQuestionInline } from '../_components/BriefQuestionPanel';
+import LiveActivityPanel from '../_components/LiveActivityPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,13 @@ export default async function BriefDetailPage({ params }: { params: Promise<{ sl
       <a href="/holding/it/cockpit/briefs" style={{ fontSize: 11.5, color: TOKENS.text2, textDecoration: 'none', marginBottom: 12, display: 'inline-block' }}>
         ← All briefs
       </a>
+
+      {/* Live activity — WATCH means watching (bug #105): who works, what moved, stall flag */}
+      {['research', 'in_progress', 'verifying'].includes(brief.status) && (
+        <div style={{ marginBottom: 18 }}>
+          <LiveActivityPanel slug={brief.slug} />
+        </div>
+      )}
 
       {/* Open question — pinned at the very top, above everything */}
       {brief.status === 'needs_input' && (
