@@ -3,6 +3,7 @@
 // Uses public.v_documents_latest + public.v_build_briefs (bridge views over documentation schema).
 // v2 2026-07-25: pipeline lifecycle strip per module (Audit → Spec → Repair → Check → Frozen)
 // driven by public.v_module_completion_queue + brief statuses (standing pipeline, ADR-165/166).
+// v3 2026-07-27 (bug #88): gap_list rendered under % bar — no % ever shows without its complement.
 
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -92,6 +93,41 @@ function TypePill({ docType }: { docType: string }) {
   );
 }
 
+// GapList: render top-3 gaps with their weight_pct, or a nudge when absent.
+function GapList({ gapList, pct }: { gapList: { gap: string; weight_pct: number }[] | null; pct: number | null }) {
+  // Only relevant when we have an audit estimate.
+  if (pct == null) return null;
+
+  if (!gapList || gapList.length === 0) {
+    return (
+      <div style={{ fontSize: 9, color: '#B8A878', fontStyle: 'italic', marginTop: -2 }}>
+        no gap data · re-audit to populate
+      </div>
+    );
+  }
+
+  const top3 = gapList.slice(0, 3);
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 6px', marginTop: -2 }}>
+      {top3.map((g, i) => (
+        <span key={i} style={{
+          fontSize: 9, fontWeight: 600, padding: '2px 7px', borderRadius: 99,
+          background: '#F4EFE2', color: '#5A5A5A', whiteSpace: 'nowrap',
+          maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis',
+          display: 'inline-block',
+        }}>
+          {g.weight_pct}% · {g.gap}
+        </span>
+      ))}
+      {gapList.length > 3 && (
+        <span style={{ fontSize: 9, color: '#8A8A8A', alignSelf: 'center' }}>
+          +{gapList.length - 3} more on detail page
+        </span>
+      )}
+    </div>
+  );
+}
+
 async function fetchData() {
   const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }] = await Promise.all([
     supabase
@@ -110,7 +146,7 @@ async function fetchData() {
       .like('doc_type', '%_module'),
     (supabase as any)
       .from('v_module_completion_queue')
-      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at'),
+      .select('module_doc_type, display_name, status, completion_estimate, gap_list, completion_estimate_date, brief_slug, priority, updated_at'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
@@ -221,6 +257,16 @@ export default async function SpecsPage() {
               // the page meaningless (PBS 2026-07-27). No estimate = say so, don't show 0%.
               const pct = q?.completion_estimate ?? null;
               const auditDate = q?.updated_at ? shortDate(q.updated_at) : null;
+              // gap_list: JSON array from the auditor contract (bug #88).
+              // May be a parsed array already (PostgREST jsonb) or a JSON string.
+              let gapList: { gap: string; weight_pct: number }[] | null = null;
+              if (q?.gap_list) {
+                try {
+                  gapList = typeof q.gap_list === 'string' ? JSON.parse(q.gap_list) : q.gap_list;
+                } catch {
+                  gapList = null;
+                }
+              }
               const live = st?.is_live ?? false;
               const signedOff = !!st?.signed_off_at;
               const cta = nextAction(q, briefStatus, signedOff);
@@ -252,6 +298,8 @@ export default async function SpecsPage() {
                   {auditDate && pct != null && (
                     <div style={{ fontSize: 9, color: '#8A8A8A', marginTop: -4 }}>audited {auditDate}</div>
                   )}
+                  {/* Gap list — what is missing to reach 100% (bug #88) */}
+                  <GapList gapList={gapList} pct={pct} />
                   {/* Pipeline lifecycle strip */}
                   <PipelineStrip q={q} briefStatus={briefStatus} />
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#1B1B1B', lineHeight: 1.4 }}>{doc.title}</div>
@@ -297,7 +345,7 @@ export default async function SpecsPage() {
           BUILD BRIEFS ({briefs.length})
         </h2>
         <p style={{ fontSize: 11, color: '#5A5A5A', margin: '0 0 12px' }}>
-          Briefs from + New spec and the module auditor · lifecycle: ready → research → in_progress → verifying → shipped · "needs PBS" = the loop has a question only you can answer
+          Briefs from + New spec and the module auditor · lifecycle: ready → research → in_progress → verifying → shipped · &quot;needs PBS&quot; = the loop has a question only you can answer
         </p>
         <div style={{ border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden' }}>
           {briefs.length === 0 ? (
