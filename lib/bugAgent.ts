@@ -33,7 +33,8 @@ async function getGhToken(): Promise<string> {
 }
 
 export interface FilePatch { path: string; new_content: string; reasoning: string }
-export interface PlannerResult { plan_md: string; patches: FilePatch[]; skip_reason?: string; missing_files: string[]; cost_usd: number }
+export interface HumanOption { label: string; consequence: string; recommended?: boolean }
+export interface PlannerResult { plan_md: string; patches: FilePatch[]; skip_reason?: string; missing_files: string[]; cost_usd: number; human_question?: string; human_options?: HumanOption[] }
 export interface ReviewerResult { verdict: 'approve' | 'reject' | 'needs_human'; notes: string; reasons: string[]; cost_usd: number }
 
 interface RunPatch {
@@ -205,6 +206,9 @@ const PLANNER_SYSTEM = [
   '- Never touch server-side secrets, .env, package.json, or lock files.',
   '- Prefer editing files that were passed in as context. If none match, set skip_reason.',
   '- missing_files: list every file path you need but was NOT given. Use [] when all files provided.',
+  '- CONTRACT (bug #87 lesson): exactly ONE of these three outcomes is valid — (a) patches non-empty, (b) missing_files non-empty (exact repo paths — if your plan names a component you were not given, its file path MUST be in missing_files), or (c) skip_reason set. Empty patches + empty missing_files + no skip_reason is a contract violation and wastes the whole run.',
+  '- When you set skip_reason, ALSO set human_question (the one decision the owner must make) and human_options (2-4 concrete choices, each with its consequence, exactly one recommended: true). The owner answers by clicking — never make him write prose.',
+  '- METRIC TRUTH (canon 552/554): if the bug claims a NUMBER or CALCULATION is wrong (ADR, RevPAR, occupancy, revenue, any KPI), do NOT change calculation logic. First outcome must be skip_reason citing kpi.kpi_catalog — metric changes go through the conformance pipeline with owner-verified definitions, never through a bug patch.',
   '- Status/state indicators must use design-system data-status tokens — never hardcoded hex/rgba.',
   '- Before using var(--status-*), read app/(cockpit)/_design/internal/tokens.css. If primitives like --status-green/amber/red/grey exist, alias semantic tokens to them (e.g. --status-success: var(--status-green)). If primitives are missing, add them with raw hex in the primitive layer, THEN alias semantics to those primitives — no raw hex in semantic tokens.',
 ].join('\n');
@@ -246,10 +250,27 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
 
   // Initial plan via tool-use — guaranteed schema-conformant output (law 549)
   const bugMeterOpts = { property_id: bug.property_id ? Number(bug.property_id) : null, agent_handle: 'bug-agent', source: 'planner', run_ref: String(bug.id) };
-  type PlanInput = { plan_md: string; patches: FilePatch[]; missing_files: string[]; skip_reason: string | null };
-  const PLAN_SCHEMA = { type: 'object', properties: { plan_md: { type: 'string' }, patches: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, new_content: { type: 'string' }, reasoning: { type: 'string' } }, required: ['path', 'new_content', 'reasoning'] } }, missing_files: { type: 'array', items: { type: 'string' } }, skip_reason: { type: ['string', 'null'] } }, required: ['plan_md', 'patches', 'missing_files'] };
+  type PlanInput = { plan_md: string; patches: FilePatch[]; missing_files: string[]; skip_reason: string | null; human_question?: string | null; human_options?: HumanOption[] | null };
+  const PLAN_SCHEMA = { type: 'object', properties: { plan_md: { type: 'string' }, patches: { type: 'array', items: { type: 'object', properties: { path: { type: 'string' }, new_content: { type: 'string' }, reasoning: { type: 'string' } }, required: ['path', 'new_content', 'reasoning'] } }, missing_files: { type: 'array', items: { type: 'string' } }, skip_reason: { type: ['string', 'null'] },
+    // PBS 2026-07-27: needs_human must be answerable by multiple choice, never a dead end
+    human_question: { type: ['string', 'null'], description: 'When skip_reason is set: the ONE decision the owner must make, phrased as a question' },
+    human_options: { type: ['array', 'null'], items: { type: 'object', properties: { label: { type: 'string' }, consequence: { type: 'string' }, recommended: { type: 'boolean' } }, required: ['label', 'consequence'] }, description: '2-4 concrete choices with consequences; mark ONE recommended' } }, required: ['plan_md', 'patches', 'missing_files'] };
   const planResult = await callAnthropicTool<PlanInput>({ system: PLANNER_SYSTEM, prompt: buildPrompt(contexts), toolName: 'submit_plan', toolDescription: 'Submit the repair plan. Use skip_reason when you cannot fix the bug with the given files.', toolSchema: PLAN_SCHEMA, maxTokens: 8000, meter: bugMeterOpts });
-  let plan: PlannerResult = { plan_md: planResult.plan_md ?? '', patches: (planResult.patches ?? []).filter((p) => p.path && p.new_content), skip_reason: planResult.skip_reason ?? undefined, missing_files: planResult.missing_files ?? [], cost_usd: 0.05 };
+  let plan: PlannerResult = { plan_md: planResult.plan_md ?? '', patches: (planResult.patches ?? []).filter((p) => p.path && p.new_content), skip_reason: planResult.skip_reason ?? undefined, missing_files: planResult.missing_files ?? [], cost_usd: 0.05, human_question: planResult.human_question ?? undefined, human_options: planResult.human_options ?? undefined };
+
+  // Contract-violation retry (bug #87): zero patches, no skip_reason, no missing_files
+  // → one forced retry telling the planner to pick a valid outcome. No prose regex (law 549).
+  if (plan.patches.length === 0 && !plan.skip_reason && plan.missing_files.length === 0) {
+    const retryResult = await callAnthropicTool<PlanInput>({
+      system: PLANNER_SYSTEM,
+      prompt: buildPrompt(contexts) + '\n\nCONTRACT VIOLATION in your previous submission: patches=[], missing_files=[], skip_reason=null. Your plan text named files/components you were not given. Resubmit with exactly one valid outcome: patches, OR missing_files listing the exact repo paths you need (e.g. the component file that renders what the bug describes), OR skip_reason.',
+      toolName: 'submit_plan',
+      toolDescription: 'Resubmit the repair plan honoring the contract: patches non-empty, or missing_files non-empty, or skip_reason set.',
+      toolSchema: PLAN_SCHEMA, maxTokens: 8000,
+      meter: { property_id: null, agent_handle: 'bug-agent', source: 'bug-agent', run_ref: String(bug.id) + '-contract-retry' },
+    });
+    plan = { plan_md: retryResult.plan_md ?? plan.plan_md, patches: (retryResult.patches ?? []).filter((p) => p.path && p.new_content), skip_reason: retryResult.skip_reason ?? undefined, missing_files: retryResult.missing_files ?? [], cost_usd: plan.cost_usd + 0.05 };
+  }
 
   // Re-plan loop: use structured missing_files from planner JSON (law 549 — no prose regex)
   for (let round = 0; round < 3 && (plan.skip_reason || plan.patches.length === 0) && plan.missing_files.length > 0; round++) {
@@ -383,7 +404,17 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     costUsd += plan.cost_usd;
     await updateRun(runId, { planner_out: plan }, `PLAN · patches=${plan.patches.length} skip=${plan.skip_reason ?? '—'}`);
     if (plan.skip_reason || plan.patches.length === 0) {
-      await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · ${plan.skip_reason ?? 'no patches'}`);
+      // PBS 2026-07-27: store the structured multiple-choice question on the bug row
+      // so the UI can render clickable options (fn_answer_bug_question consumes it).
+      try {
+        if (plan.human_question && plan.human_options?.length) {
+          await (getSupabaseAdmin() as any).rpc('fn_set_bug_open_question', {
+            p_bug_id: bug.id,
+            p_question: { question: plan.human_question, options: plan.human_options, asked_by: 'bug-agent', asked_at: new Date().toISOString() },
+          });
+        }
+      } catch { /* question storage is best-effort; needs_human still lands */ }
+      await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · ${plan.skip_reason ?? 'no patches'}${plan.human_question ? ` · Q: ${plan.human_question}` : ''}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
     }
     await updateRun(runId, { phase: 'reviewing' }, `REVIEW · calling Anthropic…`);
