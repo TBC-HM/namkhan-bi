@@ -33,6 +33,7 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { automationGuard } from "@/lib/cron/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -283,6 +284,9 @@ async function runSweep(): Promise<SweepResult> {
 
 export async function GET() {
   noStore();
+  // GLOBAL KILL SWITCH (brief ops-scheduler-console-v1 A3)
+  const blocked = await automationGuard("/api/cockpit/bugs/sweep");
+  if (blocked) return blocked;
   try {
     const result = await runSweep();
     return NextResponse.json(result);
@@ -296,6 +300,8 @@ export async function GET() {
 
 export async function POST() {
   noStore();
+  const blocked = await automationGuard("/api/cockpit/bugs/sweep");
+  if (blocked) return blocked;
   try {
     const result = await runSweep();
     return NextResponse.json(result);
