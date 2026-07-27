@@ -29,7 +29,7 @@ async function loadBugs(): Promise<BugRow[]> {
   // so BugsClient can render agent phase + PR link inline per row.
   const { data } = await sb
     .from('v_bugs_with_agent_state')
-    .select('id, dept_slug, body, status, fix_link, fix_label, created_by, page_url, viewport, user_agent, reporter_user_id, property_id, notes, created_at, acked_at, started_at, done_at, updated_at, agent_phase, agent_pr_url, agent_branch, agent_commit_sha')
+    .select('id, dept_slug, body, status, fix_link, fix_label, created_by, page_url, viewport, user_agent, reporter_user_id, property_id, notes, created_at, acked_at, started_at, done_at, updated_at, agent_phase, agent_pr_url, agent_branch, agent_commit_sha, open_question')
     .in('status', ['new', 'acked', 'processing'])
     .order('created_at', { ascending: false })
     .limit(500);
