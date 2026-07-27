@@ -5,10 +5,13 @@
 import { useState } from 'react';
 import { TOKENS, MONO } from '../../_components/tokens';
 
+// PBS 2026-07-27 guardrails: humans NEVER 'Start' (ready = machine pulls it;
+// a manual in_progress just removes the brief from the queue with no worker)
+// and humans NEVER 'Ship' (shipped is the VERIFIER's verdict — law 542).
 const TRANSITIONS: Record<string, { label: string; next: string; primary?: boolean }[]> = {
   draft:       [{ label: 'Confirm → build', next: 'ready', primary: true }, { label: 'Archive', next: 'archived' }],
-  ready:       [{ label: 'Start', next: 'in_progress', primary: true }, { label: 'Back to draft', next: 'draft' }],
-  in_progress: [{ label: 'Ship', next: 'shipped', primary: true }, { label: 'Pause', next: 'ready' }],
+  ready:       [{ label: 'Back to draft', next: 'draft' }],
+  in_progress: [{ label: 'Pause', next: 'ready' }],
   shipped:     [],
   archived:    [{ label: 'Restore', next: 'draft' }],
 };

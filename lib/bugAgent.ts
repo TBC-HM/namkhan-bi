@@ -185,6 +185,35 @@ async function ghGetTreePaths(): Promise<string[]> {
   }
 }
 
+
+// ---------- ADR-175 auto-merge (PBS 2026-07-27: "if I merge every time I am the bottleneck") ----------
+const PROTECTED_PATHS = [/^middleware/, /auth/i, /^package(-lock)?\.json$/, /^next\.config/, /^vercel\.json$/, /^supabase\/migrations\//, /^\.github\//, /\.env/];
+const AUTO_MERGE_MAX_FILES = 15;
+async function autoMergeEnabled(): Promise<boolean> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data } = await sb.rpc('fn_automation_enabled');
+    return data !== false;
+  } catch { return false; }
+}
+async function tryAutoMerge(prNumber: number, patches: FilePatch[], runId: number): Promise<boolean> {
+  if (!(await autoMergeEnabled())) { await updateRun(runId, {}, 'MERGE · skipped — automation kill switch OFF'); return false; }
+  if (patches.length > AUTO_MERGE_MAX_FILES) { await updateRun(runId, {}, `MERGE · skipped — ${patches.length} files > ${AUTO_MERGE_MAX_FILES} (PBS merges)`); return false; }
+  const touched = patches.filter((p) => PROTECTED_PATHS.some((re) => re.test(p.path)));
+  if (touched.length > 0) { await updateRun(runId, {}, `MERGE · skipped — protected path(s): ${touched.map((t) => t.path).join(', ')} (PBS merges)`); return false; }
+  const r = await ghFetch(`/repos/${GH_REPO}/pulls/${prNumber}/merge`, {
+    method: 'PUT',
+    body: JSON.stringify({ merge_method: 'squash' }),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    await updateRun(runId, {}, `MERGE · failed ${r.status}: ${t.slice(0, 150)} (PBS merges)`);
+    return false;
+  }
+  await updateRun(runId, {}, `MERGE · auto-merged PR #${prNumber} (ADR-175: reviewer+verify green, unprotected, ≤${AUTO_MERGE_MAX_FILES} files)`);
+  return true;
+}
+
 // ---------- Planning ----------
 // PBS 2026-07-17 — convert URL path segments to Next.js bracket-notation
 // so we hit real file paths like app/sales/proposals/[id]/edit/page.tsx
@@ -604,12 +633,17 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     const fixLink = ship.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${ship.branch}`;
     const fixLabel = ship.pr_number ? `PR #${ship.pr_number}` : `branch: ${ship.branch}`;
     if (success) {
-      await markBug(bug.id, { status: 'done', started_at: new Date().toISOString(), done_at: new Date().toISOString(), fix_link: fixLink, fix_label: fixLabel });
-      await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, (ship.pr_url ? `DONE · PR ready for merge` : `DONE · branch ready — open PR manually`) + ` · verify=${verify.verify_tag}`);
+      // ADR-175: verified + reviewer-approved + unprotected → the loop merges its own PR
+      let merged = false;
+      if (ship.pr_number) merged = await tryAutoMerge(ship.pr_number, plan.patches, runId);
+      await markBug(bug.id, { status: 'done', started_at: new Date().toISOString(), done_at: new Date().toISOString(), fix_link: fixLink, fix_label: merged ? `${fixLabel} · auto-merged` : fixLabel });
+      await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, (merged ? `DONE · auto-merged (ADR-175)` : (ship.pr_url ? `DONE · PR awaits PBS merge (protected/oversize/switch-off)` : `DONE · branch ready — open PR manually`)) + ` · verify=${verify.verify_tag}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'done', cost_usd: costUsd };
     } else {
       // Still record the branch so PBS can see it even if verify failed
-      await markBug(bug.id, { status: 'acknowledged', fix_link: fixLink, fix_label: fixLabel });
+      // PBS 2026-07-27 (bug-106 family) — DB CHECK allows new/acked/processing/
+      // done/wont_fix; 'acknowledged' was silently rejected by Postgres.
+      await markBug(bug.id, { status: 'acked', fix_link: fixLink, fix_label: fixLabel });
       await updateRun(runId, { phase: 'failed', cost_usd: costUsd, ended_at: new Date().toISOString(), error: `verify_failed: ${verify.verify_tag} · ${verify.note.slice(0, 300)}` }, `FAIL · CI check failed on branch`);
       return { bug_id: bug.id, run_id: runId, ok: false, phase: 'failed', cost_usd: costUsd };
     }

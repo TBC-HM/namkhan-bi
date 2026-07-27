@@ -12,11 +12,11 @@ export default function AcquisitionPage() {
     active: s.href === '/marketing/acquisition',
   }));
   return (
-    <DashboardPage title="Marketing · Acquisition" subtitle="Where new bookings come from — paid, organic, referral, direct." tabs={tabs}>
+    <DashboardPage title="Marketing · Campaigns" subtitle="Campaign performance — paid, organic, referral, direct." tabs={tabs}>
       <div style={{ gridColumn: '1 / -1' }}>
         <div style={stub}>
-          <div style={stubTitle}>Acquisition</div>
-          <div>Where new bookings come from — paid, organic, referral, direct.</div>
+          <div style={stubTitle}>Campaigns</div>
+          <div>Campaign performance — paid, organic, referral, direct.</div>
           <div style={stubHint}>Landing placeholder — content flows in from the next push.</div>
         </div>
       </div>
