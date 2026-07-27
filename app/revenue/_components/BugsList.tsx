@@ -22,10 +22,11 @@ interface Bug {
   status: string | null;
   created_at: string | null;
   page_url: string | null;
-  created_by: string | null;
-  done_at: string | null;
-  fix_label: string | null;
-  open_question: { question?: string } | null;
+  // Optional — server pages that pass `initial` may select fewer columns.
+  created_by?: string | null;
+  done_at?: string | null;
+  fix_label?: string | null;
+  open_question?: { question?: string } | null;
 }
 
 interface Props {
