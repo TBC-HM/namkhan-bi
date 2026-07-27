@@ -1,11 +1,13 @@
-// app/api/cockpit/github/stale-prs/route.ts
+// app/api/cron/github-stale-prs/route.ts
 // PBS 2026-07-27 — "the last 4 requests have merge conflicts, i go nuts".
 // 71 open PRs, many from May, dead + conflicted. This route (runs on Vercel,
 // where the GitHub API is reachable with the vault token) closes stale PRs:
-//   stale = open, NOT a bots/ PR from the last 7 days, last updated > N days
-//   ago (default 21). Branches are NOT deleted — zero knowledge loss; a
-//   comment explains the close. Dry-run by default: GET shows the hit list,
-//   POST {confirm:true} executes.
+//   stale = open, last updated > N days ago (default 21). Branches are NOT
+//   deleted — zero knowledge loss; a comment explains the close.
+// GET = dry-run listing (harmless). POST = execute, guarded by the
+// x-pipe-clean header matching vault secret stale_pr_sweep_token
+// (/api/cron/* bypasses session middleware, so the destructive path needs
+// its own gate).
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -64,6 +66,13 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  // Destructive path — verify the sweep token from vault.
+  const sb = getSupabaseAdmin();
+  const { data: expected } = await sb.rpc('fn_get_secret', { p_name: 'stale_pr_sweep_token' });
+  const got = req.headers.get('x-pipe-clean');
+  if (typeof expected !== 'string' || !got || got !== expected) {
+    return NextResponse.json({ error: 'bad_sweep_token' }, { status: 401 });
+  }
   const body = (await req.json().catch(() => ({}))) as { confirm?: boolean; days?: number };
   if (!body.confirm) return NextResponse.json({ error: 'pass {"confirm":true}' }, { status: 400 });
   const staleDays = body.days ?? 21;
