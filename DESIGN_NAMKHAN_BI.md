@@ -3003,3 +3003,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-07-27 — TESTING bracket + compact card CTAs + agent-button fix
 - Specs cards: pipeline strip gains TESTING stage (Audit→Spec→Repair→Check→Testing→Frozen); freeze refused until testing_ok/testing_target good runs; CTAs compact symbols in one row (❓ Answer · 🧪 12/50 runs · 🧊 Freeze · ⟳ Re-audit · ↗ Open · ✎ Goal · 📄 Spec); Re-audit/Sign-off now revalidate so the card visibly flips
 - Bugs board: ▶ Agent never morphs into '…'; hidden for battery-owned; '❓ answer first' hint when a question is open; 45s no-pick timeout releases the UI with an explanation
+
+### 2026-07-27 — bug-agent · fix #76
+- # Bug #76 — Fix "pp" suffix to "%" for OCC pickup delta cells in PickupMatrix  ## Root Cause In `app/(cockpit)/_design/PickupMatrix.tsx`, the `deltaCell` functi
+- touched `app/(cockpit)/_design/PickupMatrix.tsx`
