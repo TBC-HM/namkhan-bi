@@ -147,7 +147,7 @@ function nextAction(q: any, briefStatus: string | null, signedOff: boolean):
   if (briefStatus === 'needs_input' && q?.brief_slug)
     return { label: 'Answer question →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'red' };
   if (briefStatus === 'ready' && q?.brief_slug)
-    return { label: 'Confirm & build →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'green' };
+    return { label: 'Queued — builds automatically · watch →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'gold' };
   if (briefStatus === 'shipped')
     return { label: 'Sign off → freeze', rpc: 'sign_off', tone: 'green' };
   if (briefStatus && ['research', 'in_progress', 'verifying'].includes(briefStatus) && q?.brief_slug)
