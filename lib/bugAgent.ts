@@ -10,6 +10,18 @@
 // 2026-07-26 (standing builder) — type repairs on the bug82 repair-loop push:
 // planBugFix accepts reviewFeedback, ReviewerResult.reasons populated at every
 // return site, plan/review are let (repair loop reassigns). Behavior unchanged.
+// 2026-07-27 (standing builder, brief autospec-bug_agent_module-20260725):
+//   - guessCandidateFiles: [propertyId] → [property_id] (the smoking-gun path
+//     bug that blinded the planner on every /h/<pid>/ route), code-index-first
+//     candidate resolution (cockpit.bug_agent_code_index via public bridge),
+//     git-tree fallback when directory listing misses.
+//   - Verifier repair (D2): poll window mode-aware (240s one / 60s drain);
+//     missing CI = done + verify=skipped_no_ci, never failed; prod-curl is
+//     informational only (a branch fix can never be live on the prod deploy).
+//   - Reviewer ship ceiling ≤4 patched files (was >3 → needs_human).
+//   - Monthly spend cap: $50/mo (PBS approved 2026-07-27) enforced against
+//     public.ai_token_meter (measured cost, ADR-169) — not the flat estimates.
+//   - refreshCodeIndex() exported for /api/cron/bug-agent-index-refresh.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropicTool } from '@/lib/mail/anthropic';
@@ -17,6 +29,11 @@ import { callAnthropicTool } from '@/lib/mail/anthropic';
 const GH_REPO = 'TBC-HM/namkhan-bi';
 const GH_BASE_BRANCH = 'main';
 export const COST_CAP_USD = 2.0;
+// PBS 2026-07-27 (brief autospec-bug_agent_module-20260725, R1 approved):
+// hard monthly ceiling on bug-agent Anthropic spend, measured from
+// public.ai_token_meter (real metering), NOT the flat per-phase estimates.
+export const MONTHLY_COST_CAP_USD = 50.0;
+const METERED_AGENT_HANDLES = ['bug-agent', 'bug-agent-reviewer'];
 const MAX_FILES_PER_PLAN = 8;   // PBS 2026-07-26 (bug #84) — raised to feed more context
 const MAX_FILE_BYTES = 80_000;  // PBS 2026-07-26 (bug #84) — never truncate candidate files
 
@@ -133,17 +150,39 @@ async function ghOpenPR(branch: string, title: string, body: string): Promise<{ 
   }
   return await r.json() as { number: number; html_url: string };
 }
-async function ghGetCheckStatus(sha: string): Promise<{ ci_ok: boolean | null; note: string }> {
+async function ghGetCheckStatus(sha: string): Promise<{ ci_ok: boolean | null; checks_count: number; note: string }> {
   const [runsR, statusR] = await Promise.all([
     ghFetch(`/repos/${GH_REPO}/commits/${sha}/check-runs`),
     ghFetch(`/repos/${GH_REPO}/commits/${sha}/status`),
   ]);
   const runs = runsR.ok ? await runsR.json() as { check_runs: Array<{ name: string; conclusion: string | null; status: string }> } : { check_runs: [] };
   const status = statusR.ok ? await statusR.json() as { state: string } : { state: 'pending' };
-  const anyPending = runs.check_runs.some((c) => c.status === 'in_progress' || c.status === 'queued') || status.state === 'pending';
-  if (anyPending) return { ci_ok: null, note: `${runs.check_runs.length} runs, github-status=${status.state}` };
+  const checksCount = runs.check_runs.length;
+  // 2026-07-27 (D2): an explicit check-run failure decides immediately, even
+  // while other checks are still pending — never wait out the window to fail.
   const anyFail = runs.check_runs.some((c) => c.conclusion && c.conclusion !== 'success' && c.conclusion !== 'skipped' && c.conclusion !== 'neutral') || status.state === 'failure' || status.state === 'error';
-  return { ci_ok: !anyFail, note: `checks=${runs.check_runs.map((c) => `${c.name}:${c.conclusion ?? c.status}`).join('|')} status=${status.state}` };
+  if (anyFail) return { ci_ok: false, checks_count: checksCount, note: `checks=${runs.check_runs.map((c) => `${c.name}:${c.conclusion ?? c.status}`).join('|')} status=${status.state}` };
+  const anyPending = runs.check_runs.some((c) => c.status === 'in_progress' || c.status === 'queued') || status.state === 'pending';
+  if (anyPending || checksCount === 0) return { ci_ok: null, checks_count: checksCount, note: `${checksCount} runs, github-status=${status.state}` };
+  return { ci_ok: true, checks_count: checksCount, note: `checks=${runs.check_runs.map((c) => `${c.name}:${c.conclusion ?? c.status}`).join('|')} status=${status.state}` };
+}
+
+// 2026-07-27 — full repo tree (app/** + lib/** TS files), cached per lambda
+// instance for 10 min. Fallback path resolver when the code index and the
+// directory listing both miss (brief §2: planner resolves REAL paths).
+let __treeCache: { at: number; paths: string[] } | null = null;
+async function ghGetTreePaths(): Promise<string[]> {
+  if (__treeCache && Date.now() - __treeCache.at < 10 * 60_000) return __treeCache.paths;
+  try {
+    const r = await ghFetch(`/repos/${GH_REPO}/git/trees/${GH_BASE_BRANCH}?recursive=1`);
+    if (!r.ok) return __treeCache?.paths ?? [];
+    const j = await r.json() as { tree: Array<{ path: string; type: string }> };
+    const paths = (j.tree ?? []).filter((t) => t.type === 'blob' && /^(app|lib)\/.*\.(ts|tsx)$/.test(t.path)).map((t) => t.path);
+    __treeCache = { at: Date.now(), paths };
+    return paths;
+  } catch {
+    return __treeCache?.paths ?? [];
+  }
 }
 
 // ---------- Planning ----------
@@ -166,30 +205,94 @@ async function ghListDir(dirPath: string): Promise<string[]> {
   return items.filter((i) => i.type === 'file').map((i) => i.path);
 }
 
+// 2026-07-27 — candidate resolution order (brief §2): code index → live
+// directory listing → git-tree segment match. The index is refreshed nightly
+// by /api/cron/bug-agent-index-refresh into cockpit.bug_agent_code_index and
+// read here through the public bridge view (cockpit is not PostgREST-exposed).
+async function candidatesFromIndex(dirs: string[]): Promise<string[]> {
+  const out: string[] = [];
+  try {
+    const sb = getSupabaseAdmin();
+    for (const dir of dirs) {
+      const { data, error } = await sb
+        .from('v_bug_agent_code_index')
+        .select('path, kind')
+        .like('path', `${dir}/%`)
+        .limit(MAX_FILES_PER_PLAN * 2);
+      if (error || !data) continue;
+      // Direct children first (the page itself + its _components), pages before the rest.
+      const rows = data as Array<{ path: string; kind: string }>;
+      const depth = (p: string) => p.split('/').length;
+      const base = depth(dir) + 1;
+      rows.sort((a, b) => {
+        const rank = (r: { path: string; kind: string }) =>
+          (r.kind === 'page' ? 0 : r.kind === 'layout' ? 1 : 2) * 100 + (depth(r.path) - base);
+        return rank(a) - rank(b);
+      });
+      out.push(...rows.map((r) => r.path));
+      if (out.length >= MAX_FILES_PER_PLAN) break;
+    }
+  } catch { /* index unavailable → caller falls back */ }
+  return out;
+}
+
+// Last-resort fallback: score every tree path by how many URL segments it
+// contains; take the best-scoring page/component files.
+function candidatesFromTree(treePaths: string[], segments: string[]): string[] {
+  const segs = segments.filter((s) => s.length > 2 && !s.startsWith('['));
+  if (segs.length === 0) return [];
+  const scored = treePaths
+    .map((p) => {
+      const lower = p.toLowerCase();
+      const score = segs.reduce((n, s) => n + (lower.includes(`/${s.toLowerCase()}`) ? 1 : 0), 0);
+      const bonus = p.endsWith('/page.tsx') ? 0.5 : p.endsWith('Client.tsx') ? 0.4 : p.endsWith('/layout.tsx') ? 0.2 : 0;
+      return { p, score: score + bonus };
+    })
+    .filter((x) => x.score >= 1)
+    .sort((a, b) => b.score - a.score);
+  return scored.slice(0, MAX_FILES_PER_PLAN).map((x) => x.p);
+}
+
 async function guessCandidateFiles(bug: { page_url: string | null; body: string | null }): Promise<string[]> {
   const files: string[] = [];
   const url = bug.page_url ?? '';
   // List ALL files in the bug's route directory (law 549 — no guessing)
   const dirs: string[] = [];
+  let urlSegments: string[] = [];
   try {
     const u = new URL(url);
     const rawParts = u.pathname.split('/').filter(Boolean);
     const isPidRoute = rawParts[0] === 'h' && rawParts[1] && /^\d+$/.test(rawParts[1]);
     if (isPidRoute) {
       const rest = bracketize(rawParts.slice(2));
+      urlSegments = rest;
       if (rest.length > 0) {
-        dirs.push(`app/h/[propertyId]/${rest.join('/')}`);
+        // 2026-07-27 FIX (brief §0 smoking gun): the real repo segment is
+        // [property_id] (underscore), not [propertyId]. The camelCase guess
+        // fetched zero candidate files on EVERY /h/<pid>/ bug since 07-17.
+        dirs.push(`app/h/[property_id]/${rest.join('/')}`);
         dirs.push(`app/${rest.join('/')}`);
       }
     } else {
       const seg = bracketize(rawParts);
+      urlSegments = seg;
       if (seg.length > 0) dirs.push(`app/${seg.join('/')}`);
     }
   } catch { /* ignore */ }
-  for (const dir of dirs) {
-    const listed = await ghListDir(dir);
-    files.push(...listed);
-    if (files.length >= MAX_FILES_PER_PLAN) break;
+  // 1) Code index (nightly-refreshed inventory of real repo paths)
+  files.push(...await candidatesFromIndex(dirs));
+  // 2) Live directory listing (index empty / stale / unavailable)
+  if (files.length === 0) {
+    for (const dir of dirs) {
+      const listed = await ghListDir(dir);
+      files.push(...listed);
+      if (files.length >= MAX_FILES_PER_PLAN) break;
+    }
+  }
+  // 3) Git-tree segment match (route dir guess was wrong entirely)
+  if (files.length === 0 && urlSegments.length > 0) {
+    const tree = await ghGetTreePaths();
+    files.push(...candidatesFromTree(tree, urlSegments));
   }
   // Structural context always included
   files.push('lib/dept-cfg.ts', 'lib/dept-cfg/index.ts', 'app/(cockpit)/_design/index.ts');
@@ -294,7 +397,7 @@ const REVIEWER_SYSTEM = [
   'You are a strict code reviewer for a Next.js hotel BI app. Review the bug + patches and call submit_review.',
   'verdict="approve" if: patches are minimal, safe, likely to fix the bug, no syntax issues, no var(--paper-warm), no hardcoded hex/rgba in status indicators (use data-status tokens instead).',
   'verdict="reject" if: patches introduce bugs, break TS, remove needed code, add features.',
-  'verdict="needs_human" if: patches attempt a page rewrite, touch >3 files, or bug is ambiguous.',
+  'verdict="needs_human" if: patches attempt a page rewrite, touch >4 files, or bug is ambiguous.',
   'Be adversarial. Default to needs_human when in doubt.',
   'SCOPE: Judge ONLY lines that this patch ADDS or MODIFIES. Pre-existing code that was untouched is NOT grounds for reject — mention it as a follow-up note only.',
   'TOKEN LAYERS: Raw hex (#…) is ALLOWED in tokens.css palette-primitive definitions (e.g. --color-green-700: #2E7D32). It is FORBIDDEN in components, inline styles, and semantic token definitions only when an equivalent primitive already exists. Do not reject for hex in the palette layer.',
@@ -303,7 +406,9 @@ const REVIEWER_SYSTEM = [
 
 async function reviewPlan(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<ReviewerResult> {
   if (plan.patches.length === 0) return { verdict: 'needs_human', notes: 'Planner produced no patches.', reasons: [], cost_usd: 0 };
-  if (plan.patches.length > 3) return { verdict: 'needs_human', notes: `Too many files (${plan.patches.length}), needs human.`, reasons: [], cost_usd: 0 };
+  // 2026-07-27 (brief §2): ship ceiling is ≤4 patched files. MAX_FILES_PER_PLAN
+  // stays 8 (PBS bug #84 — that is CONTEXT fed to the planner, not the ship cap).
+  if (plan.patches.length > 4) return { verdict: 'needs_human', notes: `Too many files (${plan.patches.length}), needs human.`, reasons: [], cost_usd: 0 };
   const patchSummary = plan.patches.map((p) => (
     `--- ${p.path} (${p.new_content.length} bytes) ---\nRATIONALE: ${p.reasoning}\nFULL PATCHED CONTENT:\n${p.new_content}`
   )).join('\n\n');
@@ -351,9 +456,12 @@ async function shipPatches(bug: { id: number; body: string | null }, plan: Plann
     '_Review carefully before merging. Bug-agent v1 does not auto-merge._',
     `_Bug: /holding/bugs · run: cockpit.bug_agent_runs_`,
   ].join('\n');
-  // PBS 2026-07-17 — PR creation is soft-fail. Vault token has Contents R/W
-  // but may lack Pull-Requests R/W. Branch + commits are the important
-  // artifacts; PBS can open PRs in bulk via `gh pr create --head bots/bug-*`.
+  // PBS 2026-07-17 — PR creation is soft-fail. Branch + commits are the
+  // important artifacts; PBS can open PRs in bulk via `gh pr create`.
+  // 2026-07-26 (§0.R R1b): vault token re-verified — POST /pulls returns 422
+  // on a fake head (not 403), i.e. the token DOES have Pull-Requests write.
+  // The historical 403s were a stale token. Soft-fail kept as belt-and-braces.
+  // The agent NEVER merges (PUSH DISCIPLINE rule 530 — PBS merges).
   try {
     const pr = await ghOpenPR(branch, prTitle, prBody);
     return { branch, commit_sha: lastCommit, pr_number: pr.number, pr_url: pr.html_url, pr_error: null };
@@ -363,18 +471,37 @@ async function shipPatches(bug: { id: number; body: string | null }, plan: Plann
   }
 }
 
-async function verifyDeploy(commitSha: string, pageUrl: string | null): Promise<{ ci_ok: boolean | null; curl_status: number | null; curl_body_ok: boolean | null; note: string }> {
+// 2026-07-27 verifier repair (brief §2 + D2 + §0.R R2):
+//   - The gate is the repo's typecheck workflow (`tsc --noEmit`, runs on push
+//     to every branch incl. bots/*) read via check-runs. Poll window is
+//     mode-aware: typecheck takes ~2-5 min, the old 90s window always saw
+//     `pending` → historical ci=null.
+//   - A missing gate is NOT a failed gate: no check runs after the full
+//     window → verify=skipped_no_ci (caller treats as done). Checks still
+//     pending at deadline → verify=ci_pending_timeout (also not a failure).
+//   - The prod-curl probe is INFORMATIONAL ONLY: it hits the prod deploy of
+//     main, which can never contain a branch fix — using it as a gate was a
+//     structural false-negative machine (the 2026-07-17 'failed' runs).
+async function verifyDeploy(commitSha: string, pageUrl: string | null, budgetMs = 240_000): Promise<{ ci_ok: boolean | null; checks_seen: number; curl_status: number | null; curl_body_ok: boolean | null; verify_tag: string; note: string }> {
   let ciOk: boolean | null = null;
+  let checksSeen = 0;
   let note = '';
-  for (let i = 0; i < 6; i++) {
+  const deadline = Date.now() + budgetMs;
+  for (;;) {
     const s = await ghGetCheckStatus(commitSha);
     note = s.note;
+    checksSeen = Math.max(checksSeen, s.checks_count);
     if (s.ci_ok !== null) { ciOk = s.ci_ok; break; }
+    if (Date.now() + 15_000 > deadline) break;
     await new Promise((r) => setTimeout(r, 15_000));
   }
+  const verifyTag = ciOk === false ? 'ci_failed'
+    : ciOk === true ? 'ci_passed'
+    : checksSeen > 0 ? 'ci_pending_timeout'
+    : 'skipped_no_ci';
   let curlStatus: number | null = null;
   let curlBodyOk: boolean | null = null;
-  if (pageUrl && ciOk === true) {
+  if (pageUrl) {
     try {
       const r = await fetch(pageUrl, { method: 'GET', redirect: 'follow' });
       curlStatus = r.status;
@@ -384,10 +511,10 @@ async function verifyDeploy(commitSha: string, pageUrl: string | null): Promise<
       note += ` · curl_failed=${(e as Error).message}`;
     }
   }
-  return { ci_ok: ciOk, curl_status: curlStatus, curl_body_ok: curlBodyOk, note };
+  return { ci_ok: ciOk, checks_seen: checksSeen, curl_status: curlStatus, curl_body_ok: curlBodyOk, verify_tag: verifyTag, note: `verify=${verifyTag} · ${note}` };
 }
 
-export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }, triggeredBy: string): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
+export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }, triggeredBy: string, verifyBudgetMs = 240_000): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
   const sb = getSupabaseAdmin();
   const initialLog = `START · bug=${bug.id} url=${bug.page_url ?? '(none)'}`;
   const { data: rpcData, error: insErr } = await sb.rpc('fn_bug_agent_run_insert', {
@@ -466,22 +593,24 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
       ? `SHIP · PR #${ship.pr_number} → ${ship.pr_url}`
       : `SHIP · branch=${ship.branch} commit=${ship.commit_sha.slice(0,8)} · PR open BLOCKED: ${ship.pr_error} (open manually via: gh pr create --head ${ship.branch})`
     );
-    await updateRun(runId, { phase: 'verifying' }, `VERIFY · polling CI + curl…`);
-    const verify = await verifyDeploy(ship.commit_sha, bug.page_url);
+    await updateRun(runId, { phase: 'verifying' }, `VERIFY · polling CI (typecheck) · budget=${Math.round(verifyBudgetMs / 1000)}s…`);
+    const verify = await verifyDeploy(ship.commit_sha, bug.page_url, verifyBudgetMs);
     await updateRun(runId, { verifier_out: verify }, `VERIFY · ci_ok=${verify.ci_ok} curl=${verify.curl_status} body_ok=${verify.curl_body_ok} · ${verify.note}`);
-    // ci_ok===null = no CI runs yet (skipped_no_ci) → treat as success; only fail on explicit ci_ok===false
-    const success = verify.ci_ok !== false && (verify.curl_body_ok !== false);
+    // 2026-07-27 (D2): ONLY an explicit CI failure fails the run. Missing/
+    // pending CI → done + verify tag. Curl is informational (prod deploy of
+    // main can never contain the branch fix — never gate on it).
+    const success = verify.ci_ok !== false;
     // Determine best fix_link: PR URL if opened, else GH branch compare view
     const fixLink = ship.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${ship.branch}`;
     const fixLabel = ship.pr_number ? `PR #${ship.pr_number}` : `branch: ${ship.branch}`;
     if (success) {
       await markBug(bug.id, { status: 'done', started_at: new Date().toISOString(), done_at: new Date().toISOString(), fix_link: fixLink, fix_label: fixLabel });
-      await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, ship.pr_url ? `DONE · PR ready for merge` : `DONE · branch ready — open PR manually`);
+      await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, (ship.pr_url ? `DONE · PR ready for merge` : `DONE · branch ready — open PR manually`) + ` · verify=${verify.verify_tag}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'done', cost_usd: costUsd };
     } else {
       // Still record the branch so PBS can see it even if verify failed
       await markBug(bug.id, { status: 'acknowledged', fix_link: fixLink, fix_label: fixLabel });
-      await updateRun(runId, { phase: 'failed', cost_usd: costUsd, ended_at: new Date().toISOString(), error: `verify_failed: ci=${verify.ci_ok} curl=${verify.curl_status}` }, `FAIL · verification failed`);
+      await updateRun(runId, { phase: 'failed', cost_usd: costUsd, ended_at: new Date().toISOString(), error: `verify_failed: ${verify.verify_tag} · ${verify.note.slice(0, 300)}` }, `FAIL · CI check failed on branch`);
       return { bug_id: bug.id, run_id: runId, ok: false, phase: 'failed', cost_usd: costUsd };
     }
   } catch (e) {
@@ -505,10 +634,36 @@ export async function pickBugs(opts: { bug_ids?: number[]; mode: 'one' | 'drain'
   return ((data ?? []) as Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }>);
 }
 
-export async function runAgentJob(opts: { bug_ids?: number[]; mode?: 'one' | 'drain'; max?: number; triggered_by?: string }): Promise<{ ok: boolean; mode: string; cost_usd: number; processed: Array<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> }> {
+// 2026-07-27 (R1, PBS-approved $50/mo): month-to-date measured spend from
+// public.ai_token_meter. Client-side sum — PostgREST aggregates are not
+// enabled, and row volume for one month of bug-agent calls is trivially small.
+async function monthToDateSpendUsd(): Promise<number> {
+  const sb = getSupabaseAdmin();
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+  const { data, error } = await sb
+    .from('ai_token_meter')
+    .select('cost_usd')
+    .in('agent_handle', METERED_AGENT_HANDLES)
+    .gte('created_at', monthStart.toISOString())
+    .limit(10_000);
+  if (error || !data) return 0; // metering read failure never blocks a run — the per-run $2 cap still holds
+  return (data as Array<{ cost_usd: number | string | null }>).reduce((s, r) => s + Number(r.cost_usd ?? 0), 0);
+}
+
+export async function runAgentJob(opts: { bug_ids?: number[]; mode?: 'one' | 'drain'; max?: number; triggered_by?: string }): Promise<{ ok: boolean; mode: string; cost_usd: number; mtd_spend_usd?: number; processed: Array<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> }> {
   const mode = opts.mode ?? 'one';
   const max = Math.min(Math.max(1, opts.max ?? 1), 3);
   const triggeredBy = opts.triggered_by ?? 'manual';
+  // Monthly ceiling check BEFORE picking work (R1) — measured cost, not estimates.
+  let mtdSpend = await monthToDateSpendUsd();
+  if (mtdSpend >= MONTHLY_COST_CAP_USD) {
+    return { ok: false, mode, cost_usd: 0, mtd_spend_usd: Number(mtdSpend.toFixed(2)), processed: [{ bug_id: -1, ok: false, error: `cost_cap_monthly_reached ($${mtdSpend.toFixed(2)} of $${MONTHLY_COST_CAP_USD}/mo — PBS-approved cap, brief autospec-bug_agent_module-20260725)` }] };
+  }
+  // Verify budget is mode-aware: drain shares one 300s lambda across up to 3
+  // bugs; the UI 'one' mode can afford the full typecheck window (~2-5 min).
+  const verifyBudgetMs = mode === 'drain' ? 60_000 : 240_000;
   const bugs = await pickBugs({ bug_ids: opts.bug_ids, mode, max });
   const processed: Array<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> = [];
   let totalCost = 0;
@@ -517,9 +672,96 @@ export async function runAgentJob(opts: { bug_ids?: number[]; mode?: 'one' | 'dr
       processed.push({ bug_id: bug.id, ok: false, error: `cost_cap_reached ($${totalCost.toFixed(2)} of $${COST_CAP_USD})` });
       break;
     }
-    const r = await runOneBug(bug, triggeredBy);
+    if (mtdSpend + totalCost >= MONTHLY_COST_CAP_USD) {
+      processed.push({ bug_id: bug.id, ok: false, error: `cost_cap_monthly_reached ($${(mtdSpend + totalCost).toFixed(2)} of $${MONTHLY_COST_CAP_USD}/mo)` });
+      break;
+    }
+    const r = await runOneBug(bug, triggeredBy, verifyBudgetMs);
     processed.push(r);
     totalCost += r.cost_usd ?? 0;
+    // Re-read measured MTD between bugs — other sessions/agents meter too.
+    mtdSpend = await monthToDateSpendUsd();
   }
-  return { ok: true, mode, cost_usd: totalCost, processed };
+  return { ok: true, mode, cost_usd: totalCost, mtd_spend_usd: Number(mtdSpend.toFixed(2)), processed };
+}
+
+// ---------- Code index refresh (brief §2 — nightly, /api/cron/bug-agent-index-refresh) ----------
+// Pass 1 (cheap, 1 GH call): full git tree → every app/** + lib/** TS file gets
+// an index row (path + kind + blob sha) and vanished paths are pruned. This
+// alone gives the planner 100% real-path coverage.
+// Pass 2 (bounded): fetch contents ONLY for new/changed blobs (sha diff vs the
+// stored index), extract exports + header comment. Cap per run keeps the job
+// inside maxDuration; the remainder enriches on the next night.
+function indexKindOf(p: string): string {
+  if (p.endsWith('/page.tsx') || p.endsWith('/page.ts')) return 'page';
+  if (p.endsWith('/layout.tsx')) return 'layout';
+  if (p.endsWith('/route.ts')) return 'route';
+  if (p.startsWith('lib/')) return 'lib';
+  if (p.endsWith('.tsx')) return 'component';
+  return 'other';
+}
+function extractExports(content: string): string[] {
+  const ex = new Set<string>();
+  for (const m of content.matchAll(/export\s+(?:default\s+)?(?:async\s+)?(?:function|const|class|interface|type|enum|let|var)\s+([A-Za-z0-9_]+)/g)) ex.add(m[1]);
+  if (/export\s+default/.test(content)) ex.add('default');
+  return Array.from(ex).slice(0, 20);
+}
+function extractHeaderComment(content: string): string | null {
+  const m = content.match(/^(\s*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*\n))+/);
+  if (!m) return null;
+  const cleaned = m[0].replace(/^\s*\/\/ ?/gm, '').replace(/\/\*|\*\//g, '').trim().slice(0, 300);
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+export async function refreshCodeIndex(opts: { maxContentFetches?: number } = {}): Promise<{ ok: boolean; tree_files: number; enriched: number; enrich_remaining: number; upserted: number; pruned: number; error?: string }> {
+  const maxFetches = Math.min(Math.max(0, opts.maxContentFetches ?? 300), 1000);
+  const sb = getSupabaseAdmin();
+  // Live tree (bypass the 10-min cache staleness concern — refresh is nightly)
+  const r = await ghFetch(`/repos/${GH_REPO}/git/trees/${GH_BASE_BRANCH}?recursive=1`);
+  if (!r.ok) return { ok: false, tree_files: 0, enriched: 0, enrich_remaining: 0, upserted: 0, pruned: 0, error: `gh_tree ${r.status}` };
+  const tree = (await r.json() as { tree: Array<{ path: string; type: string; sha: string; size?: number }> }).tree ?? [];
+  const files = tree.filter((t) => t.type === 'blob' && /^(app|lib)\/.*\.(ts|tsx)$/.test(t.path));
+
+  // Current index shas → diff set
+  const known = new Map<string, string | null>();
+  {
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await sb.from('v_bug_agent_code_index').select('path, content_sha').range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const row of data as Array<{ path: string; content_sha: string | null }>) known.set(row.path, row.content_sha);
+      if (data.length < pageSize) break;
+    }
+  }
+  const changed = files.filter((f) => known.get(f.path) !== f.sha);
+  const toEnrich = changed.slice(0, maxFetches);
+
+  // Bounded parallel content fetch (blobs API via existing contents helper)
+  const enrichedRows = new Map<string, { exports: string[]; header_comment: string | null; bytes: number }>();
+  const CONCURRENCY = 8;
+  for (let i = 0; i < toEnrich.length; i += CONCURRENCY) {
+    const batch = toEnrich.slice(i, i + CONCURRENCY);
+    await Promise.all(batch.map(async (f) => {
+      try {
+        const file = await ghGetFile(f.path);
+        if (file) enrichedRows.set(f.path, { exports: extractExports(file.content), header_comment: extractHeaderComment(file.content), bytes: Buffer.byteLength(file.content, 'utf-8') });
+      } catch { /* enrich later */ }
+    }));
+  }
+
+  // Build the full snapshot: enriched rows carry the new sha; unfetched
+  // changed rows carry NO sha (keeps them flagged as changed for next night);
+  // unchanged rows re-send their sha so exports/header are preserved by the
+  // upsert fn's CASE logic.
+  const rows = files.map((f) => {
+    const e = enrichedRows.get(f.path);
+    if (e) return { path: f.path, kind: indexKindOf(f.path), exports: e.exports, header_comment: e.header_comment, content_sha: f.sha, bytes: e.bytes };
+    const isChanged = known.get(f.path) !== f.sha;
+    return { path: f.path, kind: indexKindOf(f.path), exports: [], header_comment: null, content_sha: isChanged ? null : f.sha, bytes: f.size ?? null };
+  });
+
+  const { data: upsertData, error: upsertErr } = await sb.rpc('fn_bug_agent_code_index_upsert', { p_rows: rows, p_prune_missing: true });
+  if (upsertErr) return { ok: false, tree_files: files.length, enriched: enrichedRows.size, enrich_remaining: changed.length - toEnrich.length, upserted: 0, pruned: 0, error: upsertErr.message };
+  const res = (upsertData ?? {}) as { upserted?: number; pruned?: number };
+  return { ok: true, tree_files: files.length, enriched: enrichedRows.size, enrich_remaining: changed.length - enrichedRows.size, upserted: res.upserted ?? 0, pruned: res.pruned ?? 0 };
 }
