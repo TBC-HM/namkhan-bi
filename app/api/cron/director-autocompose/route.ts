@@ -19,6 +19,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { automationGuard } from '@/lib/cron/guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,6 +53,10 @@ function extractDirection(ai_notes: string | null): string | null {
 }
 
 async function handle(req: Request) {
+  // GLOBAL KILL SWITCH (brief ops-scheduler-console-v1 A3): exit early when automation is OFF.
+  const blocked = await automationGuard('/api/cron/director-autocompose');
+  if (blocked) return blocked;
+
   const url = new URL(req.url);
   const dry = url.searchParams.get('dry') === '1';
   const origin = new URL(req.url).origin;
