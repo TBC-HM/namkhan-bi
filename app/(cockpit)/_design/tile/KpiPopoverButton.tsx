@@ -145,6 +145,20 @@ export default function KpiPopoverButton({ kpiKey, label }: Props) {
             </div>
           )}
 
+          {/* Learn more — deep link to the University reference page */}
+          {typeof entry.kpi_number === 'number' && (
+            <a
+              href={`/university/kpi/${entry.kpi_number}`}
+              style={{
+                display: 'block', marginBottom: 10, fontSize: 11.5, fontWeight: 600,
+                color: 'var(--status-green, #2E7D32)', textDecoration: 'underline',
+                textUnderlineOffset: 2,
+              }}
+            >
+              Learn more in TBC University →
+            </a>
+          )}
+
           {/* Definition status */}
           <span style={{
             fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 600,
