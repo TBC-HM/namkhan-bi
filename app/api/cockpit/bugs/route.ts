@@ -7,6 +7,8 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -121,12 +123,31 @@ export async function POST(req: Request) {
   if (!text) {
     return NextResponse.json({ error: "body or message required" }, { status: 400 });
   }
+  // PBS 2026-07-27 (Mai Vou case) — the widget never captured WHO reported.
+  // Staff bugs landed with created_by NULL and were unrecognizable on the
+  // board. Resolve the signed-in user SERVER-SIDE from the session cookie;
+  // client-supplied values are only a fallback for legacy callers.
+  let sessionEmail: string | null = null;
+  let sessionUserId: string | null = null;
+  try {
+    const jar = await cookies();
+    const authed = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll: () => jar.getAll().map((c) => ({ name: c.name, value: c.value })), setAll: () => {} } },
+    );
+    const { data: { user } } = await authed.auth.getUser();
+    sessionEmail = user?.email ?? null;
+    sessionUserId = user?.id ?? null;
+  } catch { /* anonymous callers (cron, tests) stay anonymous */ }
+
   const insertRow: Record<string, unknown> = {
     dept_slug: dept,
     body: text,
-    created_by: raw.created_by ?? null,
+    created_by: sessionEmail ?? raw.created_by ?? null,
     status: "new",
   };
+  if (sessionUserId) insertRow.reporter_user_id = sessionUserId;
   if (raw.page_url) insertRow.page_url = raw.page_url;
   if (raw.viewport) insertRow.viewport = raw.viewport;
   if (raw.user_agent) insertRow.user_agent = raw.user_agent;
