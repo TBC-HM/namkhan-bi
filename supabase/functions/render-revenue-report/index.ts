@@ -1,4 +1,30 @@
-// render-revenue-report v9 · PBS 2026-07-15
+// v13 · 2026-07-27 (bug #74, Mai Vou): "2026" column regrouped under
+// Baselines (colspan 5) — it is the current-year anchor, not a snapshot;
+// OTB snapshots group now spans only the 4 snapshot-dated columns.
+// render-revenue-report v14 · PBS 2026-07-16
+// v14: send=true accepts optional { to, to_name } to bypass the DB recipient list
+//      and send the report ad-hoc to a single address. Powers "Send once to…" from
+//      the scheduler card (no need to add someone as a permanent recipient).
+// render-revenue-report v13 · PBS 2026-07-15
+// v13: (1) NEW "What happened in the last 24 hours" section between Trend·30d and
+//      the pickup matrix — 4 bullets sourced from public.fn_last_24h_report_bullets
+//      (bookings + cancellations + top sources + rate plans + MTD vs SDLY).
+//      (2) "Forward outlook by night" renamed to "Forward table by Day" (matches
+//      /revenue/pickup-day container title).
+//      (3) Parity table column "Brand.com" renamed to "The Namkhan" (v_rate_integrity_matrix
+//      view was also fixed to accept ota IN ('direct','brand.com') so rates land).
+// v12: (1) pickup matrix pickupYesterday delta = snapshot(yesterday) - snapshot(dby)
+//      so the embedded matrix in the daily report matches /revenue/pickup + HoD tile.
+//      (2) shell max-width 1200 → 1600 (no more horizontal scroll on wide viewports).
+//      (3) tile grid forced to repeat(7, minmax(0, 1fr)) — all 7 tiles in ONE row.
+// v11: Daily report top 2 sections replaced with HoD-style Today + Yesterday
+//      tile stripes (OCC · ADR · RevPAR · Revenue · New bookings · Cancellations
+//      · Pickup net) with STLY corner badges. Shell max-width widened 840→1200
+//      so pickup matrix + wide tables render without horizontal scroll.
+// v10: DAILY report renamed → "Daily Pickup Report". Subject drops "Revenue · "
+//      prefix, becomes "<CadenceLabel> · <Property> · <Date>". Daily body gains
+//      a new "Trend · last 30 days" section (RN sold from v_pulse_rn_sold_30d
+//      + dashed avg overlay). Dead vel15/velChart removed from daily bundle.
 // v9: LINK-FIRST EMAIL. Preview returns full HTML (unchanged). Send path sends a
 //     tiny "open the report" email with a link to the preview page + zero attachments.
 //     Rationale: v6-v8 HTML was ~1.6 MB → Gmail clipped at 102 KB. Users only saw
@@ -20,7 +46,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const CADENCE_LABEL: Record<string,string> = { daily:'Daily report', weekly:'Weekly report', monthly:'Monthly report' };
+const CADENCE_LABEL: Record<string,string> = { daily:'Daily Pickup Report', weekly:'Weekly report', monthly:'Monthly report' };
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -62,6 +88,9 @@ interface IntegrityRow { property_id: number; shop_date: string; stay_date: stri
 
 async function loadKpiRange(admin: SB, pid: number, fromIso: string, toIso: string): Promise<KpiDay[]> { const { data } = await admin.from('v_kpi_daily_property').select('*').eq('property_id', pid).gte('night_date', fromIso).lte('night_date', toIso).order('night_date'); return (data ?? []) as KpiDay[]; }
 async function loadVelocity(admin: SB, pid: number): Promise<VelocityRow[]> { const { data } = await admin.from('v_pickup_velocity_15d30d').select('*').eq('property_id', pid).order('day', { ascending: false }).limit(30); return (data ?? []) as VelocityRow[]; }
+async function loadPulseTrend30d(admin: SB, pid: number): Promise<{ night_date: string; rooms_sold: number }[]> { const { data } = await admin.from('v_pulse_rn_sold_30d').select('night_date,rooms_sold').eq('property_id', pid).order('night_date'); return (data ?? []) as { night_date: string; rooms_sold: number }[]; }
+interface Last24hBullets { tz: string; anchor_today: string; anchor_yesterday: string; new_rn: number; new_rev: number; cxl_rn: number; cxl_rev: number; sources: Array<{ label: string; rn: number; revenue: number }>; rateplans: Array<{ label: string; rn: number; revenue: number }>; mtd_rn: number; mtd_rev: number; ly_mtd_rn: number; ly_mtd_rev: number; }
+async function loadLast24hBullets(admin: SB, pid: number): Promise<Last24hBullets | null> { try { const { data } = await admin.rpc('fn_last_24h_report_bullets', { p_property_id: pid }); return (data ?? null) as Last24hBullets | null; } catch (_e) { return null; } }
 async function loadMonthly(admin: SB, pid: number, mBack: number, mFwd: number): Promise<MonthlyRow[]> { const t = new Date(); const from = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - mBack, 1)); const to = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + mFwd, 1)); const { data } = await admin.from('v_pickup_monthly').select('*').eq('property_id', pid); const rows = (data ?? []) as MonthlyRow[]; return rows.filter((r) => { const d = Date.UTC(r.year, r.month - 1, 1); return d >= from.getTime() && d <= to.getTime(); }).sort((a, b) => (a.year - b.year) * 12 + (a.month - b.month)); }
 async function loadDayReport(admin: SB, pid: number, fromIso: string, toIso: string): Promise<DayRow[]> { const { data } = await admin.from('v_pickup_day_report').select('*').eq('property_id', pid).gte('stay_date', fromIso).lte('stay_date', toIso).order('stay_date'); return (data ?? []) as DayRow[]; }
 async function loadPaceOtb(admin: SB, pid: number, fromIso: string, toIso: string): Promise<PaceOtbRow[]> { const { data } = await admin.schema('kpi').from('v_pace_otb_daily').select('stay_date,year,month,iso_dow,rooms_available,otb_rooms_sold,otb_revenue,otb_occupancy_pct,otb_adr,otb_revpar').eq('property_id', pid).gte('stay_date', fromIso).lte('stay_date', toIso).order('stay_date'); return (data ?? []) as PaceOtbRow[]; }
@@ -90,15 +119,19 @@ async function loadPickupMatrix(admin: SB, propertyId: number, sym: string): Pro
     const stayYear = asOf.getFullYear();
     const sdlyYear = stayYear - 1;
     const yesterday = new Date(asOf); yesterday.setDate(asOf.getDate() - 1);
+    // PBS 2026-07-15: DBY snapshot so "Pickup Yesterday" = snapshot(yesterday) - snapshot(dby)
+    // = actual yesterday calendar-day activity (matches /revenue/pickup matrix + HoD tile).
+    const dby = new Date(asOf); dby.setDate(asOf.getDate() - 2);
     const lastMonday = new Date(asOf); { const dow = lastMonday.getDay() || 7; lastMonday.setDate(lastMonday.getDate() - (dow - 1) - 7); }
     const monthStart = new Date(asOf.getFullYear(), asOf.getMonth(), 1);
     const sdly = new Date(asOf); sdly.setFullYear(sdlyYear);
     const y2 = new Date(stayYear - 2, 11, 31);
     const y3 = new Date(stayYear - 3, 11, 31);
     const snap = (d: Date): Promise<OtbAtRow[]> => Promise.resolve(admin.rpc('fn_pickup_otb_at', { p_property_id: propertyId, p_asof: fmtIsoLocal(d) }).then((r) => (r.data ?? []) as OtbAtRow[]));
-    const [sToday, sYest, sMon, sMonth, sSdly, sY2, sY3] = await Promise.all([snap(asOf).catch(() => []), snap(yesterday).catch(() => []), snap(lastMonday).catch(() => []), snap(monthStart).catch(() => []), snap(sdly).catch(() => []), snap(y2).catch(() => []), snap(y3).catch(() => [])]);
+    const [sToday, sYest, sDby, sMon, sMonth, sSdly, sY2, sY3] = await Promise.all([snap(asOf).catch(() => []), snap(yesterday).catch(() => []), snap(dby).catch(() => []), snap(lastMonday).catch(() => []), snap(monthStart).catch(() => []), snap(sdly).catch(() => []), snap(y2).catch(() => []), snap(y3).catch(() => [])]);
     const otbToday = bucketRows(sToday, stayYear);
     const otbYest = bucketRows(sYest, stayYear);
+    const otbDby = bucketRows(sDby, stayYear);
     const otbMon = bucketRows(sMon, stayYear);
     const otbMonth = bucketRows(sMonth, stayYear);
     const sdlyB = bucketRows(sSdly, sdlyYear);
@@ -117,22 +150,25 @@ async function loadPickupMatrix(admin: SB, propertyId: number, sym: string): Pro
       const tMonthly = valueOf(otbMonth[mo] ?? null, metric);
       const tMonday = valueOf(otbMon[mo] ?? null, metric);
       const tYest = valueOf(otbYest[mo] ?? null, metric);
+      const tDby  = valueOf(otbDby[mo] ?? null, metric);
       const tToday = tAll;
       const sdlyValue = valueOf(sdlyB[mo] ?? null, metric);
       const suppress = isStale;
-      return { metric, baseline2023: valueOf(baseline[stayYear - 3]?.[mo] ?? null, metric), baseline2024: valueOf(baseline[stayYear - 2]?.[mo] ?? null, metric), baseline2025: valueOf(baseline[stayYear - 1]?.[mo] ?? null, metric), budget2026: null, otbAll: tAll, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday, pickupMonthly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonthly), pickupWeekly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonday), pickupYesterday: suppress ? { abs: null, pct: null } : deltaOf(tToday, tYest), vsBudget: { abs: null, pct: null }, vsLy: deltaOf(tToday, sdlyValue), sdly: sdlyValue, sdlyDiff: (tToday != null && sdlyValue != null) ? tToday - sdlyValue : null };
+      // PBS 2026-07-15: pickupYesterday = snapshot(yesterday) - snapshot(dby) = actual yesterday activity.
+      return { metric, baseline2023: valueOf(baseline[stayYear - 3]?.[mo] ?? null, metric), baseline2024: valueOf(baseline[stayYear - 2]?.[mo] ?? null, metric), baseline2025: valueOf(baseline[stayYear - 1]?.[mo] ?? null, metric), budget2026: null, otbAll: tAll, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday, pickupMonthly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonthly), pickupWeekly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonday), pickupYesterday: suppress ? { abs: null, pct: null } : deltaOf(tYest, tDby), vsBudget: { abs: null, pct: null }, vsLy: deltaOf(tToday, sdlyValue), sdly: sdlyValue, sdlyDiff: (tToday != null && sdlyValue != null) ? tToday - sdlyValue : null };
     };
     const months = [] as PickupMatrixData['months'];
     for (let mo = 1; mo <= 12; mo++) months.push({ monthKey: `${stayYear}-${String(mo).padStart(2, '0')}`, monthLabel: `01/${String(mo).padStart(2, '0')}/${stayYear}`, rows: METRICS.map((m) => buildRow(m, mo)) });
-    const tot = { today: sumBucket(otbToday), monthly: sumBucket(otbMonth), monday: sumBucket(otbMon), yest: sumBucket(otbYest), sdly: sumBucket(sdlyB), b23: sumBucket(baseline[stayYear - 3] ?? {}), b24: sumBucket(baseline[stayYear - 2] ?? {}), b25: sumBucket(baseline[stayYear - 1] ?? {}) };
+    const tot = { today: sumBucket(otbToday), monthly: sumBucket(otbMonth), monday: sumBucket(otbMon), yest: sumBucket(otbYest), dby: sumBucket(otbDby), sdly: sumBucket(sdlyB), b23: sumBucket(baseline[stayYear - 3] ?? {}), b24: sumBucket(baseline[stayYear - 2] ?? {}), b25: sumBucket(baseline[stayYear - 1] ?? {}) };
     const totalRow = (metric: PickupMetric): PickupMatrixRow => {
       const tToday = valueOf(Object.keys(otbToday).length ? tot.today : null, metric);
       const tMonthly = valueOf(Object.keys(otbMonth).length ? tot.monthly : null, metric);
       const tMonday = valueOf(Object.keys(otbMon).length ? tot.monday : null, metric);
       const tYest = valueOf(Object.keys(otbYest).length ? tot.yest : null, metric);
+      const tDby  = valueOf(Object.keys(otbDby).length  ? tot.dby  : null, metric);
       const sdlyValue = valueOf(Object.keys(sdlyB).length ? tot.sdly : null, metric);
       const suppress = isStale;
-      return { metric, baseline2023: valueOf(Object.keys(baseline[stayYear - 3] ?? {}).length ? tot.b23 : null, metric), baseline2024: valueOf(Object.keys(baseline[stayYear - 2] ?? {}).length ? tot.b24 : null, metric), baseline2025: valueOf(Object.keys(baseline[stayYear - 1] ?? {}).length ? tot.b25 : null, metric), budget2026: null, otbAll: tToday, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday, pickupMonthly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonthly), pickupWeekly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonday), pickupYesterday: suppress ? { abs: null, pct: null } : deltaOf(tToday, tYest), vsBudget: { abs: null, pct: null }, vsLy: deltaOf(tToday, sdlyValue), sdly: sdlyValue, sdlyDiff: (tToday != null && sdlyValue != null) ? tToday - sdlyValue : null };
+      return { metric, baseline2023: valueOf(Object.keys(baseline[stayYear - 3] ?? {}).length ? tot.b23 : null, metric), baseline2024: valueOf(Object.keys(baseline[stayYear - 2] ?? {}).length ? tot.b24 : null, metric), baseline2025: valueOf(Object.keys(baseline[stayYear - 1] ?? {}).length ? tot.b25 : null, metric), budget2026: null, otbAll: tToday, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday, pickupMonthly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonthly), pickupWeekly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonday), pickupYesterday: suppress ? { abs: null, pct: null } : deltaOf(tYest, tDby), vsBudget: { abs: null, pct: null }, vsLy: deltaOf(tToday, sdlyValue), sdly: sdlyValue, sdlyDiff: (tToday != null && sdlyValue != null) ? tToday - sdlyValue : null };
     };
     const curMonthAvail = otbToday[asOf.getMonth() + 1]?.avail ?? 0;
     const capacity = curMonthAvail > 0 ? Math.round(curMonthAvail / new Date(stayYear, asOf.getMonth() + 1, 0).getDate()) : 0;
@@ -182,10 +218,47 @@ function pickupMatrixHtml(data: PickupMatrixData): string {
       return `<tr style="background:${bg}">${rowHead}${tdCell(r.baseline2023, r.metric, false, borderTop)}${tdCell(r.baseline2024, r.metric, false, borderTop)}${tdCell(r.baseline2025, r.metric, false, borderTop)}${tdCell(r.budget2026, r.metric, false, borderTop)}${tdCell(r.otbAll, r.metric, true, borderTop)}${tdCell(r.otbMonthly, r.metric, false, borderTop)}${tdCell(r.otbMonday, r.metric, false, borderTop)}${tdCell(r.otbYesterday, r.metric, false, borderTop)}${tdCell(r.otbToday, r.metric, true, borderTop)}${tdDelta(r.pickupMonthly, r.metric, 'abs', borderTop)}${tdDelta(r.pickupWeekly, r.metric, 'abs', borderTop)}${tdDelta(r.pickupYesterday, r.metric, 'abs', borderTop)}${tdDelta(r.vsBudget, r.metric, 'abs', borderTop)}${tdDelta(r.vsBudget, r.metric, 'pct', borderTop)}${tdDelta(r.vsLy, r.metric, 'abs', borderTop)}${tdDelta(r.vsLy, r.metric, 'pct', borderTop)}${tdCell(r.sdly, r.metric, false, borderTop)}${tdDelta({ abs: r.sdlyDiff, pct: null }, r.metric, 'abs', borderTop)}</tr>`;
     }).join('');
   };
-  const head1 = `<tr>${groupTh(data.asOfDate + (data.stalenessNote ? `<div style=\"font-size:10px;color:${INK_SOFT};margin-top:2px;font-style:italic;text-align:left\">${data.stalenessNote}</div>` : ''))}${groupTh('Baselines', 4)}${groupTh('OTB snapshots', 5)}${groupTh('Pickup', 3)}${groupTh('Comparison', 4)}${groupTh(`SDLY · ${data.sdlyDate}`, 2)}</tr>`;
+  const head1 = `<tr>${groupTh(data.asOfDate + (data.stalenessNote ? `<div style=\"font-size:10px;color:${INK_SOFT};margin-top:2px;font-style:italic;text-align:left\">${data.stalenessNote}</div>` : ''))}${groupTh('Baselines', 5)}${groupTh('OTB snapshots', 4)}${groupTh('Pickup', 3)}${groupTh('Comparison', 4)}${groupTh(`SDLY · ${data.sdlyDate}`, 2)}</tr>`;
   const head2 = `<tr>${headerTh('Period')}${headerTh('2023')}${headerTh('2024')}${headerTh('2025')}${headerTh('Budget 2026')}${headerTh('2026')}${headerTh('Monthly', data.monthlySnapshotLabel)}${headerTh('Monday', data.mondaySnapshotLabel)}${headerTh('Yesterday', data.yesterdaySnapshotLabel)}${headerTh('Today', data.todaySnapshotLabel)}${headerTh('Monthly')}${headerTh('Weekly')}${headerTh('Yesterday')}${headerTh('OTB vs Budget', undefined, 2)}${headerTh('OTB vs LY', undefined, 2)}${headerTh('SDLY value')}${headerTh('Δ vs SDLY')}</tr>`;
   const body = data.months.map((m, i) => renderBlock(m, i % 2 === 1, false)).join('') + renderBlock({ monthKey: 'TOTAL', monthLabel: 'TOTAL 2026', rows: data.total }, false, true);
   return `<div style="overflow-x:auto;border:1px solid #E0E0E0;border-radius:4px;background:${PAPER}"><table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0;width:auto;font-family:inherit;font-size:10px;background:${PAPER};line-height:1.2"><thead>${head1}${head2}</thead><tbody>${body}</tbody></table></div>`;
+}
+
+function last24hBulletsHtml(b: Last24hBullets | null, sym: string): string {
+  if (!b) return `<div style="padding:12px;color:${INK_SOFT};font-style:italic;background:${PAPER_SOFT};border:1px solid ${HAIRLINE};border-radius:6px">Last-24h feed unavailable.</div>`;
+  const fmtMoney = (v: number) => `${sym}${Math.round(Number(v || 0)).toLocaleString('en-US')}`;
+  const fmtInt = (v: number) => Number(v || 0).toLocaleString('en-US');
+  const mtdDeltaRn = b.mtd_rn - b.ly_mtd_rn;
+  const mtdDeltaRev = Number(b.mtd_rev) - Number(b.ly_mtd_rev);
+  const mtdPctRn = b.ly_mtd_rn > 0 ? (mtdDeltaRn / b.ly_mtd_rn) * 100 : null;
+  const mtdPctRev = Number(b.ly_mtd_rev) > 0 ? (mtdDeltaRev / Number(b.ly_mtd_rev)) * 100 : null;
+  const trendTone = (mtdPctRn ?? 0) >= 0 ? 'good' : 'bad';
+  const toneCol = (t: 'good'|'bad'|'mute') => t === 'good' ? GREEN : t === 'bad' ? RED : INK_SOFT;
+  const chip = (text: string, tone: 'good'|'bad'|'mute' = 'mute') => `<span style="display:inline-block;padding:1px 6px;margin-left:6px;border-radius:10px;background:${tone==='good'?'#E8F2E4':tone==='bad'?'#FBEAEA':PAPER_SOFT};color:${toneCol(tone)};font-size:10px;font-weight:700;font-variant-numeric:tabular-nums">${text}</span>`;
+  const topN = (rows: Array<{ label: string; rn: number; revenue: number }>, n: number) => rows.slice(0, n).map((r) => `${r.label} <span style="color:${INK_SOFT};font-weight:600">${fmtInt(r.rn)} RN · ${fmtMoney(Number(r.revenue))}</span>`).join(' · ');
+  const bullet = (title: string, body: string) => `<li style="margin:6px 0;line-height:1.5;color:${INK};font-size:12px"><strong style="color:${PRIMARY}">${title}</strong> — ${body}</li>`;
+  const b1 = bullet(
+    'Bookings',
+    `${fmtInt(b.new_rn)} new · ${fmtMoney(b.new_rev)} gross${b.cxl_rn > 0 ? ` · <span style="color:${RED};font-weight:700">${fmtInt(b.cxl_rn)} cancelled (${fmtMoney(b.cxl_rev)})</span>` : ''}`
+  );
+  const b2 = bullet(
+    'Sources',
+    b.sources.length > 0 ? topN(b.sources, 5) : '<span style="color:'+INK_SOFT+';font-style:italic">no bookings in window</span>'
+  );
+  const rateplansMeaningful = b.rateplans.filter((r) => r.label !== 'Unassigned').length > 0
+    ? b.rateplans.filter((r) => r.label !== 'Unassigned')
+    : b.rateplans;
+  const b3 = bullet(
+    'Rate plans',
+    rateplansMeaningful.length > 0 ? topN(rateplansMeaningful, 5) : '<span style="color:'+INK_SOFT+';font-style:italic">no rate-plan hits</span>'
+  );
+  const trendChipRn  = mtdPctRn  != null ? chip(`${mtdPctRn  >= 0 ? '+' : ''}${mtdPctRn.toFixed(1)}%`,  trendTone) : '';
+  const trendChipRev = mtdPctRev != null ? chip(`${mtdPctRev >= 0 ? '+' : ''}${mtdPctRev.toFixed(1)}%`, trendTone) : '';
+  const b4 = bullet(
+    'Trend MTD vs SDLY',
+    `${fmtInt(b.mtd_rn)} RN · ${fmtMoney(b.mtd_rev)}${trendChipRn}${trendChipRev} <span style="color:${INK_SOFT};font-weight:500">(LY same window: ${fmtInt(b.ly_mtd_rn)} RN · ${fmtMoney(Number(b.ly_mtd_rev))})</span>`
+  );
+  return `<ul style="margin:0;padding:6px 12px 6px 24px;background:${PAPER};border:1px solid ${HAIRLINE};border-radius:6px;list-style:disc">${b1}${b2}${b3}${b4}</ul>`;
 }
 
 function forwardOutlookHtml(pace: PaceOtbRow[], pickupMap: Map<string, DayRow>, sym: string, snapshotDate: string | null): string {
@@ -249,7 +322,7 @@ function parityIntegrityHtml(rows: IntegrityRow[]): string {
     const alertBg = spreadPct >= 0.15 ? '#FBEAEA' : spreadPct >= 0.05 ? '#FDF2E1' : 'transparent';
     return `<tr style="background:${alertBg}"><td style="${td};text-align:left;font-weight:600">${dayName(r.stay_date)}</td><td style="${td};text-align:left">${fmtDmy(r.stay_date)}</td><td style="${td}">${fmtCell(r.direct_usd, r.direct_status)}</td><td style="${td}">${fmtCell(r.booking_usd, r.booking_status)}</td><td style="${td}">${fmtCell(r.expedia_usd, r.expedia_status)}</td><td style="${td}">${fmtCell(r.agoda_usd, r.agoda_status)}</td><td style="${td}">${fmtCell(r.tiket_usd, r.tiket_status)}</td><td style="${td};font-weight:600">${r.spread_usd != null ? fmtUsd(r.spread_usd) : '—'}</td><td style="${td};font-weight:600">${fmtPct2(r.spread_pct)}</td></tr>`;
   }).join('');
-  const header = `<thead><tr>${['Day','Date','Brand.com','Booking.com','Expedia','Agoda','Tiket','Spread','Spread %'].map((h)=>`<th style=\"${th}\">${h}</th>`).join('')}</tr></thead>`;
+  const header = `<thead><tr>${['Day','Date','The Namkhan','Booking.com','Expedia','Agoda','Tiket','Spread','Spread %'].map((h)=>`<th style=\"${th}\">${h}</th>`).join('')}</tr></thead>`;
   return `<div style="overflow-x:auto;border:1px solid ${HAIRLINE};border-radius:6px"><table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;background:${PAPER}">${header}<tbody>${body}</tbody></table></div>`;
 }
 
@@ -334,41 +407,117 @@ function b64(s: string): string { const bytes = new TextEncoder().encode(s); let
 interface ReportContext { propertyId: number; propertyName: string; reportDate: string; ccy: string; tz: string; }
 interface Bundle { html: string; attachments: Array<{ filename: string; content: string; content_type: string }> }
 
+// ─── PBS 2026-07-15: HoD-style KPI tile stripes (mirror /revenue page) ────────
+interface HodTileProps { label: string; value: string | number; footnote?: string; status?: 'green' | 'amber' | 'grey'; stly?: string }
+interface HodDayAct { gross_bookings_count: number; gross_bookings_rn: number | string; gross_bookings_rev: number | string; cancellations_count: number; cancellations_rn: number | string; cancellations_rev: number | string; pickup_net_rn: number | string; pickup_net_rev: number | string }
+interface KpiSnap { rooms_available: number | null; rooms_sold: number | null; rooms_revenue: number | string | null; occupancy_pct: number | string | null; adr: number | string | null; revpar: number | string | null }
+
+function renderHodTile(t: HodTileProps): string {
+  const statusColor = t.status === 'green' ? '#2E7D32' : t.status === 'amber' ? '#F59E0B' : '#9CA3AF';
+  const stlyBadge = t.stly ? `<span style="position:absolute;bottom:6px;right:6px;padding:2px 6px;border-radius:4px;background:${PAPER_SOFT};border:1px solid ${HAIRLINE};color:${INK};font-size:10px;font-weight:600;letter-spacing:0.02em;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;"><span style="color:${INK_SOFT};font-weight:500;font-size:9px;letter-spacing:0.06em;margin-right:2px;">LY</span>${t.stly}</span>` : '';
+  const statusDot = t.status ? `<span style="width:8px;height:8px;border-radius:50%;background:${statusColor};flex-shrink:0;"></span>` : '';
+  const footHtml = t.footnote ? `<div style="font-size:10px;color:${INK_SOFT};margin-top:auto;overflow:hidden;text-overflow:ellipsis;padding-right:${t.stly ? 56 : 0}px;">${t.footnote}</div>` : '';
+  return `<div style="background:${PAPER};border:1px solid ${HAIRLINE};border-radius:8px;padding:12px;min-height:88px;position:relative;overflow:hidden;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;gap:2px;color:${INK};"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span style="color:${INK_SOFT};text-transform:uppercase;letter-spacing:0.04em;font-weight:500;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${t.label}</span>${statusDot}</div><div style="font-size:20px;font-weight:600;color:${INK};line-height:1.15;">${t.value}</div>${footHtml}${stlyBadge}</div>`;
+}
+
+function renderHodStripe(tiles: HodTileProps[]): string {
+  return `<div style="display:grid;grid-template-columns:repeat(7, minmax(0, 1fr));gap:8px;">${tiles.map(renderHodTile).join('')}</div>`;
+}
+
+async function loadHodDayActivity(admin: SB, pid: number, anchor: string): Promise<HodDayAct | null> {
+  const { data } = await admin.rpc('fn_hod_day_activity', { p_property_id: pid, p_anchor: anchor });
+  return ((data as HodDayAct[] | null) ?? [])[0] ?? null;
+}
+
+async function loadKpiSnap(admin: SB, pid: number, nightDate: string): Promise<KpiSnap | null> {
+  const { data } = await admin.from('v_kpi_daily_property').select('rooms_available, rooms_sold, rooms_revenue, occupancy_pct, adr, revpar').eq('property_id', pid).eq('night_date', nightDate).maybeSingle();
+  return (data as KpiSnap | null) ?? null;
+}
+
+function lyIsoOf(iso: string): string { const d = new Date(iso + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() - 1); return d.toISOString().slice(0, 10); }
+
+function buildHodTiles(scope: 'today' | 'yesterday', kpi: KpiSnap | null, lyKpi: KpiSnap | null, act: HodDayAct | null, lyAct: HodDayAct | null, sym: string): HodTileProps[] {
+  const TAX = 1.21;
+  const occ = Math.round(Number(kpi?.occupancy_pct ?? 0));
+  const lyOcc = Math.round(Number(lyKpi?.occupancy_pct ?? 0));
+  const netAdr = Math.round(Number(kpi?.adr ?? 0) / TAX);
+  const netRevpar = Math.round(Number(kpi?.revpar ?? 0) / TAX);
+  const netRev = Math.round(Number(kpi?.rooms_revenue ?? 0) / TAX);
+  const lyNetAdr = Math.round(Number(lyKpi?.adr ?? 0) / TAX);
+  const lyNetRevpar = Math.round(Number(lyKpi?.revpar ?? 0) / TAX);
+  const lyNetRev = Math.round(Number(lyKpi?.rooms_revenue ?? 0) / TAX);
+  const grossC = Number(act?.gross_bookings_count ?? 0);
+  const grossRn = Number(act?.gross_bookings_rn ?? 0);
+  const grossRev = Number(act?.gross_bookings_rev ?? 0);
+  const cxlC = Number(act?.cancellations_count ?? 0);
+  const cxlRn = Number(act?.cancellations_rn ?? 0);
+  const cxlRev = Number(act?.cancellations_rev ?? 0);
+  const pickRn = Number(act?.pickup_net_rn ?? 0);
+  const pickRev = Number(act?.pickup_net_rev ?? 0);
+  const lyGross = Number(lyAct?.gross_bookings_rn ?? 0);
+  const lyCxl = Number(lyAct?.cancellations_rn ?? 0);
+  const lyPick = Number(lyAct?.pickup_net_rn ?? 0);
+  const revLabel = scope === 'today' ? 'Revenue tonight' : 'Revenue yesterday';
+  return [
+    { label: 'OCC', value: `${occ}%`, footnote: `${kpi?.rooms_sold ?? 0} of ${kpi?.rooms_available ?? 0} rooms`, stly: `${lyOcc}%` },
+    { label: 'ADR', value: `${sym}${netAdr.toLocaleString('en-US')}`, footnote: `${scope} · in-house · net`, stly: `${sym}${lyNetAdr.toLocaleString('en-US')}` },
+    { label: 'RevPAR', value: `${sym}${netRevpar.toLocaleString('en-US')}`, footnote: `${scope} · vs capacity · net`, stly: `${sym}${lyNetRevpar.toLocaleString('en-US')}` },
+    { label: revLabel, value: `${sym}${netRev.toLocaleString('en-US')}`, footnote: `${kpi?.rooms_sold ?? 0} rooms · net`, status: netRev > 0 ? 'green' : 'grey', stly: `${sym}${lyNetRev.toLocaleString('en-US')}` },
+    { label: `New bookings ${scope} · room nights`, value: grossRn, footnote: grossC === 0 ? `no new bookings ${scope}` : `${grossC} ${grossC === 1 ? 'reservation' : 'reservations'} · ${sym}${Math.round(grossRev).toLocaleString('en-US')} · gross booked ${scope}`, status: grossRn > 0 ? 'green' : 'grey', stly: `${lyGross} RN` },
+    { label: `Cancellations ${scope} · room nights`, value: cxlRn, footnote: cxlC === 0 ? `no cancellations ${scope}` : `${cxlC} ${cxlC === 1 ? 'reservation' : 'reservations'} · ${sym}${Math.round(cxlRev).toLocaleString('en-US')} · value lost ${scope}`, status: cxlC === 0 ? 'green' : 'amber', stly: `${lyCxl} RN` },
+    { label: `Pickup ${scope} · net RN`, value: pickRn, footnote: `${grossRn} booked − ${cxlRn} lost · ${sym}${Math.round(pickRev).toLocaleString('en-US')} net · matches pickup matrix`, status: pickRn > 0 ? 'green' : pickRn < 0 ? 'amber' : 'grey', stly: `${lyPick} RN` },
+  ];
+}
+
 async function buildDailyBundle(admin: SB, ctx: ReportContext): Promise<Bundle> {
   const today = ctx.reportDate;
   const yesterday = addDaysIso(today, -1);
   const in365 = addDaysIso(today, 365);
   const sym = ctx.ccy === 'EUR' ? '€' : '$';
 
-  const [kpis, velocity, monthly24, day60, pickupMatrix, paceForward, dayForward, integrity] = await Promise.all([
+  const lyToday = lyIsoOf(today);
+  const lyYesterday = lyIsoOf(yesterday);
+  const [kpis, trend30d, monthly24, day60, pickupMatrix, paceForward, dayForward, integrity, todayKpiSnap, yestKpiSnap, lyTodayKpiSnap, lyYestKpiSnap, hodActT, hodActY, hodActLyT, hodActLyY, last24h] = await Promise.all([
     loadKpiRange(admin, ctx.propertyId, addDaysIso(today, -2), today),
-    loadVelocity(admin, ctx.propertyId),
+    loadPulseTrend30d(admin, ctx.propertyId),
     loadMonthly(admin, ctx.propertyId, 12, 12),
     loadDayReport(admin, ctx.propertyId, today, addDaysIso(today, 60)),
     loadPickupMatrix(admin, ctx.propertyId, sym),
     loadPaceOtb(admin, ctx.propertyId, today, in365),
     loadDayReport(admin, ctx.propertyId, today, in365),
     loadIntegrity(admin, ctx.propertyId),
+    loadKpiSnap(admin, ctx.propertyId, today),
+    loadKpiSnap(admin, ctx.propertyId, yesterday),
+    loadKpiSnap(admin, ctx.propertyId, lyToday),
+    loadKpiSnap(admin, ctx.propertyId, lyYesterday),
+    loadHodDayActivity(admin, ctx.propertyId, today),
+    loadHodDayActivity(admin, ctx.propertyId, yesterday),
+    loadHodDayActivity(admin, ctx.propertyId, lyToday),
+    loadHodDayActivity(admin, ctx.propertyId, lyYesterday),
+    loadLast24hBullets(admin, ctx.propertyId),
   ]);
-  const yesterdayK = kpis.find((r) => r.night_date === yesterday) ?? null;
-  const todayK = kpis.find((r) => r.night_date === today) ?? null;
   const dayForwardMap = new Map<string, DayRow>(dayForward.map((r) => [r.stay_date, r]));
 
-  const vel15 = velocity.slice(0, 15).reverse();
-  const velBars: StackedBar[] = vel15.map((r) => ({ label: fmtDate(r.day).split(' ')[1], segments: [{ value: r.pickup_ota, color: OTA_COL, name: 'OTA' }, { value: r.pickup_direct, color: DIR_COL, name: 'Direct' }, { value: r.pickup_other, color: OTH_COL, name: 'Other' }], overlay: r.sdly_total }));
-  const velChart = svgStackedBars(velBars, 720, 220, { showLegend: true, overlayColor: LINE_COL });
+  const avgRn = trend30d.length ? trend30d.reduce((s, r) => s + r.rooms_sold, 0) / trend30d.length : 0;
+  const totalRn = trend30d.reduce((s, r) => s + r.rooms_sold, 0);
+  const trendBars: StackedBar[] = trend30d.map((r) => ({ label: fmtDate(r.night_date).split(' ')[1], segments: [{ value: r.rooms_sold, color: PRIMARY, name: 'RN sold' }], overlay: avgRn }));
+  const trendChart = svgStackedBars(trendBars, 720, 220, { showLegend: false, overlayColor: LINE_COL });
 
-  const yesterdayInner = kpiStripe('Yesterday', yesterdayK, ctx.ccy) + yesterdayHighlightTile(yesterdayK, ctx.ccy);
   const pickupMatrixInner = pickupMatrix ? pickupMatrixHtml(pickupMatrix) : `<div style="padding:12px;color:${INK_SOFT};font-style:italic;background:${PAPER_SOFT};border:1px solid ${HAIRLINE};border-radius:6px">Pickup matrix unavailable — fn_pickup_asof / fn_pickup_otb_at returned no data.</div>`;
   const forwardInner = forwardOutlookHtml(paceForward, dayForwardMap, sym, null);
   const parityInner = parityIntegrityHtml(integrity);
+  const last24hInner = last24hBulletsHtml(last24h, sym);
+
+  const todayTiles = buildHodTiles('today', todayKpiSnap, lyTodayKpiSnap, hodActT, hodActLyT, sym);
+  const yestTiles  = buildHodTiles('yesterday', yestKpiSnap, lyYestKpiSnap, hodActY, hodActLyY, sym);
 
   const body =
-    section('Yesterday — actualised', `Money tiles NET (excl. tax & service charge) · anchor ${yesterday} (${ctx.tz})`, yesterdayInner) +
-    section('Today', '', kpiStripe('Today', todayK, ctx.ccy)) +
-
+    section('Headline · Today', `${today} (${ctx.tz}) · money tiles NET (excl. 10% VAT + 10% service charge) · LY corner = same date last year`, renderHodStripe(todayTiles)) +
+    section('Headline · Yesterday', `${yesterday} (${ctx.tz}) · calendar day just closed · LY corner = same date last year`, renderHodStripe(yestTiles)) +
+    section('Trend · last 30 days', `Daily room-nights sold · dashed line = avg ${avgRn.toFixed(1)} RN/day · ${trend30d.length} days · ${totalRn} rooms sold total`, `<div style="border:1px solid ${HAIRLINE};border-radius:6px;background:${PAPER};padding:6px">${trendChart}</div>`) +
+    section('What happened in the last 24 hours', last24h ? `${last24h.anchor_yesterday} → ${last24h.anchor_today} (${last24h.tz}) · bookings · sources · rate plans · MTD vs SDLY` : 'awaiting last-24h feed', last24hInner) +
     section('OTB · Pickup · Comparison · SDLY', pickupMatrix ? (pickupMatrix.stalenessNote ?? `as of ${pickupMatrix.todaySnapshotLabel}`) : 'awaiting pickup data', pickupMatrixInner) +
-    section('Forward outlook by night', `${paceForward.length} nights from today · monthly totals inline · real −1d and −7d pickup from booking_date`, forwardInner) +
+    section('Forward table by Day', `${paceForward.length} nights from today · monthly totals inline · real −1d and −7d pickup from booking_date`, forwardInner) +
     section('Own-OTA rate integrity · parity', integrity[0] ? `last feed ${fmtDmy(integrity[0].shop_date)} · ${integrity.length} stay-dates · lowest available rate without fees & VAT` : 'no integrity feed yet', parityInner);
 
   const propertyTag = ctx.propertyName.replace(/\s+/g, '_');
@@ -422,10 +571,20 @@ async function buildMonthlyBundle(admin: SB, ctx: ReportContext): Promise<Bundle
   return { html: body, attachments: [{ filename: `monthly-pickup-${propertyTag}-${ctx.reportDate}.csv`, content: b64(buildMonthlyCsv(monthly24, ctx.propertyName, ctx.reportDate)), content_type: 'text/csv' }, { filename: `daily-pickup-${propertyTag}-${ctx.reportDate}.csv`, content: b64(buildDailyCsv(day60, ctx.propertyName, ctx.reportDate)), content_type: 'text/csv' }] };
 }
 
-function renderShell(ctx: ReportContext, cadenceLabel: string, subject: string, body: string): string { return `<!doctype html><html><head><meta charset="utf-8"><title>${subject}</title></head><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:840px;margin:0 auto;background:${PAPER}"><tr><td style="padding:28px 32px 14px 32px;border-bottom:1px solid ${HAIRLINE}"><div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">${cadenceLabel}</div><div style="font-size:22px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em">${ctx.propertyName}</div><div style="font-size:12px;color:${INK_SOFT};margin-top:2px">Report date: <strong style=\"color:${INK}\">${ctx.reportDate}</strong> · Hotel local time (${ctx.tz}) · Delivered by TBC Revenue Management</div></td></tr>${body}</table></body></html>`; }
+// PBS 2026-07-15: shell max-width widened 840 → 1200 so pickup matrix + wide tables render without horizontal scroll in the preview iframe.
+function renderShell(ctx: ReportContext, cadenceLabel: string, subject: string, body: string): string { return `<!doctype html><html><head><meta charset="utf-8"><title>${subject}</title></head><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:1600px;margin:0 auto;background:${PAPER}"><tr><td style="padding:28px 32px 14px 32px;border-bottom:1px solid ${HAIRLINE}"><div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">${cadenceLabel}</div><div style="font-size:22px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em">${ctx.propertyName}</div><div style="font-size:12px;color:${INK_SOFT};margin-top:2px">Report date: <strong style=\"color:${INK}\">${ctx.reportDate}</strong> · Hotel local time (${ctx.tz}) · Delivered by TBC Revenue Management</div></td></tr>${body}</table></body></html>`; }
 
-function renderLinkOnly(ctx: ReportContext, cadenceLabel: string, subject: string, previewUrl: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${subject}</title></head><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:32px auto;background:${PAPER};border:1px solid ${HAIRLINE};border-radius:8px"><tr><td style="padding:28px 32px"><div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:6px">${cadenceLabel}</div><div style="font-size:20px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em;margin-bottom:4px">${ctx.propertyName}</div><div style="font-size:12px;color:${INK_SOFT};margin-bottom:20px">Report date: <strong style=\"color:${INK}\">${ctx.reportDate}</strong> · Hotel local time (${ctx.tz}) · Delivered by TBC Revenue Management</div><div style="font-size:13px;color:${INK};margin-bottom:20px;line-height:1.5">Your ${cadenceLabel.toLowerCase()} is ready. Full charts, tables and HTML download live on the report page.</div><div style="margin:24px 0"><a href="${previewUrl}" style="display:inline-block;padding:12px 22px;background:${PRIMARY};color:#FFFFFF;font-size:13px;font-weight:600;letter-spacing:0.03em;border-radius:5px;text-decoration:none">Open the report →</a></div><div style="font-size:11px;color:${INK_SOFT};line-height:1.5">Or paste this into your browser:<br/><a href="${previewUrl}" style="color:${PRIMARY};text-decoration:underline;word-break:break-all">${previewUrl}</a></div></td></tr></table></body></html>`;
+// PBS 2026-07-15: minimalist email — "Dear <name>," + View + Download links, no filler.
+// recipientName is best-effort: first token of the row's `name` column, or "there" fallback.
+function firstNameOf(fullName?: string | null): string {
+  if (!fullName) return 'there';
+  const t = String(fullName).trim().split(/\s+/)[0];
+  return t || 'there';
+}
+function renderLinkOnly(ctx: ReportContext, cadenceLabel: string, subject: string, previewUrl: string, recipientName?: string | null): string {
+  const greeting = `Dear ${firstNameOf(recipientName)},`;
+  const downloadUrl = `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}download=1`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${subject}</title></head><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:32px auto;background:${PAPER}"><tr><td style="padding:24px 28px"><div style="font-size:14px;color:${INK};margin-bottom:14px">${greeting}</div><div style="font-size:13px;color:${INK};margin-bottom:22px;line-height:1.55">Your ${cadenceLabel.toLowerCase()} for <strong>${ctx.propertyName}</strong> (${ctx.reportDate}) is ready.</div><div style="margin:0 0 18px 0"><a href="${previewUrl}" style="display:inline-block;padding:10px 20px;background:${PRIMARY};color:#FFFFFF;font-size:13px;font-weight:600;letter-spacing:0.03em;border-radius:4px;text-decoration:none;margin-right:8px">View report</a><a href="${downloadUrl}" style="display:inline-block;padding:10px 20px;background:${PAPER};color:${PRIMARY};font-size:13px;font-weight:600;letter-spacing:0.03em;border:1px solid ${PRIMARY};border-radius:4px;text-decoration:none">Download HTML</a></div><div style="font-size:11px;color:${INK_SOFT};line-height:1.5;margin-top:24px">${previewUrl}</div></td></tr></table></body></html>`;
 }
 
 async function sendViaResend(opts: { to: string; name?: string | null; subject: string; html: string; attachments?: Array<{ filename: string; content: string; content_type?: string }>; meta?: unknown }): Promise<{ status: string; error?: string }> {
@@ -444,6 +603,10 @@ Deno.serve(async (req: Request) => {
     const propertyId = Number(body.property_id);
     const templateKey = String(body.template_key ?? '');
     const send = Boolean(body.send);
+    // PBS 2026-07-16: ad-hoc single-recipient send. When present, skip the DB
+    // recipient list and send only to this address. Used by "Send once to…".
+    const adhocTo = typeof body.to === 'string' && body.to.includes('@') ? body.to.trim() : null;
+    const adhocName = typeof body.to_name === 'string' && body.to_name.trim() ? body.to_name.trim() : null;
     if (!Number.isFinite(propertyId) || !['daily','weekly','monthly'].includes(templateKey)) return new Response(JSON.stringify({ error: 'invalid property_id or template_key' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
     const tz = tzFor(propertyId);
@@ -456,16 +619,24 @@ Deno.serve(async (req: Request) => {
     else if (templateKey === 'weekly') bundle = await buildWeeklyBundle(admin, ctx);
     else bundle = await buildMonthlyBundle(admin, ctx);
     const cadenceLabel = CADENCE_LABEL[templateKey];
-    const subject = `Revenue · ${cadenceLabel} · ${propertyName} · ${reportDate}`;
+    const subject = `${cadenceLabel} · ${propertyName} · ${reportDate}`;
     const previewHtml = renderShell(ctx, cadenceLabel, subject, bundle.html);
     const previewUrl = `https://namkhan-bi.vercel.app/revenue/reports/scheduled/${templateKey}/preview?property_id=${propertyId}`;
-    const emailHtml = renderLinkOnly(ctx, cadenceLabel, subject, previewUrl);
     if (!send) return new Response(JSON.stringify({ subject, html: previewHtml, property_name: propertyName, report_date: reportDate, attachment_count: 0, preview_url: previewUrl }), { headers: { 'Content-Type': 'application/json' } });
-    const { data: recips, error: recipErr } = await admin.from('v_revenue_report_recipients').select('id,email,name,active,property_id,template_key').eq('property_id', propertyId).eq('template_key', templateKey).eq('active', true);
-    if (recipErr) throw recipErr;
+    // Recipient set: ad-hoc single address OR the DB list.
+    let recipList: Array<{ id: number | null; email: string; name: string | null }> = [];
+    if (adhocTo) {
+      recipList = [{ id: null, email: adhocTo, name: adhocName }];
+    } else {
+      const { data: recips, error: recipErr } = await admin.from('v_revenue_report_recipients').select('id,email,name,active,property_id,template_key').eq('property_id', propertyId).eq('template_key', templateKey).eq('active', true);
+      if (recipErr) throw recipErr;
+      recipList = (recips ?? []).map((r) => { const x = r as { id: number; email: string; name: string | null }; return { id: x.id, email: x.email, name: x.name }; });
+    }
     const sent: Array<{ recipient_email: string; status: string; send_id?: number; error?: string }> = [];
-    for (const r of (recips ?? [])) {
-      const rec = r as { id: number; email: string; name: string | null };
+    for (const r of recipList) {
+      const rec = r;
+      // Per-recipient greeting: rebuild email HTML with their first name.
+      const emailHtml = renderLinkOnly(ctx, cadenceLabel, subject, previewUrl, rec.name);
       const { data: ins, error: insErr } = await admin.schema('documentation').from('revenue_report_sends').insert({ property_id: propertyId, template_key: templateKey, recipient_email: rec.email, subject, html_snapshot: emailHtml, status: 'queued' }).select('id').single();
       const sendId = (ins as { id: number } | null)?.id;
       if (insErr) { sent.push({ recipient_email: rec.email, status: 'error', error: insErr.message }); continue; }
