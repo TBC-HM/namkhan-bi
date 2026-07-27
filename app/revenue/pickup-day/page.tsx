@@ -44,6 +44,9 @@ async function fetchData(propertyId: number) {
   const sb = getSupabaseAdmin();
   const todayIso = new Date().toISOString().slice(0, 10);
   const in365 = new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10);
+  // Bug #81 (Mai Vou): include the elapsed part of the current month, not
+  // just today-forward — the RM needs the full current month in one view.
+  const monthStartIso = todayIso.slice(0, 8) + '01';
 
   // Latest Lighthouse snapshot for this property (feeds the Demand column).
   const { data: latestSnap } = await sb.from('v_lighthouse_rateshop')
@@ -55,7 +58,7 @@ async function fetchData(propertyId: number) {
     sb.schema('kpi').from('v_pace_otb_daily')
       .select('stay_date, year, month, iso_dow, rooms_available, otb_rooms_sold, otb_revenue, otb_occupancy_pct, otb_adr, otb_revpar')
       .eq('property_id', propertyId)
-      .gte('stay_date', todayIso).lte('stay_date', in365)
+      .gte('stay_date', monthStartIso).lte('stay_date', in365)
       .order('stay_date'),
     // Real -1d and -7d pickup from v_pickup_day_report (derived from reservation booking_date).
     sb.from('v_pickup_day_report')
@@ -223,7 +226,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
         <div style={{ gridColumn: '1 / -1' }}>
           <Container
             title="Forward table by Day"
-            subtitle={`${pace.length} nights from today · monthly totals inline · Demand · Lighthouse (snapshot ${snapshotDate ?? 'pending'})`}
+            subtitle={`${pace.length} nights from the 1st of this month · monthly totals inline · Demand · Lighthouse (snapshot ${snapshotDate ?? 'pending'})`}
           >
             <div style={{ overflowX: 'auto', border: '1px solid #E6DFCC', borderRadius: 6 }}>
               <table style={{ borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap', width: '100%' }}>
