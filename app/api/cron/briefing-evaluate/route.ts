@@ -15,6 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { automationGuard } from '@/lib/cron/guard';
 import { evaluateForBriefings, insightToUpsertArgs } from '@/lib/rules/evaluateForBriefings';
 
 export const runtime = 'nodejs';
@@ -25,6 +26,10 @@ const NAMKHAN_ID = 260955;
 const DONNA_ID   = 1000001;
 
 async function handle(req: Request) {
+  // GLOBAL KILL SWITCH (brief ops-scheduler-console-v1 A3): exit early when automation is OFF.
+  const blocked = await automationGuard('/api/cron/briefing-evaluate');
+  if (blocked) return blocked;
+
   const url = new URL(req.url);
   const pidParam = url.searchParams.get('pid') ?? url.searchParams.get('propertyId');
   const properties: number[] = pidParam
