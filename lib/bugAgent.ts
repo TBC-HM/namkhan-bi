@@ -690,7 +690,8 @@ export async function pickBugs(opts: { bug_ids?: number[]; mode: 'one' | 'drain'
   let q = sb.from('v_bugs_ready_for_agent')
     .select('id, body, page_url, dept_slug, status, property_id');
   if (opts.bug_ids && opts.bug_ids.length > 0) q = q.in('id', opts.bug_ids);
-  q = q.order('created_at', { ascending: true }).limit(opts.mode === 'one' ? 1 : opts.max);
+  // PBS 2026-07-27 — owner-set priority wins (lower = sooner), then FIFO.
+  q = q.order('priority', { ascending: true }).order('created_at', { ascending: true }).limit(opts.mode === 'one' ? 1 : opts.max);
   const { data } = await q;
   return ((data ?? []) as Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }>);
 }

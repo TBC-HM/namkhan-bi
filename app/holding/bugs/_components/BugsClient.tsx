@@ -47,6 +47,9 @@ const AGENT_PHASE_TONE: Record<string, { bg: string; fg: string; label: string }
 };
 
 function agentPill(r: BugRow) {
+  // PBS 2026-07-27 — battery-owned calc bugs are NOT waiting on a human; the
+  // stale needs_human run phase must not masquerade as an owner action.
+  if ((r.notes ?? '').includes('battery-loop-owned')) return { bg: '#EAF1EE', fg: '#084838', label: '🔋 battery · nightly' };
   if (!r.agent_phase) return null;
   return AGENT_PHASE_TONE[r.agent_phase] ?? { bg: '#F5F0E1', fg: '#5A5A5A', label: r.agent_phase };
 }
@@ -516,8 +519,16 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                             {r.started_at && <>Started: {r.started_at}<br/></>}
                             {r.done_at && <>Done: {r.done_at}</>}
                           </div>
-                          {/* Question panel for needs_human */}
-                          {r.agent_phase === 'needs_human' && (
+                          {/* Question panel for needs_human.
+                              PBS 2026-07-27 — battery-routed bugs kept showing
+                              '⚠ no options provided' because the OLD agent run's
+                              needs_human phase outlives the cleared question.
+                              Battery-owned → battery pill, no fake contract gap. */}
+                          {(r.notes ?? '').includes('battery-loop-owned') ? (
+                            <div style={{ fontSize: 11, fontWeight: 700, color: '#084838', background: '#EAF1EE', borderRadius: 6, padding: '8px 10px', alignSelf: 'start' }}>
+                              🔋 Battery-owned calculation finding — repairs nightly (20:30Z), evidence-gated, closes itself. Nothing to click.
+                            </div>
+                          ) : r.agent_phase === 'needs_human' && (
                             <div>
                               {r.open_question ? (
                                 <QuestionPanel

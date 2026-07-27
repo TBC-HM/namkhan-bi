@@ -2990,3 +2990,8 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - DB RLS / SQL / `custom_access_token_hook` UNTOUCHED on the auth branch — ADR-112 DB side stays locked.
 - Auth code merged to a BRANCH, not main. Site is still open until PBS explicitly merges PR #312.
 - Frozen `legacy2` snapshot preserves the working HoD if the next iteration breaks anything.
+
+### 2026-07-27 — work queue + schedule matrix + battery pills (PBS session)
+- /holding/it/cockpit/queue — unified work queue (briefs+bugs) in real pick order, ⏫⬆⬇ priority buttons, honest expected-start per loop cadence
+- /holding/it/cockpit/schedule — schedule matrix: all pg_cron loops + 2 CCR standing agents, last outcome, per-job switch, master kill switch
+- bugs board: battery-owned calc bugs show 🔋 pill instead of stale 'needs human' / '⚠ no options' fallback
