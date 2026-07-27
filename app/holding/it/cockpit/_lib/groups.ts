@@ -4,6 +4,10 @@
 // PBS 2026-07-25 v3: Knowledge group — added Sitemap sub-tab.
 // PBS 2026-07-25 v4: Knowledge group — added Goals sub-tab (goal stack registry, ADR-165).
 // PBS 2026-07-25 v5: Knowledge group — added Design sub-tab (live contract template gallery).
+// PBS 2026-07-27 v6: Knowledge group — added Platform Memory sub-tab (Module 1,
+// brief module-doc-architecture-memory-v1: doc diffs · ADR threads · rule consolidation · why-search).
+// Label is "Platform Memory" (NOT "Memory") — Fleet already has a Memory sub-tab
+// (/holding/it/cockpit/knowledge, the agent-memory browser).
 
 import type { DashboardTab } from '@/app/(cockpit)/_design/types';
 
@@ -32,6 +36,7 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it/cockpit/docs',     label: 'All Docs' },
       { href: '/holding/it/cockpit/goals',    label: 'Goals' },
       { href: '/holding/it/cockpit/design',   label: 'Design' },
+      { href: '/holding/it/cockpit/memory',   label: 'Platform Memory' },
       { href: '/holding/it/cockpit/schemas',  label: 'Schemas' },
       { href: '/holding/it/cockpit/freshness',label: 'Freshness' },
       { href: '/holding/it/cockpit/sitemap',  label: 'Sitemap' },
