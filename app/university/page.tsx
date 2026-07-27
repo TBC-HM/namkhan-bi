@@ -53,6 +53,11 @@ export default async function UniversityPage() {
   } catch { /* landing still renders */ }
   if (modules.length === 0) modules = FALLBACK_MODULES;
 
+  // Owner mandate (brief autospec-university_module-20260725): 0 empty module
+  // cards. A module with no live articles is hidden — not "coming soon"
+  // wallpaper. It reappears automatically the moment articles exist.
+  modules = modules.filter((m) => (counts.get(m.slug) ?? 0) > 0);
+
   return (
     <div style={{ maxWidth: 920, margin: '0 auto', padding: '20px 24px 60px', fontFamily: SANS }}>
       <header style={{ marginBottom: 16 }}>
