@@ -110,7 +110,7 @@ async function fetchData() {
       .like('doc_type', '%_module'),
     (supabase as any)
       .from('v_module_completion_queue')
-      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at'),
+      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at, entry_url'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
@@ -276,6 +276,15 @@ export default async function SpecsPage() {
                       ) : (
                         <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
                           borderRadius: 3, background: tone.bg, color: tone.color }}>{cta.label}</span>
+                      )}
+                      {/* PBS 2026-07-27: "when a module is finished put a link
+                          in the module container" — the module's front door,
+                          shown whenever a UI exists (governance queue entry_url). */}
+                      {q?.entry_url && (
+                        <Link href={q.entry_url} style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
+                          borderRadius: 3, background: '#1F3A2E', color: '#FFFFFF', textDecoration: 'none' }}>
+                          Open module ↗
+                        </Link>
                       )}
                       <Link href={`/holding/it/module/${encodeURIComponent(doc.doc_type)}`}
                         style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
