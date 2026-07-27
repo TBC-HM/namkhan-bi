@@ -136,6 +136,8 @@ interface Props {
   stylePresets?: any[];
   musicTracks?: any[];
   guardrails?: GuardrailsData;
+  // PBS 2026-07-18 · media-video-frontend brief · v_media_videos threaded through to VideoHub.
+  videos?: any[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -233,6 +235,8 @@ export default function MediaHub(props: Props) {
           pillars={props.pillars}
           stylePresets={props.stylePresets ?? []}
           musicTracks={props.musicTracks ?? []}
+          videos={props.videos ?? []}
+          areaTaxonomy={props.areaTaxonomy ?? []}
         />
       )}
     </div>

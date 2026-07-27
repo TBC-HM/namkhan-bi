@@ -57,6 +57,8 @@ async function loadAll(pid: number) {
     guardNaming, guardCaptions, guardAltText, guardTiers, guardRatios, guardTextPolicy, guardPalette,
     // SCOPE 2 · media-pipeline-frontend brief — Review queue + area taxonomy + library counts:
     reviewQueue, areaTaxonomy, libraryCounts,
+    // PBS 2026-07-18 · media-video-frontend brief — v_media_videos for the Triage sub-tab:
+    videosRaw,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     fetchAllMedia(sb),
@@ -109,6 +111,13 @@ async function loadAll(pid: number) {
       .select('property_id, pics_ready, videos_total, with_tier, with_area, to_clarify, destination, review_junk, website, ota, social, internal, archive, logos')
       .eq('property_id', pid)
       .maybeSingle(),
+    // media-video-frontend brief · v_media_videos for Triage tab.
+    // 293 rows at Namkhan; poster_path/playable_path null until Cloudinary runs.
+    sb.from('v_media_videos')
+      .select('asset_id, property_id, original_filename, status, content_class, video_type, category, sub_category, caption, usability_score, poster_path, playable_path, duration_sec, width_px, height_px, has_audio, needs_review, review_reason, analyzed_at, ai_video_notes, room_type_id, facility_id, activity_id, destination_id, created_at')
+      .eq('property_id', pid)
+      .order('created_at', { ascending: false })
+      .limit(2000),
   ]);
 
   const facilityRows = (facilitiesRaw.data ?? []) as Array<{ facility_id: number; name: string; parent_facility_id: number | null; is_meeting_space: boolean | null }>;
@@ -197,6 +206,7 @@ async function loadAll(pid: number) {
     })(),
     areaTaxonomy: areaTaxonomy.data ?? [],
     libraryCounts: libraryCounts.data ?? null,
+    videos: videosRaw.data ?? [],
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
@@ -206,6 +216,7 @@ async function loadAll(pid: number) {
       guardNaming.error, guardCaptions.error, guardAltText.error, guardTiers.error, guardRatios.error,
       guardTextPolicy.error, guardPalette.error,
       reviewQueue.error, areaTaxonomy.error, libraryCounts.error,
+      videosRaw.error,
     ].filter(Boolean),
   };
 }
@@ -252,6 +263,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             reviewRows={data.reviewRows as any}
             areaTaxonomy={data.areaTaxonomy as any}
             libraryCounts={data.libraryCounts as any}
+            videos={(data as any).videos ?? []}
             stylePresets={data.stylePresets as any}
             musicTracks={data.musicTracks as any}
             guardrails={data.guardrails as any}
