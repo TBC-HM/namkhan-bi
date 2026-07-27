@@ -5,6 +5,7 @@
 // driven by public.v_module_completion_queue + brief statuses (standing pipeline, ADR-165/166).
 
 import Link from 'next/link';
+import { revalidatePath } from 'next/cache';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -36,14 +37,17 @@ const BRIEF_STATUS: Record<string, { label: string; bg: string; color: string }>
   archived:    { label: 'archived',        bg: '#F4EFE2', color: '#8A8A8A' },
 };
 
-const STAGES = ['Audit', 'Spec', 'Repair', 'Check', 'Frozen'];
+// PBS 2026-07-27: TESTING bracket between Check and Frozen — a module only
+// freezes after testing_target (default 50) evidence-counted successful runs.
+const STAGES = ['Audit', 'Spec', 'Repair', 'Check', 'Testing', 'Frozen'];
 
 // Compute (doneUpTo index, active label, alert) from queue row + its brief status.
 function pipelineState(q: any, briefStatus: string | null): { done: number; active: string; alert: boolean } {
   if (!q || q.status === 'skipped') return { done: -1, active: 'not queued', alert: false };
   if (q.status === 'pending')   return { done: -1, active: 'queued for audit', alert: false };
   if (q.status === 'auditing')  return { done: 0,  active: 'audit running', alert: false };
-  if (q.status === 'completed') return { done: 4,  active: 'FROZEN · finished', alert: false };
+  if (q.status === 'completed') return { done: 5,  active: 'FROZEN · finished', alert: false };
+  const testing = `testing · ${q?.testing_ok ?? 0} of ${q?.testing_target ?? 50} good runs`;
   // spec_created / in_pipeline → refine from the brief
   switch (briefStatus) {
     case 'research':    return { done: 1, active: 'research running', alert: false };
@@ -51,8 +55,10 @@ function pipelineState(q: any, briefStatus: string | null): { done: number; acti
     case 'in_progress': return { done: 2, active: 'repair running', alert: false };
     case 'verifying':   return { done: 3, active: 'checking', alert: false };
     case 'needs_input': return { done: 1, active: 'needs your input', alert: true };
-    case 'shipped':     return { done: 4, active: 'shipped — awaiting sign-off', alert: false };
-    default:            return { done: 1, active: 'spec created', alert: false };
+    case 'shipped':     return { done: 4, active: testing, alert: false };
+    default:
+      if ((q?.testing_ok ?? 0) > 0) return { done: 4, active: testing, alert: false };
+      return { done: 1, active: 'spec created', alert: false };
   }
 }
 
@@ -110,7 +116,7 @@ async function fetchData() {
       .like('doc_type', '%_module'),
     (supabase as any)
       .from('v_module_completion_queue')
-      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at, entry_url'),
+      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at, entry_url, testing_target, testing_ok'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
@@ -143,32 +149,41 @@ function shortDate(iso: string): string {
 // "no CTAs, which input they need, when is a module finished").
 function nextAction(q: any, briefStatus: string | null, signedOff: boolean):
   { label: string; href?: string; rpc?: 'sign_off' | 'reaudit'; tone: 'red' | 'green' | 'gold' | 'grey' } {
-  if (signedOff || q?.status === 'completed') return { label: 'FROZEN ✓', tone: 'grey' };
+  // PBS 2026-07-27: compact labels with symbols humans know — fit ONE row.
+  if (signedOff || q?.status === 'completed') return { label: '🧊 Frozen', tone: 'grey' };
   if (briefStatus === 'needs_input' && q?.brief_slug)
-    return { label: 'Answer question →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'red' };
+    return { label: '❓ Answer', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'red' };
   if (briefStatus === 'ready' && q?.brief_slug)
-    return { label: 'Queued — builds automatically · watch →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'gold' };
-  if (briefStatus === 'shipped')
-    return { label: 'Sign off → freeze', rpc: 'sign_off', tone: 'green' };
+    return { label: '⏳ Queued', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'gold' };
+  if (briefStatus === 'shipped') {
+    const ok = q?.testing_ok ?? 0; const target = q?.testing_target ?? 50;
+    // TESTING bracket: freeze only after target successful runs.
+    if (ok < target) return { label: `🧪 ${ok}/${target} runs`, tone: 'gold' };
+    return { label: '🧊 Freeze', rpc: 'sign_off', tone: 'green' };
+  }
   if (briefStatus && ['research', 'in_progress', 'verifying'].includes(briefStatus) && q?.brief_slug)
-    return { label: 'Agents running · watch →', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'gold' };
+    return { label: '👁 Watch', href: `/holding/it/cockpit/briefs/${q.brief_slug}`, tone: 'gold' };
   // No estimate, or audit older than 3 days → the number on the card is not trustworthy
   const auditAgeDays = q?.updated_at ? (Date.now() - new Date(q.updated_at).getTime()) / 86400000 : Infinity;
   if (q?.completion_estimate == null || auditAgeDays > 3)
-    return { label: 'Re-audit now', rpc: 'reaudit', tone: 'gold' };
-  return { label: 'Queued — auditor runs every 6h', tone: 'grey' };
+    return { label: '⟳ Re-audit', rpc: 'reaudit', tone: 'gold' };
+  return { label: '⏲ auto 6h', tone: 'grey' };
 }
 
 async function signOffAction(formData: FormData) {
   'use server';
   const docType = String(formData.get('doc_type') ?? '');
   if (docType) await (supabase as any).rpc('fn_module_sign_off', { p_doc_type: docType, p_actor: 'PBS' });
+  // PBS 2026-07-27: "i press and visibly nothing happens" — the action worked
+  // but the page never re-rendered. Revalidate so the card flips immediately.
+  revalidatePath('/holding/it/cockpit/specs');
 }
 
 async function reauditAction(formData: FormData) {
   'use server';
   const docType = String(formData.get('doc_type') ?? '');
   if (docType) await (supabase as any).rpc('fn_module_reaudit', { p_doc_type: docType, p_actor: 'PBS' });
+  revalidatePath('/holding/it/cockpit/specs');
 }
 
 const CTA_TONE: Record<string, { bg: string; color: string }> = {
@@ -281,15 +296,23 @@ export default async function SpecsPage() {
                           in the module container" — the module's front door,
                           shown whenever a UI exists (governance queue entry_url). */}
                       {q?.entry_url && (
-                        <Link href={q.entry_url} style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
-                          borderRadius: 3, background: '#1F3A2E', color: '#FFFFFF', textDecoration: 'none' }}>
-                          Open module ↗
+                        <Link href={q.entry_url} title="Open the module's live page" style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px',
+                          borderRadius: 3, background: '#1F3A2E', color: '#FFFFFF', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                          ↗ Open
                         </Link>
                       )}
-                      <Link href={`/holding/it/module/${encodeURIComponent(doc.doc_type)}`}
+                      {/* PBS 2026-07-27: refine-goal restored + compact symbol row */}
+                      {q?.brief_slug && (
+                        <Link href={`/holding/it/cockpit/briefs/${q.brief_slug}`} title="Refine the goal / read the brief"
+                          style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
+                            border: '1px solid #E6DFCC', color: '#1B1B1B', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                          ✎ Goal
+                        </Link>
+                      )}
+                      <Link href={`/holding/it/module/${encodeURIComponent(doc.doc_type)}`} title="Read the spec document"
                         style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
-                          border: '1px solid #E6DFCC', color: '#1B1B1B', textDecoration: 'none' }}>
-                        Spec →
+                          border: '1px solid #E6DFCC', color: '#1B1B1B', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                        📄 Spec
                       </Link>
                     </div>
                   </div>

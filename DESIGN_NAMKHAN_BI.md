@@ -2999,3 +2999,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-07-27 — HoD bug box v2 (Mai Vou flow)
 - Revenue dashboard bug box: status pills (reported → in queue → being fixed → ❓ needs your answer → ✓ fixed), recently-fixed section (14d), reporter name, 60s auto-refresh
 - + Add now POSTs to /api/cockpit/bugs (server-side identity; old direct insert failed silently on status CHECK)
+
+### 2026-07-27 — TESTING bracket + compact card CTAs + agent-button fix
+- Specs cards: pipeline strip gains TESTING stage (Audit→Spec→Repair→Check→Testing→Frozen); freeze refused until testing_ok/testing_target good runs; CTAs compact symbols in one row (❓ Answer · 🧪 12/50 runs · 🧊 Freeze · ⟳ Re-audit · ↗ Open · ✎ Goal · 📄 Spec); Re-audit/Sign-off now revalidate so the card visibly flips
+- Bugs board: ▶ Agent never morphs into '…'; hidden for battery-owned; '❓ answer first' hint when a question is open; 45s no-pick timeout releases the UI with an explanation

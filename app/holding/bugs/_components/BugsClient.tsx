@@ -219,7 +219,19 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
       return;
     }
     const run = runsByBug.get(watchedBug);
-    if (run && (run.ended_at || TERMINAL.has(run.phase))) {
+    // PBS 2026-07-27 — if the drain declines the bug (open question, battery-
+    // owned, attempted <5min ago) NO run row ever appears; the old code waited
+    // 20 minutes with every Agent button stuck as '…'. 45s without a run = say
+    // so and release the UI.
+    if (!run || new Date(run.started_at).getTime() < watchStartRef.current - 60_000) {
+      if (elapsed > 45_000) {
+        setAgentMsg(`Bug #${watchedBug} was NOT picked — it is parked (open question, battery-owned, or attempted <5 min ago). Check its pill.`);
+        setWatchedBug(null);
+        setAgentBusy(false);
+      }
+      return;
+    }
+    if (run.ended_at || TERMINAL.has(run.phase)) {
       const label = PHASE_TONE[run.phase]?.label ?? run.phase;
       setAgentMsg(`Bug #${watchedBug} — agent finished: ${label}${run.pr_url ? ' · PR ready' : ''}${run.error ? ' · ' + run.error.slice(0, 120) : ''}`);
       setWatchedBug(null);
@@ -502,7 +514,13 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                       {s === 'acknowledged' && <Btn onClick={() => act(r.id, 'start')} disabled={busy === r.id} title="Start work — moves it to In Progress">Start</Btn>}
                       {s === 'in_progress' && <Btn onClick={() => act(r.id, 'done')} disabled={busy === r.id} tone="green" title="Mark as Done — fix shipped">Done</Btn>}
                       {s !== 'dismissed' && s !== 'done' && <Btn onClick={() => act(r.id, 'dismiss')} disabled={busy === r.id} tone="red" title="Dismiss — gone from all lists (soft, audit trail kept)">Dismiss</Btn>}
-                      {s !== 'dismissed' && s !== 'done' && <Btn onClick={() => startAgentForBug(r.id)} disabled={busy === r.id || agentBusy} tone="ghost" title="Fire the full agent loop for THIS bug — plan → re-plan → ship → verify">{agentBusy ? '…' : '▶ Agent'}</Btn>}
+                      {/* PBS 2026-07-27 — button NEVER morphs into '…' (read as
+                          "button gone"). Stays '▶ Agent', disabled while a run
+                          is watched; hidden only where firing is pointless. */}
+                      {s !== 'dismissed' && s !== 'done' && !(r.notes ?? '').includes('battery-loop-owned') && !r.open_question &&
+                        <Btn onClick={() => startAgentForBug(r.id)} disabled={busy === r.id || agentBusy} tone="ghost" title={agentBusy ? 'Agent busy — watching a run; try again when it reports' : 'Fire the full agent loop for THIS bug — plan → review → ship → verify'}>▶ Agent</Btn>}
+                      {s !== 'dismissed' && s !== 'done' && !!r.open_question &&
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#7a5500' }}>❓ answer first</span>}
                     </td>
                   </tr>
                   {isExpanded && (
