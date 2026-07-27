@@ -94,7 +94,7 @@ function deltaCell(d: PickupDelta | undefined, metric: PickupMetric, kind: 'abs'
   if (rounded === 0) return { text: '—', tone: 'mute' as const };
   const sign = rounded > 0 ? '+' : '';
   const text = kind === 'abs'
-    ? (isOcc ? sign + rounded.toFixed(1) + 'pp' : sign + fmtInt(rounded))
+    ? (isOcc ? sign + rounded.toFixed(1) + '%' : sign + fmtInt(rounded))
     : sign + rounded.toFixed(1) + '%';
   const tone = rounded > 0 ? 'good' : 'bad';
   return { text, tone };
