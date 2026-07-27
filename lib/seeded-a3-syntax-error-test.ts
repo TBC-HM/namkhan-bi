@@ -1,1 +1,0 @@
-export const broken = {;  // A3 seeded syntax error — verifier test on stale branch bots/bug-68 (no PR), safe to delete\n
