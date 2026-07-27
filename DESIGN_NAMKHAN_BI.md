@@ -2995,3 +2995,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - /holding/it/cockpit/queue — unified work queue (briefs+bugs) in real pick order, ⏫⬆⬇ priority buttons, honest expected-start per loop cadence
 - /holding/it/cockpit/schedule — schedule matrix: all pg_cron loops + 2 CCR standing agents, last outcome, per-job switch, master kill switch
 - bugs board: battery-owned calc bugs show 🔋 pill instead of stale 'needs human' / '⚠ no options' fallback
+
+### 2026-07-27 — HoD bug box v2 (Mai Vou flow)
+- Revenue dashboard bug box: status pills (reported → in queue → being fixed → ❓ needs your answer → ✓ fixed), recently-fixed section (14d), reporter name, 60s auto-refresh
+- + Add now POSTs to /api/cockpit/bugs (server-side identity; old direct insert failed silently on status CHECK)
