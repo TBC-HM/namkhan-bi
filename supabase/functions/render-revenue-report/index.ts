@@ -1,3 +1,14 @@
+// v14 · 2026-07-27 (bugs #74 + #75, Mai Vou — brief daily-report-pickup-truth-v1):
+// (1) bug 74 remaining half: "2026" anchor column now shows TOTAL OTB revenue
+//     (rooms + extras, fn_pickup_otb_at.rev_total) on the "REV rooms" row; the
+//     OTB/Today snapshot column keeps room revenue. Header sub-label "all revenue".
+// (2) bug 75: NEW "Pickup by stay month" section (OTB snapshot delta from
+//     public.v_pickup_stay_month_snapshot over plan.otb_snapshots) — per stay
+//     month: OTB % (full-month, from pickup matrix) + net pickup RN, e.g.
+//     "Jul 26 · OTB 72% · +5 RN". Degrades to "snapshot history building —
+//     full pickup from 28 Jul" until two consecutive snapshots exist.
+//     The former "Pickup … · net RN" tile is relabelled "Activity … · net RN"
+//     (New−Cancelled RN is booking activity, not pickup — Mai Vou/rule 554).
 // v13 · 2026-07-27 (bug #74, Mai Vou): "2026" column regrouped under
 // Baselines (colspan 5) — it is the current-year anchor, not a snapshot;
 // OTB snapshots group now spans only the 4 snapshot-dated columns.
@@ -95,6 +106,11 @@ async function loadMonthly(admin: SB, pid: number, mBack: number, mFwd: number):
 async function loadDayReport(admin: SB, pid: number, fromIso: string, toIso: string): Promise<DayRow[]> { const { data } = await admin.from('v_pickup_day_report').select('*').eq('property_id', pid).gte('stay_date', fromIso).lte('stay_date', toIso).order('stay_date'); return (data ?? []) as DayRow[]; }
 async function loadPaceOtb(admin: SB, pid: number, fromIso: string, toIso: string): Promise<PaceOtbRow[]> { const { data } = await admin.schema('kpi').from('v_pace_otb_daily').select('stay_date,year,month,iso_dow,rooms_available,otb_rooms_sold,otb_revenue,otb_occupancy_pct,otb_adr,otb_revpar').eq('property_id', pid).gte('stay_date', fromIso).lte('stay_date', toIso).order('stay_date'); return (data ?? []) as PaceOtbRow[]; }
 async function loadIntegrity(admin: SB, pid: number): Promise<IntegrityRow[]> { const { data } = await admin.from('v_rate_integrity_matrix').select('*').eq('property_id', pid).order('shop_date', { ascending: false }).order('stay_date', { ascending: true }); const rows = (data ?? []) as IntegrityRow[]; if (rows.length === 0) return []; const latestShop = rows[0].shop_date; return rows.filter((r) => r.shop_date === latestShop); }
+// bug 75 (Mai Vou): true pickup = OTB snapshot delta by stay month.
+// Source: public.v_pickup_stay_month_snapshot (bridge over plan.otb_snapshots — plan is not PostgREST-exposed).
+interface StayMonthPickupRow { property_id: number; stay_month: string; snapshot_date: string; prev_snapshot_date: string | null; otb_rn: number; otb_rev: number; prev_rn: number | null; prev_rev: number | null; pickup_rn: number | null; pickup_rev: number | null; has_consecutive: boolean }
+async function loadStayMonthPickup(admin: SB, pid: number): Promise<StayMonthPickupRow[]> { try { const { data } = await admin.from('v_pickup_stay_month_snapshot').select('*').eq('property_id', pid).order('stay_month'); return (data ?? []) as StayMonthPickupRow[]; } catch (_e) { return []; } }
+
 async function loadPropertyName(admin: SB, pid: number): Promise<string> { for (const view of ['v_properties','v_property_directory']) { try { const { data } = await admin.from(view).select('property_id,name').eq('property_id', pid).maybeSingle(); if (data?.name) return data.name as string; } catch (_e) {} } if (pid === 260955) return 'The Namkhan'; if (pid === 1000001) return 'Donna Portals'; return `Property ${pid}`; }
 
 interface PickupMatrixData { property: string; capacity: number; asOfDate: string; monthlySnapshotLabel: string; mondaySnapshotLabel: string; yesterdaySnapshotLabel: string; todaySnapshotLabel: string; sdlyDate: string; months: Array<{ monthKey: string; monthLabel: string; rows: PickupMatrixRow[] }>; total: PickupMatrixRow[]; stalenessNote?: string; currencySymbol: string; }
@@ -146,12 +162,14 @@ async function loadPickupMatrix(admin: SB, propertyId: number, sym: string): Pro
     }
     const METRICS: PickupMetric[] = ['RN', 'OCC', 'REV rooms', 'REV total', 'ADR', 'RevPAR'];
     const buildRow = (metric: PickupMetric, mo: number): PickupMatrixRow => {
-      const tAll = valueOf(otbToday[mo] ?? null, metric);
+      const tToday = valueOf(otbToday[mo] ?? null, metric);
+      // bug 74 (Mai Vou): "2026" anchor column = TOTAL OTB revenue (rooms+extras) on the
+      // REV rooms row; the OTB/Today snapshot column keeps room revenue.
+      const tAll = metric === 'REV rooms' ? valueOf(otbToday[mo] ?? null, 'REV total') : tToday;
       const tMonthly = valueOf(otbMonth[mo] ?? null, metric);
       const tMonday = valueOf(otbMon[mo] ?? null, metric);
       const tYest = valueOf(otbYest[mo] ?? null, metric);
       const tDby  = valueOf(otbDby[mo] ?? null, metric);
-      const tToday = tAll;
       const sdlyValue = valueOf(sdlyB[mo] ?? null, metric);
       const suppress = isStale;
       // PBS 2026-07-15: pickupYesterday = snapshot(yesterday) - snapshot(dby) = actual yesterday activity.
@@ -162,13 +180,15 @@ async function loadPickupMatrix(admin: SB, propertyId: number, sym: string): Pro
     const tot = { today: sumBucket(otbToday), monthly: sumBucket(otbMonth), monday: sumBucket(otbMon), yest: sumBucket(otbYest), dby: sumBucket(otbDby), sdly: sumBucket(sdlyB), b23: sumBucket(baseline[stayYear - 3] ?? {}), b24: sumBucket(baseline[stayYear - 2] ?? {}), b25: sumBucket(baseline[stayYear - 1] ?? {}) };
     const totalRow = (metric: PickupMetric): PickupMatrixRow => {
       const tToday = valueOf(Object.keys(otbToday).length ? tot.today : null, metric);
+      // bug 74 (Mai Vou): TOTAL row "2026" column mirrors the per-month rule — all revenue on REV rooms.
+      const tAllTotal = metric === 'REV rooms' ? valueOf(Object.keys(otbToday).length ? tot.today : null, 'REV total') : tToday;
       const tMonthly = valueOf(Object.keys(otbMonth).length ? tot.monthly : null, metric);
       const tMonday = valueOf(Object.keys(otbMon).length ? tot.monday : null, metric);
       const tYest = valueOf(Object.keys(otbYest).length ? tot.yest : null, metric);
       const tDby  = valueOf(Object.keys(otbDby).length  ? tot.dby  : null, metric);
       const sdlyValue = valueOf(Object.keys(sdlyB).length ? tot.sdly : null, metric);
       const suppress = isStale;
-      return { metric, baseline2023: valueOf(Object.keys(baseline[stayYear - 3] ?? {}).length ? tot.b23 : null, metric), baseline2024: valueOf(Object.keys(baseline[stayYear - 2] ?? {}).length ? tot.b24 : null, metric), baseline2025: valueOf(Object.keys(baseline[stayYear - 1] ?? {}).length ? tot.b25 : null, metric), budget2026: null, otbAll: tToday, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday, pickupMonthly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonthly), pickupWeekly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonday), pickupYesterday: suppress ? { abs: null, pct: null } : deltaOf(tYest, tDby), vsBudget: { abs: null, pct: null }, vsLy: deltaOf(tToday, sdlyValue), sdly: sdlyValue, sdlyDiff: (tToday != null && sdlyValue != null) ? tToday - sdlyValue : null };
+      return { metric, baseline2023: valueOf(Object.keys(baseline[stayYear - 3] ?? {}).length ? tot.b23 : null, metric), baseline2024: valueOf(Object.keys(baseline[stayYear - 2] ?? {}).length ? tot.b24 : null, metric), baseline2025: valueOf(Object.keys(baseline[stayYear - 1] ?? {}).length ? tot.b25 : null, metric), budget2026: null, otbAll: tAllTotal, otbMonthly: tMonthly, otbMonday: tMonday, otbYesterday: tYest, otbToday: tToday, pickupMonthly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonthly), pickupWeekly: suppress ? { abs: null, pct: null } : deltaOf(tToday, tMonday), pickupYesterday: suppress ? { abs: null, pct: null } : deltaOf(tYest, tDby), vsBudget: { abs: null, pct: null }, vsLy: deltaOf(tToday, sdlyValue), sdly: sdlyValue, sdlyDiff: (tToday != null && sdlyValue != null) ? tToday - sdlyValue : null };
     };
     const curMonthAvail = otbToday[asOf.getMonth() + 1]?.avail ?? 0;
     const capacity = curMonthAvail > 0 ? Math.round(curMonthAvail / new Date(stayYear, asOf.getMonth() + 1, 0).getDate()) : 0;
@@ -219,7 +239,7 @@ function pickupMatrixHtml(data: PickupMatrixData): string {
     }).join('');
   };
   const head1 = `<tr>${groupTh(data.asOfDate + (data.stalenessNote ? `<div style=\"font-size:10px;color:${INK_SOFT};margin-top:2px;font-style:italic;text-align:left\">${data.stalenessNote}</div>` : ''))}${groupTh('Baselines', 5)}${groupTh('OTB snapshots', 4)}${groupTh('Pickup', 3)}${groupTh('Comparison', 4)}${groupTh(`SDLY · ${data.sdlyDate}`, 2)}</tr>`;
-  const head2 = `<tr>${headerTh('Period')}${headerTh('2023')}${headerTh('2024')}${headerTh('2025')}${headerTh('Budget 2026')}${headerTh('2026')}${headerTh('Monthly', data.monthlySnapshotLabel)}${headerTh('Monday', data.mondaySnapshotLabel)}${headerTh('Yesterday', data.yesterdaySnapshotLabel)}${headerTh('Today', data.todaySnapshotLabel)}${headerTh('Monthly')}${headerTh('Weekly')}${headerTh('Yesterday')}${headerTh('OTB vs Budget', undefined, 2)}${headerTh('OTB vs LY', undefined, 2)}${headerTh('SDLY value')}${headerTh('Δ vs SDLY')}</tr>`;
+  const head2 = `<tr>${headerTh('Period')}${headerTh('2023')}${headerTh('2024')}${headerTh('2025')}${headerTh('Budget 2026')}${headerTh('2026', 'all revenue')}${headerTh('Monthly', data.monthlySnapshotLabel)}${headerTh('Monday', data.mondaySnapshotLabel)}${headerTh('Yesterday', data.yesterdaySnapshotLabel)}${headerTh('Today', data.todaySnapshotLabel)}${headerTh('Monthly')}${headerTh('Weekly')}${headerTh('Yesterday')}${headerTh('OTB vs Budget', undefined, 2)}${headerTh('OTB vs LY', undefined, 2)}${headerTh('SDLY value')}${headerTh('Δ vs SDLY')}</tr>`;
   const body = data.months.map((m, i) => renderBlock(m, i % 2 === 1, false)).join('') + renderBlock({ monthKey: 'TOTAL', monthLabel: 'TOTAL 2026', rows: data.total }, false, true);
   return `<div style="overflow-x:auto;border:1px solid #E0E0E0;border-radius:4px;background:${PAPER}"><table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0;width:auto;font-family:inherit;font-size:10px;background:${PAPER};line-height:1.2"><thead>${head1}${head2}</thead><tbody>${body}</tbody></table></div>`;
 }
@@ -259,6 +279,30 @@ function last24hBulletsHtml(b: Last24hBullets | null, sym: string): string {
     `${fmtInt(b.mtd_rn)} RN · ${fmtMoney(b.mtd_rev)}${trendChipRn}${trendChipRev} <span style="color:${INK_SOFT};font-weight:500">(LY same window: ${fmtInt(b.ly_mtd_rn)} RN · ${fmtMoney(Number(b.ly_mtd_rev))})</span>`
   );
   return `<ul style="margin:0;padding:6px 12px 6px 24px;background:${PAPER};border:1px solid ${HAIRLINE};border-radius:6px;list-style:disc">${b1}${b2}${b3}${b4}</ul>`;
+}
+
+// bug 75 (Mai Vou): pickup by stay month — OTB snapshot delta, e.g. "Jul 26 · OTB 72% · +5 RN".
+function pickupStayMonthHtml(rows: StayMonthPickupRow[], matrix: PickupMatrixData | null, sym: string): string {
+  if (rows.length === 0) return `<div style="padding:12px;color:${INK_SOFT};font-style:italic;background:${PAPER_SOFT};border:1px solid ${HAIRLINE};border-radius:6px">No OTB snapshots yet — pickup by stay month starts once the nightly snapshot capture has run.</div>`;
+  const occByMonth = new Map<string, number>();
+  if (matrix) for (const m of matrix.months) { const occRow = m.rows.find((r) => r.metric === 'OCC'); if (occRow && occRow.otbToday != null) occByMonth.set(m.monthKey, occRow.otbToday); }
+  const building = rows.some((r) => !r.has_consecutive);
+  const fmtMonthLbl = (iso: string) => { const d = new Date(iso + 'T00:00:00Z'); return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); };
+  const chips = rows.map((r) => {
+    const occ = occByMonth.get(r.stay_month.slice(0, 7));
+    const occTxt = occ != null ? `OTB ${Math.round(occ)}%` : `OTB ${n(r.otb_rn)} RN`;
+    let pickTxt = '±— RN'; let tone: 'good'|'bad'|'mute' = 'mute';
+    if (r.pickup_rn != null) { const v = Number(r.pickup_rn); pickTxt = `${v > 0 ? '+' : ''}${n(v)} RN`; tone = v > 0 ? 'good' : v < 0 ? 'bad' : 'mute'; }
+    const revTxt = (r.pickup_rev != null && Math.round(Number(r.pickup_rev)) !== 0) ? ` · ${Number(r.pickup_rev) > 0 ? '+' : '−'}${sym}${Math.abs(Math.round(Number(r.pickup_rev))).toLocaleString('en-US')}` : '';
+    const fg = tone === 'good' ? GREEN : tone === 'bad' ? RED : INK_SOFT;
+    const bg = tone === 'good' ? '#E8F2E4' : tone === 'bad' ? '#FBEAEA' : PAPER_SOFT;
+    return `<span style="display:inline-block;margin:4px 8px 4px 0;padding:7px 12px;border:1px solid ${HAIRLINE};border-radius:6px;background:${PAPER};font-size:12px;color:${INK};font-variant-numeric:tabular-nums;white-space:nowrap"><strong style="color:${PRIMARY}">${fmtMonthLbl(r.stay_month)}</strong> · ${occTxt} · <span style="padding:1px 7px;border-radius:10px;background:${bg};color:${fg};font-weight:700">${pickTxt}${revTxt}</span></span>`;
+  }).join('');
+  const s1 = rows[0].snapshot_date; const s0 = rows[0].prev_snapshot_date;
+  const note = building
+    ? `<div style="margin-top:6px;font-size:11px;color:${INK_SOFT};font-style:italic">Snapshot history building — full pickup from 28 Jul (nightly OTB snapshot capture repaired 27 Jul; the delta needs two consecutive days).</div>`
+    : `<div style="margin-top:6px;font-size:11px;color:${INK_SOFT}">Net pickup = OTB snapshot ${fmtDmy(s1)} − ${s0 ? fmtDmy(s0) : '—'} per stay month (nights from ${fmtDmy(s1)}) · OTB % = full-month rooms on the books.</div>`;
+  return `<div style="padding:10px 12px;background:${PAPER};border:1px solid ${HAIRLINE};border-radius:6px">${chips}${note}</div>`;
 }
 
 function forwardOutlookHtml(pace: PaceOtbRow[], pickupMap: Map<string, DayRow>, sym: string, snapshotDate: string | null): string {
@@ -465,7 +509,9 @@ function buildHodTiles(scope: 'today' | 'yesterday', kpi: KpiSnap | null, lyKpi:
     { label: revLabel, value: `${sym}${netRev.toLocaleString('en-US')}`, footnote: `${kpi?.rooms_sold ?? 0} rooms · net`, status: netRev > 0 ? 'green' : 'grey', stly: `${sym}${lyNetRev.toLocaleString('en-US')}` },
     { label: `New bookings ${scope} · room nights`, value: grossRn, footnote: grossC === 0 ? `no new bookings ${scope}` : `${grossC} ${grossC === 1 ? 'reservation' : 'reservations'} · ${sym}${Math.round(grossRev).toLocaleString('en-US')} · gross booked ${scope}`, status: grossRn > 0 ? 'green' : 'grey', stly: `${lyGross} RN` },
     { label: `Cancellations ${scope} · room nights`, value: cxlRn, footnote: cxlC === 0 ? `no cancellations ${scope}` : `${cxlC} ${cxlC === 1 ? 'reservation' : 'reservations'} · ${sym}${Math.round(cxlRev).toLocaleString('en-US')} · value lost ${scope}`, status: cxlC === 0 ? 'green' : 'amber', stly: `${lyCxl} RN` },
-    { label: `Pickup ${scope} · net RN`, value: pickRn, footnote: `${grossRn} booked − ${cxlRn} lost · ${sym}${Math.round(pickRev).toLocaleString('en-US')} net · matches pickup matrix`, status: pickRn > 0 ? 'green' : pickRn < 0 ? 'amber' : 'grey', stly: `${lyPick} RN` },
+    // bug 75 (Mai Vou): New−Cancelled RN is booking ACTIVITY, not pickup — relabelled.
+    // True pickup (OTB snapshot delta by stay month) lives in the "Pickup by stay month" section.
+    { label: `Activity ${scope} · net RN`, value: pickRn, footnote: `${grossRn} booked − ${cxlRn} lost · ${sym}${Math.round(pickRev).toLocaleString('en-US')} net · booking activity, any stay month`, status: pickRn > 0 ? 'green' : pickRn < 0 ? 'amber' : 'grey', stly: `${lyPick} RN` },
   ];
 }
 
@@ -477,7 +523,7 @@ async function buildDailyBundle(admin: SB, ctx: ReportContext): Promise<Bundle> 
 
   const lyToday = lyIsoOf(today);
   const lyYesterday = lyIsoOf(yesterday);
-  const [kpis, trend30d, monthly24, day60, pickupMatrix, paceForward, dayForward, integrity, todayKpiSnap, yestKpiSnap, lyTodayKpiSnap, lyYestKpiSnap, hodActT, hodActY, hodActLyT, hodActLyY, last24h] = await Promise.all([
+  const [kpis, trend30d, monthly24, day60, pickupMatrix, paceForward, dayForward, integrity, todayKpiSnap, yestKpiSnap, lyTodayKpiSnap, lyYestKpiSnap, hodActT, hodActY, hodActLyT, hodActLyY, last24h, stayMonthPickup] = await Promise.all([
     loadKpiRange(admin, ctx.propertyId, addDaysIso(today, -2), today),
     loadPulseTrend30d(admin, ctx.propertyId),
     loadMonthly(admin, ctx.propertyId, 12, 12),
@@ -495,6 +541,7 @@ async function buildDailyBundle(admin: SB, ctx: ReportContext): Promise<Bundle> 
     loadHodDayActivity(admin, ctx.propertyId, lyToday),
     loadHodDayActivity(admin, ctx.propertyId, lyYesterday),
     loadLast24hBullets(admin, ctx.propertyId),
+    loadStayMonthPickup(admin, ctx.propertyId),
   ]);
   const dayForwardMap = new Map<string, DayRow>(dayForward.map((r) => [r.stay_date, r]));
 
@@ -507,6 +554,7 @@ async function buildDailyBundle(admin: SB, ctx: ReportContext): Promise<Bundle> 
   const forwardInner = forwardOutlookHtml(paceForward, dayForwardMap, sym, null);
   const parityInner = parityIntegrityHtml(integrity);
   const last24hInner = last24hBulletsHtml(last24h, sym);
+  const stayMonthInner = pickupStayMonthHtml(stayMonthPickup, pickupMatrix, sym);
 
   const todayTiles = buildHodTiles('today', todayKpiSnap, lyTodayKpiSnap, hodActT, hodActLyT, sym);
   const yestTiles  = buildHodTiles('yesterday', yestKpiSnap, lyYestKpiSnap, hodActY, hodActLyY, sym);
@@ -514,6 +562,7 @@ async function buildDailyBundle(admin: SB, ctx: ReportContext): Promise<Bundle> 
   const body =
     section('Headline · Today', `${today} (${ctx.tz}) · money tiles NET (excl. 10% VAT + 10% service charge) · LY corner = same date last year`, renderHodStripe(todayTiles)) +
     section('Headline · Yesterday', `${yesterday} (${ctx.tz}) · calendar day just closed · LY corner = same date last year`, renderHodStripe(yestTiles)) +
+    section('Pickup by stay month', stayMonthPickup[0] ? `OTB snapshot delta · latest snapshot ${fmtDmy(stayMonthPickup[0].snapshot_date)} · net RN per stay month (RM pickup, not booking activity)` : 'awaiting OTB snapshots', stayMonthInner) +
     section('Trend · last 30 days', `Daily room-nights sold · dashed line = avg ${avgRn.toFixed(1)} RN/day · ${trend30d.length} days · ${totalRn} rooms sold total`, `<div style="border:1px solid ${HAIRLINE};border-radius:6px;background:${PAPER};padding:6px">${trendChart}</div>`) +
     section('What happened in the last 24 hours', last24h ? `${last24h.anchor_yesterday} → ${last24h.anchor_today} (${last24h.tz}) · bookings · sources · rate plans · MTD vs SDLY` : 'awaiting last-24h feed', last24hInner) +
     section('OTB · Pickup · Comparison · SDLY', pickupMatrix ? (pickupMatrix.stalenessNote ?? `as of ${pickupMatrix.todaySnapshotLabel}`) : 'awaiting pickup data', pickupMatrixInner) +
