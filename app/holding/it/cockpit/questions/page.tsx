@@ -84,7 +84,37 @@ export default async function QuestionsPage() {
     q.brief_slug && shippedSet.has(q.brief_slug) && !signedOff.has(q.module_doc_type) && q.status !== 'completed');
 
   // ---- Section 3: agent PRs awaiting merge (loop couldn't auto-merge) ----
-  const prsAwaiting = (agentRuns ?? []).filter((r: any) => !(r.log_tail ?? '').includes('auto-merged'));
+  // PBS 2026-07-27: "shows merge on github but both merged already" — the DB
+  // cannot see GitHub merge state. Verify each candidate LIVE against the
+  // GitHub API (this runs on Vercel where api.github.com is reachable) and
+  // list only PRs that are still actually open.
+  const candidates = (agentRuns ?? []).filter((r: any) => !(r.log_tail ?? '').includes('auto-merged'));
+  let prsAwaiting: any[] = [];
+  if (candidates.length > 0) {
+    try {
+      const { data: tok } = await (sb as any).rpc('fn_get_secret', { p_name: 'github_token' });
+      if (typeof tok === 'string' && tok.length > 20) {
+        const checked = await Promise.all(candidates.slice(0, 10).map(async (r: any) => {
+          const m = String(r.pr_url ?? '').match(/\/pull\/(\d+)/);
+          if (!m) return null;
+          try {
+            const resp = await fetch(`https://api.github.com/repos/TBC-HM/namkhan-bi/pulls/${m[1]}`, {
+              headers: { Authorization: `Bearer ${tok}`, Accept: 'application/vnd.github+json', 'User-Agent': 'namkhan-bi' },
+              cache: 'no-store',
+            });
+            if (!resp.ok) return r; // can't verify → keep visible (honest default)
+            const pr = await resp.json() as { state: string };
+            return pr.state === 'open' ? r : null;
+          } catch { return r; }
+        }));
+        prsAwaiting = checked.filter(Boolean);
+      } else {
+        prsAwaiting = candidates;
+      }
+    } catch {
+      prsAwaiting = candidates;
+    }
+  }
 
   const totalActions = questions.length + signOffReady.length + prsAwaiting.length;
 
