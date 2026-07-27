@@ -108,9 +108,14 @@ export async function POST(req: NextRequest) {
         c.relative_kind ? `Lifecycle moment: ${c.relative_kind}` : null,
       ].filter(Boolean).join('\n');
 
+      // A7 fix (verifier objection 2026-07-26): pass the campaign's
+      // relative_kind (booking_confirm / before_checkin / after_checkout) as
+      // the engine kind. Group policies (e.g. ota-traveller) whitelist
+      // relative_kind granularity in allowed_kinds — sending the literal
+      // "lifecycle" made every policied email fail pre-compose.
       const proposeBody: ProposeBody = {
         property_id: pid,
-        kind: 'lifecycle',
+        kind: c.relative_kind ?? 'lifecycle',
         seed_text: seedParts,
         group_slug: c.group_slug,
         audience_type: c.audience_type === 'b2b' ? 'b2b' : 'b2c',
