@@ -36,28 +36,34 @@ const BRIEF_STATUS: Record<string, { label: string; bg: string; color: string }>
   archived:    { label: 'archived',        bg: '#F4EFE2', color: '#8A8A8A' },
 };
 
-const STAGES = ['Audit', 'Spec', 'Repair', 'Check', 'Frozen'];
+// PBS 2026-07-27 (lifecycle decision): module lifecycle like a software house.
+// Repair/audit loops run INSIDE Build/Check — they are not top-level stages.
+const STAGES = ['Goal', 'Spec', 'Build', 'Check', 'Live', 'Frozen'];
 
-// Compute (doneUpTo index, active label, alert) from queue row + its brief status.
-function pipelineState(q: any, briefStatus: string | null): { done: number; active: string; alert: boolean } {
+// Compute (doneUpTo index, active label, alert) for the 6-stage lifecycle.
+// GOAL(0) drafted+goal-linked · SPEC(1) owner-confirmed · BUILD(2) built ·
+// CHECK(3) verified · LIVE(4) in daily use · FROZEN(5) signed off.
+function pipelineState(q: any, briefStatus: string | null, live: boolean, signedOff: boolean):
+  { done: number; active: string; alert: boolean } {
+  if (signedOff || q?.status === 'completed') return { done: 5, active: 'FROZEN · 100% + signed off', alert: false };
   if (!q || q.status === 'skipped') return { done: -1, active: 'not queued', alert: false };
-  if (q.status === 'pending')   return { done: -1, active: 'queued for audit', alert: false };
-  if (q.status === 'auditing')  return { done: 0,  active: 'audit running', alert: false };
-  if (q.status === 'completed') return { done: 4,  active: 'FROZEN · finished', alert: false };
-  // spec_created / in_pipeline → refine from the brief
+  if (q.status === 'pending')   return { done: live ? 4 : -1, active: 'audit queued', alert: false };
+  if (q.status === 'auditing')  return { done: live ? 4 : 0, active: 'audit running', alert: false };
+  // stage from the brief lifecycle; LIVE is an independent fact from module_status
   switch (briefStatus) {
+    case 'draft':       return { done: 0, active: 'awaiting your confirm', alert: false };
+    case 'needs_input': return { done: 1, active: 'needs your answer', alert: true };
     case 'research':    return { done: 1, active: 'research running', alert: false };
-    case 'ready':       return { done: 1, active: 'repair queued', alert: false };
-    case 'in_progress': return { done: 2, active: 'repair running', alert: false };
-    case 'verifying':   return { done: 3, active: 'checking', alert: false };
-    case 'needs_input': return { done: 1, active: 'needs your input', alert: true };
-    case 'shipped':     return { done: 4, active: 'shipped — awaiting sign-off', alert: false };
-    default:            return { done: 1, active: 'spec created', alert: false };
+    case 'ready':       return { done: 1, active: 'build queued', alert: false };
+    case 'in_progress': return { done: 1, active: 'building', alert: false };
+    case 'verifying':   return { done: 2, active: 'checking', alert: false };
+    case 'shipped':     return { done: live ? 4 : 3, active: live ? 'live — awaiting sign-off' : 'checked — deploying', alert: false };
+    default:            return { done: 0, active: 'drafted', alert: false };
   }
 }
 
-function PipelineStrip({ q, briefStatus }: { q: any; briefStatus: string | null }) {
-  const st = pipelineState(q, briefStatus);
+function PipelineStrip({ q, briefStatus, live, signedOff }: { q: any; briefStatus: string | null; live: boolean; signedOff: boolean }) {
+  const st = pipelineState(q, briefStatus, live, signedOff);
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -75,7 +81,7 @@ function PipelineStrip({ q, briefStatus }: { q: any; briefStatus: string | null 
         })}
       </div>
       <div style={{ fontSize: 9.5, fontWeight: 600, color: st.alert ? '#B71C1C' : '#5A5A5A', marginTop: 2 }}>
-        {st.active}{q?.completion_estimate != null ? ` · agent-audited: ${q.completion_estimate}% complete` : ''}
+        {st.active}{q?.completion_estimate != null ? ` · ${q.completion_estimate}% of target scope built` : ''}
       </div>
     </div>
   );
@@ -191,7 +197,7 @@ export default async function SpecsPage() {
             Spec docs for all modules · auditor every 6h · builder + checker hourly · each card shows ONE next action
           </p>
           <p style={{ fontSize: 11, color: '#1B1B1B', margin: '6px 0 0', fontWeight: 600 }}>
-            FINISHED = audit done → spec confirmed → all briefs shipped (commit) → re-audit clean → your sign-off = FROZEN.
+            Lifecycle: GOAL → SPEC (your confirm) → BUILD → CHECK → LIVE → FROZEN (100% + your sign-off). Repairs loop inside Build/Check.
             The % is the agent&apos;s last audit estimate — it only moves when a re-audit runs after repairs ship.
           </p>
         </div>
@@ -253,7 +259,7 @@ export default async function SpecsPage() {
                     <div style={{ fontSize: 9, color: '#8A8A8A', marginTop: -4 }}>audited {auditDate}</div>
                   )}
                   {/* Pipeline lifecycle strip */}
-                  <PipelineStrip q={q} briefStatus={briefStatus} />
+                  <PipelineStrip q={q} briefStatus={briefStatus} live={live} signedOff={signedOff} />
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#1B1B1B', lineHeight: 1.4 }}>{doc.title}</div>
                   {/* ONE next action per card (CTA) + spec link */}
                   <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 'auto', display: 'flex',
