@@ -1,0 +1,104 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MOCKUP · Daily Pickup Report v14 · pickup truth (brief daily-report-pickup-truth-v1)</title>
+</head>
+<body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:#1B1B1B">
+<div style="max-width:1100px;margin:0 auto;padding:16px 24px">
+
+<div style="background:#FDF2E1;border:1px solid #B8A878;border-radius:6px;padding:10px 14px;margin-bottom:18px;font-size:12px">
+<strong>MOCKUP — not live.</strong> Proposed v14 changes to the Daily Pickup Report (bugs 74 + 75, reporter Mai Vou, RM).
+Data below is real Namkhan OTB as of 27 Jul 2026 to make the review honest. Two changes: <strong>(1)</strong> "2026" column becomes the TOTAL-revenue anchor,
+<strong>(2)</strong> new "Pickup by stay month" section replaces the misleading activity tile as the pickup truth; the old tile is kept but relabeled honestly.
+</div>
+
+<!-- header -->
+<div style="padding:18px 0 12px 0;border-bottom:1px solid #E6DFCC;margin-bottom:16px">
+<div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#5A5A5A;margin-bottom:4px">Daily Pickup Report</div>
+<div style="font-size:22px;font-weight:700;color:#084838">The Namkhan</div>
+<div style="font-size:12px;color:#5A5A5A;margin-top:2px">Report date: <strong style="color:#1B1B1B">2026-07-28</strong> · Hotel local time (Asia/Vientiane) · Delivered by TBC Revenue Management</div>
+</div>
+
+<!-- CHANGE 2: NEW SECTION — Pickup by stay month -->
+<div style="margin-bottom:6px">
+<div style="font-size:15px;font-weight:700;color:#084838">Pickup by stay month <span style="background:#E8F2E4;color:#1F5C2C;font-size:10px;font-weight:800;padding:1px 8px;border-radius:10px;vertical-align:middle;margin-left:6px">NEW · replaces "Pickup Yesterday − Net" as pickup truth</span></div>
+<div style="font-size:11px;color:#5A5A5A;margin-bottom:10px">OTB snapshot delta by stay date (27 Jul → 28 Jul snapshots) · OTB% = full-month rooms OTB vs capacity · pickup = net RN change per stay month · Mai Vou spec, rule 554</div>
+</div>
+<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;border:1px solid #E6DFCC;border-radius:6px;background:#FFFFFF;margin-bottom:8px">
+<thead><tr style="background:#FAFAF7">
+<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#5A5A5A;border-bottom:1px solid #E6DFCC">Stay month</th>
+<th style="padding:6px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#5A5A5A;border-bottom:1px solid #E6DFCC">OTB RN</th>
+<th style="padding:6px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#5A5A5A;border-bottom:1px solid #E6DFCC">OTB %</th>
+<th style="padding:6px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#5A5A5A;border-bottom:1px solid #E6DFCC">Pickup · net RN</th>
+<th style="padding:6px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#5A5A5A;border-bottom:1px solid #E6DFCC">Pickup · rev</th>
+<th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#5A5A5A;border-bottom:1px solid #E6DFCC">Read</th>
+</tr></thead>
+<tbody style="font-size:12px;font-variant-numeric:tabular-nums">
+<tr><td style="padding:5px 10px;font-weight:600">Jul 26</td><td style="padding:5px 10px;text-align:right">260</td><td style="padding:5px 10px;text-align:right;font-weight:700">28.0%</td><td style="padding:5px 10px;text-align:right;color:#1F5C2C;font-weight:800">+5</td><td style="padding:5px 10px;text-align:right;color:#1F5C2C">+$1,040</td><td style="padding:5px 10px;color:#5A5A5A">July OTB 28.0% · +5 RN</td></tr>
+<tr style="background:#FAFAF7"><td style="padding:5px 10px;font-weight:600">Aug 26</td><td style="padding:5px 10px;text-align:right">166</td><td style="padding:5px 10px;text-align:right;font-weight:700">17.8%</td><td style="padding:5px 10px;text-align:right;color:#1F5C2C;font-weight:800">+3</td><td style="padding:5px 10px;text-align:right;color:#1F5C2C">+$610</td><td style="padding:5px 10px;color:#5A5A5A">August OTB 17.8% · +3 RN</td></tr>
+<tr><td style="padding:5px 10px;font-weight:600">Sep 26</td><td style="padding:5px 10px;text-align:right">29</td><td style="padding:5px 10px;text-align:right;font-weight:700">3.2%</td><td style="padding:5px 10px;text-align:right;color:#5A5A5A">—</td><td style="padding:5px 10px;text-align:right;color:#5A5A5A">—</td><td style="padding:5px 10px;color:#5A5A5A">no change</td></tr>
+<tr style="background:#FAFAF7"><td style="padding:5px 10px;font-weight:600">Oct 26</td><td style="padding:5px 10px;text-align:right">60</td><td style="padding:5px 10px;text-align:right;font-weight:700">6.5%</td><td style="padding:5px 10px;text-align:right;color:#B04A2F;font-weight:800">−2</td><td style="padding:5px 10px;text-align:right;color:#B04A2F">−$420</td><td style="padding:5px 10px;color:#5A5A5A">October OTB 6.5% · −2 RN</td></tr>
+<tr><td style="padding:5px 10px;font-weight:600">Nov 26</td><td style="padding:5px 10px;text-align:right">48</td><td style="padding:5px 10px;text-align:right;font-weight:700">5.3%</td><td style="padding:5px 10px;text-align:right;color:#5A5A5A">—</td><td style="padding:5px 10px;text-align:right;color:#5A5A5A">—</td><td style="padding:5px 10px;color:#5A5A5A">no change</td></tr>
+</tbody>
+</table>
+<div style="font-size:10px;color:#5A5A5A;font-style:italic;margin-bottom:8px">Pickup deltas above are ILLUSTRATIVE (two consecutive snapshots exist from 28 Jul). OTB RN / OTB% are live values as of 27 Jul 2026. Pickup revenue column included because plan.otb_snapshots already captures confirmed_revenue — free to show, drop if noisy.</div>
+
+<!-- degradation state -->
+<div style="padding:10px 14px;background:#FAFAF7;border:1px dashed #B8A878;border-radius:6px;font-size:12px;color:#5A5A5A;margin-bottom:24px">
+<strong style="color:#1B1B1B">Degraded state (what renders TODAY, 27 Jul):</strong> "Pickup by stay month — snapshot history building, full pickup from 28 Jul. OTB% shown; deltas resume when two consecutive daily snapshots exist." <em>No wrong numbers, no crash.</em>
+</div>
+
+<!-- CHANGE 1: 2026 column = total OTB revenue anchor -->
+<div style="margin-bottom:6px">
+<div style="font-size:15px;font-weight:700;color:#084838">OTB · Pickup · Comparison · SDLY <span style="background:#E8F2E4;color:#1F5C2C;font-size:10px;font-weight:800;padding:1px 8px;border-radius:10px;vertical-align:middle;margin-left:6px">CHANGED · "2026" column = TOTAL OTB revenue</span></div>
+<div style="font-size:11px;color:#5A5A5A;margin-bottom:10px">Excerpt (July block) — the "2026" anchor column now shows ALL revenue (rooms + F&B + spa + activities + transfers); "Today" snapshot column stays room-revenue, so the difference between the two IS the non-room business on the books.</div>
+</div>
+<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #E0E0E0;border-radius:4px;font-size:10px;background:#FFFFFF;margin-bottom:10px">
+<thead>
+<tr>
+<th style="padding:5px 8px;text-align:left;font-weight:700;border-bottom:1px solid #E0E0E0;border-right:1px solid #E0E0E0">Period</th>
+<th style="padding:5px 8px;text-align:right;font-weight:700;border-bottom:1px solid #E0E0E0;border-right:1px solid #E0E0E0;background:#F5F1E4">2026 · TOTAL rev<div style="font-weight:500;color:#5A5A5A">all revenue OTB</div></th>
+<th style="padding:5px 8px;text-align:right;font-weight:700;border-bottom:1px solid #E0E0E0;border-right:1px solid #E0E0E0">Today · rooms<div style="font-weight:500;color:#5A5A5A">28/07/2026</div></th>
+<th style="padding:5px 8px;text-align:right;font-weight:700;border-bottom:1px solid #E0E0E0">Δ = non-room OTB</th>
+</tr>
+</thead>
+<tbody style="font-variant-numeric:tabular-nums">
+<tr><td style="padding:3px 8px;color:#5A5A5A;border-right:1px solid #E0E0E0">01/07/2026 · RN</td><td style="padding:3px 8px;text-align:right;border-right:1px solid #E0E0E0;background:#FAFAF7">260</td><td style="padding:3px 8px;text-align:right;border-right:1px solid #E0E0E0">260</td><td style="padding:3px 8px;text-align:right;color:#5A5A5A">—</td></tr>
+<tr><td style="padding:3px 8px;color:#5A5A5A;border-right:1px solid #E0E0E0">01/07/2026 · REV</td><td style="padding:3px 8px;text-align:right;font-weight:800;border-right:1px solid #E0E0E0;background:#F5F1E4">$60,041</td><td style="padding:3px 8px;text-align:right;border-right:1px solid #E0E0E0">$44,391</td><td style="padding:3px 8px;text-align:right;color:#1F5C2C;font-weight:700">$15,650</td></tr>
+<tr><td style="padding:3px 8px;color:#5A5A5A;border-right:1px solid #E0E0E0">01/07/2026 · TRevPAR / RevPAR</td><td style="padding:3px 8px;text-align:right;font-weight:800;border-right:1px solid #E0E0E0;background:#F5F1E4">$64.6</td><td style="padding:3px 8px;text-align:right;border-right:1px solid #E0E0E0">$47.7</td><td style="padding:3px 8px;text-align:right;color:#1F5C2C;font-weight:700">$16.8</td></tr>
+</tbody>
+</table>
+<div style="font-size:10px;color:#5A5A5A;font-style:italic;margin-bottom:24px">Live values (fn_pickup_otb_at, 27 Jul): July rooms $44,391 vs total $60,041. RN/OCC rows identical in both columns (rooms are rooms); only money rows switch basis in the 2026 column. Same treatment on every month block + TOTAL row.</div>
+
+<!-- relabeled tile -->
+<div style="margin-bottom:6px">
+<div style="font-size:15px;font-weight:700;color:#084838">Headline tile <span style="background:#FDF2E1;color:#B8542A;font-size:10px;font-weight:800;padding:1px 8px;border-radius:10px;vertical-align:middle;margin-left:6px">RELABELED · was "Pickup yesterday · net RN"</span></div>
+<div style="font-size:11px;color:#5A5A5A;margin-bottom:10px">The old tile mixed stay months (New RN − Cancelled RN = booking activity, not pickup). It stays — the number is useful — but says what it is.</div>
+</div>
+<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:28px"><tr>
+<td style="border:1px solid #E6DFCC;border-radius:6px;background:#FFFFFF;padding:10px 14px;min-width:170px">
+<div style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#5A5A5A;margin-bottom:2px">Booking activity yesterday · net RN</div>
+<div style="font-size:18px;font-weight:800;color:#084838">+6</div>
+<div style="font-size:10px;color:#5A5A5A;margin-top:2px">8 booked − 2 lost · all stay months · NOT pickup by stay date — see "Pickup by stay month"</div>
+</td>
+<td style="width:14px"></td>
+<td style="border:1px solid #E6DFCC;border-radius:6px;background:#F5F1E4;padding:10px 14px;min-width:170px">
+<div style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#5A5A5A;margin-bottom:2px">Pickup yesterday · all months</div>
+<div style="font-size:18px;font-weight:800;color:#1F5C2C">+6 RN</div>
+<div style="font-size:10px;color:#5A5A5A;margin-top:2px">Σ of stay-month snapshot deltas · ties to table above</div>
+</td>
+</tr></table>
+
+<div style="border-top:1px dashed #E6DFCC;padding-top:12px;font-size:11px;color:#5A5A5A;line-height:1.6">
+<strong style="color:#1B1B1B">Review notes for PBS / Mai Vou:</strong>
+OTB% denominator = core.v_property_night capacity (same source as the occupancy KPI — 930 avail RN for a 31-day month ⇒ 30 rooms/night; flag if that should read 24).
+Months rendered: every future stay month with OTB &gt; 0, capped at 6.
+Currency: USD invoice layer, matching the rest of the report.
+Everything above ships as edge-fn render changes only — zero schema changes.
+</div>
+
+</div>
+</body>
+</html>
