@@ -473,6 +473,33 @@ async function shipPatches(bug: { id: number; body: string | null }, plan: Plann
     const msg = `bug-agent: ${plan.plan_md.slice(0, 60)} · #${bug.id}`;
     lastCommit = await ghPutFile(patch.path, patch.new_content, branch, msg, existing?.sha);
   }
+  // PBS 2026-07-27 — DESIGN RITUAL COMPLIANCE (locked 2026-05-03): every UI
+  // change must append a dated entry to DESIGN_NAMKHAN_BI.md's Update history.
+  // Agent PRs never did, so design-doc-check failed red on every UI PR and
+  // (as a required check) BLOCKED merges — including our own ADR-175
+  // auto-merge. Honor the ritual automatically instead of asking PBS to
+  // babysit CI: if this PR touches design surfaces, append the entry here.
+  const DESIGN_SURFACE = /^(app\/|components\/|styles\/|lib\/format\.ts$)/;
+  if (plan.patches.some((p) => DESIGN_SURFACE.test(p.path)) && !plan.patches.some((p) => p.path === 'DESIGN_NAMKHAN_BI.md')) {
+    try {
+      const doc = await ghGetFile('DESIGN_NAMKHAN_BI.md', branch);
+      if (doc) {
+        const today = new Date().toISOString().slice(0, 10);
+        const touched = plan.patches.filter((p) => DESIGN_SURFACE.test(p.path)).map((p) => p.path);
+        const entry = [
+          '',
+          `### ${today} — bug-agent · fix #${bug.id}`,
+          `- ${plan.plan_md.slice(0, 160).replace(/\n/g, ' ')}`,
+          ...touched.map((p) => `- touched \`${p}\``),
+          '',
+        ].join('\n');
+        lastCommit = await ghPutFile('DESIGN_NAMKHAN_BI.md', doc.content.trimEnd() + '\n' + entry, branch, `bug-agent: design-doc update-history entry · #${bug.id}`, doc.sha);
+      }
+    } catch {
+      // Doc append is best-effort — never fail a ship over it. The check
+      // will warn, PBS is not required to act.
+    }
+  }
   const prTitle = `bug-agent · fix #${bug.id}: ${(bug.body ?? '').slice(0, 60)}`;
   const prBody = [
     `Autonomous fix by bug-agent for bug #${bug.id}.`,
