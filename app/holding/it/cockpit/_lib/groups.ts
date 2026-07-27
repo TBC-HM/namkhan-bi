@@ -39,6 +39,7 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it/cockpit/memory',   label: 'Platform Memory' },
       { href: '/holding/it/cockpit/schemas',  label: 'Schemas' },
       { href: '/holding/it/cockpit/freshness',label: 'Freshness' },
+      { href: '/holding/it/cockpit/university',label: 'University' },
       { href: '/holding/it/cockpit/sitemap',  label: 'Sitemap' },
     ],
   },
