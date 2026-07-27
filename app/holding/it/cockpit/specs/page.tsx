@@ -116,7 +116,7 @@ async function fetchData() {
       .like('doc_type', '%_module'),
     (supabase as any)
       .from('v_module_completion_queue')
-      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at, entry_url, testing_target, testing_ok'),
+      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at, entry_url, testing_target, testing_ok, gap_list'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
@@ -267,6 +267,25 @@ export default async function SpecsPage() {
                   {auditDate && pct != null && (
                     <div style={{ fontSize: 9, color: '#8A8A8A', marginTop: -4 }}>audited {auditDate}</div>
                   )}
+                  {/* Bug #88 (PBS): "% without gap list is meaningless" — show
+                      WHAT is missing to reach 100%. Plan from agent PR #339,
+                      re-implemented on current main (the PR conflicted). */}
+                  {Array.isArray(q?.gap_list) && q.gap_list.length > 0 ? (
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: -2 }}>
+                      {q.gap_list.slice(0, 3).map((g: any, i: number) => (
+                        <span key={i} title={String(g?.gap ?? '')} style={{
+                          fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
+                          background: '#FDECE4', color: '#B04A2F', maxWidth: 220, overflow: 'hidden',
+                          textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block',
+                        }}>−{g?.weight_pct ?? '?'}% · {String(g?.gap ?? '').slice(0, 60)}</span>
+                      ))}
+                      {q.gap_list.length > 3 && (
+                        <span style={{ fontSize: 9, color: '#8A8A8A' }}>+{q.gap_list.length - 3} more</span>
+                      )}
+                    </div>
+                  ) : pct != null && pct < 100 ? (
+                    <div style={{ fontSize: 9, color: '#B8A878', marginTop: -2 }}>no gap data · ⟳ re-audit to populate</div>
+                  ) : null}
                   {/* Pipeline lifecycle strip */}
                   <PipelineStrip q={q} briefStatus={briefStatus} />
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#1B1B1B', lineHeight: 1.4 }}>{doc.title}</div>
