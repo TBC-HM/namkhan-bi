@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { TOKENS, SERIF, MONO } from '../_components/tokens';
 import type { V2CostBreakdown } from '../_lib/data-port';
+import KpiPopoverButton from '@/app/(cockpit)/_design/tile/KpiPopoverButton';
 
 function fmtUsd(n: number): string {
   if (!Number.isFinite(n) || n === 0) return '$0.0000';
@@ -269,10 +270,12 @@ function KpiTile({
   label,
   totals,
   accent,
+  kpiKey,
 }: {
   label: string;
   totals: { cost_usd: number; runs: number; tokens_in: number; tokens_out: number };
   accent: string;
+  kpiKey?: string;
 }) {
   return (
     <div
@@ -293,7 +296,7 @@ function KpiTile({
           textTransform: 'uppercase',
         }}
       >
-        {label}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>{label}<KpiPopoverButton kpiKey={kpiKey} label={label} /></span>
       </div>
       <div
         style={{
