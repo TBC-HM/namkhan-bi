@@ -10,12 +10,6 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const MODULE_DOC_TYPES = [
-  'bug_agent_module', 'compiler_module', 'gbp_module', 'inventory_module',
-  'media_module', 'newsletter_module', 'proposals_module', 'sales_module',
-  'socials_module', 'spec_builder_module', 'university_module', 'youtube_module',
-];
-
 const BADGE: Record<string, { bg: string; color: string }> = {
   bug_agent_module:    { bg: '#EDE7F6', color: '#4527A0' },
   compiler_module:     { bg: '#E8EAF6', color: '#283593' },
@@ -103,7 +97,7 @@ async function fetchData() {
     supabase
       .from('v_documents_latest')
       .select('id, doc_type, title, status, version, last_updated_at')
-      .in('doc_type', MODULE_DOC_TYPES)
+      .like('doc_type', '%_module')
       .order('doc_type'),
     (supabase as any)
       .from('v_build_briefs')
@@ -113,10 +107,10 @@ async function fetchData() {
     (supabase as any)
       .from('v_module_status')
       .select('doc_type, completion_pct, is_live, signed_off_at')
-      .in('doc_type', MODULE_DOC_TYPES),
+      .like('doc_type', '%_module'),
     (supabase as any)
       .from('v_module_completion_queue')
-      .select('module_doc_type, status, completion_estimate, brief_slug, priority, updated_at'),
+      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
@@ -124,7 +118,21 @@ async function fetchData() {
   for (const qr of (queue ?? [])) queueMap[qr.module_doc_type] = qr;
   const briefStatusBySlug: Record<string, string> = {};
   for (const b of (briefs ?? [])) briefStatusBySlug[b.slug] = b.status;
-  return { moduleDocs: moduleDocs ?? [], briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug };
+  // PBS 2026-07-27: new modules must get a box the moment they are drafted.
+  // Any queue entry without a spec doc yet renders as a synthesized card.
+  const docs = [...(moduleDocs ?? [])];
+  const haveDoc = new Set(docs.map((d: any) => d.doc_type));
+  for (const qr of (queue ?? [])) {
+    if (!haveDoc.has(qr.module_doc_type)) {
+      docs.push({
+        id: qr.module_doc_type, doc_type: qr.module_doc_type,
+        title: `${qr.display_name ?? qr.module_doc_type.replace(/_module$/, '').replace(/_/g, ' ')} — spec doc pending (drafted module)`,
+        status: 'draft', version: 0, last_updated_at: qr.updated_at ?? null,
+      });
+    }
+  }
+  docs.sort((a: any, b: any) => String(a.doc_type).localeCompare(String(b.doc_type)));
+  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug };
 }
 
 function shortDate(iso: string): string {
