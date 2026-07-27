@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '../../_components/tokens';
 import BriefActions from '../_components/BriefActions';
+import { BriefQuestionInline } from '../_components/BriefQuestionPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,12 +45,29 @@ export default async function BriefDetailPage({ params }: { params: Promise<{ sl
   if (!data) notFound();
   const brief = data as BriefDetail;
 
+  // PBS 2026-07-27: the open question must be IMPOSSIBLE to miss on the detail
+  // page — pinned above the content, never buried in the brief text.
+  const { data: qRow } = await (sb as any)
+    .from('v_build_briefs_index')
+    .select('open_question')
+    .eq('slug', slug)
+    .maybeSingle();
+  const openQuestion = (qRow?.open_question ?? null) as
+    { question: string; options: { label: string; consequence: string; recommended?: boolean }[] } | null;
+
   return (
     <div style={{ padding: '20px 24px', maxWidth: 900, color: TOKENS.ink }}>
       {/* Back */}
       <a href="/holding/it/cockpit/briefs" style={{ fontSize: 11.5, color: TOKENS.text2, textDecoration: 'none', marginBottom: 12, display: 'inline-block' }}>
         ← All briefs
       </a>
+
+      {/* Open question — pinned at the very top, above everything */}
+      {brief.status === 'needs_input' && (
+        <div style={{ marginBottom: 18 }}>
+          <BriefQuestionInline slug={brief.slug} question={openQuestion} />
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ marginBottom: 20 }}>

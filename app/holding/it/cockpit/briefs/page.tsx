@@ -54,13 +54,23 @@ export default async function BriefsPage({
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1100, color: TOKENS.ink, fontFamily: 'inherit' }}>
       {/* Page headline */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: TOKENS.ink }}>Build Briefs</div>
-        <div style={{ fontSize: 12, color: TOKENS.text2, marginTop: 3 }}>
-          Queue — <strong style={{ color: 'var(--status-amber)' }}>{inFlight}</strong> in flight ·{' '}
-          <strong style={{ color: 'var(--status-green)' }}>{counts['shipped'] ?? 0}</strong> shipped ·{' '}
-          <strong style={{ color: 'var(--status-red)' }}>{counts['draft'] ?? 0}</strong> draft
+      <div style={{ marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: TOKENS.ink }}>Build Briefs</div>
+          <div style={{ fontSize: 12, color: TOKENS.text2, marginTop: 3 }}>
+            Queue — <strong style={{ color: 'var(--status-amber)' }}>{inFlight}</strong> in flight ·{' '}
+            <strong style={{ color: 'var(--status-green)' }}>{counts['shipped'] ?? 0}</strong> shipped ·{' '}
+            <strong style={{ color: 'var(--status-red)' }}>{counts['draft'] ?? 0}</strong> draft
+          </div>
         </div>
+        {(counts['needs_input'] ?? 0) > 0 && (
+          <a href="/holding/it/cockpit/questions" style={{
+            fontSize: 12, fontWeight: 700, padding: '8px 16px', borderRadius: 6, textDecoration: 'none',
+            background: 'var(--status-amber)', color: '#1B1B1B',
+          }}>
+            ❓ Answer questions ({counts['needs_input']})
+          </a>
+        )}
       </div>
 
       {/* Status filter pills */}
