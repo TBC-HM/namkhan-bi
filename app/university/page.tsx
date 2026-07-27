@@ -29,7 +29,7 @@ function StatusBadge({ status }: { status: string }) {
   if (s === 'live') {
     return <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: '#FFFFFF', background: GREEN, borderRadius: 3, padding: '2px 7px' }}>LIVE</span>;
   }
-  if (s === 'being-written' || s === 'draft') {
+  if (s === 'being-written' || s === 'draft' || s === 'skeleton') {
     return <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 6px' }}>BEING WRITTEN</span>;
   }
   return <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', color: INK_SOFT, border: `1px solid ${HAIR}`, background: WARM, borderRadius: 3, padding: '1px 6px' }}>COMING SOON</span>;
@@ -72,7 +72,10 @@ export default async function UniversityPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 20 }}>
         {modules.map((m) => {
           const s = (m.status || '').toLowerCase().replace(/_/g, '-');
-          const clickable = s === 'live' || s === 'being-written' || s === 'draft';
+          // A module that HAS articles is always clickable — the landing only
+          // renders modules with >0 live articles (filter above), so a dead
+          // card here would contradict the 0-empty-cards mandate.
+          const clickable = s === 'live' || s === 'being-written' || s === 'draft' || s === 'skeleton';
           const n = counts.get(m.slug) ?? 0;
           const inner = (
             <>
