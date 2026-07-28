@@ -27,6 +27,13 @@
 //          and copy ticket.preview_url || ticket.pr_url ||
 //          ticket.github_issue_url onto bug.fix_link.
 //
+//   3. STEP C — ADDED 2026-07-28 (brief autospec-bug_agent_module-20260725,
+//      verifier objection G3): finalize bug-agent runs orphaned by a Vercel
+//      maxDuration kill (phase stuck non-terminal, ended_at NULL, >10 min).
+//      Logic lives in lib/bugAgent.ts finalizeOrphanRuns(); this cron is just
+//      the heartbeat. Additive — STEP B behavior and the existing response
+//      keys are unchanged (A8).
+//
 // PATCH-equivalent updates use the same column conventions as
 // app/api/cockpit/bugs/route.ts (acked_at / started_at / done_at / updated_at).
 
@@ -34,6 +41,7 @@ import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { automationGuard } from "@/lib/cron/guard";
+import { finalizeOrphanRuns } from "@/lib/bugAgent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +88,8 @@ type SweepResult = {
   acked: Array<{ bug_id: number; ticket_id: number | null; error?: string }>;
   promoted: Array<{ bug_id: number; ticket_id: number; from: string; to: string; fix_link?: string | null }>;
   scanned: { new: number; acked: number };
+  // STEP C (G3, 2026-07-28) — additive key; existing consumers unaffected.
+  orphan_runs?: Array<{ run_id: number; bug_id: number; outcome: string }>;
 };
 
 async function runSweep(): Promise<SweepResult> {
@@ -274,11 +284,21 @@ async function runSweep(): Promise<SweepResult> {
     }
   }
 
+  // ── STEP C (G3, 2026-07-28) ───────────────────────────────────────────
+  // Finalize runs orphaned by a Vercel maxDuration kill. Best-effort: a
+  // finalizer error never fails the sweep (STEP B's work is already done).
+  let orphanRuns: SweepResult["orphan_runs"] = [];
+  try {
+    const r = await finalizeOrphanRuns();
+    orphanRuns = r.finalized;
+  } catch { /* best-effort */ }
+
   return {
     ok: true,
     acked,
     promoted,
     scanned: { new: newCount ?? 0, acked: liveBugs?.length ?? 0 },
+    orphan_runs: orphanRuns,
   };
 }
 
