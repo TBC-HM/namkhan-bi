@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MOCKUP · Documentation Architecture v2 — Taxonomy + Releases</title>
+<style>
+  :root{--bg:#F4EFE2;--primary:#1F3A2E;--sand:#B8A878;--terracotta:#B8542A;--hairline:#E6DFCC;--card:#FBF8EF;--text2:#5B6B60;--text3:#9AA79E;--brass:#A98B3F;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--primary);font:14px/1.5 Georgia,'Times New Roman',serif;padding:28px 32px;max-width:1180px;margin:0 auto}
+  .mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .banner{background:var(--terracotta);color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;display:inline-block;margin-bottom:14px}
+  h1{font-size:24px;font-weight:600;margin-bottom:4px}
+  .sub{color:var(--text2);margin-bottom:20px;font-size:13px}
+  .tabs{display:flex;gap:8px;border-bottom:1px solid var(--hairline);margin-bottom:20px}
+  .tab{padding:8px 18px;cursor:pointer;border:1px solid var(--hairline);border-bottom:none;border-radius:8px 8px 0 0;background:transparent;color:var(--text2);font:inherit;font-size:13px}
+  .tab.active{background:var(--card);color:var(--primary);font-weight:600;border-color:var(--sand)}
+  .pane{display:none}.pane.active{display:block}
+  .cat{margin-bottom:22px;background:var(--card);border:1px solid var(--hairline);border-radius:10px;overflow:hidden}
+  .cat h2{font-size:14px;padding:10px 16px;background:var(--primary);color:#F4EFE2;font-weight:600;letter-spacing:.04em}
+  .cat h2 .n{opacity:.6;font-weight:400;margin-left:8px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);padding:8px 16px;border-bottom:1px solid var(--hairline)}
+  td{padding:7px 16px;border-bottom:1px solid var(--hairline);font-size:13px;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .badge{display:inline-block;padding:1px 9px;border-radius:10px;font-size:11px;font-family:ui-monospace,monospace}
+  .fresh{background:#DCE8DD;color:#2E5940}.slow{background:#F0E6C8;color:var(--brass)}.stale{background:#F5DCD0;color:var(--terracotta)}
+  .owner{color:var(--text2);font-size:12px}
+  .rel{background:var(--card);border:1px solid var(--hairline);border-radius:10px;padding:16px 20px;margin-bottom:14px;cursor:pointer}
+  .rel:hover{border-color:var(--sand)}
+  .rel .semver{font-size:19px;font-weight:700}
+  .rel .meta{color:var(--text2);font-size:12px;margin-top:2px}
+  .scopechip{display:inline-block;border:1px solid var(--sand);border-radius:10px;padding:1px 10px;font-size:11px;margin-left:10px;color:var(--brass)}
+  .cut{background:var(--primary);color:#F4EFE2;border:none;border-radius:8px;padding:10px 22px;font:inherit;font-size:14px;cursor:pointer;margin-bottom:18px}
+  .cut:hover{background:#2E5940}
+  .detail{background:#fff;border:1px solid var(--sand);border-radius:10px;padding:20px 24px;display:none;margin-top:6px}
+  .detail h3{font-size:15px;margin:14px 0 6px}.detail h3:first-child{margin-top:0}
+  .detail ul{margin-left:20px;font-size:13px}
+  pre{background:var(--bg);border:1px solid var(--hairline);border-radius:6px;padding:10px 14px;font-size:12px;overflow-x:auto;font-family:ui-monospace,monospace;margin:8px 0}
+  .note{background:#F0E6C8;border-left:3px solid var(--brass);padding:10px 14px;font-size:12.5px;border-radius:0 6px 6px 0;margin:14px 0;color:#5B4E22}
+  .add{color:#2E5940}.del{color:var(--terracotta)}
+</style>
+</head>
+<body>
+<div class="banner">Mockup · not live · brief documentation-architecture-v2</div>
+<h1>Documentation — Taxonomy &amp; Releases</h1>
+<div class="sub">/holding/it/cockpit/docs (taxonomy, extended in place) &nbsp;·&nbsp; /holding/it/cockpit/releases (new) — real doc_types &amp; versions from documentation.documents 2026-07-28</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="show('tax',this)">Doc Taxonomy (30)</button>
+  <button class="tab" onclick="show('rel',this)">Releases</button>
+</div>
+
+<div id="tax" class="pane active"></div>
+
+<div id="rel" class="pane">
+  <button class="cut" onclick="alert('MOCKUP — cutting a platform release snapshots all 30 doc versions (hist refs + content hashes), generates changelog from documents_history diffs, known-issues from open gap_lists, module completion table. Requires human approval (approved_by).')">⊕ Cut platform release…</button>
+  <div class="rel" onclick="toggle('d1')">
+    <span class="semver">1.0.0</span><span class="scopechip">platform</span>
+    <div class="meta">2026-07-29 · approved_by PBS · 30 doc snapshots · changelog: 34 version diffs · known issues: 14 open gaps across 6 modules</div>
+  </div>
+  <div id="d1" class="detail">
+    <h3>Generated release doc set (from live truth — never hand-written)</h3>
+    <ul>
+      <li><b>Release notes / changelog</b> — diffed from documents_history (34 snapshots): <span class="mono"><span class="add">+ architecture v87</span> · <span class="add">+ claude_md v89</span> · <span class="del">− youtube_module v1 → v2</span></span></li>
+      <li><b>Architecture + data-model deltas</b> — architecture v87, data_model v31 vs previous release refs</li>
+      <li><b>API surface</b> — api v6 + route inventory</li>
+      <li><b>Runbook</b> — deployment v8</li>
+      <li><b>Known issues</b> — open gap_lists from governance.module_completion_queue (live)</li>
+      <li><b>Module completion table</b> — completion % + LIVE/FROZEN per ADR-174</li>
+    </ul>
+    <h3>Snapshot refs (append-only)</h3>
+    <pre>{"architecture":{"version":87,"hist_id":112,"sha256":"9c41…"},
+ "claude_md":{"version":89,"hist_id":118,"sha256":"1fa0…"}, … 30 total}</pre>
+  </div>
+  <div class="rel" onclick="toggle('d2')">
+    <span class="semver">youtube_module 2.0</span><span class="scopechip">module release</span>
+    <div class="meta">2026-07-29 · sign-off PBS via fn_module_sign_off · gap_list [] · verifier PASS · doc set generated on sign-off (rule 597.2)</div>
+  </div>
+  <div id="d2" class="detail">
+    <h3>Module release = human sign-off</h3>
+    <ul>
+      <li>fn_module_sign_off refuses while gap_list non-empty, testing below target, or the linked brief is not shipped</li>
+      <li>On success: doc_type major-version cut (snapshot → documents_history) + module doc set generated + release row appended</li>
+    </ul>
+  </div>
+  <div class="note"><b>Model (R1 verdict):</b> ONE table documentation.releases, two scopes. Module sign-off ⇒ module-scoped release row (rule 597.2 "human approval = release"). Platform release ⇒ explicit cut on this page, snapshotting all 30 doc versions (§5b). Module releases nest under the next platform release's changelog.</div>
+</div>
+
+<script>
+const DOCS={
+ "Product — what it does":[
+  ["vision_roadmap","v4","2026-07-25","Felix",0,"release"],["prd","v3","2026-05-11","Felix",90,""],
+  ["education_log","v3","2026-07-25","Scribe Scott",60,""],["university_module","v1","2026-07-23","Scribe Scott",60,""],
+  ["socials_module","v2","2026-07-23","Lumen",60,""],["media_module","v2","2026-07-23","Lumen",60,""],
+  ["newsletter_module","v7","2026-07-23","Lumen",60,""],["gbp_module","v1","2026-07-23","Lumen",60,""],
+  ["youtube_module","v2","2026-07-28","Lumen",60,""],["compiler_module","v1","2026-07-24","Lumen",60,""],
+  ["proposals_module","v1","2026-07-24","Mercer",60,""],["sales_module","v1","2026-07-24","Mercer",60,""],
+  ["inventory_module","v1","2026-07-23","Forge",60,""],["hr_scheduling_module","v2","2026-07-25","Forge",60,""],
+  ["spec_builder_module","v3","2026-07-27","Captain Kit",60,""],["bug_agent_module","v2","2026-07-27","Captain Kit",60,""],
+  ["brain_module","v3","2026-07-26","Captain Kit",60,""]],
+ "Architecture — how it works":[
+  ["architecture","v87","2026-07-26","Felix",30,""],["data_model","v31","2026-07-26","Schema Sage",30,""],
+  ["integration","v9","2026-07-25","Atlas Anders",30,""],["factorial_md","v3","2026-07-23","Atlas Anders",60,""]],
+ "Operations — how to run it":[
+  ["deployment","v8","2026-07-23","Captain Kit",30,""],["claude_md","v89","2026-07-27","Felix",30,""],
+  ["handover","v51","2026-07-24","Scribe Scott",7,""]],
+ "Interfaces — machine surface":[
+  ["api","v6","2026-07-23","Atlas Anders",30,""],["it_navigation","v1","2026-07-24","Pixel Pia",90,""],
+  ["app_navigation","v1","2026-07-24","Pixel Pia",90,""]],
+ "Governance — rules & security":[
+  ["security","v5","2026-07-23","Sentinel Sergei",90,""],["design_system","v17","2026-07-26","Brand Bea",60,""],
+  ["advisory_doc_standard","v1","2026-05-28","Scribe Scott",180,""]]};
+const NOW=new Date("2026-07-28");
+function badge(upd,sla,mode){
+  if(mode==="release")return '<span class="badge fresh">per release</span>';
+  const age=Math.round((NOW-new Date(upd))/86400000),left=sla-age;
+  if(left<0)return '<span class="badge stale">overdue '+(-left)+'d</span>';
+  if(left<=Math.max(3,sla*0.2))return '<span class="badge slow">due in '+left+'d</span>';
+  return '<span class="badge fresh">'+age+'d ago</span>';}
+let h='';
+for(const[cat,rows]of Object.entries(DOCS)){
+ h+='<div class="cat"><h2>'+cat+'<span class="n">'+rows.length+' doc types</span></h2><table><tr><th>doc_type</th><th>version</th><th>updated</th><th>owner</th><th>review SLA</th><th>freshness</th></tr>';
+ for(const[t,v,u,o,s,m]of rows)h+='<tr><td class="mono">'+t+'</td><td>'+v+'</td><td>'+u+'</td><td class="owner">'+o+'</td><td class="owner">'+(m==="release"?"on release":s+"d")+'</td><td>'+badge(u,s,m)+'</td></tr>';
+ h+='</table></div>';}
+document.getElementById('tax').innerHTML=h+'<div class="note"><b>A3 check:</b> 30 of 30 doc_types classified — zero orphans. Owner + review-interval stored on documentation.documents (R4 verdict: 3 new columns, no new table). Freshness = last_updated_at vs SLA, same age-tone pattern as the cockpit freshness matrix.</div>';
+function show(id,btn){document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');}
+function toggle(id){const d=document.getElementById(id);d.style.display=d.style.display==='block'?'none':'block';}
+</script>
+</body>
+</html>
