@@ -40,12 +40,30 @@ const DOC_LABELS: Record<string, string> = {
   vision_roadmap: 'Product Vision & Roadmap',
 };
 
-const DOC_CATEGORIES: Array<{ key: string; label: string; types: string[] }> = [
-  { key: 'op',    label: 'Operating & discipline', types: ['claude_md', 'deployment', 'security'] },
-  { key: 'arch',  label: 'Architecture & design',  types: ['architecture', 'data_model', 'design_system', 'api'] },
-  { key: 'integ', label: 'Integrations',           types: ['integration', 'factorial_md'] },
-  { key: 'strat', label: 'Strategy',               types: ['prd', 'vision_roadmap'] },
+// Doc taxonomy — brief documentation-architecture-v2 §5(a). Grouping is
+// DB-driven (documents.category); this array fixes order + labels only.
+// Every doc_type MUST be classified (A3: zero orphans) — an "Unclassified"
+// bucket renders in terracotta if a future doc_type is added without one.
+const DOC_CATEGORIES: Array<{ key: string; label: string }> = [
+  { key: 'product',      label: 'Product · what it does' },
+  { key: 'architecture', label: 'Architecture · how it works' },
+  { key: 'operations',   label: 'Operations · how to run it' },
+  { key: 'interfaces',   label: 'Interfaces · APIs & contracts' },
+  { key: 'governance',   label: 'Governance · rules & security' },
 ];
+
+// Freshness vs the doc's own review SLA (mirrors public.v_doc_taxonomy):
+// fresh (< SLA) · due (1-2× SLA) · overdue (> 2× SLA). Tones follow the
+// cockpit freshness-matrix pattern (forest / sand / terracotta).
+export function docFreshness(d: { last_updated_at: string | null; review_interval_days: number | null }):
+  { key: 'fresh' | 'due' | 'overdue' | 'unknown'; label: string; tone: string } {
+  if (!d.last_updated_at || !d.review_interval_days) return { key: 'unknown', label: '—', tone: 'var(--ink-soft, #5A5A5A)' };
+  const ageDays = (Date.now() - new Date(d.last_updated_at).getTime()) / 86_400_000;
+  const label = `${Math.round(ageDays)}d / SLA ${d.review_interval_days}d`;
+  if (ageDays > d.review_interval_days * 2) return { key: 'overdue', label, tone: 'var(--status-red, #B8542A)' };
+  if (ageDays > d.review_interval_days)     return { key: 'due',     label, tone: 'var(--sand, #B8A878)' };
+  return { key: 'fresh', label, tone: 'var(--primary, #1F3A2E)' };
+}
 
 // Surfaces beyond documentation.documents that agents read from.
 const KNOWLEDGE_SURFACES: Array<{
@@ -96,33 +114,30 @@ export function DocsView({ docs }: { docs: Document[] }) {
     [docs, active],
   );
 
-  // Group docs by category
+  // Group docs by DB-driven taxonomy category (A3: zero orphans expected).
   const grouped = useMemo(() => {
-    const byType = new Map(docs.map((d) => [d.doc_type, d] as const));
-    const usedTypes = new Set<string>();
     const result = DOC_CATEGORIES.map((cat) => ({
       ...cat,
-      docs: cat.types.map((t) => byType.get(t)).filter(Boolean) as Document[],
+      docs: docs.filter((d) => d.category === cat.key),
     }));
-    DOC_CATEGORIES.forEach((cat) => cat.types.forEach((t) => usedTypes.add(t)));
-    const orphans = docs.filter((d) => !usedTypes.has(d.doc_type));
+    const orphans = docs.filter((d) => !d.category);
     if (orphans.length) {
-      result.push({ key: 'other', label: 'Other', types: orphans.map((d) => d.doc_type), docs: orphans });
+      result.push({ key: 'unclassified', label: '⚠ Unclassified — assign a category', docs: orphans });
     }
     return result.filter((g) => g.docs.length > 0);
   }, [docs]);
 
+  // Freshness vs each doc's own review SLA (not a flat 30/90d window).
   const stats = useMemo(() => {
-    const now = Date.now();
-    const fresh30d = docs.filter((d) => d.last_updated_at && (now - new Date(d.last_updated_at).getTime()) < 30 * 86_400_000).length;
-    const stale = docs.filter((d) => d.last_updated_at && (now - new Date(d.last_updated_at).getTime()) > 90 * 86_400_000).length;
+    const f = docs.map((d) => docFreshness(d).key);
     return {
       total: docs.length,
-      fresh: fresh30d,
-      stale,
-      categories: grouped.length,
+      fresh: f.filter((k) => k === 'fresh').length,
+      due: f.filter((k) => k === 'due').length,
+      overdue: f.filter((k) => k === 'overdue').length,
+      orphans: docs.filter((d) => !d.category).length,
     };
-  }, [docs, grouped]);
+  }, [docs]);
 
   if (!docs.length) {
     return (
@@ -138,10 +153,11 @@ export function DocsView({ docs }: { docs: Document[] }) {
       <MetricRow
         size="sm"
         tiles={[
-          { label: 'Docs',       value: stats.total,      footnote: 'published' },
-          { label: 'Fresh 30d',  value: stats.fresh,      footnote: 'updated recently', status: stats.fresh > 0 ? 'green' : 'grey' },
-          { label: 'Stale 90d+', value: stats.stale,      footnote: 'needs review',     status: stats.stale > 0 ? 'amber' : 'green' },
-          { label: 'Categories', value: stats.categories, footnote: 'buckets' },
+          { label: 'Docs',        value: stats.total,   footnote: 'all doc_types' },
+          { label: 'Fresh',       value: stats.fresh,   footnote: 'within review SLA', status: stats.fresh > 0 ? 'green' : 'grey' },
+          { label: 'Due',         value: stats.due,     footnote: 'past SLA',          status: stats.due > 0 ? 'amber' : 'green' },
+          { label: 'Overdue 2×',  value: stats.overdue, footnote: 'review now',        status: stats.overdue > 0 ? 'red' : 'green' },
+          { label: 'Unclassified', value: stats.orphans, footnote: 'A3 target: 0',     status: stats.orphans > 0 ? 'red' : 'green' },
         ]}
       />
 
@@ -168,7 +184,10 @@ export function DocsView({ docs }: { docs: Document[] }) {
                     <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
                       <span>{DOC_LABELS[d.doc_type] || d.doc_type}</span>
                       <span style={S.subTabMeta}>
-                        v{d.version} · {d.last_updated_at ? new Date(d.last_updated_at).toLocaleDateString() : '—'}
+                        v{d.version} · {d.owner ?? 'unowned'} ·{' '}
+                        <span style={{ color: docFreshness(d).tone, fontWeight: 600 }}>
+                          {docFreshness(d).label}
+                        </span>
                       </span>
                     </span>
                   </button>
@@ -184,7 +203,7 @@ export function DocsView({ docs }: { docs: Document[] }) {
         <div style={{ gridColumn: '1 / -1' }}>
           <Container
             title={current.title}
-            subtitle={`doc_type=${current.doc_type} · last_updated_by=${current.last_updated_by || '—'} · ${current.last_updated_at ? new Date(current.last_updated_at).toLocaleString() : '—'} · live read from documentation.documents`}
+            subtitle={`doc_type=${current.doc_type} · ${current.category ?? 'unclassified'} · owner ${current.owner ?? '—'} · review every ${current.review_interval_days ?? '—'}d (${docFreshness(current).key}) · last by ${current.last_updated_by || '—'} · ${current.last_updated_at ? new Date(current.last_updated_at).toLocaleString() : '—'}`}
             action={
               <div style={{ display: 'flex', gap: 6 }}>
                 <VersionPill>v{current.version}</VersionPill>
