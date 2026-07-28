@@ -82,6 +82,10 @@ export type Document = {
   status: string;
   last_updated_by: string | null;
   last_updated_at: string | null;
+  // Taxonomy (brief documentation-architecture-v2 · R4: columns on documents)
+  category: 'product' | 'architecture' | 'operations' | 'interfaces' | 'governance' | null;
+  owner: string | null;
+  review_interval_days: number | null;
 };
 
 // Run-counter aggregate per role from cap_skill_calls.
