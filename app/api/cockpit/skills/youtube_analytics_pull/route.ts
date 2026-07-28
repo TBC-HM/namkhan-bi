@@ -1,9 +1,14 @@
 // app/api/cockpit/skills/youtube_analytics_pull/route.ts
-// Daily analytics pull. Because yt-analytics.readonly scope was NOT granted
-// during OAuth, we fall back to Data API v3 /videos?part=statistics on the
-// last 30 days of publications and store snapshots in marketing.yt_analytics_daily.
+// Daily analytics pull — two layers (yt-completion brief 2026-07-28):
+//  1. CHANNEL-LEVEL: real YouTube Analytics API v2 query (views, watch time,
+//     subs gained, likes, shares per day, last 28 days) keyed on the active
+//     connection's channel_id. Requires the yt-analytics.readonly scope that
+//     the 2026-07-27 reconnect granted. Rows land in marketing.yt_analytics_daily
+//     with channel_id set and publication_id NULL (upsert on channel_id,metric_date).
+//  2. PER-VIDEO FALLBACK (preserved behavior): Data API v3 /videos?part=statistics
+//     on the last 30 days of publications → per-publication snapshot rows.
 // Input : { property_id, date? } (date default = yesterday UTC)
-// Output: { ok, rows_inserted, skipped_reason? }
+// Output: { ok, rows_inserted, channel_rows_inserted, analytics_api_status, skipped_reason? }
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -31,6 +36,77 @@ function yesterdayIso(): string {
   return d.toISOString().slice(0, 10);
 }
 
+// ---- Channel-level Analytics API v2 ----------------------------------------
+
+interface AnalyticsReport {
+  columnHeaders?: Array<{ name: string }>;
+  rows?: Array<Array<string | number>>;
+  error?: { code?: number; message?: string };
+}
+
+interface ChannelPullResult {
+  status: number;            // HTTP status from youtubeanalytics.googleapis.com
+  rows_upserted: number;
+  error?: string;
+}
+
+async function pullChannelDaily(
+  sb: ReturnType<typeof getSupabaseAdmin>,
+  accessToken: string,
+  channelId: string,
+  endDate: string,
+): Promise<ChannelPullResult> {
+  const start = new Date(new Date(endDate + 'T00:00:00Z').getTime() - 28 * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 10);
+  const qs = new URLSearchParams({
+    ids:        `channel==${channelId}`,
+    startDate:  start,
+    endDate,
+    metrics:    'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,subscribersGained,likes,shares',
+    dimensions: 'day',
+    sort:       'day',
+  });
+  const r = await fetch(`https://youtubeanalytics.googleapis.com/v2/reports?${qs.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache:   'no-store',
+  });
+  const j = (await r.json().catch(() => null)) as AnalyticsReport | null;
+  if (!r.ok) {
+    return { status: r.status, rows_upserted: 0, error: (j?.error?.message ?? `analytics_api_${r.status}`).slice(0, 200) };
+  }
+
+  const headers = (j?.columnHeaders ?? []).map((h) => h.name);
+  const idx = (name: string) => headers.indexOf(name);
+  const rows = j?.rows ?? [];
+  let upserted = 0;
+  for (const row of rows) {
+    const day = String(row[idx('day')] ?? '').slice(0, 10);
+    if (!day) continue;
+    const num = (name: string): number | null => {
+      const i = idx(name);
+      if (i < 0) return null;
+      const v = Number(row[i]);
+      return Number.isFinite(v) ? v : null;
+    };
+    const { error: upErr } = await sb
+      .from('v_yt_analytics_daily')
+      .upsert({
+        channel_id:          channelId,
+        publication_id:      null,
+        metric_date:         day,
+        views:               num('views') ?? 0,
+        likes:               num('likes') ?? 0,
+        shares:              num('shares') ?? 0,
+        subs_gained:         num('subscribersGained') ?? 0,
+        avg_view_duration_s: num('averageViewDuration'),
+        avg_view_pct:        num('averageViewPercentage'),
+        ctr_impressions:     null,
+      }, { onConflict: 'channel_id,metric_date', ignoreDuplicates: false });
+    if (!upErr) upserted++;
+  }
+  return { status: r.status, rows_upserted: upserted };
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as { property_id?: number; date?: string };
@@ -50,11 +126,15 @@ export async function POST(req: Request) {
       });
     }
 
-    // We know yt-analytics scope was NOT granted (per PBS · 2026-07-11 handover).
-    // Attempting the Analytics endpoint would 403. Skip it and fall back to Data API.
-    // If a future OAuth flow adds the scope, extend this route with a real analytics query.
+    // 1) CHANNEL-LEVEL Analytics API pull (scope granted at the 2026-07-27
+    //    reconnect). A 403 here means the token pre-dates the scope grant —
+    //    we record the status and continue with the per-video fallback.
+    let channelPull: ChannelPullResult = { status: 0, rows_upserted: 0, error: 'no_channel_id' };
+    if (tokRes.channel_id) {
+      channelPull = await pullChannelDaily(sb, tokRes.access_token, tokRes.channel_id, metric_date);
+    }
 
-    // Load last-30-day publications
+    // 2) PER-VIDEO FALLBACK (preserved behavior) — load last-30-day publications
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const { data: pubs } = await sb
       .from('v_yt_publications')
@@ -65,9 +145,12 @@ export async function POST(req: Request) {
     const pubRows = ((pubs ?? []) as PublicationRow[]).filter((r) => r.youtube_video_id);
     if (pubRows.length === 0) {
       return ok({
-        rows_inserted: 0,
-        skipped:       true,
-        reason:        'yt-analytics scope not granted; and no recent publications to snapshot',
+        rows_inserted:          0,
+        channel_rows_inserted:  channelPull.rows_upserted,
+        analytics_api_status:   channelPull.status,
+        analytics_api_error:    channelPull.error,
+        skipped:                channelPull.rows_upserted === 0,
+        reason:                 'no recent publications to snapshot (per-video layer)',
       });
     }
 
@@ -116,8 +199,11 @@ export async function POST(req: Request) {
 
     return ok({
       rows_inserted,
+      channel_rows_inserted: channelPull.rows_upserted,
+      analytics_api_status:  channelPull.status,
+      analytics_api_error:   channelPull.error,
       skipped: false,
-      note:    'Data API v3 snapshot fallback (yt-analytics scope not granted).',
+      note:    'channel-level Analytics API + per-publication Data API snapshot',
     });
   } catch (e) {
     return err('analytics_pull_crash', 500, { detail: String((e as Error).message ?? e).slice(0, 240) });
