@@ -132,20 +132,23 @@ export default function InventoryView({ rows, propertyName }: Props) {
       subtitle="Read-only discovery surface. Tiles flip red → green when frontend wires a view."
       tabs={tabs}
     >
-      <InventoryHeader
-        total={totals.total}
-        green={totals.green}
-        red={totals.red}
-        amber={totals.amber}
-        propertyName={propertyName}
-      />
+      {/* Full-width wrapper so header and filters span the entire grid row */}
+      <div style={fullWidthStyle}>
+        <InventoryHeader
+          total={totals.total}
+          green={totals.green}
+          red={totals.red}
+          amber={totals.amber}
+          propertyName={propertyName}
+        />
 
-      <InventoryFilters
-        tab={tab}
-        search={search} onSearch={setSearch}
-        property={property} onProperty={setProperty}
-        status={status} onStatus={setStatus}
-      />
+        <InventoryFilters
+          tab={tab}
+          search={search} onSearch={setSearch}
+          property={property} onProperty={setProperty}
+          status={status} onStatus={setStatus}
+        />
+      </div>
 
       {sections.length === 0 && (
         <Container title={TAB_LABELS[tab]} subtitle="No items match the current filters.">
@@ -196,6 +199,13 @@ export default function InventoryView({ rows, propertyName }: Props) {
     </DashboardPage>
   );
 }
+
+const fullWidthStyle: CSSProperties = {
+  gridColumn: '1 / -1',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 12,
+};
 
 const gridStyle: CSSProperties = {
   display: 'grid',
