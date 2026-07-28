@@ -195,8 +195,13 @@ export async function reviewCampaign(campaignId: string, triggeredBy: string): P
 
   await sb.rpc('fn_content_review_insert', {
     p_campaign_id: campaignId, p_verdict: verdict, p_score: score,
-    p_issues: issues as unknown as Record<string, unknown>[], p_triggered_by: triggeredBy,
+    p_issues: issues as unknown as Record<string, unknown>[],
+    // Version-stamped so every row proves which validator code produced it
+    // (a deploy-race made verdicts unattributable on 2026-07-28 — never again).
+    p_triggered_by: `${triggeredBy}·${VALIDATOR_VERSION}`,
   });
 
   return { verdict, score, issues };
 }
+
+export const VALIDATOR_VERSION = 'v1.1';
