@@ -3011,3 +3011,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - ## Bug #33 Fix: Tasks page belongs to Beyond Circle sub-navigation but clicking jumps to Namkhan menu  ### Root Cause The `app/cockpit/tasks/[id]/page.tsx` deta
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
+
+### 2026-07-28 — bug-agent · fix #65
+- ## Bug #65 — Duplicate KPI stripe on `/marketing/overview`  ### Root Cause `DashboardPage` renders its own `kpiTiles` prop as a KPI stripe inside `HeaderPills` 
+- touched `app/marketing/overview/page.tsx`
