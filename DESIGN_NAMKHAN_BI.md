@@ -3011,3 +3011,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - ## Bug #33 Fix: Tasks page belongs to Beyond Circle sub-navigation but clicking jumps to Namkhan menu  ### Root Cause The `app/cockpit/tasks/[id]/page.tsx` deta
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
+
+### 2026-07-28 — bug-agent · fix #37
+- # Bug #37 — `/cockpit-v2?tab=team` redirects to `/holding/it/cockpit` instead of `/holding/it/cockpit?tab=team`  ## Problem `app/cockpit-v2/page.tsx` performs a
+- touched `app/cockpit-v2/page.tsx`
