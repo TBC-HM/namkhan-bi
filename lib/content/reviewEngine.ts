@@ -36,7 +36,9 @@ const KNOWN_PLACEHOLDERS = new Set(['first_name', 'last_name', 'salutation', 'fu
 // True-liability language = hard fail. Everything else the LLM flags as
 // "legal" is a warning — poetic brand copy ("the river will remember you")
 // must never block a send (first sweep over-blocked 7 of 8 on this).
-const HARD_LEGAL = /guarantee[ds]?\b|full refund|money[- ]?back|100% (safe|secure)|medical|cure[sd]?\b|free of charge for life/i;
+// v1.3: leading \b on every term — 'cure[sd]?' was matching inside "seCUREd"
+// and hard-failing innocent DMC copy ("experiences you want to secure").
+const HARD_LEGAL = /\bguarantee[ds]?\b|\bfull refund\b|\bmoney[- ]?back\b|100% (safe|secure)|\bmedical\b|\bcure[sd]?\b|\bfree of charge for life\b/i;
 
 let __key: string | null = null;
 async function anthropicKey(): Promise<string> {
@@ -208,4 +210,4 @@ export async function reviewCampaign(campaignId: string, triggeredBy: string): P
   return { verdict, score, issues };
 }
 
-export const VALIDATOR_VERSION = 'v1.2';
+export const VALIDATOR_VERSION = 'v1.3';
