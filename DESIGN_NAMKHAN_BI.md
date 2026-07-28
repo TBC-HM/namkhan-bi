@@ -3012,6 +3012,6 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
 
-### 2026-07-28 — bug-agent · fix #43
-- # Bug #43 — Supabase page submenu missing  ## Root cause `InventoryView.tsx` passes `tabs` to `DashboardPage` using the `onSelect` callback pattern (no `href`).
-- touched `app/h/[property_id]/cockpit/supabase/components/InventoryView.tsx`
+### 2026-07-28 — bug-agent · fix #37
+- # Bug #37 — `/cockpit-v2?tab=team` redirects to `/holding/it/cockpit` instead of `/holding/it/cockpit?tab=team`  ## Problem `app/cockpit-v2/page.tsx` performs a
+- touched `app/cockpit-v2/page.tsx`
