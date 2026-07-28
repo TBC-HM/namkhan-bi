@@ -3023,3 +3023,8 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-07-28 — bug-agent · fix #70
 - ## Bug #70 — "Save and send" path does not work on New Contract page  ### Root cause  The route file is at `app/api/contracts/create/route.ts` and the `fetch` i
 - touched `app/api/contracts/create/route.ts`
+
+### 2026-07-28 — Quality Gate v1 (ADR-177 Phase 0)
+- lib/content/reviewEngine.ts: validator registry (placeholders, links vs policy + dead links, images vs policy + hero-required, subject/body formatting, past dates, CTA, LLM pass for spelling/grammar/tone/legal/factual) → marketing.content_reviews
+- Enqueue fns (broadcast + lifecycle) refuse recipients when latest review verdict = fail
+- /api/cron/newsletter-quality-sweep: nightly review of all scheduled campaigns + on-demand per campaign
