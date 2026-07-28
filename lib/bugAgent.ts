@@ -369,6 +369,30 @@ const PLANNER_SYSTEM = [
   '- Before using var(--status-*), read app/(cockpit)/_design/internal/tokens.css. If primitives like --status-green/amber/red/grey exist, alias semantic tokens to them (e.g. --status-success: var(--status-green)). If primitives are missing, add them with raw hex in the primitive layer, THEN alias semantics to those primitives — no raw hex in semantic tokens.',
 ].join('\n');
 
+// 2026-07-28 (drain convergence, standing builder): every needs_human exit must
+// park a multiple-choice question on the bug (canon rule 594). Bugs with
+// open_question leave v_bugs_ready_for_agent, so the drain converges instead of
+// re-running the same needs_human bug every batch (observed: bug 49 ran twice
+// in 20 min). Planner-provided questions win; otherwise a generic fallback
+// carries the concrete reason so /holding/bugs shows why (brief A7).
+async function storeNeedsHumanQuestion(bugId: number, reason: string, question?: string | null, options?: HumanOption[] | null): Promise<void> {
+  const q = (question && options && options.length)
+    ? { question, options, asked_by: 'bug-agent', asked_at: new Date().toISOString() }
+    : {
+        question: `The bug agent could not fix this bug automatically (${reason.slice(0, 200)}). What should happen?`,
+        options: [
+          { label: 'Send it back to the agent for one more try', consequence: 'Costs roughly $0.30 more and may hit the same blocker again' },
+          { label: 'I will fix it manually', consequence: 'The bug leaves the agent queue and waits for a human fix', recommended: true },
+          { label: 'Drop this bug', consequence: 'The bug is archived and nothing changes on the site' },
+        ],
+        asked_by: 'bug-agent',
+        asked_at: new Date().toISOString(),
+      };
+  try {
+    await (getSupabaseAdmin() as any).rpc('fn_set_bug_open_question', { p_bug_id: bugId, p_question: q });
+  } catch { /* question storage is best-effort; needs_human still lands */ }
+}
+
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null; reviewFeedback?: string }): Promise<PlannerResult> {
   const candidates = await guessCandidateFiles(bug);
   const contexts: Array<{ path: string; content: string }> = [];
@@ -624,14 +648,9 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     if (plan.skip_reason || plan.patches.length === 0) {
       // PBS 2026-07-27: store the structured multiple-choice question on the bug row
       // so the UI can render clickable options (fn_answer_bug_question consumes it).
-      try {
-        if (plan.human_question && plan.human_options?.length) {
-          await (getSupabaseAdmin() as any).rpc('fn_set_bug_open_question', {
-            p_bug_id: bug.id,
-            p_question: { question: plan.human_question, options: plan.human_options, asked_by: 'bug-agent', asked_at: new Date().toISOString() },
-          });
-        }
-      } catch { /* question storage is best-effort; needs_human still lands */ }
+      // 2026-07-28: ALWAYS store a question (fallback when planner omitted one) —
+      // see storeNeedsHumanQuestion for why (drain convergence).
+      await storeNeedsHumanQuestion(bug.id, plan.skip_reason ?? 'planner produced no patches', plan.human_question, plan.human_options);
       await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · ${plan.skip_reason ?? 'no patches'}${plan.human_question ? ` · Q: ${plan.human_question}` : ''}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
     }
@@ -650,6 +669,7 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
         const repairedPlan = await planBugFix({ ...bug, reviewFeedback: feedback });
         costUsd += repairedPlan.cost_usd;
         if (repairedPlan.patches.length === 0) {
+          await storeNeedsHumanQuestion(bug.id, `the planner gave up while fixing reviewer objections: ${currentReview.notes.slice(0, 160)}`);
           await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · replan${repairRound} produced no patches`);
           return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
         }
@@ -666,10 +686,12 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
         currentReview = repairedReview;
       }
       if (!converged) {
+        await storeNeedsHumanQuestion(bug.id, `the code reviewer did not approve after 2 repair rounds: ${currentReview.notes.slice(0, 160)}`);
         await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · 2 repair rounds exhausted · last verdict: ${currentReview.verdict}`);
         return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
       }
     } else if (review.verdict !== 'approve') {
+      await storeNeedsHumanQuestion(bug.id, `the code reviewer flagged this for human review: ${review.notes.slice(0, 160)}`);
       await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · reviewer said ${review.verdict}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
     }
@@ -787,8 +809,10 @@ export async function runAgentJob(opts: { bug_ids?: number[]; mode?: 'one' | 'dr
       break;
     }
     // G3: a full plan→ship→verify needs real runway; starting a bug with less
-    // than 60s guarantees an orphaned run. Leftover bugs stay eligible.
-    if (jobDeadlineMs - Date.now() < 60_000) {
+    // than 150s wastes a plan call killed at the route deadline (V3 objection
+    // 1: a plan call alone can exceed 60s — runs 108/111 burned spend and died
+    // mid-plan at the old 60s floor). Leftover bugs stay eligible.
+    if (jobDeadlineMs - Date.now() < 150_000) {
       processed.push({ bug_id: bug.id, ok: false, error: 'route_budget_exhausted — left for next drain (G3)' });
       break;
     }
