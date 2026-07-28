@@ -1,4 +1,4 @@
-id,
+{
   "regions": ["fra1"],
   "framework": "nextjs",
   "functions": {
