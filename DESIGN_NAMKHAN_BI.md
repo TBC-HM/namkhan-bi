@@ -3012,7 +3012,6 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
 
-### 2026-07-28 — bug-agent · fix #41
-- # Bug #41 — Supabase Inventory Page: Wiring & Hardcoded Values Audit  ## Findings  After reviewing all 8 candidate files:  ### 1. `page.tsx` — Hardcoded propert
-- touched `app/h/[property_id]/cockpit/supabase/components/InventoryDrawerBody.tsx`
-- touched `app/h/[property_id]/cockpit/supabase/components/InventoryFilters.tsx`
+### 2026-07-28 — bug-agent · fix #47
+- ## Bug #47 — `/cockpit-v2/deploys` should live under Holding IT menu  ### Problem The URL `https://namkhan-bi.vercel.app/cockpit-v2/deploys` is accessible but d
+- touched `app/cockpit-v2/deploys/page.tsx`
