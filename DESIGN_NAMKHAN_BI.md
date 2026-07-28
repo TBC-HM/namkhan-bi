@@ -3012,6 +3012,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
 
-### 2026-07-28 — bug-agent · fix #37
-- # Bug #37 — `/cockpit-v2?tab=team` redirects to `/holding/it/cockpit` instead of `/holding/it/cockpit?tab=team`  ## Problem `app/cockpit-v2/page.tsx` performs a
-- touched `app/cockpit-v2/page.tsx`
+### 2026-07-28 — bug-agent · fix #41
+- # Bug #41 — Supabase Inventory Page: Wiring & Hardcoded Values Audit  ## Findings  After reviewing all 8 candidate files:  ### 1. `page.tsx` — Hardcoded propert
+- touched `app/h/[property_id]/cockpit/supabase/components/InventoryDrawerBody.tsx`
+- touched `app/h/[property_id]/cockpit/supabase/components/InventoryFilters.tsx`
