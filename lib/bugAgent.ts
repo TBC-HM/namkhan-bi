@@ -62,7 +62,7 @@ async function getGhToken(): Promise<string> {
 
 export interface FilePatch { path: string; new_content: string; reasoning: string }
 export interface HumanOption { label: string; consequence: string; recommended?: boolean }
-export interface PlannerResult { plan_md: string; patches: FilePatch[]; skip_reason?: string; missing_files: string[]; cost_usd: number; human_question?: string; human_options?: HumanOption[] }
+export interface PlannerResult { plan_md: string; patches: FilePatch[]; skip_reason?: string; missing_files: string[]; cost_usd: number; human_question?: string; human_options?: HumanOption[]; candidates_total?: number; files_fetched?: number }
 export interface ReviewerResult { verdict: 'approve' | 'reject' | 'needs_human'; notes: string; reasons: string[]; cost_usd: number }
 
 interface RunPatch {
@@ -383,6 +383,9 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
       }
     } catch { /* skip missing */ }
   }
+  // 2026-07-28 (A1 evidence, verifier §0.V2): candidate resolution + initial
+  // fetch counts must appear in the run log so the ≥80% rate is gradable.
+  const initialFetched = contexts.length;
 
   function buildPrompt(ctxs: typeof contexts): string {
     const contextBlock = ctxs.length === 0
@@ -443,6 +446,8 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
     } catch { break; }
   }
 
+  plan.candidates_total = candidates.length;
+  plan.files_fetched = initialFetched;
   return plan;
 }
 
@@ -615,7 +620,7 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     await updateRun(runId, { phase: 'planning' }, `PLAN · calling Anthropic…`);
     let plan = await planBugFix(bug);
     costUsd += plan.cost_usd;
-    await updateRun(runId, { planner_out: plan }, `PLAN · patches=${plan.patches.length} skip=${plan.skip_reason ?? '—'}`);
+    await updateRun(runId, { planner_out: plan }, `PLAN · patches=${plan.patches.length} skip=${plan.skip_reason ?? '—'} · candidates=${plan.candidates_total ?? 0} fetched=${plan.files_fetched ?? 0}`);
     if (plan.skip_reason || plan.patches.length === 0) {
       // PBS 2026-07-27: store the structured multiple-choice question on the bug row
       // so the UI can render clickable options (fn_answer_bug_question consumes it).
