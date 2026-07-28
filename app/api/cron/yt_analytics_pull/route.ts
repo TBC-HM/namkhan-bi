@@ -9,7 +9,10 @@ export const dynamic = 'force-dynamic';
 const NAMKHAN_PROPERTY_ID = 260955;
 
 function authGate(req: Request): NextResponse | null {
-  const required = process.env.CRON_SECRET;
+  // 2026-07-28 (yt-completion brief): accept CRON_SHARED_SECRET — the secret
+  // pg_cron actually sends (brain-classify pattern). CRON_SECRET-only 401'd
+  // every scheduled fire of job 137.
+  const required = process.env.CRON_SHARED_SECRET ?? process.env.CRON_SECRET;
   if (!required) return null;
   const url = new URL(req.url);
   const provided = url.searchParams.get('secret') ?? req.headers.get('x-cron-secret') ?? '';
