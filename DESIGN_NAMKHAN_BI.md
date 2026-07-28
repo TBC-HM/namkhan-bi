@@ -3019,3 +3019,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-07-28 — bug-agent · fix #70
 - ## Bug #70 — "Save and send" path does not work on new contract page  ### Root cause  The `Submit` button's `onClick` calls `submit()` which correctly POSTs to 
 - touched `app/api/contracts/create/route.ts`
+
+### 2026-07-28 — bug-agent · fix #70
+- ## Bug #70 — "Save and send" path does not work on New Contract page  ### Root cause  The route file is at `app/api/contracts/create/route.ts` and the `fetch` i
+- touched `app/api/contracts/create/route.ts`
