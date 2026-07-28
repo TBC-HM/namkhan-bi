@@ -25,7 +25,7 @@ export const CCR_AGENTS: {
   { name: 'spec-pipeline-runner', schedule: '45 * * * *', what: 'intake, research, verify stages of the standing spec pipeline' },
   { name: 'module-builder', schedule: '15 * * * *', what: 'builds ONE ready brief per tick' },
   { name: 'module-completion-auditor', schedule: '10 */2 * * *', what: 'independent drift sweep over module completion', paused: true },
-  { name: 'platform-architect-gap-review', schedule: '0 6 * * 1', what: 'weekly architecture gap review' },
+  { name: 'platform-architect-gap-review', schedule: '0 1 * * 1', what: 'weekly architecture gap review' },
 ];
 
 export const CCR_READONLY_NOTE =
