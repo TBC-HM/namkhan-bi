@@ -181,59 +181,8 @@ export default async function MarketingOverviewPage({ propertyId }: PageProps = 
 
       {data && (
         <>
-          {/* A · KPI STRIP */}
-          <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-            <Kpi
-              label="Media library"
-              value={nfmt(data.mediaTotal)}
-              caption={`assets across ${data.mediaTierCount} tier${data.mediaTierCount === 1 ? '' : 's'}`}
-              href="/marketing/media"
-            />
-            {data.yt ? (
-              <Kpi
-                label="YT channel"
-                value={nfmt(data.yt.subscriber_count ?? 0)}
-                caption={`${data.yt.channel_title ?? 'connected'} subs`}
-                href="/marketing/youtube"
-              />
-            ) : (
-              <Kpi
-                label="YT channel"
-                value="—"
-                caption="not connected"
-                href="/marketing/youtube"
-                actionLabel="Connect"
-              />
-            )}
-            <Kpi
-              label="Reviews"
-              value={nfmt(reviewsTotal)}
-              caption={data.avg30d != null ? `avg ${data.avg30d.toFixed(2)} last 30d` : 'no reviews in last 30d'}
-              href="/marketing/reviews"
-            />
-            <Kpi
-              label="Social accounts"
-              value={nfmt(data.socialRows.length)}
-              caption={data.socialRows.slice(0, 3).map(s => s.platform).filter(Boolean).join(', ') || '—'}
-              href="/marketing/social"
-            />
-            <Kpi
-              label="Active campaigns"
-              value={nfmt(data.campaignsTotal)}
-              caption={data.campaignsTotal === 0 ? 'none yet' : 'total on file'}
-              href={data.campaignsTotal === 0 ? '/marketing/campaigns/new' : '/marketing/campaigns'}
-              actionLabel={data.campaignsTotal === 0 ? 'Create' : undefined}
-            />
-            <Kpi
-              label="YT this month"
-              value={nfmt(data.ytPubsMonth)}
-              caption={data.ytPubsMonth === 0 ? 'nothing published yet' : `${nfmt(data.ytPubsTotal)} total`}
-              href="/marketing/youtube"
-            />
-          </div>
-
           {/* B · THREE-COLUMN BODY */}
-          <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 10, marginTop: 10 }}>
+          <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 10 }}>
 
             {/* Column 1 · Content pipeline */}
             <Container title="Content pipeline" subtitle="latest master-tier assets" density="compact">
