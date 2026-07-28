@@ -178,9 +178,13 @@ export async function reviewCampaign(campaignId: string, triggeredBy: string): P
       for (const s of (parsed.spelling ?? []).slice(0, 5)) issues.push({ validator: 'spelling', severity: 'warn', message: s });
       for (const g of (parsed.grammar ?? []).slice(0, 5)) issues.push({ validator: 'grammar', severity: 'warn', message: g });
       if (parsed.tone_ok === false) issues.push({ validator: 'brand-tone', severity: 'warn', message: parsed.tone_notes ?? 'Off brand voice' });
+      // Severity decided by the CAMPAIGN TEXT, never the LLM's commentary —
+      // the commentary itself says "cannot be guaranteed", which kept
+      // matching the liability regex and re-failing poetic copy (v1.1 bug).
+      const campaignHardLegal = HARD_LEGAL.test(`${subject}\n${body}`);
       for (const lRaw of (parsed.legal_flags ?? []).slice(0, 5)) {
         const l = typeof lRaw === 'string' ? lRaw : JSON.stringify(lRaw);
-        issues.push({ validator: 'legal', severity: HARD_LEGAL.test(l) ? 'fail' : 'warn', message: l.slice(0, 300) });
+        issues.push({ validator: 'legal', severity: campaignHardLegal ? 'fail' : 'warn', message: l.slice(0, 300) });
       }
       for (const f of (parsed.factual_flags ?? []).slice(0, 5)) issues.push({ validator: 'factual', severity: 'warn', message: `Verify: ${f}` });
     }
@@ -204,4 +208,4 @@ export async function reviewCampaign(campaignId: string, triggeredBy: string): P
   return { verdict, score, issues };
 }
 
-export const VALIDATOR_VERSION = 'v1.1';
+export const VALIDATOR_VERSION = 'v1.2';
