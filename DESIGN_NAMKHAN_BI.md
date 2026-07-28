@@ -3012,6 +3012,6 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
 
-### 2026-07-28 — bug-agent · fix #47
-- ## Bug #47 — `/cockpit-v2/deploys` should live under Holding IT menu  ### Problem The URL `https://namkhan-bi.vercel.app/cockpit-v2/deploys` is accessible but d
-- touched `app/cockpit-v2/deploys/page.tsx`
+### 2026-07-28 — bug-agent · fix #46
+- ## Bug #46 – Fix: Replace all hardcoded hex in JSX status indicators with design-system tokens  The reviewer rejected the previous patch because JSX `style={}` 
+- touched `app/holding/it/cockpit/deploys/DeploysView.tsx`
