@@ -32,6 +32,7 @@
 //     maxDuration), and finalizeOrphanRuns() (called from the 5-min
 //     bugs/sweep cron, STEP C) closes runs killed mid-flight by Vercel:
 //     branch shipped → single check probe → done/failed; no branch → failed.
+//   - ADR-175 tightening (run 86): auto-merge requires ci_ok === true.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropicTool } from '@/lib/mail/anthropic';
@@ -693,9 +694,13 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     const fixLink = ship.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${ship.branch}`;
     const fixLabel = ship.pr_number ? `PR #${ship.pr_number}` : `branch: ${ship.branch}`;
     if (success) {
-      // ADR-175: verified + reviewer-approved + unprotected → the loop merges its own PR
+      // ADR-175: verified + reviewer-approved + unprotected → the loop merges its own PR.
+      // 2026-07-28 tightening (run 86 lesson): "verify green" means the typecheck
+      // gate CONCLUDED success (ci_ok === true) — not merely "didn't fail yet".
+      // ci_pending_timeout / skipped_no_ci runs still close as done (D2), but
+      // their PRs await PBS merge instead of auto-merging on an unconcluded gate.
       let merged = false;
-      if (ship.pr_number) merged = await tryAutoMerge(ship.pr_number, plan.patches, runId);
+      if (ship.pr_number && verify.ci_ok === true) merged = await tryAutoMerge(ship.pr_number, plan.patches, runId);
       await markBug(bug.id, { status: 'done', started_at: new Date().toISOString(), done_at: new Date().toISOString(), fix_link: fixLink, fix_label: merged ? `${fixLabel} · auto-merged` : fixLabel });
       await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, (merged ? `DONE · auto-merged (ADR-175)` : (ship.pr_url ? `DONE · PR awaits PBS merge (protected/oversize/switch-off)` : `DONE · branch ready — open PR manually`)) + ` · verify=${verify.verify_tag}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'done', cost_usd: costUsd };
