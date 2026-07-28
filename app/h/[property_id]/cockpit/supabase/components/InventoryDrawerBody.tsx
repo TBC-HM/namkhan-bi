@@ -70,5 +70,5 @@ const S: Record<string, CSSProperties> = {
   sectionTitle: { margin: 0, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-soft, #5A5A5A)', fontWeight: 600 },
   list: { margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 },
   listItem: { fontSize: 12, color: 'var(--ink, #1B1B1B)', fontFamily: 'var(--mono, ui-monospace, monospace)', wordBreak: 'break-all' },
-  pre: { margin: 0, fontSize: 11, color: 'var(--ink, #1B1B1B)', background: 'var(--bg, #F4EFE2)', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4, padding: 12, overflow: 'auto', maxHeight: 320, fontFamily: 'var(--mono, ui-monospace, monospace)' },
+  pre: { margin: 0, fontSize: 11, color: 'var(--ink, #1B1B1B)', background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4, padding: 12, overflow: 'auto', maxHeight: 320, fontFamily: 'var(--mono, ui-monospace, monospace)' },
 };
