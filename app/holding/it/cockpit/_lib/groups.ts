@@ -8,6 +8,8 @@
 // brief module-doc-architecture-memory-v1: doc diffs · ADR threads · rule consolidation · why-search).
 // Label is "Platform Memory" (NOT "Memory") — Fleet already has a Memory sub-tab
 // (/holding/it/cockpit/knowledge, the agent-memory browser).
+// 2026-07-28 v7: Knowledge group — added Releases sub-tab (rule 597 doc release
+// law, brief documentation-architecture-v2: platform + module release ledger).
 
 import type { DashboardTab } from '@/app/(cockpit)/_design/types';
 
@@ -37,6 +39,7 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it/cockpit/goals',    label: 'Goals' },
       { href: '/holding/it/cockpit/design',   label: 'Design' },
       { href: '/holding/it/cockpit/memory',   label: 'Platform Memory' },
+      { href: '/holding/it/cockpit/releases', label: 'Releases' },
       { href: '/holding/it/cockpit/schemas',  label: 'Schemas' },
       { href: '/holding/it/cockpit/freshness',label: 'Freshness' },
       { href: '/holding/it/cockpit/university',label: 'University' },
