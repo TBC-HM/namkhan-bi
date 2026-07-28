@@ -41,9 +41,15 @@ export async function POST(req: NextRequest) {
 
   if (!v2Enabled()) {
     // Legacy path: same handler the button called before the A11 rewire.
+    // PBS 2026-07-28 (bug: "Error: auth required" on Refine) — this internal
+    // server-side fetch reached the middleware WITHOUT the user's session
+    // cookies, so our own proxy call got 401'd. Forward the cookie header.
     const r = await fetch(`${req.nextUrl.origin}/api/marketing/email/refine-block`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        cookie: req.headers.get('cookie') ?? '',
+      },
       body: JSON.stringify({ kind: 'newsletter_campaign', id: campaign_id, instruction }),
     });
     const j = await r.json().catch(() => ({ ok: false, error: `legacy_http_${r.status}` }));
