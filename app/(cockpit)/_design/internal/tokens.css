@@ -1,37 +1,52 @@
-/* Cockpit design system v5 — scoped tokens.
- * Applied via <div className="cockpit-design"> wrapper in DashboardPage.
- * Legacy /h/[id] pages (Namkhan-dark theme) are untouched outside this scope.
- */
+/* ─── Cockpit Design System · Token Primitives + Semantics ─── */
 
-.cockpit-design {
-  --bg:           #F4EFE2;
-  --primary:      #1F3A2E;
-  --primary-fg:   #FFFFFF;
-  --sand:         #B8A878;
-  --terracotta:   #B8542A;
-  --ink:          #1B1B1B;
-  --ink-soft:     #5A5A5A;
-  --hairline:     #E6DFCC;
-  --paper:        #FFFFFF;
+:root {
+  /* ── Palette primitives ── */
+  --color-white:        #FFFFFF;
+  --color-ink:          #1B1B1B;
+  --color-ink-soft:     #5A5A5A;
+  --color-hairline:     #E6DFCC;
+  --color-brand-green:  #084838;
 
-  --status-green: #2E7D32;
-  --status-amber: #B8A878;
-  --status-red:   #B8542A;
-  --status-grey:  #8A8A8A;
+  /* Status primitive colours */
+  --color-grey-500:     #5A5A5A;
+  --color-blue-500:     #2C6CF6;
+  --color-amber-600:    #B47A1F;
+  --color-purple-600:   #8047A0;
+  --color-green-700:    #1F5C2C;
+  --color-red-600:      #B04A2F;
+  --color-grey-400:     #9AA0A6;
+  --color-grey-100:     #F4F4EE;
 
-  background: var(--bg);
-  color: var(--ink);
-  font-feature-settings: 'tnum' 1;
-}
+  /* Status semantic aliases (KpiTile data-status) */
+  --status-green:   var(--color-green-700);
+  --status-amber:   var(--color-amber-600);
+  --status-red:     var(--color-red-600);
+  --status-grey:    var(--color-grey-500);
 
-/* Tabular numerals everywhere inside the cockpit design subtree. */
-.cockpit-design .tnum,
-.cockpit-design [data-tnum] {
-  font-variant-numeric: tabular-nums;
-}
+  /* Semantic success/error/warning for general use */
+  --status-success: var(--status-green);
+  --status-error:   var(--status-red);
+  --status-warning: var(--status-amber);
 
-/* Skeleton shimmer keyframes (used by Skeleton.tsx). */
-@keyframes tbc-skeleton {
-  0%   { background-position: 0% 0%; }
-  100% { background-position: -200% 0%; }
+  /* ── Ticket status badge semantic tokens ── */
+  /* Background colours */
+  --status-ticket-new-bg:           var(--color-grey-500);
+  --status-ticket-triaging-bg:      var(--color-grey-500);
+  --status-ticket-triaged-bg:       var(--color-blue-500);
+  --status-ticket-working-bg:       var(--color-amber-600);
+  --status-ticket-awaits-user-bg:   var(--color-purple-600);
+  --status-ticket-completed-bg:     var(--color-green-700);
+  --status-ticket-triage-failed-bg: var(--color-red-600);
+  --status-ticket-blocked-bg:       var(--color-red-600);
+  --status-ticket-archived-bg:      var(--color-grey-400);
+  /* Foreground for badges (always white-on-dark) */
+  --status-ticket-fg:               var(--color-white);
+
+  /* Audit log outcome colours */
+  --audit-success-color: var(--color-green-700);
+  --audit-failure-color: var(--color-red-600);
+
+  /* Hover surface */
+  --surface-hover: var(--color-grey-100);
 }
