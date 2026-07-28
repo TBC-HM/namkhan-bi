@@ -22,6 +22,16 @@
 //   - Monthly spend cap: $50/mo (PBS approved 2026-07-27) enforced against
 //     public.ai_token_meter (measured cost, ADR-169) — not the flat estimates.
 //   - refreshCodeIndex() exported for /api/cron/bug-agent-index-refresh.
+// 2026-07-28 (standing builder, verifier objections G1+G3 on the same brief):
+//   - G1: the CI gate is ONLY the typecheck check-run(s) (tsc/typecheck names).
+//     Advisory checks (design-doc-check et al.) and commit statuses are
+//     informational — run 70's good fix was killed by design-doc-check:failure
+//     while tsc was still in_progress. Spec-conformance per §0.R R2.
+//   - G3: verify poll budget is clamped to the route's remaining lifetime
+//     (runAgentJob passes a job deadline; ROUTE_BUDGET_MS=280s of the 300s
+//     maxDuration), and finalizeOrphanRuns() (called from the 5-min
+//     bugs/sweep cron, STEP C) closes runs killed mid-flight by Vercel:
+//     branch shipped → single check probe → done/failed; no branch → failed.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropicTool } from '@/lib/mail/anthropic';
@@ -150,6 +160,16 @@ async function ghOpenPR(branch: string, title: string, body: string): Promise<{ 
   }
   return await r.json() as { number: number; html_url: string };
 }
+// 2026-07-28 (G1, verifier objection on brief autospec-bug_agent_module-20260725):
+// the GATE is the typecheck check-run(s) ONLY — `tsc --noEmit` from
+// .github/workflows/typecheck.yml (fires on push to every branch) and the CI
+// job that embeds a typecheck. Advisory checks (design-doc-check is
+// continue-on-error yet still reports conclusion=failure) and commit
+// STATUSES (Vercel deploy states) are INFORMATIONAL: they go in the note,
+// they never fail the run. Run 70's good 1-file fix was killed by
+// design-doc-check:failure while tsc was still in_progress — spec §0.R R2
+// named the typecheck check-run as THE gate all along.
+const GATE_CHECK_RE = /tsc|typecheck/i;
 async function ghGetCheckStatus(sha: string): Promise<{ ci_ok: boolean | null; checks_count: number; note: string }> {
   const [runsR, statusR] = await Promise.all([
     ghFetch(`/repos/${GH_REPO}/commits/${sha}/check-runs`),
@@ -157,14 +177,17 @@ async function ghGetCheckStatus(sha: string): Promise<{ ci_ok: boolean | null; c
   ]);
   const runs = runsR.ok ? await runsR.json() as { check_runs: Array<{ name: string; conclusion: string | null; status: string }> } : { check_runs: [] };
   const status = statusR.ok ? await statusR.json() as { state: string } : { state: 'pending' };
-  const checksCount = runs.check_runs.length;
-  // 2026-07-27 (D2): an explicit check-run failure decides immediately, even
-  // while other checks are still pending — never wait out the window to fail.
-  const anyFail = runs.check_runs.some((c) => c.conclusion && c.conclusion !== 'success' && c.conclusion !== 'skipped' && c.conclusion !== 'neutral') || status.state === 'failure' || status.state === 'error';
-  if (anyFail) return { ci_ok: false, checks_count: checksCount, note: `checks=${runs.check_runs.map((c) => `${c.name}:${c.conclusion ?? c.status}`).join('|')} status=${status.state}` };
-  const anyPending = runs.check_runs.some((c) => c.status === 'in_progress' || c.status === 'queued') || status.state === 'pending';
-  if (anyPending || checksCount === 0) return { ci_ok: null, checks_count: checksCount, note: `${checksCount} runs, github-status=${status.state}` };
-  return { ci_ok: true, checks_count: checksCount, note: `checks=${runs.check_runs.map((c) => `${c.name}:${c.conclusion ?? c.status}`).join('|')} status=${status.state}` };
+  const gates = runs.check_runs.filter((c) => GATE_CHECK_RE.test(c.name));
+  const info = runs.check_runs.filter((c) => !GATE_CHECK_RE.test(c.name));
+  const fmt = (arr: Array<{ name: string; conclusion: string | null; status: string }>) => arr.map((c) => `${c.name}:${c.conclusion ?? c.status}`).join('|');
+  const note = `gate=${fmt(gates) || '(none)'} · info=${fmt(info) || '(none)'} · github-status=${status.state}`;
+  // D2 + G1: an explicit GATE failure decides immediately, even while other
+  // checks are still pending — and ONLY a gate failure can fail the run.
+  const gateFail = gates.some((c) => c.conclusion && c.conclusion !== 'success' && c.conclusion !== 'skipped' && c.conclusion !== 'neutral');
+  if (gateFail) return { ci_ok: false, checks_count: gates.length, note };
+  const gatePending = gates.some((c) => c.status === 'in_progress' || c.status === 'queued');
+  if (gatePending || gates.length === 0) return { ci_ok: null, checks_count: gates.length, note };
+  return { ci_ok: true, checks_count: gates.length, note };
 }
 
 // 2026-07-27 — full repo tree (app/** + lib/** TS files), cached per lambda
@@ -570,7 +593,13 @@ async function verifyDeploy(commitSha: string, pageUrl: string | null, budgetMs 
   return { ci_ok: ciOk, checks_seen: checksSeen, curl_status: curlStatus, curl_body_ok: curlBodyOk, verify_tag: verifyTag, note: `verify=${verifyTag} · ${note}` };
 }
 
-export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }, triggeredBy: string, verifyBudgetMs = 240_000): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
+// 2026-07-28 (G3): jobDeadlineMs is the epoch-ms deadline of the CALLING
+// ROUTE (maxDuration minus headroom). The verify poll is clamped to what is
+// left of the route's lifetime so Vercel never kills the lambda mid-verify
+// and strands the run in a non-terminal phase (run 71: phase=verifying,
+// ended_at null, forever). Running out of window is NOT a failure — the run
+// closes as done + ci_pending_timeout per D2.
+export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }, triggeredBy: string, verifyBudgetMs = 240_000, jobDeadlineMs?: number): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
   const sb = getSupabaseAdmin();
   const initialLog = `START · bug=${bug.id} url=${bug.page_url ?? '(none)'}`;
   const { data: rpcData, error: insErr } = await sb.rpc('fn_bug_agent_run_insert', {
@@ -649,8 +678,12 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
       ? `SHIP · PR #${ship.pr_number} → ${ship.pr_url}`
       : `SHIP · branch=${ship.branch} commit=${ship.commit_sha.slice(0,8)} · PR open BLOCKED: ${ship.pr_error} (open manually via: gh pr create --head ${ship.branch})`
     );
-    await updateRun(runId, { phase: 'verifying' }, `VERIFY · polling CI (typecheck) · budget=${Math.round(verifyBudgetMs / 1000)}s…`);
-    const verify = await verifyDeploy(ship.commit_sha, bug.page_url, verifyBudgetMs);
+    // G3: never poll past the route's remaining lifetime (15s close-out
+    // reserve; floor 20s = at least one probe + one retry).
+    const remainingMs = jobDeadlineMs ? jobDeadlineMs - Date.now() : Number.MAX_SAFE_INTEGER;
+    const effectiveVerifyMs = Math.max(20_000, Math.min(verifyBudgetMs, remainingMs - 15_000));
+    await updateRun(runId, { phase: 'verifying' }, `VERIFY · polling CI gate (typecheck) · budget=${Math.round(effectiveVerifyMs / 1000)}s…`);
+    const verify = await verifyDeploy(ship.commit_sha, bug.page_url, effectiveVerifyMs);
     await updateRun(runId, { verifier_out: verify }, `VERIFY · ci_ok=${verify.ci_ok} curl=${verify.curl_status} body_ok=${verify.curl_body_ok} · ${verify.note}`);
     // 2026-07-27 (D2): ONLY an explicit CI failure fails the run. Missing/
     // pending CI → done + verify tag. Curl is informational (prod deploy of
@@ -718,6 +751,11 @@ export async function runAgentJob(opts: { bug_ids?: number[]; mode?: 'one' | 'dr
   const mode = opts.mode ?? 'one';
   const max = Math.min(Math.max(1, opts.max ?? 1), 3);
   const triggeredBy = opts.triggered_by ?? 'manual';
+  // G3 (2026-07-28): both calling routes declare maxDuration=300. Budget the
+  // whole job at 280s so every picked bug reaches a TERMINAL phase before
+  // Vercel kills the lambda; bugs left over stay eligible for the next drain.
+  const ROUTE_BUDGET_MS = 280_000;
+  const jobDeadlineMs = Date.now() + ROUTE_BUDGET_MS;
   // Monthly ceiling check BEFORE picking work (R1) — measured cost, not estimates.
   let mtdSpend = await monthToDateSpendUsd();
   if (mtdSpend >= MONTHLY_COST_CAP_USD) {
@@ -738,13 +776,76 @@ export async function runAgentJob(opts: { bug_ids?: number[]; mode?: 'one' | 'dr
       processed.push({ bug_id: bug.id, ok: false, error: `cost_cap_monthly_reached ($${(mtdSpend + totalCost).toFixed(2)} of $${MONTHLY_COST_CAP_USD}/mo)` });
       break;
     }
-    const r = await runOneBug(bug, triggeredBy, verifyBudgetMs);
+    // G3: a full plan→ship→verify needs real runway; starting a bug with less
+    // than 60s guarantees an orphaned run. Leftover bugs stay eligible.
+    if (jobDeadlineMs - Date.now() < 60_000) {
+      processed.push({ bug_id: bug.id, ok: false, error: 'route_budget_exhausted — left for next drain (G3)' });
+      break;
+    }
+    const r = await runOneBug(bug, triggeredBy, verifyBudgetMs, jobDeadlineMs);
     processed.push(r);
     totalCost += r.cost_usd ?? 0;
     // Re-read measured MTD between bugs — other sessions/agents meter too.
     mtdSpend = await monthToDateSpendUsd();
   }
   return { ok: true, mode, cost_usd: totalCost, mtd_spend_usd: Number(mtdSpend.toFixed(2)), processed };
+}
+
+// ---------- Orphan-run finalizer (G3, 2026-07-28 · called from bugs/sweep STEP C) ----------
+// A run stranded in a non-terminal phase with ended_at NULL means Vercel
+// killed the lambda mid-flight (run 71's failure mode). Self-heal job 149
+// only re-queues *failed* runs — it never sees these. Every 5 min the sweep
+// finalizes any latest-per-bug run stuck >10 min:
+//   - branch shipped (commit_sha set): ONE check-status probe, no polling —
+//     gate failed → failed; gate passed / still pending / absent → done with
+//     verify=ci_passed | orphaned_timeout (a missing verdict is not a failure,
+//     D2). Bug row closed exactly like runOneBug's paths (no auto-merge —
+//     the finalizer is conservative; PBS or the next full run merges).
+//   - no branch: died in plan/review → failed + orphaned_timeout; bug row
+//     untouched (stays eligible for a fresh run after the 4h window).
+// Reads v_bug_agent_runs_latest (latest run per bug — an orphan superseded by
+// a newer run for the same bug is invisible there, acceptable: the bug itself
+// is unstuck by definition in that case).
+export async function finalizeOrphanRuns(opts: { olderThanMin?: number } = {}): Promise<{ ok: boolean; finalized: Array<{ run_id: number; bug_id: number; outcome: string }>; error?: string }> {
+  const olderThanMin = Math.max(5, opts.olderThanMin ?? 10);
+  const sb = getSupabaseAdmin();
+  const cutoffIso = new Date(Date.now() - olderThanMin * 60_000).toISOString();
+  const OPEN_PHASES = ['planning', 'reviewing', 'replanning', 'shipping', 'verifying'];
+  const { data, error } = await sb
+    .from('v_bug_agent_runs_latest')
+    .select('id, bug_id, phase, branch, pr_url, commit_sha, started_at, ended_at')
+    .is('ended_at', null)
+    .in('phase', OPEN_PHASES)
+    .lt('started_at', cutoffIso)
+    .limit(10);
+  if (error) return { ok: false, finalized: [], error: error.message };
+  const finalized: Array<{ run_id: number; bug_id: number; outcome: string }> = [];
+  for (const run of (data ?? []) as Array<{ id: number; bug_id: number; phase: string; branch: string | null; pr_url: string | null; commit_sha: string | null }>) {
+    const nowIso = new Date().toISOString();
+    try {
+      if (run.commit_sha) {
+        const s = await ghGetCheckStatus(run.commit_sha);
+        if (s.ci_ok === false) {
+          await markBug(run.bug_id, { status: 'acked', fix_link: run.pr_url ?? (run.branch ? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${run.branch}` : null), fix_label: run.branch ? `branch: ${run.branch}` : null });
+          await updateRun(run.id, { phase: 'failed', ended_at: nowIso, error: `verify_failed: orphan finalizer · ${s.note.slice(0, 250)}` }, `ORPHAN-FINALIZE · route killed mid-run · CI gate failed`);
+          finalized.push({ run_id: run.id, bug_id: run.bug_id, outcome: 'failed' });
+        } else {
+          const tag = s.ci_ok === true ? 'ci_passed' : 'orphaned_timeout';
+          const fixLink = run.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${run.branch}`;
+          const fixLabel = run.pr_url ? 'PR (orphan-finalized)' : `branch: ${run.branch}`;
+          await markBug(run.bug_id, { status: 'done', started_at: nowIso, done_at: nowIso, fix_link: fixLink, fix_label: fixLabel });
+          await updateRun(run.id, { phase: 'done', ended_at: nowIso }, `ORPHAN-FINALIZE · route killed mid-run · verify=${tag} · ${s.note.slice(0, 250)}`);
+          finalized.push({ run_id: run.id, bug_id: run.bug_id, outcome: 'done' });
+        }
+      } else {
+        await updateRun(run.id, { phase: 'failed', ended_at: nowIso, error: 'orphaned_timeout — route killed before ship (G3)' }, `ORPHAN-FINALIZE · died in ${run.phase} with no branch → failed; bug stays eligible`);
+        finalized.push({ run_id: run.id, bug_id: run.bug_id, outcome: 'failed' });
+      }
+    } catch (e) {
+      finalized.push({ run_id: run.id, bug_id: run.bug_id, outcome: `error: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120) });
+    }
+  }
+  return { ok: true, finalized };
 }
 
 // ---------- Code index refresh (brief §2 — nightly, /api/cron/bug-agent-index-refresh) ----------
