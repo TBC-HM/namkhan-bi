@@ -686,9 +686,26 @@ function assembleUserPrompt(
   return parts.join('\n');
 }
 
+// PBS 2026-07-28 — key from vault first, env fallback (same pattern as
+// lib/mail/anthropic). Prod has NO env ANTHROPIC_API_KEY: with env-only
+// resolution the v2 engine would die the moment NEWSLETTER_V2_ENABLED
+// turns on ('anthropic_api_key_missing').
+let __cachedEngineKey: string | null = null;
+async function getEngineAnthropicKey(): Promise<string> {
+  if (__cachedEngineKey) return __cachedEngineKey;
+  let key = process.env.ANTHROPIC_API_KEY || '';
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabaseAdmin');
+    const { data, error } = await getSupabaseAdmin().rpc('fn_get_secret', { p_name: 'ANTHROPIC_API_KEY' });
+    if (!error && typeof data === 'string' && data.length > 20) key = data;
+  } catch { /* keep env fallback */ }
+  if (!key) throw new Error('anthropic_api_key_missing (vault + env)');
+  __cachedEngineKey = key;
+  return key;
+}
+
 async function callAnthropic(system: string, userPrompt: string, maxTokens = 1600): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error('anthropic_api_key_missing');
+  const key = await getEngineAnthropicKey();
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
