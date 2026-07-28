@@ -27,6 +27,15 @@ export function getSupabaseAdmin(): SupabaseClient {
   }
   cached = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    // PBS 2026-07-28 — CRITICAL: Next.js caches GET fetches inside route
+    // handlers by default (Data Cache). supabase-js reads were being served
+    // STALE — the quality gate kept "seeing" a campaign body fixed 40 min
+    // earlier (bug-114-adjacent class). The admin client must NEVER read
+    // cached data: force no-store on every request.
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, cache: 'no-store' }),
+    },
   });
   return cached;
 }
