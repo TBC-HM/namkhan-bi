@@ -3011,3 +3011,8 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - ## Bug #33 Fix: Tasks page belongs to Beyond Circle sub-navigation but clicking jumps to Namkhan menu  ### Root Cause The `app/cockpit/tasks/[id]/page.tsx` deta
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
+
+### 2026-07-28 — bug-agent · fix #41
+- # Bug #41 — Supabase Inventory Page: Wiring & Hardcoded Values Audit  ## Findings  After reviewing all 8 candidate files:  ### 1. `page.tsx` — Hardcoded propert
+- touched `app/h/[property_id]/cockpit/supabase/components/InventoryDrawerBody.tsx`
+- touched `app/h/[property_id]/cockpit/supabase/components/InventoryFilters.tsx`
