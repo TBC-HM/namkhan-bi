@@ -28,7 +28,15 @@ export interface ReviewResult {
   issues: ReviewIssue[];
 }
 
-const KNOWN_PLACEHOLDERS = new Set(['first_name', 'full_name', 'last_name', 'booking_code', 'booking_url']);
+// Exactly the fields the send-batch edge fn substitutes (verified 2026-07-28
+// against send-newsletter-batch source). Unknown tokens are STRIPPED in the
+// body (leaving text holes) and rendered literally in subjects.
+const KNOWN_PLACEHOLDERS = new Set(['first_name', 'last_name', 'salutation', 'full_name', 'booking_code', 'booking_url']);
+
+// True-liability language = hard fail. Everything else the LLM flags as
+// "legal" is a warning — poetic brand copy ("the river will remember you")
+// must never block a send (first sweep over-blocked 7 of 8 on this).
+const HARD_LEGAL = /guarantee[ds]?\b|full refund|money[- ]?back|100% (safe|secure)|medical|cure[sd]?\b|free of charge for life/i;
 
 let __key: string | null = null;
 async function anthropicKey(): Promise<string> {
@@ -170,7 +178,10 @@ export async function reviewCampaign(campaignId: string, triggeredBy: string): P
       for (const s of (parsed.spelling ?? []).slice(0, 5)) issues.push({ validator: 'spelling', severity: 'warn', message: s });
       for (const g of (parsed.grammar ?? []).slice(0, 5)) issues.push({ validator: 'grammar', severity: 'warn', message: g });
       if (parsed.tone_ok === false) issues.push({ validator: 'brand-tone', severity: 'warn', message: parsed.tone_notes ?? 'Off brand voice' });
-      for (const l of (parsed.legal_flags ?? []).slice(0, 5)) issues.push({ validator: 'legal', severity: 'fail', message: l });
+      for (const lRaw of (parsed.legal_flags ?? []).slice(0, 5)) {
+        const l = typeof lRaw === 'string' ? lRaw : JSON.stringify(lRaw);
+        issues.push({ validator: 'legal', severity: HARD_LEGAL.test(l) ? 'fail' : 'warn', message: l.slice(0, 300) });
+      }
       for (const f of (parsed.factual_flags ?? []).slice(0, 5)) issues.push({ validator: 'factual', severity: 'warn', message: `Verify: ${f}` });
     }
   } catch (e) {
