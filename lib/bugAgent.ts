@@ -809,8 +809,10 @@ export async function runAgentJob(opts: { bug_ids?: number[]; mode?: 'one' | 'dr
       break;
     }
     // G3: a full plan→ship→verify needs real runway; starting a bug with less
-    // than 60s guarantees an orphaned run. Leftover bugs stay eligible.
-    if (jobDeadlineMs - Date.now() < 60_000) {
+    // than 150s wastes a plan call killed at the route deadline (V3 objection
+    // 1: a plan call alone can exceed 60s — runs 108/111 burned spend and died
+    // mid-plan at the old 60s floor). Leftover bugs stay eligible.
+    if (jobDeadlineMs - Date.now() < 150_000) {
       processed.push({ bug_id: bug.id, ok: false, error: 'route_budget_exhausted — left for next drain (G3)' });
       break;
     }
