@@ -73,29 +73,7 @@ function statusFor(varPct: number | null): 'green' | 'amber' | 'red' | 'grey' {
   return 'red';
 }
 
-// PBS bug #114 — prod shows only an opaque digest. Never swallow: run the
-// real page in a try/catch and render the actual exception inline so the
-// next reload tells us exactly what broke. Remove once #114 is closed.
-export default async function FinancePlanningPage(props: {
-  params: { property_id: string };
-  searchParams?: { mo?: string };
-}) {
-  try {
-    return await FinancePlanningPageInner(props);
-  } catch (e) {
-    const err = e instanceof Error ? e : new Error(String(e));
-    return (
-      <div style={{ padding: 32, fontFamily: 'monospace', fontSize: 13, color: '#B04A2F' }}>
-        <h2 style={{ color: '#1B1B1B' }}>FP&C page failed — diagnostic (bug #114)</h2>
-        <p><b>{err.name}:</b> {err.message}</p>
-        <pre style={{ whiteSpace: 'pre-wrap', fontSize: 11, color: '#5A5A5A' }}>{(err.stack ?? '').split('\n').slice(0, 12).join('\n')}</pre>
-        <p style={{ color: '#1B1B1B' }}>Screenshot this and it goes straight into the fix.</p>
-      </div>
-    );
-  }
-}
-
-async function FinancePlanningPageInner({
+export default async function FinancePlanningPage({
   params,
   searchParams,
 }: {
@@ -287,7 +265,6 @@ async function FinancePlanningPageInner({
             yKey="closing"
             series={[{ key: 'closing', label: 'Projected closing balance USD' }]}
             height={200}
-            formatY={(v) => usd(v)}
           />
         )}
         <Chart

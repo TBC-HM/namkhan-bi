@@ -1,7 +1,9 @@
 // app/api/cockpit/skills/youtube_trend_scout/route.ts
-// Weekly trend scan → generate marketing.yt_trend_briefs rows.
+// Weekly trend scan → generate marketing.yt_trend_briefs rows
+// + marketing.yt_keyword_trends rows (A4, yt-completion brief 2026-07-28):
+// word 1/2-grams across this week's candidate titles, frequency vs last week.
 // Input : { property_id: number }
-// Output: { ok, briefs_created, seed_keywords, total_candidates }
+// Output: { ok, briefs_created, keyword_trends_written, seed_keywords, total_candidates }
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -75,6 +77,49 @@ async function statsForIds(apiKey: string, ids: string[]): Promise<Map<string, V
   const j = (await r.json().catch(() => null)) as VideosResp | null;
   for (const it of j?.items ?? []) out.set(it.id, it);
   return out;
+}
+
+const STOP_WORDS = new Set([
+  'the', 'and', 'for', 'you', 'your', 'with', 'this', 'that', 'from', 'have',
+  'was', 'are', 'not', 'but', 'all', 'how', 'why', 'what', 'when', 'where',
+  'who', 'will', 'can', 'our', 'out', 'her', 'his', 'its', 'into', 'more',
+  'most', 'new', 'now', 'one', 'two', 'top', 'best', 'video', 'youtube',
+  'shorts', 'short', 'full', 'official', 'episode', 'part', 'vlog',
+]);
+
+interface KeywordCount { count: number; videoIds: Set<string> }
+
+/** Word 1/2-grams from candidate titles → frequency map (distinct-video counts). */
+function keywordFrequencies(cands: Candidate[]): Map<string, KeywordCount> {
+  const freq = new Map<string, KeywordCount>();
+  const bump = (gram: string, vid: string) => {
+    const cur = freq.get(gram) ?? { count: 0, videoIds: new Set<string>() };
+    if (!cur.videoIds.has(vid)) { cur.count++; cur.videoIds.add(vid); }
+    freq.set(gram, cur);
+  };
+  for (const c of cands) {
+    const words = c.title.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+    const seen = new Set<string>();
+    for (let i = 0; i < words.length; i++) {
+      if (!seen.has(words[i])) { seen.add(words[i]); bump(words[i], c.video_id); }
+      if (i + 1 < words.length) {
+        const bi = `${words[i]} ${words[i + 1]}`;
+        if (!seen.has(bi)) { seen.add(bi); bump(bi, c.video_id); }
+      }
+    }
+  }
+  return freq;
+}
+
+/** Monday (UTC) of the week containing `d`, as YYYY-MM-DD. */
+function weekStartUtc(d: Date): string {
+  const day = d.getUTCDay(); // 0=Sun
+  const diff = day === 0 ? 6 : day - 1;
+  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diff));
+  return monday.toISOString().slice(0, 10);
 }
 
 function clusterCandidates(all: Candidate[]): Cluster[] {
@@ -182,8 +227,57 @@ export async function POST(req: Request) {
       if (!insErr) briefs_created++;
     }
 
+    // Keyword trends (A4): word 1/2-gram frequencies across ALL candidates this
+    // week, compared against last week's captured rows. Idempotent per week —
+    // delete-then-insert for (property_id, captured_week).
+    let keyword_trends_written = 0;
+    const captured_week = weekStartUtc(new Date());
+    const lastWeekDate = new Date(`${captured_week}T00:00:00Z`);
+    lastWeekDate.setUTCDate(lastWeekDate.getUTCDate() - 7);
+    const last_week = lastWeekDate.toISOString().slice(0, 10);
+
+    const freq = keywordFrequencies(candidates);
+    const topGrams = Array.from(freq.entries())
+      .filter(([, v]) => v.count >= 2)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 40);
+
+    if (topGrams.length > 0) {
+      const { data: prevRows } = await sb
+        .from('v_yt_keyword_trends')
+        .select('n_gram,frequency_this_week')
+        .eq('property_id', property_id)
+        .eq('captured_week', last_week);
+      const prev = new Map(
+        ((prevRows ?? []) as Array<{ n_gram: string; frequency_this_week: number }>)
+          .map((r) => [r.n_gram, r.frequency_this_week]),
+      );
+
+      await sb.from('v_yt_keyword_trends')
+        .delete()
+        .eq('property_id', property_id)
+        .eq('captured_week', captured_week);
+
+      const trendRows = topGrams.map(([gram, v]) => {
+        const lastFreq = prev.get(gram) ?? 0;
+        return {
+          property_id,
+          n_gram:               gram,
+          n_size:               gram.includes(' ') ? 2 : 1,
+          frequency_this_week:  v.count,
+          frequency_last_week:  lastFreq,
+          frequency_delta_pct:  lastFreq > 0 ? Math.round(((v.count - lastFreq) / lastFreq) * 1000) / 10 : null,
+          example_video_ids:    Array.from(v.videoIds).slice(0, 5),
+          captured_week,
+        };
+      });
+      const { error: ktErr } = await sb.from('v_yt_keyword_trends').insert(trendRows);
+      if (!ktErr) keyword_trends_written = trendRows.length;
+    }
+
     return ok({
       briefs_created,
+      keyword_trends_written,
       seed_keywords:    seedKeywords,
       total_candidates: candidates.length,
     });

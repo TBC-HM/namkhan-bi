@@ -167,7 +167,9 @@ export async function POST() {
   ].join('\n');
 
   // === 4) Call Anthropic ===
-  const llm = await callAnthropic({ systemPrompt, userPrompt, maxTokens: 8000 });
+  // 2026-07-28 (yt-completion A6): 8000 output tokens truncated the JSON with a
+  // 12-video payload (llm_bad_shape, raw_head was valid-but-cut JSON) — doubled.
+  const llm = await callAnthropic({ systemPrompt, userPrompt, maxTokens: 16000 });
   if (!isLlmOk(llm)) return err(llm.error, 502, { detail: (llm as { detail?: string }).detail });
 
   const parsed = extractJsonBlock<AuditResp>(llm.text);
