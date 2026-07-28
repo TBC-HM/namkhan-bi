@@ -201,11 +201,13 @@ export async function fetchPromptForRole(role: string): Promise<Prompt | null> {
 // PBS 2026-05-17: surface ALL 11 published doc_types in documentation.documents
 // (was hardcoded to 3). Still uses sbDocs because that's the documentation
 // schema -- separate fix scope.
+// Brief documentation-architecture-v2 (A3): fetch ALL doc rows (draft/approved
+// included — the taxonomy must classify every doc_type, zero orphans) + the
+// taxonomy columns (category, owner, review_interval_days).
 export async function fetchDocs(): Promise<Document[]> {
   const { data, error } = await sbDocs
     .from('documents')
-    .select('id, doc_type, title, content_md, version, status, last_updated_by, last_updated_at')
-    .eq('status', 'published')
+    .select('id, doc_type, title, content_md, version, status, last_updated_by, last_updated_at, category, owner, review_interval_days')
     .order('doc_type', { ascending: true })
     .order('version', { ascending: false });
   if (error) {
