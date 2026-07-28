@@ -3012,11 +3012,14 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
 
-### 2026-07-28 — bug-agent · fix #43
-- # Bug #43 — Supabase page submenu missing  ## Root cause `InventoryView.tsx` passes `tabs` to `DashboardPage` using the `onSelect` callback pattern (no `href`).
-- touched `app/h/[property_id]/cockpit/supabase/components/InventoryView.tsx`
+### 2026-07-28 — bug-agent · fix #47
+- ## Bug #47 — `/cockpit-v2/deploys` should live under Holding IT menu  ### Problem The URL `https://namkhan-bi.vercel.app/cockpit-v2/deploys` is accessible but d
+- touched `app/cockpit-v2/deploys/page.tsx`
 
-### 2026-07-28 — bug-agent · fix #44
-- ## Bug #44 Fix (Round 2)  **Problem:** The Supabase Inventory page lives at `/h/[property_id]/cockpit/supabase` (a property-level route) but belongs in the Hold
-- touched `app/holding/supabase/page.tsx`
-- touched `app/h/[property_id]/cockpit/supabase/page.tsx`
+### 2026-07-28 — bug-agent · fix #70
+- ## Bug #70 — "Save and send" path does not work on new contract page  ### Root cause  The `Submit` button's `onClick` calls `submit()` which correctly POSTs to 
+- touched `app/api/contracts/create/route.ts`
+
+### 2026-07-28 — bug-agent · fix #70
+- ## Bug #70 — "Save and send" path does not work on New Contract page  ### Root cause  The route file is at `app/api/contracts/create/route.ts` and the `fetch` i
+- touched `app/api/contracts/create/route.ts`
