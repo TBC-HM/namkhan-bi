@@ -758,6 +758,9 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'Overview',        href: '/finance/overview'                 },
     { label: 'HR',              href: '/finance/hr'                       },
     { label: 'Finance',         href: '/finance/pnl'                      },
+    // FP&C module 2026-07-28: budget vs actual by class + 13-week cash forward
+    // (brief module-financial-planning-control-v1, completion gap #2).
+    { label: 'Planning',        href: '/finance/planning'                 },
     { label: 'Legal',           href: '/finance/legal'                    },
     // PBS 2026-07-24: Archive tab — brain-backed archive overview (prompt +
     // headline stripes). Replaces the two "Open Docs register" links that

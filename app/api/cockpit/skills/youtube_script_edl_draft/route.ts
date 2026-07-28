@@ -1,7 +1,10 @@
 // app/api/cockpit/skills/youtube_script_edl_draft/route.ts
 // Reel · script + Shotstack EDL drafter.
-// Input : { property_id, brief_id?, angle_title, angle_hook?, duration_seconds, target_channel }
+// Input : { property_id, brief_id?, angle_title, angle_hook?, duration_seconds, target_channel, asset_urls? }
 // Output: { ok, render_job_id, script_preview, cost_usd_milli }
+// 2026-07-28 (yt-completion brief, A7): optional asset_urls[] — real, publicly
+// fetchable media-library URLs. Without them the LLM invents clip src values
+// that Shotstack can never fetch, so no render could ever reach 'done'.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -42,6 +45,7 @@ export async function POST(req: Request) {
       angle_hook?:       string;
       duration_seconds?: number;
       target_channel?:   TargetChannel;
+      asset_urls?:       string[];
     };
 
     const property_id   = Number(body.property_id);
@@ -77,6 +81,19 @@ export async function POST(req: Request) {
       .map((r) => `  • "${r.banned_term_lower}" → "${r.luxury_alternative}" (${r.severity})`)
       .join('\n');
 
+    const assetUrls = (Array.isArray(body.asset_urls) ? body.asset_urls : [])
+      .filter((u) => typeof u === 'string' && /^https:\/\//.test(u))
+      .slice(0, 8);
+    const assetBlock = assetUrls.length > 0
+      ? [
+          '',
+          'AVAILABLE MEDIA ASSETS — you MUST use ONLY these URLs as clip "src" values (they are real, publicly fetchable):',
+          ...assetUrls.map((u, i) => `  ${i + 1}. ${u}`),
+          'These are still images: use asset.type="image" for them, each clip 4-8 seconds, with a slow "effect" (zoomIn, zoomOut, slideLeft or slideRight) for gentle motion.',
+          'NEVER invent, guess, or modify any other media URL — a clip with an unfetchable src fails the whole render.',
+        ]
+      : [];
+
     // 2) Anthropic prompt
     const systemPrompt = [
       'You are Reel, a boutique-hospitality video script writer for the Namkhan lodge (a small river lodge in Luang Prabang, Laos).',
@@ -87,8 +104,9 @@ export async function POST(req: Request) {
       '  • "timeline": { "background": "#000000", "tracks": [ … ] }',
       '  • Track 0: video clips (asset.type="video", src, in, out, effect optional)',
       '  • Track 1: text overlays (asset.type="title" or "html", each clip has "text" and timing)',
-      '  • "output": { "format":"mp4", "resolution": … }',
+      '  • "output": { "format":"mp4", "resolution":"hd", "aspectRatio": "16:9" or "9:16" to match the requested aspect }',
       'Keep it small enough to render — aim for 4-6 clips over the requested duration.',
+      ...assetBlock,
       REALITY_FALLBACK,
       '',
       'VOCABULARY MATRIX (top 30 rows) — obey strictly:',
