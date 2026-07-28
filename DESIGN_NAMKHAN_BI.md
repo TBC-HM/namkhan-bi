@@ -3012,6 +3012,11 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
 
-### 2026-07-28 — bug-agent · fix #46
-- ## Bug #46 – Fix: Replace all hardcoded hex in JSX status indicators with design-system tokens  The reviewer rejected the previous patch because JSX `style={}` 
-- touched `app/holding/it/cockpit/deploys/DeploysView.tsx`
+### 2026-07-28 — bug-agent · fix #43
+- # Bug #43 — Supabase page submenu missing  ## Root cause `InventoryView.tsx` passes `tabs` to `DashboardPage` using the `onSelect` callback pattern (no `href`).
+- touched `app/h/[property_id]/cockpit/supabase/components/InventoryView.tsx`
+
+### 2026-07-28 — bug-agent · fix #44
+- ## Bug #44 Fix (Round 2)  **Problem:** The Supabase Inventory page lives at `/h/[property_id]/cockpit/supabase` (a property-level route) but belongs in the Hold
+- touched `app/holding/supabase/page.tsx`
+- touched `app/h/[property_id]/cockpit/supabase/page.tsx`
