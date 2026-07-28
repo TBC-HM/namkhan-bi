@@ -3012,6 +3012,6 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - touched `app/(cockpit)/_design/internal/tokens.css`
 - touched `app/cockpit/tasks/[id]/page.tsx`
 
-### 2026-07-28 — bug-agent · fix #65
-- ## Bug #65 — Duplicate KPI stripe on `/marketing/overview`  ### Root Cause `DashboardPage` renders its own `kpiTiles` prop as a KPI stripe inside `HeaderPills` 
-- touched `app/marketing/overview/page.tsx`
+### 2026-07-28 — bug-agent · fix #43
+- # Bug #43 — Supabase page submenu missing  ## Root cause `InventoryView.tsx` passes `tabs` to `DashboardPage` using the `onSelect` callback pattern (no `href`).
+- touched `app/h/[property_id]/cockpit/supabase/components/InventoryView.tsx`
