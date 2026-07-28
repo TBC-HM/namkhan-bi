@@ -111,9 +111,9 @@ const S: Record<string, CSSProperties> = {
     transition: 'background 100ms ease, color 100ms ease',
   },
   pillActive: {
-    background: 'var(--primary, #1F3A2E)',
+    background: 'var(--brand-green, #084838)',
     color: '#FFFFFF',
-    borderColor: 'var(--primary, #1F3A2E)',
+    borderColor: 'var(--brand-green, #084838)',
     fontWeight: 600,
   },
 };
