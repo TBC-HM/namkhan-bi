@@ -17,7 +17,7 @@
 //   · kpi.google_maps_daily                · Maps insights (LIVE if pulled)
 //   · public.v_review_source_summary       · platform totals (LIVE)
 //   · public.v_compset_competitor_property_detail · comp set (LIVE names, star)
-//   · PLACEHOLDER — Discovery search terms · needs GBP performance API grant
+//   · marketing.gbp_search_keywords        · Discovery terms (LIVE post-allowlist)
 //   · PLACEHOLDER — Photo performance      · needs GBP media insights
 //   · PLACEHOLDER — Q&A queue              · needs GBP Q&A endpoint
 //   · PLACEHOLDER — Posts / Updates        · needs GBP posts endpoint (localPosts)
@@ -133,7 +133,10 @@ function sumWindow(rows: MapsRow[], days: number, field: keyof MapsRow): number 
 
 // ─── Placeholder scaffolds (wire once GBP API grant lands) ────────────────
 // Real shape kept so the API pull just fills these in — no UI rework needed.
-interface DiscoveryTermRow { term: string; impressions: number; clicks: number; ctr: number; trend: 'up' | 'down' | 'flat' }
+// DiscoveryTermRow LIVE since 2026-07-29 — fed by marketing.gbp_search_keywords
+// (google-sync pull-search-keywords). Google reports impressions only for
+// discovery terms; low-volume terms come back as a threshold ("≤ N") bucket.
+interface DiscoveryTermRow { term: string; month: string; impressions: number | null; bucket: string | null }
 interface PhotoRow { url: string; caption: string; views: number; type: 'exterior' | 'interior' | 'room' | 'food' | 'other'; posted: string }
 interface QaRow { question: string; asked_by: string; asked_at: string; answered: boolean; answer: string | null }
 interface PostRow { title: string; body: string; posted_at: string | null; type: 'update' | 'offer' | 'event'; views: number | null; clicks: number | null; status: 'draft' | 'published' | 'scheduled' }
@@ -148,13 +151,38 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
     await sb.rpc('fn_google_oauth_refresh_if_expired', { p_property_id: pid });
   } catch { /* silent — banner will prompt reconnect if truly dead */ }
 
-  const [oauthR, reviewsR, mapsR, summaryR, compR, allowlistR] = await Promise.all([
+  // GBP completion brief §5.1 (2026-07-29): compset MUST be property-scoped.
+  // v_compset_competitor_property_detail has set_id but NO property_id — an
+  // unscoped is_active filter leaked BOTH properties' comps (Mallorca 5★ hotels
+  // ranked on the Namkhan page, wrong-self risk). Resolve the property's primary
+  // active set first, then filter the detail view on that set_id.
+  const compP = (async (): Promise<CompetitorRow[]> => {
+    const { data: setRow } = await sb.from('competitor_set')
+      .select('set_id')
+      .eq('property_id', pid).eq('is_primary', true).eq('is_active', true)
+      .maybeSingle();
+    if (!setRow?.set_id) return [];
+    const { data } = await sb.from('v_compset_competitor_property_detail')
+      .select('comp_id, property_name, star_rating, is_self, is_active, city')
+      .eq('set_id', setRow.set_id).eq('is_active', true)
+      .order('star_rating', { ascending: false }).limit(10);
+    return (data as CompetitorRow[]) ?? [];
+  })();
+
+  const [oauthR, reviewsR, mapsR, summaryR, compRows, allowlistR, keywordsR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', pid).eq('source', 'google').order('reviewed_at', { ascending: false }).limit(500),
     sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', pid).order('date', { ascending: false }).limit(400),
     sb.from('v_review_source_summary').select('*').eq('property_id', pid).eq('source', 'google').maybeSingle(),
-    sb.from('v_compset_competitor_property_detail').select('comp_id, property_name, star_rating, is_self, is_active, city').eq('is_active', true).order('star_rating', { ascending: false }).limit(10),
-      sb.schema('marketing').from('google_api_allowlist_state').select('*').eq('property_id', pid).maybeSingle(),
+    compP,
+    sb.schema('marketing').from('google_api_allowlist_state').select('*').eq('property_id', pid).maybeSingle(),
+    // §5.7: Discovery search terms (populated by google-sync pull-search-keywords post-allowlist).
+    sb.schema('marketing').from('gbp_search_keywords')
+      .select('month, keyword, impressions_bucket, impressions_value')
+      .eq('property_id', pid)
+      .order('month', { ascending: false })
+      .order('impressions_value', { ascending: false, nullsFirst: false })
+      .limit(60),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
@@ -168,7 +196,7 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
   const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
   const mapsRows: MapsRow[] = (mapsR.data as MapsRow[]) ?? [];
   const summary: SummaryRow | null = (summaryR.data as SummaryRow | null) ?? null;
-  const competitors: CompetitorRow[] = (compR.data as CompetitorRow[]) ?? [];
+  const competitors: CompetitorRow[] = compRows;
 
   const connected = oauthLive; // oauth row present = connected. Location detect gated on GBP API allowlist.
 
@@ -215,8 +243,16 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
   // ── Reviews velocity dataset (last 90 days, weekly buckets) ────────────
   const velocity = buildWeeklyReviewSeries(reviews, 90);
 
+  // ── Discovery terms (LIVE from marketing.gbp_search_keywords) ──────────
+  const discoveryTerms: DiscoveryTermRow[] = ((keywordsR.data as Array<{ month: string; keyword: string; impressions_bucket: string | null; impressions_value: number | string | null }> | null) ?? [])
+    .map((k) => ({
+      term: k.keyword,
+      month: k.month,
+      impressions: k.impressions_value != null ? Number(k.impressions_value) : null,
+      bucket: k.impressions_bucket,
+    }));
+
   // ── Placeholders for API-gated sections ────────────────────────────────
-  const discoveryTerms: DiscoveryTermRow[] = [];
   const photoRows: PhotoRow[] = [];
   const qaRows: QaRow[] = [];
   const postRows: PostRow[] = [];
@@ -269,7 +305,7 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
               icon="⟳"
               title="No review data yet"
               body="Reviews will flow in from the Google Business Profile scrape once the OAuth connection is completed."
-              cta={{ label: connected ? 'Pull latest' : 'Connect Google Business', href: connected ? `/api/google/pull-now?property=${pid}` : `/api/google/oauth/connect?property=${pid}` }}
+              cta={{ label: connected ? 'Pull latest' : 'Connect Google Business', href: connected ? `/api/google/pull-now?property=${pid}&return=/marketing/social/google-business` : `/api/google/oauth/connect?property=${pid}` }}
             />
           ) : (
             <ReviewsVelocityChart data={velocity} />
@@ -285,7 +321,7 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
                 icon="⌕"
                 title="Discovery terms need GBP performance API"
                 body="Once the business.manage scope grant is fully propagated (~24h after OAuth), the top search queries that surfaced the Namkhan will appear here, with impressions, clicks and CTR."
-                cta={{ label: 'Refresh performance data', href: `/api/google/pull-now?property=${pid}&kind=performance` }}
+                cta={{ label: 'Refresh performance data', href: `/api/google/pull-now?property=${pid}&kind=performance&return=/marketing/social/google-business` }}
               />
             ) : (
               <DiscoveryTable rows={discoveryTerms} />
@@ -401,7 +437,7 @@ function ConnectionHeader({ oauth, pid, allowlist }: { oauth: OAuthRow | null; p
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <TenantLink href={`/api/google/pull-now?property=${pid}`} style={btnPrimary}>Pull latest</TenantLink>
+        <TenantLink href={`/api/google/pull-now?property=${pid}&return=/marketing/social/google-business`} style={btnPrimary}>Pull latest</TenantLink>
         {!allowlistPending && (<TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={btnGhost}>Reconnect</TenantLink>)}
         <TenantLink href="/marketing/social" style={btnGhost}>← Socials hub</TenantLink>
       </div>
@@ -422,7 +458,8 @@ function EmptyPanel({ icon, title, body, cta }: { icon: string; title: string; b
   );
 }
 
-// Discovery table — 4 meaningful cols (term / impressions / clicks / CTR + trend arrow).
+// Discovery table — term / month / impressions. Google's searchkeywords endpoint
+// reports impressions only; low-volume terms are a threshold bucket rendered "≤ N".
 function DiscoveryTable({ rows }: { rows: DiscoveryTermRow[] }) {
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -430,20 +467,18 @@ function DiscoveryTable({ rows }: { rows: DiscoveryTermRow[] }) {
         <thead>
           <tr>
             <th style={thSt}>Search term</th>
+            <th style={thSt}>Month</th>
             <th style={{ ...thSt, textAlign: 'right' }}>Impressions</th>
-            <th style={{ ...thSt, textAlign: 'right' }}>Clicks</th>
-            <th style={{ ...thSt, textAlign: 'right' }}>CTR</th>
-            <th style={thSt}>Trend</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} style={{ borderBottom: `1px solid #F5F0E1` }}>
               <td style={{ padding: '6px 8px', color: INK, fontWeight: 500 }}>{r.term}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', color: INK, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(r.impressions)}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', color: INK, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(r.clicks)}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', color: INK, fontVariantNumeric: 'tabular-nums' }}>{(r.ctr * 100).toFixed(1)}%</td>
-              <td style={{ padding: '6px 8px', color: r.trend === 'up' ? GREEN : r.trend === 'down' ? RED : INK_M }}>{r.trend === 'up' ? '▲' : r.trend === 'down' ? '▼' : '—'}</td>
+              <td style={{ padding: '6px 8px', color: INK_M }}>{r.month ? r.month.slice(0, 7) : '—'}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', color: INK, fontVariantNumeric: 'tabular-nums' }}>
+                {r.bucket === 'threshold' ? '≤ ' + fmtNum(r.impressions) : fmtNum(r.impressions)}
+              </td>
             </tr>
           ))}
         </tbody>
