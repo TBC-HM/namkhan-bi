@@ -11,6 +11,10 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// FX display rate (CURRENCY LAW ADR-173: canonical pricing is LAK; USD is display-only).
+// Since migration proposals_bundle_fx_fallback (2026-07-29), fn_public_proposal_bundle
+// GUARANTEES fx_lak_per_usd: COALESCE(frozen send snapshot, latest gl.fx_rates USD->LAK, 21800).
+// This constant is therefore a last-resort belt-and-braces default that should never be hit.
 const FX_FALLBACK = 21800;
 
 interface Bundle {
