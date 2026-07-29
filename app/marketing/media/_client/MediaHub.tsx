@@ -138,6 +138,8 @@ interface Props {
   guardrails?: GuardrailsData;
   // PBS 2026-07-18 · media-video-frontend brief · v_media_videos threaded through to VideoHub.
   videos?: any[];
+  // PBS 2026-07-29 · A3 — v_media_video_review_queue threaded through to VideoHub.
+  videoReviewQueue?: any[];
 }
 
 const HAIR   = '#E6DFCC';
@@ -163,7 +165,10 @@ export default function MediaHub(props: Props) {
 
   const videoRows = (props.mediaPage ?? []).filter(isVideoRow);
   const picsCount = (props.mediaPage ?? []).length - videoRows.length;
-  const vidsCount = videoRows.length;
+  // PBS 2026-07-29 · A4 — VIDEOS counter = live count from public.v_media_videos
+  // (293 at build time), not the mediaPage mime-type heuristic. Falls back to
+  // the heuristic only if the videos fetch returned nothing.
+  const vidsCount = (props.videos && props.videos.length > 0) ? props.videos.length : videoRows.length;
   const openBriefsCount = (props.videoBriefs ?? []).filter(b => b.status !== 'archived' && b.status !== 'published').length;
 
   const TABS: Array<{ key: TabKey; label: string; badge?: number; count?: number }> = [
@@ -237,6 +242,7 @@ export default function MediaHub(props: Props) {
           musicTracks={props.musicTracks ?? []}
           videos={props.videos ?? []}
           areaTaxonomy={props.areaTaxonomy ?? []}
+          videoReviewQueue={props.videoReviewQueue ?? []}
         />
       )}
     </div>
