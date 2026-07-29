@@ -8,19 +8,20 @@
 
 import DeptEntry from '@/components/dept-entry/DeptEntry';
 import { DEPT_CFG } from '@/lib/dept-cfg';
-import { fetchCockpitOpsKpis, tileNum } from '@/lib/kpi/cockpitOps';
+import { fetchCockpitOpsKpis, tileDeploys, tileNum } from '@/lib/kpi/cockpitOps';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function ArchitectEntry() {
   const ops = await fetchCockpitOpsKpis();
+  const deploys = tileDeploys(ops); // '—' + 'deploy feed offline' while the feed is dead
   const cfg = {
     ...DEPT_CFG.architect,
     kpiTiles: [
       { k: 'TODO',     v: '—', d: 'no live source yet' },
       { k: 'AGENTS',   v: tileNum(ops?.agents_active), d: 'active roles' },
-      { k: 'DEPLOYS',  v: tileNum(ops?.deploys_24h),   d: 'last 24h' },
+      { k: 'DEPLOYS',  v: deploys.value,   d: deploys.footnote },
       { k: 'PROJECTS', v: '—', d: 'no live source yet' },
     ],
   };
