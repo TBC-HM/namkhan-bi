@@ -11,7 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { getInquiry, type ProposalBlock } from '@/lib/sales';
+import { getInquiry, getLiveFxRate, type ProposalBlock } from '@/lib/sales';
 import { FX_LAK_PER_USD } from '@/lib/format';
 import {
   renderProposalEmailHtml,
@@ -322,7 +322,10 @@ export async function GET(req: Request, { params }: Ctx) {
     }).sort((a, b) => a.sort_order - b.sort_order),
     rate_offers: rateOffers,
     total_lak: totalLak,
-    fx_lak_per_usd: FX_LAK_PER_USD ?? 21800,
+    // A8 (2026-07-29) — single FX source: proposal snapshot rate (proposals.
+    // fx_rate_lak_usd, also exposed to the guest page via fn_public_proposal_bundle),
+    // else live gl.fx_rates, else env default. Keeps email + composer + public page equal.
+    fx_lak_per_usd: (proposal as any).fx_rate_lak_usd ?? (await getLiveFxRate()) ?? FX_LAK_PER_USD ?? 21800,
     property: propSnap,
     base_url: base,
     factsheet: factsheet ? {
