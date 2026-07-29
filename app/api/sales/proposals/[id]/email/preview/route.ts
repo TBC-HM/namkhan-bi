@@ -96,23 +96,43 @@ async function loadFactsheet(sb: ReturnType<typeof getSupabaseAdmin>, factsheetI
   return data as { doc_id: string; title: string; file_name: string | null; external_url: string | null } | null;
 }
 
+// media-module brief A1 (2026-07-29) — bug #55 "no defaults" leg: auto-hero
+// previously covered room + activity blocks only; facility / fnb / spa /
+// transfer blocks never received a default photo. Extended with property_area
+// fallbacks mirroring /api/sales/proposals/photos context map, plus a
+// facility_id FK match for facility blocks. Area fallback also catches
+// room/activity blocks whose FK/label lookup found nothing.
+const AREA_FALLBACK: Record<string, string[]> = {
+  facility: ['facility'],
+  fnb: ['restaurant', 'bar', 'dining', 'fnb'],
+  spa: ['spa'],
+  transfer: ['transport', 'boat', 'tuktuk', 'car'],
+  activity: ['activity'],
+};
+
 async function autoHeroForBlocks(
   sb: ReturnType<typeof getSupabaseAdmin>,
   blocks: ProposalBlock[],
 ): Promise<Record<string, string>> {
   const roomIds = new Set<number>();
   const activityBigints = new Set<number>();
+  const facilityIds = new Set<number>();
+  const areaTypes = new Set<string>();
   const labelLookups: Array<{ blockId: string; label: string }> = [];
 
   for (const b of blocks) {
     if (b.hero_asset_id) continue;
-    if (b.block_type === 'room' && b.ref_id) {
+    const bt = String(b.block_type);
+    if (bt === 'room' && b.ref_id) {
       const n = Number(b.ref_id);
       if (Number.isFinite(n)) roomIds.add(n);
-    } else if (b.block_type === 'activity' && b.ref_id) {
+    } else if (bt === 'activity' && b.ref_id) {
       if (/^\d+$/.test(b.ref_id)) activityBigints.add(Number(b.ref_id));
       else if (b.label) labelLookups.push({ blockId: b.id, label: b.label });
+    } else if (bt === 'facility' && b.ref_id && /^\d+$/.test(String(b.ref_id))) {
+      facilityIds.add(Number(b.ref_id));
     }
+    if (AREA_FALLBACK[bt]) areaTypes.add(bt);
   }
 
   const APPROVED_TIERS = ['ready', 'tagged'];
@@ -144,6 +164,31 @@ async function autoHeroForBlocks(
     for (const row of ranked) if (!byActivity[row.activity_id]) byActivity[row.activity_id] = row.asset_id as string;
   }
 
+  const byFacility: Record<number, string> = {};
+  if (facilityIds.size > 0) {
+    const { data } = await sb.schema('media').from('media_assets')
+      .select('asset_id, facility_id, quality_index, technical_score, created_at')
+      .in('facility_id', Array.from(facilityIds))
+      .in('status', APPROVED_TIERS);
+    const ranked = ((data ?? []) as any[]).slice().sort(rank);
+    for (const row of ranked) if (!byFacility[row.facility_id]) byFacility[row.facility_id] = row.asset_id as string;
+  }
+
+  const byAreaType: Record<string, string> = {};
+  if (areaTypes.size > 0) {
+    await Promise.all(Array.from(areaTypes).map(async (bt) => {
+      const areas = AREA_FALLBACK[bt];
+      if (!areas) return;
+      const { data } = await sb.schema('media').from('media_assets')
+        .select('asset_id, property_area, quality_index, technical_score, created_at')
+        .in('property_area', areas)
+        .in('status', APPROVED_TIERS)
+        .limit(50);
+      const ranked = ((data ?? []) as any[]).slice().sort(rank);
+      if (ranked.length > 0) byAreaType[bt] = ranked[0].asset_id as string;
+    }));
+  }
+
   const byLabel: Record<string, string> = {};
   if (labelLookups.length > 0) {
     for (const { blockId, label } of labelLookups) {
@@ -164,10 +209,11 @@ async function autoHeroForBlocks(
   const out: Record<string, string> = {};
   for (const b of blocks) {
     if (b.hero_asset_id) continue;
-    if (b.block_type === 'room' && b.ref_id) {
+    const bt = String(b.block_type);
+    if (bt === 'room' && b.ref_id) {
       const pick = byRoom[Number(b.ref_id)];
       if (pick) out[b.id] = pick;
-    } else if (b.block_type === 'activity' && b.ref_id) {
+    } else if (bt === 'activity' && b.ref_id) {
       if (/^\d+$/.test(b.ref_id)) {
         const pick = byActivity[Number(b.ref_id)];
         if (pick) out[b.id] = pick;
@@ -175,6 +221,14 @@ async function autoHeroForBlocks(
         const pick = byLabel[b.id];
         if (pick) out[b.id] = pick;
       }
+    } else if (bt === 'facility' && b.ref_id && /^\d+$/.test(String(b.ref_id))) {
+      const pick = byFacility[Number(b.ref_id)];
+      if (pick) out[b.id] = pick;
+    }
+    // property_area fallback for facility/fnb/spa/transfer (and any
+    // room/activity/facility block the FK or label lookup could not serve).
+    if (!out[b.id] && AREA_FALLBACK[bt] && byAreaType[bt]) {
+      out[b.id] = byAreaType[bt];
     }
   }
   return out;
