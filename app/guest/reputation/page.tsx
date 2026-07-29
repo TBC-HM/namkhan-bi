@@ -18,6 +18,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import SourceBadge from '@/components/marketing/SourceBadge';
 import ReputationReviewsTabs from './_components/ReputationReviewsTabs';
+import ReplyComposer from './_components/ReplyComposer';
 import SentimentContainer from './_components/SentimentContainer';
 import ReportContainer from './_components/ReportContainer';
 
@@ -154,6 +155,21 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
   const reasonParam = (Array.isArray(searchParams.reason) ? searchParams.reason[0] : searchParams.reason) ?? null;
   const stepParam   = (Array.isArray(searchParams.step)   ? searchParams.step[0]   : searchParams.step)   ?? null;
   const locationParam = (Array.isArray(searchParams.location) ? searchParams.location[0] : searchParams.location) ?? null;
+
+  // GBP completion brief §5.5 (2026-07-29): ?review=<id> deep-link from the GBP
+  // page opens the reply composer on that review. Fetched separately — the list
+  // above is capped at 50 and the target review may be older.
+  const reviewParam = (Array.isArray(searchParams.review) ? searchParams.review[0] : searchParams.review) ?? null;
+  const reviewParamId = reviewParam != null ? Number(reviewParam) : NaN;
+  let composerReview: (ReviewRow & { response_text?: string | null }) | null = null;
+  if (Number.isFinite(reviewParamId) && reviewParamId > 0) {
+    const { data: cr } = await sb
+      .from('mkt_reviews')
+      .select('id, source, reviewer_name, rating_norm, title, body, reviewed_at, response_status, response_text')
+      .eq('property_id', pid).eq('id', reviewParamId)
+      .maybeSingle();
+    composerReview = (cr as (ReviewRow & { response_text?: string | null }) | null) ?? null;
+  }
 
   return (
     <div style={{ background: WHITE, minHeight: '100vh' }}>
@@ -323,6 +339,17 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
           <SentimentContainer reviews={reviews} />
           <ReportContainer reviews={reviews} />
         </div>
+
+        {composerReview && (
+          <div style={{ gridColumn:'1 / -1' }}>
+            <ReplyComposer review={{ ...composerReview, response_text: composerReview.response_text ?? null }} propertyId={pid} />
+          </div>
+        )}
+        {reviewParam != null && !composerReview && (
+          <div style={{ gridColumn:'1 / -1', padding:'10px 14px', borderRadius:4, background:'#FDF7E6', border:'1px solid #E8CB84', color:'#8B6914', fontSize:12 }}>
+            Review <code>{reviewParam}</code> not found for this property — it may have been removed or belongs to another property.
+          </div>
+        )}
 
         <div style={{ gridColumn:'1 / -1' }}>
           <ReputationReviewsTabs reviews={reviews} />
