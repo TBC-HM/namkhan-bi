@@ -5,6 +5,7 @@
 
 import HodLanding from '@/app/_components/HodLanding';
 import { DEPT_CFG } from '@/lib/dept-cfg';
+import { fetchCockpitOpsKpis, tileNum } from '@/lib/kpi/cockpitOps';
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export const dynamic = 'force-dynamic';
@@ -23,12 +24,18 @@ function insightsFromCfg(): Insight[] {
   }));
 }
 
-export default function HoldingCeoPage() {
-  const cfg = DEPT_CFG.holding_ceo;
+export default async function HoldingCeoPage() {
   const insights = insightsFromCfg();
-  const liveTiles = (cfg.kpiTiles ?? []).map((k) => ({
-    label: k.k, value: k.v, size: 'sm' as const, footnote: k.d,
-  }));
+  // tile-truth-wiring 2026-07-29: EXPOSURE tile removed (no live source —
+  // brief §0.R R1); APPROVALS now live from public.v_cockpit_ops_kpis
+  // (awaits-user tickets). PROPERTIES is a structural fact; PORTFOLIO stays
+  // '—' until a consolidated-revenue source exists.
+  const ops = await fetchCockpitOpsKpis();
+  const liveTiles = [
+    { label: 'PROPERTIES', value: tileNum(ops?.properties_count ?? 2), size: 'sm' as const, footnote: 'Namkhan · Donna' },
+    { label: 'PORTFOLIO',  value: '—', size: 'sm' as const, footnote: 'consolidated revenue YTD' },
+    { label: 'APPROVALS',  value: tileNum(ops?.tickets_awaits_user), size: 'sm' as const, footnote: 'tickets awaiting your call' },
+  ];
 
   return (
     <HodLanding
