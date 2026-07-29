@@ -48,5 +48,9 @@ export async function POST(req: NextRequest) {
     p_detected_text: null,
   });
   if (error) return NextResponse.json({ ok: false, error: 'rpc_failed', detail: error.message }, { status: 500 });
+  // media-module brief D2 (2026-07-29) — status-ladder fix (§10.8): promote
+  // ingested→ready when the asset now qualifies (scored + tiered + not
+  // needs_review). Best-effort; the score save itself already succeeded.
+  try { await sb.rpc('fn_media_promote_ready', { p_asset_id: asset_id }); } catch { /* best effort */ }
   return NextResponse.json({ ok: true, data });
 }
