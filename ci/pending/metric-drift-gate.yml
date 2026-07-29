@@ -1,0 +1,98 @@
+# PENDING INSTALL — move this file to .github/workflows/metric-drift-gate.yml
+# The fn_gh_push_file bridge token lacks GitHub `workflow` scope (403 on
+# 2026-07-29, request 956846), so it cannot write under .github/workflows/.
+# Any session with direct git push (or a token with workflow scope) should:
+#   git mv ci/pending/metric-drift-gate.yml .github/workflows/metric-drift-gate.yml
+# Content below is final and YAML-validated. Brief: autospec-university_module-20260725.
+name: Metric drift gate
+
+# TBC University freshness-ops (brief autospec-university_module-20260725,
+# design "CI drift gate on metric SQL pushes"). Whenever metric SQL lands on
+# main, verify the KPI metric layer did not drift:
+#   1. every live/partial kpi.kpi_catalog gold_view still resolves to a real
+#      relation (catalog pointing at a dropped/renamed view = hard FAIL);
+#   2. gold views touched by DDL in the last 24h are reported, with the
+#      expectation that the nightly university refresh stale-flags their
+#      articles (informational).
+# Read-only: single psql query via the session pooler. Skips with a warning
+# when DB secrets are not configured (same guard pattern as supabase-diff).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/seed.sql'
+
+permissions:
+  contents: read
+
+jobs:
+  drift-gate:
+    name: kpi gold-view drift check (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    steps:
+      - name: Guard — required secrets
+        id: guard
+        run: |
+          if [ -z "$SUPABASE_PROJECT_REF" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "::warning::SUPABASE_PROJECT_REF / SUPABASE_DB_PASSWORD not configured. Skipping metric drift gate."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check gold-view drift
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          export PGPASSWORD="$SUPABASE_DB_PASSWORD"
+          PSQL="psql -h aws-0-eu-central-1.pooler.supabase.com -p 5432 -U postgres.${SUPABASE_PROJECT_REF} -d postgres -v ON_ERROR_STOP=1 -t -A"
+
+          echo "== 1/2 broken gold_view references (FAIL if any) =="
+          BROKEN=$($PSQL -c "
+            SELECT count(*)
+            FROM kpi.kpi_catalog k
+            WHERE k.status IN ('live','partial')
+              AND k.gold_view IS NOT NULL
+              AND split_part(k.gold_view,'.',2) <> ''
+              AND to_regclass(k.gold_view) IS NULL
+              AND NOT EXISTS (              -- gold_view may legitimately be a function
+                SELECT 1 FROM pg_proc p
+                JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = split_part(k.gold_view,'.',1)
+                  AND p.proname  = split_part(k.gold_view,'.',2));
+          ")
+          if [ "${BROKEN:-0}" != "0" ]; then
+            echo "::error::$BROKEN kpi_catalog gold_view reference(s) no longer resolve to a relation or function — metric layer drifted. List:"
+            $PSQL -c "
+              SELECT k.kpi_number || ' -> ' || k.gold_view
+              FROM kpi.kpi_catalog k
+              WHERE k.status IN ('live','partial')
+                AND k.gold_view IS NOT NULL
+                AND split_part(k.gold_view,'.',2) <> ''
+                AND to_regclass(k.gold_view) IS NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM pg_proc p
+                  JOIN pg_namespace n ON n.oid = p.pronamespace
+                  WHERE n.nspname = split_part(k.gold_view,'.',1)
+                    AND p.proname  = split_part(k.gold_view,'.',2));
+            "
+            exit 1
+          fi
+          echo "OK — all live/partial gold_view references resolve."
+
+          echo "== 2/2 gold views with DDL in last 24h (informational) =="
+          $PSQL -c "
+            SELECT DISTINCT cl.object_identity || ' @ ' || cl.changed_at
+            FROM public.cockpit_change_log cl
+            JOIN kpi.kpi_catalog k
+              ON k.gold_view = cl.schema_name || '.' || split_part(cl.object_identity,'.',2)
+            WHERE cl.changed_at > now() - interval '24 hours'
+              AND k.status IN ('live','partial');
+          " || echo "(change-log check skipped — non-fatal)"
+          echo "Nightly university refresh will stale-flag articles for any views listed above."
