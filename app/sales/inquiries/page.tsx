@@ -90,7 +90,8 @@ export default async function InquiriesPage({
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  let mtdRevenueLabel = '$112,400';
+  // tile-truth-wiring 2026-07-29: fallback was a fake '$112,400' — '—' now.
+  let mtdRevenueLabel = '—';
   let mtdLive = false;
   try {
     const rows = await getKpiDaily(fmt(monthStart), fmt(today));
@@ -377,40 +378,42 @@ export default async function InquiriesPage({
           marginTop: 14,
         }}
       >
+        {/* tile-truth-wiring 2026-07-29: hardcoded mock values (18/4 · 2h 14m ·
+            61% · 27% · $48,200) blanked to '—' — the page is parked and these
+            numbers rendered as if live. Pills + tooltips (intended sources)
+            kept so the wiring plan survives. */}
         <OpsKpiTile
           scope="Open inq · SLA at risk"
-          value="18 / 4"
-          label="4 past 1h target"
+          value="—"
+          label="1h first-reply target"
           needs={dataNeed}
-          valueColor="var(--st-bad)"
           tooltip="Open inquiries / those past first-reply SLA (1h target). Source: sales.email_messages + sales.inquiry_status. Currently a placeholder."
         />
         <OpsKpiTile
           scope="Median time to first reply"
-          value="2h 14m"
-          label="target 1h · LM −18m"
+          value="—"
+          label="target ≤ 1h"
           needs={dataNeed}
           tooltip="Median minutes from inbound inquiry to first outbound reply. Target ≤ 1h. Source: v_thread_response."
         />
         <OpsKpiTile
           scope="Auto-offer hit rate"
-          value="61%"
+          value="—"
           label="sent without edit · target 75%"
           needs={dataNeed}
-          valueColor="var(--brass)"
           tooltip="Drafts the agent generated that were sent unedited ÷ total drafts. Target ≥ 75%. Source: sales.email_drafts.status."
         />
         <OpsKpiTile
           scope="Quote → Booking conv"
-          value="27%"
-          label="weighted 90d · LY +4 pts"
+          value="—"
+          label="weighted 90d · target 30%"
           needs={dataNeed}
           tooltip="Quoted opportunities that converted to a confirmed booking, weighted by quote value over 90d. Target ≥ 30%."
         />
         <OpsKpiTile
           scope="Open pipeline value"
-          value="$48,200"
-          label="18 open quotes · weighted"
+          value="—"
+          label="open quotes · weighted"
           needs={dataNeed}
           tooltip="Sum of quote totals × win-probability for currently-open opportunities. Source: sales.opportunities (schema TODO)."
         />
