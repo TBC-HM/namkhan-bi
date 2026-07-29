@@ -105,6 +105,18 @@ export default async function UniversityPage() {
           );
         })}
 
+        <a href="/university/paths" style={{ ...card, borderTop: `3px solid ${GREEN}`, textDecoration: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span aria-hidden style={{ fontSize: 17 }}>🎓</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>Learning paths</span>
+          </div>
+          <div style={{ fontSize: 13.5, color: INK_SOFT, lineHeight: 1.6 }}>
+            Short, ordered courses per role — Front Office, F&amp;B, Housekeeping, and Hotel Math for
+            managers, with quizzes and a certificate.
+          </div>
+          <div style={{ marginTop: 'auto', fontSize: 12, fontWeight: 600, color: GREEN }}>start learning →</div>
+        </a>
+
         <a href="/university/kpis" style={{ ...card, borderTop: `3px solid ${GOLD}`, textDecoration: 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span aria-hidden style={{ fontSize: 17 }}>📊</span>
