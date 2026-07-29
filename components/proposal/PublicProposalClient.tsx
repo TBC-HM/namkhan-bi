@@ -275,8 +275,13 @@ export default function PublicProposalClient({
           <h1 style={{ fontFamily: T.serif, fontSize: 32, color: T.green, margin: 0, lineHeight: 1.15 }}>
             Your stay proposal
           </h1>
-          <div style={{ fontFamily: T.sans, fontSize: 14, color: T.inkSoft, marginTop: 6 }}>
-            For {proposal.guest_name || 'guest'}
+          <div style={{ fontFamily: T.sans, fontSize: 14, color: T.inkSoft, marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <span>For {proposal.guest_name || 'guest'}</span>
+            {/* Proposals brief A5 (2026-07-29) — zero-dependency PDF via print view */}
+            <a href={`/p/${token}/print`} target="_blank" rel="noreferrer" style={{
+              fontSize: 12, color: T.green, textDecoration: 'none', fontWeight: 600,
+              border: `1px solid ${T.hairline}`, borderRadius: 4, padding: '4px 10px',
+            }}>Download PDF ↗</a>
           </div>
         </div>
       </header>
