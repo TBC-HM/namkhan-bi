@@ -11,7 +11,7 @@
 // can be resolved, we surface the error to the composer so PBS knows.
 
 import { NextResponse } from 'next/server';
-import { markProposalSent, getProposalWithBlocks, getInquiry, checkProposalRoomsAvail } from '@/lib/sales';
+import { markProposalSent, getProposalWithBlocks, getInquiry, checkProposalRoomsAvail, getLiveFxRate } from '@/lib/sales';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fireMakeWebhook } from '@/lib/makeWebhooks';
 import { getCurrentAuthUser, refreshIfExpired, sendMessage } from '@/lib/userGmail';
@@ -123,6 +123,38 @@ export async function POST(req: Request, { params }: Ctx) {
       message: gmailError,
       hint: 'Check your Gmail connection at /mail (Connect / Reconnect Email).',
     }, { status: 500 });
+  }
+
+  // ---- persist the exact sent email (brief A3/#48, 2026-07-29) ----
+  // The read-only sent view renders THIS snapshot — the immutable record of
+  // what actually left via Gmail. Non-fatal on failure (email already sent).
+  try {
+    const { data: latestEmail } = await sb.schema('sales').from('proposal_emails')
+      .select('id').eq('proposal_id', params.id)
+      .order('version', { ascending: false }).limit(1).maybeSingle();
+    if (latestEmail) {
+      await sb.schema('sales').from('proposal_emails').update({
+        sent_html: emailHtml,
+        sent_subject: emailSubject,
+        sent_to: recipientEmail,
+        gmail_message_id: gmailMessageId,
+        sent_at: new Date().toISOString(),
+      }).eq('id', (latestEmail as { id: string }).id);
+    }
+  } catch (e) {
+    console.error('[proposal.send] sent_html persist failed (non-fatal)', e);
+  }
+
+  // ---- A8: freeze the FX rate used for this proposal (single source for
+  // composer, email and guest page). Only set once — never overwrite. ----
+  try {
+    if ((proposal as unknown as { fx_rate_lak_usd: number | null }).fx_rate_lak_usd == null) {
+      const fx = await getLiveFxRate();
+      await sb.schema('sales').from('proposals')
+        .update({ fx_rate_lak_usd: fx }).eq('id', params.id);
+    }
+  } catch (e) {
+    console.error('[proposal.send] fx snapshot failed (non-fatal)', e);
   }
 
   // ---- mark as sent + generate public_token ----
