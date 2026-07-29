@@ -38,6 +38,12 @@ import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, FX_LAK_PER_USD } from '@/lib/format';
 import type { ProposalBlock } from '@/lib/sales';
 
+// Proposals brief A8 (2026-07-29) — single-source FX. The server (edit page)
+// passes the proposal's frozen fx_rate_lak_usd (set at send) or the live
+// gl.fx_rates rate; env FX_LAK_PER_USD is only the last-resort fallback.
+// Module-level so the in-file subcomponents (RateOfferCard, BlockRow) share it.
+let FX = FX_LAK_PER_USD;
+
 // ---------- design tokens (inlined; do NOT use CSS vars — see burn memory) ----------
 const T = {
   paper:    '#FFFFFF',
@@ -283,6 +289,8 @@ interface Props {
     room_type_id: string | null;
     completed_at: string | null;
   };
+  /** Proposals brief A8 — server-resolved LAK-per-USD rate (frozen snapshot or live gl.fx_rates). */
+  fxLakPerUsd?: number | null;
 }
 
 const STATUS_TONE: Record<string, { tone: StatusTone; label: string }> = {
@@ -319,8 +327,12 @@ function relativeTime(iso: string | null): string {
 }
 
 export default function ComposerEditor({
-  proposalId, propertyId, initialBlocks, initialEmail, proposal, wizard,
+  proposalId, propertyId, initialBlocks, initialEmail, proposal, wizard, fxLakPerUsd,
 }: Props) {
+  // Proposals brief A8 — adopt the server-resolved rate for every USD display in this file.
+  if (fxLakPerUsd != null && Number.isFinite(Number(fxLakPerUsd)) && Number(fxLakPerUsd) > 0) {
+    FX = Number(fxLakPerUsd);
+  }
   // --- state ---
   const [blocks, setBlocks] = useState<ProposalBlock[]>(initialBlocks);
   const [showRooms, setShowRooms] = useState(false);
@@ -630,7 +642,7 @@ export default function ComposerEditor({
       ...x, ...patch,
       total_lak: (patch.qty ?? x.qty) * (patch.nights ?? x.nights) * (patch.unit_price_lak ?? x.unit_price_lak),
     } : x));
-    await fetch(`/api/sales/proposals//blocks`, {
+    await fetch(`/api/sales/proposals/${proposalId}/blocks`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ block_id: id, ...patch }),
@@ -647,7 +659,7 @@ export default function ComposerEditor({
         for (const o of matchingOffers) {
           const newTotal = Math.round(newUnit * nights);
           setRateOffers((arr) => arr.map((x) => x.id === o.id ? { ...x, unit_price_lak: Math.round(newUnit), total_lak: newTotal } : x));
-          await fetch(`/api/sales/proposals//rate-offers?id=`, {
+          await fetch(`/api/sales/proposals/${proposalId}/rate-offers?id=${o.id}`, {
             method: 'PATCH',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ unit_price_lak: Math.round(newUnit), total_lak: newTotal }),
@@ -805,7 +817,7 @@ export default function ComposerEditor({
     const unitEff = Number(b.unit_price_lak ?? 0) * (1 - Math.max(0, Math.min(100, disc)) / 100);
     return s + Number(b.qty ?? 1) * Number(b.nights ?? 1) * unitEff;
   }, 0);
-  const totalUsd = totalLak / FX_LAK_PER_USD;
+  const totalUsd = totalLak / FX;
   const nights = nightCount(proposal.date_in, proposal.date_out);
   const status = STATUS_TONE[proposal.status] ?? STATUS_TONE.draft;
 
@@ -1471,7 +1483,7 @@ export default function ComposerEditor({
           loading={catalogLoading}
           onPick={(a) => {
             const usd = Number(a.price_amount ?? 0);
-            const lak = usd > 0 ? Math.round(usd * FX_LAK_PER_USD) : 0;
+            const lak = usd > 0 ? Math.round(usd * FX) : 0;
             // PBS 2026-07-20 pm · picker now returns activity/transport/cruise.
             // Compound activity_id is "{kind}:{numeric_id}"; strip prefix for ref_id
             // and route to the correct source table so email render can rehydrate.
@@ -1546,8 +1558,8 @@ function RateOfferCard({
     : plans.find((p) => p.rate_plan_id === offer.rate_plan_id);
   const nightlyLak = offer.unit_price_lak != null ? Number(offer.unit_price_lak) : (plan ? Number(plan.total_lak) / Math.max(1, Number(plan.nights ?? 1)) : 0);
   const totalLak = offer.total_lak != null ? Number(offer.total_lak) : (plan ? Number(plan.total_lak) : 0);
-  const nightlyUsd = nightlyLak / FX_LAK_PER_USD;
-  const totalUsd = totalLak / FX_LAK_PER_USD;
+  const nightlyUsd = nightlyLak / FX;
+  const totalUsd = totalLak / FX;
 
   return (
     <div style={{
@@ -1677,7 +1689,7 @@ function BlockRow({
 }) {
   const disc = Number(block.additional_discount_pct ?? 0);
   const unitAfter = Number(block.unit_price_lak) * (1 - Math.max(0, Math.min(100, disc)) / 100);
-  const totalUsdEff = Number(block.qty) * Number(block.nights) * unitAfter / FX_LAK_PER_USD;
+  const totalUsdEff = Number(block.qty) * Number(block.nights) * unitAfter / FX;
   const isExperience = block.block_type === 'activity';
   const kindLabel = isExperience ? 'Experience' : block.block_type === 'room' ? 'Room' : block.block_type;
 
@@ -1734,9 +1746,9 @@ function BlockRow({
             </>
           )}
           {/* PBS 2026-07-18 · USD input (LAK stored internally = usd × FX_LAK_PER_USD) */}
-          <input type="number" min={0} step={1} value={Math.round((Number(block.unit_price_lak) || 0) / FX_LAK_PER_USD * 100) / 100}
+          <input type="number" min={0} step={1} value={Math.round((Number(block.unit_price_lak) || 0) / FX * 100) / 100}
             style={{ ...S.numInput, width: 84 }}
-            onChange={(e) => onPatch({ unit_price_lak: Math.round(parseFloat(e.target.value || '0') * FX_LAK_PER_USD) })} />
+            onChange={(e) => onPatch({ unit_price_lak: Math.round(parseFloat(e.target.value || '0') * FX) })} />
           <span style={{ fontSize: 11, color: T.inkMute }}>{isExperience ? '$/pax' : '$'}</span>
           {isExperience && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: T.inkSoft, marginLeft: 4 }}>
