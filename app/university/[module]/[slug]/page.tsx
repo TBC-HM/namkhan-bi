@@ -18,6 +18,7 @@ export const revalidate = 0;
 type Article = {
   slug: string; module: string; article_type: string; title: string; purpose: string;
   audience: string; body_md: string; related: string[] | null; updated_at: string; version: number;
+  stale: boolean | null; stale_reason: string | null;
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -37,7 +38,7 @@ export default async function ArticlePage({ params }: { params: { module: string
     const sb = getSupabaseAdmin();
     const [artRes, siblingsRes, modRes] = await Promise.all([
       sb.from('v_university_articles')
-        .select('slug, module, article_type, title, purpose, audience, body_md, related, updated_at, version')
+        .select('slug, module, article_type, title, purpose, audience, body_md, related, updated_at, version, stale, stale_reason')
         .eq('slug', slug).eq('lang', 'en').maybeSingle(),
       sb.from('v_university_articles')
         .select('slug, article_type, title, purpose, audience, keywords')
@@ -115,6 +116,18 @@ export default async function ArticlePage({ params }: { params: { module: string
         </span>
         {article.audience === 'owner' && (
           <span style={{ fontSize: 10, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 6px' }}>OWNER</span>
+        )}
+        {/* Freshness badge (design freshness-ops): stale = the source data/view
+            changed after this article was written — read with care. Otherwise
+            show when it was last brought up to date. */}
+        {article.stale ? (
+          <span title={article.stale_reason ?? undefined} style={{ fontSize: 10, fontWeight: 700, color: GOLD, background: '#FBF3E2', border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 6px' }}>
+            ⚠ CHECK FRESHNESS
+          </span>
+        ) : (
+          <span style={{ fontSize: 10, fontWeight: 600, color: INK_SOFT, border: `1px solid ${HAIR}`, borderRadius: 3, padding: '1px 6px' }}>
+            UP TO DATE · {new Date(article.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </span>
         )}
       </div>
 
