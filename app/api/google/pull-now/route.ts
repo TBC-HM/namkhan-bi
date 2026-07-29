@@ -1,6 +1,9 @@
 // app/api/google/pull-now/route.ts
 // PBS 2026-07-03: manual "Pull latest" trigger for Google reviews + Maps insights.
-// Fires both pulls, redirects back to /guest/reputation with status params.
+// Fires both pulls, redirects back with status params.
+// 2026-07-29 (GBP completion brief §5.6): accepts &return=<path> so the GBP page
+// gets its own return path. Default stays /guest/reputation — existing callers
+// unchanged. Only same-origin relative paths accepted (no open redirect).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -9,7 +12,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   const property = Number(req.nextUrl.searchParams.get('property') ?? '260955');
-  const base = new URL('/guest/reputation', req.url);
+  const ret = req.nextUrl.searchParams.get('return') ?? '/guest/reputation';
+  const safeRet = ret.startsWith('/') && !ret.startsWith('//') ? ret : '/guest/reputation';
+  const base = new URL(safeRet, req.url);
   try {
     const sb = getSupabaseAdmin();
     const [reviewsR, perfR] = await Promise.all([
