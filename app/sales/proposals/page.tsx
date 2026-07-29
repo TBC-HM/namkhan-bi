@@ -49,6 +49,28 @@ async function loadProposals(propertyId: number): Promise<ProposalRow[]> {
   return (data ?? []) as ProposalRow[];
 }
 
+// Proposals brief A7 (2026-07-29) — view tracking per proposal, read from the
+// public bridge view v_sales_proposal_tracking (bridge law §5; aggregates
+// sales.proposal_view_events which is not PostgREST-reachable directly).
+interface TrackingRow {
+  proposal_id: string;
+  first_viewed_at: string | null;
+  last_viewed_at: string | null;
+  view_count: number;
+}
+
+async function loadTracking(propertyId: number): Promise<Map<string, TrackingRow>> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb
+    .from('v_sales_proposal_tracking')
+    .select('proposal_id, first_viewed_at, last_viewed_at, view_count')
+    .eq('property_id', propertyId)
+    .limit(500);
+  const m = new Map<string, TrackingRow>();
+  for (const r of (data ?? []) as TrackingRow[]) m.set(r.proposal_id, r);
+  return m;
+}
+
 const T = {
   WHITE: '#FFFFFF', HAIR: '#E6DFCC', INK: '#1B1B1B', INK_M: '#5A5A5A',
   CREAM: '#F5F0E1', FOREST: '#084838', AMBER: '#B48A3A', MOSS: '#4C7A5E', RED: '#B03826',
@@ -69,7 +91,7 @@ function statusColor(s: string): string {
 
 export default async function SalesProposalsIndexPage({ propertyId }: PageProps = {}) {
   const pid = propertyId ?? NAMKHAN;
-  const rows = await loadProposals(pid);
+  const [rows, tracking] = await Promise.all([loadProposals(pid), loadTracking(pid)]);
   const tabs = SALES_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/sales/proposals',
   }));
@@ -87,7 +109,7 @@ export default async function SalesProposalsIndexPage({ propertyId }: PageProps 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: T.INK }}>
             <thead>
               <tr style={{ background: T.CREAM }}>
-                {['Guest', 'Status', 'Dates', 'Origin', 'Total (LAK)', 'Created', ''].map((h) => (
+                {['Guest', 'Status', 'Dates', 'Origin', 'Total (LAK)', 'Sent', 'First viewed', 'Views', 'Created', ''].map((h) => (
                   <th key={h} style={{
                     padding: '8px 10px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase',
                     letterSpacing: 0.5, color: T.INK_M, fontWeight: 600, borderBottom: '1px solid ' + T.HAIR,
@@ -97,7 +119,7 @@ export default async function SalesProposalsIndexPage({ propertyId }: PageProps 
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: T.INK_M }}>
+                <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: T.INK_M }}>
                   No proposals yet. Create one from a lead via the Leads tab.
                 </td></tr>
               ) : rows.map((p) => {
@@ -105,6 +127,7 @@ export default async function SalesProposalsIndexPage({ propertyId }: PageProps 
                   : p.inquiry_id ? 'inquiry'
                   : 'manual';
                 const dates = [p.date_in_snapshot, p.date_out_snapshot].filter(Boolean).join(' → ');
+                const trk = tracking.get(p.id);
                 return (
                   <tr key={p.id}>
                     <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, fontWeight: 600 }}>
@@ -120,6 +143,15 @@ export default async function SalesProposalsIndexPage({ propertyId }: PageProps 
                     <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, color: T.INK_M }}>{origin}</td>
                     <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, textAlign: 'right' }}>
                       {p.total_lak != null ? Number(p.total_lak).toLocaleString() : '—'}
+                    </td>
+                    <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, color: T.INK_M, whiteSpace: 'nowrap' }}>
+                      {p.sent_at ? new Date(p.sent_at).toLocaleDateString() : '—'}
+                    </td>
+                    <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, color: T.INK_M, whiteSpace: 'nowrap' }}>
+                      {trk?.first_viewed_at ? new Date(trk.first_viewed_at).toLocaleDateString() : '—'}
+                    </td>
+                    <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {trk && Number(trk.view_count) > 0 ? Number(trk.view_count) : '—'}
                     </td>
                     <td style={{ padding: '8px 10px', borderBottom: '1px solid ' + T.HAIR, color: T.INK_M, whiteSpace: 'nowrap' }}>
                       {new Date(p.created_at).toLocaleDateString()}
