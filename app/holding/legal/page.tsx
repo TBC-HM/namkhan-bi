@@ -5,6 +5,7 @@
 
 import HodLanding from '@/app/_components/HodLanding';
 import { DEPT_CFG } from '@/lib/dept-cfg';
+import { fetchLegalCasesSummary, tileNum } from '@/lib/kpi/cockpitOps';
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export const dynamic = 'force-dynamic';
@@ -23,12 +24,15 @@ function insightsFromCfg(): Insight[] {
   }));
 }
 
-export default function HoldingLegalPage() {
-  const cfg = DEPT_CFG.holding_legal;
+export default async function HoldingLegalPage() {
   const insights = insightsFromCfg();
-  const liveTiles = (cfg.kpiTiles ?? []).map((k) => ({
-    label: k.k, value: k.v, size: 'sm' as const, footnote: k.d,
-  }));
+  // tile-truth-wiring 2026-07-29: EXPOSURE / BLEED / TARGET tiles removed
+  // (no live source — brief §0.R R1). OPEN CASES is live from
+  // public.v_legal_cases_summary (counts only, no case details).
+  const legal = await fetchLegalCasesSummary();
+  const liveTiles = [
+    { label: 'OPEN CASES', value: tileNum(legal?.cases_active), size: 'sm' as const, footnote: 'active matters' },
+  ];
 
   return (
     <HodLanding
