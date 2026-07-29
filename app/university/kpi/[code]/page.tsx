@@ -34,6 +34,11 @@ type Golden = {
   expected_value: number | null; currency_layer: string | null; certified: boolean | null;
 };
 
+type WorkedExample = {
+  ok: boolean; view?: string; property_scoped?: boolean; ordered_by?: string | null;
+  rows?: Record<string, unknown>[];
+};
+
 const CONF_LABEL: Record<string, { label: string; color: string }> = {
   green: { label: 'battery-verified', color: GREEN },
   amber: { label: 'gated · not yet tested', color: GOLD },
@@ -50,18 +55,21 @@ export default async function KpiReferencePage({ params }: { params: { code: str
   let def: KpiDef | null = null;
   let conf: Conformance | null = null;
   let goldens: Golden[] = [];
+  let example: WorkedExample | null = null;
 
   if (Number.isFinite(code)) {
     try {
       const sb = getSupabaseAdmin();
-      const [dRes, cRes, gRes] = await Promise.all([
+      const [dRes, cRes, gRes, eRes] = await Promise.all([
         sb.from('v_kpi_definitions').select('*').eq('kpi_id', code).maybeSingle(),
         sb.from('v_kpi_conformance_status').select('*').eq('kpi_number', code).maybeSingle(),
         sb.from('v_kpi_golden_values').select('*').eq('kpi_number', code),
+        sb.rpc('fn_kpi_worked_example', { p_kpi_number: code }),
       ]);
       def = (dRes.data as KpiDef | null) ?? null;
       conf = (cRes.data as Conformance | null) ?? null;
       goldens = (gRes.data as Golden[] | null) ?? [];
+      example = (eRes.data as WorkedExample | null) ?? null;
     } catch { /* friendly not-found below */ }
   }
 
@@ -164,6 +172,55 @@ export default async function KpiReferencePage({ params }: { params: { code: str
           </div>
         </div>
       </section>
+
+      {example?.ok && Array.isArray(example.rows) && example.rows.length > 0 && (() => {
+        // Worked example (design spec): the KPI's most recent real rows straight
+        // from its gold view — Namkhan-scoped when the view carries property_id.
+        const cols = Object.keys(example.rows[0]).slice(0, 6);
+        return (
+          <section style={{ marginTop: 18 }}>
+            <h2 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: INK }}>
+              Worked example — recent real numbers
+            </h2>
+            <div style={{ fontSize: 12.5, color: INK_SOFT, marginBottom: 8, lineHeight: 1.6 }}>
+              Latest rows from <code style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace', fontSize: 11.5, color: INK }}>{example.view}</code>
+              {example.property_scoped ? ' for The Namkhan' : ''} — this is the exact data the formula above runs on.
+            </div>
+            <div style={{ overflowX: 'auto', border: `1px solid ${HAIR}`, borderRadius: 6 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: WARM, textAlign: 'left', color: INK_SOFT }}>
+                    {cols.map((c) => (
+                      <th key={c} style={{ padding: '5px 9px', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.replace(/_/g, ' ')}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {example.rows.map((r, i) => (
+                    <tr key={i} style={{ borderTop: `1px solid ${HAIR}`, color: INK }}>
+                      {cols.map((c) => {
+                        const v = r[c];
+                        const num = typeof v === 'number';
+                        return (
+                          <td key={c} style={{
+                            padding: '5px 9px', whiteSpace: 'nowrap',
+                            fontFamily: num ? 'JetBrains Mono, ui-monospace, monospace' : 'inherit',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}>
+                            {v === null || v === undefined ? '—'
+                              : num ? Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
+                              : String(v)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      })()}
 
       {goldens.length > 0 && (
         <section style={{ marginTop: 18 }}>
