@@ -868,11 +868,14 @@ const IT_CFG: DeptCfg = {
     { matcher: 'knowledge', href: '/knowledge'        },
   ],
   defaultDrilldown: '/cockpit',
+  // tile-truth-wiring 2026-07-29: hardcoded values (8 · 7/9 · 94% · 12)
+  // removed — app/it/page.tsx now fetches public.v_cockpit_ops_kpis and
+  // overrides these placeholders server-side. '—' is the honest fallback.
   kpiTiles: [
-    { k: 'TICKETS',  v: '8',   d: 'open · 2 awaits-user' },
-    { k: 'AGENTS',   v: '7/9', d: 'active'               },
-    { k: 'SLA',      v: '94%', d: '< 5 min triage'       },
-    { k: 'DEPLOYS',  v: '12',  d: 'today · 1 failed'     },
+    { k: 'TICKETS',  v: '—', d: 'open'                          },
+    { k: 'AGENTS',   v: '—', d: 'active roles'                  },
+    { k: 'SLA',      v: '—', d: '30d · first action ≤5 min'     },
+    { k: 'DEPLOYS',  v: '—', d: 'last 24h'                      },
   ],
 };
 
@@ -925,11 +928,15 @@ const ARCHITECT_CFG: DeptCfg = {
     { matcher: 'agent',  href: '/cockpit?tab=team' },
   ],
   defaultDrilldown: '/cockpit',
+  // tile-truth-wiring 2026-07-29: hardcoded values (12 · 7 · 4 · 3) removed —
+  // app/architect/page.tsx overrides AGENTS/DEPLOYS from public.v_cockpit_ops_kpis.
+  // TODO/PROJECTS have no live source yet → honest '—' (a fake number is worse
+  // than no number).
   kpiTiles: [
-    { k: 'TODO',    v: '12', d: 'across all depts'    },
-    { k: 'AGENTS',  v: '7',  d: 'active'              },
-    { k: 'DEPLOYS', v: '4',  d: 'awaiting approval'   },
-    { k: 'PROJECTS', v: '3', d: 'active'              },
+    { k: 'TODO',    v: '—', d: 'no live source yet'   },
+    { k: 'AGENTS',  v: '—', d: 'active roles'         },
+    { k: 'DEPLOYS', v: '—', d: 'last 24h'             },
+    { k: 'PROJECTS', v: '—', d: 'no live source yet'  },
   ],
 };
 
@@ -953,7 +960,7 @@ const HOLDING_CFG: DeptCfg = {
   subPages: [],
   quickChips: [],
   defaultAttn: [
-    { id: 'h1', label: 'Donna DCO 1/2025 · settlement window open · ≈€25k/week bleed', severity: 'high',   kind: 'leakage'     },
+    { id: 'h1', label: 'Donna DCO 1/2025 · settlement window open', severity: 'high',   kind: 'leakage'     },
     { id: 'h2', label: 'Namkhan Mews tokens dead · backfill blocked on reissue',         severity: 'medium', kind: 'leakage'     },
     { id: 'h3', label: 'Donna April payroll loaded · ready for finance review',          severity: 'low',    kind: 'opportunity' },
     { id: 'h4', label: 'Sherlock Tier 1 dossiers due in 48h',                            severity: 'medium', kind: 'opportunity' },
@@ -977,11 +984,13 @@ const HOLDING_CFG: DeptCfg = {
     { matcher: 'mews',     href: '/h/260955'               },
   ],
   defaultDrilldown: '/holding/it/cockpit',
+  // tile-truth-wiring 2026-07-29: hardcoded AGENTS 65 / OPEN 3 removed ('—'
+  // honest fallback); EXPOSURE tile deleted — no live legal-exposure source
+  // exists and matter figures must not live in platform config (see brief).
   kpiTiles: [
-    { k: 'PROPERTIES', v: '2',     d: '1 live · 1 prospect'      },
-    { k: 'AGENTS',     v: '65',    d: 'active across holding'    },
-    { k: 'OPEN',       v: '3',     d: 'high-severity items'      },
-    { k: 'EXPOSURE',   v: '€440k', d: 'DCO tramitación accrued'  },
+    { k: 'PROPERTIES', v: '2', d: 'Namkhan · Donna'      },
+    { k: 'AGENTS',     v: '—', d: 'active across holding' },
+    { k: 'OPEN',       v: '—', d: 'high-severity items'   },
   ],
   hideWeather: true,
   customExtra: 'holding',
@@ -1010,7 +1019,7 @@ const HOLDING_LEGAL_CFG: DeptCfg = {
   ],
   quickChips: [],
   defaultAttn: [
-    { id: 'l1', label: 'DCO 1/2025 · 4 months elapsed · settle within 30d (€150-200k target)', severity: 'high',   kind: 'leakage'     },
+    { id: 'l1', label: 'DCO 1/2025 · 4 months elapsed · settle within 30d', severity: 'high',   kind: 'leakage'     },
     { id: 'l2', label: 'D&O / RC patronal insurer notification — confirm filed',                severity: 'high',   kind: 'leakage'     },
     { id: 'l3', label: 'Sherlock Tier 1 dossiers due in 48h',                                    severity: 'medium', kind: 'opportunity' },
     { id: 'l4', label: 'Acción de regreso draft against Five Senses SLs — file in 14d',          severity: 'medium', kind: 'opportunity' },
@@ -1024,7 +1033,7 @@ const HOLDING_LEGAL_CFG: DeptCfg = {
   defaultTasks: [
     { id: 'lt1', label: 'Confirm casación procedural state with Letrada Cañellas', done: false, created: TODAY, alert: true },
     { id: 'lt2', label: 'Authorise Sherlock Tier 1 (5 priority targets)',           done: false, created: TODAY               },
-    { id: 'lt3', label: 'Open settlement channel with UGT (floor 30%, target 35%)', done: false, created: TODAY               },
+    { id: 'lt3', label: 'Open settlement channel with UGT', done: false, created: TODAY               },
   ],
   attentionRoutes: [
     { matcher: 'dco',         href: '/h/1000001/finance' },
@@ -1034,11 +1043,12 @@ const HOLDING_LEGAL_CFG: DeptCfg = {
     { matcher: 'casación',    href: '/h/1000001/finance' },
   ],
   defaultDrilldown: '/h/1000001/finance',
+  // tile-truth-wiring 2026-07-29: EXPOSURE / BLEED / TARGET tiles deleted —
+  // no live legal-exposure source exists, and matter settlement figures must
+  // not live in platform config (see brief §0.R R1). OPEN CASES is overridden
+  // live from public.v_legal_cases_summary in app/holding/legal/page.tsx.
   kpiTiles: [
-    { k: 'OPEN CASES', v: '1',     d: 'DCO 1/2025 · solidaria' },
-    { k: 'EXPOSURE',   v: '€440k', d: 'tramitación accrued'    },
-    { k: 'BLEED',      v: '€25k/wk', d: 'until readmisión'      },
-    { k: 'TARGET',     v: '€150-200k', d: 'UGT settlement'      },
+    { k: 'OPEN CASES', v: '—', d: 'active matters' },
   ],
   hideWeather: true,
 };
@@ -1087,11 +1097,14 @@ const HOLDING_IT_CFG: DeptCfg = {
     { matcher: 'pdf',    href: '/holding/it/cockpit?tab=docs' },
   ],
   defaultDrilldown: '/holding/it/cockpit',
+  // tile-truth-wiring 2026-07-29: hardcoded values (8 · 65 · 12 · 94%)
+  // removed — app/holding/it/page.tsx overrides these live from
+  // public.v_cockpit_ops_kpis. '—' is the honest fallback.
   kpiTiles: [
-    { k: 'TICKETS', v: '8',   d: 'open · 2 awaits-user'  },
-    { k: 'AGENTS',  v: '65',  d: 'active'                },
-    { k: 'DEPLOYS', v: '12',  d: 'today · 1 failed'      },
-    { k: 'SLA',     v: '94%', d: '< 5 min triage'        },
+    { k: 'TICKETS', v: '—', d: 'open'                      },
+    { k: 'AGENTS',  v: '—', d: 'active roles'              },
+    { k: 'DEPLOYS', v: '—', d: 'last 24h'                  },
+    { k: 'SLA',     v: '—', d: '30d · first action ≤5 min' },
   ],
   hideWeather: true,
 };
@@ -1173,7 +1186,7 @@ const HOLDING_CEO_CFG: DeptCfg = {
   ],
   quickChips: [],
   defaultAttn: [
-    { id: 'ceo1', label: 'Approve Donna DCO 1/2025 settlement window (€150-200k target)', severity: 'high',   kind: 'leakage'     },
+    { id: 'ceo1', label: 'Approve Donna DCO 1/2025 settlement window', severity: 'high',   kind: 'leakage'     },
     { id: 'ceo2', label: 'Namkhan portfolio pace ahead of LY · consider price ladder',    severity: 'low',    kind: 'opportunity' },
     { id: 'ceo3', label: 'Q2 board pack due in 14 days',                                   severity: 'medium', kind: 'opportunity' },
   ],
@@ -1189,11 +1202,14 @@ const HOLDING_CEO_CFG: DeptCfg = {
     { matcher: 'board',   href: '/holding/finance' },
   ],
   defaultDrilldown: '/holding/it/cockpit',
+  // tile-truth-wiring 2026-07-29: EXPOSURE tile deleted (no live source;
+  // matter figures must not live in platform config — brief §0.R R1).
+  // APPROVALS hardcoded '3' removed — app/holding/ceo/page.tsx overrides it
+  // live (awaits-user tickets) from public.v_cockpit_ops_kpis.
   kpiTiles: [
-    { k: 'PROPERTIES', v: '2',     d: '1 live · 1 prospect'      },
-    { k: 'PORTFOLIO',  v: '—',     d: 'consolidated revenue YTD' },
-    { k: 'EXPOSURE',   v: '€440k', d: 'Donna DCO tramitación'    },
-    { k: 'APPROVALS',  v: '3',     d: 'high-severity items'      },
+    { k: 'PROPERTIES', v: '2', d: 'Namkhan · Donna'           },
+    { k: 'PORTFOLIO',  v: '—', d: 'consolidated revenue YTD'  },
+    { k: 'APPROVALS',  v: '—', d: 'tickets awaiting your call' },
   ],
   hideWeather: true,
 };
