@@ -4,7 +4,7 @@
 // same page as in-flight ones. Right pane is the live email iframe preview.
 // ProposerWizard.tsx is deprecated (kept only for dependency safety, no longer routed).
 import { notFound } from 'next/navigation';
-import { getProposalWithBlocks, getInquiry, getLiveFxRate } from '@/lib/sales';
+import { getProposalWithBlocks, getInquiry } from '@/lib/sales';
 import ComposerEditor from '@/components/proposal/ComposerEditor';
 import SentProposalView from '@/components/proposal/SentProposalView';
 
@@ -37,9 +37,6 @@ export default async function ComposerPage({ params }: { params: { id: string } 
 
   const inq = proposal.inquiry_id ? await getInquiry(proposal.inquiry_id) : null;
 
-  // A8 — single FX source: proposal snapshot rate, else live gl.fx_rates.
-  const fxLakPerUsd = (proposal as any).fx_rate_lak_usd ?? await getLiveFxRate();
-
   const p = proposal as unknown as {
     adults_snapshot: number | null;
     children_snapshot: number | null;
@@ -53,7 +50,6 @@ export default async function ComposerPage({ params }: { params: { id: string } 
     <ComposerEditor
       proposalId={proposal.id}
       propertyId={proposal.property_id}
-      fxLakPerUsd={fxLakPerUsd}
       initialBlocks={blocks}
       initialEmail={email}
       proposal={{
