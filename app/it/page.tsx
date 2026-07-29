@@ -6,13 +6,14 @@
 
 import DeptEntry from '@/components/dept-entry/DeptEntry';
 import { DEPT_CFG } from '@/lib/dept-cfg';
-import { fetchCockpitOpsKpis, tileNum, tilePct } from '@/lib/kpi/cockpitOps';
+import { fetchCockpitOpsKpis, tileDeploys, tileNum, tilePct } from '@/lib/kpi/cockpitOps';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function ITPage() {
   const ops = await fetchCockpitOpsKpis();
+  const deploys = tileDeploys(ops); // '—' + 'deploy feed offline' while the feed is dead
   const cfg = {
     ...DEPT_CFG.it,
     kpiTiles: [
@@ -22,7 +23,7 @@ export default async function ITPage() {
       },
       { k: 'AGENTS',  v: tileNum(ops?.agents_active), d: 'active roles' },
       { k: 'SLA',     v: tilePct(ops?.sla_triage_pct), d: '30d · first action ≤5 min' },
-      { k: 'DEPLOYS', v: tileNum(ops?.deploys_24h),   d: 'last 24h' },
+      { k: 'DEPLOYS', v: deploys.value,   d: deploys.footnote },
     ],
   };
   return <DeptEntry cfg={cfg} />;
