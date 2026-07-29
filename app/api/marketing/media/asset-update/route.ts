@@ -91,6 +91,10 @@ export async function POST(req: NextRequest) {
     if (!res?.ok) {
       return NextResponse.json({ error: res?.error ?? 'update_failed' }, { status: 400 });
     }
+    // media-module brief D2 (2026-07-29) — status-ladder fix (§10.8): promote
+    // ingested→ready when the asset now qualifies (scored + tiered + not
+    // needs_review). Best-effort; the edit itself already succeeded.
+    try { await sb.rpc('fn_media_promote_ready', { p_asset_id: asset_id }); } catch { /* best effort */ }
     return NextResponse.json({ ok: true, asset: res.asset });
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? 'unknown' }, { status: 500 });
