@@ -54,9 +54,9 @@ const ROUTE_TO_VIEW: Record<string, string> = {
   "/revenue/channels": "v_channel_mix",
   "/revenue/parity": "v_tactical_alerts_top",
   "/revenue/agents": "cockpit_audit_log",
-  "/revenue-v2": "mv_kpi_today",
-  "/revenue-v2/pulse": "mv_kpi_today",
-  "/revenue-v2/parity": "v_tactical_alerts_top",
+  // tile-truth-wiring 2026-07-29: /revenue-v2 entries removed — the whole
+  // app/revenue-v2 prototype tree (hardcoded May-2026 data, zero inbound
+  // links) was deleted. /revenue + /h/*/revenue are the live surfaces.
   "/sales/inquiries": "v_unanswered_threads",
   "/cockpit": "cockpit_tickets",
   "/cockpit/it-digest": "v_it_weekly_digest",
