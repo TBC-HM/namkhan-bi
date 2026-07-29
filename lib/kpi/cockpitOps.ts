@@ -17,6 +17,9 @@ export interface CockpitOpsKpis {
   tickets_open: number;
   tickets_awaits_user: number;
   deploys_24h: number;
+  /** false when deploy.deployments has no row in 30 days — the ingestion feed is
+   *  offline, so deploys_24h=0 would be a FALSE zero. Render '—' instead. */
+  deploys_feed_live: boolean;
   /** % of tickets (30d) whose first cockpit_audit_log action landed ≤5 min after creation. Null when no tickets in window. */
   sla_triage_pct: number | null;
   properties_count: number;
@@ -63,4 +66,16 @@ export function tileNum(v: number | null | undefined): string {
 /** Format a percentage KPI for a tile; '—' when null. */
 export function tilePct(v: number | null | undefined): string {
   return v === null || v === undefined ? '—' : `${v}%`;
+}
+
+/**
+ * DEPLOYS tile value + footnote (verifier objection, tile-truth-wiring 2026-07-29):
+ * the deploy ingestion feed died 2026-05-17, so a live-wired "0 · last 24h" is a
+ * false zero — the exact disease this brief exists to kill. When the feed has no
+ * row in 30 days (deploys_feed_live=false) render '—' with an honest footnote.
+ */
+export function tileDeploys(ops: CockpitOpsKpis | null): { value: string; footnote: string } {
+  if (!ops) return { value: '—', footnote: 'last 24h' };
+  if (!ops.deploys_feed_live) return { value: '—', footnote: 'deploy feed offline' };
+  return { value: tileNum(ops.deploys_24h), footnote: 'last 24h' };
 }
