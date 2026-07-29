@@ -104,9 +104,21 @@ function usabilityColor(n: number | null): string {
   return RED;
 }
 
+// PBS 2026-07-29 · media-video-frontend brief (A1) — sentinel for "no value"
+// filter options. Previously '(unclassified)'/'(untyped)' mapped to '' which
+// meant "All", so the 172 NULL-content_class clips could never be isolated.
+const NULL_SENTINEL = '__null__';
+
+function extractQualityFlags(notes: any): string[] {
+  const f = notes && typeof notes === 'object' ? notes.quality_flags : null;
+  if (!Array.isArray(f)) return [];
+  return f.filter((x: any) => typeof x === 'string' && x.trim()).slice(0, 4);
+}
+
 export default function VideoTriageTab({ videos, areaTaxonomy }: Props) {
   const [videoTypeFilter, setVideoTypeFilter] = useState<string>('');
   const [contentClassFilter, setContentClassFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [needsReviewOnly, setNeedsReviewOnly] = useState<boolean>(false);
   const [search, setSearch] = useState<string>('');
   const [selected, setSelected] = useState<VideoRow | null>(null);
@@ -142,16 +154,54 @@ export default function VideoTriageTab({ videos, areaTaxonomy }: Props) {
     }
     const byClass: Record<string, number> = {};
     for (const v of videos) {
-      const c = v.content_class ?? '(unclassified)';
+      const c = v.content_class ?? NULL_SENTINEL;
       byClass[c] = (byClass[c] ?? 0) + 1;
     }
-    return { total, flagged, byType, byClass };
+    const byCategory: Record<string, number> = {};
+    for (const v of videos) {
+      const c = v.category ?? NULL_SENTINEL;
+      byCategory[c] = (byCategory[c] ?? 0) + 1;
+    }
+    return { total, flagged, byType, byClass, byCategory };
   }, [videos]);
+
+  // A4 · destination folder counts — videos grouped by destination_id (matched
+  // to taxonomy ref_id), plus destination-class clips not yet filed to a folder.
+  const destCounts = useMemo(() => {
+    const folders = areaTaxonomy.filter((t) => t.kind === 'destination');
+    const byDest = new Map<string, number>();
+    let unfiled = 0;
+    for (const v of videos) {
+      if (v.destination_id != null) {
+        const k = String(v.destination_id);
+        byDest.set(k, (byDest.get(k) ?? 0) + 1);
+      } else if (v.content_class === 'destination') {
+        unfiled += 1;
+      }
+    }
+    return {
+      folders: folders.map((f) => ({ name: f.name, count: byDest.get(String(f.ref_id)) ?? 0 })),
+      unfiled,
+    };
+  }, [videos, areaTaxonomy]);
 
   const filtered = useMemo(() => {
     let out = videos.filter((v) => !localDismiss.has(v.asset_id));
-    if (videoTypeFilter)    out = out.filter((v) => (v.video_type ?? '') === videoTypeFilter);
-    if (contentClassFilter) out = out.filter((v) => (v.content_class ?? '') === contentClassFilter);
+    if (videoTypeFilter) {
+      out = videoTypeFilter === NULL_SENTINEL
+        ? out.filter((v) => v.video_type == null)
+        : out.filter((v) => v.video_type === videoTypeFilter);
+    }
+    if (contentClassFilter) {
+      out = contentClassFilter === NULL_SENTINEL
+        ? out.filter((v) => v.content_class == null)
+        : out.filter((v) => v.content_class === contentClassFilter);
+    }
+    if (categoryFilter) {
+      out = categoryFilter === NULL_SENTINEL
+        ? out.filter((v) => v.category == null)
+        : out.filter((v) => v.category === categoryFilter);
+    }
     if (needsReviewOnly)    out = out.filter((v) => v.needs_review === true);
     if (search) {
       const q = search.toLowerCase();
@@ -161,7 +211,7 @@ export default function VideoTriageTab({ videos, areaTaxonomy }: Props) {
         (v.category ?? '').toLowerCase().includes(q));
     }
     return out;
-  }, [videos, videoTypeFilter, contentClassFilter, needsReviewOnly, search, localDismiss]);
+  }, [videos, videoTypeFilter, contentClassFilter, categoryFilter, needsReviewOnly, search, localDismiss]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -285,14 +335,21 @@ export default function VideoTriageTab({ videos, areaTaxonomy }: Props) {
           style={{ padding: '6px 10px', fontSize: 11, border: '1px solid ' + HAIR, borderRadius: 3, color: INK, background: WHITE }}>
           <option value="">All types</option>
           {Object.entries(counts.byType).sort((a,b) => b[1]-a[1]).map(([t, n]) => (
-            <option key={t} value={t === '(untyped)' ? '' : t}>{VIDEO_TYPE_STYLE[t]?.label ?? t} · {n}</option>
+            <option key={t} value={t === '(untyped)' ? NULL_SENTINEL : t}>{t === '(untyped)' ? 'Untyped' : (VIDEO_TYPE_STYLE[t]?.label ?? t)} · {n}</option>
           ))}
         </select>
         <select value={contentClassFilter} onChange={(e) => setContentClassFilter(e.target.value)}
           style={{ padding: '6px 10px', fontSize: 11, border: '1px solid ' + HAIR, borderRadius: 3, color: INK, background: WHITE }}>
           <option value="">All classes</option>
           {Object.entries(counts.byClass).sort((a,b) => b[1]-a[1]).map(([c, n]) => (
-            <option key={c} value={c === '(unclassified)' ? '' : c}>{CONTENT_CLASS_LABEL[c] ?? c} · {n}</option>
+            <option key={c} value={c}>{c === NULL_SENTINEL ? 'Unclassified' : (CONTENT_CLASS_LABEL[c] ?? c)} · {n}</option>
+          ))}
+        </select>
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
+          style={{ padding: '6px 10px', fontSize: 11, border: '1px solid ' + HAIR, borderRadius: 3, color: INK, background: WHITE }}>
+          <option value="">All categories</option>
+          {Object.entries(counts.byCategory).sort((a,b) => b[1]-a[1]).map(([c, n]) => (
+            <option key={c} value={c}>{c === NULL_SENTINEL ? 'Uncategorized' : c} · {n}</option>
           ))}
         </select>
         <button
@@ -305,6 +362,21 @@ export default function VideoTriageTab({ videos, areaTaxonomy }: Props) {
           }}
         >Needs review · {counts.flagged}</button>
       </div>
+
+      {/* A4 · destination folder video counts */}
+      {destCounts.folders.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10, fontSize: 10, color: INK_M }}>
+          <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Destination folders:</span>
+          {destCounts.folders.map((f) => (
+            <span key={f.name} style={{ background: CREAM, border: '1px solid ' + HAIR, borderRadius: 10, padding: '2px 8px', color: INK }}>
+              {f.name} · {f.count}
+            </span>
+          ))}
+          {destCounts.unfiled > 0 && (
+            <span style={{ color: AMBER, fontWeight: 600 }}>{destCounts.unfiled} destination clips not filed yet</span>
+          )}
+        </div>
+      )}
 
       {msg && (
         <div style={{ padding: '6px 10px', background: '#F7F0E1', border: '1px solid ' + HAIR, borderRadius: 4, marginBottom: 10, fontSize: 12, color: INK }}>
@@ -395,6 +467,18 @@ export default function VideoTriageTab({ videos, areaTaxonomy }: Props) {
                     {v.category && <span>{v.category}</span>}
                     {v.usability_score != null && <span>· QI {v.usability_score}</span>}
                   </div>
+
+                  {/* A1 · quality-flag chips from ai_video_notes.quality_flags */}
+                  {extractQualityFlags(v.ai_video_notes).length > 0 && (
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {extractQualityFlags(v.ai_video_notes).map((f) => (
+                        <span key={f} style={{
+                          background: '#FBE8E4', color: RED, fontSize: 9, fontWeight: 600,
+                          padding: '1px 6px', borderRadius: 8,
+                        }}>{f.replace(/_/g, ' ')}</span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Inline area dropdown — only for hotel-class clips without area */}
                   {v.content_class === 'hotel' && !v.room_type_id && !v.facility_id && !v.activity_id && taxonomyGroups.length > 0 && (
