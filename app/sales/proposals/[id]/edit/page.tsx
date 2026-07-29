@@ -4,7 +4,7 @@
 // same page as in-flight ones. Right pane is the live email iframe preview.
 // ProposerWizard.tsx is deprecated (kept only for dependency safety, no longer routed).
 import { notFound } from 'next/navigation';
-import { getProposalWithBlocks, getInquiry } from '@/lib/sales';
+import { getProposalWithBlocks, getInquiry, getLiveFxRate } from '@/lib/sales';
 import ComposerEditor from '@/components/proposal/ComposerEditor';
 import SentProposalView from '@/components/proposal/SentProposalView';
 
@@ -36,6 +36,10 @@ export default async function ComposerPage({ params }: { params: { id: string } 
   }
 
   const inq = proposal.inquiry_id ? await getInquiry(proposal.inquiry_id) : null;
+
+  // Proposals brief A8 (2026-07-29) — single FX source for composer + public page:
+  // frozen proposal snapshot (set at send) first, else live gl.fx_rates, env fallback inside.
+  const fxLakPerUsd = (proposal as any).fx_rate_lak_usd ?? (await getLiveFxRate());
 
   const p = proposal as unknown as {
     adults_snapshot: number | null;
@@ -75,6 +79,7 @@ export default async function ComposerPage({ params }: { params: { id: string } 
         room_type_id: p.selected_room_type_id ?? null,
         completed_at: p.wizard_completed_at ?? null,
       }}
+      fxLakPerUsd={fxLakPerUsd}
     />
   );
 }
