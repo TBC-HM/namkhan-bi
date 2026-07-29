@@ -6,7 +6,7 @@ import { Container } from '@/app/(cockpit)/_design';
 import ModuleDocsPanel, { type ModuleDocRow, type ModuleStatusRow } from '@/app/_components/ModuleDocsPanel';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { supabase } from '@/lib/supabase';
-import { fetchCockpitOpsKpis, tileNum, tilePct } from '@/lib/kpi/cockpitOps';
+import { fetchCockpitOpsKpis, tileDeploys, tileNum, tilePct } from '@/lib/kpi/cockpitOps';
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export const dynamic = 'force-dynamic';
@@ -38,13 +38,14 @@ export default async function HoldingItPage() {
   // tile-truth-wiring 2026-07-29: values come live from public.v_cockpit_ops_kpis
   // (was hardcoded 8 · 65 · 12 · 94%). '—' when the fetch fails.
   const ops = await fetchCockpitOpsKpis();
+  const deploys = tileDeploys(ops); // '—' + 'deploy feed offline' while the feed is dead
   const liveTiles = [
     {
       label: 'TICKETS', value: tileNum(ops?.tickets_open), size: 'sm' as const,
       footnote: ops ? `open · ${ops.tickets_awaits_user} awaits-user` : 'open',
     },
     { label: 'AGENTS',  value: tileNum(ops?.agents_active), size: 'sm' as const, footnote: 'active roles' },
-    { label: 'DEPLOYS', value: tileNum(ops?.deploys_24h),   size: 'sm' as const, footnote: 'last 24h' },
+    { label: 'DEPLOYS', value: deploys.value,   size: 'sm' as const, footnote: deploys.footnote },
     { label: 'SLA',     value: tilePct(ops?.sla_triage_pct), size: 'sm' as const, footnote: '30d · first action ≤5 min' },
   ];
 
