@@ -59,6 +59,8 @@ async function loadAll(pid: number) {
     reviewQueue, areaTaxonomy, libraryCounts,
     // PBS 2026-07-18 · media-video-frontend brief — v_media_videos for the Triage sub-tab:
     videosRaw,
+    // PBS 2026-07-29 · A3 — v_media_video_review_queue for the Video Review sub-tab:
+    videoReviewQueue,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
     fetchAllMedia(sb),
@@ -118,6 +120,12 @@ async function loadAll(pid: number) {
       .eq('property_id', pid)
       .order('created_at', { ascending: false })
       .limit(2000),
+    // A3 · Video Review = junk cull. Flagged clips (video_unusable / video_low_quality).
+    sb.from('v_media_video_review_queue')
+      .select('asset_id, property_id, original_filename, status, content_class, video_type, usability_score, review_reason, poster_path, playable_path, caption, created_at')
+      .eq('property_id', pid)
+      .order('created_at', { ascending: false })
+      .limit(1000),
   ]);
 
   const facilityRows = (facilitiesRaw.data ?? []) as Array<{ facility_id: number; name: string; parent_facility_id: number | null; is_meeting_space: boolean | null }>;
@@ -207,6 +215,7 @@ async function loadAll(pid: number) {
     areaTaxonomy: areaTaxonomy.data ?? [],
     libraryCounts: libraryCounts.data ?? null,
     videos: videosRaw.data ?? [],
+    videoReviewQueue: videoReviewQueue.data ?? [],
     errors: [
       byTier.error, mediaPage.error, channelSpecs.error, rulesActive.error,
       aiGens.error, videoEdits.error, reality.error, categories.error,
@@ -216,7 +225,7 @@ async function loadAll(pid: number) {
       guardNaming.error, guardCaptions.error, guardAltText.error, guardTiers.error, guardRatios.error,
       guardTextPolicy.error, guardPalette.error,
       reviewQueue.error, areaTaxonomy.error, libraryCounts.error,
-      videosRaw.error,
+      videosRaw.error, videoReviewQueue.error,
     ].filter(Boolean),
   };
 }
@@ -264,6 +273,7 @@ export default async function MarketingMediaPage({ propertyId }: Props = {}) {
             areaTaxonomy={data.areaTaxonomy as any}
             libraryCounts={data.libraryCounts as any}
             videos={(data as any).videos ?? []}
+            videoReviewQueue={(data as any).videoReviewQueue ?? []}
             stylePresets={data.stylePresets as any}
             musicTracks={data.musicTracks as any}
             guardrails={data.guardrails as any}
