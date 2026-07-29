@@ -6,6 +6,7 @@ import { Container } from '@/app/(cockpit)/_design';
 import ModuleDocsPanel, { type ModuleDocRow, type ModuleStatusRow } from '@/app/_components/ModuleDocsPanel';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { supabase } from '@/lib/supabase';
+import { fetchCockpitOpsKpis, tileNum, tilePct } from '@/lib/kpi/cockpitOps';
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export const dynamic = 'force-dynamic';
@@ -34,9 +35,18 @@ function insightsFromCfg(): Insight[] {
 export default async function HoldingItPage() {
   const cfg = DEPT_CFG.holding_it;
   const insights = insightsFromCfg();
-  const liveTiles = (cfg.kpiTiles ?? []).map((k) => ({
-    label: k.k, value: k.v, size: 'sm' as const, footnote: k.d,
-  }));
+  // tile-truth-wiring 2026-07-29: values come live from public.v_cockpit_ops_kpis
+  // (was hardcoded 8 · 65 · 12 · 94%). '—' when the fetch fails.
+  const ops = await fetchCockpitOpsKpis();
+  const liveTiles = [
+    {
+      label: 'TICKETS', value: tileNum(ops?.tickets_open), size: 'sm' as const,
+      footnote: ops ? `open · ${ops.tickets_awaits_user} awaits-user` : 'open',
+    },
+    { label: 'AGENTS',  value: tileNum(ops?.agents_active), size: 'sm' as const, footnote: 'active roles' },
+    { label: 'DEPLOYS', value: tileNum(ops?.deploys_24h),   size: 'sm' as const, footnote: 'last 24h' },
+    { label: 'SLA',     value: tilePct(ops?.sla_triage_pct), size: 'sm' as const, footnote: '30d · first action ≤5 min' },
+  ];
 
   let docs: ModuleDocRow[] = [];
   let statuses: ModuleStatusRow[] = [];
