@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, Container, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { groupsAsTabs } from './_lib/groups';
+import { isDeployFeedStale, staleFeedMessage } from './_lib/stale-feed';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -34,6 +35,7 @@ async function fetchHomeData() {
     { count: memHigh },
     { count: freshness },
     { data: costData },
+    { data: latestPush },
   ] = await Promise.all([
     sb.from('cockpit_agent_prompts').select('*', { count: 'exact', head: true }).eq('active', true),
     sb.from('cockpit_audit_log').select('*', { count: 'exact', head: true }).gt('created_at', new Date(Date.now() - 86_400_000).toISOString()),
@@ -53,6 +55,7 @@ async function fetchHomeData() {
     sb.from('v_tenant_cost_monthly')
       .select('property_id, month, cost_usd, runs')
       .gte('month', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10)),
+    sb.from('v_push_ledger').select('pushed_at').eq('ok', true).order('pushed_at', { ascending: false }).limit(1),
   ]);
 
   const totalCostThisMonth = (costData ?? []).reduce((s, r) => s + Number(r.cost_usd || 0), 0);
@@ -97,6 +100,10 @@ async function fetchHomeData() {
   const errors24h = (deploysByState24h ?? []).filter((d) => d.state === 'ERROR').length;
   const builds24h = (deploysByState24h ?? []).length;
 
+  const newestDeployAt = (latestDeploys ?? [])[0]?.created_at ?? null;
+  const newestPushAt = (latestPush ?? [])[0]?.pushed_at ?? null;
+  const feedStale = isDeployFeedStale(newestDeployAt, newestPushAt);
+
   return {
     counts: {
       activeAgents: activeAgents ?? 0,
@@ -117,6 +124,8 @@ async function fetchHomeData() {
     syncs: syncs ?? [],
     webhooks24h: webhooks24h ?? [],
     totalCostThisMonth,
+    feedStale,
+    newestDeployAt,
   };
 }
 
@@ -152,6 +161,20 @@ export default async function CockpitV2Home() {
       title="Cockpit · Home"
       tabs={groupsAsTabs('home')}
     >
+      {d.feedStale && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{
+            fontSize: 12, padding: '8px 12px', borderRadius: 4,
+            background: 'rgba(184, 168, 120, 0.18)',
+            border: '1px solid #B8A878',
+            color: '#1B1B1B',
+          }}>
+            <span style={{ fontWeight: 600, color: '#B8542A', marginRight: 6 }}>⚠ feed stale</span>
+            {staleFeedMessage(d.newestDeployAt)}
+          </div>
+        </div>
+      )}
+
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Headline" subtitle="fleet at a glance · last refresh just now" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
@@ -215,6 +238,11 @@ export default async function CockpitV2Home() {
                 </li>
               ))}
             </ul>
+            <div style={{ marginTop: 6, fontSize: 11, color: '#8A8A8A' }}>
+              History note: no per-deploy records exist for 2026-05-17 → 2026-07-30 (the live
+              webhook feed was first wired 2026-07-30; earlier rows were a one-time import).
+              The gap is intentionally not backfilled.
+            </div>
           </Container>
         </div>
       )}
