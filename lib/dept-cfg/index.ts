@@ -1187,6 +1187,9 @@ const HOLDING_CEO_CFG: DeptCfg = {
   subPages: [
     { label: 'HoD',      href: '/holding/ceo'      },
     { label: 'Strategy', href: '/holding/strategy' },
+    // dataroom-module-v1 round 2 (verifier gap: module was URL-only): the
+    // holding data-room cockpit lives under the CEO stripe per brief §2.
+    { label: 'Data Room', href: '/holding/ceo/dataroom' },
   ],
   quickChips: [],
   defaultAttn: [
@@ -1274,5 +1277,3 @@ export const DEPT_CFG = {
   holding_john:      HOLDING_JOHN_CFG,
   holding_finance:   HOLDING_FINANCE_CFG,
 } as const;
-
-export type { DeptCfg } from './types';
