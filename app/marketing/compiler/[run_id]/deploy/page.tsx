@@ -3,7 +3,7 @@
 
 import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
-import Page from '@/components/page/Page';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtIsoDate } from '@/lib/format';
@@ -34,8 +34,15 @@ export default async function DeployPage({ params }: { params: { run_id: string 
     .eq('run_id', params.run_id)
     .order('created_at', { ascending: false });
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/compiler',
+  }));
+
   return (
-    <Page eyebrow="Marketing · Compiler · Deploy" title={<>Deploy <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>history</em></>} subPages={MARKETING_SUBPAGES}>
+    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+    <DashboardPage title="Marketing · Compiler · Deploy" tabs={tabs}>
+    <div style={{ gridColumn: '1 / -1' }}>
 
       <table className="data-table" style={{ marginTop: 22, width: '100%' }}>
         <thead>
@@ -73,6 +80,8 @@ export default async function DeployPage({ params }: { params: { run_id: string 
           ← Back to variants
         </TenantLink>
       </div>
-    </Page>
+    </div>
+    </DashboardPage>
+    </div>
   );
 }
