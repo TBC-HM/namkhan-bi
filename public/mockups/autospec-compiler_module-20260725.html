@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOCKUP · Compiler Offer Document — The Namkhan</title>
+<style>
+  :root{
+    --bg:#F4EFE2; --primary:#1F3A2E; --sand:#B8A878; --terracotta:#B8542A;
+    --ink:#1F3A2E; --muted:#5c6f64; --card:#ffffff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--ink); font-family:Georgia,'Times New Roman',serif; line-height:1.55;}
+  .mock-banner{background:var(--terracotta); color:#fff; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:.12em; text-transform:uppercase; text-align:center; padding:8px;}
+  .toolbar{display:flex; justify-content:flex-end; gap:8px; max-width:820px; margin:12px auto 0; padding:0 16px; font-family:Arial,sans-serif;}
+  .toolbar button{background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 14px; font-size:13px; cursor:pointer;}
+  .toolbar button.alt{background:transparent; color:var(--primary); border:1px solid var(--primary);}
+  .doc{max-width:820px; margin:12px auto 48px; background:var(--card); box-shadow:0 2px 14px rgba(31,58,46,.12);}
+  .hero{background:linear-gradient(160deg, #1F3A2E 0%, #2c5242 70%); color:#F4EFE2; padding:56px 56px 40px; position:relative;}
+  .hero .kicker{font-family:Arial,sans-serif; font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:var(--sand); margin-bottom:14px;}
+  .hero h1{font-size:34px; font-weight:normal; letter-spacing:.01em; margin-bottom:10px;}
+  .hero .sub{font-size:16px; color:#e9e2cd; max-width:520px;}
+  .hero .validity{margin-top:22px; display:inline-block; border:1px solid var(--sand); color:var(--sand); font-family:Arial,sans-serif; font-size:12px; letter-spacing:.08em; padding:6px 12px; border-radius:999px;}
+  section{padding:36px 56px; border-bottom:1px solid #eee7d6;}
+  h2{font-family:Arial,sans-serif; font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--terracotta); margin-bottom:18px;}
+  .price-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  .price-card{border:1px solid #e4dcc6; border-radius:10px; padding:18px; cursor:pointer;}
+  .price-card.sel{border-color:var(--primary); box-shadow:0 0 0 2px var(--primary) inset;}
+  .price-card .room{font-family:Arial,sans-serif; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;}
+  .price-card .amount{font-size:26px; color:var(--primary);}
+  .price-card .per{font-size:12px; color:var(--muted); font-family:Arial,sans-serif;}
+  .price-card .badge{display:inline-block; margin-top:8px; background:var(--sand); color:#fff; font-family:Arial,sans-serif; font-size:10px; letter-spacing:.08em; text-transform:uppercase; padding:3px 8px; border-radius:4px;}
+  .day{display:flex; gap:18px; padding:14px 0; border-bottom:1px dashed #e4dcc6;}
+  .day:last-child{border-bottom:none;}
+  .day .n{flex:0 0 64px; font-family:Arial,sans-serif; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--sand); padding-top:4px;}
+  .day h3{font-size:17px; font-weight:normal; margin-bottom:4px;}
+  .day p{font-size:14px; color:var(--muted);}
+  .inclusions ul{list-style:none; columns:2; column-gap:32px;}
+  .inclusions li{font-size:14px; padding:6px 0 6px 22px; position:relative; break-inside:avoid;}
+  .inclusions li::before{content:''; position:absolute; left:0; top:13px; width:10px; height:10px; border-radius:50%; background:var(--sand);}
+  .contact{display:flex; justify-content:space-between; align-items:center; gap:24px; flex-wrap:wrap;}
+  .contact .cta{background:var(--terracotta); color:#fff; font-family:Arial,sans-serif; font-size:14px; letter-spacing:.05em; text-decoration:none; padding:12px 26px; border-radius:6px;}
+  .contact .meta{font-size:13px; color:var(--muted); font-family:Arial,sans-serif;}
+  .footer{padding:20px 56px; font-family:Arial,sans-serif; font-size:11px; color:var(--muted); display:flex; justify-content:space-between;}
+  @media print{
+    .mock-banner,.toolbar{display:none;}
+    body{background:#fff;}
+    .doc{box-shadow:none; margin:0; max-width:none;}
+    .hero{-webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    section{page-break-inside:avoid;}
+  }
+  @media (max-width:640px){ .price-grid{grid-template-columns:1fr;} section,.hero{padding-left:24px;padding-right:24px;} }
+</style>
+</head>
+<body>
+<div class="mock-banner">Mockup — compiler offer document (A3) · fake data · brief autospec-compiler_module-20260725</div>
+<div class="toolbar">
+  <button class="alt" onclick="alert('MOCKUP: in production this link copies the public funnel URL /r/river-stillness-3n')">Copy funnel link</button>
+  <button onclick="window.print()">Print / Save as PDF</button>
+</div>
+<div class="doc">
+  <div class="hero">
+    <div class="kicker">The Namkhan · Luang Prabang · Private Offer</div>
+    <h1>River &amp; Stillness — 3-Night Mindfulness Retreat</h1>
+    <div class="sub">A slow-living escape on the banks of the Nam Khan: guided morning meditation, riverside spa rituals and Lao farm-to-table dining.</div>
+    <div class="validity">Valid for stays 15 Sep – 20 Dec 2026 · Offer expires 31 Aug 2026</div>
+  </div>
+
+  <section>
+    <h2>Your rate — choose a room</h2>
+    <div class="price-grid">
+      <div class="price-card sel" onclick="pick(this)">
+        <div class="room">Riverview Villa</div>
+        <div class="amount">USD 1,180</div>
+        <div class="per">per person · 3 nights · double occupancy</div>
+        <div class="badge">Recommended</div>
+      </div>
+      <div class="price-card" onclick="pick(this)">
+        <div class="room">Garden Pool Villa</div>
+        <div class="amount">USD 1,340</div>
+        <div class="per">per person · 3 nights · double occupancy</div>
+      </div>
+      <div class="price-card" onclick="pick(this)">
+        <div class="room">Namkhan Suite</div>
+        <div class="amount">USD 1,620</div>
+        <div class="per">per person · 3 nights · double occupancy</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Itinerary</h2>
+    <div class="day"><div class="n">Day 1</div><div><h3>Arrival &amp; grounding</h3><p>Private transfer, welcome herbal tea, sunset river blessing ceremony and a light Lao dinner by the water.</p></div></div>
+    <div class="day"><div class="n">Day 2</div><div><h3>Mindful morning · spa afternoon</h3><p>Sunrise meditation on the deck, organic farm breakfast, traditional Lao massage and herbal steam ritual.</p></div></div>
+    <div class="day"><div class="n">Day 3</div><div><h3>The river's rhythm</h3><p>Guided kayak on the Nam Khan, picnic at the falls, evening candle-lit yin yoga and chef's table dinner.</p></div></div>
+    <div class="day"><div class="n">Day 4</div><div><h3>Slow farewell</h3><p>Closing breathwork circle, journal session with tea, late checkout and airport transfer.</p></div></div>
+  </section>
+
+  <section class="inclusions">
+    <h2>Included</h2>
+    <ul>
+      <li>3 nights accommodation, room of your choice</li>
+      <li>Daily organic breakfast &amp; 2 themed dinners</li>
+      <li>2 guided meditation / yoga sessions daily</li>
+      <li>60-min Lao massage + herbal steam</li>
+      <li>Kayak excursion with private guide</li>
+      <li>Return airport transfers</li>
+    </ul>
+  </section>
+
+  <section class="contact">
+    <div>
+      <h2>Reserve</h2>
+      <div class="meta">reservations@thenamkhan.com · +856 71 254 999<br>Quote offer code <strong>RS-3N-2026</strong></div>
+    </div>
+    <a class="cta" href="#" onclick="alert('MOCKUP: links to the live public funnel /r/river-stillness-3n (already working in production)');return false;">Book this retreat →</a>
+  </section>
+
+  <div class="footer">
+    <span>The Namkhan · Ban Don Kang, Luang Prabang, Laos</span>
+    <span>Offer ref RS-3N-2026 · generated by TBC Compiler</span>
+  </div>
+</div>
+<script>
+  function pick(el){document.querySelectorAll('.price-card').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');}
+</script>
+</body>
+</html>
