@@ -114,6 +114,8 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
   // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
+  // 2026-07-30: + Dishes + Spa (PBS 2026-07-24 pages, registered per inventory
+  // completion brief A7 — were direct-URL only).
   {
     parentHref: '/operations/inventory',
     members: [
@@ -122,11 +124,13 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/inventory/capex',
       '/operations/inventory/catalog',
       '/operations/inventory/counts',
+      '/operations/inventory/dishes',
       '/operations/inventory/items',
       '/operations/inventory/orders',
       '/operations/inventory/par',
       '/operations/inventory/requests',
       '/operations/inventory/shop',
+      '/operations/inventory/spa',
       '/operations/inventory/stock',
       '/operations/inventory/suppliers',
     ],
@@ -136,11 +140,13 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Capex',     href: '/operations/inventory/capex'     },
       { label: 'Catalog',   href: '/operations/inventory/catalog'   },
       { label: 'Counts',    href: '/operations/inventory/counts'    },
+      { label: 'Dishes',    href: '/operations/inventory/dishes'    },
       { label: 'Items',     href: '/operations/inventory/items'     },
       { label: 'Orders',    href: '/operations/inventory/orders'    },
       { label: 'Par',       href: '/operations/inventory/par'       },
       { label: 'Requests',  href: '/operations/inventory/requests'  },
       { label: 'Shop',      href: '/operations/inventory/shop'      },
+      { label: 'Spa',       href: '/operations/inventory/spa'       },
       { label: 'Stock',     href: '/operations/inventory/stock'     },
       { label: 'Suppliers', href: '/operations/inventory/suppliers' },
     ],
