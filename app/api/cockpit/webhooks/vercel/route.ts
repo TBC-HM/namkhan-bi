@@ -236,9 +236,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ event: eventType, audited: true, deploy_row: deployRow });
   }
 
-  // deployment.created — not currently in the Vercel-side subscription (only
-  // succeeded/error/canceled fire today), but handle it truthfully if it ever
-  // arrives: record a BUILDING row, no incident, no rollback.
+  // deployment.created — CONFIRMED in the Vercel-side subscription (verifier
+  // 2026-07-30: 4 created events landed 02:29–02:31 UTC, previously routed to
+  // unknown_event by the old code). Record a BUILDING row, no incident, no
+  // rollback; the succeeded/error event for the same deploy id then flips the
+  // row via the update path. Write path requires USAGE on
+  // deploy.deployments_id_seq for service_role (granted 2026-07-30, migration
+  // grant_deploy_deployments_seq_service_role).
   if (eventType === "deployment.created") {
     const deployRow = await recordDeployment(eventType, payload);
     return NextResponse.json({ event: eventType, deploy_row: deployRow });
