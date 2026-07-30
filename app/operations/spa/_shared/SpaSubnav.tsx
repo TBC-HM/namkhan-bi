@@ -26,7 +26,7 @@ export default function SpaSubnav({ active }: { active: SpaSubpage }) {
             style={{
               padding: '7px 14px', fontFamily: MONO, fontSize: 11,
               letterSpacing: '0.05em', textTransform: 'uppercase', textDecoration: 'none',
-              color: isActive ? '#FFFFFF' : TOKENS.ink,
+              color: isActive ? TOKENS.bgRaised : TOKENS.ink,
               background: isActive ? TOKENS.forest : 'transparent',
               fontWeight: isActive ? 600 : 500,
             }}
