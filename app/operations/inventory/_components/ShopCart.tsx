@@ -18,11 +18,16 @@ export interface CartItem {
 
 interface Props {
   locations: { location_id: number; location_name: string }[];
+  /** Route prefix for post-submit navigation. Defaults to the legacy
+   *  Namkhan-only path; tenant mounts pass `/h/${propertyId}/operations/inventory`. */
+  basePath?: string;
+  /** Auto-approve threshold (USD) read from procurement.config. Defaults to 500. */
+  autoApproveCap?: number;
 }
 
 const STORAGE_KEY = 'inv_cart_v1';
 
-export default function ShopCart({ locations }: Props) {
+export default function ShopCart({ locations, basePath = '/operations/inventory', autoApproveCap = 500 }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<CartItem[]>([]);
   const [open, setOpen] = useState(false);
@@ -70,7 +75,7 @@ export default function ShopCart({ locations }: Props) {
   function clear() { persist([]); }
 
   const total = items.reduce((s, it) => s + it.qty * it.unit_cost_usd, 0);
-  const autoApprove = total < 500;
+  const autoApprove = total < autoApproveCap;
 
   async function submit(form: HTMLFormElement) {
     if (busy || items.length === 0) return;
@@ -100,7 +105,7 @@ export default function ShopCart({ locations }: Props) {
       setOpen(false);
       setToast(`Submitted — status: ${j.approval_status}`);
       setTimeout(() => setToast(null), 4000);
-      router.push(`/operations/inventory/requests/${j.pr_id}`);
+      router.push(`${basePath}/requests/${j.pr_id}`);
     } catch (e: any) { setErr(e?.message || 'Network error'); }
     finally { setBusy(false); }
   }
@@ -183,7 +188,7 @@ export default function ShopCart({ locations }: Props) {
                 <div className="inv-cart-total">
                   Total estimate: <strong>${total.toFixed(2)}</strong>
                   <div className={autoApprove ? 'inv-cart-status-ok' : 'inv-cart-status-warn'}>
-                    {autoApprove ? '✓ Auto-approved on submit (under $500)' : '⚠ Needs approval'}
+                    {autoApprove ? `✓ Auto-approved on submit (under $${autoApproveCap})` : '⚠ Needs approval'}
                   </div>
                 </div>
 
