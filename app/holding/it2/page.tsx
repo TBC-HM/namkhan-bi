@@ -82,7 +82,10 @@ export default async function ActionCenterPage() {
       kind: 'module-question',
       title: m.display_name ?? m.module_doc_type,
       detail: oq,
-      href: m.entry_url || '/holding/it2/modules/status',
+      // PBS 2026-07-30: a module question that is BLOCKED on an owner answer must
+      // route to the Decision Inbox (answer inline), never to the module's entry
+      // page — clicking the Central Chat question landed PBS on legacy /chat.
+      href: oq.startsWith('BLOCKED') ? '/holding/it2/questions' : (m.entry_url || '/holding/it2/modules/status'),
     });
   }
   for (const t of tickets) {
