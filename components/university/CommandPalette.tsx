@@ -9,7 +9,7 @@
 // grounded answer with citations. House palette only (design_system U.2).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 const INK = '#1B1B1B';
 const INK_SOFT = '#5A5A5A';
@@ -36,6 +36,11 @@ const GROUP_LABEL: Record<Row['kind'], string> = {
 
 export default function CommandPalette() {
   const router = useRouter();
+  // Verifier gap (dataroom-module-v1 round 2): the palette is app chrome —
+  // never mount its hotkey/UI on external guest surfaces (/room/ dataroom
+  // guests, /p/ proposal guests). Same hide rule as NDropdown/BugWidget.
+  const pathname = usePathname() ?? '';
+  const onExternalSurface = pathname.startsWith('/room/') || pathname.startsWith('/p/');
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
@@ -169,7 +174,7 @@ export default function CommandPalette() {
     else if (e.key === 'Enter' && rows[sel]) { e.preventDefault(); activate(rows[sel]); }
   };
 
-  if (!open) return null;
+  if (onExternalSurface || !open) return null;
 
   let lastKind: Row['kind'] | null = null;
 
