@@ -5,7 +5,7 @@
 
 import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
-import Page from '@/components/page/Page';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
@@ -39,13 +39,15 @@ export default async function VariantsPage({ params }: { params: { run_id: strin
   const spec = (run.parsed_spec ?? {}) as any;
   const latestDeploy = deploys?.[0] ?? null;
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/compiler',
+  }));
+
   return (
-    <Page
-      eyebrow="Marketing · Compiler · Variants"
-      title={<>Compare <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>variants</em></>}
-      subPages={MARKETING_SUBPAGES}
-      topRight={<StatusPill tone={STATUS_TONE[run.status] ?? 'info'}>{run.status}</StatusPill>}
-    >
+    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+    <DashboardPage title="Marketing · Compiler · Variants" tabs={tabs} action={<StatusPill tone={STATUS_TONE[run.status] ?? 'info'}>{run.status}</StatusPill>}>
+    <div style={{ gridColumn: '1 / -1' }}>
 
       {/* Compact 2-row header (prompt + parsed spec + deploy link) */}
       <div style={headerWrap}>
@@ -94,7 +96,9 @@ export default async function VariantsPage({ params }: { params: { run_id: strin
         {' · '}
         <TenantLink href={`/marketing/compiler/${run.id}/deploy`} style={{ color: 'var(--brass)' }}>DEPLOY HISTORY</TenantLink>
       </div>
-    </Page>
+    </div>
+    </DashboardPage>
+    </div>
   );
 }
 
