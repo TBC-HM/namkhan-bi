@@ -19,6 +19,7 @@ import {
   type ChartSeries, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import CostEntryForms from './_components/CostEntryForms';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -36,11 +37,12 @@ interface BuildRow { month: string; initiative: string; labor_usd: number | null
 interface UnallocRow { month: string; unallocated_usd: number | null; total_usd: number; unallocated_pct: number | null }
 interface EventRow {
   id: number; event_at: string; cost_nature: string; work_class: string;
-  property_id: number | null; provider: string | null; item: string | null;
+  property_id: number | null; module_key: string | null; provider: string | null; item: string | null;
   amount_usd: number; is_estimate: boolean; source_table: string; source_id: string;
   note: string | null;
 }
 interface ReconRow { source: string; source_total_usd: number | null; ledger_total_usd: number | null }
+interface ModuleRow { month: string; module_key: string; events: number; amount_usd: number }
 
 const PROPERTY_LABEL: Record<number, string> = { 260955: 'Namkhan', 1000001: 'Donna' };
 const usd = (n: number | null | undefined, dp = 2): string =>
@@ -50,13 +52,14 @@ const tenantLabel = (pid: number | null): string =>
 
 export default async function HoldingCostsPage() {
   const sb = getSupabaseAdmin();
-  const [sumRes, tenRes, buildRes, unallocRes, evRes, reconRes] = await Promise.all([
+  const [sumRes, tenRes, buildRes, unallocRes, evRes, reconRes, modRes] = await Promise.all([
     sb.from('v_costs_summary_monthly').select('*').order('month', { ascending: true }),
     sb.from('v_costs_tenant_unit_economics').select('*').order('month', { ascending: false }),
     sb.from('v_costs_build_portfolio').select('*').order('month', { ascending: false }),
     sb.from('v_costs_unallocated').select('*').order('month', { ascending: false }),
     sb.from('v_costs_events_recent').select('*').limit(60),
     sb.from('v_costs_sources_reconciliation').select('*'),
+    sb.from('v_costs_module_monthly').select('*').order('month', { ascending: false }),
   ]);
   if (sumRes.error) throw new Error(`v_costs_summary_monthly: ${sumRes.error.message}`);
 
@@ -66,6 +69,7 @@ export default async function HoldingCostsPage() {
   const unalloc = (unallocRes.data ?? []) as UnallocRow[];
   const events = (evRes.data ?? []) as EventRow[];
   const recon = (reconRes.data ?? []) as ReconRow[];
+  const modules = (modRes.data ?? []) as ModuleRow[];
 
   const months = Array.from(new Set(summary.map((r) => r.month))).sort();
   const curMonth = months[months.length - 1] ?? null;
@@ -144,14 +148,29 @@ export default async function HoldingCostsPage() {
   const eventRows = events.map((e) => ({
     at: e.event_at.slice(0, 16).replace('T', ' '),
     nature: e.cost_nature, work_class: e.work_class, tenant: tenantLabel(e.property_id),
+    module: e.module_key ?? '—',
     item: [e.provider, e.item].filter(Boolean).join(' · '),
     amount: usd(e.amount_usd, 4),
     src: `${e.source_table.replace('public.', '')}#${e.source_id}${e.is_estimate ? ' (est)' : ''}`,
   }));
   const eventCols: ChartSeries[] = [
     { key: 'nature', label: 'Nature' }, { key: 'work_class', label: 'Class' },
-    { key: 'tenant', label: 'Tenant' }, { key: 'item', label: 'Item' },
+    { key: 'tenant', label: 'Tenant' }, { key: 'module', label: 'Module' },
+    { key: 'item', label: 'Item' },
     { key: 'amount', label: 'USD' }, { key: 'src', label: 'Drill source' },
+  ];
+
+  // Module attribution (ADR-196 "costs visible on all platform levels"):
+  // current month per module, from public.v_costs_module_monthly (view-level
+  // enrichment covers historical events — ledger rows are never updated).
+  const curModules = modules.filter((m) => curMonth != null && m.month === curMonth)
+    .sort((a, b) => Number(b.amount_usd) - Number(a.amount_usd));
+  const moduleRows = curModules.map((m) => ({
+    module: m.module_key.replace(/_/g, ' '), events: String(m.events), amount: usd(Number(m.amount_usd)),
+    share: curTotal > 0 ? `${((100 * Number(m.amount_usd)) / curTotal).toFixed(1)}%` : '—',
+  }));
+  const moduleCols: ChartSeries[] = [
+    { key: 'events', label: 'Events' }, { key: 'amount', label: 'USD' }, { key: 'share', label: 'Share' },
   ];
 
   return (
@@ -179,6 +198,14 @@ export default async function HoldingCostsPage() {
 
       <Container title={`Work-class breakdown · ${curMonth?.slice(0, 7) ?? '—'}`} subtitle="ops vs build vs tenant vs special-request — separately reportable (acceptance §19)">
         <Chart variant="table" data={classRows} xKey="work_class" series={classCols} empty={{ title: 'No events this month' }} />
+      </Container>
+
+      <Container title={`Module attribution · ${curMonth?.slice(0, 7) ?? '—'}`} subtitle="public.v_costs_module_monthly · costs.module_map agent/task→module · historical events enriched at view level (ledger immutable)">
+        <Chart variant="table" data={moduleRows} xKey="module" series={moduleCols} empty={{ title: 'No module-attributed cost this month' }} />
+      </Container>
+
+      <Container title="Manual capture" subtitle="infra / SaaS charges + PBS build hours · bridges fn_costs_add_infra_charge / fn_costs_log_build_labor · ingested into the ledger on submit">
+        <CostEntryForms />
       </Container>
 
       <Container title="Tenant unit economics" subtitle="public.v_costs_tenant_unit_economics · contribution margin joins revenue at monetization-engine build">
