@@ -76,6 +76,7 @@ export const SUBPAGES_BY_DEPT: Record<string, SubpageOption[]> = {
     { href: '/marketing/docs',           label: 'Docs' },
     { href: '/marketing/reputation',     label: 'Reputation' },
     { href: '/marketing/seo',            label: 'SEO' },
+    { href: '/marketing/website',        label: 'Website' }, // website-module-v1 P3 (2026-07-30)
     { href: '/marketing/agents',         label: 'Agents' },
   ],
 
