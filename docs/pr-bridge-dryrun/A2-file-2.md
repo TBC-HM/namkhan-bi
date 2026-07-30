@@ -1,0 +1,1 @@
+PR bridge dry-run file 2 (gh-pr-bridge-v1 A2/A3 evidence, 2026-07-30). Safe to delete after verification.
