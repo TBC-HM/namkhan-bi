@@ -1,0 +1,38 @@
+-- db/proposed/build-spa-module/003_spa_resolve_treatment_and_seeds.sql
+-- STATUS: APPLIED 2026-07-30 (migration spa_resolve_treatment_fn + data seeds).
+-- Note: 001 and 002 were also applied 2026-07-30 15:24–15:25 UTC as migrations
+-- spa_rooms_and_bridges / spa_booking_functions (see supabase_migrations).
+--
+-- Spa module v1, verifier-authorized gap batch (brief spa-module-v1 §0.V):
+--   gap 1 remainder — seeds; gap 2 enabler — catalogue→operational resolver.
+--
+-- ── A. fn_spa_resolve_treatment ──────────────────────────────────────────
+-- Catalogue source of truth = property.spa_treatments (bigint ids), but
+-- spa.treatment_bookings.treatment_id → spa.treatments (uuid). The resolver
+-- upserts the operational row from the catalogue row and returns its uuid.
+-- (Full body in migration spa_resolve_treatment_fn.)
+
+-- ── B. Room seed (APPLIED) — from property.facilities, NOT invented ──────
+-- DATA-EXISTS: 3 real treatment rooms found in property.facilities
+-- (facility_id 118/119/120, parent = The Jungle Spa facility_id 6):
+--   Treatment Room 1 · couples-capable
+--   Treatment Room 2 · single
+--   Treatment Room 3 · couples-capable, aircon
+-- INSERT INTO spa.rooms ... SELECT FROM property.facilities
+-- WHERE property_id=260955 AND category='treatment_room' AND is_active;
+
+-- ── C. Catalogue seed (APPLIED) — 8 rows in property.spa_treatments ─────
+-- Source: Poster POS sales export (dms doc 3e63363a…, real transacted prices):
+--   Aroma of Laos 60min $35 · Aroma of Laos 90min $45 · Lao Oil 90min $50
+--   Lao Traditional 90min $45 · Face/Head/Shoulder $30 (duration unverified)
+--   Luxury Radiant Facial 90min $65 · Namkhan Signature Ritual 120min $70
+--   Ice Bath & Breath Work $15/pp (duration unverified)
+-- price_includes_vat_service=false (POS added 10% SC on top).
+-- Editable by spa team via Settings → Property → Spa treatments panel.
+
+-- ── D. NOT seeded: therapists ────────────────────────────────────────────
+-- No therapist names exist anywhere in the platform (hr.employees has no spa
+-- dept/positions; dms has no roster). Inventing staff names violates data
+-- truth. Booking flow works with therapist unassigned; add real therapists
+-- via a future settings panel or direct insert once the spa team supplies
+-- the roster (ship-evidence ask).
