@@ -1,10 +1,5 @@
 // app/api/marketing/youtube/manage-playlist/route.ts
 // CRUD for YouTube playlists + playlist item membership.
-// POST   body: { action: 'create', title, description?, privacy? }
-// PUT    body: { action: 'update', playlist_id, title?, description? }
-// DELETE body: { action: 'delete', playlist_id }
-// POST   body: { action: 'add_video',    playlist_id, video_id, position? }
-// POST   body: { action: 'remove_video', playlist_item_id }
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getFreshAccessToken } from '@/lib/youtube/token';
