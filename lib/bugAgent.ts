@@ -306,8 +306,13 @@ function candidatesFromTree(treePaths: string[], segments: string[]): string[] {
   return scored.slice(0, MAX_FILES_PER_PLAN).map((x) => x.p);
 }
 
-async function guessCandidateFiles(bug: { page_url: string | null; body: string | null }): Promise<string[]> {
+async function guessCandidateFiles(bug: { page_url: string | null; body: string | null; component?: string | null; file_path?: string | null }): Promise<string[]> {
   const files: string[] = [];
+  // 2026-07-30 fix (PBS: "agents who pick it up never understand context") —
+  // bug-triage already resolves this most of the time (component ~98% of
+  // bugs, file_path ~50%). Trust it as the top candidate instead of
+  // re-deriving from the URL from scratch on every run.
+  if (bug.file_path) files.push(bug.file_path);
   const url = bug.page_url ?? '';
   // List ALL files in the bug's route directory (law 549 — no guessing)
   const dirs: string[] = [];
@@ -393,7 +398,7 @@ async function storeNeedsHumanQuestion(bugId: number, reason: string, question?:
   } catch { /* question storage is best-effort; needs_human still lands */ }
 }
 
-async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null; reviewFeedback?: string }): Promise<PlannerResult> {
+async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null; component?: string | null; file_path?: string | null; reviewFeedback?: string }): Promise<PlannerResult> {
   const candidates = await guessCandidateFiles(bug);
   const contexts: Array<{ path: string; content: string }> = [];
   let fetchLog = '';
@@ -418,6 +423,8 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
     return [
       `BUG #${bug.id}`,
       `URL: ${bug.page_url ?? '(none)'}`,
+      `COMPONENT (triaged): ${bug.component ?? '(not triaged)'}`,
+      `KNOWN FILE (triaged): ${bug.file_path ?? '(none — resolved from URL/candidates below)'}`,
       `REPORT: ${bug.body ?? '(empty)'}`,
       '',
       `CANDIDATE FILES (${ctxs.length} files fetched):`,
@@ -629,7 +636,7 @@ async function verifyDeploy(commitSha: string, pageUrl: string | null, budgetMs 
 // and strands the run in a non-terminal phase (run 71: phase=verifying,
 // ended_at null, forever). Running out of window is NOT a failure — the run
 // closes as done + ci_pending_timeout per D2.
-export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }, triggeredBy: string, verifyBudgetMs = 240_000, jobDeadlineMs?: number): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
+export async function runOneBug(bug: { id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null; component?: string | null; file_path?: string | null }, triggeredBy: string, verifyBudgetMs = 240_000, jobDeadlineMs?: number): Promise<{ bug_id: number; run_id?: number; ok: boolean; phase?: string; error?: string; cost_usd?: number }> {
   const sb = getSupabaseAdmin();
   const initialLog = `START · bug=${bug.id} url=${bug.page_url ?? '(none)'}`;
   const { data: rpcData, error: insErr } = await sb.rpc('fn_bug_agent_run_insert', {
@@ -746,19 +753,19 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
   }
 }
 
-export async function pickBugs(opts: { bug_ids?: number[]; mode: 'one' | 'drain'; max: number }): Promise<Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }>> {
+export async function pickBugs(opts: { bug_ids?: number[]; mode: 'one' | 'drain'; max: number }): Promise<Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null; component: string | null; file_path: string | null }>> {
   const sb = getSupabaseAdmin();
   // PBS 2026-07-17 — READ from public.cockpit_bugs view (cockpit schema not
   // PostgREST-exposed). View exposes agent_skip via the underlying table.
   // PBS 2026-07-17 — v_bugs_ready_for_agent excludes bugs attempted in the
   // last 4h so drain doesn't re-pick the same 3 bugs every call.
   let q = sb.from('v_bugs_ready_for_agent')
-    .select('id, body, page_url, dept_slug, status, property_id');
+    .select('id, body, page_url, dept_slug, status, property_id, component, file_path');
   if (opts.bug_ids && opts.bug_ids.length > 0) q = q.in('id', opts.bug_ids);
   // PBS 2026-07-27 — owner-set priority wins (lower = sooner), then FIFO.
   q = q.order('priority', { ascending: true }).order('created_at', { ascending: true }).limit(opts.mode === 'one' ? 1 : opts.max);
   const { data } = await q;
-  return ((data ?? []) as Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null }>);
+  return ((data ?? []) as Array<{ id: number; body: string | null; page_url: string | null; dept_slug: string | null; property_id: string | null; component: string | null; file_path: string | null }>);
 }
 
 // 2026-07-27 (R1, PBS-approved $50/mo): month-to-date measured spend from
