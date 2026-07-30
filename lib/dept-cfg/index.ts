@@ -1277,3 +1277,5 @@ export const DEPT_CFG = {
   holding_john:      HOLDING_JOHN_CFG,
   holding_finance:   HOLDING_FINANCE_CFG,
 } as const;
+
+export type { DeptCfg } from './types';
