@@ -8,6 +8,7 @@ import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab
 import { OPERATIONS_SUBPAGES } from '@/app/operations/_subpages';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import { supabase } from '@/lib/supabase';
+import SpaSubnav from '@/app/operations/spa/_shared/SpaSubnav';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -206,6 +207,7 @@ export default async function DonnaSpaPage({ params, searchParams }: Props) {
   return (
     <DashboardPage title="Wellness treatments" subtitle={`Operations · Spa · Cloudbeds folio · Donna Portals · property_id=${propertyId}`} tabs={tabs}>
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <SpaSubnav active="overview" />
         <Container title="Operating snapshot" subtitle={`Cloudbeds folio · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
