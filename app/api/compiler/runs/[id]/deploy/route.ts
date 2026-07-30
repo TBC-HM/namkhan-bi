@@ -1,7 +1,13 @@
 // app/api/compiler/runs/[id]/deploy/route.ts
-// POST { variantId, designVariant, subdomain } -> creates compiler.deploys row,
-// publishes a web.retreats record so the public /r/[slug] page can render.
-// Stubs Vercel/Cloudflare integration.
+// POST { variantId, designVariant, subdomain, channels } -> creates
+// compiler.deploys row, publishes a web.retreats record so the public
+// /r/[slug] page can render. Stubs Vercel/Cloudflare integration.
+//
+// A2 (brief autospec-compiler_module-20260725, additive — response shape
+// preserved): optional `channels` {sales, social, influencer} booleans are
+// recorded on the deploy row as HONEST broadcast entries — `queued` (their
+// cockpits pick them up later), never fake `live`. Web is `live` because the
+// /r/[slug] funnel genuinely is.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -19,7 +25,7 @@ export async function POST(
   const admin = getSupabaseAdmin();
   const id = params.id;
   const body = await req.json().catch(() => ({}));
-  const { variantId, designVariant = 'B', subdomain } = body;
+  const { variantId, designVariant = 'B', subdomain, channels } = body;
   if (!variantId) return NextResponse.json({ error: 'variantId required' }, { status: 400 });
 
   const { data: variant } = await admin.schema('compiler').from('variants').select('*').eq('id', variantId).maybeSingle();
@@ -28,6 +34,16 @@ export async function POST(
 
   const spec = (run.parsed_spec ?? {}) as any;
   const slug = subdomain || slugify(`${spec.theme ?? 'retreat'}-${spec.season?.[0] ?? 'all'}-${id.slice(0, 6)}`);
+
+  // Honest broadcast log (D3): web is live (the /r/ funnel really deploys);
+  // opted-in channels are queued until their cockpits pick them up.
+  const broadcastTargets = {
+    web: 'live',
+    sales: channels?.sales ? 'queued' : 'off',
+    social: channels?.social ? 'queued' : 'off',
+    influencer: channels?.influencer ? 'queued' : 'off',
+    queued_at: new Date().toISOString(),
+  };
 
   // Create a deploys row
   const { data: deploy, error: depErr } = await admin
@@ -40,6 +56,7 @@ export async function POST(
       subdomain: slug,
       status: 'live',
       deployed_at: new Date().toISOString(),
+      broadcast_targets: broadcastTargets,
     })
     .select('id')
     .single();
@@ -70,6 +87,7 @@ export async function POST(
     subdomain: slug,
     publicUrl: `/r/${slug}`,
     status: 'live',
+    broadcasts: broadcastTargets,
     note: 'v1 publishes to /r/[slug] on the same Vercel project. Custom subdomain wiring deferred.',
   });
 }
