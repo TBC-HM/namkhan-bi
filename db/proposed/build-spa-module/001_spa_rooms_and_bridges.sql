@@ -1,5 +1,5 @@
 -- db/proposed/build-spa-module/001_spa_rooms_and_bridges.sql
--- PROPOSED — NOT APPLIED. Requires PBS approval (project rule 4).
+-- APPLIED 2026-07-30 15:24 UTC as migration spa_rooms_and_bridges (verifier-authorized, brief spa-module-v1 §0.V).
 -- Spa module v1 (brief spa-module-v1, audit docs/spa-audit-2026-07-30.md).
 --
 -- Found state: spa.treatment_bookings / spa.therapists exist (0 rows) but have
@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS spa.rooms (
 -- VALUES (260955, 'Treatment Room 1', 'treatment', true, 1),
 --        (260955, 'Treatment Room 2', 'treatment', true, 2)
 -- ON CONFLICT (property_id, name) DO NOTHING;
+-- [2026-07-30 builder note: superseded — rooms seeded from property.facilities
+--  treatment_room rows (3 real rooms, facility_id 118/119/120); see 003.]
 
 -- ── 2. Therapist display name (gap: spa.therapists has no name column) ───
 ALTER TABLE spa.therapists ADD COLUMN IF NOT EXISTS display_name text;
