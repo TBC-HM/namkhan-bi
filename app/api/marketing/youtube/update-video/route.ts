@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getFreshAccessToken } from '@/lib/youtube/token';
-import { updateVideoMetadata } from '@/lib/youtube/data';
+import { updateVideoMetadata, isErr } from '@/lib/youtube/data';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +35,6 @@ export async function POST(req: Request) {
     ...(tags        !== undefined ? { tags }        : {}),
   });
 
-  if (!result.ok) return NextResponse.json({ error: result.error, detail: result.detail }, { status: 502 });
+  if (isErr(result)) return NextResponse.json({ error: result.error, detail: result.detail }, { status: 502 });
   return NextResponse.json({ ok: true, video_id });
 }
