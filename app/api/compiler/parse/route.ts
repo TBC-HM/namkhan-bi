@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
         prompt,
         parsed_spec: parsed,
         status: 'draft',
-        property_id: 'namkhan',
+        // A5 (brief autospec-compiler_module-20260725): canonical LOCKED
+        // property id, not the legacy 'namkhan' text (column is bigint).
+        property_id: 260955,
         cost_eur: 0,
         model: 'regex-mvp',
       })
