@@ -44,6 +44,9 @@ const nextConfig = {
       // Phase 2 marketing restructure 2026-05-01 PM: /media* → /library, /upload, /taxonomy.
       // PBS 2026-07-11 pm: killed the legacy /marketing/media redirects — the new Media Hub owns /marketing/media.
       // /marketing/library now 307 → /marketing/media (in app/marketing/library/page.tsx).
+      // 2026-07-30 (brief autospec-newsletter_module-20260725 · A8/URL LAW rule 7):
+      // Director Studio moved under the tenant tree; legacy path is a Namkhan-only 307.
+      { source: '/guest/newsletters/director',  destination: '/h/260955/guest/newsletters/director', permanent: false },
     ];
   },
 };
