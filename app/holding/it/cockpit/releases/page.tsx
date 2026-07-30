@@ -7,7 +7,8 @@
 // Top: the live module table from public.v_module_completion_queue (no cache,
 // no hardcoded rows — force-dynamic + revalidate 0, straight from the view).
 // Sort: needs-owner rows (open_questions set) first, then in_production desc,
-// then priority.
+// then expected_delivery (nulls last; priority as final tiebreak) — brief v2
+// verifier objection V7.
 //
 // Below: the rule-597 doc-release ledger (platform + module releases),
 // preserved from v1. A RELEASE is an append-only, sha256-signed snapshot of
@@ -62,7 +63,8 @@ async function fetchQueue(): Promise<QueueRow[]> {
     return [];
   }
   const rows = ((data as QueueRow[]) ?? []).slice();
-  // needs-owner first, then in production, then priority.
+  // needs-owner first, then in production, then expected_delivery (nulls
+  // last), then priority as tiebreak (brief releases-cockpit-v2 · V7).
   rows.sort((a, b) => {
     const aQ = a.open_questions ? 0 : 1;
     const bQ = b.open_questions ? 0 : 1;
@@ -70,6 +72,9 @@ async function fetchQueue(): Promise<QueueRow[]> {
     const aP = a.in_production ? 0 : 1;
     const bP = b.in_production ? 0 : 1;
     if (aP !== bP) return aP - bP;
+    const aD = a.expected_delivery ?? '9999-12-31';
+    const bD = b.expected_delivery ?? '9999-12-31';
+    if (aD !== bD) return aD < bD ? -1 : 1;
     return (a.priority ?? 999) - (b.priority ?? 999);
   });
   return rows;
