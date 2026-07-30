@@ -18,10 +18,15 @@
 // v1 CUT (stated): both modes post to the EXISTING /api/cockpit/chat route
 // (tickets-thread persistence — cockpit_tickets is the conversation store
 // until cockpit.conversations/messages land, see db/proposed/build-central-
-// chat/). The body carries mode / module_scope / property_id; the route
-// ignores unknown fields today, so general-mode isolation is enforced
-// server-side only when the route grows mode support (v2). The component
-// already sends the fields so no client change is needed then.
+// chat/). The body carries mode / module_scope / property_id.
+// 2026-07-30 (verifier V3 fix): the route now enforces general-mode
+// isolation SERVER-SIDE — mode='general' skips all context assembly, tools
+// and memory writes; the label here is informational only.
+//
+// 2026-07-30 (verifier V4 fix): general mode is ALWAYS offered — every
+// instance renders a mode toggle. The `mode` prop is the instance default
+// (its knowledge scope); the user can flip to General (model-only) and back
+// at any time. Flipping starts a fresh thread so scopes never mix.
 //
 // Owner-class questions: any Felix reply that surfaces an owner decision
 // ("owner-class", "Decision Inbox", "Needs you", "OPEN QUESTION") gets a
@@ -115,10 +120,13 @@ function hasOwnerClassQuestion(agentText: string): boolean {
   return /owner-class|decision inbox|needs you|open question/i.test(agentText);
 }
 
-export default function CentralChat({ mode, moduleScope, propertyId }: CentralChatProps) {
+export default function CentralChat({ mode: defaultMode, moduleScope, propertyId }: CentralChatProps) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  // V4 (2026-07-30): mode is user-switchable in every instance; the prop is
+  // just the instance default. General mode is always offered.
+  const [mode, setMode] = useState<CentralChatMode>(defaultMode);
   // Thread starts fresh on mount (PBS 2026-05-09 rule — no stale localStorage).
   const [threadStart, setThreadStart] = useState<string>(() => new Date().toISOString());
   const endRef = useRef<HTMLDivElement>(null);
@@ -126,6 +134,14 @@ export default function CentralChat({ mode, moduleScope, propertyId }: CentralCh
   const startNewChat = () => {
     setThreadStart(new Date().toISOString());
     setInput('');
+  };
+
+  // Switching modes starts a fresh thread — scopes never mix in one thread.
+  const switchMode = (m: CentralChatMode) => {
+    if (m === mode) return;
+    setMode(m);
+    setTickets([]);
+    setThreadStart(new Date().toISOString());
   };
 
   function buildConversationHistory(): Array<{ role: 'user' | 'assistant'; content: string }> {
@@ -179,8 +195,9 @@ export default function CentralChat({ mode, moduleScope, propertyId }: CentralCh
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
-    // One-channel law: every turn routes to Felix ('lead'). Never a specialist.
-    const body = text.match(/^@/) ? text : `@felix ${text}`;
+    // One-channel law: every Second Brain turn routes to Felix ('lead').
+    // General mode has no dispatcher — raw text, model only.
+    const body = mode === 'general' ? text : (text.match(/^@/) ? text : `@felix ${text}`);
     const conversation_history = buildConversationHistory();
     const optimistic: Ticket = {
       id: -Date.now(),
@@ -201,10 +218,10 @@ export default function CentralChat({ mode, moduleScope, propertyId }: CentralCh
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: body,
-          mention: 'felix',
+          mention: mode === 'general' ? undefined : 'felix',
           conversation_history,
-          // Forward-compatible scope fields — ignored by the route today,
-          // consumed once mode-scoped context assembly lands (v2).
+          // Scope fields — enforced server-side since 2026-07-30 (V3):
+          // mode='general' → no context assembly, no tools, no memory writes.
           mode,
           module_scope: moduleScope ?? null,
           property_id: propertyId ?? null,
@@ -236,25 +253,35 @@ export default function CentralChat({ mode, moduleScope, propertyId }: CentralCh
       {/* ── header ─────────────────────────────────────────────────────── */}
       <div style={S.header}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={S.avatar}>F</div>
+          <div style={S.avatar}>{mode === 'general' ? '◦' : 'F'}</div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>Felix · chief of staff</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
+              {mode === 'general' ? 'General chat · model only' : 'Felix · chief of staff'}
+            </div>
             <div style={{ fontFamily: MONO, fontSize: 10, color: C.text3, letterSpacing: 0.4 }}>{scopeBits}</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {mode === 'general' && (
-            <span
-              title="General mode: model only. No business data read, no memory written."
-              style={{
-                fontFamily: MONO, fontSize: 10, color: C.text2,
-                border: `1px solid ${C.border}`, borderRadius: 2, padding: '3px 8px',
-                background: C.bg,
-              }}
-            >
-              no business data
-            </span>
-          )}
+          {/* V4: mode toggle — general access always available in every instance. */}
+          <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden' }}>
+            {(['second-brain', 'general'] as CentralChatMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => switchMode(m)}
+                title={m === 'general'
+                  ? 'General mode: model only. No business data read, no memory written. Enforced server-side.'
+                  : 'Second Brain: full scoped business context via Felix.'}
+                style={{
+                  fontFamily: MONO, fontSize: 10, letterSpacing: 0.4, cursor: 'pointer',
+                  padding: '4px 10px', border: 0,
+                  background: mode === m ? C.forest : C.bg,
+                  color: mode === m ? '#FFFFFF' : C.text2,
+                }}
+              >
+                {m === 'general' ? 'General' : 'Second Brain'}
+              </button>
+            ))}
+          </div>
           <button onClick={startNewChat} style={S.newChatBtn}>+ New chat</button>
         </div>
       </div>
@@ -289,7 +316,7 @@ export default function CentralChat({ mode, moduleScope, propertyId }: CentralCh
               )}
               {(split.agent || isPending) && (
                 <div style={S.agentRow}>
-                  <div style={S.agentAvatar}>F</div>
+                  <div style={S.agentAvatar}>{mode === 'general' ? '◦' : 'F'}</div>
                   <div style={{ maxWidth: 'calc(100% - 44px)' }}>
                     <div style={S.agentBubble}>
                       {isPending ? (
@@ -297,7 +324,9 @@ export default function CentralChat({ mode, moduleScope, propertyId }: CentralCh
                           <span style={S.dot} />
                           <span style={{ ...S.dot, animationDelay: '0.2s' }} />
                           <span style={{ ...S.dot, animationDelay: '0.4s' }} />
-                          <span style={{ marginLeft: 8, color: C.text2, fontSize: 12 }}>Felix is thinking…</span>
+                          <span style={{ marginLeft: 8, color: C.text2, fontSize: 12 }}>
+                            {mode === 'general' ? 'Thinking…' : 'Felix is thinking…'}
+                          </span>
                         </span>
                       ) : (
                         <div dangerouslySetInnerHTML={{ __html: md(split.agent) }} />
@@ -343,7 +372,11 @@ export default function CentralChat({ mode, moduleScope, propertyId }: CentralCh
             {sending ? '…' : '→'}
           </button>
         </div>
-        <div style={S.hint}>Enter to send · Shift+Enter for new line · one channel — Felix dispatches</div>
+        <div style={S.hint}>
+          {mode === 'general'
+            ? 'Enter to send · Shift+Enter for new line · model only — nothing touches the business'
+            : 'Enter to send · Shift+Enter for new line · one channel — Felix dispatches'}
+        </div>
       </div>
 
       <style jsx global>{`
