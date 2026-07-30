@@ -75,6 +75,7 @@ export async function POST(req: Request) {
       vendor_id: po.vendor_id,
       reference_type: 'po',
       reference_id: po.po_id,
+      reason_code: 'purchase',
       batch_code: b.batch_code ?? null,
       expiry_date: b.expiry_date ?? null,
       notes: b.notes ?? null,
