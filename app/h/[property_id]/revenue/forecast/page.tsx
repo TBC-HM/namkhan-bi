@@ -65,6 +65,34 @@ interface ScoredRow {
   within_band: boolean | null;
 }
 
+// LLM commentary layer (forecast-commentary edge fn → forecast.run_commentary,
+// read via public.v_forecast_commentary). Content is agent-written jsonb —
+// every field is optional and rendered defensively. BINDING rule 1: this layer
+// never alters the statistical numbers above it.
+interface CommentaryRow {
+  run_date: string;
+  kind: 'challenger' | 'insight';
+  content: Record<string, unknown> | null;
+  model: string | null;
+  confidence_adjustment: number | null;
+}
+
+interface ChallengerContent {
+  verdict?: string;
+  summary?: string;
+  challenges?: Array<{ issue?: string; severity?: string; detail?: string }>;
+  stale_data_flags?: string[];
+}
+
+interface InsightContent {
+  summary?: string;
+  findings?: Array<{ title?: string; detail?: string; confidence?: string }>;
+  drivers?: string[];
+  risks?: string[];
+  opportunities?: string[];
+  recommended_actions?: Array<{ action?: string; rationale?: string }>;
+}
+
 // ─── Fetchers ─────────────────────────────────────────────────────────────
 
 async function getForecastCurrent(pid: number): Promise<ForecastRow[]> {
@@ -97,6 +125,21 @@ async function getScored90d(pid: number, todayIso: string): Promise<ScoredRow[]>
     if (rows.length < PAGE) break;
   }
   return out;
+}
+
+async function getCommentary(pid: number): Promise<{ challenger: CommentaryRow | null; insight: CommentaryRow | null }> {
+  const { data, error } = await supabase
+    .from('v_forecast_commentary')
+    .select('run_date, kind, content, model, confidence_adjustment')
+    .eq('property_id', pid)
+    .order('run_date', { ascending: false })
+    .limit(6);
+  if (error) { console.error('[forecast] v_forecast_commentary', error); return { challenger: null, insight: null }; }
+  const rows = (data ?? []) as CommentaryRow[];
+  return {
+    challenger: rows.find((r) => r.kind === 'challenger') ?? null,
+    insight: rows.find((r) => r.kind === 'insight') ?? null,
+  };
 }
 
 async function getLyRoomsByMonth(pid: number, fromIso: string, toIso: string): Promise<Map<string, number>> {
@@ -151,6 +194,111 @@ function placeholderNote(text: string) {
     <p style={{ margin: 0, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.6, fontStyle: 'italic' }}>
       {text}
     </p>
+  );
+}
+
+function listBlock(label: string, items: string[] | undefined) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div>
+      <p style={{ margin: '0 0 4px', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>{label}</p>
+      <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.7 }}>
+        {items.map((it, i) => (<li key={i}>{it}</li>))}
+      </ul>
+    </div>
+  );
+}
+
+function ChallengerSection({ row }: { row: CommentaryRow | null }) {
+  const c = (row?.content ?? null) as ChallengerContent | null;
+  const verdict = String(c?.verdict ?? '');
+  const status = !c ? 'grey' : verdict === 'sound' ? 'green' : verdict === 'caution' ? 'amber' : verdict === 'unreliable' ? 'red' : 'grey';
+  return (
+    <Container
+      title={`Forecast Challenger${verdict ? ` — verdict: ${verdict}` : ''}`}
+      subtitle={
+        row
+          ? `Adversarial LLM review of run ${row.run_date} · never changes the statistical numbers · ${row.model ?? ''}`
+          : 'Adversarial review: stale data, unrealistic assumptions, unusual pace → confidence adjustment'
+      }
+      status={status as 'green' | 'amber' | 'red' | 'grey'}
+    >
+      {c ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {c.summary ? <p style={{ margin: 0, color: 'var(--ink)', fontSize: 13, lineHeight: 1.6 }}>{c.summary}</p> : null}
+          {(c.challenges ?? []).length > 0 ? (
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.7 }}>
+              {(c.challenges ?? []).map((ch, i) => (
+                <li key={i}>
+                  <strong style={{ color: 'var(--ink)' }}>{ch.issue ?? 'issue'}</strong>
+                  {ch.severity ? ` (${ch.severity})` : ''}{ch.detail ? ` — ${ch.detail}` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {typeof row?.confidence_adjustment === 'number' && row.confidence_adjustment !== 0 ? (
+            <p style={{ margin: 0, color: 'var(--ink-soft)', fontSize: 12.5 }}>
+              Confidence adjustment: {row.confidence_adjustment} pp — read the stated bands that much wider.
+            </p>
+          ) : null}
+          {listBlock('Stale-data flags', c.stale_data_flags)}
+        </div>
+      ) : (
+        placeholderNote(
+          'No Challenger review yet for the latest run. The nightly forecast-commentary agent (19:00 UTC) attempts to prove the forecast wrong and adjusts confidence. It never changes the statistical numbers above.',
+        )
+      )}
+    </Container>
+  );
+}
+
+function InsightSection({ row }: { row: CommentaryRow | null }) {
+  const c = (row?.content ?? null) as InsightContent | null;
+  return (
+    <Container
+      title="Insight — findings, drivers, risks, opportunities"
+      subtitle={
+        row
+          ? `LLM framing of run ${row.run_date} · recommendations only, humans and Vector execute · ${row.model ?? ''}`
+          : 'Numbers → business findings (e.g. demand shifted later than the historical booking window)'
+      }
+      status={c ? undefined : 'grey'}
+    >
+      {c ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {c.summary ? <p style={{ margin: 0, color: 'var(--ink)', fontSize: 13, lineHeight: 1.6 }}>{c.summary}</p> : null}
+          {(c.findings ?? []).length > 0 ? (
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.7 }}>
+              {(c.findings ?? []).map((f, i) => (
+                <li key={i}>
+                  <strong style={{ color: 'var(--ink)' }}>{f.title ?? 'finding'}</strong>
+                  {f.confidence ? ` (${f.confidence} confidence)` : ''}{f.detail ? ` — ${f.detail}` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {listBlock('Drivers', c.drivers)}
+          {listBlock('Risks', c.risks)}
+          {listBlock('Opportunities', c.opportunities)}
+          {(c.recommended_actions ?? []).length > 0 ? (
+            <div>
+              <p style={{ margin: '0 0 4px', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>
+                Recommended actions — recommend only, never execute
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.7 }}>
+                {(c.recommended_actions ?? []).map((a, i) => (
+                  <li key={i}>{a.action ?? ''}{a.rationale ? ` — ${a.rationale}` : ''}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        placeholderNote(
+          'No Insight yet for the latest run. The nightly forecast-commentary agent (19:00 UTC) turns the engine output into named business findings with confidence levels. Framing only — the forecast itself stays statistical.',
+        )
+      )}
+    </Container>
   );
 }
 
@@ -231,26 +379,6 @@ function EngineOutlookSection({ run }: { run: EngineRun | null }) {
       </Container>
 
       <Container
-        title="Forecast Challenger — placeholder (v2 LLM slot)"
-        subtitle="Adversarial review: stale data, unrealistic assumptions, unusual pace → confidence adjustment"
-        status="grey"
-      >
-        {placeholderNote(
-          'Not yet active. In v2 the Challenger agent attempts to prove this forecast wrong and adjusts confidence. It never changes the statistical numbers above.',
-        )}
-      </Container>
-
-      <Container
-        title="Insight — placeholder (v2 LLM slot)"
-        subtitle="Numbers → business findings (e.g. demand shifted later than the historical booking window)"
-        status="grey"
-      >
-        {placeholderNote(
-          'Not yet active. In v2 the Insight agent turns the engine output into named business findings with confidence levels. Framing only — the forecast itself stays statistical.',
-        )}
-      </Container>
-
-      <Container
         title="Scenarios & recommendations — placeholder (v2 LLM slot)"
         subtitle="What-if comparisons over engine runs · options only — recommend, never execute"
         status="grey"
@@ -298,7 +426,10 @@ export default async function RevenueForecastPage({
   // TS engine v1 (lib/forecast) — independent of the nightly run, so the
   // statistical outlook still renders when forecast-daily-run is down.
   const todayIso = new Date().toISOString().slice(0, 10);
-  const engineRun = await runMonthlyForecast(propertyId, fc[0]?.run_date ?? todayIso);
+  const [engineRun, commentary] = await Promise.all([
+    runMonthlyForecast(propertyId, fc[0]?.run_date ?? todayIso),
+    getCommentary(propertyId),
+  ]);
 
   if (fc.length === 0) {
     return (
@@ -312,6 +443,8 @@ export default async function RevenueForecastPage({
             </p>
           </Container>
           <EngineOutlookSection run={engineRun} />
+          <ChallengerSection row={commentary.challenger} />
+          <InsightSection row={commentary.insight} />
         </div>
       </DashboardPage>
     );
@@ -523,6 +656,8 @@ export default async function RevenueForecastPage({
         </Container>
 
         <EngineOutlookSection run={engineRun} />
+        <ChallengerSection row={commentary.challenger} />
+        <InsightSection row={commentary.insight} />
       </div>
     </DashboardPage>
   );
