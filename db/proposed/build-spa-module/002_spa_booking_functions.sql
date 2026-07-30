@@ -1,5 +1,5 @@
 -- db/proposed/build-spa-module/002_spa_booking_functions.sql
--- PROPOSED — NOT APPLIED. Requires PBS approval (project rule 4).
+-- APPLIED 2026-07-30 15:25 UTC as migration spa_booking_functions (verifier-authorized, brief spa-module-v1 §0.V).
 -- Conflict-safe booking writes for spa module v1. Depends on 001.
 --
 -- Queue-only law: nothing here triggers agents. These are SECURITY DEFINER
