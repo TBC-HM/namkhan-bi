@@ -4,7 +4,7 @@
 // move these to a `compiler.settings` jsonb row so they're editable.
 
 import TenantLink from '@/components/nav/TenantLink';
-import Page from '@/components/page/Page';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtKpi } from '@/lib/format';
@@ -46,14 +46,21 @@ export default async function CompilerSettingsPage() {
     { key: 'Rate seasons',                 value: String(seasonsCount ?? 0),               source: 'pricing.seasons',                   editable: 'live' },
     { key: 'Parser model',                 value: 'regex (MVP)',                           source: 'lib/compiler/parse.ts',             editable: 'soon' },
     { key: 'Variant builder',              value: 'real PMS NRF rate × selection',   source: 'lib/compiler/variants.ts',          editable: 'live' },
-    { key: 'PDF render',                   value: 'STUB · returns placeholder URL',        source: 'app/api/compiler/runs/[id]/render', editable: 'soon' },
+    { key: 'PDF render',                   value: 'LIVE · print-clean offer doc',          source: 'app/api/compiler/runs/[id]/pdf',    editable: 'live' },
     { key: 'Stripe checkout',              value: 'STUB · holds booking, no charge',       source: 'STRIPE_SECRET_KEY missing',         editable: 'env' },
     { key: 'PMS reserve on payment', value: 'STUB · not auto-created',               source: 'CLOUDBEDS_REFRESH_TOKEN missing',   editable: 'env' },
     { key: 'Klaviyo lead flow',            value: 'STUB · capture writes to web.subscribers, no flow',  source: 'KLAVIYO_PRIVATE_KEY missing', editable: 'env' },
   ];
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/compiler',
+  }));
+
   return (
-    <Page eyebrow="Marketing · Compiler · Settings" title={<>Compiler <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>settings</em></>} subPages={MARKETING_SUBPAGES}>
+    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+    <DashboardPage title="Marketing · Compiler · Settings" tabs={tabs}>
+    <div style={{ gridColumn: '1 / -1' }}>
 
       <div style={{ marginTop: 16, marginBottom: 8 }} className="t-eyebrow">Configuration</div>
 
@@ -85,6 +92,8 @@ export default async function CompilerSettingsPage() {
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
         <TenantLink href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</TenantLink>
       </div>
-    </Page>
+    </div>
+    </DashboardPage>
+    </div>
   );
 }
