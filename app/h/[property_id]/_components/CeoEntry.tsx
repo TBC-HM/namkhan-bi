@@ -244,6 +244,8 @@ export default async function CeoEntry({
                   { label: 'How is the resort doing today?', href: `/h/${cfg.propertyId}/revenue/pulse` },
                   { label: 'Any leakage flags?',             href: `/h/${cfg.propertyId}/revenue/leakage` },
                   { label: 'This week pickup',               href: `/h/${cfg.propertyId}/revenue/pickup` },
+                  // dataroom-module-v1 round 2: property data-room cockpit entry
+                  { label: 'Data room',                      href: `/h/${cfg.propertyId}/dataroom` },
                 ].map((chip) => (
                   <ChipHint key={chip.label} label={chip.label} href={chip.href} />
                 ))}
