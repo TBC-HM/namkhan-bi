@@ -9,8 +9,10 @@ import { OPERATIONS_SUBPAGES } from '@/app/operations/_subpages';
 import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
 import SpaSubnav from './SpaSubnav';
 import BridgeNotice from './BridgeNotice';
+import BookingForm from './BookingForm';
+import StatusActions from './StatusActions';
 import {
-  getSpaBookingsForDay, getSpaTherapists, getSpaRooms,
+  getSpaBookingsForDay, getSpaTherapists, getSpaRooms, getSpaCatalogue,
   localTimeStr, localHour, todayIsoAtProperty,
   type SpaBookingRow,
 } from './data';
@@ -45,10 +47,11 @@ export default async function ScheduleView({
   const dRaw = typeof searchParams.d === 'string' ? searchParams.d : todayIso;
   const dayIso = /^\d{4}-\d{2}-\d{2}$/.test(dRaw) ? dRaw : todayIso;
 
-  const [bookingsB, therapistsB, roomsB] = await Promise.all([
+  const [bookingsB, therapistsB, roomsB, catalogue] = await Promise.all([
     getSpaBookingsForDay(propertyId, dayIso),
     getSpaTherapists(propertyId),
     getSpaRooms(propertyId),
+    getSpaCatalogue(propertyId),
   ]);
 
   const bridgeMissing = bookingsB.bridgeMissing;
@@ -103,9 +106,9 @@ export default async function ScheduleView({
           padding: '6px 12px', fontFamily: MONO, fontSize: 11, letterSpacing: '0.04em',
           textTransform: 'uppercase', textDecoration: 'none', borderRadius: 4,
           border: `1px solid ${TOKENS.border}`,
-          color: p.d === dayIso && p.label !== 'Today' ? '#FFF' : TOKENS.ink,
+          color: p.d === dayIso && p.label !== 'Today' ? TOKENS.bgRaised : TOKENS.ink,
           background: p.label === 'Today' && dayIso === todayIso ? TOKENS.forest : TOKENS.bgRaised,
-          ...(p.label === 'Today' && dayIso === todayIso ? { color: '#FFF' } : {}),
+          ...(p.label === 'Today' && dayIso === todayIso ? { color: TOKENS.bgRaised } : {}),
         }}>
           {p.label}
         </TenantLink>
@@ -126,6 +129,19 @@ export default async function ScheduleView({
 
         {bridgeMissing && <BridgeNotice what="The schedule surface" />}
 
+        {!bridgeMissing && (
+          <BookingForm
+            propertyId={propertyId}
+            dayIso={dayIso}
+            treatments={catalogue.filter((t) => t.is_active !== false).map((t) => ({
+              treatment_id: t.treatment_id, name: t.name,
+              duration_min: t.duration_min, price_usd: t.price_usd == null ? null : Number(t.price_usd),
+            }))}
+            therapists={therapistsB.rows.map((t) => ({ id: t.therapist_id, label: t.display_name }))}
+            rooms={roomsB.rows.map((r) => ({ id: String(r.room_id), label: r.name + (r.couples_capable ? ' · couples' : '') }))}
+          />
+        )}
+
         <Container title="Daily spa analytics" subtitle={`bookings · revenue · capacity · ${dayIso}`} density="compact" action={dayNav}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
             {kpis.map((t, i) => <KpiTile key={i} {...t} />)}
@@ -135,7 +151,7 @@ export default async function ScheduleView({
         <Container title="Slot grid" subtitle={`therapist columns × hour rows · ${DAY_START}:00–${DAY_END}:00 local`} density="compact">
           {activeBookings.length === 0 && !bridgeMissing ? (
             <div style={{ padding: 20, fontSize: 13, color: TOKENS.inkSoft }}>
-              No bookings for {dayIso}. Bookings are created via <code style={{ fontFamily: MONO }}>fn_spa_create_booking</code> (conflict-safe: rejects therapist/room overlap incl. cleanup buffer).
+              No bookings for {dayIso}. Use <strong>+ New booking</strong> above — creation is conflict-safe (rejects therapist/room overlap incl. cleanup buffer).
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -187,7 +203,7 @@ export default async function ScheduleView({
                   <tr>
                     <th style={th}>Time</th><th style={th}>Guest</th><th style={th}>Treatment</th>
                     <th style={th}>Therapist</th><th style={th}>Room</th><th style={th}>Status</th>
-                    <th style={{ ...th, textAlign: 'right' }}>Price</th><th style={th}>Folio</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Price</th><th style={th}>Folio</th><th style={th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -201,6 +217,7 @@ export default async function ScheduleView({
                       <td style={{ ...td, color: STATUS_COLOR[b.status] ?? TOKENS.ink, fontFamily: MONO, fontSize: 11, textTransform: 'uppercase' }}>{b.status}</td>
                       <td style={{ ...td, textAlign: 'right', fontFamily: MONO }}>{fmtMoney(b.price, b.currency)}</td>
                       <td style={{ ...td, fontFamily: MONO, fontSize: 11 }}>{b.posted_to_folio ? (b.cloudbeds_charge_id ?? 'posted') : '—'}</td>
+                      <td style={td}><StatusActions bookingId={b.booking_id} status={b.status} /></td>
                     </tr>
                   ))}
                 </tbody>
