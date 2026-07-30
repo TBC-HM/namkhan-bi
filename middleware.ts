@@ -46,6 +46,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/marketing/media/preview') || // PBS 2026-07-14
     pathname.startsWith('/api/marketing/contacts/extract') || // PBS 2026-07-16 · cron+admin gate lives inside the route
     pathname.startsWith('/api/public/') || // PBS 2026-07-16 (Feature B): public guest confirmation POST
+    pathname.startsWith('/api/sales/leads/webhook') || // sales brief A7 2026-07-30: vendor webhook — x-webhook-secret gate lives inside the route
+    pathname.startsWith('/api/sales/prospects/import') || // sales brief A7 2026-07-30: server-to-server import — secret gate lives inside the route
     pathname.startsWith('/api/p/') || // PBS 2026-07-16: guest-side /p/[token] view + block tracking
     pathname.startsWith('/api/room/') || // dataroom-module-v1: guest item view/download (token-gated in route)
     PUBLIC_PATHS.some(p => pathname.startsWith(p))
