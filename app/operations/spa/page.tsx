@@ -18,6 +18,7 @@ import {
   type TopSellerTrend,
 } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
+import SpaSubnav from './_shared/SpaSubnav';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -138,6 +139,7 @@ export default async function SpaPage({ searchParams, propertyId }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <SpaSubnav active="overview" />
         <Container title="Operating snapshot" subtitle={`Cloudbeds folio · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
