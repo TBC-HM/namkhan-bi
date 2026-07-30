@@ -20,16 +20,24 @@ export interface CountRow {
 interface Props {
   locationId: number;
   rows: CountRow[];
+  /** Route prefix for post-submit navigation. Defaults to the legacy
+   *  Namkhan-only path; tenant mounts pass `/h/${propertyId}/operations/inventory`. */
+  basePath?: string;
+  /** 'opening' seeds stock_balance with the full counted qty on approval;
+   *  'periodic' posts only the variance. Defaults to 'periodic'. */
+  countType?: 'periodic' | 'opening';
 }
 
-export default function CountForm({ locationId, rows }: Props) {
+export default function CountForm({ locationId, rows, basePath = '/operations/inventory', countType = 'periodic' }: Props) {
   const router = useRouter();
   const [counts, setCounts] = useState<Record<string, string>>({});
+  const [countedBy, setCountedBy] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<string | null>(null);
 
   async function save(asDraft: boolean) {
+    if (!asDraft && !countedBy.trim()) { setErr('Enter the name of the person who counted'); return; }
     setBusy(true); setErr(null);
     const lines = rows
       .filter((r) => counts[r.item_id] !== undefined && counts[r.item_id] !== '')
@@ -46,15 +54,16 @@ export default function CountForm({ locationId, rows }: Props) {
         body: JSON.stringify({
           count_date: new Date().toISOString().slice(0, 10),
           location_id: locationId,
-          count_type: 'periodic',
+          count_type: countType,
           status: asDraft ? 'draft' : 'submitted',
+          counted_by_name: countedBy.trim() || null,
           lines,
         }),
       });
       const j = await resp.json().catch(() => ({}));
       if (!resp.ok || !j.ok) { setErr(j.error || `HTTP ${resp.status}`); setBusy(false); return; }
       setSubmitted(`Saved — ${j.lines_inserted} lines · count_id=${j.count_id}`);
-      setTimeout(() => router.push('/operations/inventory/counts'), 1500);
+      setTimeout(() => router.push(`${basePath}/counts`), 1500);
     } catch (e: any) { setErr(e?.message || 'Network error'); }
     finally { setBusy(false); }
   }
@@ -102,6 +111,15 @@ export default function CountForm({ locationId, rows }: Props) {
       <div className="inv-count-progress">
         Progress: <strong>{filledCount}</strong> / {rows.length} items counted
       </div>
+
+      <label className="inv-field">
+        <span>Counted by (your name — a different person must approve)</span>
+        <input
+          type="text" value={countedBy}
+          onChange={(e) => setCountedBy(e.target.value)}
+          className="inv-input" placeholder="e.g. Khamla"
+        />
+      </label>
 
       {err && <div className="inv-error">{err}</div>}
       {submitted && <div className="inv-success">{submitted}</div>}
