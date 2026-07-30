@@ -31,10 +31,14 @@ interface GuestBundle {
   }>;
 }
 
-const INK = '#1B1B1B';
-const MUTE = '#6B6B6B';
-const HAIRLINE = '#E6DFCC';
-const GREEN = '#1F3A2E';
+// Verifier gap (round 2): design tokens instead of hex literals — the page
+// renders inside the root layout's .site-paper-scope, where these resolve to
+// the paper palette (design_system precedent: /p/[token] uses var(--…) too).
+const INK = 'var(--ink)';
+const MUTE = 'var(--ink-mute)';
+const HAIRLINE = 'var(--hairline)';
+const GREEN = 'var(--primary)';
+const PAPER_DEEP = 'var(--paper-deep)';
 
 export default async function RoomGuestPage({ params }: { params: { token: string } }) {
   const sb = getSupabaseAdmin();
@@ -83,7 +87,7 @@ export default async function RoomGuestPage({ params }: { params: { token: strin
       </header>
 
       {newItems.length > 0 && (
-        <div style={{ background: '#F5F0E1', border: `1px solid ${HAIRLINE}`, borderRadius: 8, padding: '10px 14px', margin: '14px 0', fontSize: 13 }}>
+        <div style={{ background: PAPER_DEEP, border: `1px solid ${HAIRLINE}`, borderRadius: 8, padding: '10px 14px', margin: '14px 0', fontSize: 13 }}>
           <strong>{newItems.length} new</strong> since your last visit:{' '}
           {newItems.slice(0, 5).map((i) => i.title).join(' · ')}
         </div>
