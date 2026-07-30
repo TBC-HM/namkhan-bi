@@ -25,7 +25,11 @@ interface Item {
   download_allowed: boolean; added_at: string; retired_at: string | null;
 }
 interface Grant {
-  id: string; email: string; display_name: string | null; magic_token: string;
+  // magic_token deliberately NOT here: the bridge view stopped exposing it
+  // (verifier gap round 2 — tokens are external credentials, harvestable by
+  // any internal reader). Copy-link fetches it on demand via the service-role
+  // copy_link action; invite responses still return it once at creation.
+  id: string; email: string; display_name: string | null;
   granted_at: string; expires_at: string | null; revoked_at: string | null;
   can_download: boolean; is_active: boolean; last_seen_at: string | null;
   view_count: number; download_count: number;
@@ -312,7 +316,9 @@ export default function RoomView({ roomId }: { roomId: string }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 {g.is_active && (
                   <>
-                    <button onClick={() => { void navigator.clipboard.writeText(`${window.location.origin}/room/${g.magic_token}`); }}
+                    <button disabled={busy} onClick={() => void act({ action: 'copy_link', grant_id: g.id }).then((j) => {
+                        if (j?.magic_token) void navigator.clipboard.writeText(`${window.location.origin}/room/${j.magic_token}`);
+                      })}
                       style={{ border: '1px solid var(--hairline)', background: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer', color: 'var(--primary)' }}>
                       Copy link
                     </button>
