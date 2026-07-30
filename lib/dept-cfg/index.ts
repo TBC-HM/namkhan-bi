@@ -549,6 +549,10 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Content',  href: '/marketing/content'  },
     { label: 'Socials',  href: '/marketing/social'   },
     { label: 'Digital',  href: '/marketing/digital'  },
+    // A4 · brief autospec-compiler_module-20260725 (2026-07-30): Compiler was
+    // reachable only by typed URL — surfaced as a top tab so the retreat/offer
+    // compiler is discoverable. Hub tab row derives from this list.
+    { label: 'Compiler', href: '/marketing/compiler' },
   ],
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
