@@ -171,7 +171,14 @@ async function ingestOne(msg: GmailMessageFull, fallbackMailbox: string): Promis
     raw_payload: { headers: headers.slice(0, 30) },
     ingest_source: 'gmail-poll',
   });
-  if (e2) { console.error('[poll-gmail msg insert]', e2); return { kind: 'error', error: `msg: ${e2.message ?? JSON.stringify(e2)}` }; }
+  if (e2) {
+    // Sales brief A2 (2026-07-30): a unique-violation race (23505) between the
+    // dedupe pre-check and this insert is a duplicate, not an error — count it
+    // as skipped so gmail_poll_runs.error_message stays clean.
+    if ((e2 as { code?: string }).code === '23505') return { kind: 'duplicate' };
+    console.error('[poll-gmail msg insert]', e2);
+    return { kind: 'error', error: `msg: ${e2.message ?? JSON.stringify(e2)}` };
+  }
   return { kind: 'inserted' };
 }
 
@@ -179,11 +186,17 @@ async function ingestOne(msg: GmailMessageFull, fallbackMailbox: string): Promis
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
+  // Sales brief A1 (2026-07-30): accept the platform-standard x-cron-secret header
+  // (CRON_SHARED_SECRET, same as every other /api/cron/* route) so the pg_cron job
+  // 'sales-gmail-poll-15min' can call this. Legacy ?key= / Bearer CRON_SECRET kept.
   const key = url.searchParams.get('key');
   const auth = req.headers.get('authorization');
-  const expected = process.env.CRON_SECRET;
-  if (!expected) return NextResponse.json({ error: 'CRON_SECRET not set' }, { status: 500 });
-  if (key !== expected && auth !== `Bearer ${expected}`) {
+  const cronHdr = req.headers.get('x-cron-secret') ?? '';
+  const shared = process.env.CRON_SHARED_SECRET ?? process.env.CRON_SECRET ?? '';
+  const expected = process.env.CRON_SECRET ?? '';
+  const okShared = shared.length > 0 && cronHdr === shared;
+  const okLegacy = expected.length > 0 && (key === expected || auth === `Bearer ${expected}`);
+  if (!okShared && !okLegacy) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
@@ -203,7 +216,7 @@ export async function GET(req: Request) {
 
   const results: Array<Record<string, unknown>> = [];
 
-  for (const c of conns as Array<{ email: string; refresh_token: string; last_synced_at: string | null; total_synced: number }>) {
+  for (const c of conns as Array<{ email: string; refresh_token: string | null; last_synced_at: string | null; total_synced: number }>) {
     const { data: run } = await sb.schema('sales').from('gmail_poll_runs').insert({
       email: c.email, status: 'running'
     }).select('id').single();
@@ -211,7 +224,16 @@ export async function GET(req: Request) {
 
     let access_token: string;
     try {
-      ({ access_token } = await refreshAccessToken(c.refresh_token));
+      // SECRETS LAW (sales brief A9c, 2026-07-30): refresh token lives in vault
+      // ('gmail_refresh_token:<email>'), read via service-role-only RPC. The
+      // plaintext gmail_connections.refresh_token column is nulled; fall back to
+      // it only if the vault secret is missing (transition safety).
+      let refreshToken = '';
+      const { data: vaultTok } = await sb.rpc('fn_get_gmail_refresh_token', { p_email: c.email });
+      if (typeof vaultTok === 'string' && vaultTok.length > 0) refreshToken = vaultTok;
+      else if (c.refresh_token) refreshToken = c.refresh_token;
+      if (!refreshToken) throw new Error('no refresh token in vault or table');
+      ({ access_token } = await refreshAccessToken(refreshToken));
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'token refresh failed';
       if (runId) await sb.schema('sales').from('gmail_poll_runs').update({ status: 'error', error_message: msg, finished_at: new Date().toISOString() }).eq('id', runId);
