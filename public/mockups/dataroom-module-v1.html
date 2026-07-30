@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Room Module — clickable mockup v1</title>
+<style>
+:root{--bg:#F4EFE2;--primary:#1F3A2E;--sand:#B8A878;--terracotta:#B8542A;--card:#FFFFFF;--ink:#1F2A24;--muted:#6B7568;--line:#E3DCC8;--ok:#2E7D4F;--warn:#C9A227;--bad:#B8542A;}
+*{box-sizing:border-box;margin:0;padding:0;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}
+body{background:var(--bg);color:var(--ink);font-size:14px;}
+.banner{background:var(--terracotta);color:#fff;text-align:center;padding:6px 12px;font-size:12px;letter-spacing:.04em;}
+header{background:var(--primary);color:#F4EFE2;padding:14px 24px;display:flex;align-items:center;gap:16px;}
+header h1{font-size:16px;font-weight:600;letter-spacing:.02em;}
+header .crumb{font-size:12px;opacity:.75;}
+nav.tabs{display:flex;gap:4px;background:var(--primary);padding:0 24px 12px;}
+nav.tabs button{background:transparent;border:1px solid rgba(244,239,226,.3);color:#F4EFE2;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:13px;}
+nav.tabs button.on{background:#F4EFE2;color:var(--primary);font-weight:600;border-color:#F4EFE2;}
+main{max-width:1180px;margin:0 auto;padding:24px;}
+.grid{display:grid;gap:16px;}
+.cards{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;}
+.card h3{font-size:14px;margin-bottom:4px;}
+.badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:20px;}
+.b-dd{background:#E7EFE9;color:var(--primary);}.b-legal{background:#F6E3D8;color:var(--terracotta);}
+.b-partner{background:#EFE8D2;color:#7A6A34;}.b-media{background:#E4E9F2;color:#33517A;}
+.meta{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;}
+.bar{height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:10px;}
+.bar i{display:block;height:100%;background:var(--primary);}
+.warnrow{font-size:11px;color:var(--terracotta);margin-top:8px;font-weight:600;}
+.tiles{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:18px;}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;}
+.tile .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.tile .v{font-size:22px;font-weight:700;color:var(--primary);margin-top:2px;}
+.tile .s{font-size:11px;color:var(--muted);margin-top:2px;}
+section.tree{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+.sec{border-bottom:1px solid var(--line);}
+.sec:last-child{border-bottom:none;}
+.sec-h{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;background:#FBF8EF;}
+.sec-h:hover{background:#F5F0E0;}
+.sec-h .n{font-weight:600;font-size:13px;flex:1;}
+.pill{font-size:11px;padding:2px 9px;border-radius:16px;background:var(--line);color:var(--muted);}
+.pill.done{background:#E7EFE9;color:var(--ok);}
+.pill.part{background:#F8F1DC;color:#8a6d1a;}
+.pill.empty{background:#F6E3D8;color:var(--bad);}
+.items{display:none;padding:4px 16px 12px;}
+.sec.open .items{display:block;}
+.item{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px dashed var(--line);font-size:13px;}
+.item:last-child{border-bottom:none;}
+.item .t{flex:1;}
+.kind{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;letter-spacing:.04em;}
+.k-snap{background:#E7EFE9;color:var(--primary);}
+.k-live{background:#E4E9F2;color:#33517A;}
+.k-note{background:#EFE8D2;color:#7A6A34;}
+.k-slot{background:#F1EDE0;color:var(--muted);border:1px dashed var(--sand);}
+.btn{background:var(--primary);color:#F4EFE2;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;}
+.btn.ghost{background:transparent;color:var(--primary);border:1px solid var(--primary);}
+.btn.small{padding:5px 10px;font-size:12px;}
+.btn.danger{background:var(--terracotta);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);}
+td{padding:9px 10px;border-bottom:1px solid var(--line);}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;}
+.toolbar{display:flex;gap:10px;align-items:center;margin:0 0 14px;flex-wrap:wrap;}
+.toolbar h2{font-size:16px;flex:1;}
+.hint{font-size:12px;color:var(--muted);font-style:italic;margin-top:14px;}
+/* external guest theme */
+.guest-wrap{background:#FCFBF7;min-height:70vh;border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+.guest-top{background:#fff;border-bottom:1px solid var(--line);padding:18px 26px;display:flex;align-items:center;gap:14px;}
+.guest-top .logo{width:38px;height:38px;border-radius:50%;background:var(--primary);color:#F4EFE2;display:flex;align-items:center;justify-content:center;font-weight:700;}
+.scope{background:#F3F6F2;border:1px solid #DCE5DC;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#3A4A3E;margin:18px 26px 0;}
+.guest-body{padding:18px 26px 26px;}
+.gitem{display:flex;align-items:center;gap:10px;padding:10px 8px;border-bottom:1px dashed var(--line);}
+.gitem .t{flex:1;font-size:13.5px;}
+.viewer{margin-top:16px;background:#EDEAE0;border:1px solid var(--line);border-radius:12px;height:190px;display:none;position:relative;align-items:center;justify-content:center;overflow:hidden;}
+.viewer.show{display:flex;}
+.viewer .wm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform:rotate(-24deg);font-size:20px;color:rgba(31,58,46,.16);font-weight:700;pointer-events:none;white-space:nowrap;}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(31,42,36,.45);z-index:50;align-items:center;justify-content:center;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff;border-radius:16px;padding:22px;width:520px;max-width:92vw;max-height:84vh;overflow:auto;}
+.modal h3{margin-bottom:12px;}
+.modal label{font-size:12px;color:var(--muted);display:block;margin:10px 0 4px;}
+.modal input,.modal select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;}
+.pickrow{display:flex;gap:8px;align-items:center;padding:8px 6px;border-bottom:1px dashed var(--line);font-size:13px;}
+.footer-note{margin:26px 0 8px;font-size:11.5px;color:var(--muted);text-align:center;}
+</style>
+</head>
+<body>
+<div class="banner">MOCKUP — dataroom-module-v1 · fake data · for PBS design review only</div>
+<header>
+  <h1>Data Room</h1>
+  <span class="crumb" id="crumb">Holding · /holding/ceo/dataroom</span>
+  <span style="flex:1"></span>
+  <span style="font-size:12px;opacity:.8">The Beyond Circle</span>
+</header>
+<nav class="tabs">
+  <button class="on" onclick="show('cockpit',this)">1 · Cockpit (rooms list)</button>
+  <button onclick="show('room',this)">2 · Room view (dd_full)</button>
+  <button onclick="show('access',this)">3 · Access panel</button>
+  <button onclick="show('guest',this)">4 · External guest view</button>
+</nav>
+<main>
+
+<!-- ============ 1 COCKPIT ============ -->
+<div id="cockpit">
+  <div class="toolbar">
+    <h2>Rooms — Holding (CEO)</h2>
+    <select style="padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;">
+      <option>Holding · /holding/ceo/dataroom</option>
+      <option>The Namkhan · /h/260955/dataroom</option>
+      <option>Donna Portals · /h/1000001/dataroom</option>
+    </select>
+    <button class="btn" onclick="alert('MOCK: New room wizard — pick template: dd_full / legal_case / partner_share / media_share / custom')">+ New room</button>
+  </div>
+  <div class="grid cards">
+    <div class="card" onclick="show('room',document.querySelectorAll('nav.tabs button')[1])" style="cursor:pointer">
+      <span class="badge b-dd">dd_full</span>
+      <h3 style="margin-top:8px">Project Lantern — platform DD</h3>
+      <div class="meta">49 checklist slots · 21 filled · 3 guests active<br>Last external access: today 06:12 · created 2026-07-30</div>
+      <div class="bar"><i style="width:43%"></i></div>
+      <div class="meta"><b>43% complete</b> — Financial pillar weakest (28%)</div>
+      <div class="warnrow">⚠ 1 grant expires in 5 days</div>
+    </div>
+    <div class="card">
+      <span class="badge b-legal">legal_case</span>
+      <h3 style="margin-top:8px">namkhan-khoa — matter file</h3>
+      <div class="meta">4 sections · 37 items · 2 guests (counsel)<br>Last external access: 2026-07-29 18:44</div>
+      <div class="bar"><i style="width:88%"></i></div>
+      <div class="meta"><b>88% complete</b> — evidence section growing</div>
+    </div>
+    <div class="card">
+      <span class="badge b-partner">partner_share</span>
+      <h3 style="margin-top:8px">Mekong DMC — marketing data</h3>
+      <div class="meta">3 sections · 12 items (live links) · 1 guest<br>Last external access: 2026-07-28 09:31</div>
+      <div class="bar"><i style="width:100%"></i></div>
+      <div class="meta"><b>Live-link room</b> — always current</div>
+    </div>
+    <div class="card">
+      <span class="badge b-media">media_share</span>
+      <h3 style="margin-top:8px">Press kit 2026 — agencies</h3>
+      <div class="meta">2 sections · 48 assets · downloads ON · 5 guests<br>214 downloads logged</div>
+      <div class="bar"><i style="width:100%"></i></div>
+      <div class="meta"><b>Open until 2026-12-31</b></div>
+    </div>
+  </div>
+  <p class="hint">Every card = one isolated room. Guests of one room can never see another (RLS + per-room token). Completeness = filled slots / target slots, computed per pillar.</p>
+</div>
+
+<!-- ============ 2 ROOM VIEW ============ -->
+<div id="room" style="display:none">
+  <div class="toolbar">
+    <h2>Project Lantern — platform DD <span class="badge b-dd">dd_full</span></h2>
+    <button class="btn ghost" onclick="show('access',document.querySelectorAll('nav.tabs button')[2])">Access panel</button>
+    <button class="btn" onclick="openPicker()">+ Add from registry</button>
+  </div>
+  <div class="grid tiles">
+    <div class="tile"><div class="k">Overall</div><div class="v">43%</div><div class="s">21 / 49 slots</div></div>
+    <div class="tile"><div class="k">I · Company</div><div class="v">58%</div><div class="s">7 / 12</div></div>
+    <div class="tile"><div class="k">II · Legal</div><div class="v">42%</div><div class="s">5 / 12</div></div>
+    <div class="tile"><div class="k">III · Financial</div><div class="v">28%</div><div class="s">4 / 13 · weakest</div></div>
+    <div class="tile"><div class="k">IV · Technical</div><div class="v">42%</div><div class="s">5 / 12</div></div>
+    <div class="tile"><div class="k">Guests</div><div class="v">3</div><div class="s">1 expiring ≤ 5d</div></div>
+    <div class="tile"><div class="k">Last access</div><div class="v">06:12</div><div class="s">berger@lawfirm.example</div></div>
+  </div>
+  <section class="tree">
+    <div class="sec open">
+      <div class="sec-h" onclick="this.parentElement.classList.toggle('open')">
+        <span class="n">PILLAR I — COMPANY / CORPORATE</span><span class="pill part">7 / 12</span>
+      </div>
+      <div class="items">
+        <div class="item"><span class="kind k-snap">SNAPSHOT</span><span class="t">I.1 Group structure chart v3 (pdf, frozen 2026-07-30)</span><span class="mono" style="color:var(--muted)">dms:9f2…</span></div>
+        <div class="item"><span class="kind k-snap">SNAPSHOT</span><span class="t">I.2 Incorporation — Laos ERO extract (pdf)</span><span class="mono" style="color:var(--muted)">dms:c41…</span></div>
+        <div class="item"><span class="kind k-note">NOTE</span><span class="t">I.5 Cap table — clean, no options/convertibles outstanding</span></div>
+        <div class="item"><span class="kind k-slot">EMPTY SLOT</span><span class="t" style="color:var(--muted)">I.6 Board + shareholder minutes (5y) — target 5 docs</span><button class="btn small ghost" onclick="openPicker()">Fill</button></div>
+        <div class="item"><span class="kind k-slot">EMPTY SLOT</span><span class="t" style="color:var(--muted)">I.9 Related-party transaction register</span><button class="btn small ghost" onclick="openPicker()">Fill</button></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-h" onclick="this.parentElement.classList.toggle('open')">
+        <span class="n">PILLAR II — LEGAL</span><span class="pill part">5 / 12</span>
+      </div>
+      <div class="items">
+        <div class="item"><span class="kind k-snap">SNAPSHOT</span><span class="t">II.2 Litigation register incl. Khoa matter summary (frozen)</span></div>
+        <div class="item"><span class="kind k-slot">EMPTY SLOT</span><span class="t" style="color:var(--muted)">II.4 IP chain of title + SBOM</span><button class="btn small ghost" onclick="openPicker()">Fill</button></div>
+        <div class="item"><span class="kind k-slot">EMPTY SLOT</span><span class="t" style="color:var(--muted)">II.6 DPAs with processors (Supabase, Vercel, Anthropic…)</span><button class="btn small ghost" onclick="openPicker()">Fill</button></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-h" onclick="this.parentElement.classList.toggle('open')">
+        <span class="n">PILLAR III — FINANCIAL</span><span class="pill empty">4 / 13</span>
+      </div>
+      <div class="items">
+        <div class="item"><span class="kind k-live">LIVE LINK</span><span class="t">III.5 Revenue quality pack — ADR/RevPAR/occ 3y (gold-view export, refreshes)</span></div>
+        <div class="item"><span class="kind k-slot">EMPTY SLOT</span><span class="t" style="color:var(--muted)">III.1 Annual accounts 3–5y (Kip statutory + Spain + holding)</span><button class="btn small ghost" onclick="openPicker()">Fill</button></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-h" onclick="this.parentElement.classList.toggle('open')">
+        <span class="n">PILLAR IV — TECHNICAL / PLATFORM</span><span class="pill part">5 / 12</span>
+      </div>
+      <div class="items">
+        <div class="item"><span class="kind k-snap">SNAPSHOT</span><span class="t">IV.1 Architecture doc + ADR log export (frozen 2026-07-30)</span></div>
+        <div class="item"><span class="kind k-snap">SNAPSHOT</span><span class="t">IV.5 Tenant isolation design + RLS test evidence</span></div>
+        <div class="item"><span class="kind k-slot">EMPTY SLOT</span><span class="t" style="color:var(--muted)">IV.3 Backup/restore evidence, RTO/RPO statement</span><button class="btn small ghost" onclick="openPicker()">Fill</button></div>
+      </div>
+    </div>
+  </section>
+  <p class="hint">SNAPSHOT = frozen copy at link time (source edits never change it). LIVE LINK = resolves current version on view (partner rooms). EMPTY SLOT = checklist target, drives the completeness %. Items are append-only: retire with reason, never delete.</p>
+</div>
+
+<!-- ============ 3 ACCESS PANEL ============ -->
+<div id="access" style="display:none">
+  <div class="toolbar">
+    <h2>Access — Project Lantern</h2>
+    <button class="btn" onclick="openInvite()">+ Invite guest</button>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <h3>Active grants</h3>
+    <table>
+      <tr><th>Guest</th><th>Granted</th><th>Expires</th><th>Download</th><th>Last seen</th><th></th></tr>
+      <tr><td>berger@lawfirm.example<br><span class="mono" style="color:var(--muted)">buyer counsel</span></td><td>2026-07-30</td><td style="color:var(--terracotta);font-weight:600">2026-08-04 ⚠</td><td>no</td><td>today 06:12</td><td><button class="btn small danger" onclick="alert('MOCK: revoke → revoked_at=now(); guest token dies on next request (≤1 min)')">Revoke</button></td></tr>
+      <tr><td>analyst@buyerfund.example</td><td>2026-07-30</td><td>2026-08-29</td><td>no</td><td>2026-07-30 05:40</td><td><button class="btn small danger">Revoke</button></td></tr>
+      <tr><td>partner@bank.example</td><td>2026-07-30</td><td>2026-09-28</td><td><b>yes</b></td><td>never</td><td><button class="btn small danger">Revoke</button></td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Access log <span style="font-weight:400;color:var(--muted);font-size:12px">— every login / view / download, exportable</span></h3>
+    <table>
+      <tr><th>When (UTC)</th><th>Guest</th><th>Action</th><th>Item</th><th>IP</th></tr>
+      <tr><td class="mono">07-30 06:12:41</td><td>berger@lawfirm.example</td><td>view</td><td>II.2 Litigation register</td><td class="mono">84.112.9.20</td></tr>
+      <tr><td class="mono">07-30 06:12:03</td><td>berger@lawfirm.example</td><td>login</td><td>—</td><td class="mono">84.112.9.20</td></tr>
+      <tr><td class="mono">07-30 05:41:19</td><td>analyst@buyerfund.example</td><td>view</td><td>III.5 Revenue quality pack</td><td class="mono">203.0.113.7</td></tr>
+      <tr><td class="mono">07-29 18:44:52</td><td>analyst@buyerfund.example</td><td>download <span style="color:var(--terracotta)">(denied — no permission)</span></td><td>I.1 Group structure chart</td><td class="mono">203.0.113.7</td></tr>
+    </table>
+  </div>
+  <p class="hint">Grants are append-only (revoke = revoked_at, audit preserved). Invite sends a per-guest room link — the guest authenticates by token, sees only this room.</p>
+</div>
+
+<!-- ============ 4 EXTERNAL GUEST VIEW ============ -->
+<div id="guest" style="display:none">
+  <div class="guest-wrap">
+    <div class="guest-top">
+      <div class="logo">TN</div>
+      <div>
+        <div style="font-weight:700">Project Lantern — data room</div>
+        <div style="font-size:12px;color:var(--muted)">Shared by The Beyond Circle · The Namkhan</div>
+      </div>
+      <span style="flex:1"></span>
+      <div style="font-size:12px;color:var(--muted);text-align:right">berger@lawfirm.example<br>access until <b>2026-08-04</b></div>
+    </div>
+    <div class="scope">You have <b>view-only</b> access to this room. Downloads are disabled for your account. Every view is logged. Questions → pb@thenamkhan.com</div>
+    <div class="guest-body">
+      <h3 style="margin:6px 0 10px;font-size:14px">II — Legal</h3>
+      <div class="gitem"><span class="t">II.2 Litigation register incl. matter summary</span><button class="btn small" onclick="openViewer('II.2 Litigation register')">View</button></div>
+      <div class="gitem"><span class="t">II.3 Land titles &amp; concessions — Laos (extract)</span><button class="btn small" onclick="openViewer('II.3 Land titles')">View</button></div>
+      <h3 style="margin:18px 0 10px;font-size:14px">III — Financial</h3>
+      <div class="gitem"><span class="t">III.5 Revenue quality pack (ADR / RevPAR / occupancy, 3y)</span><button class="btn small" onclick="openViewer('III.5 Revenue quality pack')">View</button></div>
+      <div class="gitem"><span class="t">III.2 Management P&amp;L by class — FY2025</span><button class="btn small" onclick="openViewer('III.2 Management P&L')">View</button></div>
+      <div class="viewer" id="viewer">
+        <div class="wm" id="wm">berger@lawfirm.example · 2026-07-30 06:12 UTC · Project Lantern</div>
+        <div style="text-align:center;color:var(--muted)"><div style="font-size:28px">📄</div><div id="viewer-title" style="font-size:13px;margin-top:6px">document preview</div><div style="font-size:11px;margin-top:4px">inline view-only render · watermark overlay · download disabled</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="hint">Isolated namespace /room/[token] — no platform navigation, no other rooms, clean minimal theme. The watermark overlay carries guest email + timestamp on every preview.</p>
+</div>
+
+<!-- picker modal -->
+<div class="modal-bg" id="picker">
+  <div class="modal">
+    <h3>Add from document registry</h3>
+    <input placeholder="Search 3,070 registry documents… (mock)" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px">
+    <div style="margin-top:10px">
+      <div class="pickrow"><span style="flex:1">Annual accounts FY2024 — Namkhan (pdf, signed)</span><button class="btn small" onclick="alert('MOCK: linked as SNAPSHOT — frozen copy created')">Snapshot</button><button class="btn small ghost" onclick="alert('MOCK: linked as LIVE LINK — always current')">Live link</button></div>
+      <div class="pickrow"><span style="flex:1">Board resolution 2026-03 — capital increase (pdf)</span><button class="btn small">Snapshot</button><button class="btn small ghost">Live link</button></div>
+      <div class="pickrow"><span style="flex:1">DPA — Supabase Inc. (countersigned 2026-01)</span><button class="btn small">Snapshot</button><button class="btn small ghost">Live link</button></div>
+    </div>
+    <label>Or</label>
+    <div style="display:flex;gap:8px">
+      <button class="btn ghost" style="flex:1" onclick="alert('MOCK: upload new file into this room + registry')">Upload file</button>
+      <button class="btn ghost" style="flex:1" onclick="alert('MOCK: add a text note item')">Add note</button>
+    </div>
+    <div style="text-align:right;margin-top:14px"><button class="btn" onclick="closeModals()">Close</button></div>
+  </div>
+</div>
+
+<!-- invite modal -->
+<div class="modal-bg" id="invite">
+  <div class="modal">
+    <h3>Invite external guest</h3>
+    <label>Email</label><input placeholder="name@company.com">
+    <label>Display name</label><input placeholder="Buyer-side counsel">
+    <label>Access expires</label><select><option>30 days (2026-08-29)</option><option>60 days</option><option>90 days</option><option>Custom date…</option></select>
+    <label>Downloads</label><select><option>View only (default)</option><option>Allow downloads</option></select>
+    <div style="text-align:right;margin-top:16px">
+      <button class="btn ghost" onclick="closeModals()">Cancel</button>
+      <button class="btn" onclick="alert('MOCK: grant created → per-guest room link emailed · appears in Active grants');closeModals()">Send invite</button>
+    </div>
+  </div>
+</div>
+
+<div class="footer-note">dataroom-module-v1 mockup · design_system v14 tokens (internal) / clean minimal theme (external) · all data fake · four surfaces: cockpit /holding/ceo/dataroom + /h/260955/dataroom · room view · access panel · external /room/[token]</div>
+</main>
+<script>
+function show(id,btn){['cockpit','room','access','guest'].forEach(x=>document.getElementById(x).style.display=x===id?'':'none');document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');document.getElementById('crumb').textContent=id==='guest'?'External · /room/[token]':(id==='cockpit'?'Holding · /holding/ceo/dataroom':'Holding · /holding/ceo/dataroom · project-lantern');}
+function openPicker(){document.getElementById('picker').classList.add('show')}
+function openInvite(){document.getElementById('invite').classList.add('show')}
+function closeModals(){document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('show'))}
+function openViewer(t){document.getElementById('viewer').classList.add('show');document.getElementById('viewer-title').textContent=t;var d=new Date();document.getElementById('wm').textContent='berger@lawfirm.example · '+d.toISOString().slice(0,16).replace('T',' ')+' UTC · Project Lantern';}
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModals()}))
+</script>
+</body>
+</html>
