@@ -52,6 +52,7 @@ export const SUBPAGES_BY_DEPT: Record<string, SubpageOption[]> = {
     { href: '/finance/budget',           label: 'Budget vs Actual' },
     { href: '/finance/transactions',     label: 'Transactions explorer' },
     { href: '/finance/costs',            label: 'Costs · platform usage' },
+    { href: '/finance/studio',           label: 'Spreadsheet Studio' },
     { href: '/finance/hr/payroll',       label: 'Payroll register' },
     { href: '/finance/hr',               label: 'HR' },
     { href: '/finance/legal',            label: 'Legal' },
