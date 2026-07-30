@@ -3,7 +3,7 @@
 
 import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
-import Page from '@/components/page/Page';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtKpi } from '@/lib/format';
@@ -29,6 +29,11 @@ export default async function EditPage({
     .maybeSingle();
   if (!run) notFound();
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/compiler',
+  }));
+
   const { data: variants } = await admin
     .schema('compiler')
     .from('variants')
@@ -41,20 +46,26 @@ export default async function EditPage({
 
   if (!active) {
     return (
-      <Page eyebrow="Marketing · Compiler · Edit" title="No variants" subPages={MARKETING_SUBPAGES}>
+      <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+    <DashboardPage title="Marketing · Compiler · Edit" tabs={tabs}>
+    <div style={{ gridColumn: '1 / -1' }}>
         <div style={{ marginTop: 16 }}>
           <TenantLink href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)' }}>
             ← Back to variants
           </TenantLink>
         </div>
-      </Page>
+      </div>
+    </DashboardPage>
+    </div>
     );
   }
 
   const days = (active.day_structure ?? []) as Day[];
 
   return (
-    <Page eyebrow="Marketing · Compiler · Edit" title={<>Itinerary <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>editor</em></>} subPages={MARKETING_SUBPAGES}>
+    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+    <DashboardPage title="Marketing · Compiler · Edit" tabs={tabs}>
+    <div style={{ gridColumn: '1 / -1' }}>
 
       <div style={{ marginTop: 16, display: 'flex', gap: 8, fontSize: 'var(--t-sm)' }}>
         {list.map(v => (
@@ -115,6 +126,8 @@ export default async function EditPage({
           ← Back to variants
         </TenantLink>
       </div>
-    </Page>
+    </div>
+    </DashboardPage>
+    </div>
   );
 }
