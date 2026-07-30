@@ -120,7 +120,11 @@ export default async function SalesProposalsIndexPage({ propertyId }: PageProps 
             <tbody>
               {rows.length === 0 ? (
                 <tr><td colSpan={10} style={{ padding: 24, textAlign: 'center', color: T.INK_M }}>
-                  No proposals yet. Create one from a lead via the Leads tab.
+                  {pid === NAMKHAN
+                    ? 'No proposals yet. Create one from a lead via the Leads tab.'
+                    // Sales brief A5 / R1 default (2026-07-30): proposal authoring is
+                    // Namkhan-only until Mews inbound is wired for Donna.
+                    : 'No proposals for this property. Proposal authoring is Namkhan-only until Mews inbound is wired.'}
                 </td></tr>
               ) : rows.map((p) => {
                 const origin = p.lead_id != null ? 'lead #' + p.lead_id
