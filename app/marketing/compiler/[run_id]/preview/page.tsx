@@ -3,7 +3,7 @@
 
 import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
-import Page from '@/components/page/Page';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -29,8 +29,15 @@ export default async function PreviewPage({ params }: { params: { run_id: string
     .limit(1);
   const live = deploys?.[0];
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/compiler',
+  }));
+
   return (
-    <Page eyebrow="Marketing · Compiler · Preview" title={<>Funnel <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>preview</em></>} subPages={MARKETING_SUBPAGES}>
+    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+    <DashboardPage title="Marketing · Compiler · Preview" tabs={tabs}>
+    <div style={{ gridColumn: '1 / -1' }}>
 
       <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         {[
@@ -74,6 +81,8 @@ export default async function PreviewPage({ params }: { params: { run_id: string
           ← Back to variants
         </TenantLink>
       </div>
-    </Page>
+    </div>
+    </DashboardPage>
+    </div>
   );
 }
