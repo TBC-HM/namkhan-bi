@@ -4,11 +4,14 @@
 // v2 2026-07-26 (spec-builder completion): fetches active governance goals
 // (public.v_goals, level >= 2) server-side and passes them to the client so
 // every saved brief carries a goal_id (ADR-165).
+// v3 2026-07-30 (md-intake-v1): mode toggle — guided form OR owner-MD upload
+// (verbatim canon → evaluate vs platform law → brief + queue row).
 
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { groupsAsTabs } from '@/app/holding/it/cockpit/_lib/groups';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import SpecBuilderClient, { type GoalOption } from './SpecBuilderClient';
+import { type GoalOption } from './SpecBuilderClient';
+import SpecNewTabs from './SpecNewTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,11 +44,11 @@ export default async function SpecNewPage() {
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <div style={{ fontSize: 13, color: '#5A5A5A', marginBottom: 20, lineHeight: 1.6, maxWidth: 680 }}>
-          Answer 7 sections to produce a spec that an agent can build against autonomously.
-          Be specific — vague descriptions lead to wrong implementations.
-          You can edit the brief after saving.
+          Fill the guided form — or upload an owner MD and let the evaluator
+          distill it into a brief. Either way the result is a complete build
+          brief an agent can act on autonomously. You can edit it after saving.
         </div>
-        <SpecBuilderClient goals={goals} />
+        <SpecNewTabs goals={goals} />
       </div>
     </DashboardPage>
   );
