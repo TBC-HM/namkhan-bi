@@ -29,7 +29,7 @@ export interface SlotRow {
   group_name?: string | null;
   group_color?: string | null;
 }
-export interface GroupRow { slug: string; name: string; color: string | null; sort_order: number | null }
+export interface GroupRow { slug: string; name: string; color: string | null; sort_order: number | null; newsletter_cadence_per_month?: number | string | null }
 
 interface Props {
   propertyId: number;
@@ -388,7 +388,22 @@ export default function DirectorClient({ propertyId, initialGoals, initialSlots,
         <div style={{ display:'flex', gap:12, alignItems:'end', flexWrap:'wrap' }}>
           <label style={fieldWrap}>
             <span style={fieldLabel}>Group</span>
-            <select value={groupFilter} onChange={e=>setGroupFilter(e.target.value)} style={input}>
+            <select
+              value={groupFilter}
+              onChange={e => {
+                const slug = e.target.value;
+                setGroupFilter(slug);
+                // #362 (brief autospec-newsletter_module-20260725 · 2026-07-30):
+                // picking a specific group auto-fills the cadence input from the
+                // group's Settings cadence (newsletter_cadence_per_month). The
+                // owner can still override the value before generating.
+                if (slug !== 'all') {
+                  const c = Number(groupsBySlug.get(slug)?.newsletter_cadence_per_month);
+                  if (Number.isFinite(c) && c > 0) setCadencePerMonth(c);
+                }
+              }}
+              style={input}
+            >
               <option value="all">All groups</option>
               {groups.map((g) => (
                 <option key={g.slug} value={g.slug}>{g.name}</option>
