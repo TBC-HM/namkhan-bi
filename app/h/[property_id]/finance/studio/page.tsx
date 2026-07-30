@@ -13,7 +13,7 @@ import { notFound } from 'next/navigation';
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
 import type { StudioCatalogEntry, StudioTemplateRow } from '@/lib/studio/types';
-import StudioClient from './_components/StudioClient';
+import StudioTabs from './_components/StudioTabs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -39,7 +39,7 @@ export default async function SpreadsheetStudioPage({ params }: { params: { prop
 
   return (
     <DashboardPage title={`Spreadsheet Studio · ${KNOWN_LABEL[propertyId]}`}>
-      <StudioClient propertyId={propertyId} catalog={catalog} initialTemplates={templates} />
+      <StudioTabs propertyId={propertyId} catalog={catalog} initialTemplates={templates} />
     </DashboardPage>
   );
 }
