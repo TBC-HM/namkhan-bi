@@ -19,7 +19,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 // The page itself validates the token and refuses if it's missing/expired.
 // PBS 2026-07-16: /subscriber/confirm/[token] is the public newsletter opt-in
 // confirmation landing (single-purpose page; token = only auth surface).
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/account/password', '/p/', '/subscriber/confirm/']
+// PBS brief dataroom-module-v1 (2026-07-30): /room/[token] is the external
+// data-room guest surface — token-only auth (per-request grant re-validation
+// inside fn_dataroom_guest_* RPCs), zero platform navigation. /api/room/ is
+// its serving API. Pattern mirrors /p/ (proposals).
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/account/password', '/p/', '/subscriber/confirm/', '/room/']
 
 // base64url -> JSON. Edge-safe (no Buffer / no Node crypto).
 function decodeJwtPayload(token: string): Record<string, unknown> {
@@ -43,6 +47,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/marketing/contacts/extract') || // PBS 2026-07-16 · cron+admin gate lives inside the route
     pathname.startsWith('/api/public/') || // PBS 2026-07-16 (Feature B): public guest confirmation POST
     pathname.startsWith('/api/p/') || // PBS 2026-07-16: guest-side /p/[token] view + block tracking
+    pathname.startsWith('/api/room/') || // dataroom-module-v1: guest item view/download (token-gated in route)
     PUBLIC_PATHS.some(p => pathname.startsWith(p))
   ) return NextResponse.next()
 
