@@ -191,7 +191,12 @@ function renderEnrichmentBlock(ctx: Record<string, unknown>, currentPageUrl?: st
 }
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// central-chat-v1 V9 fix (2026-07-30): 60s was insufficient for tool-using
+// Second Brain turns (~70 tools → multi-roundtrip loop). Tickets 287-289
+// died mid-flight with zero audit rows. 300s + incremental reply persistence
+// (ticket row written BEFORE the LLM loop) means a killed function can no
+// longer leave an invisible dead turn.
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
@@ -200,6 +205,36 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co",
   process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key"
 );
+
+// ─── Model tier router (central-chat-v1 V7, ADR-169 Anthropic-only) ─────────
+// One map holds every model id + pricing so a later provider abstraction is a
+// single-file change. Tiers:
+//   fast         — short prose, no heavy reasoning (general-mode small talk)
+//   reasoning    — default for Second Brain / tool-using turns
+//   long_context — triggered when the assembled input is large
+// provider/model land in the audit metadata per message (V5 metering).
+type ModelTier = "fast" | "reasoning" | "long_context";
+const MODEL_TIERS: Record<ModelTier, { provider: string; model: string; inPerM: number; outPerM: number }> = {
+  fast:         { provider: "anthropic", model: "claude-haiku-4-5",          inPerM: 1,  outPerM: 5 },
+  reasoning:    { provider: "anthropic", model: "claude-sonnet-4-5-20250929", inPerM: 3,  outPerM: 15 },
+  long_context: { provider: "anthropic", model: "claude-sonnet-4-6",          inPerM: 3,  outPerM: 15 },
+};
+const LONG_CONTEXT_CHARS = 60_000; // history + message + system beyond this → long_context
+
+function pickTier(args: { message: string; historyChars: number; systemChars: number; toolCount: number; mode: string }): ModelTier {
+  const total = args.message.length + args.historyChars + args.systemChars;
+  if (total > LONG_CONTEXT_CHARS) return "long_context";
+  // Tool-using Second Brain turns need reasoning quality regardless of length.
+  if (args.mode !== "general" && args.toolCount > 0) return "reasoning";
+  // Short prose without tools → fast tier.
+  if (args.message.length < 400) return "fast";
+  return "reasoning";
+}
+
+function tierCostMilli(tier: ModelTier, tokensIn: number, tokensOut: number): number {
+  const t = MODEL_TIERS[tier];
+  return Math.round((tokensIn * t.inPerM + tokensOut * t.outPerM) / 1000);
+}
 
 // IT Manager prompt now lives in DB (cockpit_agent_prompts where role='it_manager').
 // Falls back to this hardcoded copy only if DB lookup fails.
@@ -865,15 +900,147 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not Found" }, { status: 404 });
     }
     const body = await req.json();
-    const { message, current_page_url, active_doc_id, mention: mentionFromUI, conversation_history } = body as {
+    const { message, current_page_url, active_doc_id, mention: mentionFromUI, conversation_history, mode, module_scope, property_id } = body as {
       message?: string;
       current_page_url?: string;
       active_doc_id?: string;
       mention?: string;
       conversation_history?: Array<{ role: "user" | "assistant"; content: string }>;
+      mode?: "second-brain" | "general";
+      module_scope?: string | null;
+      property_id?: number | null;
     };
     if (!message || typeof message !== "string") {
       return NextResponse.json({ error: "message required" }, { status: 400 });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // GENERAL MODE (central-chat-v1 V3 — isolation enforced SERVER-SIDE).
+    // mode='general' means: model only. Both directions sealed:
+    //   IN  — no enrichment, no persona/agent prompts, no TBC bootstrap,
+    //         no brain/KB/doc/page/ticket context, no tools/skills.
+    //   OUT — no memory/brain writes; nothing except the conversation row
+    //         (required by the brief: every conversation stored) and the
+    //         per-message metering audit rows (V5 cost-to-serve).
+    // The client label is cosmetic; THIS branch is the enforcement.
+    // ─────────────────────────────────────────────────────────────────────
+    if (mode === "general") {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      // Strip any @mention — general mode has no personas, no dispatcher.
+      const cleanMessage = message.replace(/^@[a-z][a-z0-9_]*\s*/i, "").trim() || message;
+
+      const GENERAL_SYSTEM = [
+        "You are a general-purpose AI assistant inside a private workspace chat.",
+        "GENERAL MODE CONTRACT: you have NO access to business data, company documents, agent memory, or tools in this mode — and you must not claim otherwise.",
+        "If the user asks about their business/company data, answer: switch to Second Brain mode for that.",
+        "Be direct and useful: brainstorming, writing, coding, research from general knowledge.",
+      ].join("\n");
+
+      // Alternation-safe history (same normalizer as the persona path).
+      const rawPrior = (conversation_history ?? []).slice(-12);
+      const collapsed: Array<{ role: "user" | "assistant"; content: string }> = [];
+      for (const t of rawPrior) {
+        if (t.role !== "user" && t.role !== "assistant") continue;
+        if (!t.content || !t.content.trim()) continue;
+        const last = collapsed[collapsed.length - 1];
+        if (last && last.role === t.role) last.content = t.content;
+        else collapsed.push({ role: t.role, content: t.content });
+      }
+      if (collapsed.length && collapsed[collapsed.length - 1].role === "user") collapsed.pop();
+      while (collapsed.length && collapsed[0].role === "assistant") collapsed.shift();
+      const historyChars = collapsed.reduce((n, t) => n + t.content.length, 0);
+
+      // Incremental persistence (V9): write the user turn BEFORE the LLM call
+      // so a killed function never leaves an invisible dead turn.
+      const { data: pendingTicket } = await supabase
+        .from("cockpit_tickets")
+        .insert({
+          source: "central_chat_general",
+          arm: "chat",
+          intent: "chat",
+          status: "triaging",
+          parsed_summary: `**Request**: ${message}`,
+          notes: JSON.stringify({ chat_reply: true, mode: "general", module_scope: module_scope ?? null, property_id: property_id ?? null }),
+          iterations: 0,
+        })
+        .select()
+        .single();
+
+      const tier = pickTier({ message: cleanMessage, historyChars, systemChars: GENERAL_SYSTEM.length, toolCount: 0, mode: "general" });
+      const tierDef = MODEL_TIERS[tier];
+      let replyText = "_(model unavailable — ANTHROPIC_API_KEY not configured)_";
+      let gIn = 0, gOut = 0, gCost = 0, gDur = 0;
+
+      if (apiKey) {
+        try {
+          const t0 = Date.now();
+          const r = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+            body: JSON.stringify({
+              model: tierDef.model,
+              max_tokens: 2000,
+              system: GENERAL_SYSTEM,
+              messages: [...collapsed, { role: "user", content: cleanMessage }],
+            }),
+          });
+          gDur = Date.now() - t0;
+          if (r.ok) {
+            const j = await r.json();
+            const blocks = (j?.content ?? []) as Array<{ type: string; text?: string }>;
+            const t = blocks.find((b) => b.type === "text")?.text;
+            if (typeof t === "string" && t.trim()) replyText = t.trim();
+            gIn = (j?.usage?.input_tokens as number | undefined) ?? 0;
+            gOut = (j?.usage?.output_tokens as number | undefined) ?? 0;
+            gCost = tierCostMilli(tier, gIn, gOut);
+          } else {
+            replyText = `_(model error ${r.status} — try again)_`;
+          }
+        } catch (e) {
+          console.error("[chat:general] anthropic call failed:", e);
+          replyText = "_(model call failed — try again)_";
+        }
+      }
+
+      // Metering per message (V5): provider/model/tokens/latency/cost.
+      void supabase.from("cockpit_audit_log").insert({
+        ticket_id: pendingTicket?.id ?? null,
+        agent: "general_chat",
+        action: "chat_llm_call",
+        target: "mode:general",
+        success: true,
+        duration_ms: gDur,
+        cost_usd_milli: gCost,
+        input_tokens: gIn,
+        output_tokens: gOut,
+        metadata: { provider: tierDef.provider, model: tierDef.model, tier, chat_mode: true, mode: "general", isolation: "no business data in, no memory out" },
+        reasoning: `General-mode call (${tier}/${tierDef.model}); ${gIn}in/${gOut}out tokens`,
+      }).then(({ error }) => { if (error) console.warn("[chat:general] audit insert failed:", error.message); });
+
+      if (pendingTicket?.id) {
+        await supabase
+          .from("cockpit_tickets")
+          .update({
+            status: "triaged",
+            parsed_summary: `**Request**: ${message}\n\n${replyText}`,
+            notes: JSON.stringify({
+              chat_reply: true,
+              mode: "general",
+              module_scope: module_scope ?? null,
+              property_id: property_id ?? null,
+              provider: tierDef.provider,
+              model: tierDef.model,
+              tier,
+              llm_tokens_in: gIn,
+              llm_tokens_out: gOut,
+              llm_cost_usd_milli: gCost,
+              llm_call_count: 1,
+            }),
+          })
+          .eq("id", pendingTicket.id);
+      }
+
+      return NextResponse.json({ ticket: pendingTicket ? { ...pendingTicket, status: "triaged", parsed_summary: `**Request**: ${message}\n\n${replyText}` } : null, chat_mode: true, persona: "General", mode: "general" });
     }
 
     const mention = mentionFromUI ?? parseMention(message);
@@ -997,6 +1164,32 @@ export async function POST(req: Request) {
       let replyText = `Hi — I'm here. What do you want to work on?`;
       const skillCallLog: Array<{ skill: string; status: string; ms: number }> = [];
 
+      // ─── Incremental persistence (central-chat-v1 V9, 2026-07-30) ──────
+      // Write the user turn as a 'triaging' ticket BEFORE the tool loop.
+      // If the function is killed mid-loop (serverless limit), the turn
+      // stays visible as pending instead of vanishing without a trace
+      // (tickets 287-289 failure mode). The row is UPDATEd with the reply
+      // after the loop — and also after each tool roundtrip below, so a
+      // late kill preserves the partial trail in notes.
+      const { data: pendingTicket } = await supabase
+        .from("cockpit_tickets")
+        .insert({
+          source: "cockpit_chat",
+          arm: "chat",
+          intent: "chat",
+          status: "triaging",
+          parsed_summary: `**Request**: ${message}`,
+          notes: JSON.stringify({ chat_reply: true, mode: "second-brain", recommended_role: personaRole, persona: persona.name, in_progress: true }),
+          iterations: 0,
+        })
+        .select()
+        .single();
+
+      // ─── Tier routing (central-chat-v1 V7, ADR-169 Anthropic-only) ─────
+      const sbHistoryChars = collapsed.reduce((n, t) => n + t.content.length, 0);
+      const sbTier = pickTier({ message, historyChars: sbHistoryChars, systemChars: personaVoice.length, toolCount: chatTools.length, mode: "second-brain" });
+      const sbModel = MODEL_TIERS[sbTier].model;
+
       // ─── LLM cost ledger (2026-05-13, #84) ─────────────────────────────
       // Anthropic Sonnet 4.5 pricing: $3 / 1M input · $15 / 1M output.
       // Stored in milli-USD (×1000) to match cap_skill_calls.cost_usd_milli.
@@ -1017,7 +1210,7 @@ export async function POST(req: Request) {
         for (let iter = 0; iter < MAX_ITERS; iter++) {
           try {
             const body: Record<string, unknown> = {
-              model: "claude-sonnet-4-5-20250929",
+              model: sbModel,
               max_tokens: 1500,
               system: personaVoice,
               messages: loopMessages,
@@ -1047,8 +1240,7 @@ export async function POST(req: Request) {
             // ─── Capture per-call token usage + roll into the ledger ─────
             const callTokensIn = (j?.usage?.input_tokens as number | undefined) ?? 0;
             const callTokensOut = (j?.usage?.output_tokens as number | undefined) ?? 0;
-            // Sonnet 4.5 pricing: $3/M in, $15/M out → milli-USD.
-            const callCostMilli = Math.round((callTokensIn * 3 + callTokensOut * 15) / 1000);
+            const callCostMilli = tierCostMilli(sbTier, callTokensIn, callTokensOut);
             llmTokensIn += callTokensIn;
             llmTokensOut += callTokensOut;
             llmCostMilli += callCostMilli;
@@ -1067,11 +1259,14 @@ export async function POST(req: Request) {
               input_tokens: callTokensIn,
               output_tokens: callTokensOut,
               metadata: {
-                model: "claude-sonnet-4-5-20250929",
+                provider: MODEL_TIERS[sbTier].provider,
+                model: sbModel,
+                tier: sbTier,
                 stop_reason: stopReason ?? null,
                 iter,
                 tools_offered: chatTools.length,
                 chat_mode: true,
+                mode: "second-brain",
               },
               reasoning: `Anthropic call #${iter + 1} for ${persona.name} (${personaRole}); ${callTokensIn}in/${callTokensOut}out tokens`,
             }).then(({ error }) => {
@@ -1111,6 +1306,23 @@ export async function POST(req: Request) {
                 });
               }
               loopMessages.push({ role: 'user', content: results });
+              // V9: persist the partial tool trail so a mid-loop kill leaves
+              // evidence of progress, not a blank turn. Fire-and-forget.
+              if (pendingTicket?.id) {
+                void supabase
+                  .from("cockpit_tickets")
+                  .update({
+                    notes: JSON.stringify({
+                      chat_reply: true, mode: "second-brain", recommended_role: personaRole,
+                      persona: persona.name, in_progress: true, iter: iter + 1,
+                      skill_calls: skillCallLog,
+                      llm_tokens_in: llmTokensIn, llm_tokens_out: llmTokensOut,
+                      llm_cost_usd_milli: llmCostMilli, llm_call_count: llmCallCount,
+                    }),
+                  })
+                  .eq("id", pendingTicket.id)
+                  .then(({ error }) => { if (error) console.warn('[chat] partial-trail update failed:', error.message); });
+              }
               continue; // back into the loop for the model's next turn.
             }
 
@@ -1135,7 +1347,7 @@ export async function POST(req: Request) {
         if (replyText === `Hi — I'm here. What do you want to work on?` && apiKey) {
           try {
             const finalBody: Record<string, unknown> = {
-              model: "claude-sonnet-4-5-20250929",
+              model: sbModel,
               max_tokens: 1500,
               system: personaVoice + '\n\nFINAL TURN: tools have been disabled. Reply with prose only — answer the user directly using what you already know. Do not say you cannot help; give your best response.',
               messages: loopMessages.length > 0 ? loopMessages : (messages as Msg[]),
@@ -1159,7 +1371,7 @@ export async function POST(req: Request) {
               const fOut = (j?.usage?.output_tokens as number | undefined) ?? 0;
               llmTokensIn  += fIn;
               llmTokensOut += fOut;
-              llmCostMilli += Math.round((fIn * 3 + fOut * 15) / 1000);
+              llmCostMilli += tierCostMilli(sbTier, fIn, fOut);
               llmCallCount += 1;
             }
           } catch (e) {
@@ -1168,39 +1380,61 @@ export async function POST(req: Request) {
         }
       }
 
-      // Persist as a normal triaged ticket so ChatShell's existing
-      // subscription/render path works without modification.
-      // IMPORTANT: parsed_summary MUST use the `**Request**: <user>\n\n<agent>`
-      // framing that stripTicketFraming() in ChatShell.tsx parses, otherwise
-      // both user message + agent reply collapse into a single user-side bubble.
-      const { data: chatTicket } = await supabase
-        .from("cockpit_tickets")
-        .insert({
-          source: "cockpit_chat",
-          arm: "chat",
-          intent: "chat",
-          status: "triaged",
-          parsed_summary: `**Request**: ${message}\n\n${replyText}`,
-          notes: JSON.stringify({
-            chat_reply: true,
-            recommended_role: personaRole,
-            recommended_agent: personaRole,
-            persona: persona.name,
-            persona_source: persona === PERSONA_FALLBACK ? "fallback" : "id_agents",
-            persona_dept: persona.dept,
-            persona_hierarchy_level: persona.hierarchy_level,
-            skill_calls: skillCallLog,
-            skills_available: chatTools.length,
-            // 2026-05-13 (#84): LLM cost ledger for this chat turn.
-            llm_tokens_in: llmTokensIn,
-            llm_tokens_out: llmTokensOut,
-            llm_cost_usd_milli: llmCostMilli,
-            llm_call_count: llmCallCount,
-          }),
-          iterations: 0,
-        })
-        .select()
-        .single();
+      // Finalize the pending ticket (inserted BEFORE the loop, V9) with the
+      // reply. IMPORTANT: parsed_summary MUST use the `**Request**: <user>\n\n
+      // <agent>` framing that stripTicketFraming() in ChatShell/CentralChat
+      // parses, otherwise both turns collapse into a single user-side bubble.
+      const finalNotes = JSON.stringify({
+        chat_reply: true,
+        mode: "second-brain",
+        recommended_role: personaRole,
+        recommended_agent: personaRole,
+        persona: persona.name,
+        persona_source: persona === PERSONA_FALLBACK ? "fallback" : "id_agents",
+        persona_dept: persona.dept,
+        persona_hierarchy_level: persona.hierarchy_level,
+        skill_calls: skillCallLog,
+        skills_available: chatTools.length,
+        provider: MODEL_TIERS[sbTier].provider,
+        model: sbModel,
+        tier: sbTier,
+        // 2026-05-13 (#84): LLM cost ledger for this chat turn.
+        llm_tokens_in: llmTokensIn,
+        llm_tokens_out: llmTokensOut,
+        llm_cost_usd_milli: llmCostMilli,
+        llm_call_count: llmCallCount,
+      });
+      let chatTicket = pendingTicket ?? null;
+      if (pendingTicket?.id) {
+        const { data: updated } = await supabase
+          .from("cockpit_tickets")
+          .update({
+            status: "triaged",
+            parsed_summary: `**Request**: ${message}\n\n${replyText}`,
+            notes: finalNotes,
+          })
+          .eq("id", pendingTicket.id)
+          .select()
+          .single();
+        chatTicket = updated ?? { ...pendingTicket, status: "triaged", parsed_summary: `**Request**: ${message}\n\n${replyText}` };
+      } else {
+        // Defensive: the pre-loop insert failed — fall back to the legacy
+        // post-loop insert so the reply is never lost.
+        const { data: inserted } = await supabase
+          .from("cockpit_tickets")
+          .insert({
+            source: "cockpit_chat",
+            arm: "chat",
+            intent: "chat",
+            status: "triaged",
+            parsed_summary: `**Request**: ${message}\n\n${replyText}`,
+            notes: finalNotes,
+            iterations: 0,
+          })
+          .select()
+          .single();
+        chatTicket = inserted ?? null;
+      }
 
       // Roll-up audit row: total LLM cost for this chat turn, linked to the ticket.
       if (chatTicket?.id && llmCallCount > 0) {
@@ -1217,7 +1451,10 @@ export async function POST(req: Request) {
             persona: persona.name,
             llm_call_count: llmCallCount,
             skill_calls: skillCallLog,
-            model: "claude-sonnet-4-5-20250929",
+            provider: MODEL_TIERS[sbTier].provider,
+            model: sbModel,
+            tier: sbTier,
+            mode: "second-brain",
           },
           reasoning: `Chat turn for ${persona.name}: ${llmCallCount} LLM call(s), ${llmTokensIn}in/${llmTokensOut}out tokens, ${llmCostMilli} milli-USD`,
         });
