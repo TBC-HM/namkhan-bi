@@ -7,6 +7,11 @@
 //
 // 2026-05-08 — PBS regression fix: prod token expired → "project not found"
 // was misleading. Now: surface the real Vercel error AND backfill from Supabase.
+//
+// 2026-07-30 (brief fix-deployments-ingestion, goal 47): the Vercel webhook now
+// writes every deployment.* event into deploy.deployments (v_deployments bridge),
+// so v_deployments is the FIRST fallback (full sha/branch/message/state rows);
+// the lossy audit_log fallback is kept as last resort only.
 
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
@@ -38,7 +43,7 @@ type Deploy = {
   ref: string;
   message: string;
   url: string | null;
-  source: "vercel" | "audit_log";
+  source: "vercel" | "v_deployments" | "audit_log";
 };
 
 async function listDeploysFromVercel(project: string, token: string, limit: number): Promise<{ deploys?: Deploy[]; error?: string }> {
@@ -61,6 +66,28 @@ async function listDeploysFromVercel(project: string, token: string, limit: numb
       message: d.meta?.githubCommitMessage ?? "",
       url: d.url ? `https://${d.url}` : null,
       source: "vercel",
+    })),
+  };
+}
+
+async function listDeploysFromVDeployments(slug: string, limit: number): Promise<{ deploys: Deploy[] }> {
+  const { data } = await supabase
+    .from("v_deployments")
+    .select("vercel_deploy_id, state, created_at, commit_sha, branch, commit_message, preview_url")
+    .eq("vercel_project_name", slug)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return {
+    deploys: (data ?? []).map((r): Deploy => ({
+      uid: r.vercel_deploy_id,
+      state: r.state ?? "UNKNOWN",
+      created_at: r.created_at,
+      sha: (r.commit_sha ?? "").slice(0, 7),
+      ref: r.branch ?? "?",
+      message: r.commit_message ?? "",
+      url: r.preview_url ?? null,
+      source: "v_deployments",
     })),
   };
 }
@@ -122,12 +149,18 @@ export async function GET() {
     if (viaVercel && viaVercel.deploys && viaVercel.deploys.length > 0) {
       result[slug] = { deploys: viaVercel.deploys, source: "vercel" };
     } else {
-      const fb = await listDeploysFromAuditLog(slug, 20);
-      result[slug] = {
-        deploys: fb.deploys,
-        source: "audit_log",
-        vercel_note: viaVercel?.error ?? (token ? "no rows from vercel" : "VERCEL_TOKEN missing — using audit_log fallback"),
-      };
+      const vercelNote = viaVercel?.error ?? (token ? "no rows from vercel" : "VERCEL_TOKEN missing — using DB fallback");
+      const vd = await listDeploysFromVDeployments(slug, 20);
+      if (vd.deploys.length > 0) {
+        result[slug] = { deploys: vd.deploys, source: "v_deployments", vercel_note: vercelNote };
+      } else {
+        const fb = await listDeploysFromAuditLog(slug, 20);
+        result[slug] = {
+          deploys: fb.deploys,
+          source: "audit_log",
+          vercel_note: vercelNote,
+        };
+      }
     }
   }
 
