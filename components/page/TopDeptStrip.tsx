@@ -55,7 +55,7 @@ const HOLDING_SLUG_SET = new Set(HOLDING_DEPTS.map((d) => d.slug));
 
 // Paths where the strip should NOT render at all. We keep /holding OUT
 // of this list now — it renders the holding-mode strip instead.
-const HIDE_PREFIXES = ['/tbc', '/TBC', '/login', '/p/', '/_next'];
+const HIDE_PREFIXES = ['/tbc', '/TBC', '/login', '/p/', '/room/', '/_next']; // '/room/' = dataroom external guests (dataroom-module-v1)
 function isHiddenPath(pathname: string): boolean {
   if (pathname === '/') return true; // home page = Felix architect entry; no dept menu yet
   return HIDE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p));
