@@ -136,7 +136,11 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
     active: s.label === 'HoD',
   }));
 
-  const chatHref = `/cockpit/chat?dept=${slug}`;
+  // One-channel command law (rule 658) + it-area-reorg-v1 gap 2: the old
+  // /cockpit/chat persona-tab surface is retired (redirect stub) and the dept
+  // param died in the redirect anyway. Central Chat is the ONE channel —
+  // Felix dispatches; no per-dept chat context.
+  const chatHref = '/holding/it2/fleet/chat';
 
   const actionBar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
