@@ -7,8 +7,14 @@
 // Bug #82 (PBS 2026-07-25): added spec/doc traceability columns:
 //   - Goals table: version, last edit, status bulb (from v_goals_with_briefs)
 //   - Intake table: updated_at, answered_by per row
+// knowledge-goals-intake-v1 (PBS build order 2026-07-29): WRITE LAYER added —
+//   inline edit per goal row + "Add goal" per layer. Read view unchanged (PBS:
+//   "structure acceptable, transparency is the complaint"). Ratification gates
+//   preserved: new rows land status='proposed'; material edits to ratified L1/L2
+//   reset to 'proposed' for re-ratification (enforced in public.fn_goal_upsert,
+//   history in governance.goals_history).
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Container } from '@/app/(cockpit)/_design';
 
 export type GoalRow = {
@@ -118,9 +124,201 @@ const INTAKE_BLOCKS: Array<{ block: string; intro: string; questions: string[] }
   ]},
 ];
 
+// ---------------------------------------------------------------------------
+// Write layer (knowledge-goals-intake-v1)
+// ---------------------------------------------------------------------------
+
+type GoalDraft = {
+  goal_id: number | null;
+  level: number;
+  parent_goal_id: number | null;
+  slug: string;
+  title: string;
+  description: string;
+  measurable_target: string;
+  target_metric: string;
+  target_operator: string;
+  target_value: string;
+  property_id: string;
+  review_cadence: string;
+};
+
+function draftFromRow(g: GoalRow): GoalDraft {
+  return {
+    goal_id: g.goal_id,
+    level: g.level,
+    parent_goal_id: g.parent_goal_id,
+    slug: g.slug,
+    title: g.title,
+    description: g.description ?? '',
+    measurable_target: g.measurable_target ?? '',
+    target_metric: g.target_metric ?? '',
+    target_operator: g.target_operator ?? '',
+    target_value: g.target_value != null ? String(g.target_value) : '',
+    property_id: g.property_id != null ? String(g.property_id) : '',
+    review_cadence: g.review_cadence ?? '',
+  };
+}
+
+function emptyDraft(level: number): GoalDraft {
+  return {
+    goal_id: null, level, parent_goal_id: null, slug: '', title: '', description: '',
+    measurable_target: '', target_metric: '', target_operator: '', target_value: '',
+    property_id: '', review_cadence: '',
+  };
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', fontSize: 12.5, padding: '5px 8px', border: '1px solid var(--hairline)',
+  borderRadius: 6, background: 'var(--paper)', color: 'var(--ink)',
+};
+const labelStyle: React.CSSProperties = {
+  fontSize: 10.5, fontWeight: 600, color: 'var(--ink-soft)', textTransform: 'uppercase',
+  letterSpacing: 0.4, marginBottom: 2, display: 'block',
+};
+
+function Field({ label, children, span }: { label: string; children: React.ReactNode; span?: number }) {
+  return (
+    <div style={{ gridColumn: span ? `span ${span}` : undefined }}>
+      <span style={labelStyle}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function GoalEditor({
+  draft, parents, onCancel, onSaved,
+}: {
+  draft: GoalDraft;
+  parents: GoalRow[];
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [d, setD] = useState<GoalDraft>(draft);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string>('');
+  const isNew = d.goal_id == null;
+  const set = (k: keyof GoalDraft, v: string) => setD((prev) => ({ ...prev, [k]: v }));
+
+  async function save() {
+    if (!d.title.trim()) { setErr('title required'); return; }
+    if (isNew && !/^[a-z0-9][a-z0-9-]{1,79}$/.test(d.slug.trim().toLowerCase())) {
+      setErr('slug required: lowercase letters, digits, hyphens'); return;
+    }
+    setSaving(true); setErr('');
+    try {
+      const res = await fetch('/api/cockpit/goals', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'upsert', goal: {
+          goal_id: d.goal_id, level: d.level,
+          parent_goal_id: d.parent_goal_id, slug: d.slug.trim().toLowerCase(),
+          title: d.title.trim(), description: d.description.trim() || null,
+          measurable_target: d.measurable_target.trim() || null,
+          target_metric: d.target_metric.trim() || null,
+          target_operator: d.target_operator.trim() || null,
+          target_value: d.target_value.trim() || null,
+          property_id: d.property_id.trim() || null,
+          review_cadence: d.review_cadence.trim() || null,
+        }}),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(j.error || 'save failed'); setSaving(false); return; }
+      onSaved();
+    } catch (e) {
+      setErr(String(e)); setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--hairline)', borderRadius: 8, padding: '12px 14px',
+      margin: '8px 0 12px', background: 'rgba(8,72,56,0.03)' }}>
+      <div style={{ fontSize: 12.5, fontWeight: 650, marginBottom: 10, color: 'var(--primary)' }}>
+        {isNew ? `New L${d.level} goal` : `Edit ${d.slug}`}
+        {!isNew && d.level <= 2 && (
+          <span style={{ fontWeight: 500, color: 'var(--ink-soft)', marginLeft: 8, fontSize: 11.5 }}>
+            material edits to a ratified L1/L2 row reset it to PROPOSED for re-ratification
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        {isNew && (
+          <Field label="Slug">
+            <input style={{ ...inputStyle, fontFamily: MONO }} value={d.slug}
+              placeholder="kebab-case-slug" onChange={(e) => set('slug', e.target.value)} />
+          </Field>
+        )}
+        <Field label="Title" span={isNew ? 3 : 4}>
+          <input style={inputStyle} value={d.title} onChange={(e) => set('title', e.target.value)} />
+        </Field>
+        <Field label="Description" span={4}>
+          <textarea style={{ ...inputStyle, resize: 'vertical' }} rows={2} value={d.description}
+            onChange={(e) => set('description', e.target.value)} />
+        </Field>
+        <Field label="Measurable target" span={2}>
+          <input style={{ ...inputStyle, fontFamily: MONO }} value={d.measurable_target}
+            placeholder="human-readable target sentence" onChange={(e) => set('measurable_target', e.target.value)} />
+        </Field>
+        <Field label="Parent goal" span={2}>
+          <select style={inputStyle} value={d.parent_goal_id != null ? String(d.parent_goal_id) : ''}
+            onChange={(e) => setD((prev) => ({ ...prev, parent_goal_id: e.target.value ? Number(e.target.value) : null }))}>
+            <option value="">— none —</option>
+            {parents.map((p) => (
+              <option key={p.goal_id} value={p.goal_id}>{`L${p.level} · ${p.slug} — ${p.title.slice(0, 60)}`}</option>
+            ))}
+          </select>
+        </Field>
+        {d.level === 4 && (
+          <>
+            <Field label="Metric">
+              <input style={{ ...inputStyle, fontFamily: MONO }} value={d.target_metric}
+                placeholder="e.g. occupancy_pct" onChange={(e) => set('target_metric', e.target.value)} />
+            </Field>
+            <Field label="Operator">
+              <select style={inputStyle} value={d.target_operator} onChange={(e) => set('target_operator', e.target.value)}>
+                <option value="">—</option>
+                {['>=', '<=', '>', '<', '='].map((op) => <option key={op} value={op}>{op}</option>)}
+              </select>
+            </Field>
+            <Field label="Value">
+              <input style={{ ...inputStyle, fontFamily: MONO }} value={d.target_value}
+                placeholder="number" onChange={(e) => set('target_value', e.target.value)} />
+            </Field>
+          </>
+        )}
+        <Field label="Property (blank = platform)">
+          <input style={{ ...inputStyle, fontFamily: MONO }} value={d.property_id}
+            placeholder="260955 / 1000001" onChange={(e) => set('property_id', e.target.value)} />
+        </Field>
+        <Field label="Review cadence">
+          <select style={inputStyle} value={d.review_cadence} onChange={(e) => set('review_cadence', e.target.value)}>
+            <option value="">—</option>
+            {['continuous', 'weekly', 'monthly', 'quarterly', 'yearly'].map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+        <button onClick={save} disabled={saving}
+          style={{ fontSize: 12.5, fontWeight: 650, padding: '6px 16px', borderRadius: 6, cursor: 'pointer',
+            border: '1px solid var(--primary)', background: 'var(--primary)', color: 'var(--paper)' }}>
+          {saving ? 'Saving…' : isNew ? 'Add goal (lands as PROPOSED)' : 'Save changes'}
+        </button>
+        <button onClick={onCancel} disabled={saving}
+          style={{ fontSize: 12.5, fontWeight: 600, padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+            border: '1px solid var(--hairline)', background: 'var(--paper)', color: 'var(--ink)' }}>
+          Cancel
+        </button>
+        {err && <span style={{ fontSize: 12, color: 'var(--status-red)' }}>{err}</span>}
+      </div>
+    </div>
+  );
+}
+
 export function GoalsView({ goals, intake, briefs }: { goals: GoalRow[]; intake: IntakeRow[]; briefs: BriefRow[] }) {
   const [busy, setBusy] = useState<number | null>(null);
   const [saved, setSaved] = useState<string>('');
+  // Write layer state: which row is in edit mode / which layer has an open add-form.
+  const [editing, setEditing] = useState<number | null>(null);
+  const [adding, setAdding] = useState<number | null>(null);
   const initialAnswers = useMemo(() => {
     const m: Record<string, string> = {};
     intake.forEach((r) => { m[r.block + '||' + r.question] = r.answer || ''; });
@@ -150,6 +348,8 @@ export function GoalsView({ goals, intake, briefs }: { goals: GoalRow[]; intake:
   }, [goals]);
   const proposedTop = goals.filter((g) => g.status === 'proposed' && g.level <= 2);
   const childrenOf = (id: number) => goals.filter((g) => g.parent_goal_id === id);
+  // Parent candidates for the editor: rows one level up.
+  const parentsForLevel = (lvl: number) => goals.filter((g) => g.level === lvl - 1);
 
   async function ratify(goal_id: number) {
     setBusy(goal_id);
@@ -229,31 +429,52 @@ export function GoalsView({ goals, intake, briefs }: { goals: GoalRow[]; intake:
                 const brief = briefByGoalId[g.goal_id];
                 const lastEdit = brief?.brief_last_edit ? brief.brief_last_edit.slice(0, 10) : null;
                 return (
-                  <tr key={g.goal_id} style={{ borderBottom: '1px solid var(--hairline)' }}>
-                    <td style={{ padding: '7px 8px 7px 0', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>{g.slug}</td>
-                    <td style={{ padding: '7px 8px' }}>
-                      <div style={{ fontWeight: lvl <= 2 ? 650 : 500 }}>{g.title}</div>
-                      {g.measurable_target && (
-                        <div style={{ fontSize: 12, color: 'var(--ink-soft)', fontFamily: MONO }}>{g.measurable_target}</div>
-                      )}
-                      {lvl === 3 && childrenOf(g.goal_id).length > 0 && (
-                        <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>targets: {childrenOf(g.goal_id).map((c) => c.slug).join(' · ')}</div>
-                      )}
-                    </td>
-                    <td style={{ padding: '7px 8px', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                      {brief?.brief_version ?? <span style={{ color: 'var(--ink-soft)', opacity: 0.5 }}>—</span>}
-                    </td>
-                    <td style={{ padding: '7px 8px', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                      {lastEdit ?? <span style={{ opacity: 0.5 }}>—</span>}
-                    </td>
-                    <td style={{ padding: '7px 8px', textAlign: 'center' }}>
-                      <StatusBulb color={brief?.status_bulb ?? 'grey'} />
-                    </td>
-                    <td style={{ padding: '7px 0 7px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {g.property_id ? <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink-soft)', marginRight: 8 }}>{String(g.property_id)}</span> : null}
-                      <Pill status={g.status} />
-                    </td>
-                  </tr>
+                  <Fragment key={g.goal_id}>
+                    <tr style={{ borderBottom: editing === g.goal_id ? 'none' : '1px solid var(--hairline)' }}>
+                      <td style={{ padding: '7px 8px 7px 0', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>{g.slug}</td>
+                      <td style={{ padding: '7px 8px' }}>
+                        <div style={{ fontWeight: lvl <= 2 ? 650 : 500 }}>{g.title}</div>
+                        {g.measurable_target && (
+                          <div style={{ fontSize: 12, color: 'var(--ink-soft)', fontFamily: MONO }}>{g.measurable_target}</div>
+                        )}
+                        {lvl === 3 && childrenOf(g.goal_id).length > 0 && (
+                          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>targets: {childrenOf(g.goal_id).map((c) => c.slug).join(' · ')}</div>
+                        )}
+                      </td>
+                      <td style={{ padding: '7px 8px', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                        {brief?.brief_version ?? <span style={{ color: 'var(--ink-soft)', opacity: 0.5 }}>—</span>}
+                      </td>
+                      <td style={{ padding: '7px 8px', whiteSpace: 'nowrap', fontFamily: MONO, fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                        {lastEdit ?? <span style={{ opacity: 0.5 }}>—</span>}
+                      </td>
+                      <td style={{ padding: '7px 8px', textAlign: 'center' }}>
+                        <StatusBulb color={brief?.status_bulb ?? 'grey'} />
+                      </td>
+                      <td style={{ padding: '7px 0 7px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {g.property_id ? <span style={{ fontFamily: MONO, fontSize: 11, color: 'var(--ink-soft)', marginRight: 8 }}>{String(g.property_id)}</span> : null}
+                        <Pill status={g.status} />
+                        <button
+                          onClick={() => { setAdding(null); setEditing(editing === g.goal_id ? null : g.goal_id); }}
+                          title="Edit this goal"
+                          style={{ fontSize: 11, fontWeight: 650, marginLeft: 8, padding: '3px 10px', borderRadius: 6, cursor: 'pointer',
+                            border: '1px solid var(--hairline)', background: 'var(--paper)', color: 'var(--ink)' }}>
+                          {editing === g.goal_id ? 'Close' : 'Edit'}
+                        </button>
+                      </td>
+                    </tr>
+                    {editing === g.goal_id && (
+                      <tr style={{ borderBottom: '1px solid var(--hairline)' }}>
+                        <td colSpan={6}>
+                          <GoalEditor
+                            draft={draftFromRow(g)}
+                            parents={parentsForLevel(g.level)}
+                            onCancel={() => setEditing(null)}
+                            onSaved={() => window.location.reload()}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
               {(byLevel[lvl] || []).length === 0 && (
@@ -261,6 +482,23 @@ export function GoalsView({ goals, intake, briefs }: { goals: GoalRow[]; intake:
               )}
             </tbody>
           </table>
+          {adding === lvl ? (
+            <GoalEditor
+              draft={emptyDraft(lvl)}
+              parents={parentsForLevel(lvl)}
+              onCancel={() => setAdding(null)}
+              onSaved={() => window.location.reload()}
+            />
+          ) : (
+            <div style={{ marginTop: 6 }}>
+              <button
+                onClick={() => { setEditing(null); setAdding(lvl); }}
+                style={{ fontSize: 12, fontWeight: 650, padding: '4px 12px', borderRadius: 6, cursor: 'pointer',
+                  border: '1px dashed var(--hairline)', background: 'transparent', color: 'var(--primary)' }}>
+                + Add L{lvl} goal
+              </button>
+            </div>
+          )}
         </Container>
       ))}
 
