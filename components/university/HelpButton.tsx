@@ -54,7 +54,7 @@ export default function HelpButton() {
   }, [q, asking, pathname]);
 
   // login/public surfaces don't need the help brain
-  if (pathname?.startsWith('/login') || pathname?.startsWith('/p/') || pathname?.startsWith('/subscriber/')) return null;
+  if (pathname?.startsWith('/login') || pathname?.startsWith('/p/') || pathname?.startsWith('/room/') || pathname?.startsWith('/subscriber/')) return null;
 
   return (
     <>
