@@ -413,3 +413,161 @@ export async function replyToComment(
   if (!json) return { ok: false, error: 'youtube_api_bad_json' };
   return { ok: true, data: json };
 }
+
+// ---- write: update video metadata ------------------------------------------
+
+export interface VideoSnippetUpdate {
+  title?: string;
+  description?: string;
+  tags?: string[];
+}
+
+/** Fetch existing snippet then merge + PUT back — safe partial update. */
+export async function updateVideoMetadata(
+  accessToken: string,
+  videoId: string,
+  changes: VideoSnippetUpdate,
+): Promise<YtResult<{ videoId: string }>> {
+  // Step 1: fetch existing snippet to preserve categoryId + other fields
+  const getUrl = `${API}/videos?part=snippet&id=${encodeURIComponent(videoId)}`;
+  const existing = await ytFetch<{ items?: Array<{ id: string; snippet?: Record<string, unknown> }> }>(getUrl, accessToken);
+  if (isErr(existing)) return { ok: false, error: existing.error, detail: existing.detail };
+  const item = existing.data.items?.[0];
+  if (!item?.snippet) return { ok: false, error: 'video_not_found', detail: videoId };
+
+  // Step 2: merge changes into existing snippet
+  const snippet = {
+    ...item.snippet,
+    ...(changes.title       !== undefined ? { title:       changes.title }       : {}),
+    ...(changes.description !== undefined ? { description: changes.description } : {}),
+    ...(changes.tags        !== undefined ? { tags:        changes.tags }        : {}),
+  };
+
+  // Step 3: PUT
+  const putUrl = `${API}/videos?part=snippet`;
+  const res = await fetch(putUrl, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: videoId, snippet }),
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 240);
+    return { ok: false, error: `youtube_api_${res.status}`, detail };
+  }
+  return { ok: true, data: { videoId } };
+}
+
+// ---- write: playlist CRUD --------------------------------------------------
+
+export interface PlaylistInput { title: string; description?: string; privacyStatus?: 'public' | 'unlisted' | 'private' }
+export interface PlaylistResult { id: string; title: string }
+
+export async function createPlaylist(
+  accessToken: string,
+  input: PlaylistInput,
+): Promise<YtResult<PlaylistResult>> {
+  const url = `${API}/playlists?part=snippet,status`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      snippet: { title: input.title, description: input.description ?? '' },
+      status:  { privacyStatus: input.privacyStatus ?? 'public' },
+    }),
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 240);
+    return { ok: false, error: `youtube_api_${res.status}`, detail };
+  }
+  const j = (await res.json().catch(() => null)) as { id?: string; snippet?: { title?: string } } | null;
+  if (!j?.id) return { ok: false, error: 'youtube_api_bad_json' };
+  return { ok: true, data: { id: j.id, title: j.snippet?.title ?? input.title } };
+}
+
+export async function updatePlaylist(
+  accessToken: string,
+  playlistId: string,
+  input: Partial<PlaylistInput>,
+): Promise<YtResult<PlaylistResult>> {
+  // Fetch existing first to preserve fields
+  const getUrl = `${API}/playlists?part=snippet&id=${encodeURIComponent(playlistId)}`;
+  const ex = await ytFetch<{ items?: Array<{ id: string; snippet?: Record<string, unknown> }> }>(getUrl, accessToken);
+  if (isErr(ex)) return { ok: false, error: ex.error, detail: ex.detail };
+  const item = ex.data.items?.[0];
+  if (!item?.snippet) return { ok: false, error: 'playlist_not_found', detail: playlistId };
+  const snippet = {
+    ...item.snippet,
+    ...(input.title       !== undefined ? { title:       input.title }       : {}),
+    ...(input.description !== undefined ? { description: input.description } : {}),
+  };
+  const url = `${API}/playlists?part=snippet`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: playlistId, snippet }),
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 240);
+    return { ok: false, error: `youtube_api_${res.status}`, detail };
+  }
+  return { ok: true, data: { id: playlistId, title: String(snippet.title ?? '') } };
+}
+
+export async function deletePlaylist(
+  accessToken: string,
+  playlistId: string,
+): Promise<YtResult<{ deleted: true }>> {
+  const url = `${API}/playlists?id=${encodeURIComponent(playlistId)}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok && res.status !== 204) {
+    const detail = (await res.text().catch(() => '')).slice(0, 240);
+    return { ok: false, error: `youtube_api_${res.status}`, detail };
+  }
+  return { ok: true, data: { deleted: true } };
+}
+
+// ---- write: playlist items -------------------------------------------------
+
+export async function addVideoToPlaylist(
+  accessToken: string,
+  playlistId: string,
+  videoId: string,
+  position?: number,
+): Promise<YtResult<{ playlistItemId: string }>> {
+  const url = `${API}/playlistItems?part=snippet`;
+  const body: Record<string, unknown> = {
+    snippet: { playlistId, resourceId: { kind: 'youtube#video', videoId } },
+  };
+  if (position !== undefined) (body.snippet as Record<string, unknown>).position = position;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => '')).slice(0, 240);
+    return { ok: false, error: `youtube_api_${res.status}`, detail };
+  }
+  const j = (await res.json().catch(() => null)) as { id?: string } | null;
+  if (!j?.id) return { ok: false, error: 'youtube_api_bad_json' };
+  return { ok: true, data: { playlistItemId: j.id } };
+}
+
+export async function removeVideoFromPlaylist(
+  accessToken: string,
+  playlistItemId: string,
+): Promise<YtResult<{ removed: true }>> {
+  const url = `${API}/playlistItems?id=${encodeURIComponent(playlistItemId)}`;
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok && res.status !== 204) {
+    const detail = (await res.text().catch(() => '')).slice(0, 240);
+    return { ok: false, error: `youtube_api_${res.status}`, detail };
+  }
+  return { ok: true, data: { removed: true } };
+}

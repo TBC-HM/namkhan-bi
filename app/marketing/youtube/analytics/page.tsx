@@ -215,6 +215,14 @@ export default async function YtAnalyticsPage() {
                           )}
                         </div>
                       </div>
+                      <div style={{ flexShrink: 0, paddingTop: 2 }}>
+                        <ApplyAuditButton
+                          videoId={v.video_id}
+                          suggestedTitle={v.suggested_title}
+                          suggestedDescription={v.suggested_description}
+                          suggestedTags={v.suggested_tags}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
