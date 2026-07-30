@@ -2,7 +2,7 @@
 // All retreats published from the compiler. Status / spots / link.
 
 import TenantLink from '@/components/nav/TenantLink';
-import Page from '@/components/page/Page';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtIsoDate, fmtKpi } from '@/lib/format';
@@ -43,8 +43,15 @@ export default async function RetreatsListPage() {
     .order('created_at', { ascending: false });
   const rows = (data ?? []) as RetreatRow[];
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/compiler',
+  }));
+
   return (
-    <Page eyebrow="Marketing · Compiler · Retreats" title={<>Live <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>retreats</em></>} subPages={MARKETING_SUBPAGES}>
+    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+    <DashboardPage title="Marketing · Compiler · Retreats" tabs={tabs}>
+    <div style={{ gridColumn: '1 / -1' }}>
 
       {error && (
         <div style={{ marginTop: 12, fontSize: 'var(--t-xs)', color: 'var(--st-bad)' }}>
@@ -91,6 +98,8 @@ export default async function RetreatsListPage() {
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
         <TenantLink href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</TenantLink>
       </div>
-    </Page>
+    </div>
+    </DashboardPage>
+    </div>
   );
 }
