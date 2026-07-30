@@ -133,6 +133,54 @@ function dayStructure(spec: ParsedSpec, programSkus: string[]): VariantDay[] {
   return days;
 }
 
+// A7 (brief autospec-compiler_module-20260725): prefill day_structure from
+// compiler.itinerary_templates when a theme template exists. Template days use
+// {day, morning, afternoon, evening} — mapped onto VariantDay; skus stay from
+// the generated structure (pricing is computed from the pricelist
+// independently of day narrative).
+async function loadTemplateDays(spec: ParsedSpec): Promise<VariantDay[] | null> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .schema('compiler')
+    .from('itinerary_templates')
+    .select('duration_nights, day_structure')
+    .eq('is_active', true)
+    .eq('theme', spec.theme)
+    .order('duration_nights');
+  const rows = data ?? [];
+  if (rows.length === 0) return null;
+  const exact = rows.find((r: any) => r.duration_nights === spec.duration_nights);
+  const raw = (exact ?? rows[0]).day_structure;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  return raw.map((d: any, i: number) => ({
+    day: d.day ?? i + 1,
+    title: d.title ?? `Day ${d.day ?? i + 1}`,
+    am: Array.isArray(d.am) ? d.am : d.morning ? [String(d.morning)] : [],
+    pm: Array.isArray(d.pm) ? d.pm : d.afternoon ? [String(d.afternoon)] : [],
+    eve: Array.isArray(d.eve) ? d.eve : d.evening ? [String(d.evening)] : [],
+    skus: Array.isArray(d.skus) ? d.skus : [],
+  }));
+}
+
+// Merge template narrative onto the generated skeleton: template wins on
+// titles/am/pm/eve per day index; generated wins on skus and on any days the
+// template does not cover (e.g. template shorter than the requested stay).
+function mergeTemplateDays(generated: VariantDay[], template: VariantDay[] | null): VariantDay[] {
+  if (!template) return generated;
+  return generated.map((g, i) => {
+    const t = template[i];
+    if (!t) return g;
+    return {
+      ...g,
+      title: t.title || g.title,
+      am: t.am.length ? t.am : g.am,
+      pm: t.pm.length ? t.pm : g.pm,
+      eve: t.eve.length ? t.eve : g.eve,
+      skus: g.skus.length ? g.skus : t.skus,
+    };
+  });
+}
+
 function buildOneFromRoom(
   rows: PricelistRow[],
   spec: ParsedSpec,
@@ -141,6 +189,7 @@ function buildOneFromRoom(
   roomMaxGuests: number,
   intensity: 'light' | 'medium' | 'full',
   recommended: boolean,
+  templateDays: VariantDay[] | null,
 ): BuiltVariant {
   const board = pick(rows, FNB_BY_INTENSITY[intensity].sku);
   const program: PricelistRow[] = [];
@@ -186,7 +235,7 @@ function buildOneFromRoom(
   };
 
   const programSkus = program.map(p => p.sku);
-  const days = dayStructure(spec, programSkus);
+  const days = mergeTemplateDays(dayStructure(spec, programSkus), templateDays);
 
   const breakdown: PricingBreakdown = {
     rooms: {
@@ -286,6 +335,9 @@ export async function buildVariants(spec: ParsedSpec): Promise<BuiltVariant[]> {
   const sortedStats = [...stats].sort((a, b) => a.median_usd - b.median_usd);
   const intensityLadder: ('light' | 'medium' | 'full')[] = ['light', 'medium', 'full'];
 
+  // A7: theme template prefill for the day-by-day narrative (once per build).
+  const templateDays = await loadTemplateDays(spec);
+
   const variants: BuiltVariant[] = sortedStats.map((stat, i) => {
     const intensity =
       sortedStats.length === 1 ? 'medium' :
@@ -299,6 +351,7 @@ export async function buildVariants(spec: ParsedSpec): Promise<BuiltVariant[]> {
       maxGuestsMap.get(stat.room_type_id) ?? 2,
       intensity,
       i === Math.floor(sortedStats.length / 2), // middle is recommended
+      templateDays,
     );
   });
 
