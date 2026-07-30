@@ -98,7 +98,7 @@ export default async function ActionCenterPage() {
       kind: 'ticket',
       title: t.email_subject || `Ticket #${t.id}`,
       detail: (t.parsed_summary ?? 'Awaiting your reply.').slice(0, 140),
-      href: `/holding/it/cockpit/tasks/${t.id}`,
+      href: `/holding/it2/fleet/tasks/${t.id}`,
     });
   }
 
