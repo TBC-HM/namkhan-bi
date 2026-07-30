@@ -12,13 +12,21 @@ import DirectorClient, { type GoalRow, type SlotRow, type GroupRow } from './_co
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function DirectorPage() {
-  const pid = PROPERTY_ID;
+// A8 (brief autospec-newsletter_module-20260725 · URL LAW): accepts an optional
+// propertyId so the /h/[property_id] tenant delegate can mount this body —
+// same delegation pattern as ../page.tsx and ../sequences/page.tsx.
+interface PageProps { propertyId?: number }
+
+export default async function DirectorPage({ propertyId }: PageProps = {}) {
+  const pid = propertyId ?? PROPERTY_ID;
 
   const [{ data: goalRows }, { data: slotRows }, { data: groupRows }] = await Promise.all([
     supabase.from('v_director_goals').select('*').eq('property_id', pid).is('group_slug', null).order('weight', { ascending: false }),
     supabase.from('v_director_calendar').select('*').eq('property_id', pid).order('slot_date', { ascending: true }),
-    supabase.from('v_subscriber_groups').select('slug,name,color,sort_order')
+    // #362: newsletter_cadence_per_month rides along so the Director cadence
+    // input can auto-fill from Settings when a specific group is selected.
+    supabase.from('v_subscriber_groups').select('slug,name,color,sort_order,newsletter_cadence_per_month')
+      .eq('property_id', pid)
       .order('sort_order', { ascending: true, nullsFirst: false }).order('name', { ascending: true }),
   ]);
 
