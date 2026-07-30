@@ -31,9 +31,12 @@ async function signOffAction(formData: FormData) {
 export default async function QuestionsPage() {
   const sb = getSupabaseAdmin();
   const [{ data: briefs }, { data: bugs }, { data: queue }, { data: statuses }, { data: agentRuns }] = await Promise.all([
+    // it-area-reorg-v1 gap 1 (2026-07-30): include 'verifying' — verifiers park
+    // owner questions on briefs without flipping them to needs_input. The inbox
+    // must show every open_question regardless of which loop stage parked it.
     (sb as any).from('v_build_briefs_index')
       .select('slug, title, status, open_question')
-      .eq('status', 'needs_input')
+      .in('status', ['needs_input', 'verifying'])
       .not('open_question', 'is', null),
     (sb as any).from('cockpit_bugs')
       .select('id, body, status, open_question')
