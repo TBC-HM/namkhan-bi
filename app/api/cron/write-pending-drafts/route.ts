@@ -35,12 +35,14 @@ function checkCronSecret(req: NextRequest): boolean {
 // Mirror of broadcasts/page.tsx isConceptOnly — a draft whose body is still the
 // bare plan concept (no hero image markdown, no signature).
 function isConceptOnly(body_md: string | null, ai_model: string | null): boolean {
+  // A9 explicit guard (brief autospec-newsletter_module-20260725, D7 · 2026-07-30):
+  // any campaign already stamped with an ai_model has been written — by the
+  // engine, by autocompose, or by a manual model run. NEVER rewrite it here.
+  // This closes the slot-accept → async auto-write vs manual-persist race for
+  // good; the body-shape test below only decides among never-written drafts.
+  if (ai_model && ai_model.trim().length > 0) return false;
   const b = (body_md ?? '').trim();
-  if (!(b.length > 0 && b.length <= 700 && !b.includes('Warm regards') && !b.includes('!['))) return false;
-  // belt-and-braces: rows the engine already wrote carry a hero + signature and
-  // fail the body test anyway; the ai_model guard covers exotic manual edits.
-  if (ai_model && /fable5/i.test(ai_model) && b.includes('![')) return false;
-  return true;
+  return b.length > 0 && b.length <= 700 && !b.includes('Warm regards') && !b.includes('![');
 }
 
 async function run(req: NextRequest): Promise<NextResponse> {
