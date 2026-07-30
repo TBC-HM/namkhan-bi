@@ -16,6 +16,11 @@ interface Props {
   locations: { location_id: number; location_name: string }[];
 }
 
+/** Waste-family reason codes offered on write-offs (inv.movements.reason_code CHECK list). */
+const WRITEOFF_REASONS = [
+  'waste', 'spoilage', 'breakage', 'theft', 'guest_comp', 'staff_meal', 'write_off',
+] as const;
+
 export default function MovementModal({ itemId, itemName, currentLocationId, locations }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<MovementMode | null>(null);
@@ -33,6 +38,8 @@ export default function MovementModal({ itemId, itemName, currentLocationId, loc
     const toLoc   = Number(fd.get('to_location') || 0);
     const reason  = (fd.get('reason') as string) || null;
 
+    const reasonCode = (fd.get('reason_code') as string) || null;
+
     let body: any;
     if (mode === 'adjust') {
       body = {
@@ -40,6 +47,7 @@ export default function MovementModal({ itemId, itemName, currentLocationId, loc
         location_id: fromLoc,
         movement_type: 'count_correction',
         quantity: qty, // signed delta
+        reason_code: 'correction',
         notes: reason,
       };
     } else if (mode === 'writeoff') {
@@ -48,14 +56,15 @@ export default function MovementModal({ itemId, itemName, currentLocationId, loc
         location_id: fromLoc,
         movement_type: 'write_off',
         quantity: -Math.abs(qty),
+        reason_code: reasonCode ?? 'write_off',
         notes: reason,
       };
     } else {
       // move — two rows
       if (!toLoc || toLoc === fromLoc) { setErr('Pick a different to_location'); setBusy(false); return; }
       body = [
-        { item_id: itemId, location_id: fromLoc, movement_type: 'transfer_out', quantity: -Math.abs(qty), counterparty_location_id: toLoc, notes: reason },
-        { item_id: itemId, location_id: toLoc,   movement_type: 'transfer_in',  quantity: Math.abs(qty),  counterparty_location_id: fromLoc, notes: reason },
+        { item_id: itemId, location_id: fromLoc, movement_type: 'transfer_out', quantity: -Math.abs(qty), counterparty_location_id: toLoc, reason_code: 'transfer', notes: reason },
+        { item_id: itemId, location_id: toLoc,   movement_type: 'transfer_in',  quantity: Math.abs(qty),  counterparty_location_id: fromLoc, reason_code: 'transfer', notes: reason },
       ];
     }
 
@@ -106,6 +115,16 @@ export default function MovementModal({ itemId, itemName, currentLocationId, loc
                   <select name="to_location" defaultValue="" className="inv-input" required>
                     <option value="">— pick destination —</option>
                     {locations.map((l) => <option key={l.location_id} value={l.location_id}>{l.location_name}</option>)}
+                  </select>
+                </label>
+              )}
+              {mode === 'writeoff' && (
+                <label className="inv-field">
+                  <span>Write-off reason</span>
+                  <select name="reason_code" defaultValue="waste" className="inv-input" required>
+                    {WRITEOFF_REASONS.map((r) => (
+                      <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>
+                    ))}
                   </select>
                 </label>
               )}
