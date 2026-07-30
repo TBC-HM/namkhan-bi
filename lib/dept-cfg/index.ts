@@ -770,6 +770,9 @@ const FINANCE_CFG: DeptCfg = {
     // headline stripes). Replaces the two "Open Docs register" links that
     // lived on the Legal page.
     { label: 'Archive',         href: '/finance/archive'                  },
+    // cost-governance-v1 (2026-07-30): tenant-scoped platform usage at cost
+    // (PBS placement correction: Administration -> Costs on the client surface).
+    { label: 'Costs',           href: '/finance/costs'                    },
   ],
   quickChips: [
     { label: 'HoD',            href: '/finance'             },
@@ -1241,6 +1244,8 @@ const HOLDING_FINANCE_CFG: DeptCfg = {
     { label: 'HoD',      href: '/holding/finance'          },
     { label: 'Invoices', href: '/holding/finance/invoices' },
     { label: 'Clients',  href: '/holding/finance/clients'  },
+    // cost-governance-v1 (2026-07-30): enterprise cost dashboard (schema costs.*).
+    { label: 'Costs',    href: '/holding/finance/costs'    },
   ],
   quickChips: [],
   defaultAttn: [],
