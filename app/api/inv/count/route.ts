@@ -21,8 +21,20 @@ interface CountInput {
   location_id: number;
   count_type?: 'periodic' | 'spot' | 'cycle' | 'annual' | 'opening';
   status?: 'draft' | 'submitted';
+  /** Free-text name of the counter. Hashed to a deterministic uuid for
+   *  counted_by (no per-user auth yet) so fn_inv_count_post can enforce
+   *  counter ≠ approver. The readable name is appended to notes. */
+  counted_by_name?: string | null;
   notes?: string;
   lines: CountLineInput[];
+}
+
+/** Deterministic uuid from a free-text name (md5, formatted as uuid). */
+function nameToUuid(name: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { createHash } = require('crypto') as typeof import('crypto');
+  const h = createHash('md5').update(name.trim().toLowerCase()).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
 export async function POST(req: Request) {
@@ -50,7 +62,9 @@ export async function POST(req: Request) {
       location_id: body.location_id,
       count_type: body.count_type ?? 'periodic',
       status: body.status ?? 'submitted',
-      notes: body.notes ?? null,
+      counted_by: body.counted_by_name ? nameToUuid(body.counted_by_name) : null,
+      notes: [body.notes, body.counted_by_name ? `counted by: ${body.counted_by_name.trim()}` : null]
+        .filter(Boolean).join(' · ') || null,
     })
     .select('count_id')
     .maybeSingle();
