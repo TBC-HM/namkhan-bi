@@ -56,6 +56,21 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     return NextResponse.json(data);
   }
 
+  if (action === 'copy_link') {
+    // Verifier gap (round 2): magic_token was stripped from v_dataroom_grants
+    // (external credential, must not sit in a bridge every internal reader can
+    // SELECT). The cockpit fetches it on demand here — service-role RPC that
+    // only returns tokens for ACTIVE grants of this room.
+    const grantId = String(body.grant_id ?? '');
+    if (!grantId) return NextResponse.json({ error: 'grant_id_required' }, { status: 400 });
+    const { data, error } = await sb.rpc('fn_dataroom_grant_link', {
+      p_grant_id: grantId, p_room_id: params.roomId,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: 'grant_not_active' }, { status: 404 });
+    return NextResponse.json(data);
+  }
+
   if (action === 'revoke') {
     const { data, error } = await sb.rpc('fn_dataroom_revoke', { p_grant_id: String(body.grant_id ?? '') });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
