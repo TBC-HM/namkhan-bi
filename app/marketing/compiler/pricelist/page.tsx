@@ -1,8 +1,10 @@
 // app/marketing/compiler/pricelist/page.tsx
 // Read-only view of pricing.pricelist — what the variant builder reads from.
+// A6 (brief autospec-compiler_module-20260725, 2026-07-30): migrated legacy
+// <Page> shell → DashboardPage primitives. Data content unchanged.
 
 import TenantLink from '@/components/nav/TenantLink';
-import Page from '@/components/page/Page';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtKpi, EMPTY } from '@/lib/format';
@@ -33,8 +35,15 @@ export default async function PricelistPage() {
     .order('sku');
   const rows = (data ?? []) as PriceRow[];
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/compiler',
+  }));
+
   return (
-    <Page eyebrow="Marketing · Compiler · Pricelist" title={<>Active <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>pricelist</em></>} subPages={MARKETING_SUBPAGES}>
+    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
+    <DashboardPage title="Marketing · Compiler · Pricelist" tabs={tabs}>
+    <div style={{ gridColumn: '1 / -1' }}>
 
       <div style={{
         marginTop: 14, padding: '10px 14px',
@@ -87,6 +96,8 @@ export default async function PricelistPage() {
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
         <TenantLink href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</TenantLink>
       </div>
-    </Page>
+    </div>
+    </DashboardPage>
+    </div>
   );
 }
