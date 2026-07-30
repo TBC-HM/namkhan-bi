@@ -56,6 +56,21 @@ function parseCsv(text: string): Record<string,string>[] {
 }
 
 export async function POST(req: Request) {
+  // Sales brief A7 (2026-07-30): this route is now middleware-exempt for
+  // server-to-server imports, so it carries its own secret gate —
+  // x-webhook-secret (LEADS_WEBHOOK_SECRET, vendor path) or
+  // x-cron-secret (CRON_SHARED_SECRET, platform/verifier path).
+  const webhookSecret = process.env.LEADS_WEBHOOK_SECRET ?? '';
+  const cronSecret = process.env.CRON_SHARED_SECRET ?? process.env.CRON_SECRET ?? '';
+  const gotWebhook = req.headers.get('x-webhook-secret') ?? '';
+  const gotCron = req.headers.get('x-cron-secret') ?? '';
+  const authorized =
+    (webhookSecret.length > 0 && gotWebhook === webhookSecret) ||
+    (cronSecret.length > 0 && gotCron === cronSecret);
+  if (!authorized) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
   let body: { csv?: string; rows?: Record<string,unknown>[]; default_source?: string; icp_segment_id?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'invalid json' }, { status: 400 }); }
 
