@@ -27,9 +27,14 @@ export default async function ActionCenterPage() {
   const sb = getSupabaseAdmin();
 
   const [briefsRes, bugsRes, mcqRes, ticketsRes, auditRes, ops] = await Promise.all([
+    // it-area-reorg-v1 gap 1 (2026-07-30): briefs park owner questions while in
+    // 'verifying' too (verifier writes open_question + sets status=verifying).
+    // Filtering on needs_input alone made 3 live questions invisible (youtube
+    // Analytics-API sat unanswered 2 days). Nav law: anything needing PBS
+    // surfaces in the Action Center automatically.
     (sb as any).from('v_build_briefs_index')
       .select('slug, title, status, open_question')
-      .eq('status', 'needs_input')
+      .in('status', ['needs_input', 'verifying'])
       .not('open_question', 'is', null),
     (sb as any).from('cockpit_bugs')
       .select('id, body, status, open_question')
