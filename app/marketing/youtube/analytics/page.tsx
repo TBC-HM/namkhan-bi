@@ -9,6 +9,7 @@ import { fetchChannel, isErr } from '@/lib/youtube/data';
 import YtSubTabs from '../_shared/SubTabs';
 import AnalyticsKPIs from '../_server/AnalyticsKPIs';
 import RunAuditButton from './_client/RunAuditButton';
+import ApplyAuditButton from './_client/ApplyAuditButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
