@@ -24,6 +24,7 @@ export default function SendLogsPage({ params }: { params: { property_id: string
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
         { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`, active: true },
+        { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
       ]}
     >
       <div style={{ gridColumn: '1 / -1' }}>
