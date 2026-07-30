@@ -837,20 +837,20 @@ const IT_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. why is the chat slow today?',
   storageKeyPrefix: 'it',
   subPages: [
-    { label: 'Cockpit',   href: '/cockpit'           },
-    { label: 'Tasks',     href: '/cockpit/tasks'     },
-    { label: 'Schedule',  href: '/cockpit/schedule'  },
+    { label: 'Cockpit',   href: '/holding/it2'           },
+    { label: 'Tasks',     href: '/holding/it2/fleet/tasks'     },
+    { label: 'Schedule',  href: '/holding/it/cockpit/schedule'  },
     { label: 'Knowledge', href: '/knowledge'         },
-    { label: 'Audit log', href: '/cockpit?tab=audit' },
-    { label: 'Agents',    href: '/cockpit?tab=team'  },
+    { label: 'Audit log', href: '/holding/it2/system/activity' },
+    { label: 'Agents',    href: '/holding/it2/fleet/team'  },
   ],
   quickChips: [
-    { label: 'Cockpit',   href: '/cockpit'           },
-    { label: 'Tasks',     href: '/cockpit/tasks'     },
-    { label: 'Schedule',  href: '/cockpit/schedule'  },
+    { label: 'Cockpit',   href: '/holding/it2'           },
+    { label: 'Tasks',     href: '/holding/it2/fleet/tasks'     },
+    { label: 'Schedule',  href: '/holding/it/cockpit/schedule'  },
     { label: 'Knowledge', href: '/knowledge'         },
-    { label: 'Audit log', href: '/cockpit?tab=audit' },
-    { label: 'Agents',    href: '/cockpit?tab=team'  },
+    { label: 'Audit log', href: '/holding/it2/system/activity' },
+    { label: 'Agents',    href: '/holding/it2/fleet/team'  },
   ],
   defaultAttn: [
     { id: 'l1', label: 'Open cockpit tickets need triage',     severity: 'medium', kind: 'leakage'     },
@@ -859,7 +859,7 @@ const IT_CFG: DeptCfg = {
   ],
   defaultDocs: [
     { id: 'd1', label: 'CLAUDE.md',         href: '/knowledge'      },
-    { id: 'd2', label: 'Deploy runbook',    href: '/cockpit'        },
+    { id: 'd2', label: 'Deploy runbook',    href: '/holding/it2'        },
     { id: 'd3', label: 'Cockpit constraints', href: '/knowledge'    },
   ],
   defaultTasks: [
@@ -868,13 +868,13 @@ const IT_CFG: DeptCfg = {
     { id: 't3', label: 'Triage open tickets',        done: false, created: TODAY },
   ],
   attentionRoutes: [
-    { matcher: 'ticket',   href: '/cockpit/tasks'     },
-    { matcher: 'deploy',   href: '/cockpit'           },
-    { matcher: 'agent',    href: '/cockpit?tab=team'  },
-    { matcher: 'audit',    href: '/cockpit?tab=audit' },
+    { matcher: 'ticket',   href: '/holding/it2/fleet/tasks'     },
+    { matcher: 'deploy',   href: '/holding/it2'           },
+    { matcher: 'agent',    href: '/holding/it2/fleet/team'  },
+    { matcher: 'audit',    href: '/holding/it2/system/activity' },
     { matcher: 'knowledge', href: '/knowledge'        },
   ],
-  defaultDrilldown: '/cockpit',
+  defaultDrilldown: '/holding/it2',
   // tile-truth-wiring 2026-07-29: hardcoded values (8 · 7/9 · 94% · 12)
   // removed — app/it/page.tsx now fetches public.v_cockpit_ops_kpis and
   // overrides these placeholders server-side. '—' is the honest fallback.
@@ -920,8 +920,8 @@ const ARCHITECT_CFG: DeptCfg = {
     { id: 'o1', label: 'Agent fleet healthy — push autonomous PRs',        severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'd1', label: 'Cockpit overview',  href: '/cockpit'       },
-    { id: 'd2', label: 'Tasks board',       href: '/cockpit/tasks' },
+    { id: 'd1', label: 'Cockpit overview',  href: '/holding/it2'       },
+    { id: 'd2', label: 'Tasks board',       href: '/holding/it2/fleet/tasks' },
     { id: 'd3', label: 'Knowledge base',    href: '/knowledge'     },
   ],
   defaultTasks: [
@@ -930,11 +930,11 @@ const ARCHITECT_CFG: DeptCfg = {
     { id: 't3', label: 'Triage open tickets',     done: false, created: TODAY },
   ],
   attentionRoutes: [
-    { matcher: 'ticket', href: '/cockpit/tasks' },
-    { matcher: 'deploy', href: '/cockpit'       },
-    { matcher: 'agent',  href: '/cockpit?tab=team' },
+    { matcher: 'ticket', href: '/holding/it2/fleet/tasks' },
+    { matcher: 'deploy', href: '/holding/it2'       },
+    { matcher: 'agent',  href: '/holding/it2/fleet/team' },
   ],
-  defaultDrilldown: '/cockpit',
+  defaultDrilldown: '/holding/it2',
   // tile-truth-wiring 2026-07-29: hardcoded values (12 · 7 · 4 · 3) removed —
   // app/architect/page.tsx overrides AGENTS/DEPLOYS from public.v_cockpit_ops_kpis.
   // TODO/PROJECTS have no live source yet → honest '—' (a fake number is worse
@@ -973,7 +973,7 @@ const HOLDING_CFG: DeptCfg = {
     { id: 'h4', label: 'Sherlock Tier 1 dossiers due in 48h',                            severity: 'medium', kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'hd1', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
+    { id: 'hd1', label: 'Cockpit (operations command)', href: '/holding/it2' },
     { id: 'hd2', label: 'TBC public homepage',          href: '/tbc'         },
     { id: 'hd3', label: 'Knowledge base',               href: '/knowledge'   },
   ],
@@ -990,7 +990,7 @@ const HOLDING_CFG: DeptCfg = {
     { matcher: 'payroll',  href: '/h/1000001/operations/staff' },
     { matcher: 'mews',     href: '/h/260955'               },
   ],
-  defaultDrilldown: '/holding/it/cockpit',
+  defaultDrilldown: '/holding/it2',
   // tile-truth-wiring 2026-07-29: hardcoded AGENTS 65 / OPEN 3 removed ('—'
   // honest fallback); EXPOSURE tile deleted — no live legal-exposure source
   // exists and matter figures must not live in platform config (see brief).
@@ -1075,10 +1075,10 @@ const HOLDING_IT_CFG: DeptCfg = {
   subPages: [
     { label: 'HoD',         href: '/holding/it'               },
     { label: 'Bugs',        href: '/holding/bugs'             }, // PBS 2026-07-16 · site-wide bug widget list + CTAs + agent-payload
-    { label: 'Tasks',       href: '/cockpit/tasks'            },
-    { label: 'Cockpit',     href: '/holding/it/cockpit'               },
-    { label: 'Agent Fleet', href: '/holding/it/cockpit?tab=team'      },
-    { label: 'Documentation', href: '/holding/it/cockpit?tab=docs'    },
+    { label: 'Tasks',       href: '/holding/it2/fleet/tasks'            },
+    { label: 'Cockpit',     href: '/holding/it2'               },
+    { label: 'Agent Fleet', href: '/holding/it2/fleet/team'      },
+    { label: 'Documentation', href: '/holding/it2/knowledge/docs'    },
   ],
   quickChips: [],
   defaultAttn: [
@@ -1087,10 +1087,10 @@ const HOLDING_IT_CFG: DeptCfg = {
     { id: 'i3', label: 'Agent fleet healthy — push autonomous PRs',               severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'id1', label: 'Cockpit V2',                href: '/holding/it/cockpit'           },
-    { id: 'id2', label: 'Tasks board',               href: '/cockpit/tasks'        },
+    { id: 'id1', label: 'Cockpit V2',                href: '/holding/it2'           },
+    { id: 'id2', label: 'Tasks board',               href: '/holding/it2/fleet/tasks'        },
     { id: 'id3', label: 'Knowledge base',            href: '/knowledge'            },
-    { id: 'id4', label: 'Claude operating manual',   href: '/holding/it/cockpit?tab=docs'  },
+    { id: 'id4', label: 'Claude operating manual',   href: '/holding/it2/knowledge/docs'  },
   ],
   defaultTasks: [
     { id: 'it1', label: 'Wait on Mews token reissue (push side works)', done: false, created: TODAY },
@@ -1099,11 +1099,11 @@ const HOLDING_IT_CFG: DeptCfg = {
   ],
   attentionRoutes: [
     { matcher: 'mews',   href: '/h/260955'      },
-    { matcher: 'deploy', href: '/holding/it/cockpit'    },
-    { matcher: 'agent',  href: '/holding/it/cockpit?tab=team' },
-    { matcher: 'pdf',    href: '/holding/it/cockpit?tab=docs' },
+    { matcher: 'deploy', href: '/holding/it2'    },
+    { matcher: 'agent',  href: '/holding/it2/fleet/team' },
+    { matcher: 'pdf',    href: '/holding/it2/knowledge/docs' },
   ],
-  defaultDrilldown: '/holding/it/cockpit',
+  defaultDrilldown: '/holding/it2',
   // tile-truth-wiring 2026-07-29: hardcoded values (8 · 65 · 12 · 94%)
   // removed — app/holding/it/page.tsx overrides these live from
   // public.v_cockpit_ops_kpis. '—' is the honest fallback.
@@ -1132,12 +1132,12 @@ const HOLDING_STRATEGY_CFG: DeptCfg = {
   quickChips: [],
   defaultAttn: [],
   defaultDocs: [
-    { id: 'sd1', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
+    { id: 'sd1', label: 'Cockpit (operations command)', href: '/holding/it2' },
     { id: 'sd2', label: 'Knowledge base',               href: '/knowledge'   },
   ],
   defaultTasks: [],
   attentionRoutes: [],
-  defaultDrilldown: '/holding/it/cockpit',
+  defaultDrilldown: '/holding/it2',
   kpiTiles: [
     { k: 'PROJECTS', v: '—', d: 'group restructuring · ongoing' },
     { k: 'REVIEWS',  v: '—', d: 'contracts in queue'             },
@@ -1161,12 +1161,12 @@ const HOLDING_JOHN_CFG: DeptCfg = {
   quickChips: [],
   defaultAttn: [],
   defaultDocs: [
-    { id: 'jd1', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
+    { id: 'jd1', label: 'Cockpit (operations command)', href: '/holding/it2' },
     { id: 'jd2', label: 'Knowledge base',               href: '/knowledge'   },
   ],
   defaultTasks: [],
   attentionRoutes: [],
-  defaultDrilldown: '/holding/it/cockpit',
+  defaultDrilldown: '/holding/it2',
   kpiTiles: [
     { k: 'JURISDICTION', v: 'LAO', d: 'Namkhan + Luang Prabang' },
     { k: 'OPEN MATTERS', v: '—',   d: 'contracts in review'      },
@@ -1201,7 +1201,7 @@ const HOLDING_CEO_CFG: DeptCfg = {
     { id: 'ceo3', label: 'Q2 board pack due in 14 days',                                   severity: 'medium', kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'ceod1', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
+    { id: 'ceod1', label: 'Cockpit (operations command)', href: '/holding/it2' },
     { id: 'ceod2', label: 'Knowledge base',               href: '/knowledge'  },
     { id: 'ceod3', label: 'Holding overview',             href: '/holding'    },
   ],
@@ -1211,7 +1211,7 @@ const HOLDING_CEO_CFG: DeptCfg = {
     { matcher: 'pace',    href: '/h/260955/revenue/pace' },
     { matcher: 'board',   href: '/holding/finance' },
   ],
-  defaultDrilldown: '/holding/it/cockpit',
+  defaultDrilldown: '/holding/it2',
   // tile-truth-wiring 2026-07-29: EXPOSURE tile deleted (no live source;
   // matter figures must not live in platform config — brief §0.R R1).
   // APPROVALS hardcoded '3' removed — app/holding/ceo/page.tsx overrides it
@@ -1251,7 +1251,7 @@ const HOLDING_FINANCE_CFG: DeptCfg = {
   defaultAttn: [],
   defaultDocs: [
     { id: 'hfd1', label: 'Invoice generator', href: '/holding/finance/invoices' },
-    { id: 'hfd2', label: 'Cockpit (operations command)', href: '/holding/it/cockpit' },
+    { id: 'hfd2', label: 'Cockpit (operations command)', href: '/holding/it2' },
   ],
   defaultTasks: [],
   attentionRoutes: [],
