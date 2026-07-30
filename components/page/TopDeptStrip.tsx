@@ -12,6 +12,7 @@
 // brass-soft so both rows can be lit at once (breadcrumb).
 
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 interface DeptLink { label: string; slug: string; href?: string; openInNewWindow?: boolean; color?: string }
 
@@ -120,9 +121,24 @@ function stripStyleFor(propertyId: number, holdingMode: boolean): { bg: string; 
 
 export default function TopDeptStrip() {
   const pathname = usePathname() ?? '';
-  if (isHiddenPath(pathname)) return null;
-
   const holdingMode = isHoldingPath(pathname);
+
+  // it-area-reorg-v1 gap 6 (2026-07-30): "IT2 ●N" badge — the needs-you count
+  // (open owner questions + awaits-user tickets) surfaces in the nav itself so
+  // PBS sees pending decisions from anywhere in the holding area. null = hide
+  // (fetch failed or nothing pending → no badge; a fake 0 is noise).
+  const [needsYou, setNeedsYou] = useState<number | null>(null);
+  useEffect(() => {
+    if (!holdingMode) return;
+    let alive = true;
+    fetch('/api/it2/needs-you-count', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive && j && typeof j.count === 'number') setNeedsYou(j.count); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [holdingMode, pathname]);
+
+  if (isHiddenPath(pathname)) return null;
 
   // Holding mode — render the 2-link holding strip (Legal · IT) and skip
   // the property-id resolution + settings gear (no per-property scope here).
@@ -172,6 +188,20 @@ export default function TopDeptStrip() {
               }}
             >
               {d.label}
+              {d.slug === 'it2' && needsYou != null && needsYou > 0 && (
+                <span style={{
+                  marginLeft: 6,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  color: '#FFFFFF',
+                  background: '#B04A2F',
+                  borderRadius: 99,
+                  padding: '1px 6px',
+                  verticalAlign: 'middle',
+                }}>
+                  {needsYou}
+                </span>
+              )}
             </a>
           );
         })}
