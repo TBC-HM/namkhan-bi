@@ -11,6 +11,15 @@
 //
 // Donna branch: canonical empty-state surface, untouched (Donna deferred,
 // ADR-173).
+//
+// Extension (brief forecasting-module-v1, build/forecasting): 12-month
+// statistical outlook from the deterministic TS engine in lib/forecast/
+// (STLY baseline + OTB + pickup-pace projection, variance bands) rendered
+// below the nightly-run sections, plus clearly-marked placeholder slots for
+// the v2 LLM layers (Challenger / Insight / Scenario+Recommendation —
+// recommend-never-execute, BINDING rule 1). The engine section also renders
+// when the nightly run is missing, so the page degrades honestly instead of
+// going dark.
 
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import {
@@ -28,6 +37,7 @@ import { REVENUE_SUBPAGES } from '@/app/revenue/_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import DonnaRevenueCanonical from '../_DonnaRevenueCanonical';
 import { REVENUE_SURFACES } from '../_surfaces';
+import { runMonthlyForecast, type EngineRun } from '@/lib/forecast';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -130,6 +140,129 @@ function monthEnd(ym: string): string {
   return new Date(d.getTime() - 86400000).toISOString().slice(0, 10);
 }
 
+// ─── Statistical engine v1 section (lib/forecast) ─────────────────────────
+// Monthly-grain 12-month outlook: Occupancy %, ADR, RevPAR, Rooms Revenue
+// (USALI names, PMS-layer USD). Deterministic statistics only — the three
+// panels after the table are PLACEHOLDER SLOTS for the v2 LLM layers and
+// render no generated content in v1.
+
+function placeholderNote(text: string) {
+  return (
+    <p style={{ margin: 0, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.6, fontStyle: 'italic' }}>
+      {text}
+    </p>
+  );
+}
+
+function EngineOutlookSection({ run }: { run: EngineRun | null }) {
+  const fmtUsd = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
+
+  const engineTable = (run?.months ?? []).map((m) => ({
+    month: monthLabel(m.month),
+    occ_fc: `${m.occupancyPctForecast.toFixed(0)}% (${m.occupancyP10.toFixed(0)}–${m.occupancyP90.toFixed(0)}%)`,
+    adr_fc: m.roomsForecast > 0 ? fmtUsd(m.adrForecast) : '—',
+    revpar_fc: m.capacityRoomNights > 0 ? fmtUsd(m.revparForecast) : '—',
+    rooms_rev_fc: fmtUsd(m.roomsRevenueForecast),
+    otb: Math.round(m.otbRooms).toLocaleString('en-US'),
+    stly: m.stlyRooms > 0 ? Math.round(m.stlyRooms).toLocaleString('en-US') : '—',
+    basis: m.basis,
+  }));
+  const engineTableSeries: ChartSeries[] = [
+    { key: 'occ_fc', label: 'Occupancy % fc (p10–p90)' },
+    { key: 'adr_fc', label: 'ADR fc' },
+    { key: 'revpar_fc', label: 'RevPAR fc' },
+    { key: 'rooms_rev_fc', label: 'Rooms Revenue fc' },
+    { key: 'otb', label: 'OTB RN' },
+    { key: 'stly', label: 'STLY RN' },
+    { key: 'basis', label: 'Basis' },
+  ];
+
+  const engineChart = (run?.months ?? []).map((m) => ({
+    month: monthLabel(m.month),
+    occ_fc: Number(m.occupancyPctForecast.toFixed(1)),
+    p10: Number(m.occupancyP10.toFixed(1)),
+    p90: Number(m.occupancyP90.toFixed(1)),
+    stly_occ:
+      m.capacityRoomNights > 0 && m.stlyRooms > 0
+        ? Number(((100 * m.stlyRooms) / m.capacityRoomNights).toFixed(1))
+        : 0,
+  }));
+  const engineChartSeries: ChartSeries[] = [
+    { key: 'occ_fc', label: 'Occupancy % forecast', color: 'var(--primary, #1F3A2E)', type: 'line' },
+    { key: 'p10', label: 'p10 (low)', color: 'var(--hairline, #E6DFCC)', type: 'line' },
+    { key: 'p90', label: 'p90 (high)', color: 'var(--hairline, #E6DFCC)', type: 'line' },
+    { key: 'stly_occ', label: 'STLY occupancy % (vs current capacity)', color: 'var(--status-grey, #8A8A8A)', type: 'line' },
+  ];
+
+  return (
+    <>
+      <Container
+        title="12-month statistical outlook — engine v1 (monthly grain)"
+        subtitle={
+          run
+            ? `Deterministic TS engine (lib/forecast) · run ${run.runDate} · pace ratio ${run.pace.ratio.toFixed(2)} over ${run.pace.observedDays}d · USALI metrics · PMS layer USD`
+            : 'Deterministic TS engine (lib/forecast) — no inputs available'
+        }
+      >
+        {run ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <Chart variant="combo" data={engineChart} xKey="month" series={engineChartSeries} height={260} />
+            <Chart variant="table" data={engineTable} xKey="month" series={engineTableSeries} />
+            <details>
+              <summary style={{ cursor: 'pointer', color: 'var(--primary, #1F3A2E)', fontSize: 13, fontWeight: 600 }}>
+                Method — transparent formula, no black box
+              </summary>
+              <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 12, lineHeight: 1.7, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                {run.method}
+              </p>
+              <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 12, lineHeight: 1.6 }}>
+                STLY occupancy is shown against current capacity (24 → 30 rooms on 2026-07-01), so
+                LY room nights read low as a percentage by design. Cancellation risk is modeled at
+                daily grain by the nightly engine, not at monthly grain in v1. Confidence is always
+                shown — never hidden.
+              </p>
+            </details>
+          </div>
+        ) : (
+          placeholderNote(
+            'Engine inputs unavailable (v_kpi_daily / v_otb_pace returned no rows). Statistical outlook cannot be computed.',
+          )
+        )}
+      </Container>
+
+      <Container
+        title="Forecast Challenger — placeholder (v2 LLM slot)"
+        subtitle="Adversarial review: stale data, unrealistic assumptions, unusual pace → confidence adjustment"
+        status="grey"
+      >
+        {placeholderNote(
+          'Not yet active. In v2 the Challenger agent attempts to prove this forecast wrong and adjusts confidence. It never changes the statistical numbers above.',
+        )}
+      </Container>
+
+      <Container
+        title="Insight — placeholder (v2 LLM slot)"
+        subtitle="Numbers → business findings (e.g. demand shifted later than the historical booking window)"
+        status="grey"
+      >
+        {placeholderNote(
+          'Not yet active. In v2 the Insight agent turns the engine output into named business findings with confidence levels. Framing only — the forecast itself stays statistical.',
+        )}
+      </Container>
+
+      <Container
+        title="Scenarios & recommendations — placeholder (v2 LLM slot)"
+        subtitle="What-if comparisons over engine runs · options only — recommend, never execute"
+        status="grey"
+      >
+        {placeholderNote(
+          'Not yet active. In v2 the Scenario agent compares alternative futures and the Recommendation agent proposes commercial responses. Nothing here will ever execute a price, inventory or channel change — humans and Vector decide.',
+        )}
+      </Container>
+    </>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────
 
 export default async function RevenueForecastPage({
@@ -162,15 +295,24 @@ export default async function RevenueForecastPage({
 
   const fc = await getForecastCurrent(propertyId);
 
+  // TS engine v1 (lib/forecast) — independent of the nightly run, so the
+  // statistical outlook still renders when forecast-daily-run is down.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const engineRun = await runMonthlyForecast(propertyId, fc[0]?.run_date ?? todayIso);
+
   if (fc.length === 0) {
     return (
       <DashboardPage title="Revenue · Forecast" subtitle="365-day occupancy, ADR and revenue forecast · The Namkhan" tabs={tabs}>
-        <Container title="No forecast run available" status="red">
-          <p style={{ margin: 0, color: 'var(--ink)', fontSize: 14 }}>
-            The nightly job <code>forecast-daily-run</code> has not produced a current run.
-            Check pg_cron job status and <code>public.v_forecast_current</code>.
-          </p>
-        </Container>
+        <div style={{ display: 'grid', gap: 16 }}>
+          <Container title="No forecast run available" status="red">
+            <p style={{ margin: 0, color: 'var(--ink)', fontSize: 14 }}>
+              The nightly job <code>forecast-daily-run</code> has not produced a current run.
+              Check pg_cron job status and <code>public.v_forecast_current</code>.
+              The monthly statistical outlook below is computed live and does not depend on it.
+            </p>
+          </Container>
+          <EngineOutlookSection run={engineRun} />
+        </div>
       </DashboardPage>
     );
   }
@@ -379,6 +521,8 @@ export default async function RevenueForecastPage({
             </details>
           </div>
         </Container>
+
+        <EngineOutlookSection run={engineRun} />
       </div>
     </DashboardPage>
   );
