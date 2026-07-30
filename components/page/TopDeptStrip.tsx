@@ -46,6 +46,10 @@ const HOLDING_DEPTS: DeptLink[] = [
   { label: 'Legal',        slug: 'legal',     href: '/holding/legal'     },
   { label: 'Finance',      slug: 'finance',   href: '/holding/finance'   },
   { label: 'IT',           slug: 'it',        href: '/holding/it'        },
+  // PBS 2026-07-30: IT2 — the reorganized IT area (brief it-area-reorg-v1),
+  // running in parallel next to IT. Once PBS approves + all is wired, the old
+  // IT entry and /holding/it/* retire and IT2 becomes IT.
+  { label: 'IT2',          slug: 'it2',       href: '/holding/it2'       },
   // PBS 2026-07-09 pm: Tasks OUT of top strip. Still reachable via the DeptEntry
   // landing on /holding (Tasks box in Attention · Reports · Tasks · Bugs row).
   // PBS 2026-07-09 pm: Strategy OUT of top strip. Now surfaces as a sub-item
