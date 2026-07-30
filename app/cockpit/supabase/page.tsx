@@ -1,11 +1,5 @@
-// app/cockpit/supabase/page.tsx
-// Legacy redirect for the pre-/h/ era. Brief acceptance #2:
-// /cockpit/supabase → /h/260955/cockpit/supabase (Namkhan only).
-
+// LEGACY SURFACE RETIRED — PBS 2026-07-30: "kill all the orphan pages, all
+// chats — we only want ONE chat / ONE cockpit." Redirects to the IT2 target.
 import { redirect } from 'next/navigation';
-
-const NAMKHAN_PROPERTY_ID = 260955;
-
-export default function LegacyCockpitSupabaseRedirect() {
-  redirect(`/h/${NAMKHAN_PROPERTY_ID}/cockpit/supabase`);
-}
+export const dynamic = 'force-dynamic';
+export default function LegacyRedirect() { redirect('/holding/it2/knowledge/data'); }

@@ -1,20 +1,5 @@
-// Legacy route — cockpit moved to /holding/it/cockpit (refactor 2026-07-23).
-// Kept as a 307 redirect for old bookmarks, per platform convention for retired routes.
+// LEGACY SURFACE RETIRED — PBS 2026-07-30: "kill all the orphan pages, all
+// chats — we only want ONE chat / ONE cockpit." Redirects to the IT2 target.
 import { redirect } from 'next/navigation';
-
-export default function LegacyCockpitV2Redirect({
-  searchParams,
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(searchParams ?? {})) {
-    if (Array.isArray(value)) {
-      for (const v of value) params.append(key, v);
-    } else if (value !== undefined) {
-      params.set(key, value);
-    }
-  }
-  const qs = params.toString();
-  redirect(`/holding/it/cockpit${qs ? `?${qs}` : ''}`);
-}
+export const dynamic = 'force-dynamic';
+export default function LegacyRedirect() { redirect('/holding/it2'); }

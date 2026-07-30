@@ -1,7 +1,5 @@
-// Legacy route — deploys page moved to /holding/it/cockpit/deploys (refactor 2026-07-23).
-// Kept as a 307 redirect for old bookmarks, per platform convention for retired routes.
+// LEGACY SURFACE RETIRED — PBS 2026-07-30: "kill all the orphan pages, all
+// chats — we only want ONE chat / ONE cockpit." Redirects to the IT2 target.
 import { redirect } from 'next/navigation';
-
-export default function LegacyCockpitV2DeploysRedirect() {
-  redirect('/holding/it/cockpit/deploys');
-}
+export const dynamic = 'force-dynamic';
+export default function LegacyRedirect() { redirect('/holding/it2/system/deploys'); }

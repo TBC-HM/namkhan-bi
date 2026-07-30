@@ -1,11 +1,5 @@
-// app/cockpit/users/page.tsx
-// PBS 2026-07-09: legacy /cockpit/users used the workspace_session cookie flow
-// (Supabase Auth doesn't set that cookie → 404 from the /api route).
-// Redirect to the new /settings/users page which uses Supabase Auth.
+// LEGACY SURFACE RETIRED — PBS 2026-07-30: "kill all the orphan pages, all
+// chats — we only want ONE chat / ONE cockpit." Redirects to the IT2 target.
 import { redirect } from 'next/navigation';
-
 export const dynamic = 'force-dynamic';
-
-export default function LegacyCockpitUsersRedirect() {
-  redirect('/settings/users');
-}
+export default function LegacyRedirect() { redirect('/holding/users'); }
