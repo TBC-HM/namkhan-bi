@@ -1,30 +1,25 @@
 // app/marketing/compiler/_components/CompilerCockpit.tsx
 //
-// PBS 2026-05-16: Compiler 2-tab workflow + Lock & Distribute wizard.
+// Brief autospec-compiler_module-20260725 · A1/A2 (2026-07-30).
+// v2 — REAL DATA. The v1 component rendered hardcoded arrays (five fake
+// retreats with invented MTD revenue) — owner-facing fake data, deleted here.
+// Every row below is sourced from compiler.runs / compiler.variants /
+// compiler.deploys / web_analytics.retreats. No revenue column: no real
+// bookings-revenue source exists for retreats yet (brief §5.1 — omit, never
+// invent). Spots booked/remaining come from web_analytics.retreats (real).
 //
-// Mental model:
-//   Compiler builds an OFFER or RETREAT. While it's being built it lives
-//   in "Ongoing Offers". When PBS clicks "Lock", the wizard:
-//     1. Generates the perfect PDF (preview)
-//     2. Asks where to distribute · checkboxes:
-//          ☐ Sales · /sales/packages (ready for sale)
-//          ☐ Social cockpit · enters posting calendar
-//          ☐ Influencer cockpit · routed to ambassadors
-//          ☐ Web · builds funnel page AND adds to website
-//     3. On confirm · package moves to "Fixed Retreats" with broadcast log
-//        showing which channels picked it up.
-//
-// Not every retreat needs a funnel page — the checkboxes default to
-// Sales + Social only. PBS opts into Web + Influencer per-retreat.
-//
-// Sections via ?view=:
-//   ongoing  · drafts being built (default)
-//   fixed    · locked packages with broadcast log
-//   lock     · Lock & Distribute wizard (when ?offer=<id>)
+// Views via ?view=:
+//   ongoing  · runs not yet deployed (default)
+//   fixed    · deployed runs joined to their live /r/[slug] retreat
+//   lock     · Lock & Distribute wizard (?view=lock&offer=<run_id>) —
+//              drives the EXISTING /api/compiler/runs/[id]/deploy route.
+//              Social/influencer selections write honest `queued` broadcast
+//              entries, never fake `live` (D3).
 
-import type { ReactNode } from 'react';
-import Panel from '@/components/page/Panel';
-import KpiBox from '@/components/kpi/KpiBox';
+import type { CSSProperties } from 'react';
+import { Container, KpiTile } from '@/app/(cockpit)/_design';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import LockWizard, { type WizardRun, type WizardVariant } from './LockWizard';
 
 type View = 'ongoing' | 'fixed' | 'lock';
 
@@ -33,544 +28,493 @@ interface Props {
   selectedOfferId?: string;
 }
 
-// ─── Offers (drafts in progress) ──────────────────────────────────────────
+// ─── Row shapes (all sourced from public bridge views / compiler schema) ──
 
-type OfferStatus = 'Draft' | 'Pricing' | 'PDF Review' | 'Awaiting Lock';
-type OfferType = 'Retreat' | 'Seasonal Offer' | 'Group Package' | 'Promo';
-
-interface Offer {
+interface RunRow {
   id: string;
-  name: string;
-  type: OfferType;
-  status: OfferStatus;
-  duration: string;
-  pax: string;
-  priceBand: string;
-  season: string;
-  icp: string;
-  pillars: string[];
-  description: string;
-  pdfReady: boolean;
-  marginPct?: number;
-  lastEdited: string;
+  prompt: string;
+  parsed_spec: any;
+  status: string;
+  property_id: number | null;
+  created_at: string;
+  updated_at: string | null;
 }
 
-const OFFERS: Offer[] = [
-  { id: 'o1', name: '5-Day Mindfulness Reset',           type: 'Retreat',        status: 'Awaiting Lock', duration: '5 days',  pax: '4',   priceBand: '$2,800–3,400/pax', season: 'Green',     icp: 'EU Wellness Women',  pillars: ['Morning Rituals', 'Spa Reset', 'Silence', 'Sleep'],     description: 'Five days of daily yoga · spa rituals · river silence · plant-based meals. Designed for the EU Wellness ICP.', pdfReady: true,  marginPct: 41, lastEdited: '8m ago' },
-  { id: 'o2', name: '3-Night Detox · Green Season',      type: 'Seasonal Offer', status: 'PDF Review',    duration: '3 nights', pax: '2',   priceBand: '$1,640–1,900/pax', season: 'Green',     icp: 'Digital Detox EU',   pillars: ['Tech-free', 'River Silence', 'Sleep'],                  description: 'Phone-locked weekend · hammock + river + sound bath · no Wi-Fi.',                                                pdfReady: true,  marginPct: 38, lastEdited: '1h ago' },
-  { id: 'o3', name: '7-Day River Tales',                 type: 'Retreat',        status: 'Pricing',       duration: '7 days',  pax: '6',   priceBand: 'TBD',              season: 'Cool',      icp: 'Mystique Explorers', pillars: ['Temples', 'Heritage', 'Slow Walks'],                    description: 'Seven days of UNESCO heritage walks · monks at dawn · boat journeys upriver.',                                  pdfReady: false, marginPct: undefined, lastEdited: '3h ago' },
-  { id: 'o4', name: '4-Day Lux Couples',                 type: 'Retreat',        status: 'PDF Review',    duration: '4 days',  pax: '2',   priceBand: '$5,200–6,800/pax', season: 'Cool',      icp: 'Luxury Couples',     pillars: ['Privacy', 'Candle Dinners', 'River Floats'],            description: 'Suite + private boat + candle dinners. For anniversaries and reconnection.',                                    pdfReady: true,  marginPct: 47, lastEdited: '6h ago' },
-  { id: 'o5', name: 'Farm-to-Table Long Weekend',         type: 'Seasonal Offer', status: 'Draft',         duration: '3 days',  pax: '4',   priceBand: 'TBD',              season: 'Green',     icp: 'Conscious Food',     pillars: ['Herb Garden', 'Foraging', 'Local Chefs'],               description: 'Foraging at dawn · chef-led market run · fermentation class · 4 dinners.',                                       pdfReady: false, marginPct: undefined, lastEdited: '1d ago' },
-  { id: 'o6', name: 'Tết · 5-Day Vietnamese New Year',    type: 'Seasonal Offer', status: 'Draft',         duration: '5 days',  pax: '6',   priceBand: 'TBD',              season: 'High',      icp: 'Asia Source Markets', pillars: ['Wellness', 'Cultural Heritage'],                       description: 'Vietnamese-narrated welcome · Tết-aligned ritual schedule · regional food.',                                    pdfReady: false, marginPct: undefined, lastEdited: '2d ago' },
+interface VariantRow {
+  id: string;
+  run_id: string;
+  label: string;
+  room_category: string | null;
+  per_pax_usd: number | null;
+  total_usd: number | null;
+  margin_pct: number | null;
+  recommended: boolean | null;
+}
+
+interface DeployRow {
+  id: string;
+  run_id: string;
+  variant_id: string | null;
+  subdomain: string | null;
+  status: string | null;
+  deployed_at: string | null;
+  created_at: string;
+  broadcast_targets: Record<string, string> | null;
+}
+
+interface RetreatRow {
+  id: string;
+  run_id: string | null;
+  slug: string;
+  name: string;
+  tagline: string | null;
+  arrival_window_from: string | null;
+  arrival_window_to: string | null;
+  spots_total: number | null;
+  spots_booked: number | null;
+  spots_remaining: number | null;
+  price_usd_from: number | null;
+  status: string | null;
+}
+
+type BroadcastState = 'live' | 'queued' | 'off';
+
+const CHANNELS: { key: string; label: string }[] = [
+  { key: 'sales',      label: 'Sales · Packages' },
+  { key: 'social',     label: 'Social cockpit' },
+  { key: 'influencer', label: 'Influencer cockpit' },
+  { key: 'web',        label: 'Web · /r/ funnel' },
 ];
 
-// ─── Fixed retreats (locked + distributed) ────────────────────────────────
-
-interface BroadcastTargets {
-  sales: 'live' | 'pending' | 'off';
-  social: 'live' | 'pending' | 'off';
-  influencer: 'live' | 'pending' | 'off';
-  web: 'live' | 'pending' | 'off';
+// Legacy deploys (pre broadcast_targets column): the /r/ funnel really is
+// live; nothing else was ever wired — render honestly.
+function broadcastOf(d: DeployRow | undefined): Record<string, BroadcastState> {
+  const raw = d?.broadcast_targets ?? {};
+  const norm = (v: unknown, fallback: BroadcastState): BroadcastState =>
+    v === 'live' || v === 'queued' || v === 'off' ? v : fallback;
+  return {
+    web:        norm(raw['web'], d ? 'live' : 'off'),
+    sales:      norm(raw['sales'], 'off'),
+    social:     norm(raw['social'], 'off'),
+    influencer: norm(raw['influencer'], 'off'),
+  };
 }
 
-interface FixedRetreat {
-  id: string;
-  name: string;
-  duration: string;
-  pax: string;
-  pricePax: string;
-  icp: string;
-  lockedAt: string;
-  bookingsMtd: number;
-  revenueMtdUsd: number;
-  pdfUrl: string;
-  funnelUrl: string | null;
-  broadcasts: BroadcastTargets;
+async function loadCockpit() {
+  const admin = getSupabaseAdmin();
+  const [runsQ, variantsQ, deploysQ, retreatsQ] = await Promise.all([
+    admin.from('v_compiler_runs')
+      .select('id, prompt, parsed_spec, status, property_id, created_at, updated_at')
+      .order('created_at', { ascending: false }).limit(50),
+    admin.from('v_compiler_variants')
+      .select('id, run_id, label, room_category, per_pax_usd, total_usd, margin_pct, recommended'),
+    admin.schema('compiler').from('deploys')
+      .select('id, run_id, variant_id, subdomain, status, deployed_at, created_at, broadcast_targets')
+      .order('created_at', { ascending: false }),
+    admin.from('v_retreats')
+      .select('id, run_id, slug, name, tagline, arrival_window_from, arrival_window_to, spots_total, spots_booked, spots_remaining, price_usd_from, status'),
+  ]);
+  return {
+    runs: (runsQ.data ?? []) as RunRow[],
+    variants: (variantsQ.data ?? []) as VariantRow[],
+    deploys: (deploysQ.data ?? []) as DeployRow[],
+    retreats: (retreatsQ.data ?? []) as RetreatRow[],
+    err: runsQ.error?.message ?? variantsQ.error?.message ?? deploysQ.error?.message ?? retreatsQ.error?.message ?? null,
+  };
 }
 
-const FIXED: FixedRetreat[] = [
-  { id: 'f1', name: 'Full Moon Reset · 6 Days',          duration: '6 days', pax: '8',  pricePax: '$3,200', icp: 'EU Wellness Women',  lockedAt: '2026-04-22', bookingsMtd: 4, revenueMtdUsd: 102_400, pdfUrl: '/api/compiler/pdf/f1', funnelUrl: '/marketing/funnels?domain=retreatlaos.xy',     broadcasts: { sales: 'live',    social: 'live',    influencer: 'live',    web: 'live' } },
-  { id: 'f2', name: '4-Day Anniversary · Couples',       duration: '4 days', pax: '2',  pricePax: '$5,800', icp: 'Luxury Couples',     lockedAt: '2026-04-18', bookingsMtd: 2, revenueMtdUsd:  46_400, pdfUrl: '/api/compiler/pdf/f2', funnelUrl: null,                                            broadcasts: { sales: 'live',    social: 'live',    influencer: 'live',    web: 'off' } },
-  { id: 'f3', name: 'Foraging + Fermentation · 5 Days',  duration: '5 days', pax: '6',  pricePax: '$2,650', icp: 'Conscious Food',     lockedAt: '2026-05-02', bookingsMtd: 3, revenueMtdUsd:  47_700, pdfUrl: '/api/compiler/pdf/f3', funnelUrl: '/marketing/funnels?domain=ecoretreatasia.xy',    broadcasts: { sales: 'live',    social: 'live',    influencer: 'pending', web: 'live' } },
-  { id: 'f4', name: 'Lao Heritage Walk · 6 Days',        duration: '6 days', pax: '6',  pricePax: '$2,900', icp: 'Mystique Explorers', lockedAt: '2026-04-30', bookingsMtd: 1, revenueMtdUsd:  17_400, pdfUrl: '/api/compiler/pdf/f4', funnelUrl: null,                                            broadcasts: { sales: 'live',    social: 'live',    influencer: 'off',     web: 'off' } },
-  { id: 'f5', name: 'Host-Your-Retreat · B2B 7-Day',      duration: '7 days', pax: '14', pricePax: '$1,950', icp: 'Yoga Teachers · B2B', lockedAt: '2026-05-08', bookingsMtd: 0, revenueMtdUsd:       0, pdfUrl: '/api/compiler/pdf/f5', funnelUrl: '/marketing/funnels?domain=hostretreatasia.xy', broadcasts: { sales: 'live',    social: 'pending', influencer: 'off',     web: 'live' } },
-];
+function runName(run: RunRow): string {
+  const spec = run.parsed_spec ?? {};
+  const theme = String(spec.theme ?? 'retreat').replace(/-/g, ' ');
+  const nights = spec.duration_nights ?? '?';
+  return `${nights}-night ${theme}`.replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-// ─── Component ────────────────────────────────────────────────────────────
+function fmtUsd(n: number | null | undefined): string {
+  return n == null ? '—' : `$${Math.round(Number(n)).toLocaleString('en-US')}`;
+}
 
-const VIEW_LABEL: Record<View, string> = {
-  ongoing: '✶ Ongoing Offers',
-  fixed:   '◆ Fixed Retreats',
-  lock:    '🔒 Lock & Distribute',
-};
-const VIEWS: View[] = ['ongoing', 'fixed'];   // Lock is shown only when selectedOfferId is set
+function fmtDate(s: string | null | undefined): string {
+  return s ? String(s).slice(0, 10) : '—';
+}
 
-export default function CompilerCockpit({ view, selectedOfferId }: Props) {
-  const draftsInProgress = OFFERS.length;
-  const fixedCount = FIXED.length;
-  const totalLiveBroadcasts = FIXED.reduce((s, f) =>
-    s + Object.values(f.broadcasts).filter((v) => v === 'live').length, 0);
-  const revenueMtd = FIXED.reduce((s, f) => s + f.revenueMtdUsd, 0);
-  const bookingsMtd = FIXED.reduce((s, f) => s + f.bookingsMtd, 0);
-  const pdfPending = OFFERS.filter((o) => !o.pdfReady).length;
+// ─── Component (async server component — fetches live rows) ──────────────
 
-  const selectedOffer = selectedOfferId ? OFFERS.find((o) => o.id === selectedOfferId) : undefined;
+export default async function CompilerCockpit({ view, selectedOfferId }: Props) {
+  const { runs, variants, deploys, retreats, err } = await loadCockpit();
+
+  const variantsByRun = new Map<string, VariantRow[]>();
+  for (const v of variants) {
+    const list = variantsByRun.get(v.run_id) ?? [];
+    list.push(v);
+    variantsByRun.set(v.run_id, list);
+  }
+  const latestDeployByRun = new Map<string, DeployRow>();
+  for (const d of deploys) {
+    if (!latestDeployByRun.has(d.run_id)) latestDeployByRun.set(d.run_id, d);
+  }
+  const retreatByRun = new Map<string, RetreatRow>();
+  for (const r of retreats) {
+    if (r.run_id && !retreatByRun.has(r.run_id)) retreatByRun.set(r.run_id, r);
+  }
+
+  const ongoing = runs.filter((r) => r.status !== 'deployed');
+  const fixed = runs.filter((r) => r.status === 'deployed');
+
+  const spotsBooked = retreats.reduce((s, r) => s + (r.spots_booked ?? 0), 0);
+  const spotsRemaining = retreats.reduce((s, r) => s + (r.spots_remaining ?? 0), 0);
+  const queuedBroadcasts = deploys.reduce((s, d) => {
+    const b = d.broadcast_targets ?? {};
+    return s + Object.values(b).filter((v) => v === 'queued').length;
+  }, 0);
+
+  const selectedRun = selectedOfferId ? runs.find((r) => r.id === selectedOfferId) : undefined;
 
   return (
     <>
-      {/* KPI band */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <KpiBox value={draftsInProgress}      unit="count" label="Ongoing Offers"     tooltip="Offers + retreats in build · not yet locked" />
-        <KpiBox value={fixedCount}            unit="count" label="Fixed Retreats"     tooltip="Locked · for sale" />
-        <KpiBox value={pdfPending}            unit="count" label="PDFs pending"       state={pdfPending > 0 ? 'data-needed' : 'live'} needs={pdfPending > 0 ? 'pricing required' : undefined} />
-        <KpiBox value={totalLiveBroadcasts}   unit="count" label="Live broadcasts"    tooltip="Sales + Social + Influencer + Web slots currently lit per fixed retreat" />
-        <KpiBox value={bookingsMtd}           unit="count" label="Bookings · MTD"     tooltip="Across all fixed retreats this month" />
-        <KpiBox value={revenueMtd}            unit="usd"   label="Revenue · MTD"      tooltip="Package revenue this month · USD" />
+      {/* KPI band — every number from live rows (no invented revenue) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginBottom: 16 }}>
+        <KpiTile label="Ongoing offers" value={ongoing.length} size="sm" footnote="runs not yet deployed" />
+        <KpiTile label="Fixed retreats" value={fixed.length} size="sm" footnote="deployed · live funnel" />
+        <KpiTile label="Priced variants" value={variants.length} size="sm" footnote="from Cloudbeds rates" />
+        <KpiTile label="Spots booked" value={spotsBooked} size="sm" footnote={`${spotsRemaining} remaining`} />
+        <KpiTile label="Queued broadcasts" value={queuedBroadcasts} size="sm" footnote="awaiting channel pickup" />
       </div>
 
       {/* Sub-strip */}
       <div style={S.subStrip}>
-        {VIEWS.map((v) => (
+        {(['ongoing', 'fixed'] as View[]).map((v) => (
           <a key={v} href={`?view=${v}`}
              style={{ ...S.subStripLink, ...(v === view ? S.subStripLinkActive : {}) }}>
-            {VIEW_LABEL[v]}
+            {v === 'ongoing' ? 'Ongoing offers' : 'Fixed retreats'}
           </a>
         ))}
         {view === 'lock' && (
           <span style={{ ...S.subStripLink, ...S.subStripLinkActive }}>
-            {VIEW_LABEL.lock}{selectedOffer ? ` · ${selectedOffer.name}` : ''}
+            Lock &amp; distribute{selectedRun ? ` · ${runName(selectedRun)}` : ''}
           </span>
         )}
       </div>
 
-      {view === 'ongoing' && <OngoingSection />}
-      {view === 'fixed'   && <FixedSection />}
-      {view === 'lock'    && <LockWizardSection offer={selectedOffer} />}
+      {err && (
+        <div style={S.errBox}>DB error: {err}</div>
+      )}
+
+      {view === 'ongoing' && (
+        <OngoingSection runs={ongoing} variantsByRun={variantsByRun} />
+      )}
+      {view === 'fixed' && (
+        <FixedSection runs={fixed} variantsByRun={variantsByRun}
+                      latestDeployByRun={latestDeployByRun} retreatByRun={retreatByRun} />
+      )}
+      {view === 'lock' && (
+        <LockSection run={selectedRun} variantsByRun={variantsByRun}
+                     latestDeploy={selectedRun ? latestDeployByRun.get(selectedRun.id) : undefined} />
+      )}
     </>
   );
 }
 
-// ─── ONGOING ──────────────────────────────────────────────────────────────
+// ─── ONGOING · real compiler.runs ─────────────────────────────────────────
 
-function OngoingSection() {
+function OngoingSection({ runs, variantsByRun }: {
+  runs: RunRow[];
+  variantsByRun: Map<string, VariantRow[]>;
+}) {
   return (
-    <Panel
-      title="Ongoing offers"
-      eyebrow={`${OFFERS.length} in build · prompt → pricing → PDF → lock`}
-      actions={<a href="?new=offer" style={S.btnPrimary}>+ New offer</a>}
-    >
-      <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12 }}>
-        {OFFERS.map((o) => <OngoingCard key={o.id} offer={o} />)}
-      </div>
-    </Panel>
+    <Container title="Ongoing offers" subtitle={`${runs.length} in build · prompt → pricing → offer doc → lock`}>
+      {runs.length === 0 ? (
+        <EmptyState title="No offers in build."
+                    sub="Type a prompt in the bar below (or click a seed template) to start one." />
+      ) : (
+        <div style={S.cardGrid}>
+          {runs.map((r) => <OngoingCard key={r.id} run={r} variants={variantsByRun.get(r.id) ?? []} />)}
+        </div>
+      )}
+    </Container>
   );
 }
 
-function OngoingCard({ offer }: { offer: Offer }) {
-  const canLock = offer.status === 'Awaiting Lock' && offer.pdfReady;
+function OngoingCard({ run, variants }: { run: RunRow; variants: VariantRow[] }) {
+  const spec = run.parsed_spec ?? {};
+  const priced = variants.filter((v) => v.per_pax_usd != null);
+  const perPaxMin = priced.length ? Math.min(...priced.map((v) => Number(v.per_pax_usd))) : null;
+  const perPaxMax = priced.length ? Math.max(...priced.map((v) => Number(v.per_pax_usd))) : null;
+  const bestMargin = priced.length ? Math.max(...priced.map((v) => Number(v.margin_pct ?? 0))) : null;
+  const canLock = run.status === 'ready' && priced.length > 0;
+  const priceBand = perPaxMin == null ? 'TBD'
+    : perPaxMin === perPaxMax ? `${fmtUsd(perPaxMin)}/pax`
+    : `${fmtUsd(perPaxMin)}–${fmtUsd(perPaxMax)}/pax`;
+
   return (
-    <div style={S.offerCard}>
-      <div style={S.offerHead}>
+    <div style={S.card}>
+      <div style={S.cardHead}>
         <div>
-          <div style={S.offerType}>{offer.type}</div>
-          <div style={S.offerName}>{offer.name}</div>
+          <div style={S.cardType}>{String(spec.theme ?? 'retreat').replace(/-/g, ' ')}</div>
+          <div style={S.cardName}>{runName(run)}</div>
         </div>
-        <span style={offerStatusPill(offer.status)}>{offer.status}</span>
+        <span style={statusPill(run.status)}>{run.status}</span>
       </div>
-      <div style={S.offerMeta}>{offer.duration} · {offer.pax} pax · {offer.season} season · {offer.icp}</div>
-      <div style={S.offerDescr}>{offer.description}</div>
-      <div style={S.offerStatRow}>
-        <Stat label="Price band" value={offer.priceBand} />
-        <Stat label="Margin"     value={offer.marginPct != null ? `${offer.marginPct}%` : '—'} />
-        <Stat label="PDF"        value={offer.pdfReady ? '✓ ready' : '⟶ build'} />
-        <Stat label="Edited"     value={offer.lastEdited} />
+      <div style={S.cardMeta}>
+        {spec.duration_nights ?? '?'} nights · {spec.pax ?? '?'} pax
+        {Array.isArray(spec.tier) && spec.tier.length > 0 ? ` · ${spec.tier.join('/')}` : ''}
+        {Array.isArray(spec.season) && spec.season.length > 0 ? ` · ${spec.season.join('/')} season` : ''}
+        {spec.lunar_required ? ' · full moon' : ''}
       </div>
-      <div style={S.offerPillars}>
-        <span style={S.offerFieldLabel}>Pillars</span>
-        <div style={S.tagRow}>
-          {offer.pillars.map((p) => <span key={p} style={S.tagChip}>{p}</span>)}
-        </div>
+      <div style={S.cardPrompt}>“{run.prompt}”</div>
+      <div style={S.statRow}>
+        <Stat label="Variants" value={String(variants.length)} />
+        <Stat label="Price band" value={priceBand} />
+        <Stat label="Best margin" value={bestMargin != null ? `${Math.round(bestMargin)}%` : '—'} />
+        <Stat label="Created" value={fmtDate(run.created_at)} />
       </div>
-      <div style={S.offerActions}>
-        <a href={`?offer=${offer.id}&edit=1`} style={S.btnInlineSecondary}>✎ Edit</a>
-        <a href={`?offer=${offer.id}&pdf=1`} style={S.btnInlineSecondary}>📄 {offer.pdfReady ? 'Preview PDF' : 'Generate PDF'}</a>
-        <a href={`?view=lock&offer=${offer.id}`}
+      <div style={S.actions}>
+        <a href={`/marketing/compiler/${run.id}`} style={S.btnSecondary}>Variants</a>
+        <a href={`/marketing/compiler/${run.id}/edit`} style={S.btnSecondary}>Edit</a>
+        {priced.length > 0 && (
+          <a href={`/api/compiler/runs/${run.id}/pdf`} target="_blank" rel="noopener noreferrer" style={S.btnSecondary}>Offer doc</a>
+        )}
+        <a href={`?view=lock&offer=${run.id}`}
            aria-disabled={!canLock}
-           style={canLock ? S.btnInlinePrimary : { ...S.btnInlineSecondary, opacity: 0.5, pointerEvents: 'none' as const }}>
-          🔒 Lock &amp; distribute
+           style={canLock ? S.btnPrimary : { ...S.btnSecondary, opacity: 0.45, pointerEvents: 'none' as const }}>
+          Lock &amp; distribute
         </a>
-        <a href={`?offer=${offer.id}&duplicate=1`} style={S.btnInlineSecondary}>⎘ Clone</a>
-        <a href={`?offer=${offer.id}&archive=1`} style={S.btnInlineSecondary}>📦 Archive</a>
       </div>
     </div>
   );
 }
 
-// ─── FIXED ────────────────────────────────────────────────────────────────
+// ─── FIXED · deployed runs joined to live web_analytics.retreats ──────────
 
-function FixedSection() {
+function FixedSection({ runs, variantsByRun, latestDeployByRun, retreatByRun }: {
+  runs: RunRow[];
+  variantsByRun: Map<string, VariantRow[]>;
+  latestDeployByRun: Map<string, DeployRow>;
+  retreatByRun: Map<string, RetreatRow>;
+}) {
   return (
-    <Panel title="Fixed retreats · ready for sale" eyebrow={`${FIXED.length} locked · per-channel broadcast log`}>
-      <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12 }}>
-        {FIXED.map((f) => <FixedCard key={f.id} retreat={f} />)}
-      </div>
-    </Panel>
+    <Container title="Fixed retreats" subtitle={`${runs.length} locked · live funnel + per-channel broadcast log`}>
+      {runs.length === 0 ? (
+        <EmptyState title="No fixed retreats yet."
+                    sub="Lock & distribute an ongoing offer to publish it here." />
+      ) : (
+        <div style={S.cardGrid}>
+          {runs.map((r) => (
+            <FixedCard key={r.id} run={r}
+                       variants={variantsByRun.get(r.id) ?? []}
+                       deploy={latestDeployByRun.get(r.id)}
+                       retreat={retreatByRun.get(r.id)} />
+          ))}
+        </div>
+      )}
+    </Container>
   );
 }
 
-function FixedCard({ retreat }: { retreat: FixedRetreat }) {
+function FixedCard({ run, variants, deploy, retreat }: {
+  run: RunRow; variants: VariantRow[]; deploy?: DeployRow; retreat?: RetreatRow;
+}) {
+  const b = broadcastOf(deploy);
+  const locked = variants.find((v) => v.id === deploy?.variant_id) ?? variants.find((v) => v.recommended) ?? variants[0];
   return (
-    <div style={S.fixedCard}>
-      <div style={S.offerHead}>
+    <div style={S.card}>
+      <div style={S.cardHead}>
         <div>
-          <div style={S.offerType}>Locked · {retreat.lockedAt}</div>
-          <div style={S.offerName}>{retreat.name}</div>
+          <div style={S.cardType}>Locked · {fmtDate(deploy?.deployed_at ?? deploy?.created_at)}</div>
+          <div style={S.cardName}>{retreat?.name ?? runName(run)}</div>
         </div>
-        <span style={{ ...basePill('var(--st-good, #82ad8c)') }}>FOR SALE</span>
+        <span style={statusPill('deployed')}>for sale</span>
       </div>
-      <div style={S.offerMeta}>{retreat.duration} · {retreat.pax} pax · {retreat.pricePax}/pax · {retreat.icp}</div>
-      <div style={S.offerStatRow}>
-        <Stat label="Bookings MTD" value={String(retreat.bookingsMtd)} />
-        <Stat label="Revenue MTD"  value={`$${retreat.revenueMtdUsd.toLocaleString('en-US')}`} />
-        <Stat label="PDF" value="✓" />
-        <Stat label="Funnel" value={retreat.funnelUrl ? '✓' : '—'} />
+      <div style={S.cardMeta}>
+        {retreat?.tagline ?? '—'}
+        {locked?.per_pax_usd != null ? ` · from ${fmtUsd(retreat?.price_usd_from ?? locked.per_pax_usd)}/pax` : ''}
+      </div>
+      <div style={S.statRow}>
+        <Stat label="Spots booked" value={retreat ? `${retreat.spots_booked ?? 0}/${retreat.spots_total ?? 0}` : '—'} />
+        <Stat label="Remaining" value={retreat?.spots_remaining != null ? String(retreat.spots_remaining) : '—'} />
+        <Stat label="Window" value={retreat ? `${fmtDate(retreat.arrival_window_from)} → ${fmtDate(retreat.arrival_window_to)}` : '—'} />
+        <Stat label="Margin" value={locked?.margin_pct != null ? `${Math.round(Number(locked.margin_pct))}%` : '—'} />
       </div>
       <div style={S.broadcastBox}>
         <div style={S.broadcastLabel}>Broadcast log</div>
         <div style={S.broadcastRow}>
-          <BroadcastBadge label="Sales · Packages"  state={retreat.broadcasts.sales}      />
-          <BroadcastBadge label="Social cockpit"    state={retreat.broadcasts.social}     />
-          <BroadcastBadge label="Influencer cockpit" state={retreat.broadcasts.influencer} />
-          <BroadcastBadge label="Web · Funnel"      state={retreat.broadcasts.web}        />
+          {CHANNELS.map((c) => <BroadcastBadge key={c.key} label={c.label} state={b[c.key] ?? 'off'} />)}
         </div>
       </div>
-      <div style={S.offerActions}>
-        <a href={retreat.pdfUrl} target="_blank" rel="noopener noreferrer" style={S.btnInlineSecondary}>📄 Open PDF</a>
-        {retreat.funnelUrl && <a href={retreat.funnelUrl} style={S.btnInlineSecondary}>🌐 Funnel page</a>}
-        <a href={`?retreat=${retreat.id}&edit-broadcast=1`} style={S.btnInlineSecondary}>✎ Edit broadcast</a>
-        <a href={`?retreat=${retreat.id}&relock=1`} style={S.btnInlineSecondary}>🔁 Re-lock</a>
-        <a href={`?retreat=${retreat.id}&unlock=1`} style={S.btnInlineSecondary}>🔓 Unlock</a>
+      <div style={S.actions}>
+        {retreat && (
+          <a href={`/r/${retreat.slug}`} target="_blank" rel="noopener noreferrer" style={S.btnSecondary}>Funnel page</a>
+        )}
+        <a href={`/api/compiler/runs/${run.id}/pdf${locked ? `?variant=${locked.id}` : ''}`}
+           target="_blank" rel="noopener noreferrer" style={S.btnSecondary}>Offer doc</a>
+        <a href={`/marketing/compiler/${run.id}`} style={S.btnSecondary}>Variants</a>
+        <a href={`?view=lock&offer=${run.id}`} style={S.btnSecondary}>Re-lock</a>
       </div>
     </div>
   );
 }
 
-function BroadcastBadge({ label, state }: { label: string; state: 'live' | 'pending' | 'off' }) {
-  const color = state === 'live'    ? 'var(--st-good, #82ad8c)' :
-                state === 'pending' ? 'var(--st-warn, #C28F2C)' :
-                                      'var(--text-place, #5a5448)';
-  const icon  = state === 'live' ? '✓' : state === 'pending' ? '·' : '—';
+function BroadcastBadge({ label, state }: { label: string; state: BroadcastState }) {
+  const color = state === 'live' ? 'var(--status-green)' :
+                state === 'queued' ? 'var(--status-amber)' :
+                                     'var(--status-grey)';
+  const icon = state === 'live' ? '✓' : state === 'queued' ? '…' : '—';
   return (
     <span style={{
       display: 'inline-flex', gap: 4, alignItems: 'center',
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-      fontSize: 'var(--t-xs)', letterSpacing: '0.10em',
+      fontSize: 10, letterSpacing: '0.08em',
       padding: '2px 6px',
       border: `1px solid ${color}`, color, borderRadius: 3,
     }}>
-      <span style={{ fontWeight: 700 }}>{icon}</span>{label}
+      <span style={{ fontWeight: 700 }}>{icon}</span>{label} · {state}
     </span>
   );
 }
 
-// ─── LOCK & DISTRIBUTE WIZARD ─────────────────────────────────────────────
+// ─── LOCK & DISTRIBUTE · drives the real deploy route ─────────────────────
 
-function LockWizardSection({ offer }: { offer?: Offer }) {
-  if (!offer) {
+function LockSection({ run, variantsByRun, latestDeploy }: {
+  run?: RunRow;
+  variantsByRun: Map<string, VariantRow[]>;
+  latestDeploy?: DeployRow;
+}) {
+  if (!run) {
     return (
-      <Panel title="Lock & distribute" eyebrow="no offer selected">
-        <div style={{ padding: 14 }}>
-          <div style={S.emptyState}>
-            <div style={S.emptyTitle}>Select an offer to lock.</div>
-            <div style={S.emptySub}>Go back to <a href="?view=ongoing" style={{ color: 'var(--brass)' }}>Ongoing Offers</a> and click <strong>🔒 Lock & distribute</strong> on a card.</div>
-          </div>
-        </div>
-      </Panel>
+      <Container title="Lock & distribute" subtitle="no offer selected">
+        <EmptyState title="Select an offer to lock."
+                    sub="Go to Ongoing offers and click Lock & distribute on a card." />
+      </Container>
     );
   }
-
-  // Default checkboxes: Sales + Social on. Web + Influencer off (PBS opts in).
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)', gap: 14, alignItems: 'start' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Step 1 — PDF preview */}
-        <Panel title="Step 1 · Perfect PDF" eyebrow="generated · brand-locked · printable">
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={S.pdfMockup}>
-              <div style={S.pdfHeader}>
-                <div style={S.pdfBrand}>THE NAMKHAN · LUANG PRABANG</div>
-                <div style={S.pdfTitleBig}>{offer.name}</div>
-                <div style={S.pdfSub}>{offer.duration} · {offer.pax} pax · {offer.season} season</div>
-              </div>
-              <div style={S.pdfBody}>
-                <div style={S.pdfSection}>
-                  <span style={S.pdfLabel}>For</span>
-                  <span style={S.pdfValue}>{offer.icp} · seeking {offer.pillars.slice(0, 2).join(' + ')}</span>
-                </div>
-                <div style={S.pdfSection}>
-                  <span style={S.pdfLabel}>What</span>
-                  <span style={S.pdfValue}>{offer.description}</span>
-                </div>
-                <div style={S.pdfSection}>
-                  <span style={S.pdfLabel}>Pillars</span>
-                  <span style={S.pdfValue}>{offer.pillars.join(' · ')}</span>
-                </div>
-                <div style={S.pdfSection}>
-                  <span style={S.pdfLabel}>Price</span>
-                  <span style={S.pdfValue}>{offer.priceBand} {offer.marginPct ? `· margin ${offer.marginPct}%` : ''}</span>
-                </div>
-                <div style={S.pdfSection}>
-                  <span style={S.pdfLabel}>Includes</span>
-                  <span style={S.pdfValue}>Accommodation · daily program · 3 meals · spa rituals · transfers · welcome ritual · personalised concierge.</span>
-                </div>
-              </div>
-              <div style={S.pdfFooter}>
-                <span>thenamkhan.com · book@thenamkhan.com · +856 71 256 222</span>
-                <span>v.1 · {new Date().toISOString().slice(0, 10)}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button type="button" style={S.btnPrimary}>↻ Regenerate</button>
-              <button type="button" style={S.btnSecondary}>✎ Edit copy</button>
-              <button type="button" style={S.btnSecondary}>📥 Download draft</button>
-              <button type="button" style={S.btnSecondary}>👁 Open full-size</button>
-            </div>
-          </div>
-        </Panel>
-
-        {/* Step 2 — Distribution checkboxes */}
-        <Panel title="Step 2 · Where to promote" eyebrow="opt in per channel · not every retreat needs a funnel page">
-          <form style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <DistTarget
-              code="sales"
-              label="Sales · /sales/packages (ready for sale)"
-              desc="Adds to the sales-team packages catalog · agents can quote + book"
-              defaultOn
-              required
-            />
-            <DistTarget
-              code="social"
-              label="Social cockpit · posting calendar"
-              desc="Schedules 8-12 posts across IG / Pinterest / TikTok / YouTube tied to the ICP for this retreat"
-              defaultOn
-            />
-            <DistTarget
-              code="influencer"
-              label="Influencer cockpit · ambassador inclusion"
-              desc="Routes the retreat to ambassadors matching the ICP · they include it in monthly posting calendar"
-              defaultOn={false}
-            />
-            <DistTarget
-              code="scrape"
-              label="Lead scrape · ICP-targeted campaigns"
-              desc="Seeds sales.scraping_jobs with this retreat as the target offer · scrapers pull leads matching the ICP, leads are enriched + funnelled into Pipeline tagged to this retreat"
-              defaultOn={false}
-              hint="Auto-creates 1 campaign per active scrape tool · daily_target = ICP daily_quota"
-            />
-            <DistTarget
-              code="web"
-              label="Web · funnel page + website"
-              desc="Builds a dedicated funnel page (intent-keyword-targeted) AND adds the retreat to the main website. Skip for one-off / private retreats."
-              defaultOn={false}
-              hint="≈ 2 hr build time · cost $40-80 for AI hero + reel cover"
-            />
-
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border-1, #1f1c15)' }}>
-              <button type="submit" style={S.btnPrimary}>✓ Confirm &amp; broadcast</button>
-              <a href="?view=ongoing" style={S.btnSecondary}>← Back</a>
-              <button type="button" style={S.btnSecondary}>⟶ Save as draft</button>
-            </div>
-          </form>
-        </Panel>
-      </div>
-
-      {/* Right rail */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Panel title="On confirm · what happens" eyebrow="step-by-step">
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <Flow step="1" desc="PDF generated + stored in dms.documents" />
-            <Flow step="2" desc="Package row inserted into sales.packages (status: live)" />
-            <Flow step="3" desc="Social cockpit picks it up · Content Strategist drafts 8-12 posts" />
-            <Flow step="4" desc="Influencer cockpit (if opted in) routes to matching ambassadors" />
-            <Flow step="5" desc="Lead scrape (if opted in) seeds sales.scraping_jobs · scrapers run on ICP" />
-            <Flow step="6" desc="Funnel cockpit (if opted in) builds page + adds to website nav" />
-            <Flow step="7" desc="Compiler emits compiler_locked event · audit_log written" />
-          </div>
-        </Panel>
-
-        <Panel title="Lock checklist" eyebrow="all must pass">
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Check on={offer.pdfReady}                label="PDF generated + reviewed" />
-            <Check on={offer.marginPct != null && offer.marginPct >= 35} label="Margin ≥ 35%" />
-            <Check on={offer.pillars.length >= 3}       label="≥ 3 pillars defined" />
-            <Check on={!!offer.icp}                     label="ICP target identified" />
-            <Check on={offer.priceBand !== 'TBD'}        label="Price band confirmed" />
-            <Check on={true}                            label="Brand-fit auto-pass" />
-          </div>
-        </Panel>
-
-        <Panel title="Guardrails" eyebrow="non-negotiable">
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Callout tone="brass">Margin floor: 35% net of F&amp;B + spa + transfer + commission. Compiler refuses lock below.</Callout>
-            <Callout tone="warn">Reality Agent checks every PDF claim against actual resort capability. Fabrications blocked.</Callout>
-            <Callout tone="soft">Funnel page broadcasts are off by default. Don't ship a funnel for one-off / private / B2B retreats.</Callout>
-            <Callout tone="soft">Re-locking a retreat re-broadcasts. Unlock + re-lock if you change pricing or pillars.</Callout>
-          </div>
-        </Panel>
-      </div>
-    </div>
-  );
+  const variants = variantsByRun.get(run.id) ?? [];
+  if (variants.length === 0) {
+    return (
+      <Container title="Lock & distribute" subtitle={runName(run)}>
+        <EmptyState title="No priced variants yet."
+                    sub="Open the run, set the offer window + room types, and build variants first." />
+      </Container>
+    );
+  }
+  const wizardRun: WizardRun = {
+    id: run.id,
+    name: runName(run),
+    prompt: run.prompt,
+    status: run.status,
+    alreadyDeployed: !!latestDeploy,
+    lastSlug: latestDeploy?.subdomain ?? null,
+  };
+  const wizardVariants: WizardVariant[] = variants.map((v) => ({
+    id: v.id,
+    label: v.label,
+    room_category: v.room_category,
+    per_pax_usd: v.per_pax_usd == null ? null : Number(v.per_pax_usd),
+    total_usd: v.total_usd == null ? null : Number(v.total_usd),
+    margin_pct: v.margin_pct == null ? null : Number(v.margin_pct),
+    recommended: !!v.recommended,
+  }));
+  return <LockWizard run={wizardRun} variants={wizardVariants} />;
 }
 
-function DistTarget({ code, label, desc, defaultOn, required, hint }: { code: string; label: string; desc: string; defaultOn: boolean; required?: boolean; hint?: string }) {
-  return (
-    <label style={S.distRow}>
-      <input type="checkbox" defaultChecked={defaultOn} disabled={required} name={`dist_${code}`} style={S.distCheckbox} />
-      <div style={{ flex: 1 }}>
-        <div style={S.distLabel}>{label}{required && <span style={{ color: 'var(--brass, #a8854a)', marginLeft: 6 }}>· required</span>}</div>
-        <div style={S.distDesc}>{desc}</div>
-        {hint && <div style={S.distHint}>{hint}</div>}
-      </div>
-    </label>
-  );
-}
-
-function Flow({ step, desc }: { step: string; desc: string }) {
-  return (
-    <div style={S.flowRow}>
-      <span style={S.flowStep}>{step}</span>
-      <span style={S.flowDesc}>{desc}</span>
-    </div>
-  );
-}
-
-function Check({ on, label }: { on: boolean; label: string }) {
-  const color = on ? 'var(--st-good, #82ad8c)' : '#c97b6a';
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.10em', color: 'var(--text-1, #d8cca8)' }}>
-      <span style={{ width: 14, height: 14, borderRadius: 2, border: `1px solid ${color}`, color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{on ? '✓' : '✕'}</span>
-      <span>{label}</span>
-    </div>
-  );
-}
+// ─── Small shared bits ────────────────────────────────────────────────────
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
       <span style={S.statLabel}>{label}</span>
       <span style={S.statValue}>{value}</span>
     </div>
   );
 }
 
-function Callout({ tone, children }: { tone: 'brass' | 'soft' | 'warn'; children: ReactNode }) {
-  const border = tone === 'brass' ? 'var(--brass, #a8854a)' : tone === 'warn' ? 'var(--st-warn, #C28F2C)' : 'var(--border-1, #1f1c15)';
+function EmptyState({ title, sub }: { title: string; sub: string }) {
   return (
-    <div style={{ padding: '8px 10px', borderLeft: `2px solid ${border}`, background: 'var(--surf-1, #0f0d0a)', fontSize: 'var(--t-sm)', lineHeight: 1.5, color: 'var(--text-1, #d8cca8)' }}>
-      {children}
+    <div style={{ padding: '28px 14px', textAlign: 'center' }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>{sub}</div>
     </div>
   );
 }
 
-// ─── Pills ────────────────────────────────────────────────────────────────
-
-function offerStatusPill(s: OfferStatus): React.CSSProperties {
-  const c = s === 'Awaiting Lock' ? 'var(--brass, #a8854a)' :
-            s === 'PDF Review'    ? 'var(--text-2, #d8cca8)' :
-            s === 'Pricing'       ? 'var(--st-warn, #C28F2C)' :
-                                    'var(--text-mute, #9b907a)';
-  return basePill(c);
-}
-
-function basePill(color: string): React.CSSProperties {
+function statusPill(s: string): CSSProperties {
+  const c = s === 'deployed' ? 'var(--status-green)' :
+            s === 'ready'    ? 'var(--status-amber)' :
+            s === 'halted' || s === 'error' ? 'var(--status-red)' :
+                               'var(--status-grey)';
   return {
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 'var(--t-xs)',
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    color,
-    border: `1px solid ${color}`,
-    padding: '2px 6px',
-    borderRadius: 3,
-    whiteSpace: 'nowrap',
+    fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' as const,
+    color: c, border: `1px solid ${c}`, borderRadius: 3, padding: '2px 8px',
+    whiteSpace: 'nowrap' as const, alignSelf: 'flex-start',
   };
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────
-
-const S: Record<string, React.CSSProperties> = {
-  subStrip: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid var(--border-1, #1f1c15)' },
-  subStripLink: { padding: '6px 12px', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-mute, #9b907a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 3, textDecoration: 'none', background: 'var(--surf-1, #0f0d0a)' },
-  subStripLinkActive: { color: 'var(--surf-0, #0a0a0a)', background: 'var(--brass, #a8854a)', borderColor: 'var(--brass, #a8854a)', fontWeight: 700 },
-
-  // Offer card
-  offerCard: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderLeft: '3px solid var(--brass, #a8854a)', borderRadius: 6, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 },
-  fixedCard: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderLeft: '3px solid var(--st-good, #82ad8c)', borderRadius: 6, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 },
-  offerHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
-  offerType: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)' },
-  offerName: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-md)', color: 'var(--text-0, #e9e1ce)', fontWeight: 500, marginTop: 2 },
-  offerMeta: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', color: 'var(--text-mute, #9b907a)' },
-  offerDescr: { fontSize: 'var(--t-sm)', lineHeight: 1.5, color: 'var(--text-1, #d8cca8)' },
-  offerStatRow: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, borderTop: '1px solid var(--border-1, #1f1c15)', paddingTop: 8 },
-  offerPillars: { display: 'flex', flexDirection: 'column', gap: 4 },
-  offerFieldLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)' },
-  tagRow: { display: 'flex', gap: 4, flexWrap: 'wrap' },
-  tagChip: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.10em', padding: '1px 5px', background: 'transparent', color: 'var(--text-1, #d8cca8)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 2 },
-  offerActions: { display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border-1, #1f1c15)' },
-
-  // Broadcast log (fixed cards)
-  broadcastBox: { padding: '8px 10px', background: 'var(--surf-0, #0a0a0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 3, display: 'flex', flexDirection: 'column', gap: 6 },
-  broadcastLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)' },
-  broadcastRow: { display: 'flex', gap: 6, flexWrap: 'wrap' },
-
-  // PDF mockup
-  pdfMockup: {
-    background: '#f7f1e6',
-    border: '1px solid var(--brass, #a8854a)',
-    borderRadius: 4,
-    padding: '24px 28px',
-    color: '#2a2620',
-    fontFamily: "'Fraunces', Georgia, serif",
-    boxShadow: '0 4px 18px rgba(0,0,0,0.4)',
+const S: Record<string, CSSProperties> = {
+  subStrip: {
+    display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap',
   },
-  pdfHeader: { textAlign: 'center', paddingBottom: 14, borderBottom: '1px solid #a8854a' },
-  pdfBrand: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, letterSpacing: '0.32em', color: '#a8854a', marginBottom: 12 },
-  pdfTitleBig: { fontSize: 26, fontStyle: 'italic', fontWeight: 400, color: '#2a2620' },
-  pdfSub: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#7d7565', marginTop: 8 },
-  pdfBody: { padding: '18px 0', display: 'flex', flexDirection: 'column', gap: 10 },
-  pdfSection: { display: 'grid', gridTemplateColumns: '80px 1fr', gap: 14 },
-  pdfLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#a8854a', paddingTop: 2 },
-  pdfValue: { fontFamily: "'Inter Tight', system-ui, sans-serif", fontSize: 13, lineHeight: 1.6, color: '#2a2620' },
-  pdfFooter: { paddingTop: 14, borderTop: '1px solid #a8854a', display: 'flex', justifyContent: 'space-between', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#7d7565' },
-
-  // Distribution rows
-  distRow: { display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 4, cursor: 'pointer' },
-  distCheckbox: { width: 16, height: 16, marginTop: 3, accentColor: '#a8854a' as any },
-  distLabel: { fontSize: 'var(--t-sm)', color: 'var(--text-0, #e9e1ce)', fontWeight: 500 },
-  distDesc: { fontSize: 'var(--t-xs)', lineHeight: 1.5, color: 'var(--text-mute, #9b907a)', marginTop: 2 },
-  distHint: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', color: 'var(--text-place, #5a5448)', marginTop: 4, fontStyle: 'italic' },
-
-  // Flow rows
-  flowRow: { display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 'var(--t-xs)', lineHeight: 1.5, color: 'var(--text-1, #d8cca8)' },
-  flowStep: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', color: 'var(--brass, #a8854a)', minWidth: 16 },
-  flowDesc: { flex: 1 },
-
-  // Stats
-  statLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)' },
-  statValue: { fontSize: 'var(--t-sm)', fontWeight: 600, color: 'var(--text-0, #e9e1ce)', fontVariantNumeric: 'tabular-nums' },
-
-  // Buttons
-  btnPrimary: { background: 'var(--brass, #a8854a)', color: 'var(--surf-0, #0a0a0a)', border: '1px solid var(--brass, #a8854a)', padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600, textDecoration: 'none' },
-  btnSecondary: { background: 'transparent', color: 'var(--text-1, #d8cca8)', border: '1px solid var(--border-1, #1f1c15)', padding: '5px 12px', borderRadius: 3, cursor: 'pointer', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none' },
-  btnInlinePrimary: { background: 'var(--brass, #a8854a)', color: 'var(--surf-0, #0a0a0a)', border: '1px solid var(--brass, #a8854a)', padding: '3px 8px', borderRadius: 3, cursor: 'pointer', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 600, textDecoration: 'none' },
-  btnInlineSecondary: { background: 'transparent', color: 'var(--text-1, #d8cca8)', border: '1px solid var(--border-1, #1f1c15)', padding: '3px 8px', borderRadius: 3, cursor: 'pointer', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.10em', textTransform: 'uppercase', textDecoration: 'none' },
-
-  // Empty state
-  emptyState: { padding: '32px 18px', textAlign: 'center', background: 'var(--surf-1, #0f0d0a)', border: '1px dashed var(--border-1, #1f1c15)', borderRadius: 6 },
-  emptyTitle: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-lg)', color: 'var(--text-0, #e9e1ce)', marginBottom: 6 },
-  emptySub: { fontSize: 'var(--t-sm)', color: 'var(--text-mute, #9b907a)' },
+  subStripLink: {
+    fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase',
+    color: 'var(--color-ink-soft)', textDecoration: 'none',
+    padding: '6px 12px', border: '1px solid var(--color-hairline)', borderRadius: 4,
+    background: 'var(--color-white)',
+  },
+  subStripLinkActive: {
+    color: 'var(--color-white)', background: 'var(--color-brand-green)',
+    border: '1px solid var(--color-brand-green)',
+  },
+  errBox: {
+    padding: '8px 12px', marginBottom: 12,
+    border: '1px solid var(--status-red)', borderRadius: 4,
+    color: 'var(--status-red)', fontSize: 12,
+  },
+  cardGrid: {
+    padding: 4, display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 12,
+  },
+  card: {
+    border: '1px solid var(--color-hairline)', borderRadius: 6,
+    padding: 14, background: 'var(--color-white)',
+    display: 'flex', flexDirection: 'column', gap: 10,
+  },
+  cardHead: { display: 'flex', justifyContent: 'space-between', gap: 8 },
+  cardType: {
+    fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
+    color: 'var(--color-ink-soft)', marginBottom: 2,
+  },
+  cardName: { fontSize: 15, fontWeight: 600, color: 'var(--color-ink)' },
+  cardMeta: { fontSize: 12, color: 'var(--color-ink-soft)' },
+  cardPrompt: {
+    fontSize: 11, color: 'var(--color-ink-soft)', fontStyle: 'italic',
+    borderLeft: '2px solid var(--color-hairline)', paddingLeft: 8,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  statRow: {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8,
+  },
+  statLabel: {
+    fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase',
+    color: 'var(--color-ink-soft)',
+  },
+  statValue: {
+    fontSize: 12, fontWeight: 600, color: 'var(--color-ink)',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  broadcastBox: {
+    border: '1px dashed var(--color-hairline)', borderRadius: 4, padding: 8,
+  },
+  broadcastLabel: {
+    fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase',
+    color: 'var(--color-ink-soft)', marginBottom: 6,
+  },
+  broadcastRow: { display: 'flex', gap: 6, flexWrap: 'wrap' },
+  actions: { display: 'flex', gap: 6, flexWrap: 'wrap' },
+  btnPrimary: {
+    fontSize: 12, fontWeight: 600, textDecoration: 'none',
+    color: 'var(--color-white)', background: 'var(--color-brand-green)',
+    padding: '6px 12px', borderRadius: 4, border: '1px solid var(--color-brand-green)',
+  },
+  btnSecondary: {
+    fontSize: 12, textDecoration: 'none',
+    color: 'var(--color-ink)', background: 'var(--color-white)',
+    padding: '6px 12px', borderRadius: 4, border: '1px solid var(--color-hairline)',
+  },
 };
-
-// Export the offer/fixed lists so /sales/packages can read them too
-export { FIXED as COMPILER_FIXED_RETREATS };
-export type { FixedRetreat as CompilerFixedRetreat };
