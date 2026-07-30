@@ -46,6 +46,8 @@ export default function NDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const activeId = activePropertyFromPath(pathname);
+  // dataroom-module-v1: external data-room guests get ZERO platform navigation.
+  const isExternalRoom = pathname.startsWith('/room/') || pathname.startsWith('/p/');
 
   useEffect(() => {
     function onClickAway(e: MouseEvent) {
@@ -59,6 +61,8 @@ export default function NDropdown() {
       document.removeEventListener('keydown', onEsc);
     };
   }, []);
+
+  if (isExternalRoom) return null;
 
   function switchTo(id: number) {
     setOpen(false);
