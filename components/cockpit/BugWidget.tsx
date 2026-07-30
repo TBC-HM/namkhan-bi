@@ -7,6 +7,7 @@
 // agent captured invisibly.
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { usePathname } from 'next/navigation';
 
 const PRIMARY = '#084838';
 const HAIRLINE = '#E6DFCC';
@@ -17,6 +18,9 @@ const PAPER_SOFT = '#FAFAF7';
 const TERRACOTTA = '#B8542A';
 
 export default function BugWidget() {
+  // dataroom-module-v1: hide on external guest surfaces (/room, /p).
+  const pathname = usePathname() ?? '';
+  const hidden = pathname.startsWith('/room/') || pathname.startsWith('/p/');
   const [open, setOpen]   = useState(false);
   const [text, setText]   = useState('');
   const [busy, setBusy]   = useState(false);
@@ -69,6 +73,8 @@ export default function BugWidget() {
       setBusy(false);
     }
   }
+
+  if (hidden) return null;
 
   return (
     <>
