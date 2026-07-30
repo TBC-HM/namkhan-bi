@@ -193,12 +193,16 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/marketing/youtube/production',
       '/marketing/youtube/analytics',
       '/marketing/seo',
+      '/marketing/website',
     ],
     tabs: [
       { label: 'Web',     href: '/marketing/digital/web'       },
       { label: 'Funnels', href: '/marketing/funnels'           },
       { label: 'YouTube', href: '/marketing/youtube/dashboard' },
       { label: 'SEO',     href: '/marketing/seo'               },
+      // website-module-v1 P3 (2026-07-30): Website capability — editor over
+      // website.* rows + publish. Brief §MENU: Marketing substripe → Website.
+      { label: 'Website', href: '/marketing/website'           },
     ],
   },
   // PBS 2026-07-21 · Channels subgroup deleted — Socials + Digital are now top-strip peers.
