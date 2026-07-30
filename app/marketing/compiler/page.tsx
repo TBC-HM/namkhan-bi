@@ -126,7 +126,7 @@ export default async function CompilerHomePage({ searchParams }: Props) {
     <div style={{ background: WHITE, minHeight: '100vh' }}>
       <DashboardPage
         title="Marketing · Compiler"
-        subtitle={`Retreat compiler · v1.3 · NRF rates · stub Stripe / Klaviyo / PDF · ${recent.length} recent run${recent.length === 1 ? '' : 's'}`}
+        subtitle={`Retreat compiler · v1.4 · NRF rates · offer docs live · stub Stripe / Klaviyo · ${recent.length} recent run${recent.length === 1 ? '' : 's'}`}
         tabs={tabs}
       >
         {/* KPI strip */}
@@ -195,7 +195,7 @@ export default async function CompilerHomePage({ searchParams }: Props) {
           <div style={{ ...sectionHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span>Recent runs · {recent.length}</span>
             <span style={{ fontSize: 10, fontFamily: 'ui-monospace, SFMono-Regular, monospace', color: INK_M, letterSpacing: '0.06em' }}>
-              v1.3 · NRF rates · stub Stripe / Klaviyo / PDF
+              v1.4 · NRF rates · offer docs live · stub Stripe / Klaviyo
             </span>
           </div>
           <RecentRunsTable rows={recent} />
