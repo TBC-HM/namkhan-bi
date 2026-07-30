@@ -43,6 +43,9 @@ const SLUG_SET = new Set(CANONICAL_DEPTS.map((d) => d.slug));
 // out of this strip and into /holding/legal's own subPages (Legal HoD scope).
 const HOLDING_DEPTS: DeptLink[] = [
   { label: 'CEO',          slug: 'ceo',       href: '/holding/ceo'       },
+  // Onboarding pipeline (brief onboarding-engine-v1, 2026-07-30): holding
+  // Sales substripe → Onboarding. /holding/sales redirects to ./onboarding.
+  { label: 'Sales',        slug: 'sales',     href: '/holding/sales'     },
   { label: 'Legal',        slug: 'legal',     href: '/holding/legal'     },
   { label: 'Finance',      slug: 'finance',   href: '/holding/finance'   },
   { label: 'IT',           slug: 'it',        href: '/holding/it'        },
