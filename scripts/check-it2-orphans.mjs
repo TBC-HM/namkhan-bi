@@ -55,7 +55,10 @@ const navHrefs = new Set([...groupsSrc.matchAll(/href:\s*'([^']+)'/g)].map((m) =
 for (const f of walkPages(IT2_DIR)) {
   if (f.includes('/_components/') || f.includes('/_lib/')) continue;
   const route = routeOf(f, IT2_DIR, '/holding/it2');
-  if (!navHrefs.has(route) && !ALLOWLIST.has(route)) {
+  // Dynamic segments ([id], [slug]) are detail pages: reachable when the
+  // nearest static ancestor route is reachable (consolidation pass 2026-07-30).
+  const staticBase = route.includes('[') ? route.slice(0, route.indexOf('[')).replace(/\/$/, '') : route;
+  if (!navHrefs.has(staticBase) && !ALLOWLIST.has(staticBase)) {
     errors.push(`ORPHAN: ${route} (${f.slice(ROOT.length + 1)}) is not reachable from _lib/groups.ts`);
   }
 }
