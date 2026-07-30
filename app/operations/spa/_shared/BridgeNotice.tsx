@@ -1,8 +1,9 @@
 // app/operations/spa/_shared/BridgeNotice.tsx
-// Shown while the proposed spa.* bridge views are not yet applied.
-// Audit-first law: the operational schema exists (spa.treatment_bookings,
-// spa.therapists — 0 rows) but has no public.v_* bridges. No DDL is applied
-// by the build agent; SQL awaits approval in db/proposed/build-spa-module/.
+// Graceful-degradation notice: shown only if the spa bridge views become
+// unreadable. The bridges (v_spa_rooms / v_spa_therapists /
+// v_spa_treatment_bookings) were APPLIED 2026-07-30 (migrations
+// spa_rooms_and_bridges + spa_booking_functions), so in normal operation
+// this never renders — if it does, check DB migrations / grants.
 
 import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
 
