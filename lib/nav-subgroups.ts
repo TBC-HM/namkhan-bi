@@ -236,7 +236,9 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // so P&L/Ledger/Transactions/Budget are visible even before you click Finance.
   {
     parentHref: '/finance/pnl',
-    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/banks', '/finance/pos', '/finance/budget'],
+    // 2026-07-30: + Studio (Spreadsheet Studio v1, brief module-spreadsheet-studio-v1 —
+    // Administration substripe placement per PBS 2026-07-29 menu directive).
+    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/banks', '/finance/pos', '/finance/budget', '/finance/studio'],
     tabs: [
       { label: 'P&L',          href: '/finance/pnl'          },
       { label: 'Ledger',       href: '/finance/ledger'       },
@@ -244,6 +246,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Banks',        href: '/finance/banks'        },
       { label: 'POS',          href: '/finance/pos'          },
       { label: 'Budget',       href: '/finance/budget'       },
+      { label: 'Studio',       href: '/finance/studio'       },
     ],
   },
 
