@@ -26,6 +26,10 @@ export function rewriteHref(pathname: string | null, href: string): string {
   if (/^(https?:|mailto:|tel:|#)/i.test(href)) return href;
   if (!href.startsWith('/')) return href;
   if (href.startsWith('/h/')) return href;
+  // URL law (ADR-168): holding surfaces carry NO property segment. Prefixing
+  // /holding/* with /h/{pid} lands in the catch-all as an unknown dept.
+  // (it-area-reorg-v1 gap 2: HodLanding's chat CTA now targets /holding/it2/...)
+  if (href === '/holding' || href.startsWith('/holding/')) return href;
   const prefix = tenantPrefix(pathname);
   if (!prefix) return href;
   return prefix + href;
