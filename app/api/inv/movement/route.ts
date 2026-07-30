@@ -13,6 +13,12 @@ const VALID_TYPES = new Set([
   'count_correction', 'write_off', 'waste', 'open_stock',
 ]);
 
+// Mirrors the CHECK constraint on inv.movements.reason_code (nullable for legacy rows).
+const VALID_REASON_CODES = new Set([
+  'opening', 'purchase', 'transfer', 'count_variance', 'waste', 'spoilage',
+  'breakage', 'theft', 'guest_comp', 'staff_meal', 'write_off', 'correction',
+]);
+
 interface MovementInput {
   item_id: string;
   location_id: number;
@@ -25,6 +31,7 @@ interface MovementInput {
   counterparty_location_id?: number | null;
   reference_type?: string | null;
   reference_id?: string | null;
+  reason_code?: string | null;
   batch_code?: string | null;
   expiry_date?: string | null;
   notes?: string | null;
@@ -50,6 +57,9 @@ export async function POST(req: Request) {
     if (!VALID_TYPES.has(r.movement_type)) {
       return NextResponse.json({ error: `movement_type must be one of ${[...VALID_TYPES].join(', ')}` }, { status: 400 });
     }
+    if (r.reason_code != null && !VALID_REASON_CODES.has(r.reason_code)) {
+      return NextResponse.json({ error: `reason_code must be one of ${[...VALID_REASON_CODES].join(', ')}` }, { status: 400 });
+    }
     cleaned.push({
       item_id: r.item_id,
       location_id: r.location_id,
@@ -64,6 +74,7 @@ export async function POST(req: Request) {
       counterparty_location_id: r.counterparty_location_id ?? null,
       reference_type: r.reference_type ?? 'manual',
       reference_id: r.reference_id ?? null,
+      reason_code: r.reason_code ?? null,
       batch_code: r.batch_code ?? null,
       expiry_date: r.expiry_date ?? null,
       notes: r.notes ?? null,
