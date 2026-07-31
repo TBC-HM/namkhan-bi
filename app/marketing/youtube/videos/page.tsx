@@ -77,6 +77,13 @@ export default async function YtVideosPage() {
   ]);
 
   const videos = isErr(vidRes) ? [] : (Array.isArray(vidRes.data) ? vidRes.data : []);
+
+  // Video applied log — applied videos show ✓ and sink to the bottom
+  // (same source as analytics page: yt_action_log entity_type=video action=applied)
+  const { data: videoLogData } = await sb.from('yt_action_log')
+    .select('entity_id')
+    .eq('property_id', NAMKHAN).eq('entity_type', 'video').eq('action', 'applied');
+  const appliedVideos = new Set((videoLogData ?? []).map(r => r.entity_id));
   const runs = (allRunsRes.data ?? []) as Array<{ id: string; generated_at: string; video_count: number | null; overall_grade: string | null }>;
   const latestRun = runs[0] ?? null;
 
