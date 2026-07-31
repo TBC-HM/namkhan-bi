@@ -38,6 +38,8 @@ export default function BookingForm({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [guest, setGuest] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
   const [resId, setResId] = useState('');
   const [treatmentId, setTreatmentId] = useState('');
   const [therapistId, setTherapistId] = useState('');
@@ -79,6 +81,8 @@ export default function BookingForm({
           therapist_id: therapistId || null,
           room_id: roomId || null,
           reservation_id: resId.trim() || null,
+          guest_email: guestEmail.trim() || null,
+          guest_phone: guestPhone.trim() || null,
           price: price || null,
           currency: 'USD',
           notes: notes.trim() || null,
@@ -94,7 +98,7 @@ export default function BookingForm({
         return;
       }
       setOpen(false);
-      setGuest(''); setResId(''); setNotes('');
+      setGuest(''); setResId(''); setNotes(''); setGuestEmail(''); setGuestPhone('');
       router.refresh();
     } catch {
       setErr('Network error — booking not created.');
@@ -128,6 +132,14 @@ export default function BookingForm({
         <div>
           <span style={lbl}>Reservation (in-house)</span>
           <input style={inp} value={resId} onChange={(e) => setResId(e.target.value)} placeholder="Cloudbeds res. ID — optional" />
+        </div>
+        <div>
+          <span style={lbl}>Guest email</span>
+          <input style={inp} type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} placeholder="for confirmations — optional" />
+        </div>
+        <div>
+          <span style={lbl}>Guest phone (WhatsApp)</span>
+          <input style={inp} value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="+856… — optional" />
         </div>
         <div>
           <span style={lbl}>Treatment</span>
