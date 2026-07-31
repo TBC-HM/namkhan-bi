@@ -15,10 +15,11 @@ const SUBTABS: Array<{ key: string; label: string; href: string }> = [
   { key: 'production', label: 'Production', href: '/marketing/youtube/production' },
   { key: 'analytics',  label: 'Analytics · Audit', href: '/marketing/youtube/analytics' },
   { key: 'videos',     label: 'Videos · Status',   href: '/marketing/youtube/videos' },
+  { key: 'coverage',   label: 'Coverage',          href: '/marketing/youtube/coverage' },
   { key: 'spy',        label: 'Spy',               href: '/marketing/youtube/spy' },
 ];
 
-export default function YtSubTabs({ current }: { current: 'dashboard' | 'playlists' | 'planning' | 'production' | 'analytics' | 'spy' | 'videos' }) {
+export default function YtSubTabs({ current }: { current: 'dashboard' | 'playlists' | 'planning' | 'production' | 'analytics' | 'spy' | 'videos' | 'coverage' }) {
   return (
     <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${HAIR}`, marginBottom: 12, gridColumn: '1 / -1' }}>
       {SUBTABS.map((t) => {
