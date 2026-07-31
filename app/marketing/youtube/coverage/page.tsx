@@ -1,14 +1,15 @@
-/* eslint-disable @next/next/no-img-element */
 // app/marketing/youtube/coverage/page.tsx
 // YouTube coverage matrix — mirrors the media library coverage view.
-// Shows which playlists have content by format (Shorts / Regular / Long),
-// which content pillars are linked, and where the production gaps are.
+// Rows = property entities (rooms, facilities, activities, retreats).
+// Columns = Short (≤60s) | Regular (1-8min) | Long (8min+).
+// Coverage detected by: playlist membership + title text match in audited videos.
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getFreshAccessToken } from '@/lib/youtube/token';
-import { fetchChannelPlaylists, isErr } from '@/lib/youtube/data';
+import { fetchPlaylistItemsWithStats, isErr } from '@/lib/youtube/data';
 import YtSubTabs from '../_shared/SubTabs';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -18,25 +19,60 @@ const WHITE = '#FFFFFF'; const HAIR = '#E6DFCC'; const INK = '#1B1B1B';
 const INK_M = '#5A5A5A'; const FOREST = '#084838'; const RED = '#B03826';
 const AMBER = '#B48A3A'; const OK = '#0E7A4B'; const CREAM = '#F5F0E1';
 
-// The 9-slot taxonomy — source of truth for production planning
-const TAXONOMY = [
-  // TIER 1 — PROPERTY (what The Namkhan offers)
-  { tier: 'Property', slot: 'The Namkhan · Overview',       id: 'PLO87vGnBPV3EhxtWYCS77_q37lg-BjxSA', shortsTarget: 2, longTarget: 2 },
-  { tier: 'Property', slot: 'Stay · Rooms & Suites',        id: 'PLO87vGnBPV3EtdAOz-aTYxvyoOnwDWgXz', shortsTarget: 6, longTarget: 2 },
-  { tier: 'Property', slot: 'Glamping at The Namkhan',      id: 'PLO87vGnBPV3EuBtExtOTtNZZ6xabAZOqD', shortsTarget: 4, longTarget: 1 },
-  { tier: 'Property', slot: 'ROOTS Restaurant & Farm',      id: 'PLO87vGnBPV3G1P5Kxren-fLtU0_nNATG2', shortsTarget: 4, longTarget: 2 },
-  { tier: 'Property', slot: 'Jungle Spa & Wellness',        id: 'PLO87vGnBPV3GUXQopyoQSzb95sCKLMHwP', shortsTarget: 4, longTarget: 2 },
-  { tier: 'Property', slot: 'Wellness Retreats',            id: null,                                   shortsTarget: 2, longTarget: 3 },
-  // TIER 2 — DESTINATION (what Luang Prabang offers)
-  { tier: 'Destination', slot: 'Luang Prabang · Sacred Sites & Culture', id: 'PLO87vGnBPV3Gm_QTQcNXF6Yqn60eAcG0d', shortsTarget: 6, longTarget: 2 },
-  { tier: 'Destination', slot: 'Luang Prabang · River Life',             id: null,                                     shortsTarget: 4, longTarget: 1 },
-  // TIER 3 — COMMUNITY
-  { tier: 'Community', slot: 'Namkhan Help · Community & Craft', id: 'PLO87vGnBPV3GdkPC1_KzTEzHwYgz5J_AQ', shortsTarget: 2, longTarget: 1 },
-];
+// Playlist IDs for each content category
+const PLAYLIST_ROOMS      = 'PLO87vGnBPV3EtdAOz-aTYxvyoOnwDWgXz';
+const PLAYLIST_GLAMPING   = 'PLO87vGnBPV3EuBtExtOTtNZZ6xabAZOqD';
+const PLAYLIST_SPA        = 'PLO87vGnBPV3GUXQopyoQSzb95sCKLMHwP';
+const PLAYLIST_ROOTS      = 'PLO87vGnBPV3G1P5Kxren-fLtU0_nNATG2';
+const PLAYLIST_EXPERIENCES = 'PLO87vGnBPV3GUXQopyoQSzb95sCKLMHwP'; // same as spa for now
+const PLAYLIST_CULTURE    = 'PLO87vGnBPV3Gm_QTQcNXF6Yqn60eAcG0d';
 
-const TIER_COLORS: Record<string, string> = {
-  Property: FOREST, Destination: AMBER, Community: '#5A3E8A',
-};
+function durationSec(iso: string | undefined): number {
+  if (!iso) return 0;
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso);
+  if (!m) return 0;
+  return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0);
+}
+function formatBucket(sec: number): 'short' | 'regular' | 'long' {
+  if (sec <= 60) return 'short';
+  if (sec <= 480) return 'regular';
+  return 'long';
+}
+function nameHit(title: string, keywords: string[]): boolean {
+  const t = title.toLowerCase();
+  return keywords.some(k => t.includes(k.toLowerCase()));
+}
+
+interface VideoCounts { short: number; regular: number; long: number }
+
+function CoverageCell({ counts }: { counts: VideoCounts }) {
+  const total = counts.short + counts.regular + counts.long;
+  if (total === 0) return (
+    <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR, background: '#FEF2F2' }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: RED }}>0</span>
+    </td>
+  );
+  return (
+    <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: total >= 3 ? OK : AMBER }}>{total}</span>
+      <div style={{ fontSize: 9, color: INK_M, marginTop: 1 }}>
+        {counts.short > 0 && <span>{counts.short}S </span>}
+        {counts.regular > 0 && <span>{counts.regular}R </span>}
+        {counts.long > 0 && <span>{counts.long}L</span>}
+      </div>
+    </td>
+  );
+}
+
+function SectionHeader({ label, count, gapCount }: { label: string; count: number; gapCount: number }) {
+  return (
+    <tr style={{ background: '#F7F3EA' }}>
+      <td colSpan={5} style={{ padding: '5px 12px', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: FOREST, borderTop: '2px solid ' + HAIR, borderBottom: '1px solid ' + HAIR }}>
+        {label} · {count} entries · <span style={{ color: gapCount > 0 ? RED : OK }}>{gapCount} gaps</span>
+      </td>
+    </tr>
+  );
+}
 
 export default async function YtCoveragePage() {
   const sb = getSupabaseAdmin();
@@ -45,164 +81,216 @@ export default async function YtCoveragePage() {
   const tok = await getFreshAccessToken(NAMKHAN);
   const tabs = MARKETING_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href }));
 
-  // Fetch live playlists + content pillars in parallel
-  const [plRes, pillarsRes] = await Promise.all([
-    tok.ok && tok.access_token
-      ? fetchChannelPlaylists(tok.access_token, tok.channel_id!, 50)
-      : Promise.resolve({ ok: false as const, error: 'no_token', data: [] as any }),
-    sb.from('v_yt_content_pillars')
-      .select('pillar_key, label, target_cadence, youtube_playlist_id')
-      .eq('property_id', NAMKHAN).eq('active', true).order('sort_order'),
+  // Fetch property entities + audit data in parallel
+  const [roomsRes, facilitiesRes, activitiesRes, retreatsRes, auditRes] = await Promise.all([
+    sb.from('v_room_grounding').select('room_type_id, room_type_name').eq('property_id', NAMKHAN).order('room_type_name'),
+    sb.from('v_facility_grounding').select('facility_id, facility_name, category').eq('property_id', NAMKHAN).eq('active', true).order('sort_order'),
+    sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }).then(() =>
+      sb.schema('property' as any).from('activities').select('activity_id, name').eq('property_id', NAMKHAN).eq('is_active', true).order('name')
+    ),
+    sb.schema('content' as any).from('retreat_programs').select('retreat_id, display_name').eq('property_id', NAMKHAN).order('display_name'),
+    sb.from('v_yt_channel_audit_videos').select('video_id, video_title'),
   ]);
 
-  const livePlaylists = isErr(plRes) ? [] : (plRes as any).data ?? [];
-  const pillars = (pillarsRes.data ?? []) as Array<{ pillar_key: string; label: string; target_cadence: string | null; youtube_playlist_id: string | null }>;
+  const rooms = (roomsRes.data ?? []) as Array<{ room_type_id: number; room_type_name: string }>;
+  const facilities = (facilitiesRes.data ?? []) as Array<{ facility_id: number; facility_name: string; category: string | null }>;
+  const activities = (activitiesRes.data ?? []) as Array<{ activity_id: number; name: string }>;
+  const retreats = (retreatsRes.data ?? []) as Array<{ retreat_id: number; display_name: string }>;
+  const auditedTitles = (auditRes.data ?? []).map(r => (r as any).video_title ?? '');
 
-  // Build lookup: playlistId → itemCount
-  const liveMap = new Map<string, number>();
-  for (const p of livePlaylists) liveMap.set(p.id, p.itemCount ?? 0);
+  // Fetch playlist videos for coverage if token available
+  let roomVideos: Array<{ title: string; duration?: string }> = [];
+  let spaVideos: Array<{ title: string; duration?: string }> = [];
+  let expVideos: Array<{ title: string; duration?: string }> = [];
+  let cultureVideos: Array<{ title: string; duration?: string }> = [];
 
-  // Build lookup: playlistId → linked pillar labels
-  const pillarsByPlaylist = new Map<string, string[]>();
-  for (const p of pillars) {
-    if (!p.youtube_playlist_id) continue;
-    const arr = pillarsByPlaylist.get(p.youtube_playlist_id) ?? [];
-    arr.push(`${p.label} (${p.target_cadence ?? 'ad hoc'})`);
-    pillarsByPlaylist.set(p.youtube_playlist_id, arr);
+  if (tok.ok && tok.access_token) {
+    const [rv, sv, ev, cv] = await Promise.all([
+      fetchPlaylistItemsWithStats(tok.access_token, PLAYLIST_ROOMS, 50),
+      fetchPlaylistItemsWithStats(tok.access_token, PLAYLIST_SPA, 50),
+      fetchPlaylistItemsWithStats(tok.access_token, PLAYLIST_EXPERIENCES, 50),
+      fetchPlaylistItemsWithStats(tok.access_token, PLAYLIST_CULTURE, 50),
+    ]);
+    roomVideos = isErr(rv) ? [] : rv.data.map(v => ({ title: v.title, duration: v.duration }));
+    spaVideos = isErr(sv) ? [] : sv.data.map(v => ({ title: v.title, duration: v.duration }));
+    expVideos = isErr(ev) ? [] : ev.data.map(v => ({ title: v.title, duration: v.duration }));
+    cultureVideos = isErr(cv) ? [] : cv.data.map(v => ({ title: v.title, duration: v.duration }));
   }
 
-  const totalPlaylists = TAXONOMY.filter(t => t.id && liveMap.has(t.id)).length;
-  const gapPlaylists = TAXONOMY.filter(t => !t.id || !liveMap.has(t.id)).length;
-  const unlinkedPillars = pillars.filter(p => !p.youtube_playlist_id).length;
+  function countCoverage(videoPool: typeof roomVideos, keywords: string[]): VideoCounts {
+    const counts: VideoCounts = { short: 0, regular: 0, long: 0 };
+    for (const v of videoPool) {
+      if (!nameHit(v.title, keywords)) continue;
+      const bucket = formatBucket(durationSec(v.duration));
+      counts[bucket]++;
+    }
+    // Also check audited titles (broader pool)
+    for (const title of auditedTitles) {
+      if (!nameHit(title, keywords)) continue;
+      if (videoPool.some(v => v.title === title)) continue; // already counted
+      counts.regular++; // unknown format for un-fetched videos
+    }
+    return counts;
+  }
 
-  let lastTier = '';
+  const roomGaps = rooms.filter(r => {
+    const c = countCoverage(roomVideos, [r.room_type_name, ...r.room_type_name.split(' ').filter(w => w.length > 4)]);
+    return c.short + c.regular + c.long === 0;
+  }).length;
+
+  const actGaps = activities.filter(a => {
+    const c = countCoverage(expVideos, [a.name, ...a.name.split(' ').filter(w => w.length > 4)]);
+    return c.short + c.regular + c.long === 0;
+  }).length;
+
+  const retGaps = retreats.filter(r => {
+    const c = countCoverage([], [r.display_name, ...r.display_name.split(' ').filter(w => w.length > 4)]);
+    return c.short + c.regular + c.long === 0;
+  }).length;
+
+  const totalVideos = roomVideos.length + spaVideos.length + expVideos.length + cultureVideos.length;
+
+  const thStyle = { padding: '7px 10px', textAlign: 'left' as const, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '.06em', color: INK_M, borderBottom: '1px solid ' + HAIR, background: CREAM };
+  const tdStyle = { padding: '6px 12px', borderBottom: '1px solid ' + HAIR, fontSize: 12, color: INK };
 
   return (
     <DashboardPage title="YouTube · Coverage" tabs={tabs}>
       <div style={{ display: 'grid', gap: 16 }}>
         <YtSubTabs current="coverage" />
 
+        <div style={{ fontSize: 12, color: INK_M, padding: '8px 12px', background: CREAM, borderRadius: 4, border: '1px solid ' + HAIR }}>
+          Coverage = videos in the relevant playlist whose title mentions the entity. S = Short ≤60s · R = Regular 1-8min · L = Long 8min+.
+          <strong style={{ color: RED }}> 0 = production gap.</strong> Run audit to update data. <Link href="/marketing/youtube/analytics" style={{ color: FOREST }}>Run audit →</Link>
+        </div>
+
         {/* Summary */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
           {[
-            { label: 'Playlists live', value: totalPlaylists, sub: `of ${TAXONOMY.length} in taxonomy`, color: FOREST },
-            { label: 'Playlist gaps', value: gapPlaylists, sub: 'not yet created', color: gapPlaylists > 0 ? RED : OK },
-            { label: 'Pillars unlinked', value: unlinkedPillars, sub: 'need playlist assigned', color: unlinkedPillars > 0 ? AMBER : OK },
-            { label: 'Total playlists', value: livePlaylists.length, sub: 'on your channel now', color: INK },
+            { label: 'Rooms checked', value: rooms.length, color: INK },
+            { label: 'Room gaps', value: roomGaps, color: roomGaps > 0 ? RED : OK },
+            { label: 'Activity gaps', value: actGaps, color: actGaps > 0 ? RED : OK },
+            { label: 'Retreat gaps', value: retGaps, color: retGaps > 0 ? RED : OK },
+            { label: 'Videos indexed', value: totalVideos, color: FOREST },
           ].map(t => (
-            <div key={t.label} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '10px 12px' }}>
+            <div key={t.label} style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, padding: '10px 12px' }}>
               <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '.07em', color: INK_M, marginBottom: 3 }}>{t.label}</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: t.color, fontVariantNumeric: 'tabular-nums' }}>{t.value}</div>
-              <div style={{ fontSize: 10, color: INK_M, marginTop: 2 }}>{t.sub}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: t.color, fontVariantNumeric: 'tabular-nums' }}>{t.value}</div>
             </div>
           ))}
         </div>
 
-        {/* Coverage matrix */}
-        <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: `1px solid ${HAIR}`, fontSize: 12, fontWeight: 600, color: INK }}>
-            Playlist coverage · 9 target slots · production gaps highlighted
+        {/* Main coverage table */}
+        <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid ' + HAIR, fontSize: 12, fontWeight: 600, color: INK }}>
+            Coverage by property entity · same structure as media library coverage
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: CREAM }}>
-                <th style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_M, borderBottom: `1px solid ${HAIR}`, width: 220 }}>Playlist</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_M, borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}` }}>Videos</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_M, borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}` }}>Target</th>
-                <th style={{ padding: '8px 10px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_M, borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}` }}>Linked pillars</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_M, borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}` }}>Status</th>
+              <tr>
+                <th style={{ ...thStyle, width: 220 }}>Entity</th>
+                <th style={{ ...thStyle, textAlign: 'center' as const, borderLeft: '1px solid ' + HAIR }}>Short ≤60s</th>
+                <th style={{ ...thStyle, textAlign: 'center' as const, borderLeft: '1px solid ' + HAIR }}>Regular 1-8m</th>
+                <th style={{ ...thStyle, textAlign: 'center' as const, borderLeft: '1px solid ' + HAIR }}>Long 8m+</th>
+                <th style={{ ...thStyle, textAlign: 'center' as const, borderLeft: '1px solid ' + HAIR }}>Total</th>
               </tr>
             </thead>
             <tbody>
-              {TAXONOMY.map((slot, i) => {
-                const isNewTier = slot.tier !== lastTier;
-                if (isNewTier) lastTier = slot.tier;
-                const exists = !!slot.id && liveMap.has(slot.id);
-                const count = slot.id ? (liveMap.get(slot.id) ?? 0) : 0;
-                const target = slot.shortsTarget + slot.longTarget;
-                const pct = target > 0 ? Math.min(100, Math.round(count / target * 100)) : 0;
-                const linked = slot.id ? (pillarsByPlaylist.get(slot.id) ?? []) : [];
-                const bgRow = !exists ? '#FEF9F0' : undefined;
+              {/* ROOMS */}
+              <SectionHeader label="Accommodation" count={rooms.length} gapCount={roomGaps} />
+              {rooms.map(r => {
+                const keywords = [r.room_type_name, ...r.room_type_name.split(/\s+/).filter(w => w.length > 4)];
+                const c = countCoverage(roomVideos, keywords);
+                const total = c.short + c.regular + c.long;
                 return (
-                  <>
-                    {isNewTier && (
-                      <tr key={'tier-' + slot.tier} style={{ background: '#F7F3EA' }}>
-                        <td colSpan={5} style={{ padding: '5px 12px', fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: TIER_COLORS[slot.tier] ?? INK_M, borderTop: i > 0 ? `2px solid ${HAIR}` : undefined, borderBottom: `1px solid ${HAIR}` }}>
-                          Tier {slot.tier === 'Property' ? '1' : slot.tier === 'Destination' ? '2' : '3'} · {slot.tier}
-                        </td>
-                      </tr>
-                    )}
-                    <tr key={slot.slot} style={{ background: bgRow }}>
-                      <td style={{ padding: '8px 12px', borderBottom: `1px solid ${HAIR}`, fontWeight: 500, color: exists ? INK : INK_M }}>
-                        {slot.id ? (
-                          <a href={`/marketing/youtube/playlists/${encodeURIComponent(slot.id)}`} style={{ color: FOREST, textDecoration: 'none' }}>{slot.slot}</a>
-                        ) : slot.slot}
-                      </td>
-                      <td style={{ padding: '6px 10px', textAlign: 'center', borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}`, fontWeight: 700, color: exists ? INK : INK_M, fontVariantNumeric: 'tabular-nums' }}>
-                        {exists ? count : '—'}
-                      </td>
-                      <td style={{ padding: '6px 10px', textAlign: 'center', borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}`, color: INK_M, fontSize: 11 }}>
-                        <div style={{ fontSize: 10, color: INK_M }}>{slot.shortsTarget}S + {slot.longTarget}L</div>
-                        {exists && count > 0 && (
-                          <div style={{ marginTop: 3, height: 4, background: HAIR, borderRadius: 2, width: 60, display: 'inline-block', overflow: 'hidden' }}>
-                            <div style={{ width: `${pct}%`, height: '100%', background: pct >= 80 ? OK : pct >= 40 ? AMBER : RED, borderRadius: 2 }} />
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '6px 10px', borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}`, fontSize: 11, color: INK_M }}>
-                        {linked.length > 0 ? linked.join(' · ') : <span style={{ color: '#C8C0AF', fontStyle: 'italic' }}>no pillar linked</span>}
-                      </td>
-                      <td style={{ padding: '6px 10px', textAlign: 'center', borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}` }}>
-                        {!exists
-                          ? <span style={{ fontSize: 10, fontWeight: 700, color: RED, padding: '2px 6px', background: '#FDECEA', borderRadius: 3 }}>⚠ Create</span>
-                          : count === 0
-                          ? <span style={{ fontSize: 10, fontWeight: 700, color: AMBER }}>Empty</span>
-                          : <span style={{ fontSize: 10, color: OK, fontWeight: 700 }}>✓</span>}
-                      </td>
-                    </tr>
-                  </>
+                  <tr key={r.room_type_id}>
+                    <td style={{ ...tdStyle }}>{r.room_type_name}</td>
+                    <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR, background: c.short === 0 ? '#FEF9F5' : undefined }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: c.short === 0 ? AMBER : OK }}>{c.short}</span>
+                    </td>
+                    <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: c.regular === 0 ? INK_M : OK }}>{c.regular}</span>
+                    </td>
+                    <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: c.long === 0 ? INK_M : OK }}>{c.long}</span>
+                    </td>
+                    <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '2px solid ' + HAIR, background: total === 0 ? '#FEF2F2' : undefined }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: total === 0 ? RED : total >= 2 ? OK : AMBER }}>{total === 0 ? '⚠ 0' : total}</span>
+                    </td>
+                  </tr>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
 
-        {/* Content pillars status */}
-        <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: `1px solid ${HAIR}`, fontSize: 12, fontWeight: 600, color: INK }}>
-            Content pillars — production cadence & format
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: CREAM }}>
-                {['Pillar', 'Cadence', 'Format', 'Target playlist', 'Status'].map((h, i) => (
-                  <th key={h} style={{ padding: '7px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: INK_M, borderBottom: `1px solid ${HAIR}`, borderLeft: i > 0 ? `1px solid ${HAIR}` : undefined }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pillars.map(p => {
-                const playlistName = p.youtube_playlist_id
-                  ? (livePlaylists.find((l: any) => l.id === p.youtube_playlist_id)?.title ?? p.youtube_playlist_id.slice(0, 24) + '…')
-                  : null;
-                const isShortFormat = p.pillar_key === 'monks_minute' || p.pillar_key === 'river_life';
-                const format = isShortFormat ? 'Short ≤60s' : p.target_cadence === 'weekly' || p.target_cadence === 'biweekly' ? 'Short + Medium' : 'Medium/Long';
+              {/* FACILITIES (SPA) */}
+              {(() => {
+                const spaFacilities = facilities.filter(f => ['wellness', 'treatment_room', 'dining', 'f&b', 'restaurant', 'bar', 'food'].some(cat => (f.category ?? '').toLowerCase().includes(cat)));
+                const spaGaps = spaFacilities.filter(f => {
+                  const kw = [f.facility_name, ...f.facility_name.split(/\s+/).filter(w => w.length > 4)];
+                  const c = countCoverage(spaVideos, kw);
+                  return c.short + c.regular + c.long === 0;
+                }).length;
+                if (spaFacilities.length === 0) return null;
                 return (
-                  <tr key={p.pillar_key}>
-                    <td style={{ padding: '7px 12px', borderBottom: `1px solid ${HAIR}`, fontWeight: 500, color: INK }}>{p.label}</td>
-                    <td style={{ padding: '7px 12px', borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}`, color: INK_M }}>{p.target_cadence ?? '—'}</td>
-                    <td style={{ padding: '7px 12px', borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}` }}>
-                      <span style={{ fontSize: 10, padding: '1px 6px', background: isShortFormat ? '#E8F5E9' : CREAM, color: isShortFormat ? OK : INK_M, border: `1px solid ${HAIR}`, borderRadius: 3 }}>
-                        {format}
-                      </span>
+                  <>
+                    <SectionHeader label="Jungle Spa & Dining" count={spaFacilities.length} gapCount={spaGaps} />
+                    {spaFacilities.map(f => {
+                      const kw = [f.facility_name, ...f.facility_name.split(/\s+/).filter(w => w.length > 4)];
+                      const c = countCoverage(spaVideos, kw);
+                      const total = c.short + c.regular + c.long;
+                      return (
+                        <tr key={f.facility_id}>
+                          <td style={{ ...tdStyle }}>{f.facility_name}</td>
+                          {['short', 'regular', 'long'].map(fmt => (
+                            <td key={fmt} style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: (c as any)[fmt] === 0 ? INK_M : OK }}>{(c as any)[fmt]}</span>
+                            </td>
+                          ))}
+                          <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '2px solid ' + HAIR, background: total === 0 ? '#FEF2F2' : undefined }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: total === 0 ? RED : total >= 2 ? OK : AMBER }}>{total === 0 ? '⚠ 0' : total}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </>
+                );
+              })()}
+
+              {/* ACTIVITIES */}
+              <SectionHeader label="Experiences & Activities" count={activities.length} gapCount={actGaps} />
+              {activities.map(a => {
+                const kw = [a.name, ...a.name.split(/\s+/).filter(w => w.length > 4)];
+                const c = countCoverage([...expVideos, ...spaVideos, ...roomVideos], kw);
+                const total = c.short + c.regular + c.long;
+                return (
+                  <tr key={a.activity_id}>
+                    <td style={{ ...tdStyle }}>{a.name}</td>
+                    {['short', 'regular', 'long'].map(fmt => (
+                      <td key={fmt} style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: (c as any)[fmt] === 0 ? INK_M : OK }}>{(c as any)[fmt]}</span>
+                      </td>
+                    ))}
+                    <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '2px solid ' + HAIR, background: total === 0 ? '#FEF2F2' : undefined }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: total === 0 ? RED : total >= 2 ? OK : AMBER }}>{total === 0 ? '⚠ 0' : total}</span>
                     </td>
-                    <td style={{ padding: '7px 12px', borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}`, color: FOREST, fontSize: 11 }}>
-                      {playlistName ?? <span style={{ color: RED, fontWeight: 600 }}>⚠ No playlist</span>}
-                    </td>
-                    <td style={{ padding: '7px 12px', borderBottom: `1px solid ${HAIR}`, borderLeft: `1px solid ${HAIR}`, textAlign: 'center' }}>
-                      {p.youtube_playlist_id
-                        ? <span style={{ color: OK, fontWeight: 700, fontSize: 11 }}>✓ Linked</span>
-                        : <span style={{ color: RED, fontWeight: 700, fontSize: 10 }}>Not linked</span>}
+                  </tr>
+                );
+              })}
+
+              {/* RETREATS */}
+              <SectionHeader label="Wellness Retreats" count={retreats.length} gapCount={retGaps} />
+              {retreats.map(r => {
+                const kw = [r.display_name, ...r.display_name.split(/\s+/).filter(w => w.length > 4), 'retreat'];
+                const c = countCoverage([...spaVideos, ...roomVideos], kw);
+                const total = c.short + c.regular + c.long;
+                return (
+                  <tr key={r.retreat_id}>
+                    <td style={{ ...tdStyle }}>{r.display_name}</td>
+                    {['short', 'regular', 'long'].map(fmt => (
+                      <td key={fmt} style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '1px solid ' + HAIR }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: (c as any)[fmt] === 0 ? INK_M : OK }}>{(c as any)[fmt]}</span>
+                      </td>
+                    ))}
+                    <td style={{ padding: '5px 8px', textAlign: 'center', borderBottom: '1px solid ' + HAIR, borderLeft: '2px solid ' + HAIR, background: total === 0 ? '#FEF2F2' : undefined }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: total === 0 ? RED : total >= 2 ? OK : AMBER }}>{total === 0 ? '⚠ 0 — Wellness Retreats playlist missing' : total}</span>
                     </td>
                   </tr>
                 );
@@ -211,24 +299,9 @@ export default async function YtCoveragePage() {
           </table>
         </div>
 
-        {/* Production gap summary */}
-        <div style={{ background: '#FEF9F0', border: `1px solid ${AMBER}`, borderRadius: 4, padding: '14px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: AMBER, marginBottom: 8 }}>⚠ Production gaps to close</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8, fontSize: 11, color: INK_M }}>
-            <div>
-              <strong style={{ color: INK }}>Missing playlists (create first):</strong>
-              <ul style={{ margin: '4px 0 0 16px', lineHeight: 1.8 }}>
-                <li>Wellness Retreats at The Namkhan — target: 2 Shorts + 3 long-form</li>
-                <li>Luang Prabang · River Life — target: 4 Shorts + 1 long-form</li>
-              </ul>
-            </div>
-            <div>
-              <strong style={{ color: INK }}>Unlinked pillar (link after River Life created):</strong>
-              <ul style={{ margin: '4px 0 0 16px', lineHeight: 1.8 }}>
-                <li>River Life (weekly Shorts) → Luang Prabang · River Life playlist</li>
-              </ul>
-            </div>
-          </div>
+        <div style={{ fontSize: 11, color: INK_M, padding: '8px 12px', background: CREAM, borderRadius: 4 }}>
+          Coverage is estimated by matching entity names against video titles in relevant playlists. Accuracy improves once the Wellness Retreats and River Life playlists are created and videos are assigned. Create missing playlists from the{' '}
+          <Link href="/marketing/youtube/playlists" style={{ color: FOREST }}>Playlists tab →</Link>
         </div>
       </div>
     </DashboardPage>
