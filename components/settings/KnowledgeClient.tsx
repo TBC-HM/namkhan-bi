@@ -5,8 +5,11 @@
 // - Client Goals: big goals -> module goals (metric/baseline/target/deadline/weight
 //   + guardrail type). Rows are canon (governance.tenant_goals via bridge fns).
 // - Judgment sections: guided owner-class questions; answers are canon rows
-//   (governance.tenant_knowledge_answers). The agent-drafted doc + inline-redline
-//   approval cycle (brief §JUDGMENT-DOC FRONTEND CONTRACT) builds on these rows next.
+//   (governance.tenant_knowledge_answers). Per section, the full judgment-doc cycle
+//   (§JUDGMENT-DOC FRONTEND CONTRACT) runs in-page: Generate draft (agent writes it
+//   from the answers) -> inline redline (editable draft) -> Approve = publish to
+//   dms + brain + version bump, or Reject with a comment = steers the redraft.
+//   Version history visible; nothing reaches agents pre-approval.
 // Design: cockpit tokens only; section-card + gap-badge pattern mirrors
 // /settings/property (PBS 2026-07-29: reuse, no second completeness system).
 
@@ -22,6 +25,11 @@ export type TenantGoalRow = {
 export type KnowledgeAnswerRow = {
   section: string; question: string; answer: string | null;
   answered_by: string | null; updated_at: string;
+};
+export type KnowledgeDocRow = {
+  doc_id: number; section: string; version: number; status: string;
+  content_md: string; owner_comments: string | null; drafted_by: string | null;
+  decided_by: string | null; decided_at: string | null; updated_at: string;
 };
 
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
@@ -228,8 +236,160 @@ function GoalForm({ draft, propertyId, onDone, onCancel }: {
   );
 }
 
-export default function KnowledgeClient({ propertyId, goals, answers, completeness }: {
-  propertyId: number; goals: TenantGoalRow[]; answers: KnowledgeAnswerRow[]; completeness: number;
+const STATUS_COLORS: Record<string, string> = {
+  draft: '#B48A3A', approved: 'var(--primary)', rejected: 'var(--status-red)', superseded: 'var(--ink-soft)',
+};
+
+// §JUDGMENT-DOC FRONTEND CONTRACT — per-section doc cycle:
+// generate draft -> inline redline -> approve (publish) / reject (comment -> redraft).
+function JudgmentDocPanel({ propertyId, section, sectionLabel, docs }: {
+  propertyId: number; section: string; sectionLabel: string; docs: KnowledgeDocRow[];
+}) {
+  const latest = docs[0] ?? null;
+  const latestDraft = latest && latest.status === 'draft' ? latest : null;
+  const latestApproved = docs.find((d) => d.status === 'approved') ?? null;
+
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [redline, setRedline] = useState<string | null>(null); // owner edits on the open draft
+  const [rejectComment, setRejectComment] = useState('');
+  const [rejecting, setRejecting] = useState(false);
+  const [showApproved, setShowApproved] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  async function post(payload: Record<string, unknown>): Promise<boolean> {
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch('/api/settings/knowledge', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ property_id: propertyId, ...payload }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(j.error || 'request failed'); setBusy(false); return false; }
+      return true;
+    } catch (e) { setErr(String(e)); setBusy(false); return false; }
+  }
+
+  async function generateDraft() {
+    if (await post({ action: 'doc_draft', section })) window.location.reload();
+  }
+  async function approve() {
+    if (!latestDraft) return;
+    if (await post({
+      action: 'doc_decide', doc_id: latestDraft.doc_id, decision: 'approved',
+      content_md: redline ?? latestDraft.content_md,
+    })) window.location.reload();
+  }
+  async function reject() {
+    if (!latestDraft) return;
+    if (!rejectComment.trim()) { setErr('add a short comment — it steers the redraft'); return; }
+    if (await post({
+      action: 'doc_decide', doc_id: latestDraft.doc_id, decision: 'rejected', comments: rejectComment,
+    })) window.location.reload();
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--hairline)', borderRadius: 8, padding: '10px 12px', marginTop: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, fontWeight: 650 }}>{sectionLabel} — document</span>
+        {latest ? (
+          <span style={{ fontSize: 11, fontFamily: MONO, fontWeight: 700, color: STATUS_COLORS[latest.status] ?? 'var(--ink-soft)' }}>
+            v{latest.version} · {latest.status}
+          </span>
+        ) : (
+          <span style={{ fontSize: 11, fontFamily: MONO, color: 'var(--ink-soft)' }}>no document yet</span>
+        )}
+        {docs.length > 1 && (
+          <button style={{ ...btnGhost, fontSize: 11, padding: '2px 8px' }}
+            onClick={() => setShowHistory((v) => !v)}>
+            {showHistory ? 'hide history' : `history (${docs.length})`}
+          </button>
+        )}
+        {err && <span style={{ fontSize: 11.5, color: 'var(--status-red)' }}>{err}</span>}
+      </div>
+
+      {showHistory && (
+        <div style={{ margin: '6px 0' }}>
+          {docs.map((d) => (
+            <div key={d.doc_id} style={{ fontSize: 11, fontFamily: MONO, color: 'var(--ink-soft)', padding: '1px 0' }}>
+              v{d.version} · <span style={{ color: STATUS_COLORS[d.status] ?? 'var(--ink-soft)' }}>{d.status}</span>
+              {' · '}{(d.decided_at ?? d.updated_at)?.slice(0, 10)}
+              {d.status === 'rejected' && d.owner_comments ? ` · "${d.owner_comments.slice(0, 80)}"` : ''}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {latestDraft ? (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginBottom: 4 }}>
+            Draft written from your answers. Edit it directly below — your edits are what gets approved.
+            Nothing reaches the platform&apos;s agents until you approve.
+          </div>
+          <textarea
+            value={redline ?? latestDraft.content_md}
+            onChange={(e) => setRedline(e.target.value)}
+            rows={14}
+            style={{ ...inputStyle, fontFamily: MONO, fontSize: 12, lineHeight: 1.5, resize: 'vertical' }}
+          />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+            <button style={btnPrimary} onClick={approve} disabled={busy}>
+              {busy ? 'Working…' : 'Approve & publish'}
+            </button>
+            {!rejecting ? (
+              <button style={btnGhost} onClick={() => setRejecting(true)} disabled={busy}>Reject…</button>
+            ) : (
+              <>
+                <input
+                  style={{ ...inputStyle, width: 320 }}
+                  placeholder="what should the redraft change?"
+                  value={rejectComment}
+                  onChange={(e) => setRejectComment(e.target.value)}
+                />
+                <button style={btnGhost} onClick={reject} disabled={busy}>Confirm reject</button>
+                <button style={{ ...btnGhost, border: 'none' }} onClick={() => { setRejecting(false); setRejectComment(''); }} disabled={busy}>cancel</button>
+              </>
+            )}
+            <button style={{ ...btnGhost, fontSize: 11 }} onClick={generateDraft} disabled={busy}>
+              Regenerate from answers
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+          <button style={btnPrimary} onClick={generateDraft} disabled={busy}>
+            {busy ? 'Drafting…' : latestApproved ? 'Draft new version from answers' : 'Generate draft from answers'}
+          </button>
+          {latest?.status === 'rejected' && latest.owner_comments && (
+            <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+              last rejection: &quot;{latest.owner_comments.slice(0, 100)}&quot; — the redraft will address it
+            </span>
+          )}
+        </div>
+      )}
+
+      {latestApproved && !latestDraft && (
+        <div style={{ marginTop: 8 }}>
+          <button style={{ ...btnGhost, fontSize: 11, padding: '2px 8px' }}
+            onClick={() => setShowApproved((v) => !v)}>
+            {showApproved ? 'hide approved doc' : `view approved doc (v${latestApproved.version})`}
+          </button>
+          {showApproved && (
+            <pre style={{
+              fontSize: 11.5, fontFamily: MONO, whiteSpace: 'pre-wrap', lineHeight: 1.5,
+              border: '1px solid var(--hairline)', borderRadius: 6, padding: '8px 10px',
+              marginTop: 6, background: 'rgba(8,72,56,0.03)', color: 'var(--ink)',
+            }}>{latestApproved.content_md}</pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function KnowledgeClient({ propertyId, goals, answers, docs = [], completeness }: {
+  propertyId: number; goals: TenantGoalRow[]; answers: KnowledgeAnswerRow[];
+  docs?: KnowledgeDocRow[]; completeness: number;
 }) {
   const [editing, setEditing] = useState<GoalDraft | null>(null);
   const [savedMsg, setSavedMsg] = useState('');
@@ -392,6 +552,12 @@ export default function KnowledgeClient({ propertyId, goals, answers, completene
             );
           })}
           <button style={btnPrimary} onClick={() => saveAnswers(s.slug)}>Save {s.label} answers</button>
+          <JudgmentDocPanel
+            propertyId={propertyId}
+            section={s.slug}
+            sectionLabel={s.label}
+            docs={docs.filter((d) => d.section === s.slug).sort((a, b) => b.version - a.version)}
+          />
         </div>
       ))}
     </div>
