@@ -21,6 +21,8 @@ import { getFreshAccessToken } from '@/lib/youtube/token';
 import { fetchChannelPlaylists, fetchPlaylistItemsWithStats, isErr, type PlaylistVideo } from '@/lib/youtube/data';
 import YtSubTabs from '../../_shared/SubTabs';
 import { GenerateProposalsButton, QueueProposalButton } from '../../_client/PlaylistCalendarActions';
+import RemoveFromPlaylistButton from '../../_client/RemoveFromPlaylistButton';
+import MoveToPlaylistButton from '../../_client/MoveToPlaylistButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -42,6 +44,11 @@ type LengthBucket = typeof LENGTH_BUCKETS[number];
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+function gradeColor(g: string | null): string {
+  if (g === 'A') return '#0E7A4B'; if (g === 'B') return '#084838';
+  if (g === 'C') return '#B48A3A'; if (g === 'D' || g === 'F') return '#B03826';
+  return '#5A5A5A';
+}
 function fmt(n: number): string { return new Intl.NumberFormat('en-US').format(n); }
 function fmtCompact(n: number): string {
   if (n < 1000) return String(n);
@@ -467,9 +474,19 @@ export default async function YtPlaylistDetailPage({ params }: Params) {
                         <span>· {v.publishedAt.slice(0, 10)}</span>
                       </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
                       <div style={{ fontSize: 11, color: perfColor, textTransform: 'uppercase', fontWeight: 600, letterSpacing: '.04em' }}>{perfLabel}</div>
                       <div style={{ fontSize: 10, color: INK_M, fontVariantNumeric: 'tabular-nums' }}>{perf.toFixed(1)}× median</div>
+                      {auditByVideoId.has(v.videoId) && (
+                        <span style={{ fontSize: 10, padding: '1px 5px', background: gradeColor(auditByVideoId.get(v.videoId)!) + '22', color: gradeColor(auditByVideoId.get(v.videoId)!), border: '1px solid ' + gradeColor(auditByVideoId.get(v.videoId)!) + '44', borderRadius: 2, fontWeight: 700 }}>
+                          {auditByVideoId.get(v.videoId)}
+                        </span>
+                      )}
+                      {appliedInPlaylist.has(v.videoId) && <span style={{ fontSize: 9, color: OK, fontWeight: 700 }}>✓ applied</span>}
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: 2 }}>
+                        <MoveToPlaylistButton videoId={v.videoId} playlistItemId={v.playlistItemId} videoTitle={v.title} currentPlaylistId={playlistId} availablePlaylists={allPlaylists} />
+                        <RemoveFromPlaylistButton playlistItemId={v.playlistItemId} videoTitle={v.title} />
+                      </div>
                     </div>
                   </div>
                 );
