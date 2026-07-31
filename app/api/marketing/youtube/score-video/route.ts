@@ -1,22 +1,21 @@
 // app/api/marketing/youtube/score-video/route.ts
-// Scores a YouTube video: Claude vision on thumbnail + Lens audit verdicts.
-// No YouTube API quota — thumbnails from public CDN, audit data from DB.
+// Scores a YouTube video: raw Anthropic fetch on thumbnail (vision) + Lens audit verdicts.
+// Uses getVaultSecret from skills-common — NO direct @anthropic-ai/sdk import.
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getVaultSecret, ANTHROPIC_MODEL } from '@/lib/youtube/skills-common';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const NAMKHAN = 260955;
-const anthropic = new Anthropic();
 
 const THUMB_PROMPT = [
   'Score this YouTube thumbnail for The Namkhan — a 5-star boutique hotel in Luang Prabang, Laos (SLH Considerate Collection). Be strict.',
-  'Return ONLY valid JSON:',
-  '{ "visual_quality":0-100, "brand_alignment":0-100, "composition":0-100, "click_appeal":0-100, "composite":0-100, "feedback":"2-3 sentences", "flags":["issue1"] }',
-  'visual_quality: sharpness, exposure, color, professional finish.',
-  'brand_alignment: luxury feel, authentic Laos/nature, appropriate for SLH Considerate Collection.',
+  'Return ONLY valid JSON (no markdown):',
+  '{"visual_quality":0-100,"brand_alignment":0-100,"composition":0-100,"click_appeal":0-100,"composite":0-100,"feedback":"2-3 sentences","flags":["issue1"]}',
+  'visual_quality: sharpness, exposure, color grading, professional finish.',
+  'brand_alignment: luxury feel, authentic Laos culture/nature, SLH Considerate Collection standard.',
   'composition: subject framing, rule of thirds, visual hierarchy.',
   'click_appeal: would a luxury traveler stop scrolling?',
 ].join('\n');
@@ -40,28 +39,44 @@ export async function POST(req: NextRequest) {
     .select('video_title, title_verdict, description_verdict, tag_verdict, playlist_fit_score, video_views, video_likes')
     .eq('video_id', videoId).order('id', { ascending: false }).limit(1).maybeSingle();
 
-  // 1. Thumbnail via Claude vision (public CDN — zero YouTube quota cost)
+  // 1. Thumbnail via raw Anthropic fetch (vision) — no SDK import needed
   let thumbScore = 50;
   let thumbFeedback = 'Thumbnail not analyzed.';
   let thumbFlags: string[] = [];
+
   try {
     const imgRes = await fetch(`https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, { cache: 'no-store' });
     if (imgRes.ok) {
       const b64 = Buffer.from(await imgRes.arrayBuffer()).toString('base64');
-      const msg = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6', max_tokens: 500,
-        messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
-          { type: 'text', text: THUMB_PROMPT },
-        ]}],
-      });
-      const raw = (msg.content[0] as { type: string; text: string }).text;
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (match) {
-        const p = JSON.parse(match[0]) as Record<string, unknown>;
-        thumbScore = Math.round(Number(p.composite ?? ((Number(p.visual_quality) + Number(p.brand_alignment) + Number(p.composition) + Number(p.click_appeal)) / 4)));
-        thumbFeedback = String(p.feedback ?? '');
-        thumbFlags = Array.isArray(p.flags) ? (p.flags as string[]).slice(0, 6) : [];
+      const apiKey = await getVaultSecret('ANTHROPIC_API_KEY');
+      if (apiKey) {
+        const msg = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: ANTHROPIC_MODEL,
+            max_tokens: 500,
+            messages: [{ role: 'user', content: [
+              { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+              { type: 'text', text: THUMB_PROMPT },
+            ]}],
+          }),
+        });
+        if (msg.ok) {
+          const j = await msg.json() as { content?: Array<{ type: string; text?: string }> };
+          const raw = (j.content ?? []).filter(c => c.type === 'text').map(c => c.text ?? '').join('');
+          const match = raw.match(/\{[\s\S]*\}/);
+          if (match) {
+            const p = JSON.parse(match[0]) as Record<string, unknown>;
+            thumbScore = Math.round(Number(p.composite ?? ((Number(p.visual_quality) + Number(p.brand_alignment) + Number(p.composition) + Number(p.click_appeal)) / 4)));
+            thumbFeedback = String(p.feedback ?? '');
+            thumbFlags = Array.isArray(p.flags) ? (p.flags as string[]).slice(0, 6) : [];
+          }
+        }
       }
     }
   } catch { /* use defaults */ }
