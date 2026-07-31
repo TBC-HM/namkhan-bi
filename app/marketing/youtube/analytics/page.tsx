@@ -101,6 +101,12 @@ export default async function YtAnalyticsPage() {
     videos = (data ?? []) as VidRow[];
   }
 
+  // Read action log so completed playlist actions show ✓ Done on load
+  const { data: actionLogData } = await sb.from('yt_action_log')
+    .select('entity_id, action, new_value')
+    .eq('property_id', NAMKHAN).eq('entity_type', 'playlist');
+  const doneMap = new Map((actionLogData ?? []).map(r => [r.entity_id, r.action + (r.new_value ? ' → ' + r.new_value : '')]));
+
   const tabs = MARKETING_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
   const cardStyle: React.CSSProperties = { background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 20, gridColumn: '1 / -1' };
   const sectionH: React.CSSProperties = { fontSize: 12, textTransform: 'uppercase', letterSpacing: '.08em', color: INK_M, marginBottom: 12, fontWeight: 500 };
@@ -196,6 +202,8 @@ export default async function YtAnalyticsPage() {
                         verdict={p.verdict ?? ''}
                         currentTitle={p.playlist_title ?? p.playlist_id ?? ''}
                         suggestedTitle={p.verdict === 'rename' ? extractSuggestedTitle(p.notes) : null}
+                      initialDone={doneMap.has(p.playlist_id ?? '')}
+                      initialAction={doneMap.get(p.playlist_id ?? '')}
                       />
                     </div>
                   ))}
