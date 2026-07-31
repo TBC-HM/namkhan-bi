@@ -9,6 +9,7 @@ import { getFreshAccessToken } from '@/lib/youtube/token';
 import { fetchChannelPlaylists, isErr } from '@/lib/youtube/data';
 import YtSubTabs from '../_shared/SubTabs';
 import CreatePlaylistForm from '../_client/CreatePlaylistForm';
+import DeletePlaylistButton from '../analytics/_client/DeletePlaylistButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -41,7 +42,7 @@ export default async function YouTubePlaylistsPage() {
         <YtSubTabs current="playlists" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12, color: '#5A5A5A' }}>
-            {playlists.length} playlists · click any to view videos, scheduling + calendar
+            {playlists.length} playlists · sorted A–Z · click any to view videos, scheduling + calendar
           </div>
           <CreatePlaylistForm />
         </div>
@@ -56,7 +57,7 @@ export default async function YouTubePlaylistsPage() {
         <YtSubTabs current="playlists" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12, color: '#5A5A5A' }}>
-            {playlists.length} playlists · click any to view videos, scheduling + calendar
+            {playlists.length} playlists · sorted A–Z · click any to view videos, scheduling + calendar
           </div>
           <CreatePlaylistForm />
         </div>
@@ -65,7 +66,7 @@ export default async function YouTubePlaylistsPage() {
     );
   }
   const plRes = await fetchChannelPlaylists(tok.access_token, connection.channel_id, 50);
-  const playlists = isErr(plRes) ? [] : plRes.data;
+  const playlists = (isErr(plRes) ? [] : plRes.data).sort((a, b) => a.title.localeCompare(b.title));
   const err = isErr(plRes) ? `${plRes.error}${plRes.detail ? ` · ${plRes.detail.slice(0, 120)}` : ''}` : null;
 
   // Also load pillars to show which playlist is linked to which program
@@ -81,7 +82,7 @@ export default async function YouTubePlaylistsPage() {
         <YtSubTabs current="playlists" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12, color: '#5A5A5A' }}>
-            {playlists.length} playlists · click any to view videos, scheduling + calendar
+            {playlists.length} playlists · sorted A–Z · click any to view videos, scheduling + calendar
           </div>
           <CreatePlaylistForm />
         </div>
@@ -98,27 +99,32 @@ export default async function YouTubePlaylistsPage() {
                 const thumb = pl.thumbnails.medium?.url ?? pl.thumbnails.high?.url ?? pl.thumbnails.default?.url ?? null;
                 const linkedPillar = pillarByPlaylistId.get(pl.id);
                 return (
-                  <Link key={pl.id} href={`/marketing/youtube/playlists/${encodeURIComponent(pl.id)}`}
-                    style={{ display: 'block', border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden', background: WHITE, textDecoration: 'none', color: INK }}>
-                    {thumb ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumb} alt={pl.title} style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: CREAM }} />
-                    ) : <div style={{ aspectRatio: '16 / 9', background: CREAM }} />}
-                    <div style={{ padding: 10 }}>
-                      <div style={{ fontSize: 13, color: INK, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 34 }}>{pl.title}</div>
-                      <div style={{ fontSize: 11, color: INK_M, marginTop: 6, display: 'flex', gap: 8 }}>
-                        <span>{pl.itemCount} videos</span>
-                        {pl.privacyStatus && <span>· {pl.privacyStatus}</span>}
-                      </div>
-                      {linkedPillar ? (
-                        <div style={{ marginTop: 6, fontSize: 10, color: FOREST, background: '#E8F0EC', padding: '2px 6px', borderRadius: 2, display: 'inline-block' }}>
-                          🎬 {linkedPillar.label}{linkedPillar.cadence ? ` · ${linkedPillar.cadence}` : ''}
+                  <div key={pl.id} style={{ display: 'flex', flexDirection: 'column', border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden', background: WHITE }}>
+                    <Link href={`/marketing/youtube/playlists/${encodeURIComponent(pl.id)}`}
+                      style={{ display: 'block', textDecoration: 'none', color: INK, flexGrow: 1 }}>
+                      {thumb ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={thumb} alt={pl.title} style={{ display: 'block', width: '100%', aspectRatio: '16 / 9', objectFit: 'cover', background: CREAM }} />
+                      ) : <div style={{ aspectRatio: '16 / 9', background: CREAM }} />}
+                      <div style={{ padding: 10 }}>
+                        <div style={{ fontSize: 13, color: INK, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: 34 }}>{pl.title}</div>
+                        <div style={{ fontSize: 11, color: INK_M, marginTop: 6, display: 'flex', gap: 8 }}>
+                          <span>{pl.itemCount} videos</span>
+                          {pl.privacyStatus && <span>· {pl.privacyStatus}</span>}
                         </div>
-                      ) : (
-                        <div style={{ marginTop: 6, fontSize: 10, color: INK_M }}>no program linked</div>
-                      )}
+                        {linkedPillar ? (
+                          <div style={{ marginTop: 6, fontSize: 10, color: FOREST, background: '#E8F0EC', padding: '2px 6px', borderRadius: 2, display: 'inline-block' }}>
+                            🎬 {linkedPillar.label}{linkedPillar.cadence ? ` · ${linkedPillar.cadence}` : ''}
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 6, fontSize: 10, color: INK_M }}>no program linked</div>
+                        )}
+                      </div>
+                    </Link>
+                    <div style={{ padding: '6px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', justifyContent: 'flex-end', background: '#FAFAFA' }}>
+                      <DeletePlaylistButton playlistId={pl.id} playlistTitle={pl.title} />
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
