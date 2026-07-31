@@ -148,10 +148,12 @@ export async function fetchRecentVideos(
   accessToken: string,
   channelId: string,
   max = 24,
-): Promise<YtResult<VideoItem[]>> {
+  startPageToken?: string,
+): Promise<YtResult<VideoItem[]> & { nextPageToken?: string | null }> {
   const cap = Math.max(1, Math.min(max, 200));
   const ids: string[] = [];
-  let pageToken: string | null = null;
+  let pageToken: string | null = startPageToken ?? null;
+  let nextPageToken: string | null = null;
 
   // Search API caps maxResults=50; paginate via pageToken until we reach `cap`
   // or exhaust results.
@@ -171,11 +173,12 @@ export async function fetchRecentVideos(
       const vid = it.id?.videoId;
       if (vid) ids.push(vid);
     }
-    if (!s.data.nextPageToken) break;
-    pageToken = s.data.nextPageToken;
+    nextPageToken = s.data.nextPageToken ?? null;
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
   }
 
-  if (ids.length === 0) return { ok: true, data: [] };
+  if (ids.length === 0) return { ok: true, data: [], nextPageToken: null };
 
   // Videos API caps 50 IDs per call — batch.
   const batches: string[][] = [];
@@ -205,7 +208,7 @@ export async function fetchRecentVideos(
   const idx = new Map(ids.map((x, i) => [x, i]));
   all.sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
 
-  return { ok: true, data: all };
+  return { ok: true, data: all, nextPageToken };
 }
 
 // ---- recent comments -------------------------------------------------------
