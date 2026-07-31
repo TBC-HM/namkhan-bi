@@ -82,6 +82,11 @@ function cadenceDays(c: string | null | undefined): number {
     default:          return 30;
   }
 }
+function gradeColor(g: string | null): string {
+  if (g === 'A') return '#0E7A4B'; if (g === 'B') return '#084838';
+  if (g === 'C') return '#B48A3A'; if (g === 'D' || g === 'F') return '#B03826';
+  return '#5A5A5A';
+}
 function cadenceLabel(gap: number): string {
   if (gap <= 8) return 'weekly';
   if (gap <= 16) return 'biweekly';
@@ -144,6 +149,19 @@ export default async function YtPlaylistDetailPage({ params }: Params) {
   const playlist = isErr(plMeta) ? null : plMeta.data.find((p) => p.id === playlistId) ?? null;
   const videos: PlaylistVideo[] = isErr(plItems) ? [] : plItems.data;
   const err = isErr(plItems) ? `${plItems.error}${plItems.detail ? ` · ${plItems.detail.slice(0, 120)}` : ''}` : null;
+  const videoIds = videos.map(v => v.videoId);
+  const [auditRes, videoLogRes] = await Promise.all([
+    videoIds.length > 0
+      ? sb.from('v_yt_channel_audit_videos').select('video_id, current_grade').in('video_id', videoIds)
+      : Promise.resolve({ data: [] as Array<{ video_id: string; current_grade: string | null }> }),
+    sb.from('yt_action_log').select('entity_id')
+      .eq('property_id', NAMKHAN).eq('entity_type', 'video').eq('action', 'applied'),
+  ]);
+  const auditByVideoId = new Map<string, string>();
+  for (const r of (auditRes.data ?? []) as Array<{ video_id: string; current_grade: string | null }>) {
+    if (r.current_grade) auditByVideoId.set(r.video_id, r.current_grade);
+  }
+  const appliedInPlaylist = new Set((videoLogRes.data ?? []).map(r => r.entity_id));
   const linkedPillar = (pillarRes.data ?? null) as { pillar_key: string; label: string; target_cadence: string | null; youtube_playlist_id: string | null } | null;
   const proposals = (proposalsRes.data ?? []) as Array<{
     id: string; scheduled_month: string; rank: number;
@@ -430,6 +448,14 @@ export default async function YtPlaylistDetailPage({ params }: Params) {
                         <img src={thumb} alt={v.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : null}
                       {v.duration && <span style={{ position: 'absolute', bottom: 4, right: 4, background: 'rgba(0,0,0,.8)', color: WHITE, fontSize: 10, padding: '1px 4px', borderRadius: 2 }}>{fmtDuration(v.duration)}</span>}
+                      {auditByVideoId.has(v.videoId) && (
+                        <span style={{ position: 'absolute', top: 3, left: 3, fontSize: 9, padding: '1px 4px', background: gradeColor(auditByVideoId.get(v.videoId)!) + 'EE', color: WHITE, borderRadius: 2, fontWeight: 700, lineHeight: '13px' }}>
+                          {auditByVideoId.get(v.videoId)}
+                        </span>
+                      )}
+                      {appliedInPlaylist.has(v.videoId) && (
+                        <span style={{ position: 'absolute', top: 3, right: 3, fontSize: 9, padding: '1px 4px', background: OK + 'EE', color: WHITE, borderRadius: 2, fontWeight: 700, lineHeight: '13px' }}>✓</span>
+                      )}
                     </div>
                     <div>
                       <a href={`https://youtube.com/watch?v=${v.videoId}`} target="_blank" rel="noreferrer noopener" style={{ fontSize: 13, color: INK, fontWeight: 500, textDecoration: 'none', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{v.title}</a>
