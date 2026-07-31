@@ -8,6 +8,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getFreshAccessToken } from '@/lib/youtube/token';
 import { fetchChannelPlaylists, isErr } from '@/lib/youtube/data';
 import YtSubTabs from '../_shared/SubTabs';
+import CreatePlaylistForm from '../_client/CreatePlaylistForm';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -38,6 +39,12 @@ export default async function YouTubePlaylistsPage() {
     return (
       <DashboardPage title="YouTube · channel management" tabs={tabs}>
         <YtSubTabs current="playlists" />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, color: '#5A5A5A' }}>
+            {playlists.length} playlists · click any to view videos, scheduling + calendar
+          </div>
+          <CreatePlaylistForm />
+        </div>
         <div style={{ gridColumn: '1 / -1', padding: 20 }}>Connect YouTube first.</div>
       </DashboardPage>
     );
@@ -47,6 +54,12 @@ export default async function YouTubePlaylistsPage() {
     return (
       <DashboardPage title="YouTube · channel management" tabs={tabs}>
         <YtSubTabs current="playlists" />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, color: '#5A5A5A' }}>
+            {playlists.length} playlists · click any to view videos, scheduling + calendar
+          </div>
+          <CreatePlaylistForm />
+        </div>
         <div style={{ gridColumn: '1 / -1', padding: 20 }}>Session expired. Reconnect via Dashboard.</div>
       </DashboardPage>
     );
@@ -66,6 +79,12 @@ export default async function YouTubePlaylistsPage() {
     <DashboardPage title="YouTube · channel management" tabs={tabs}>
       <div style={{ display: 'grid', gap: 16 }}>
         <YtSubTabs current="playlists" />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12, color: '#5A5A5A' }}>
+            {playlists.length} playlists · click any to view videos, scheduling + calendar
+          </div>
+          <CreatePlaylistForm />
+        </div>
         <div style={{ gridColumn: '1 / -1', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
             <div style={{ fontSize: 14, color: INK, fontWeight: 600 }}>Channel playlists ({playlists.length})</div>
