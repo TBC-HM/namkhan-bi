@@ -25,6 +25,6 @@ function authGate(req: Request): NextResponse | null {
 export async function POST(req: Request) {
   const gate = authGate(req);
   if (gate) return gate;
-  return auditRunPOST();
+  return auditRunPOST(req);
 }
 export const GET = POST;
