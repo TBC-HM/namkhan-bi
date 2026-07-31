@@ -6,6 +6,7 @@ import Card from '@/components/sections/Card';
 import { getItemDetail, getInvLocations } from '@/lib/inv-data';
 import { fmtMoney, fmtNumber } from '@/lib/format';
 import MovementModal from '../../_components/MovementModal';
+import ParEditor from '../../_components/ParEditor';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -203,6 +204,12 @@ export default async function ItemDetailPage({ params }: Props) {
       )}
 
       <Card title="Par by location" emphasis={`${parStatus.length} location${parStatus.length === 1 ? '' : 's'}`}>
+        <ParEditor
+          itemId={item.item_id}
+          itemName={item.item_name ?? ''}
+          locations={locations as any[]}
+          existingPars={parStatus.map((p) => ({ location_id: p.location_id, par_quantity: Number(p.par_quantity ?? 0) }))}
+        />
         <table className="inv-table">
           <thead>
             <tr><th>Location</th><th>On hand</th><th>Par</th><th>Status</th><th>Short</th></tr>
