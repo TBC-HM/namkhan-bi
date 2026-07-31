@@ -69,6 +69,43 @@ export interface CatalogueRow {
   display_order: number | null;
 }
 
+export interface SpaPassRow {
+  pass_id: string;
+  property_id: number;
+  pass_type: 'day_pass' | 'package';
+  name: string;
+  guest_name: string;
+  guest_email: string | null;
+  guest_phone: string | null;
+  reservation_id: string | null;
+  credits_total: number;
+  credits_used: number;
+  credits_remaining: number;
+  valid_from: string;
+  valid_until: string | null;
+  price: number | null;
+  currency: string | null;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  last_redeemed_at: string | null;
+}
+
+export interface SpaPassRedemptionRow {
+  redemption_id: string;
+  pass_id: string;
+  pass_name: string;
+  pass_type: string;
+  pass_guest: string;
+  booking_id: string | null;
+  booking_guest: string | null;
+  booking_scheduled_at: string | null;
+  treatment_name: string | null;
+  credits: number;
+  redeemed_at: string;
+  note: string | null;
+}
+
 export interface FolioSellerRow {
   description: string;
   total_revenue_usd: number;
@@ -162,6 +199,30 @@ export async function getSpaRooms(propertyId: number): Promise<Bridged<SpaRoomRo
     .order('display_order');
   if (error) return { rows: [], bridgeMissing: true };
   return { rows: (data ?? []) as SpaRoomRow[], bridgeMissing: false };
+}
+
+export async function getSpaPasses(propertyId: number): Promise<Bridged<SpaPassRow>> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await (sb as any)
+    .from('v_spa_passes')
+    .select('pass_id, property_id, pass_type, name, guest_name, guest_email, guest_phone, reservation_id, credits_total, credits_used, credits_remaining, valid_from, valid_until, price, currency, status, notes, created_at, last_redeemed_at')
+    .eq('property_id', propertyId)
+    .order('created_at', { ascending: false })
+    .limit(300);
+  if (error) return { rows: [], bridgeMissing: true };
+  return { rows: (data ?? []) as SpaPassRow[], bridgeMissing: false };
+}
+
+export async function getSpaPassRedemptions(propertyId: number, limit = 100): Promise<Bridged<SpaPassRedemptionRow>> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await (sb as any)
+    .from('v_spa_pass_redemptions')
+    .select('redemption_id, pass_id, pass_name, pass_type, pass_guest, booking_id, booking_guest, booking_scheduled_at, treatment_name, credits, redeemed_at, note')
+    .eq('property_id', propertyId)
+    .order('redeemed_at', { ascending: false })
+    .limit(limit);
+  if (error) return { rows: [], bridgeMissing: true };
+  return { rows: (data ?? []) as SpaPassRedemptionRow[], bridgeMissing: false };
 }
 
 /** LIVE bridge — property.spa_treatments via v_property_spa_treatments. */
