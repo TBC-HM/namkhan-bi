@@ -1,9 +1,14 @@
 // app/marketing/website/preview/_site/Nav.tsx
+// v2: olive-green nav matching thenamkhan.com
 import Link from 'next/link';
 
 export const BOOK_URL = 'https://hotels.cloudbeds.com/en/reservation/lKAMWp?hkc=a0m0';
 
 const BASE = '/marketing/website/preview';
+
+// Olive green matching thenamkhan.com
+const NAV_BG   = '#3A4633';
+const NAV_TEXT = '#FFFFFF';
 
 const LINKS = [
   { label: 'Stay',        href: '/accommodation' },
@@ -20,23 +25,29 @@ export function SiteNav({ slug }: { slug: string }) {
   return (
     <nav style={{
       position: 'sticky', top: 0, zIndex: 50,
-      background: '#FFFFFF', borderBottom: '1px solid #D4C9B0',
+      background: NAV_BG,
       padding: '0 24px',
     }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 68, gap: 16 }}>
-        <Link href={BASE + '/'} style={{ fontFamily: 'Georgia, serif', fontSize: 19, fontWeight: 700, color: '#1C1812', textDecoration: 'none', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
-          The Namkhan
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72, gap: 16 }}>
+        {/* Logo */}
+        <Link href={BASE + '/'} style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1 }}>
+          <span style={{ fontFamily: 'Georgia, serif', fontSize: 17, fontWeight: 700, color: NAV_TEXT, letterSpacing: '0.05em', textTransform: 'uppercase' }}>The Namkhan</span>
+          <span style={{ fontFamily: 'Georgia, serif', fontSize: 9, color: 'rgba(255,255,255,0.65)', letterSpacing: '0.18em', textTransform: 'uppercase', marginTop: 3 }}>Luang Prabang</span>
         </Link>
+        {/* Nav links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {LINKS.map(l => (
             <Link key={l.href} href={BASE + l.href} style={{
-              padding: '6px 11px', fontSize: 13, color: '#3a342a', textDecoration: 'none', fontWeight: 500,
-              borderBottom: slug === l.href || slug.startsWith(l.href + '/') ? '2px solid #2C4A3E' : '2px solid transparent',
+              padding: '6px 11px', fontSize: 13, color: NAV_TEXT, textDecoration: 'none', fontWeight: 400,
+              opacity: slug === l.href || slug.startsWith(l.href + '/') ? 1 : 0.85,
+              borderBottom: slug === l.href || slug.startsWith(l.href + '/') ? '1px solid rgba(255,255,255,0.6)' : '1px solid transparent',
             }}>{l.label}</Link>
           ))}
           <a href={BOOK_URL} target="_blank" rel="noopener noreferrer" style={{
-            marginLeft: 10, padding: '9px 20px', fontSize: 13, fontWeight: 700,
-            background: '#1C1812', color: '#FFFFFF', borderRadius: 3, textDecoration: 'none', whiteSpace: 'nowrap',
+            marginLeft: 12, padding: '8px 20px', fontSize: 13, fontWeight: 600,
+            background: 'rgba(255,255,255,0.12)', color: NAV_TEXT,
+            border: '1px solid rgba(255,255,255,0.35)',
+            borderRadius: 2, textDecoration: 'none', whiteSpace: 'nowrap',
           }}>Book now</a>
         </div>
       </div>
@@ -44,21 +55,18 @@ export function SiteNav({ slug }: { slug: string }) {
   );
 }
 
-export function PreviewBanner({ slug, generatedAt }: { slug: string; generatedAt?: string | null }) {
+export function PreviewBanner({ slug }: { slug: string; generatedAt?: string | null }) {
   return (
     <div style={{
-      background: '#1a1a1a', color: '#c8c0b0', fontSize: '0.78rem',
-      padding: '0.55rem 1.25rem', display: 'flex', alignItems: 'center',
+      background: '#111', color: '#888', fontSize: '0.72rem',
+      padding: '0.45rem 1.25rem', display: 'flex', alignItems: 'center',
       justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
     }}>
       <span>
-        <strong style={{ color: '#e8e4dc' }}>PREVIEW</strong>
-        {' — '}{slug}
-        {generatedAt ? ' · crawl ' + new Date(generatedAt).toLocaleDateString() : ''}
-        {' · images from hotelierkit CDN · '}
-        <Link href="/marketing/website" style={{ color: '#9ca89b', textDecoration: 'underline' }}>← Website editor</Link>
+        <strong style={{ color: '#ccc' }}>PREVIEW</strong>{' — '}{slug}{' · '}
+        <Link href="/marketing/website" style={{ color: '#666', textDecoration: 'underline' }}>← Website editor</Link>
       </span>
-      <span style={{ color: '#6a6050', fontSize: '0.72rem' }}>Not the live design — structural preview only</span>
+      <span>Photos: blank placeholders — media library wiring pending</span>
     </div>
   );
 }
