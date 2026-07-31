@@ -32,6 +32,10 @@ export interface SpaBookingRow {
   posted_to_folio: boolean | null;
   cloudbeds_charge_id: string | null;
   notes: string | null;
+  guest_email: string | null;
+  guest_phone: string | null;
+  confirmation_sent_at: string | null;
+  reminder_sent_at: string | null;
 }
 
 export interface SpaTherapistRow {
@@ -114,7 +118,7 @@ export async function getSpaBookingsForDay(propertyId: number, dayIso: string): 
   const { fromUtc, toUtc } = dayWindowUtc(dayIso, propertyId);
   const { data, error } = await (sb as any)
     .from('v_spa_treatment_bookings')
-    .select('booking_id, scheduled_at, ends_at, duration_min, guest_name, reservation_id, treatment_name, treatment_category, therapist_id, therapist_name, room_id, room_name, status, price, currency, posted_to_folio, cloudbeds_charge_id, notes')
+    .select('booking_id, scheduled_at, ends_at, duration_min, guest_name, reservation_id, treatment_name, treatment_category, therapist_id, therapist_name, room_id, room_name, status, price, currency, posted_to_folio, cloudbeds_charge_id, notes, guest_email, guest_phone, confirmation_sent_at, reminder_sent_at')
     .eq('property_id', propertyId)
     .gte('scheduled_at', fromUtc).lt('scheduled_at', toUtc)
     .order('scheduled_at', { ascending: true });
@@ -126,7 +130,7 @@ export async function getSpaDeliveryRecords(propertyId: number, sinceIso: string
   const sb = getSupabaseAdmin();
   const { data, error } = await (sb as any)
     .from('v_spa_treatment_bookings')
-    .select('booking_id, scheduled_at, ends_at, duration_min, guest_name, reservation_id, treatment_name, treatment_category, therapist_id, therapist_name, room_id, room_name, status, price, currency, posted_to_folio, cloudbeds_charge_id, notes')
+    .select('booking_id, scheduled_at, ends_at, duration_min, guest_name, reservation_id, treatment_name, treatment_category, therapist_id, therapist_name, room_id, room_name, status, price, currency, posted_to_folio, cloudbeds_charge_id, notes, guest_email, guest_phone, confirmation_sent_at, reminder_sent_at')
     .eq('property_id', propertyId)
     .in('status', ['completed', 'no_show', 'cancelled'])
     .gte('scheduled_at', `${sinceIso}T00:00:00Z`)
