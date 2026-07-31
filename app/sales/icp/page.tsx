@@ -1,183 +1,211 @@
-// app/sales/icp/page.tsx
-// PBS 2026-07-11 pm — Design System rebuild. Every section wrapped in a
-// primitive:
-//   TOP     : MetricRow (4 KpiTile)
-//   §1      : Container "Scoring model" — 5 weighted areas as bar rows
-//   §2      : Container "Active ICP segments" — cards grid
-//   §3      : Container "Scrapers · cost & yield" — Chart variant="table"
-//   §4      : Container "Framework library" — Chart variant="table"
-// Bridge reads unchanged; only presentation.
-
-import {
-  DashboardPage,
-  Container,
-  MetricRow,
-  Chart,
-  type KpiTileProps,
-} from '@/app/(cockpit)/_design';
-import { SALES_SUBPAGES } from '../_subpages';
+// app/sales/icp/page.tsx — ICP Engine · data-driven, 89-day rolling
+// ICPs are the base for all sales, marketing, YouTube, newsletter, capex.
+// Source: pms.v_reservations matched to sales.icp_segments by country/LOS/ADR/channel.
+import Link from 'next/link';
+import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 30;
+export const revalidate = 0;
 
-const NAMKHAN = 260955;
+const WHITE = '#FFFFFF'; const HAIR = '#E6DFCC'; const INK = '#1B1B1B';
+const INK_M = '#5A5A5A'; const CREAM = '#F5F0E1'; const RED = '#B03826';
+const OK = '#0E7A4B';
 
-const HAIR = '#E6DFCC'; const INK = '#1B1B1B'; const INK_M = '#5A5A5A';
-const FOREST = '#1F3A2E';
-
-interface WeightRow  { area: string | null; weight: number | null; scoring_logic: string | null; input_owner: string | null }
-interface SegRow     { id: string; key: string | null; name: string | null; description: string | null; criteria: unknown; daily_quota: number | null; source: string | null }
-interface ScraperRow { id: string; property_id: number | null; target_category: string | null; status: string | null; daily_target: number | null; lead_count: number | null; icp_segment_id: string | null; cost_per_lead_eur: number | null; monthly_budget_eur: number | null; spend_7d_eur: number | null }
-interface FwRow      { slug: string; framework: string | null; core_question: string | null; position: number | null }
-
-interface PageProps {
-  propertyId?: number;
+interface IcpRow {
+  key: string; name: string; icp_type: string; priority: number;
+  sort_order: number; color: string; description: string;
+  property_use_case: string | null;
+  yt_content_tags: string[] | null; newsletter_segment: string | null;
+  target_adr_min: number; target_adr_max: number;
+  target_los_min: number; target_los_max: number;
+  source_countries: string[] | null; booking_channels: string[] | null;
+  bookings_89d: number; revenue_89d: number;
+  avg_adr_89d: number; avg_los_89d: number;
+  avg_pax_89d: number; avg_stay_value_89d: number;
+  top_countries_89d: string[] | null;
 }
 
-async function loadData(propertyId: number) {
+function fmt(n: number) { return new Intl.NumberFormat('en-US').format(Math.round(n)); }
+function fmtK(n: number) { return n >= 1000 ? `$${(n/1000).toFixed(1)}K` : `$${Math.round(n)}`; }
+
+function PriorityBadge({ p }: { p: number }) {
+  const label = p === 1 ? 'SNIPER' : p === 2 ? 'TARGET' : 'MONITOR';
+  const bg = p === 1 ? '#B03826' : p === 2 ? '#B48A3A' : '#5A5A5A';
+  return (
+    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.1em', padding: '2px 7px',
+      background: bg, color: '#fff', borderRadius: 2, textTransform: 'uppercase' }}>
+      {label}
+    </span>
+  );
+}
+
+export default async function IcpEnginePage() {
   const sb = getSupabaseAdmin();
-  const [weights, segs, scrapers, fws] = await Promise.all([
-    sb.from('v_scoring_model').select('area,weight,scoring_logic,input_owner'),
-    sb.from('v_icp_segments_active').select('id,key,name,description,criteria,daily_quota,source').order('name'),
-    sb.from('v_scrapers').select('id,property_id,target_category,status,daily_target,lead_count,icp_segment_id,cost_per_lead_eur,monthly_budget_eur,spend_7d_eur').eq('property_id', propertyId),
-    sb.from('v_targeting_frameworks').select('slug,framework,core_question,position').order('position'),
-  ]);
-  return {
-    weights:  (weights.data  ?? []) as WeightRow[],
-    segs:     (segs.data     ?? []) as SegRow[],
-    scrapers: (scrapers.data ?? []) as ScraperRow[],
-    fws:      (fws.data      ?? []) as FwRow[],
-  };
-}
+  const { data: icps } = await sb.from('v_icp_89day_performance')
+    .select('*').order('sort_order');
 
-function money(x: number | null | undefined) {
-  if (x == null) return '—';
-  return '€' + Number(x).toFixed(0);
-}
+  const rows = (icps ?? []) as IcpRow[];
+  const b2c = rows.filter(r => r.icp_type === 'b2c');
+  const b2b = rows.filter(r => r.icp_type === 'b2b');
 
-export default async function IcpSegmentsPage({ propertyId }: PageProps = {}) {
-  const pid = propertyId ?? NAMKHAN;
-  const { weights, segs, scrapers, fws } = await loadData(pid);
-  const tabs = SALES_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
-
-  const totalWeight = weights.reduce((n, w) => n + (Number(w.weight) || 0), 0) || 100;
-  const activeScrapers = scrapers.filter((s) => s.status === 'active').length;
-  const cpaTotal = scrapers.reduce((n, s) => n + (Number(s.spend_7d_eur) || 0), 0);
-  const leadsTotal = scrapers.reduce((n, s) => n + (Number(s.lead_count) || 0), 0);
-  const monthlyBudget = scrapers.reduce((n, s) => n + (Number(s.monthly_budget_eur) || 0), 0);
-
-  const kpiTiles: KpiTileProps[] = [
-    { label: 'Segments active', value: segs.length,       size: 'sm' },
-    { label: 'Scrapers running',value: activeScrapers,    size: 'sm', status: activeScrapers > 0 ? 'green' : 'grey', footnote: scrapers.length + ' total' },
-    { label: 'Monthly budget',  value: Math.round(monthlyBudget), currency: 'EUR', size: 'sm', footnote: 'sum of scraper budgets' },
-    { label: 'Leads scraped 7d',value: leadsTotal,        size: 'sm', footnote: money(cpaTotal) + ' spent' },
-  ];
+  const total89Rev = rows.reduce((s, r) => s + Number(r.revenue_89d), 0);
+  const top = [...rows].sort((a, b) => Number(b.avg_adr_89d) - Number(a.avg_adr_89d))[0];
+  const totalBookings = rows.reduce((s, r) => s + Number(r.bookings_89d), 0);
+  const maxRev = Math.max(...rows.map(r => Number(r.revenue_89d)), 1);
 
   return (
-    <DashboardPage
-      title="ICP Segments"
-      subtitle="Ideal Customer Profile · scoring model · scrapers · frameworks"
-      tabs={tabs}
-    >
-      <div style={{ gridColumn: '1 / -1' }}>
-        <MetricRow tiles={kpiTiles} size="sm" />
-      </div>
+    <DashboardPage title="Sales · ICP Engine" subtitle="Ideal Customer Profiles · 89-day rolling · data from PMS">
+      <div style={{ display: 'grid', gap: 20, gridColumn: '1 / -1' }}>
 
-      {/* §1 Scoring model */}
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Scoring model" subtitle="5 weighted areas · total weight normalises to 100">
-          <div style={{ display: 'grid', gap: 10 }}>
-            {weights.map((w, i) => {
-              const pctVal = ((Number(w.weight) || 0) / totalWeight) * 100;
+        {/* Header */}
+        <div style={{ padding: '12px 20px', background: INK, color: WHITE, borderRadius: 4, display: 'flex', gap: 40, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: '#aaa', marginBottom: 2 }}>89-DAY REVENUE</div>
+            <div style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>${fmt(total89Rev)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: '#aaa', marginBottom: 2 }}>BOOKINGS MATCHED</div>
+            <div style={{ fontSize: 28, fontWeight: 700 }}>{totalBookings}</div>
+          </div>
+          {top && Number(top.avg_adr_89d) > 0 && (
+            <div>
+              <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: '#aaa', marginBottom: 2 }}>TOP ICP · ADR</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: top.color || WHITE }}>{top.name} · ${fmt(top.avg_adr_89d)}/night</div>
+            </div>
+          )}
+          <div style={{ marginLeft: 'auto', fontSize: 11, color: '#888', maxWidth: 280, lineHeight: 1.5 }}>
+            ICPs are the foundation. Every YouTube video, newsletter, rate offer, and capex decision should serve one of these profiles.
+          </div>
+        </div>
+
+        {/* B2C ICPs — Guest Personas */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: INK_M, marginBottom: 12 }}>Guest Personas · B2C</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
+            {b2c.map(icp => {
+              const revFrac = maxRev > 0 ? Number(icp.revenue_89d) / maxRev : 0;
+              const hasData = Number(icp.bookings_89d) > 0;
               return (
-                <div key={(w.area ?? '') + '-' + i} style={{ display: 'grid', gridTemplateColumns: '180px 60px 1fr 1fr', gap: 12, alignItems: 'center' }}>
-                  <div style={{ fontSize: 13, color: INK, fontWeight: 500 }}>{w.area ?? '—'}</div>
-                  <div style={{ fontSize: 13, color: INK, fontVariantNumeric: 'tabular-nums' }}>{w.weight ?? 0}</div>
-                  <div style={{ position: 'relative', height: 8, background: HAIR, borderRadius: 999, overflow: 'hidden' }}>
-                    <div style={{ position: 'absolute', inset: 0, width: pctVal + '%', background: FOREST, borderRadius: 999 }} />
+                <div key={icp.key} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, overflow: 'hidden' }}>
+                  {/* Color bar + header */}
+                  <div style={{ background: icp.color || '#084838', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: WHITE }}>{icp.name}</div>
+                    <PriorityBadge p={icp.priority} />
                   </div>
-                  <div style={{ fontSize: 11, color: INK_M }}>{w.scoring_logic ?? ''}</div>
+
+                  {/* 89-day revenue bar */}
+                  <div style={{ height: 4, background: CREAM }}>
+                    <div style={{ width: `${Math.round(revFrac * 100)}%`, height: '100%', background: icp.color || '#084838' }} />
+                  </div>
+
+                  <div style={{ padding: 14 }}>
+                    {/* 89-day KPIs */}
+                    {hasData ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+                        {[
+                          { label: 'Revenue', val: fmtK(Number(icp.revenue_89d)) },
+                          { label: 'ADR', val: `$${fmt(Number(icp.avg_adr_89d))}` },
+                          { label: 'Avg LOS', val: `${Number(icp.avg_los_89d).toFixed(1)}n` },
+                          { label: 'Stays', val: String(icp.bookings_89d) },
+                        ].map(k => (
+                          <div key={k.label} style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 9, color: INK_M, textTransform: 'uppercase', letterSpacing: '.05em' }}>{k.label}</div>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: INK, fontVariantNumeric: 'tabular-nums' }}>{k.val}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '8px 0', marginBottom: 10, fontSize: 11, color: INK_M, fontStyle: 'italic' }}>
+                        No matched stays in last 89 days — refine criteria or broaden geo.
+                      </div>
+                    )}
+
+                    {/* Description */}
+                    <div style={{ fontSize: 11.5, color: INK, lineHeight: 1.6, marginBottom: 10 }}>{icp.description}</div>
+
+                    {/* Use case */}
+                    {icp.property_use_case && (
+                      <div style={{ fontSize: 10.5, color: INK_M, lineHeight: 1.5, padding: '6px 10px', background: CREAM, borderRadius: 3, marginBottom: 10 }}>
+                        🏨 {icp.property_use_case}
+                      </div>
+                    )}
+
+                    {/* Target spec */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                      <span style={{ fontSize: 10, padding: '2px 7px', background: CREAM, borderRadius: 10 }}>ADR ${icp.target_adr_min}–${icp.target_adr_max}</span>
+                      <span style={{ fontSize: 10, padding: '2px 7px', background: CREAM, borderRadius: 10 }}>LOS {icp.target_los_min}–{icp.target_los_max}n</span>
+                      {(icp.booking_channels ?? []).map(c => (
+                        <span key={c} style={{ fontSize: 10, padding: '2px 7px', background: CREAM, borderRadius: 10 }}>{c}</span>
+                      ))}
+                    </div>
+
+                    {/* Countries */}
+                    <div style={{ fontSize: 10, color: INK_M, marginBottom: 8 }}>
+                      <span style={{ fontWeight: 600 }}>Markets: </span>
+                      {(icp.source_countries ?? []).join(' · ')}
+                      {hasData && icp.top_countries_89d && (
+                        <span style={{ color: OK }}> · Live: {icp.top_countries_89d.join(', ')}</span>
+                      )}
+                    </div>
+
+                    {/* YT + Newsletter tags */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {(icp.yt_content_tags ?? []).slice(0, 4).map(t => (
+                        <span key={t} style={{ fontSize: 9, padding: '1px 6px', border: `1px solid ${HAIR}`, borderRadius: 10, color: INK_M }}>▶ {t}</span>
+                      ))}
+                      {icp.newsletter_segment && (
+                        <span style={{ fontSize: 9, padding: '1px 6px', border: `1px solid ${HAIR}`, borderRadius: 10, color: INK_M }}>✉ {icp.newsletter_segment}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })}
-            {weights.length === 0 ? <div style={{ fontSize: 12, color: INK_M }}>No scoring weights configured.</div> : null}
           </div>
-        </Container>
-      </div>
+        </div>
 
-      {/* §2 Active segments */}
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Active ICP segments" subtitle={segs.length + ' segments'}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
-            {segs.map((s) => (
-              <Container key={s.id} title={s.name ?? s.key ?? '—'} subtitle={s.source ? 'Source · ' + s.source : undefined} density="compact" expandable={false}>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  <div style={{ fontSize: 12, color: INK_M, lineHeight: 1.4 }}>{s.description ?? ''}</div>
-                  <div style={{ fontSize: 11, color: INK_M }}>
-                    Quota <strong style={{ color: INK }}>{s.daily_quota ?? '—'}</strong>/day
+        {/* B2B ICPs */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.1em', color: INK_M, marginBottom: 12 }}>Outreach Segments · B2B</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>
+            {b2b.map(icp => (
+              <div key={icp.key} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ background: icp.color || '#B48A3A', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: WHITE }}>{icp.name}</div>
+                  <span style={{ fontSize: 9, padding: '2px 7px', background: 'rgba(255,255,255,.2)', color: WHITE, borderRadius: 2, letterSpacing: '.05em' }}>B2B</span>
+                </div>
+                <div style={{ padding: 14 }}>
+                  {Number(icp.bookings_89d) > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+                      {[
+                        { label: 'Revenue', val: fmtK(Number(icp.revenue_89d)) },
+                        { label: 'ADR', val: `$${fmt(Number(icp.avg_adr_89d))}` },
+                        { label: 'Avg LOS', val: `${Number(icp.avg_los_89d).toFixed(1)}n` },
+                      ].map(k => (
+                        <div key={k.label} style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: 9, color: INK_M, textTransform: 'uppercase', letterSpacing: '.05em' }}>{k.label}</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: INK, fontVariantNumeric: 'tabular-nums' }}>{k.val}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11.5, color: INK, lineHeight: 1.6, marginBottom: 8 }}>{icp.description}</div>
+                  <div style={{ fontSize: 10, color: INK_M }}>
+                    {(icp.source_countries ?? []).join(' · ')}
                   </div>
                 </div>
-              </Container>
+              </div>
             ))}
-            {segs.length === 0 ? <div style={{ fontSize: 12, color: INK_M }}>No active segments.</div> : null}
           </div>
-        </Container>
-      </div>
+        </div>
 
-      {/* §3 Scrapers */}
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Container
-          title="Scrapers · cost & yield"
-          subtitle={activeScrapers + ' active · ' + money(cpaTotal) + ' spent 7d · ' + leadsTotal + ' leads'}
-        >
-          {scrapers.length === 0 ? (
-            <div style={{ fontSize: 12, color: INK_M, textAlign: 'center', padding: 12 }}>No scrapers configured.</div>
-          ) : (
-            <Chart
-              variant="table"
-              xKey="category"
-              data={scrapers.map((s) => ({
-                category: s.target_category ?? '—',
-                status: (s.status ?? '—').toUpperCase(),
-                daily_target: s.daily_target ?? 0,
-                leads: s.lead_count ?? 0,
-                cost_per_lead: money(s.cost_per_lead_eur),
-                monthly_budget: money(s.monthly_budget_eur),
-                spend_7d: money(s.spend_7d_eur),
-              }))}
-              series={[
-                { key: 'status',         label: 'Status' },
-                { key: 'daily_target',   label: 'Daily target' },
-                { key: 'leads',          label: 'Leads' },
-                { key: 'cost_per_lead',  label: 'Cost / lead' },
-                { key: 'monthly_budget', label: 'Monthly budget' },
-                { key: 'spend_7d',       label: 'Spend 7d' },
-              ]}
-            />
-          )}
-        </Container>
-      </div>
-
-      {/* §4 Framework library */}
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Framework library" subtitle={fws.length + ' frameworks'}>
-          {fws.length === 0 ? (
-            <div style={{ fontSize: 12, color: INK_M, textAlign: 'center', padding: 12 }}>No frameworks.</div>
-          ) : (
-            <Chart
-              variant="table"
-              xKey="framework"
-              data={fws.map((f) => ({
-                framework: f.framework ?? f.slug,
-                core_question: f.core_question ?? '',
-              }))}
-              series={[
-                { key: 'core_question', label: 'Core question' },
-              ]}
-            />
-          )}
-        </Container>
+        {/* Engine note */}
+        <div style={{ padding: '12px 16px', background: CREAM, borderRadius: 4, fontSize: 11, color: INK_M, lineHeight: 1.6 }}>
+          <strong style={{ color: INK }}>ICP Engine · 89-day rolling</strong> — Bookings are matched to ICPs by country, channel, LOS and ADR.
+          Revenue and ADR update automatically as new bookings sync from the PMS.
+          ICPs drive: YouTube content angles · Newsletter segments · Rate proposals · Retreat outreach · Capex priorities.
+        </div>
       </div>
     </DashboardPage>
   );
