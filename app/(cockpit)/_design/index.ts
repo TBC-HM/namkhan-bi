@@ -45,7 +45,8 @@ export { default as MetricRow } from './layout/MetricRow';
 export { default as SplitContainer } from './layout/SplitContainer';
 export { default as BookingActivity } from './BookingActivity';
 export { default as PickupTabs } from './PickupTabs';
-export { default as FloatingMira } from './FloatingMira';
+// FloatingMira retired 2026-07-31 (central-chat-v1 round 3) — floating chat
+// is now components/chat/FloatingCentralChat.tsx hosting the one CentralChat.
 
 // Walkthrough feedback engine entry-point
 export { BugWidget } from './BugWidget';
