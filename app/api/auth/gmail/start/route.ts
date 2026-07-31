@@ -19,5 +19,5 @@ export async function GET(req: Request) {
   // Encode the original "from" param so we can redirect back.
   const back = url.searchParams.get('back') ?? '/admin/gmail-connect';
   const state = Buffer.from(JSON.stringify({ back, n: crypto.randomUUID() })).toString('base64url');
-  return NextResponse.redirect(buildAuthUrl(state));
+  return NextResponse.redirect(await buildAuthUrl(state));
 }
