@@ -2,12 +2,15 @@
 
 // app/holding/it/brain/BrainClient.tsx
 // BRAIN v1 · client console: pipeline tiles · human review queue · ask window.
-// Data via /api/brain/review (GET tiles+queue, POST confirm) and /api/brain/ask.
+// Data via /api/brain/review (GET tiles+queue, POST confirm).
+// Central Chat round 3 (brief central-chat-v1 §0.B.1): the inline
+// /api/brain/ask window is replaced by the one CentralChat, scoped brain —
+// the brain stays a context source consulted by Felix via the chat route.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Container, KpiTile } from '@/app/(cockpit)/_design';
 import { BRAIN_DOC_KINDS, BRAIN_TIERS } from '@/lib/brain/taxonomy';
-import AskFeedback from '@/components/brain/AskFeedback';
+import CentralChat from '@/components/chat/CentralChat';
 
 const DOC_KINDS: string[] = [...BRAIN_DOC_KINDS];
 const TIERS: string[] = [...BRAIN_TIERS];
@@ -35,31 +38,6 @@ type QueueRow = {
   confidence: number | null; summary: string | null; created_at: string;
 };
 
-type Source = { doc_id: string; title: string; link: string };
-
-/** minimal md → react: [title](link) links + line breaks + bullets. No deps. */
-function renderAnswer(md: string) {
-  const lines = md.split('\n');
-  return lines.map((line, i) => {
-    const parts: Array<string | JSX.Element> = [];
-    let rest = line;
-    let k = 0;
-    while (rest.length > 0) {
-      const m = rest.match(/\[([^\]]+)\]\(([^)]+)\)/);
-      if (!m || m.index === undefined) { parts.push(rest); break; }
-      if (m.index > 0) parts.push(rest.slice(0, m.index));
-      parts.push(
-        <a key={`${i}-${k++}`} href={m[2]} target="_blank" rel="noreferrer"
-           style={{ color: 'var(--tbl-fg, #8ab4f8)', textDecoration: 'underline' }}>
-          {m[1]}
-        </a>
-      );
-      rest = rest.slice(m.index + m[0].length);
-    }
-    return <div key={i} style={{ minHeight: line.trim() ? undefined : 8 }}>{parts}</div>;
-  });
-}
-
 export default function BrainClient() {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [missing, setMissing] = useState<MissingSummary | null>(null);
@@ -68,12 +46,6 @@ export default function BrainClient() {
   const [edits, setEdits] = useState<Record<string, { doc_kind: string; sensitivity: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-
-  const [question, setQuestion] = useState('');
-  const [asking, setAsking] = useState(false);
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [sources, setSources] = useState<Source[]>([]);
-  const [usedHr, setUsedHr] = useState(false);
 
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rulesVersion, setRulesVersion] = useState<number | null>(null);
@@ -144,23 +116,6 @@ export default function BrainClient() {
     } finally { setRulesSaving(false); }
   }, [rulesSaving, rulesText]);
 
-  const ask = useCallback(async () => {
-    const q = question.trim();
-    if (!q || asking) return;
-    setAsking(true); setAnswer(null); setSources([]);
-    try {
-      const res = await fetch('/api/brain/ask', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: q }),
-      });
-      const j = await res.json();
-      if (j.ok) { setAnswer(j.answer as string); setSources((j.sources ?? []) as Source[]); setUsedHr(!!j.used_hr); }
-      else setAnswer('Error: ' + (j.error ?? 'ask failed'));
-    } catch (e) {
-      setAnswer('Error: ' + (e instanceof Error ? e.message : 'ask failed'));
-    } finally { setAsking(false); }
-  }, [question, asking]);
-
   const tiles = useMemo(() => status ? [
     { label: 'Extract pending', value: status.extract_pending, footnote: 'files awaiting MD shadow' },
     { label: 'Extracted', value: status.extracted, footnote: 'MD shadow written' },
@@ -215,43 +170,8 @@ export default function BrainClient() {
         </div>
       ) : null}
 
-      <Container title="Ask the company brain" subtitle="Owner view · answers only from classified documents, with citations">
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={question}
-            onChange={e => setQuestion(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') void ask(); }}
-            placeholder="e.g. What commission do we pay EXO Travel?"
-            style={{ flex: 1, ...selStyle, padding: '8px 10px', fontSize: 13 }}
-          />
-          <button onClick={() => void ask()} disabled={asking || !question.trim()}
-            style={{ ...selStyle, cursor: 'pointer', padding: '8px 14px', opacity: asking ? 0.5 : 1 }}>
-            {asking ? 'Thinking…' : 'Ask'}
-          </button>
-        </div>
-        {answer ? (
-          <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.55 }}>
-            {renderAnswer(answer)}
-            {sources.length > 0 ? (
-              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-                Sources: {sources.map((s, i) => (
-                  <span key={s.doc_id}>
-                    {i > 0 ? ' · ' : ''}
-                    <a href={s.link} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>{s.title}</a>
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {!answer.startsWith('Error:') && !usedHr ? (
-              <AskFeedback question={question} answer={answer} sources={sources} />
-            ) : null}
-            {usedHr ? (
-              <div style={{ marginTop: 8, fontSize: 11.5, opacity: 0.6 }}>
-                Contains live HR data (owner surface) — not preservable, refetched fresh on every ask.
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+      <Container title="Ask the company brain" subtitle="One channel — Felix answers with brain context (HR/payroll stays excluded from retrieval)">
+        <CentralChat mode="second-brain" moduleScope="brain" />
       </Container>
 
       <Container
