@@ -27,8 +27,30 @@ export const GMAIL_SCOPES = [
   'openid',
 ].join(' ');
 
-export function buildAuthUrl(state: string): string {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+// 2026-07-31 (sales brief round 2, A1 fix): resolve the OAuth client from the
+// Supabase vault FIRST (unified namkhan-bi-vercel client, rotated 2026-07-13 —
+// same source lib/userGmail.ts uses, provably working for token refresh), and
+// only fall back to the legacy Vercel env pair. Root cause of the dead sales
+// poller: tokens minted under the vault client were being refreshed with the
+// stale env GOOGLE_OAUTH_CLIENT_SECRET → Google 401 invalid_client.
+async function getOAuthClient(): Promise<{ clientId: string; clientSecret: string }> {
+  let clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || '';
+  let clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+  try {
+    const admin = getSupabaseAdmin();
+    const [cidRes, csecRes] = await Promise.all([
+      admin.rpc('fn_get_secret', { p_name: 'GOOGLE_CLIENT_ID' }),
+      admin.rpc('fn_get_secret', { p_name: 'GOOGLE_CLIENT_SECRET' }),
+    ]);
+    if (!cidRes.error && typeof cidRes.data === 'string' && cidRes.data.length > 20) clientId = cidRes.data;
+    if (!csecRes.error && typeof csecRes.data === 'string' && csecRes.data.length > 10) clientSecret = csecRes.data;
+  } catch { /* keep env fallback */ }
+  if (!clientId || !clientSecret) throw new Error('Google OAuth client missing in vault + env');
+  return { clientId, clientSecret };
+}
+
+export async function buildAuthUrl(state: string): Promise<string> {
+  const { clientId } = await getOAuthClient();
   const redirect = process.env.GOOGLE_OAUTH_REDIRECT_URI;
   if (!clientId || !redirect) throw new Error('Google OAuth env vars not set');
   const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -53,8 +75,7 @@ export interface TokenResponse {
 }
 
 export async function exchangeCodeForTokens(code: string): Promise<TokenResponse> {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID!;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET!;
+  const { clientId, clientSecret } = await getOAuthClient();
   const redirect = process.env.GOOGLE_OAUTH_REDIRECT_URI!;
   const r = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
@@ -72,8 +93,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expires_in: number }> {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID!;
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET!;
+  const { clientId, clientSecret } = await getOAuthClient();
   const r = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
