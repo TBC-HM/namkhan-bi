@@ -42,8 +42,15 @@ interface AuditPlaylistOut {
   performance_score: number;   // 0-10
   verdict: 'keep' | 'merge' | 'kill' | 'rename' | string;
   notes: string;
-  suggested_title: string | null;       // for rename verdict: new playlist title ≤60 chars
-  suggested_description: string | null; // for rename verdict: new playlist description ≤300 chars
+}
+interface AuditProfileAudit {
+  description_grade: string;
+  description_verdict: string;
+  suggested_description: string; // ≤800 chars on-brand About text
+  keywords_verdict: string;
+  suggested_keywords: string;    // comma-separated
+  handle_verdict: string;
+  missing_links: string[];       // e.g. ["booking link absent", "website URL missing"]
 }
 interface AuditResp {
   overall_channel_grade: string;
@@ -51,6 +58,7 @@ interface AuditResp {
   brand_voice_notes: string;
   top_wins: string[];
   top_fixes: string[];
+  channel_profile_audit: AuditProfileAudit;
   videos: AuditVideoOut[];
   playlists: AuditPlaylistOut[];
 }
