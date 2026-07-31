@@ -10,6 +10,7 @@ interface Props {
   suggestedTitle?: string | null;
   suggestedDescription?: string | null;
   suggestedTags?: string[] | null;
+  initialApplied?: boolean; // pre-populated from yt_action_log — survives refresh
 }
 
 const FOREST = '#084838';
@@ -20,8 +21,8 @@ const WHITE  = '#FFFFFF';
 const INK_M  = '#5A5A5A';
 const HAIR   = '#E6DFCC';
 
-export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDescription, suggestedTags }: Props) {
-  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDescription, suggestedTags, initialApplied }: Props) {
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>(initialApplied ? 'done' : 'idle');
   const [errMsg, setErrMsg] = useState('');
   const [open, setOpen] = useState(false);
 
