@@ -113,9 +113,9 @@ export async function route_to_hod(
     return { ok: false, error: 'cross_property_forbidden' };
   }
 
-  // 5. Success — caller is responsible for actually invoking the target agent
-  //    (typically: another /api/cockpit/chat-v2 call with role=target.role
-  //    and hop_count+=1).
+  // 5. Success — caller is responsible for actually invoking the target agent.
+  //    (chat-v2 deleted 2026-07-31, central-chat-v1 round 3 — dispatch now
+  //    happens inside /api/cockpit/chat's Felix loop; hop_count discipline kept.)
   await audit('route_to_hod', ctx, input.target_role, true, input.reason ?? input.framing ?? '');
   return {
     ok: true,
