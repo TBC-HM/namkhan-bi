@@ -42,7 +42,7 @@ export default async function YouTubePlaylistsPage() {
         <YtSubTabs current="playlists" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12, color: '#5A5A5A' }}>
-            {playlists.length} playlists · sorted A–Z · click any to view videos, scheduling + calendar
+            0 playlists · sorted A–Z · click any to view videos, scheduling + calendar
           </div>
           <CreatePlaylistForm />
         </div>
@@ -57,7 +57,7 @@ export default async function YouTubePlaylistsPage() {
         <YtSubTabs current="playlists" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12, color: '#5A5A5A' }}>
-            {playlists.length} playlists · sorted A–Z · click any to view videos, scheduling + calendar
+            0 playlists · sorted A–Z · click any to view videos, scheduling + calendar
           </div>
           <CreatePlaylistForm />
         </div>
