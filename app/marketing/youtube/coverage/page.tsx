@@ -84,6 +84,7 @@ export default async function YtCoveragePage() {
   // Fetch property entities + audit data in parallel
   const [roomsRes, facilitiesRes, activitiesRes, retreatsRes, auditRes] = await Promise.all([
     sb.from('v_room_grounding').select('room_type_id, room_type_name').eq('property_id', NAMKHAN).order('room_type_name'),
+    sb.from('v_room_grounding').select('room_type_id, room_type_name').eq('property_id', NAMKHAN).order('room_type_name'),
     sb.from('v_facility_grounding').select('facility_id, facility_name, category').eq('property_id', NAMKHAN).eq('active', true).order('sort_order'),
     sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }).then(() =>
       sb.schema('property' as any).from('activities').select('activity_id, name').eq('property_id', NAMKHAN).eq('is_active', true).order('name')
