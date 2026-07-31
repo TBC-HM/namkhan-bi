@@ -1,6 +1,6 @@
 // app/api/marketing/youtube/score-video/route.ts
 // Scores a YouTube video: Claude vision on thumbnail + Lens audit verdicts.
-// No YouTube API quota used — thumbnails from public CDN, audit from DB.
+// No YouTube API quota — thumbnails from public CDN, audit data from DB.
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -11,23 +11,15 @@ export const maxDuration = 60;
 const NAMKHAN = 260955;
 const anthropic = new Anthropic();
 
-const THUMB_PROMPT = `Score this YouTube thumbnail for The Namkhan — a 5-star boutique hotel in Luang Prabang, Laos (SLH Considerate Collection). Be strict — luxury hospitality standard.
-
-Return ONLY valid JSON (no markdown, no explanation outside JSON):
-{
-  "visual_quality": 0-100,
-  "brand_alignment": 0-100,
-  "composition": 0-100,
-  "click_appeal": 0-100,
-  "composite": 0-100,
-  "feedback": "2-3 sentences",
-  "flags": ["issue1", "issue2"]
-}
-
-visual_quality: sharpness, exposure, color grading, professional finish.
-brand_alignment: 5-star feel, authentic Laos culture/nature, appropriate for SLH Considerate Collection, no clutter.
-composition: subject framing, rule of thirds, visual hierarchy, clean background.
-click_appeal: would a luxury traveler stop scrolling? Is the hook compelling?`;
+const THUMB_PROMPT = [
+  'Score this YouTube thumbnail for The Namkhan — a 5-star boutique hotel in Luang Prabang, Laos (SLH Considerate Collection). Be strict.',
+  'Return ONLY valid JSON:',
+  '{ "visual_quality":0-100, "brand_alignment":0-100, "composition":0-100, "click_appeal":0-100, "composite":0-100, "feedback":"2-3 sentences", "flags":["issue1"] }',
+  'visual_quality: sharpness, exposure, color, professional finish.',
+  'brand_alignment: luxury feel, authentic Laos/nature, appropriate for SLH Considerate Collection.',
+  'composition: subject framing, rule of thirds, visual hierarchy.',
+  'click_appeal: would a luxury traveler stop scrolling?',
+].join('\n');
 
 function verdictScore(v: string | null): number {
   if (!v) return 50;
@@ -39,17 +31,16 @@ function verdictScore(v: string | null): number {
 }
 
 export async function POST(req: NextRequest) {
-  let videoId: string;
-  try { ({ videoId } = await req.json()); } catch { return NextResponse.json({ error: 'bad_json' }, { status: 400 }); }
-  if (!videoId) return NextResponse.json({ error: 'missing videoId' }, { status: 400 });
+  const body = await req.json().catch(() => null) as { videoId?: string } | null;
+  if (!body?.videoId) return NextResponse.json({ error: 'missing videoId' }, { status: 400 });
+  const videoId = body.videoId;
 
   const sb = getSupabaseAdmin();
-
   const { data: audit } = await sb.from('v_yt_channel_audit_videos')
     .select('video_title, title_verdict, description_verdict, tag_verdict, playlist_fit_score, video_views, video_likes')
     .eq('video_id', videoId).order('id', { ascending: false }).limit(1).maybeSingle();
 
-  // 1. Thumbnail via Claude vision (public CDN — no YouTube quota)
+  // 1. Thumbnail via Claude vision (public CDN — zero YouTube quota cost)
   let thumbScore = 50;
   let thumbFeedback = 'Thumbnail not analyzed.';
   let thumbFlags: string[] = [];
@@ -67,10 +58,10 @@ export async function POST(req: NextRequest) {
       const raw = (msg.content[0] as { type: string; text: string }).text;
       const match = raw.match(/\{[\s\S]*\}/);
       if (match) {
-        const p = JSON.parse(match[0]);
-        thumbScore = Math.round(p.composite ?? ((p.visual_quality + p.brand_alignment + p.composition + p.click_appeal) / 4));
-        thumbFeedback = p.feedback ?? '';
-        thumbFlags = Array.isArray(p.flags) ? p.flags.slice(0, 6) : [];
+        const p = JSON.parse(match[0]) as Record<string, unknown>;
+        thumbScore = Math.round(Number(p.composite ?? ((Number(p.visual_quality) + Number(p.brand_alignment) + Number(p.composition) + Number(p.click_appeal)) / 4)));
+        thumbFeedback = String(p.feedback ?? '');
+        thumbFlags = Array.isArray(p.flags) ? (p.flags as string[]).slice(0, 6) : [];
       }
     }
   } catch { /* use defaults */ }
