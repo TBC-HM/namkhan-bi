@@ -2,8 +2,8 @@
 // knowledge-goals-intake-v1 (PBS build order 2026-07-29): client Knowledge tab —
 // tenant goal registry intake (big goals -> module goals) + guided judgment-doc
 // question intake. Rows are canon (governance.tenant_goals / tenant_knowledge_answers,
-// bridged via public.v_* views per claude_md L5); rendered MD docs + agent-draft
-// approval cycle are the next stage of this brief and consume these rows.
+// bridged via public.v_* views per claude_md L5); per-section judgment-doc cycle
+// (agent draft -> inline redline -> approve = dms + brain publish) is in-page.
 // Completeness meter mirrors the /settings/property pattern (PBS: no second system).
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -12,6 +12,7 @@ import KnowledgeClient, {
   JUDGMENT_SECTIONS,
   type TenantGoalRow,
   type KnowledgeAnswerRow,
+  type KnowledgeDocRow,
 } from '@/components/settings/KnowledgeClient';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ export default async function KnowledgeSettingsPage({
   const propertyId = Number(params.property_id);
   const sb = getSupabaseAdmin();
 
-  const [{ data: goals, error: gErr }, { data: answers, error: aErr }] = await Promise.all([
+  const [{ data: goals, error: gErr }, { data: answers, error: aErr }, { data: docs, error: dErr }] = await Promise.all([
     sb.from('v_tenant_goals')
       .select('goal_id, property_id, kind, parent_goal_id, module, title, description, metric, baseline, target_value, deadline, weight, guardrail_type, status, updated_at')
       .eq('property_id', propertyId)
@@ -34,18 +35,23 @@ export default async function KnowledgeSettingsPage({
     sb.from('v_tenant_knowledge_answers')
       .select('section, question, answer, answered_by, updated_at')
       .eq('property_id', propertyId),
+    sb.from('v_tenant_knowledge_docs')
+      .select('doc_id, section, version, status, content_md, owner_comments, drafted_by, decided_by, decided_at, updated_at')
+      .eq('property_id', propertyId)
+      .order('version', { ascending: false }),
   ]);
 
-  if (gErr || aErr) {
+  if (gErr || aErr || dErr) {
     return (
       <div style={{ padding: 24, color: 'var(--ink)' }}>
-        Failed to load knowledge intake: {gErr?.message ?? aErr?.message}
+        Failed to load knowledge intake: {gErr?.message ?? aErr?.message ?? dErr?.message}
       </div>
     );
   }
 
   const goalRows = (goals ?? []) as TenantGoalRow[];
   const answerRows = (answers ?? []) as KnowledgeAnswerRow[];
+  const docRows = (docs ?? []) as KnowledgeDocRow[];
 
   // Completeness: goals section complete-ish when >= 1 big goal with >= 1 module goal;
   // each judgment section counts answered/total of its guided question set.
@@ -88,6 +94,7 @@ export default async function KnowledgeSettingsPage({
             propertyId={propertyId}
             goals={goalRows}
             answers={answerRows}
+            docs={docRows}
             completeness={completeness}
           />
         </Container>
