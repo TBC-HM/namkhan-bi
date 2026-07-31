@@ -10,7 +10,11 @@ import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import SopBrowser, { type SopRow } from './_components/SopBrowser';
-import SopChat from './_components/SopChat';
+// Central Chat round 3 (brief central-chat-v1 §0.B.1): SopChat replaced by
+// the one CentralChat, scoped operations. NOTE: legacy SopChat ran at
+// staff_ok tier (SOP corpus only); server-side module-scope narrowing for
+// second-brain instances is the remaining enforcement gap logged in the brief.
+import CentralChat from '@/components/chat/CentralChat';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -62,7 +66,8 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
             duplicate that broke the industry-standard SubTab visual. */}
 
         <div style={{ gridColumn: '1 / -1' }}>
-          <SopChat />
+          <CentralChat mode="second-brain" moduleScope="operations" propertyId={pid} />
+          <div style={{ height: 16 }} />
           <SopBrowser sops={sops} />
         </div>
       </DashboardPage>
