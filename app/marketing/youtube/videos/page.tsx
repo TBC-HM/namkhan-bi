@@ -11,6 +11,7 @@ import { fetchRecentVideos, isErr } from '@/lib/youtube/data';
 import YtSubTabs from '../_shared/SubTabs';
 import ApplyAuditButton from '../analytics/_client/ApplyAuditButton';
 import RunAuditButton from '../analytics/_client/RunAuditButton';
+import DeleteVideoButton from '../analytics/_client/DeleteVideoButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -214,6 +215,7 @@ export default async function YtVideosPage() {
                       suggestedTags={audit.suggested_tags}
                     />
                   )}
+                  <DeleteVideoButton videoId={v.id} videoTitle={v.title} />
                 </div>
               </div>
             );
