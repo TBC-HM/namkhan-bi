@@ -29,6 +29,9 @@ const ALLOWLIST = new Set([
   '/holding/it2',             // Action Center home (group href, kept for safety)
   '/holding/it2/questions',   // Decision Inbox — linked from Action Center Zone 1
   '/holding/it2/system/live', // Live Builders heartbeat — linked contextually from System (ADR-209)
+  // Data surfaces — linked contextually from Knowledge → Data hub (consolidation 2026-07-31):
+  '/holding/it2/knowledge/data/schemas',
+  '/holding/it2/knowledge/data/freshness',
 ]);
 
 function walkPages(dir, out = []) {
