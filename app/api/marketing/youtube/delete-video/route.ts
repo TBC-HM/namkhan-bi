@@ -9,9 +9,9 @@ export const dynamic = 'force-dynamic';
 const NAMKHAN = 260955;
 
 export async function DELETE(req: NextRequest) {
-  let video_id: string;
-  try { ({ video_id } = await req.json()); } catch { return NextResponse.json({ error: 'bad_json' }, { status: 400 }); }
-  if (!video_id) return NextResponse.json({ error: 'missing video_id' }, { status: 400 });
+  const body = await req.json().catch(() => null) as { video_id?: string } | null;
+  if (!body?.video_id) return NextResponse.json({ error: 'missing video_id' }, { status: 400 });
+  const video_id = body.video_id;
 
   const sb = getSupabaseAdmin();
   try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
@@ -26,8 +26,8 @@ export async function DELETE(req: NextRequest) {
 
   if (res.status === 403) return NextResponse.json({ error: 'not_owned' }, { status: 403 });
   if (res.status !== 204 && !res.ok) {
-    const body = await res.text().catch(() => '');
-    return NextResponse.json({ ok: false, error: `youtube_api_${res.status}`, detail: body.slice(0, 200) }, { status: res.status });
+    const detail = await res.text().catch(() => '');
+    return NextResponse.json({ ok: false, error: `youtube_api_${res.status}`, detail: detail.slice(0, 200) }, { status: res.status });
   }
   return NextResponse.json({ ok: true });
 }
