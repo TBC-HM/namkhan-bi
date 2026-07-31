@@ -10,7 +10,7 @@
 
 import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import ArchiveAskClient from './ArchiveAskClient';
+import CentralChat from '@/components/chat/CentralChat';
 
 interface Props {
   propertyId: number;
@@ -97,10 +97,13 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
 
   return (
     <DashboardPage title={title} subtitle={subtitle} tabs={tabs.length ? tabs : undefined}>
-      {/* Prompt window — the primary way in */}
+      {/* Prompt window — the primary way in. Central Chat round 3 (brief
+          central-chat-v1 §0.B.1): legacy ArchiveAskClient replaced by the one
+          CentralChat, scoped finance — Felix consults the brain for archive
+          answers; general mode is offered inside the component. */}
       <div style={fullRow}>
-        <Container title="Ask the archive" subtitle="Cited answers from the company archive · live KPIs · plain language" density="compact">
-          <ArchiveAskClient />
+        <Container title="Ask the archive" subtitle="One channel — Felix answers from the company archive and brain" density="compact">
+          <CentralChat mode="second-brain" moduleScope="finance" propertyId={propertyId} />
         </Container>
       </div>
 
