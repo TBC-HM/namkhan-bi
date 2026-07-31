@@ -10,6 +10,7 @@ import YtSubTabs from '../_shared/SubTabs';
 import AnalyticsKPIs from '../_server/AnalyticsKPIs';
 import RunAuditButton from './_client/RunAuditButton';
 import ApplyAuditButton from './_client/ApplyAuditButton';
+import PlaylistVerdictActions from './_client/PlaylistVerdictActions';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -183,6 +184,12 @@ export default async function YtAnalyticsPage() {
                         p.verdict === 'keep' ? OK : p.verdict === 'kill' ? RED : AMBER,
                         fontWeight: 600 }}>{p.verdict ?? '—'}</div>
                       {p.notes && <div style={{ fontSize: 11, color: INK_S, marginTop: 6, lineHeight: 1.4 }}>{p.notes}</div>}
+                      <PlaylistVerdictActions
+                        playlistId={p.playlist_id ?? ''}
+                        verdict={p.verdict ?? ''}
+                        currentTitle={p.playlist_title ?? p.playlist_id ?? ''}
+                        suggestedTitle={null}
+                      />
                     </div>
                   ))}
                 </div>
