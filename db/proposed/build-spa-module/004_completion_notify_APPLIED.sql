@@ -1,0 +1,42 @@
+-- 004 — spa completion hooks + notify support (brief spa-module-v1, gap round 3)
+-- STATUS: APPLIED 2026-07-31 as migrations
+--   `spa_rooms_rls_and_booking_contact` and `spa_completion_notify_bridge_fns`
+-- (standing-builder run cowork-builder-0731; record file only — the live DB is canon).
+--
+-- What was applied:
+--
+-- 1. §0.V2 verifier objection fix (rule 537):
+--    ALTER TABLE spa.rooms ENABLE ROW LEVEL SECURITY;
+--    + house policy pair rooms_service (service_role ALL) /
+--      rooms_tenant (authenticated, core.has_property_access(property_id)).
+--
+-- 2. Booking contact + notification stamps (gap 5 support), all additive:
+--    ALTER TABLE spa.treatment_bookings ADD COLUMN IF NOT EXISTS
+--      guest_email text, guest_phone text,
+--      confirmation_sent_at timestamptz, reminder_sent_at timestamptz;
+--    public.v_spa_treatment_bookings recreated with the four new columns
+--    appended at the tail (safe per claude_md §5.9).
+--
+-- 3. L5 bridge fns for the completion/notify write paths (spa.* is not
+--    PostgREST-exposed). All SECURITY DEFINER, pinned search_path,
+--    GRANT EXECUTE to service_role ONLY (PII + write paths):
+--      public.fn_spa_booking_detail(uuid)             -- booking + contact incl.
+--                                                     -- pms.reservations.guest_email
+--                                                     -- fallback for in-house guests
+--      public.fn_spa_record_contact(uuid, text, text) -- walk-in contact capture
+--      public.fn_spa_record_folio_post(uuid, boolean, text, jsonb)
+--                                                     -- Cloudbeds post outcome +
+--                                                     -- raw.folio_post evidence
+--      public.fn_spa_record_notify(uuid, text)        -- confirmation/reminder stamp
+--
+-- Consumers: app/api/spa/bookings/route.ts (completion hooks on status=completed),
+-- app/api/spa/bookings/notify/route.ts (confirmations/reminders),
+-- lib/spa/completion.ts (inventory deduction + Cloudbeds postCustomItem).
+--
+-- NOTE on the Cloudbeds write: /postCustomItem is called with the vault
+-- CLOUDBEDS_API_KEY (same key cb-probe/sync-cloudbeds use; read scope verified
+-- live via /getTransactions). Write scope could not be verified without posting
+-- a real charge to a production folio — the hook therefore records the full API
+-- response as evidence and degrades to "manual post needed" (amber KPI on the
+-- Delivery view) if Cloudbeds rejects. First live completion settles it.
+SELECT 'record only — see migration history' AS note;
