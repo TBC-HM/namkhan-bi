@@ -11,6 +11,7 @@ import SpaSubnav from './SpaSubnav';
 import BridgeNotice from './BridgeNotice';
 import BookingForm from './BookingForm';
 import StatusActions from './StatusActions';
+import NotifyActions from './NotifyActions';
 import {
   getSpaBookingsForDay, getSpaTherapists, getSpaRooms, getSpaCatalogue,
   localTimeStr, localHour, todayIsoAtProperty,
@@ -217,7 +218,12 @@ export default async function ScheduleView({
                       <td style={{ ...td, color: STATUS_COLOR[b.status] ?? TOKENS.ink, fontFamily: MONO, fontSize: 11, textTransform: 'uppercase' }}>{b.status}</td>
                       <td style={{ ...td, textAlign: 'right', fontFamily: MONO }}>{fmtMoney(b.price, b.currency)}</td>
                       <td style={{ ...td, fontFamily: MONO, fontSize: 11 }}>{b.posted_to_folio ? (b.cloudbeds_charge_id ?? 'posted') : '—'}</td>
-                      <td style={td}><StatusActions bookingId={b.booking_id} status={b.status} /></td>
+                      <td style={td}>
+                        <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+                          <StatusActions bookingId={b.booking_id} status={b.status} />
+                          <NotifyActions bookingId={b.booking_id} status={b.status} confirmationSentAt={b.confirmation_sent_at} />
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
