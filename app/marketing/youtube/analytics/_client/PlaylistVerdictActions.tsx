@@ -1,6 +1,5 @@
 'use client';
-// Playlist verdict CTAs — persists every action to yt_action_log so state
-// survives page refreshes and new audit runs.
+// Playlist verdict CTAs v3 — merge uses live playlist dropdown (no manual ID paste).
 import { useState } from 'react';
 
 const FOREST = '#084838'; const RED = '#B03826'; const AMBER = '#B48A3A';
@@ -19,15 +18,13 @@ interface Props {
 
 async function logAction(entityId: string, action: string, newValue?: string) {
   await fetch('/api/marketing/youtube/log-action', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ entity_type: 'playlist', entity_id: entityId, action, new_value: newValue }),
   });
 }
 
 async function getPlaylistItems(playlistId: string): Promise<string[]> {
-  // Fetch video IDs from source playlist via manage-playlist GET
-  const r = await fetch(`/api/marketing/youtube/manage-playlist?action=get_items&playlist_id=${encodeURIComponent(playlistId)}`, { cache: 'no-store' });
+  const r = await fetch('/api/marketing/youtube/manage-playlist?action=get_items&playlist_id=' + encodeURIComponent(playlistId), { cache: 'no-store' });
   const j = await r.json();
   return j.video_ids ?? [];
 }
@@ -35,7 +32,7 @@ async function getPlaylistItems(playlistId: string): Promise<string[]> {
 export default function PlaylistVerdictActions({ playlistId, verdict, currentTitle, suggestedTitle, initialDone, initialAction }: Props) {
   const [done, setDone] = useState(initialDone ?? false);
   const [doneLabel, setDoneLabel] = useState(initialAction ?? '');
-  const [busy, setState_] = useState(false);
+  const [busy, setBusy_] = useState(false);
   const [errMsg, setErr] = useState('');
   const [open, setOpen] = useState(false);
   const [newTitle, setNewTitle] = useState(suggestedTitle ?? currentTitle);
@@ -48,9 +45,12 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
   const [playlists, setPlaylists] = useState<Array<{ id: string; title: string }>>([]);
   const [loadingPl, setLoadingPl] = useState(false);
 
+  const v = verdict?.toLowerCase();
+  function setBusy(b: boolean) { setBusy_(b); }
+
   async function openMergePanel() {
     setMergeOpen(true);
-    if (playlists.length > 0) return; // already loaded
+    if (playlists.length > 0) return;
     setLoadingPl(true);
     try {
       const res = await fetch('/api/marketing/youtube/manage-playlist?action=list', { cache: 'no-store' });
@@ -59,10 +59,6 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
     } catch { /* silent */ }
     setLoadingPl(false);
   }
-
-  const v = verdict?.toLowerCase();
-
-  function setBusy(b: boolean) { setState_(b); }
 
   async function doDelete() {
     setBusy(true);
@@ -96,25 +92,24 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
   }
 
   async function doMerge() {
-    if (!targetId) { setErr('Select a target playlist first'); return; }
+    if (!targetId) { setErr('Select a target playlist'); return; }
+    const targetTitle = playlists.find(p => p.id === targetId)?.title ?? targetId;
     setBusy(true); setErr('');
     try {
-      // 1: get all video IDs from source playlist
       setMergeStep('copying'); setMergeMsg('Fetching source playlist videos…');
       const videoIds = await getPlaylistItems(playlistId);
       if (videoIds.length === 0) {
-        setMergeMsg('No videos found in source playlist — deleting empty playlist…');
+        setMergeMsg('Source is empty — deleting…');
       } else {
-        setMergeMsg('Copying ' + videoIds.length + ' videos to target playlist…');
+        setMergeMsg('Copying ' + videoIds.length + ' videos…');
         for (let i = 0; i < videoIds.length; i++) {
           await fetch('/api/marketing/youtube/manage-playlist', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'add_video', playlist_id: targetId, video_id: videoIds[i] }),
           });
-          setMergeMsg('Copying ' + (i + 1) + ' / ' + videoIds.length + ' videos…');
+          setMergeMsg('Copying ' + (i + 1) + ' / ' + videoIds.length + '…');
         }
       }
-      // 2: delete source
       setMergeStep('deleting'); setMergeMsg('Deleting source playlist…');
       const del = await fetch('/api/marketing/youtube/manage-playlist', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -122,22 +117,17 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
       });
       const dj = await del.json();
       if (!del.ok || !dj.ok) { setErr('Copy done but delete failed: ' + (dj.error ?? '')); setBusy(false); return; }
-      await logAction(playlistId, 'merged', targetTitle || targetId);
+      await logAction(playlistId, 'merged', targetTitle);
       setMergeStep('done'); setMergeMsg('');
-      setDone(true); setDoneLabel('merged into ' + (targetTitle || targetId));
+      setDone(true); setDoneLabel('merged into ' + targetTitle);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'network'); }
-    setBusy(false);
+    setBusy(false); setMergeStep('idle');
   }
 
-  // Already done — show persistent badge
   if (done) {
     const bg = doneLabel.startsWith('deleted') ? '#FDECEA' : doneLabel.startsWith('merged') ? '#FFF8E6' : '#E4F1E0';
     const fg = doneLabel.startsWith('deleted') ? RED : doneLabel.startsWith('merged') ? AMBER : OK;
-    return (
-      <div style={{ marginTop: 8, fontSize: 10, padding: '3px 10px', background: bg, border: '1px solid ' + fg, borderRadius: 3, color: fg, fontWeight: 700 }}>
-        ✓ {doneLabel || 'done'}
-      </div>
-    );
+    return <div style={{ marginTop: 8, fontSize: 10, padding: '3px 10px', background: bg, border: '1px solid ' + fg, borderRadius: 3, color: fg, fontWeight: 700 }}>✓ {doneLabel || 'done'}</div>;
   }
 
   if (v === 'keep') {
@@ -148,9 +138,7 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
     return (
       <div style={{ marginTop: 8 }}>
         {!open ? (
-          <button onClick={() => setOpen(true)} style={{ fontSize: 10, padding: '4px 12px', background: RED, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 700 }}>
-            Delete playlist
-          </button>
+          <button onClick={() => setOpen(true)} style={{ fontSize: 10, padding: '4px 12px', background: RED, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 700 }}>Delete playlist</button>
         ) : (
           <div style={{ background: '#FEF2F2', border: '1px solid ' + RED, borderRadius: 4, padding: 10, fontSize: 11 }}>
             <div style={{ fontWeight: 600, color: RED, marginBottom: 6 }}>Delete "{currentTitle}"? Cannot be undone.</div>
@@ -171,9 +159,7 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
     return (
       <div style={{ marginTop: 8 }}>
         {!open ? (
-          <button onClick={() => setOpen(true)} style={{ fontSize: 10, padding: '4px 12px', background: AMBER, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 700 }}>
-            Rename
-          </button>
+          <button onClick={() => setOpen(true)} style={{ fontSize: 10, padding: '4px 12px', background: AMBER, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 700 }}>Rename</button>
         ) : (
           <div style={{ background: '#FFFBF0', border: '1px solid ' + AMBER, borderRadius: 4, padding: 10, fontSize: 11 }}>
             <div style={{ fontWeight: 600, color: AMBER, marginBottom: 6 }}>New title:</div>
@@ -197,28 +183,30 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
     return (
       <div style={{ marginTop: 8 }}>
         {!mergeOpen ? (
-          <button onClick={() => setMergeOpen(true)}
+          <button onClick={openMergePanel}
             style={{ fontSize: 10, padding: '4px 12px', background: AMBER, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 700 }}>
             Copy videos & merge
           </button>
         ) : mergeStep === 'done' ? null : (
           <div style={{ background: '#FFFBF0', border: '1px solid ' + AMBER, borderRadius: 4, padding: 10, fontSize: 11 }}>
             <div style={{ fontWeight: 600, color: AMBER, marginBottom: 8 }}>Merge "{currentTitle}" into:</div>
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 10, color: INK_M, marginBottom: 4 }}>TARGET PLAYLIST ID (paste from YouTube Studio URL)</div>
-              <input value={targetId} onChange={e => setTargetId(e.target.value)} placeholder="PLO87vGnBPV3..."
-                style={{ width: '100%', padding: '5px 8px', border: '1px solid ' + HAIR, borderRadius: 3, fontSize: 11, marginBottom: 4, boxSizing: 'border-box' }} />
-              <input value={targetTitle} onChange={e => setTargetTitle(e.target.value)} placeholder="Target playlist name (for display)"
-                style={{ width: '100%', padding: '5px 8px', border: '1px solid ' + HAIR, borderRadius: 3, fontSize: 11, boxSizing: 'border-box' }} />
-            </div>
-            <div style={{ fontSize: 10, color: INK_M, marginBottom: 8, padding: '6px 8px', background: '#F5F0E1', borderRadius: 3 }}>
-              This will copy ALL videos from "{currentTitle}" to the target playlist, then delete the source. Cannot be undone.
+            {loadingPl ? (
+              <div style={{ fontSize: 10, color: INK_M, marginBottom: 8 }}>Loading playlists…</div>
+            ) : (
+              <select value={targetId} onChange={e => setTargetId(e.target.value)}
+                style={{ width: '100%', padding: '7px 8px', border: '1px solid ' + HAIR, borderRadius: 3, fontSize: 11, marginBottom: 10, background: WHITE, color: INK, boxSizing: 'border-box' }}>
+                <option value="">— select target playlist —</option>
+                {playlists.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+            )}
+            <div style={{ fontSize: 10, color: INK_M, marginBottom: 8, padding: '5px 8px', background: '#F5F0E1', borderRadius: 3 }}>
+              Copies ALL videos to selected playlist, then deletes this one. Cannot be undone.
             </div>
             {mergeMsg && <div style={{ fontSize: 10, color: FOREST, marginBottom: 6, fontWeight: 600 }}>{mergeMsg}</div>}
             {errMsg && <div style={{ color: RED, marginBottom: 6, fontSize: 10 }}>{errMsg}</div>}
             <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={doMerge} disabled={busy || !targetId.trim()}
-                style={{ padding: '4px 12px', background: FOREST, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 700, fontSize: 10, opacity: !targetId.trim() ? 0.5 : 1 }}>
+              <button onClick={doMerge} disabled={busy || !targetId}
+                style={{ padding: '4px 12px', background: FOREST, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer', fontWeight: 700, fontSize: 10, opacity: !targetId || busy ? 0.5 : 1 }}>
                 {busy ? mergeMsg || 'Working…' : 'Copy all & delete source'}
               </button>
               <button onClick={() => setMergeOpen(false)} style={{ padding: '4px 10px', background: WHITE, color: INK_M, border: '1px solid ' + HAIR, borderRadius: 3, cursor: 'pointer', fontSize: 10 }}>Cancel</button>
