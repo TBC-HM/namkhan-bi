@@ -100,6 +100,9 @@ export default async function YtVideosPage() {
   // Merge and sort: worst grade first, unaudited after graded, A/B at bottom
   const merged = videos.map(v => ({ ...v, audit: auditMap.get(v.id) ?? null }));
   merged.sort((a, b) => {
+    const aApplied = appliedVideos.has(a.id);
+    const bApplied = appliedVideos.has(b.id);
+    if (aApplied !== bApplied) return aApplied ? 1 : -1; // applied sinks to bottom
     const ag = a.audit?.current_grade ?? null;
     const bg = b.audit?.current_grade ?? null;
     const ao = ag != null ? (GRADE_ORDER[ag] ?? 99) : 3.5;
@@ -171,11 +174,21 @@ export default async function YtVideosPage() {
             const thumb = bestThumb(v.thumbnails);
             return (
               <div key={v.id} style={{ display: 'grid', gridTemplateColumns: '88px 1fr auto', gap: 12, padding: '10px 14px', borderBottom: `1px solid ${HAIR}`, alignItems: 'flex-start' }}>
-                {/* Thumb */}
-                <div style={{ width: 88, height: 50, background: CREAM, borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
+                {/* Thumb + audit/applied badges */}
+                <div style={{ width: 88, height: 50, background: CREAM, borderRadius: 3, overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
                   {thumb
                     ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: INK_M }}>No thumb</div>}
+                  {grade && (
+                    <div style={{ position: 'absolute', top: 2, left: 2, fontSize: 9, padding: '0px 4px', background: gradeColor(grade) + 'EE', color: '#FFF', borderRadius: 2, fontWeight: 700, lineHeight: '14px' }}>
+                      {grade}
+                    </div>
+                  )}
+                  {appliedVideos.has(v.id) && (
+                    <div style={{ position: 'absolute', top: 2, right: 2, fontSize: 8, padding: '0px 4px', background: OK + 'EE', color: '#FFF', borderRadius: 2, fontWeight: 700, lineHeight: '14px' }}>
+                      ✓
+                    </div>
+                  )}
                 </div>
 
                 {/* Content */}
