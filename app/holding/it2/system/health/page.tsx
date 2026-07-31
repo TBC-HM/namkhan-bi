@@ -1,4 +1,22 @@
-// IT2 shim (brief it-area-reorg-v1): re-exports the existing cockpit page.
-// The page renders inside the IT2 shell. Internal links may still point to
-// /holding/it/* until the consolidation pass after PBS approves IT2.
-export { default } from '@/app/holding/it/cockpit/health/page';
+// app/holding/it2/system/health/page.tsx
+// Health — V2 port of /cockpit/health. Combines:
+//   cockpit_incidents          (resolved_at IS NULL → open)
+//   cockpit_audit_log          (last 24h)
+//   cockpit_audit_log          (webhook events: github-webhook, supabase-webhook, vercel-webhook, deploy-prod-workflow)
+//   scheduled_task_runs        (cron status — latest per task)
+//   v_scheduled_task_cost_burn (daily spend)
+// Server-rendered with a 30s client poll so PBS can leave the tab open.
+//
+// Author: IT-team agent · 2026-05-13 · #58.
+
+import { fetchHealth } from '@/app/holding/it/cockpit/_lib/data-port';
+import { HealthView } from './HealthView';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+export default async function CockpitV2HealthPage() {
+  const data = await fetchHealth();
+  return <HealthView initial={data} />;
+}
