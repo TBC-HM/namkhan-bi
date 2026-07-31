@@ -151,26 +151,25 @@ export async function fetchRecentVideos(
   startPageToken?: string,
 ): Promise<YtResult<VideoItem[]> & { nextPageToken?: string | null }> {
   const cap = Math.max(1, Math.min(max, 200));
+  // Use uploads playlist (UC→UU) instead of search.list — 1 quota unit/call vs 100.
+  const uploadsPlaylistId = 'UU' + channelId.slice(2);
   const ids: string[] = [];
   let pageToken: string | null = startPageToken ?? null;
   let nextPageToken: string | null = null;
 
-  // Search API caps maxResults=50; paginate via pageToken until we reach `cap`
-  // or exhaust results.
   while (ids.length < cap) {
     const perPage = Math.min(50, cap - ids.length);
     const params = new URLSearchParams({
-      part: 'id',
-      channelId,
-      order: 'date',
-      type: 'video',
+      part: 'contentDetails',
+      playlistId: uploadsPlaylistId,
       maxResults: String(perPage),
     });
     if (pageToken) params.set('pageToken', pageToken);
-    const s = await ytFetch<SearchListResp>(`${API}/search?${params.toString()}`, accessToken);
+    const s = await ytFetch<{ items?: Array<{ contentDetails?: { videoId?: string } }>; nextPageToken?: string }>(
+      `${API}/playlistItems?${params.toString()}`, accessToken);
     if (isErr(s)) return { ok: false, error: s.error, detail: s.detail };
     for (const it of s.data.items ?? []) {
-      const vid = it.id?.videoId;
+      const vid = it.contentDetails?.videoId;
       if (vid) ids.push(vid);
     }
     nextPageToken = s.data.nextPageToken ?? null;
