@@ -79,6 +79,10 @@ document.documentElement.setAttribute('data-property',v);}catch(e){}})();
         <TopDeptStrip />
         <div className="site-paper-scope">
           {children}
+          <footer style={{ borderTop: '1px solid #E6DFCC', padding: '8px 24px', display: 'flex', gap: 20, justifyContent: 'flex-end', fontSize: 10, color: '#8A8A8A', background: '#FFFFFF' }}>
+            <a href="/legal/privacy" style={{ color: '#5A5A5A', textDecoration: 'none' }}>Privacy Policy</a>
+            <a href="/legal/terms" style={{ color: '#5A5A5A', textDecoration: 'none' }}>Terms of Service</a>
+          </footer>
         </div>
         <AgentEditModal />
         <BugWidget />
