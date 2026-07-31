@@ -1,5 +1,5 @@
 // app/operations/spa/_shared/SpaSubnav.tsx
-// Spa module v1 — Overview · Schedule · Catalogue · Delivery strip.
+// Spa module v1 — Overview · Schedule · Catalogue · Passes · Delivery strip.
 // TenantLink keeps the /h/{property_id} prefix on Donna; Namkhan stays unprefixed.
 
 import TenantLink from '@/components/nav/TenantLink';
@@ -9,6 +9,7 @@ const ITEMS = [
   { key: 'overview',  label: 'Overview',  href: '/operations/spa' },
   { key: 'schedule',  label: 'Schedule',  href: '/operations/spa/schedule' },
   { key: 'catalogue', label: 'Catalogue', href: '/operations/spa/catalogue' },
+  { key: 'passes',    label: 'Passes',    href: '/operations/spa/passes' },
   { key: 'delivery',  label: 'Delivery',  href: '/operations/spa/delivery' },
 ] as const;
 
