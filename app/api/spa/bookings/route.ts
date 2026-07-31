@@ -59,6 +59,14 @@ export async function POST(req: Request) {
       p_notes: body.notes || null,
     });
     if (error) {
+      // FK-typo polish (§0.V3 note 2): an unknown reservation_id used to
+      // surface as a raw 500 (23503 on treatment_bookings_reservation_id_fkey).
+      if (/reservation_id_fkey|violates foreign key/.test(error.message)) {
+        return NextResponse.json(
+          { error: `Reservation "${body.reservation_id}" not found in Cloudbeds — check the reservation ID, or leave it empty for a walk-in.` },
+          { status: 400 },
+        );
+      }
       const status = /SPA_CONFLICT/.test(error.message) ? 409 : 500;
       return NextResponse.json({ error: error.message }, { status });
     }
