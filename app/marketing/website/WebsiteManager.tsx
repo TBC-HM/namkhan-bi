@@ -7,6 +7,8 @@ import { useMemo, useState } from 'react';
 
 const HAIR = '#E6DFCC'; const INK = '#1B1B1B'; const INK_M = '#5A5A5A'; const INK_F = '#8A8A8A';
 const GREEN = '#2E7D32'; const AMBER = '#B8A878'; const RED = '#B8542A'; const BG = '#F4EFE2';
+const PREVIEW_GREEN = '#2C4A3E';
+const PREVIEW_BASE = '/marketing/website/preview';
 
 export interface WebsitePageRow {
   id: number; property_id: number; slug: string; title: string | null;
@@ -63,7 +65,6 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  // draft fields for the editor drawer
   const [dTitle, setDTitle] = useState('');
   const [dStatus, setDStatus] = useState('');
   const [dNote, setDNote] = useState('');
@@ -185,12 +186,23 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
             {t.sub && <div style={{ fontSize: 11.5, color: INK_F, marginTop: 2 }}>{t.sub}</div>}
           </div>
         ))}
+        {/* Publish tile */}
         <div style={{ background: '#FFFFFF', border: `1px solid ${HAIR}`, borderRadius: 6, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6 }}>
           <button onClick={publish} disabled={busy} style={{ ...btnStyle, background: '#1F3A2E', color: '#FFFFFF', border: '1px solid #1F3A2E', opacity: busy ? 0.6 : 1 }}>
             {busy ? 'Working…' : 'Publish siteData'}
           </button>
           <div style={{ fontSize: 10.5, color: INK_F, lineHeight: 1.4 }}>
             Regenerates siteData from rows, versions it, fires the deploy hook when configured.
+          </div>
+        </div>
+        {/* Preview tile */}
+        <div style={{ background: '#FFFFFF', border: `1px solid ${PREVIEW_GREEN}`, borderRadius: 6, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6 }}>
+          <a href={PREVIEW_BASE + '/'} target="_blank" rel="noopener noreferrer"
+             style={{ ...btnStyle, background: PREVIEW_GREEN, color: '#FFFFFF', border: `1px solid ${PREVIEW_GREEN}`, textDecoration: 'none', textAlign: 'center', display: 'block' }}>
+            Preview site →
+          </a>
+          <div style={{ fontSize: 10.5, color: INK_F, lineHeight: 1.4 }}>
+            Opens the full site clone · all {pages.length} pages
           </div>
         </div>
       </div>
@@ -204,7 +216,7 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
       {/* Pages table */}
       <div style={{ background: '#FFFFFF', border: `1px solid ${HAIR}`, borderRadius: 6, overflow: 'hidden' }}>
         <div style={{ padding: '10px 14px', borderBottom: `1px solid ${HAIR}`, fontSize: 13.5, fontWeight: 600, color: INK }}>
-          Pages <span style={{ color: INK_F, fontWeight: 400 }}>· slugs are 1:1 with the live site (SEO mandate — never rename here)</span>
+          Pages <span style={{ color: INK_F, fontWeight: 400 }}>· click to edit · ↗ to preview</span>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -216,6 +228,7 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
                 <th style={{ ...headStyle, textAlign: 'left' }}>Status</th>
                 <th style={{ ...headStyle, textAlign: 'right' }}>Sections</th>
                 <th style={{ ...headStyle, textAlign: 'left' }}>Updated</th>
+                <th style={{ ...headStyle, textAlign: 'center' }}>Preview</th>
               </tr>
             </thead>
             <tbody>
@@ -223,7 +236,7 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
                 <tr key={p.id} onClick={() => openEditor(p)} style={{ cursor: 'pointer' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = BG; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'; }}>
-                  <td style={{ ...cellStyle, fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>/{p.slug}</td>
+                  <td style={{ ...cellStyle, fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{p.slug}</td>
                   <td style={cellStyle}>{p.title ?? <span style={{ color: INK_F }}>—</span>}</td>
                   <td style={cellStyle}>{p.page_kind ?? '—'}</td>
                   <td style={cellStyle}>
@@ -234,10 +247,15 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
                   </td>
                   <td style={{ ...cellStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{initial.sectionsByPage[p.id] ?? 0}</td>
                   <td style={{ ...cellStyle, color: INK_M }}>{fmtTs(p.updated_at)}</td>
+                  <td style={{ ...cellStyle, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                    <a href={PREVIEW_BASE + p.slug} target="_blank" rel="noopener noreferrer"
+                       style={{ fontSize: 14, color: PREVIEW_GREEN, textDecoration: 'none', fontWeight: 700 }}
+                       title={'Preview ' + p.slug}>↗</a>
+                  </td>
                 </tr>
               ))}
               {pages.length === 0 && (
-                <tr><td style={{ ...cellStyle, color: INK_F }} colSpan={6}>No pages seeded for this property yet.</td></tr>
+                <tr><td style={{ ...cellStyle, color: INK_F }} colSpan={7}>No pages seeded for this property yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -274,7 +292,7 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
         </div>
       </div>
 
-      {/* Editor drawer (simple overlay) */}
+      {/* Editor drawer */}
       {selected && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,27,27,0.35)', zIndex: 60, display: 'flex', justifyContent: 'flex-end' }}
              onClick={() => setSelected(null)}>
@@ -282,10 +300,16 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
                onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 600, color: INK }}>/{selected.slug}</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: INK }}>{selected.slug}</div>
                 <div style={{ fontSize: 11.5, color: INK_F }}>{selected.page_kind ?? 'page'} · id {selected.id}</div>
               </div>
-              <button onClick={() => setSelected(null)} style={btnStyle}>Close</button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <a href={PREVIEW_BASE + selected.slug} target="_blank" rel="noopener noreferrer"
+                   style={{ ...btnStyle, textDecoration: 'none', color: PREVIEW_GREEN, borderColor: PREVIEW_GREEN, display: 'inline-block' }}>
+                  Preview ↗
+                </a>
+                <button onClick={() => setSelected(null)} style={btnStyle}>Close</button>
+              </div>
             </div>
 
             <label style={{ display: 'block', fontSize: 11.5, color: INK_M, marginBottom: 4 }}>Title</label>
