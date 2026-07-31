@@ -24,7 +24,9 @@ export async function POST(req: NextRequest) {
   // AI Propose action
   if (body.action === 'propose') {
     // 1. Fetch unmatched booking clusters
-    const { data: unmatched } = await sb.rpc('fn_icp_unmatched_clusters', { p_days: 89, p_property_id: NAMKHAN }).catch(() => ({ data: null }));
+    // (2026-07-31 tsc fix: PostgrestFilterBuilder has no .catch — supabase-js
+    // never throws here; errors come back in the result object, data is null.)
+    const { data: unmatched } = await sb.rpc('fn_icp_unmatched_clusters', { p_days: 89, p_property_id: NAMKHAN });
 
     // 2. Fetch current ICPs
     const { data: currentIcps } = await sb.from('v_icp_89day_performance').select('key,name,bookings_89d,revenue_89d,avg_adr_89d').order('sort_order');
