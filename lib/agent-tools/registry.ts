@@ -33,7 +33,7 @@ export interface AnthropicTool {
 export interface ToolDispatchCtx {
   propertyId?: number;
   role: string;
-  /** Live hop counter — chat-v2 increments this when it recurses. */
+  /** Live hop counter — incremented on recursive agent dispatch (legacy chat-v2 deleted 2026-07-31). */
   hopCount?: number;
   /** The original user message that started the current dispatch chain. */
   userMessage?: string;
