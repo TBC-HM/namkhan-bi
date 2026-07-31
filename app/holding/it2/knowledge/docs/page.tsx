@@ -1,4 +1,16 @@
-// IT2 shim (brief it-area-reorg-v1): re-exports the existing cockpit page.
-// The page renders inside the IT2 shell. Internal links may still point to
-// /holding/it/* until the consolidation pass after PBS approves IT2.
-export { default } from '@/app/holding/it/cockpit/docs/page';
+// app/holding/it2/knowledge/docs/page.tsx
+// Ask 3 — live documentation tab. Renders the LIVE markdown for the three
+// canonical docs (claude_md, architecture, factorial_md) directly from
+// documentation.documents. No caching; force-dynamic so every visit reads
+// fresh state from Supabase.
+
+import { fetchDocs } from '@/app/holding/it/cockpit/_lib/data';
+import { DocsView } from './DocsView';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+export default async function CockpitV2DocsPage() {
+  const docs = await fetchDocs();
+  return <DocsView docs={docs} />;
+}
