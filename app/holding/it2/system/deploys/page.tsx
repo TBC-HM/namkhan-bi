@@ -1,4 +1,20 @@
-// IT2 shim (brief it-area-reorg-v1): re-exports the existing cockpit page.
-// The page renders inside the IT2 shell. Internal links may still point to
-// /holding/it/* until the consolidation pass after PBS approves IT2.
-export { default } from '@/app/holding/it/cockpit/deploys/page';
+// app/holding/it2/system/deploys/page.tsx
+// Deploys console — V2 port. Calls existing /api/cockpit/deployments to list
+// recent Vercel deploys (with audit_log fallback). Client-side polls the
+// same endpoint every 60s + does live HEAD route smoke checks against a
+// curated route allowlist.
+//
+// Author: IT-team agent · 2026-05-13 · #58.
+
+import { DeploysView } from './DeploysView';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+export default function CockpitV2DeploysPage() {
+  // Server doesn't pre-fetch — the existing /api/cockpit/deployments handles
+  // its own caching (no-store) and can run heavy Vercel API calls; we let
+  // the client pull on mount so the page TTFB is fast.
+  return <DeploysView />;
+}
