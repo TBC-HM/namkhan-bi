@@ -42,6 +42,8 @@ interface AuditPlaylistOut {
   performance_score: number;   // 0-10
   verdict: 'keep' | 'merge' | 'kill' | 'rename' | string;
   notes: string;
+  suggested_title: string | null;       // for rename verdict: new playlist title ≤60 chars
+  suggested_description: string | null; // for rename verdict: new playlist description ≤300 chars
 }
 interface AuditResp {
   overall_channel_grade: string;
