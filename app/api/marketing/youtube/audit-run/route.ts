@@ -53,7 +53,16 @@ interface AuditResp {
   playlists: AuditPlaylistOut[];
 }
 
-export async function POST() {
+export async function POST(req: Request) {
+  // Accept optional batch size (default 25, max 30 for LLM output budget).
+  // pageToken: pass the nextPageToken from a prior run to audit the NEXT batch of videos.
+  let batch = 25;
+  let pageToken: string | undefined;
+  try {
+    const body = await req.json() as Record<string, unknown>;
+    if (typeof body.batch === 'number') batch = Math.min(30, Math.max(5, body.batch));
+    if (typeof body.pageToken === 'string') pageToken = body.pageToken;
+  } catch { /* no body — use defaults */ }
   const sb = getSupabaseAdmin();
 
   // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC. No-op if token still valid.
@@ -68,13 +77,15 @@ export async function POST() {
   const [chRes, plRes, vidRes] = await Promise.all([
     fetchChannel(tok.access_token, tok.channel_id),
     fetchChannelPlaylists(tok.access_token, tok.channel_id, 50),
-    fetchRecentVideos(tok.access_token, tok.channel_id, 12),
+    fetchRecentVideos(tok.access_token, tok.channel_id, batch, pageToken),
   ]);
   if (isErr(chRes)) return err('channel_fetch_failed', 502, { detail: chRes.error });
   const ch = chRes.data;
   const playlists = isErr(plRes) ? [] : plRes.data;
-  const videos = isErr(vidRes) ? [] : vidRes.data;
-  if (videos.length === 0) return err('no_videos_to_audit', 400, { detail: `channel ${ch.id} has 0 videos in the last 12-recent window` });
+  const vidResult = isErr(vidRes) ? { data: [], nextPageToken: null } : vidRes;
+  const videos = Array.isArray(vidResult.data) ? vidResult.data : (Array.isArray(vidResult) ? vidResult : []);
+  const nextPageToken: string | null = (vidResult as any).nextPageToken ?? null;
+  if (videos.length === 0) return err('no_videos_to_audit', 400, { detail: `channel ${ch.id} has 0 videos in this batch` });
 
   // === 2) Pull brand context — vocab + pillars + reality ===
   const [vocabRes, pillarsRes, realityRes] = await Promise.all([
