@@ -22,6 +22,17 @@ const INK_S  = '#3A3A3A';
 const FOREST = '#084838';
 const CREAM  = '#F5F0E1';
 const AMBER  = '#B48A3A';
+const OK     = '#0E7A4B';
+const RED    = '#B03826';
+
+// Format classification per pillar key
+const SHORT_PILLARS = new Set(['monks_minute', 'river_life']);
+const MEDIUM_PILLARS = new Set(['guided_meditations', 'chef_foraging']);
+function pillarFormat(key: string): { label: string; bg: string; color: string } {
+  if (SHORT_PILLARS.has(key)) return { label: 'SHORT ≤60s', bg: '#E8F5E9', color: OK };
+  if (MEDIUM_PILLARS.has(key)) return { label: 'MEDIUM 2-8m', bg: '#FFF8E6', color: AMBER };
+  return { label: 'LONG 10-20m', bg: '#E4F1E0', color: '#084838' };
+}
 
 interface PubRow { publication_id: string; title: string | null; scheduled_publish_utc: string | null; actual_publish_utc: string | null; youtube_video_id: string | null }
 interface BriefRow { brief_id: string; generated_at_utc: string | null; activation_score: number | null; keyword_seeds: string[] | null }
@@ -89,11 +100,35 @@ export default async function YouTubePlanningPage() {
       <div style={{ display: 'grid', gap: 16 }}>
         <YtSubTabs current="planning" />
 
+        {/* Weekly production schedule */}
+        <div style={cardStyle}>
+          <div style={sectionH}>Weekly production schedule · 1-2 pieces/week</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+            {[
+              { when: 'Weekly · Mon', format: 'SHORT', label: 'River Life', detail: 'River/Mekong vignette · ≤60s · film at dawn' },
+              { when: 'Weekly · Thu', format: 'SHORT', label: "Monks' Minute", detail: 'Sacred ritual or teaching · ≤60s · one takeaway' },
+              { when: 'Biweekly', format: 'MEDIUM', label: 'Chef & Foraging', detail: 'Farm walk → kitchen → dish · 3-8 min' },
+              { when: 'Biweekly', format: 'MEDIUM', label: 'Guided Meditation', detail: 'Riverside wellness · 3-8 min' },
+              { when: 'Monthly', format: 'LONG', label: 'Sacred Site portrait', detail: 'One temple, one story · 10-20 min' },
+              { when: 'Monthly', format: 'LONG', label: 'Retreat journey', detail: 'Guest arc across 3-day retreat · 10-20 min' },
+            ].map(s => (
+              <div key={s.label} style={{ padding: '10px 12px', border: `1px solid ${HAIR}`, borderRadius: 4, background: CREAM }}>
+                <div style={{ fontSize: 9, color: INK_M, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>{s.when}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 2, fontWeight: 700, background: s.format === 'SHORT' ? '#E8F5E9' : s.format === 'MEDIUM' ? '#FFF8E6' : '#E4F1E0', color: s.format === 'SHORT' ? OK : s.format === 'MEDIUM' ? AMBER : FOREST }}>{s.format}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: INK }}>{s.label}</span>
+                </div>
+                <div style={{ fontSize: 10, color: INK_M, lineHeight: 1.4 }}>{s.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Programs / pillars */}
         <div style={cardStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
             <div style={{ ...sectionH, marginBottom: 0 }}>Content programs ({pillars.length})</div>
-            <div style={{ fontSize: 11, color: INK_M }}>Planned series &amp; target cadence</div>
+            <div style={{ fontSize: 11, color: INK_M }}>Planned series &amp; target cadence · click for 12-month calendar</div>
           </div>
           {pillars.length === 0 ? <div style={{ fontSize: 13, color: INK_M }}>No programs defined.</div> : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
