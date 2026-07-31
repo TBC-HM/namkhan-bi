@@ -1,4 +1,20 @@
-// IT2 shim (brief it-area-reorg-v1): re-exports the existing cockpit page.
-// The page renders inside the IT2 shell. Internal links may still point to
-// /holding/it/* until the consolidation pass after PBS approves IT2.
-export { default } from '@/app/holding/it/cockpit/knowledge/page';
+// app/holding/it2/fleet/memory/page.tsx
+// Ask 2 — tiered knowledge with strict tenant separation.
+// L1 Holding (Felix) · L2 Property (Namkhan OR Donna — never blended) ·
+// L3 Department · L4 Agent (drill-in to prompt + memories).
+// Edit-prompt button on each agent card opens a versioned write flow that
+// goes through /api/holding/it/cockpit/prompt with a mandatory dry-run preview.
+
+import { fetchAgents, fetchMemories, fetchPrompts } from '@/app/holding/it/cockpit/_lib/data';
+import { KnowledgeView } from './KnowledgeView';
+
+export const dynamic = 'force-dynamic';
+
+export default async function CockpitV2KnowledgePage() {
+  const [agents, memories, prompts] = await Promise.all([
+    fetchAgents(),
+    fetchMemories(),
+    fetchPrompts(),
+  ]);
+  return <KnowledgeView agents={agents} memories={memories} prompts={prompts} />;
+}
