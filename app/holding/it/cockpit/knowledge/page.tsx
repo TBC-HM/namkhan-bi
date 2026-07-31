@@ -1,20 +1,6 @@
-// app/holding/it/cockpit/knowledge/page.tsx
-// Ask 2 — tiered knowledge with strict tenant separation.
-// L1 Holding (Felix) · L2 Property (Namkhan OR Donna — never blended) ·
-// L3 Department · L4 Agent (drill-in to prompt + memories).
-// Edit-prompt button on each agent card opens a versioned write flow that
-// goes through /api/holding/it/cockpit/prompt with a mandatory dry-run preview.
-
-import { fetchAgents, fetchMemories, fetchPrompts } from '../_lib/data';
-import { KnowledgeView } from './KnowledgeView';
-
+// LEGACY SURFACE MOVED — it-area-reorg-v1 consolidation pass (2026-07-31):
+// implementation now lives under /holding/it2. This stub keeps the old URL
+// alive (zero dead links) until PBS approves deleting the old IT tree.
+import { redirect } from 'next/navigation';
 export const dynamic = 'force-dynamic';
-
-export default async function CockpitV2KnowledgePage() {
-  const [agents, memories, prompts] = await Promise.all([
-    fetchAgents(),
-    fetchMemories(),
-    fetchPrompts(),
-  ]);
-  return <KnowledgeView agents={agents} memories={memories} prompts={prompts} />;
-}
+export default function LegacyRedirect() { redirect('/holding/it2/fleet/memory'); }
