@@ -1,12 +1,12 @@
 // app/holding/it2/knowledge/data/page.tsx
 // PBS 2026-07-30 — IT2 Knowledge → Data: one room for "what data exists and
-// how fresh is it". Links the four data surfaces (still living at their old
-// cockpit URLs until the consolidation pass merges Schemas + Freshness into
-// a single tabbed page here).
+// how fresh is it". Schemas + Freshness are it2-native (consolidation r4
+// 2026-07-31); Sitemap + Platform Memory still at old cockpit URLs until the
+// next consolidation slice moves them.
 
 const CARDS = [
-  { href: '/holding/it/cockpit/schemas',   title: 'Schemas',         sub: 'Every schema, table and view in the platform DB' },
-  { href: '/holding/it/cockpit/freshness', title: 'Freshness',       sub: 'Per-tenant data coverage — what is stale, what is live' },
+  { href: '/holding/it2/knowledge/data/schemas',   title: 'Schemas',         sub: 'Every schema, table and view in the platform DB' },
+  { href: '/holding/it2/knowledge/data/freshness', title: 'Freshness',       sub: 'Per-tenant data coverage — what is stale, what is live' },
   { href: '/holding/it/cockpit/sitemap',   title: 'Sitemap',         sub: 'Every route in the app, audited' },
   { href: '/holding/it/cockpit/memory',    title: 'Platform Memory', sub: 'Doc diffs · ADR threads · rule consolidation · why-search' },
 ];
