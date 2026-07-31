@@ -1,8 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 // app/marketing/website/preview/[...slug]/page.tsx
-// Catch-all route: renders all 53 pages with 5 templates.
-// Images: HotelierKit CDN (via v_website_media crawl manifest).
-// Photos from media library wired in next pass.
+// v2: fix duplicate title + room hero overlay matching thenamkhan.com layout.
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -31,6 +29,27 @@ const CREAM= '#F0EAE0';
 const GREEN= '#2C4A3E';
 const SERIF= 'Georgia, serif';
 
+// Strips the leading "# Page Title" from crawled body_md — it's always present
+// and duplicates the title we already render separately.
+function stripTitle(md: string): string {
+  return md.replace(/^#\s+[^\n]+\n*/, '');
+}
+
+// From body_md, extracts the first "## Subtitle" label (e.g. "Garden View").
+function extractLabel(md: string): string | null {
+  const m = md.match(/^##\s+(.+)/m);
+  return m ? m[1].trim() : null;
+}
+
+// Extracts the first substantial paragraph after any headings.
+function extractLead(md: string): string | null {
+  const m = md.match(/^(?:[#][^\n]+\n+)+([^\n#][^\n]{15,})/m);
+  if (m) return m[1].trim();
+  // fallback: first non-heading, non-empty line
+  const m2 = md.match(/^(?!#)([^\n]{20,})/m);
+  return m2 ? m2[1].trim() : null;
+}
+
 export default async function WebsiteSlugPage({ params }: { params: { slug: string[] } }) {
   const slug = '/' + (params.slug ?? []).join('/');
   const sb = getSupabaseAdmin();
@@ -48,13 +67,13 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
   ]);
   const sections = (sd ?? []) as SectionRow[];
   const images   = (id ?? []) as ImageRow[];
-  const body     = sections[0]?.body_md ?? '';
+  const rawBody  = sections[0]?.body_md ?? '';
+  const body     = stripTitle(rawBody);
   const hero     = images.find(i => i.role === 'hero') ?? images.find(i => i.role === 'og') ?? null;
   const gallery  = images.filter(i => i.role === 'gallery');
   const meta     = (page.meta ?? {}) as Record<string, string>;
   const metaDesc = meta.description ?? null;
 
-  // Blog index: fetch all posts + thumbnails
   let blogPosts: PageRow[] = [];
   let blogImgs: Record<number, string | null> = {};
   if (page.page_kind === 'blog_index') {
@@ -81,57 +100,49 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
       {kind === 'blog_index'  ? <BlogIndex page={page} posts={blogPosts} imgs={blogImgs} /> :
        kind === 'blog_post'   ? <BlogPost  page={page} hero={hero} body={body} /> :
        kind === 'legal'       ? <Legal     page={page} body={body} /> :
-       kind === 'room'        ? <Room      page={page} hero={hero ?? gallery[0] ?? null} gallery={gallery} body={body} desc={metaDesc} /> :
-                                <Core      page={page} hero={hero} gallery={gallery} body={body} desc={metaDesc} />}
+       kind === 'room'        ? <Room      page={page} hero={hero ?? gallery[0] ?? null} gallery={gallery} body={body} metaDesc={metaDesc} /> :
+                                <Core      page={page} hero={hero} gallery={gallery} body={body} metaDesc={metaDesc} />}
       <SiteFooter />
     </div>
   );
 }
 
-// ── Core template (most pages) ─────────────────────────────────────────────
-function Core({ page, hero, gallery, body, desc }: { page: PageRow; hero: ImageRow | null; gallery: ImageRow[]; body: string; desc: string | null }) {
+// ── Room template — hero overlay matching thenamkhan.com layout ────────────
+function Room({ page, hero, gallery, body, metaDesc }: {
+  page: PageRow; hero: ImageRow | null; gallery: ImageRow[]; body: string; metaDesc: string | null;
+}) {
+  const rest  = hero ? gallery.filter(i => i.id !== hero.id) : gallery;
+  const label = extractLabel(body);          // "Garden View"
+  const lead  = extractLead(body) ?? metaDesc; // "38m² of considered space..."
+
   return (
     <main>
-      {hero?.src_url && (
-        <div style={{ width: '100%', height: 500, overflow: 'hidden', background: INK }}>
-          <img src={hero.src_url} alt={hero.alt ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} />
-        </div>
-      )}
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '52px 24px 80px' }}>
-        {!hero && (
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '1rem', letterSpacing: '-0.02em' }}>
+      {/* Hero with overlay — title/label/description layered on dark image */}
+      <div style={{ position: 'relative', width: '100%', height: 640, overflow: 'hidden', background: '#2a2620' }}>
+        {hero?.src_url && (
+          <img src={hero.src_url} alt={hero.alt ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
+        )}
+        {/* Bottom gradient */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.10) 100%)' }} />
+        {/* Overlay text */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 6% 72px', textAlign: 'center', color: '#FFFFFF' }}>
+          {label && (
+            <div style={{ fontSize: 12, letterSpacing: '0.22em', textTransform: 'uppercase', marginBottom: 18, opacity: 0.8, fontWeight: 500 }}>
+              {label}
+            </div>
+          )}
+          <h1 style={{ fontSize: 'clamp(2.4rem, 5vw, 4rem)', fontWeight: 700, fontFamily: SERIF, margin: '0 0 20px', letterSpacing: '-0.01em', lineHeight: 1.1, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
             {page.title}
           </h1>
-        )}
-        {desc && !body && <p style={{ fontSize: '1.1rem', lineHeight: 1.8, color: INK2, marginBottom: '2rem' }}>{desc}</p>}
-        {body && <div>{renderMd(body)}</div>}
-        {gallery.length > 0 && (
-          <div style={{ marginTop: 56, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
-            {gallery.map(img => img.src_url && (
-              <img key={img.id} src={img.src_url} alt={img.alt ?? ''} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 3 }} />
-            ))}
-          </div>
-        )}
-      </div>
-    </main>
-  );
-}
-
-// ── Room template ──────────────────────────────────────────────────────────
-function Room({ page, hero, gallery, body, desc }: { page: PageRow; hero: ImageRow | null; gallery: ImageRow[]; body: string; desc: string | null }) {
-  const rest = hero ? gallery.filter(i => i.id !== hero.id) : gallery;
-  return (
-    <main>
-      {hero?.src_url && (
-        <div style={{ width: '100%', height: 580, overflow: 'hidden', background: INK }}>
-          <img src={hero.src_url} alt={hero.alt ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {lead && (
+            <p style={{ fontSize: '1.05rem', maxWidth: 580, margin: '0 auto', opacity: 0.88, lineHeight: 1.75, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+              {lead}
+            </p>
+          )}
         </div>
-      )}
+      </div>
+
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '52px 24px 80px' }}>
-        <h1 style={{ fontSize: '2.4rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '0.6rem', letterSpacing: '-0.02em' }}>
-          {page.title}
-        </h1>
-        {desc && <p style={{ fontSize: '1.1rem', color: INK2, marginBottom: '2rem', lineHeight: 1.75 }}>{desc}</p>}
         <div style={{ marginBottom: 40 }}>{renderMd(body)}</div>
         {rest.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10, marginBottom: 48 }}>
@@ -146,6 +157,37 @@ function Room({ page, hero, gallery, body, desc }: { page: PageRow; hero: ImageR
             Check availability
           </a>
         </div>
+      </div>
+    </main>
+  );
+}
+
+// ── Core template ──────────────────────────────────────────────────────────
+function Core({ page, hero, gallery, body, metaDesc }: {
+  page: PageRow; hero: ImageRow | null; gallery: ImageRow[]; body: string; metaDesc: string | null;
+}) {
+  return (
+    <main>
+      {hero?.src_url && (
+        <div style={{ width: '100%', height: 500, overflow: 'hidden', background: INK }}>
+          <img src={hero.src_url} alt={hero.alt ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.9 }} />
+        </div>
+      )}
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: '52px 24px 80px' }}>
+        {!hero && (
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '1rem', letterSpacing: '-0.02em' }}>
+            {page.title}
+          </h1>
+        )}
+        {metaDesc && !body && <p style={{ fontSize: '1.1rem', lineHeight: 1.8, color: INK2, marginBottom: '2rem' }}>{metaDesc}</p>}
+        {body && <div>{renderMd(body)}</div>}
+        {gallery.length > 0 && (
+          <div style={{ marginTop: 56, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+            {gallery.map(img => img.src_url && (
+              <img key={img.id} src={img.src_url} alt={img.alt ?? ''} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 3 }} />
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );
