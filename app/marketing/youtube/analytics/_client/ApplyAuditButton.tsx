@@ -50,6 +50,12 @@ export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDes
       }
       setState('done');
       setOpen(false);
+      // Persist applied state so it survives page refreshes
+      fetch('/api/marketing/youtube/log-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_type: 'video', entity_id: videoId, action: 'applied' }),
+      }).catch(() => {});
     } catch (e: unknown) {
       setErrMsg(e instanceof Error ? e.message : 'network error');
       setState('error');
