@@ -16,6 +16,35 @@ async function getToken() {
   return getFreshAccessToken(NAMKHAN);
 }
 
+// GET ?action=get_items&playlist_id=X — returns video IDs in the playlist for merge
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const action = url.searchParams.get('action');
+  const playlistId = url.searchParams.get('playlist_id') ?? '';
+  if (action !== 'get_items' || !playlistId) {
+    return NextResponse.json({ error: 'use ?action=get_items&playlist_id=PL...' }, { status: 400 });
+  }
+  const tok = await getToken();
+  if (!tok.ok || !tok.access_token) return NextResponse.json({ error: 'yt_token_missing' }, { status: 401 });
+  try {
+    const all: string[] = [];
+    let pageToken: string | undefined;
+    do {
+      const qs = new URLSearchParams({ part: 'snippet', playlistId, maxResults: '50' });
+      if (pageToken) qs.set('pageToken', pageToken);
+      const r = await fetch('https://www.googleapis.com/youtube/v3/playlistItems?' + qs, {
+        headers: { Authorization: 'Bearer ' + tok.access_token },
+      });
+      const j = await r.json() as { items?: Array<{ snippet: { resourceId: { videoId: string } } }>; nextPageToken?: string };
+      for (const item of j.items ?? []) all.push(item.snippet.resourceId.videoId);
+      pageToken = j.nextPageToken;
+    } while (pageToken);
+    return NextResponse.json({ ok: true, video_ids: all, count: all.length });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'fetch_failed' }, { status: 502 });
+  }
+}
+
 export async function POST(req: Request) {
   const body = await req.json() as Record<string, unknown>;
   const action = body.action as string;
