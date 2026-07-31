@@ -7,7 +7,9 @@
 
 import type { CSSProperties } from 'react';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import AskWindow from './_components/AskWindow';
+// Central Chat round 3 (brief central-chat-v1 §0.B.1): AskWindow replaced by
+// the one CentralChat, scoped university.
+import CentralChat from '@/components/chat/CentralChat';
 import { FALLBACK_MODULES, type ModuleCard } from './_lib/ia';
 import { INK, INK_SOFT, HAIR, GREEN, GOLD, WARM, SANS } from './_lib/theme';
 
@@ -67,7 +69,7 @@ export default async function UniversityPage() {
         </p>
       </header>
 
-      <AskWindow />
+      <CentralChat mode="second-brain" moduleScope="university" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 20 }}>
         {modules.map((m) => {
