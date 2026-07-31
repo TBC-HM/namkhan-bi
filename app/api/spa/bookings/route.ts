@@ -4,11 +4,16 @@
 //         (rejects therapist/room overlap incl. room cleanup buffer).
 // PATCH → lifecycle transition via public.fn_spa_set_booking_status
 //         (booked → confirmed → arrived → in_treatment → completed | cancelled | no_show).
+//         On `completed`, completion hooks fire AFTER the transition commits
+//         (gap 4): inventory recipe deduction + Cloudbeds folio post for
+//         in-house guests. Hooks degrade gracefully and never block completion
+//         — see lib/spa/completion.ts.
 // Catalogue ids (property.spa_treatments, bigint) are resolved to operational
 // spa.treatments uuids via public.fn_spa_resolve_treatment before insert.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getBookingDetail, runCompletionHooks } from '@/lib/spa/completion';
 
 const KNOWN_PROPERTIES = new Set([260955, 1000001]);
 
@@ -57,6 +62,18 @@ export async function POST(req: Request) {
       const status = /SPA_CONFLICT/.test(error.message) ? 409 : 500;
       return NextResponse.json({ error: error.message }, { status });
     }
+
+    // Walk-in contact capture (optional fields; best-effort, never blocks create).
+    const guestEmail = typeof body.guest_email === 'string' ? body.guest_email.trim() : '';
+    const guestPhone = typeof body.guest_phone === 'string' ? body.guest_phone.trim() : '';
+    if (data && (guestEmail || guestPhone)) {
+      await sb.rpc('fn_spa_record_contact', {
+        p_booking_id: String(data),
+        p_guest_email: guestEmail || null,
+        p_guest_phone: guestPhone || null,
+      });
+    }
+
     return NextResponse.json({ ok: true, booking_id: data });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'unknown error';
@@ -77,6 +94,19 @@ export async function PATCH(req: Request) {
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     if (!data) return NextResponse.json({ error: 'booking not found' }, { status: 404 });
+
+    // Completion hooks (gap 4) — run after the lifecycle fn committed the
+    // transition, keeping Cloudbeds calls out of the DB txn path. The
+    // lifecycle whitelist means `completed` is reachable exactly once, so
+    // inventory deduction cannot double-fire.
+    if (String(body.status) === 'completed') {
+      const booking = await getBookingDetail(sb, String(body.booking_id));
+      if (booking) {
+        const hooks = await runCompletionHooks(sb, booking);
+        return NextResponse.json({ ok: true, hooks });
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'unknown error';
