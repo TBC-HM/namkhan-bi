@@ -16,7 +16,7 @@ export default function DeletePlaylistButton({ playlistId, playlistTitle }: Prop
       const res = await fetch('/api/marketing/youtube/manage-playlist', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playlistId }),
+        body: JSON.stringify({ playlist_id: playlistId }),
       });
       const j = await res.json();
       if (j.ok) setStep('done');
