@@ -43,9 +43,22 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
   // Merge state
   const [mergeOpen, setMergeOpen] = useState(false);
   const [targetId, setTargetId] = useState('');
-  const [targetTitle, setTargetTitle] = useState('');
   const [mergeStep, setMergeStep] = useState<'idle' | 'copying' | 'deleting' | 'done'>('idle');
   const [mergeMsg, setMergeMsg] = useState('');
+  const [playlists, setPlaylists] = useState<Array<{ id: string; title: string }>>([]);
+  const [loadingPl, setLoadingPl] = useState(false);
+
+  async function openMergePanel() {
+    setMergeOpen(true);
+    if (playlists.length > 0) return; // already loaded
+    setLoadingPl(true);
+    try {
+      const res = await fetch('/api/marketing/youtube/manage-playlist?action=list', { cache: 'no-store' });
+      const j = await res.json();
+      setPlaylists((j.playlists ?? []).filter((p: { id: string }) => p.id !== playlistId));
+    } catch { /* silent */ }
+    setLoadingPl(false);
+  }
 
   const v = verdict?.toLowerCase();
 
