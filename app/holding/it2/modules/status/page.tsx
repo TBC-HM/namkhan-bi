@@ -138,7 +138,7 @@ export default async function It2ModulesStatusPage() {
                     <td style={{ ...td, maxWidth: 340, fontSize: 12, color: urgent ? '#B71C1C' : TOKENS.text2 }}>{r.open_questions ?? ''}</td>
                     <td style={td}>
                       {r.brief_slug
-                        ? <Link href={`/holding/it/cockpit/briefs/${r.brief_slug}`} style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.forest, textDecoration: 'underline', whiteSpace: 'nowrap' }}>brief →</Link>
+                        ? <Link href={`/holding/it2/modules/briefs/${r.brief_slug}`} style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.forest, textDecoration: 'underline', whiteSpace: 'nowrap' }}>brief →</Link>
                         : <span style={{ color: TOKENS.text3, fontSize: 11 }}>—</span>}
                     </td>
                   </tr>
