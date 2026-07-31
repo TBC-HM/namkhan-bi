@@ -21,6 +21,7 @@ import { getFreshAccessToken } from '@/lib/youtube/token';
 import { fetchChannelPlaylists, fetchPlaylistItemsWithStats, isErr, type PlaylistVideo } from '@/lib/youtube/data';
 import YtSubTabs from '../../_shared/SubTabs';
 import { GenerateProposalsButton, QueueProposalButton } from '../../_client/PlaylistCalendarActions';
+import RemoveFromPlaylistButton from '../../_client/RemoveFromPlaylistButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -466,9 +467,10 @@ export default async function YtPlaylistDetailPage({ params }: Params) {
                         <span>· {v.publishedAt.slice(0, 10)}</span>
                       </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                       <div style={{ fontSize: 11, color: perfColor, textTransform: 'uppercase', fontWeight: 600, letterSpacing: '.04em' }}>{perfLabel}</div>
                       <div style={{ fontSize: 10, color: INK_M, fontVariantNumeric: 'tabular-nums' }}>{perf.toFixed(1)}× median</div>
+                      <RemoveFromPlaylistButton playlistItemId={v.playlistItemId} videoTitle={v.title} />
                     </div>
                   </div>
                 );
