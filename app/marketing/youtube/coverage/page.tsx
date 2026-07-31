@@ -82,21 +82,17 @@ export default async function YtCoveragePage() {
   const tabs = MARKETING_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href }));
 
   // Fetch property entities + audit data in parallel
-  const [roomsRes, facilitiesRes, activitiesRes, retreatsRes, auditRes] = await Promise.all([
+  const [roomsRes, facilitiesRes, activitiesRes, auditRes] = await Promise.all([
     sb.from('v_room_grounding').select('room_type_id, room_type_name').eq('property_id', NAMKHAN).order('room_type_name'),
-    sb.from('v_room_grounding').select('room_type_id, room_type_name').eq('property_id', NAMKHAN).order('room_type_name'),
-    sb.from('v_facility_grounding').select('facility_id, facility_name, category').eq('property_id', NAMKHAN).eq('active', true).order('sort_order'),
-    sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }).then(() =>
-      sb.schema('property' as any).from('activities').select('activity_id, name').eq('property_id', NAMKHAN).eq('is_active', true).order('name')
-    ),
-    sb.schema('content' as any).from('retreat_programs').select('retreat_id, display_name').eq('property_id', NAMKHAN).order('display_name'),
+    sb.from('v_facility_grounding').select('facility_id, facility_name, category').eq('property_id', NAMKHAN).eq('active', true).order('facility_name'),
+    sb.from('v_activity_grounding').select('activity_id, name').eq('property_id', NAMKHAN).order('name'),
     sb.from('v_yt_channel_audit_videos').select('video_id, video_title'),
   ]);
 
   const rooms = (roomsRes.data ?? []) as Array<{ room_type_id: number; room_type_name: string }>;
   const facilities = (facilitiesRes.data ?? []) as Array<{ facility_id: number; facility_name: string; category: string | null }>;
   const activities = (activitiesRes.data ?? []) as Array<{ activity_id: number; name: string }>;
-  const retreats = (retreatsRes.data ?? []) as Array<{ retreat_id: number; display_name: string }>;
+  const retreats: Array<{ retreat_id: number; display_name: string }> = [];
   const auditedTitles = (auditRes.data ?? []).map(r => (r as any).video_title ?? '');
 
   // Fetch playlist videos for coverage if token available
