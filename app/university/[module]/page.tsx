@@ -7,7 +7,9 @@
 
 import type { CSSProperties } from 'react';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import AskWindow from '../_components/AskWindow';
+// Central Chat round 3 (brief central-chat-v1 §0.B.1): AskWindow replaced by
+// the one CentralChat, scoped university.
+import CentralChat from '@/components/chat/CentralChat';
 import Breadcrumbs from '../_components/Breadcrumbs';
 import { FALLBACK_MODULES, groupArticles, type ArticleMeta, type ModuleCard } from '../_lib/ia';
 import { INK, INK_SOFT, HAIR, GREEN, GOLD, WARM, SANS } from '../_lib/theme';
@@ -57,7 +59,7 @@ export default async function ModuleGuidePage({ params }: { params: { module: st
         )}
       </header>
 
-      <AskWindow module={moduleSlug} placeholder={`Ask about ${title.toLowerCase()} — plain words are fine.`} />
+      <CentralChat mode="second-brain" moduleScope={`university:${moduleSlug}`} />
 
       {loadError && (
         <div style={{ marginTop: 14, fontSize: 13, color: '#B03826' }}>Could not load articles: {loadError}</div>
