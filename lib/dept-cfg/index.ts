@@ -839,7 +839,7 @@ const IT_CFG: DeptCfg = {
   subPages: [
     { label: 'Cockpit',   href: '/holding/it2'           },
     { label: 'Tasks',     href: '/holding/it2/fleet/tasks'     },
-    { label: 'Schedule',  href: '/holding/it/cockpit/schedule'  },
+    { label: 'Schedule',  href: '/holding/it2/fleet/tasks'  },
     { label: 'Knowledge', href: '/knowledge'         },
     { label: 'Audit log', href: '/holding/it2/system/activity' },
     { label: 'Agents',    href: '/holding/it2/fleet/team'  },
@@ -847,7 +847,7 @@ const IT_CFG: DeptCfg = {
   quickChips: [
     { label: 'Cockpit',   href: '/holding/it2'           },
     { label: 'Tasks',     href: '/holding/it2/fleet/tasks'     },
-    { label: 'Schedule',  href: '/holding/it/cockpit/schedule'  },
+    { label: 'Schedule',  href: '/holding/it2/fleet/tasks'  },
     { label: 'Knowledge', href: '/knowledge'         },
     { label: 'Audit log', href: '/holding/it2/system/activity' },
     { label: 'Agents',    href: '/holding/it2/fleet/team'  },
