@@ -1,8 +1,7 @@
 // app/marketing/website/preview/_site/Nav.tsx
 import Link from 'next/link';
 
-// TODO: replace BOOK_URL with the actual Cloudbeds booking URL from thenamkhan.com
-export const BOOK_URL = 'https://hotels.cloudbeds.com/reservation/thenamkhan';
+export const BOOK_URL = 'https://hotels.cloudbeds.com/en/reservation/lKAMWp?hkc=a0m0';
 
 const BASE = '/marketing/website/preview';
 
