@@ -44,11 +44,6 @@ type LengthBucket = typeof LENGTH_BUCKETS[number];
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function gradeColor(g: string | null): string {
-  if (g === 'A') return '#0E7A4B'; if (g === 'B') return '#084838';
-  if (g === 'C') return '#B48A3A'; if (g === 'D' || g === 'F') return '#B03826';
-  return '#5A5A5A';
-}
 function fmt(n: number): string { return new Intl.NumberFormat('en-US').format(n); }
 function fmtCompact(n: number): string {
   if (n < 1000) return String(n);
