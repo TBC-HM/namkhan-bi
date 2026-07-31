@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
 'use client';
 // app/marketing/website/WebsiteManager.tsx
 // website-module-v1 P3 — client manager for the Website capability.
