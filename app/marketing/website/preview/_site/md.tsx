@@ -1,5 +1,6 @@
 // app/marketing/website/preview/_site/md.tsx
 // Shared markdown renderer for The Namkhan website preview.
+/* eslint-disable @next/next/no-img-element */
 import type { ReactNode } from 'react';
 
 // Lines the crawler added as structural metadata — skip in output.
@@ -12,8 +13,35 @@ function isMeta(line: string): boolean {
   return META_PREFIXES.some(p => line.startsWith(p));
 }
 
+// Markdown images ![alt](url) and links [text](url). Crawled sections carry
+// real inline images (now served from the website-assets storage bucket after
+// the 2026-07-31 media archive) — render them as <img>, not as raw text.
+const LINKISH = /(!?\[[^\]]*\]\([^)]+\))/g;
+
 function ri(text: string, k: string): ReactNode[] {
   const nodes: ReactNode[] = [];
+  const chunks = text.split(LINKISH);
+  chunks.forEach((chunk, ci) => {
+    const m = /^(!?)\[([^\]]*)\]\(([^)]+)\)$/.exec(chunk);
+    if (m) {
+      const bang = m[1];
+      const label = m[2];
+      const url = m[3].trim().split(/\s+/)[0];
+      if (bang) {
+        nodes.push(<img key={k + 'img' + ci} src={url} alt={label} loading="lazy"
+          style={{ maxWidth: '100%', borderRadius: 3, display: 'block', margin: '0.75rem 0' }} />);
+      } else {
+        nodes.push(<a key={k + 'a' + ci} href={url} target="_blank" rel="noopener noreferrer"
+          style={{ color: '#2C4A3E', textDecoration: 'underline' }}>{label || url}</a>);
+      }
+      return;
+    }
+    if (chunk) riPlain(chunk, k + 'c' + ci, nodes);
+  });
+  return nodes;
+}
+
+function riPlain(text: string, k: string, nodes: ReactNode[]): void {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   parts.forEach((c, i) => {
     if (/^\*\*[^*]+\*\*$/.test(c)) {
@@ -37,7 +65,6 @@ function ri(text: string, k: string): ReactNode[] {
       });
     });
   });
-  return nodes;
 }
 
 export function renderMd(md: string): ReactNode[] {
