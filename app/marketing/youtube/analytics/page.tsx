@@ -101,11 +101,17 @@ export default async function YtAnalyticsPage() {
     videos = (data ?? []) as VidRow[];
   }
 
-  // Read action log so completed playlist actions show ✓ Done on load
+  // Playlist actions log — completed playlists show ✓ Done on load
   const { data: actionLogData } = await sb.from('yt_action_log')
     .select('entity_id, action, new_value')
     .eq('property_id', NAMKHAN).eq('entity_type', 'playlist');
   const doneMap = new Map((actionLogData ?? []).map(r => [r.entity_id, r.action + (r.new_value ? ' → ' + r.new_value : '')]));
+
+  // Video applied log — ApplyAuditButton starts as ✓ Applied for already-applied videos
+  const { data: videoLogData } = await sb.from('yt_action_log')
+    .select('entity_id')
+    .eq('property_id', NAMKHAN).eq('entity_type', 'video').eq('action', 'applied');
+  const appliedVideos = new Set((videoLogData ?? []).map(r => r.entity_id));
 
   const tabs = MARKETING_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
   const cardStyle: React.CSSProperties = { background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 20, gridColumn: '1 / -1' };
@@ -244,6 +250,7 @@ export default async function YtAnalyticsPage() {
                           suggestedTitle={v.suggested_title}
                           suggestedDescription={v.suggested_description}
                           suggestedTags={v.suggested_tags}
+                          initialApplied={appliedVideos.has(v.video_id)}
                         />
                       </div>
                     </div>
