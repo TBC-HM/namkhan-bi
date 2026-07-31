@@ -114,15 +114,24 @@ export async function POST(req: Request) {
   const playlistList = playlists.map((p) => `  • ${p.id} — "${p.title}" — ${p.itemCount} videos`).join('\n');
 
   // Compact video payload the LLM will audit
-  const videoPayload = videos.map((v) => ({
-    id: v.id,
-    title: v.title,
-    description: (v.description ?? '').slice(0, 400),
-    views: v.views,
-    likes: v.likes,
-    comments: v.comments,
-    published: v.publishedAt.slice(0, 10),
-  }));
+  const videoPayload = videos.map((v) => {
+    const durationSec = (() => {
+      const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(v.duration ?? '');
+      if (!m) return null;
+      return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0);
+    })();
+    return {
+      id: v.id,
+      title: v.title,
+      description: (v.description ?? '').slice(0, 400),
+      views: v.views,
+      likes: v.likes,
+      comments: v.comments,
+      published: v.publishedAt.slice(0, 10),
+      is_short: durationSec !== null && durationSec <= 60,
+      duration_sec: durationSec,
+    };
+  });
 
   // === 3) Build the audit prompt ===
   const systemPrompt = [
@@ -154,6 +163,17 @@ export async function POST(req: Request) {
     'KILL LAW: Any playlist not mappable to the 9 categories above must be killed.',
     'LODGE LAW: Never use "lodge" or "river lodge" anywhere — brand is The Namkhan, Luang Prabang.',
     '═════════════════════════════════════════════',
+    '',
+    '═══ SHORTS LAW (is_short: true = duration ≤ 60s) ═══',
+    'YouTube Shorts have DIFFERENT rules from regular videos:',
+    '  • Shorts ARE correctly placed in thematic playlists — do NOT flag this',
+    '  • Shorts titles: max 40 chars, punchy, no hashtags needed in title',
+    '  • Shorts descriptions: 1-2 lines max, hashtags in description ARE FINE',
+    '  • "No CTA" is NOT a flaw for Shorts — they end with a swipe',
+    '  • Grade Shorts on: brand voice, visual hook, title specificity',
+    '  • Do NOT penalise Shorts for missing long description or structured tags',
+    '  • Shorts without a playlist_fit assignment get: suggested_playlist = the most relevant thematic playlist',
+    '════════════════════════════════════════════════════',
     '',
     'BRAND REALITY:',
     reality?.location ? `  Location: ${reality.location}` : '',
