@@ -57,6 +57,13 @@ interface VidRow {
   issues: any;
 }
 
+// Extract "rename to 'New Title'" from Lens audit notes
+function extractSuggestedTitle(notes: string | null): string | null {
+  if (!notes) return null;
+  const m = notes.match(/rename(?:\s+(?:this\s+)?to)?\s+['"‘’]([^'"‘’]{3,})['"‘’]/i);
+  return m?.[1]?.trim() ?? null;
+}
+
 function gradeColor(g: string | null): string {
   const x = (g ?? '').toUpperCase();
   if (x === 'A') return OK;
@@ -188,7 +195,7 @@ export default async function YtAnalyticsPage() {
                         playlistId={p.playlist_id ?? ''}
                         verdict={p.verdict ?? ''}
                         currentTitle={p.playlist_title ?? p.playlist_id ?? ''}
-                        suggestedTitle={null}
+                        suggestedTitle={p.verdict === 'rename' ? extractSuggestedTitle(p.notes) : null}
                       />
                     </div>
                   ))}
