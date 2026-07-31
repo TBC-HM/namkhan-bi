@@ -26,6 +26,7 @@ const REPORT_PRESETS: { code: string; label: string; desc: string; href: string 
   { code: 'invoice_log',   label: 'Invoices · Send log', desc: 'Every invoice ever issued · sortable + Preview',      href: '/holding/finance/invoices/send-log' },
   { code: 'invoice_tpl',   label: 'Invoice template',    desc: 'Edit brand + Sender + defaults · live A4 preview',    href: '/holding/finance/invoices/template' },
   { code: 'clients',       label: 'Clients (CRM)',       desc: 'Add / edit / deactivate · linked invoice counts',     href: '/holding/finance/clients'           },
+  { code: 'studio',        label: 'Spreadsheet Studio',  desc: 'Workbook registry · scratch sheets · my documents',   href: '/holding/finance/studio'            },
 ];
 
 async function loadHoldingFinanceSummary(sb: ReturnType<typeof getSupabaseAdmin>) {
