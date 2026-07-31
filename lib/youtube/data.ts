@@ -313,17 +313,18 @@ export async function fetchChannelPlaylists(
 // ---- playlist items --------------------------------------------------------
 
 export interface PlaylistVideo {
-  videoId:      string;
-  title:        string;
-  description:  string;
-  publishedAt:  string;
-  thumbnails:   Thumbnails;
-  position:     number;
-  channelTitle: string;
-  views?:       number;
-  likes?:       number;
-  comments?:    number;
-  duration?:    string;
+  videoId:        string;
+  playlistItemId: string;  // the playlist item entry id (needed for remove_video)
+  title:          string;
+  description:    string;
+  publishedAt:    string;
+  thumbnails:     Thumbnails;
+  position:       number;
+  channelTitle:   string;
+  views?:         number;
+  likes?:         number;
+  comments?:      number;
+  duration?:      string;
 }
 
 interface PlaylistItemsResp {
@@ -351,14 +352,15 @@ export async function fetchPlaylistItemsWithStats(
   if (isErr(list)) return { ok: false, error: list.error, detail: list.detail };
   const items: PlaylistVideo[] = (list.data.items ?? [])
     .filter((it) => it.snippet?.resourceId?.videoId)
-    .map((it) => ({
-      videoId:      it.snippet!.resourceId!.videoId!,
-      title:        it.snippet?.title ?? '(untitled)',
-      description:  it.snippet?.description ?? '',
-      publishedAt:  it.snippet?.publishedAt ?? '',
-      thumbnails:   it.snippet?.thumbnails ?? {},
-      position:     Number(it.snippet?.position ?? 0),
-      channelTitle: it.snippet?.channelTitle ?? '',
+    .map((it, idx) => ({
+      videoId:        it.snippet!.resourceId!.videoId!,
+      playlistItemId: (it as any).id ?? `item-${idx}`,  // the playlist item entry ID for remove_video
+      title:          it.snippet?.title ?? '(untitled)',
+      description:    it.snippet?.description ?? '',
+      publishedAt:    it.snippet?.publishedAt ?? '',
+      thumbnails:     it.snippet?.thumbnails ?? {},
+      position:       Number(it.snippet?.position ?? 0),
+      channelTitle:   it.snippet?.channelTitle ?? '',
     }));
   if (items.length === 0) return { ok: true, data: [] };
 
