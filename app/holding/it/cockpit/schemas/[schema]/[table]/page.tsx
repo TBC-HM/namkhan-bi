@@ -1,8 +1,6 @@
-// Redirect stub — Schema detail moved to IT2 (it-area-reorg-v1 consolidation).
+// LEGACY SURFACE MOVED — it-area-reorg-v1 consolidation pass (2026-07-31):
+// implementation now lives under /holding/it2. This stub keeps the old URL
+// alive (zero dead links) until PBS approves deleting the old IT tree.
 import { redirect } from 'next/navigation';
-export default async function LegacySchemaDetailRedirect(
-  { params }: { params: Promise<{ schema: string; table: string }> },
-) {
-  const { schema, table } = await params;
-  redirect(`/holding/it2/knowledge/data/schemas/${schema}/${table}`);
-}
+export const dynamic = 'force-dynamic';
+export default function LegacyRedirect({ params }: { params: { schema: string; table: string } }) { redirect(`/holding/it2/knowledge/data/schemas/${params.schema}/${params.table}`); }
