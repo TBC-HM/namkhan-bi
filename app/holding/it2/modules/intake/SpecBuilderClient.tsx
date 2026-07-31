@@ -330,7 +330,7 @@ ${AGENT_CONTEXT}
             <option value="">— Select the goal this brief serves —</option>
             {goals.map(g => (
               <option key={g.goal_id} value={String(g.goal_id)}>
-                {' '.repeat(Math.max(0, (g.level - 2) * 2))}{g.title} ({g.slug})
+                {' '.repeat(Math.max(0, (g.level - 2) * 2))}{g.title} ({g.slug})
               </option>
             ))}
           </select>
