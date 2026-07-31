@@ -1,0 +1,54 @@
+-- 005 — spa passes/packages + day-before reminder cron (brief spa-module-v1, gap-6 round)
+-- STATUS: APPLIED 2026-07-31 as migration `spa_passes_and_redemptions`
+-- (standing-builder run cowork-builder-2026-07-31T15; record file only — the
+-- live DB is canon).
+--
+-- What was applied:
+--
+-- 1. spa.passes — day_pass | package register. credits_total/credits_used with
+--    CHECK credits_used <= credits_total; status active | fully_redeemed |
+--    expired | cancelled; valid_from/valid_until window; price/currency
+--    entered AT SALE (audit 2026-07-31: no priced day-pass tiers exist
+--    anywhere — content.activities_catalog "Day Pass Packages" is inactive
+--    with NULL price; nothing was invented, owner supplies tier pricing for
+--    the website row later). posted_to_folio/cloudbeds_charge_id reserved for
+--    a later folio hookup.
+--    spa.pass_redemptions — append-only redemption trail, optional FK to
+--    spa.treatment_bookings (tie a redemption to the delivered booking).
+--    RLS on both: house pair (service_role ALL / authenticated via
+--    core.has_property_access; redemptions scoped through their pass).
+--
+-- 2. L5 bridge fns (SECURITY DEFINER, pinned search_path, EXECUTE granted to
+--    service_role ONLY):
+--      public.fn_spa_sell_pass(...)        → uuid
+--      public.fn_spa_redeem_pass(pass_id, booking_id?, credits, note) → jsonb
+--        (row-locked; raises SPA_PASS_NOT_FOUND / _EXPIRED / _INACTIVE /
+--         _NOT_STARTED / _NO_CREDITS / _BOOKING_MISMATCH; flips status to
+--         fully_redeemed when credits exhaust)
+--      public.fn_spa_set_pass_status(pass_id, status) — active → cancelled|expired only
+--      public.fn_spa_expire_passes() → int — sweep active passes past valid_until
+--
+-- 3. Read bridges public.v_spa_passes (credits_remaining + last_redeemed_at
+--    computed) and public.v_spa_pass_redemptions (joined booking + treatment).
+--    GRANT SELECT to authenticated + service_role, NO anon (guest PII —
+--    deliberate deviation from the §5 anon-grant habit, per §0.V2 PII note).
+--
+-- 4. pg_cron job 187 'spa-reminders-daily' @ '0 2 * * *' (02:00 UTC = 09:00
+--    Vientiane / 04:00 Madrid): fn_automation_enabled-guarded net.http_post →
+--    /api/cron/spa-reminders with x-cron-secret from vault, body
+--    {"dry_run": false}, timeout 30s (pg_net law: explicit timeout).
+--    The route (same x-cron-secret gate as tile-sweep) expires passes via
+--    fn_spa_expire_passes, then sends day-before reminders for tomorrow's
+--    booked/confirmed bookings with reminder_sent_at NULL through
+--    lib/spa/notify.ts — identical message to the manual ↻ Remind button;
+--    stamps only on a real email send. Manual pokes default to dry_run=true.
+--
+-- Consumers: app/api/spa/passes/route.ts (sell/redeem/cancel),
+-- app/operations/spa/_shared/PassesView.tsx + PassActions.tsx (+ passes pages,
+-- SpaSubnav "Passes" tab), app/api/cron/spa-reminders/route.ts.
+--
+-- Smoke-tested in a rolled-back txn (sell 3-credit package → redeem 1 →
+-- redeem 2 → fully_redeemed → over-redeem raises SPA_PASS_INACTIVE → view
+-- shows credits_remaining=0 → backdated pass swept by fn_spa_expire_passes).
+-- Zero residue confirmed after rollback.
+SELECT 'record only — see migration history' AS note;
