@@ -26,8 +26,9 @@ const GROUPS_FILE = join(IT2_DIR, '_lib', 'groups.ts');
 
 // Pages reachable by design without a nav tab (linked contextually):
 const ALLOWLIST = new Set([
-  '/holding/it2',            // Action Center home (group href, kept for safety)
-  '/holding/it2/questions',  // Decision Inbox — linked from Action Center Zone 1
+  '/holding/it2',             // Action Center home (group href, kept for safety)
+  '/holding/it2/questions',   // Decision Inbox — linked from Action Center Zone 1
+  '/holding/it2/system/live', // Live Builders heartbeat — linked contextually from System (ADR-209)
 ]);
 
 function walkPages(dir, out = []) {
