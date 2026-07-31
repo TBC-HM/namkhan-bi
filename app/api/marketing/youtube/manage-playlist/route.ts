@@ -16,16 +16,38 @@ async function getToken() {
   return getFreshAccessToken(NAMKHAN);
 }
 
+// GET ?action=list — returns all channel playlists as {id, title}[]
 // GET ?action=get_items&playlist_id=X — returns video IDs in the playlist for merge
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const action = url.searchParams.get('action');
-  const playlistId = url.searchParams.get('playlist_id') ?? '';
-  if (action !== 'get_items' || !playlistId) {
-    return NextResponse.json({ error: 'use ?action=get_items&playlist_id=PL...' }, { status: 400 });
-  }
   const tok = await getToken();
   if (!tok.ok || !tok.access_token) return NextResponse.json({ error: 'yt_token_missing' }, { status: 401 });
+
+  if (action === 'list') {
+    try {
+      const all: Array<{ id: string; title: string }> = [];
+      let pageToken: string | undefined;
+      do {
+        const qs = new URLSearchParams({ part: 'id,snippet', channelId: tok.channel_id!, maxResults: '50' });
+        if (pageToken) qs.set('pageToken', pageToken);
+        const r = await fetch('https://www.googleapis.com/youtube/v3/playlists?' + qs, {
+          headers: { Authorization: 'Bearer ' + tok.access_token },
+        });
+        const j = await r.json() as { items?: Array<{ id: string; snippet?: { title?: string } }>; nextPageToken?: string };
+        for (const item of j.items ?? []) all.push({ id: item.id, title: item.snippet?.title ?? item.id });
+        pageToken = j.nextPageToken;
+      } while (pageToken);
+      return NextResponse.json({ ok: true, playlists: all });
+    } catch (e: unknown) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : 'fetch_failed' }, { status: 502 });
+    }
+  }
+
+  const playlistId = url.searchParams.get('playlist_id') ?? '';
+  if (action !== 'get_items' || !playlistId) {
+    return NextResponse.json({ error: 'use ?action=list or ?action=get_items&playlist_id=PL...' }, { status: 400 });
+  }
   try {
     const all: string[] = [];
     let pageToken: string | undefined;
