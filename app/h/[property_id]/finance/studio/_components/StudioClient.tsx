@@ -5,7 +5,7 @@
 // run → save template → export stamped .xlsx. Tokens only (var(--…)),
 // mobile-first, no browser storage (state lives in React + DB).
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Container } from '@/app/(cockpit)/_design';
 import type {
   StudioAggFn,
@@ -16,6 +16,7 @@ import type {
   StudioTemplateRow,
   StudioViewColumn,
 } from '@/lib/studio/types';
+import type { StudioScheduleRow } from '@/lib/studio/scheduleTypes';
 
 interface Props {
   propertyId: number;
@@ -91,6 +92,71 @@ export default function StudioClient({ propertyId, catalog, initialTemplates }: 
   const [templateName, setTemplateName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [schedules, setSchedules] = useState<StudioScheduleRow[]>([]);
+  const [schedTemplateId, setSchedTemplateId] = useState('');
+  const [schedRecipients, setSchedRecipients] = useState('');
+  const [schedCadence, setSchedCadence] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [schedHour, setSchedHour] = useState(1);
+  const [schedError, setSchedError] = useState<string | null>(null);
+
+  const loadSchedules = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/reports/studio/schedules?property_id=${propertyId}`);
+      const json = (await res.json()) as { schedules?: StudioScheduleRow[] };
+      if (json.schedules) setSchedules(json.schedules);
+    } catch {
+      // panel is auxiliary; builder keeps working without it
+    }
+  }, [propertyId]);
+
+  useEffect(() => { void loadSchedules(); }, [loadSchedules]);
+
+  const saveSchedule = useCallback(async () => {
+    if (!schedTemplateId) { setSchedError('Pick a saved template to schedule.'); return; }
+    if (!schedRecipients.trim()) { setSchedError('Add at least one recipient email.'); return; }
+    setBusy(true);
+    setSchedError(null);
+    try {
+      const res = await fetch('/api/reports/studio/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template_id: schedTemplateId,
+          recipients: schedRecipients,
+          cadence: schedCadence,
+          send_hour_utc: schedHour,
+          property_id: propertyId,
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || json.error) throw new Error(json.error ?? 'schedule save failed');
+      setSchedRecipients('');
+      await loadSchedules();
+    } catch (e) {
+      setSchedError(e instanceof Error ? e.message : 'schedule save failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [schedTemplateId, schedRecipients, schedCadence, schedHour, propertyId, loadSchedules]);
+
+  const toggleSchedule = useCallback(async (s: StudioScheduleRow) => {
+    setBusy(true);
+    setSchedError(null);
+    try {
+      const res = await fetch('/api/reports/studio/schedules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: s.id, active: !s.active }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || json.error) throw new Error(json.error ?? 'toggle failed');
+      await loadSchedules();
+    } catch (e) {
+      setSchedError(e instanceof Error ? e.message : 'toggle failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [loadSchedules]);
 
   const viewsForSchema = useMemo(
     () => catalog.filter((c) => c.view_schema === schema),
@@ -468,6 +534,86 @@ export default function StudioClient({ propertyId, catalog, initialTemplates }: 
           </div>
         ) : (
           <div style={S.note}>No templates saved yet for this property.</div>
+        )}
+      </Container>
+
+      <Container title="5 · Schedules" subtitle="Template + cadence → stamped .xlsx by email (hourly cron, honors the automation switch)">
+        <div style={S.row}>
+          <span style={S.label}>Template</span>
+          <select
+            style={{ ...S.select, minWidth: 200 }}
+            value={schedTemplateId}
+            onChange={(e) => setSchedTemplateId(e.target.value)}
+          >
+            <option value="">— pick a saved template —</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} · v{t.version}</option>
+            ))}
+          </select>
+          <select
+            style={S.select}
+            value={schedCadence}
+            onChange={(e) => setSchedCadence(e.target.value === 'daily' ? 'daily' : e.target.value === 'monthly' ? 'monthly' : 'weekly')}
+          >
+            <option value="daily">daily</option>
+            <option value="weekly">weekly (Mon)</option>
+            <option value="monthly">monthly (1st)</option>
+          </select>
+          <select style={S.select} value={schedHour} onChange={(e) => setSchedHour(Number(e.target.value))}>
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={h}>{String(h).padStart(2, '0')}:00 UTC</option>
+            ))}
+          </select>
+        </div>
+        <div style={S.row}>
+          <span style={S.label}>Recipients</span>
+          <input
+            style={{ ...S.input, flex: 1, minWidth: 220 }}
+            value={schedRecipients}
+            placeholder="email, email — comma separated"
+            onChange={(e) => setSchedRecipients(e.target.value)}
+          />
+          <button type="button" style={S.btn} disabled={busy || !schedTemplateId} onClick={() => void saveSchedule()}>
+            Schedule
+          </button>
+        </div>
+        {schedError && <div style={S.err}>{schedError}</div>}
+        {schedules.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={S.th}>Template</th>
+                  <th style={S.th}>Cadence</th>
+                  <th style={S.th}>Recipients</th>
+                  <th style={S.th}>Last run</th>
+                  <th style={S.th}>Status</th>
+                  <th style={S.th}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedules.map((s) => (
+                  <tr key={s.id}>
+                    <td style={S.td}>{s.template_name}</td>
+                    <td style={S.td}>{s.cadence} · {String(s.send_hour_utc).padStart(2, '0')}:00 UTC</td>
+                    <td style={S.td}>{s.recipients.join(', ')}</td>
+                    <td style={S.td}>{s.last_run_at ? s.last_run_at.slice(0, 16).replace('T', ' ') : '—'}</td>
+                    <td style={S.td}>
+                      {s.last_status ?? '—'}
+                      {s.last_error ? ` · ${s.last_error.slice(0, 60)}` : ''}
+                    </td>
+                    <td style={S.td}>
+                      <button type="button" style={s.active ? S.chipOn : S.chip} disabled={busy} onClick={() => void toggleSchedule(s)}>
+                        {s.active ? 'active' : 'paused'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={S.note}>No schedules yet. Save a template above, then schedule it here.</div>
         )}
       </Container>
     </div>
