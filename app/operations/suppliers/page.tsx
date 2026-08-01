@@ -2,6 +2,7 @@
 // PBS 2026-07-07 · Operations Supplier master list
 // 2026-08-01 · Gold-layer fix: split USD vs LAK vendors; KPI tiles → YTD;
 //              v_operations_suppliers rebuilt with ytd_spend_usd / ytd_spend_lak.
+import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -109,7 +110,10 @@ export default async function OperationsSuppliersPage() {
               return (
                 <tr key={i} style={{ background: i % 2 === 0 ? WHITE : '#FAFAF7' }}>
                   <td style={tdStyle}>
-                    <div style={{ fontWeight: 500 }}>{r.display_name ?? r.vendor_name}</div>
+                    <Link href={`/operations/suppliers/${encodeURIComponent(r.vendor_name)}`}
+                      style={{ fontWeight: 600, color: '#084838', textDecoration: 'none', fontSize: 12 }}>
+                      {r.display_name ?? r.vendor_name}
+                    </Link>
                     {r.display_name && <div style={{ fontSize: 10, color: INK_M }}>{r.vendor_name}</div>}
                   </td>
                   <td style={tdStyle}>
