@@ -17,8 +17,8 @@
 
 import { useState, useMemo, type CSSProperties } from 'react';
 import { Container, MetricRow } from '@/app/(cockpit)/_design';
-import { Markdown } from '@/app/holding/it/cockpit/_components/Markdown';
-import type { Document } from '@/app/holding/it/cockpit/_lib/types';
+import { Markdown } from '@/components/cockpit/Markdown';
+import type { Document } from '@/lib/cockpit/types';
 
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
 
