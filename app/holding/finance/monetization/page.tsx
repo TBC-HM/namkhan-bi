@@ -67,7 +67,7 @@ export default async function HoldingMonetizationPage() {
     sb.from('v_commercial_shadow_prices').select('*').order('module_key'),
     sb.from('v_commercial_margin_rules').select('*').order('rule_code'),
   ]);
-  if (prodRes.error) throw new Error(`v_commercial_products: ${prodRes.error.message}`);
+  if (prodRes.error) { console.error('v_commercial_products:', prodRes.error.message); }
 
   const products = (prodRes.data ?? []) as ProductRow[];
   const entitlements = (entRes.data ?? []) as EntitlementRow[];
@@ -211,7 +211,6 @@ export default async function HoldingMonetizationPage() {
           xKey="month"
           series={[{ key: 'cost', label: 'measured cost' }, { key: 'shadow_revenue', label: 'shadow revenue (simulated)' }]}
           height={240}
-          formatY={(v) => `$${v}`}
           empty={{ title: 'No rated usage yet', hint: 'costs-ingest populates costs.cost_events hourly' }}
         />
       </Container>
