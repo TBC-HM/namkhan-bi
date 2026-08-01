@@ -48,7 +48,7 @@ export default async function CockpitMemoryPage() {
 
   const err = vErr || aErr || rErr;
   if (err) {
-    return <div style={{ padding: 24, color: 'var(--ink') }}>Failed to load platform memory: {err.message}</div>;
+    return <div style={{ padding: 24, color: 'var(--ink)' }}>Failed to load platform memory: {err.message}</div>;
   }
 
   return (
