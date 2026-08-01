@@ -1,7 +1,7 @@
 // app/api/cockpit/skills/discover_agent_flows/route.ts
 // REASONING AGENT LOOP: Generate -> Score -> Filter -> Return
-// Two LLM calls: (1) generate proposals, (2) score each for quality.
-// Only proposals scoring 7+/10 average pass the filter.
+// Sources: (1) GitHub search, (2) e2b-dev/awesome-ai-agents curated list, (3) failing skills gap analysis
+// Two LLM calls: generate proposals then score -> filter >=7/10.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-common';
@@ -10,7 +10,23 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
 
-async function searchGitHub(query: string, token: string, max = 5) {
+// Curated from e2b-dev/awesome-ai-agents (29k stars) -- filtered for Namkhan relevance
+const CURATED_FRAMEWORKS = [
+  { name: 'CrewAI', repo: 'joaomdmoura/crewai', use_case: 'Multi-agent role orchestration -- retreat proposal pipeline, guest email sequences, ICP research teams' },
+  { name: 'GPT Researcher', repo: 'assafelovic/gpt-researcher', use_case: 'Deep research agent -- market research digest, competitor intelligence, ICP prospect profiling' },
+  { name: 'AutoGen', repo: 'microsoft/autogen', use_case: 'Conversational multi-agent -- financial narration, HOD report generation, complex reasoning chains' },
+  { name: 'Lemon Agent', repo: 'felixbrock/lemon-agent', use_case: 'Plan-Validate-Solve workflow -- guest email policy enforcement, retreat proposal with quality gates' },
+  { name: 'MemGPT', repo: 'cpacker/MemGPT', use_case: 'Persistent memory management -- replacement for cockpit_knowledge_base, agent grounding and recall' },
+  { name: 'BabyAGI', repo: 'yoheinakajima/babyagi', use_case: 'Sequential task decomposition -- multi-step booking pipeline, onboarding sequence automation' },
+  { name: 'MetaGPT', repo: 'geekan/MetaGPT', use_case: 'Multi-role software agents -- automated spec writing, module documentation updates' },
+  { name: 'Autonomous HR Chatbot', repo: 'stepanogil/autonomous-hr-chatbot', use_case: 'Tool-using Q&A -- pattern for route_to_hod, create_task_from_conversation, FO phone bot' },
+  { name: 'Maige', repo: 'team-maige/maige', use_case: 'Natural-language GitHub workflows -- automated PR labelling, issue triage for namkhan-bi repo' },
+  { name: 'FastAgency', repo: 'airtai/fastagency', use_case: 'Multi-agent deployment framework -- productionising any of the 10 flow library skills as API routes' },
+];
+
+const QUALITY_GATE = 'A GOOD proposal (score 7-10): specific skill name, references real Namkhan data (QB/PMS/ICP/media/YouTube), genuinely useful for 24-room Luang Prabang luxury hotel, concrete measurable ROI, does NOT duplicate existing skills, technically feasible. A BAD proposal (score 1-6): generic, no data integration, duplicates existing skill, vague ROI, not feasible.';
+
+async function searchGitHub(query: string, token: string, max = 4) {
   const url = 'https://api.github.com/search/repositories?q=' + encodeURIComponent(query) + '&sort=stars&order=desc&per_page=' + max;
   const res = await fetch(url, {
     headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json' }, cache: 'no-store',
@@ -19,9 +35,6 @@ async function searchGitHub(query: string, token: string, max = 5) {
   const data = await res.json() as { items?: Array<{ full_name: string; description: string | null; stargazers_count: number }> };
   return (data.items ?? []).map(r => ({ repo: r.full_name, description: r.description ?? '', stars: r.stargazers_count }));
 }
-
-const QUALITY_GATE = `A GOOD proposal (score 7-10): specific skill name, references real Namkhan data (QB/PMS/ICP/media/YouTube), genuinely useful for 24-room Luang Prabang luxury hotel, concrete measurable ROI, does NOT duplicate existing skills, technically feasible.
-A BAD proposal (score 1-6): generic, no data integration, duplicates existing skill, vague ROI like "saves time", not feasible.`;
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as { focus?: string; prompt?: string; max_proposals?: number };
@@ -40,34 +53,36 @@ export async function POST(req: NextRequest) {
     .filter((s: Record<string,unknown>) => s.health_status === 'failing')
     .map((s: Record<string,unknown>) => (s.name as string) + '(' + s.success_all_time + '/' + s.total_all_time + ')');
 
-  // Search GitHub
+  // GitHub search -- broad + niche hospitality
   const searches = [
-    userRequest + ' agent LLM workflow',
-    'hotel hospitality ' + userRequest + ' AI automation',
-    'crewai multi-agent workflow business stars:>500',
-    'boutique hotel ' + userRequest + ' python agent',
-    'langchain hospitality travel agent template',
+    userRequest + ' agent LLM workflow hospitality',
+    'boutique hotel ' + userRequest + ' AI automation python',
+    'crewai ' + userRequest + ' agent template stars:>100',
+    'langchain hospitality travel agent business',
+    userRequest + ' multi-agent workflow production',
   ];
   const repoLines: string[] = [];
   for (const q of searches) {
     if (githubToken) {
       const repos = await searchGitHub(q, githubToken, 3);
-      if (repos.length) repoLines.push('"' + q + '": ' + repos.map(r => r.repo + '(star' + r.stars + '): ' + r.description.slice(0,80)).join(' | '));
+      if (repos.length) repoLines.push('"' + q + '": ' + repos.map(r => r.repo + '(star' + r.stars + '): ' + (r.description || '').slice(0,80)).join(' | '));
     }
   }
 
-  // STEP 1: GENERATE
-  const sysGen = 'You are an AI agent architect for The Namkhan — 24-room 5-star luxury hotel Luang Prabang Laos (SLH Considerate Collection). Data: QB GL (finance.*), PMS (pms.*), ICP (sales.icp_segments), media (media.*), YouTube (marketing.yt_*). Failing skills needing replacement: ' + (failingList.join(', ') || 'none') + '.';
-  const usrGen = 'USER REQUEST: "' + userRequest + '"\n\nGITHUB REFS:\n' + (repoLines.join('\n') || '[use training knowledge]') + '\n\nEXISTING SKILLS (no duplicates): ' + existingNames + '\n\nGenerate ' + (maxProposals + 4) + ' proposals. Each must be a SPECIFIC agent flow, not a generic tool. Return JSON array: [{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun_slug","display_name":"Human Name","source_repo":"owner/repo or framework","namkhan_fit":"WHY this specific 24-room Luang Prabang hotel needs this","effort":"Low|Medium|High","roi":"High|Medium|Low","value":"specific measurable outcome","integration":"exact table/view names from Namkhan DB","proposal":"2-3 sentences what to build","match_pct":70-99}]';
+  const curatedCtx = CURATED_FRAMEWORKS.map(f => f.name + ' (' + f.repo + '): ' + f.use_case).join('\n');
 
-  const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 3000 });
+  // STEP 1: GENERATE
+  const sysGen = 'You are an AI agent architect for The Namkhan -- 24-room 5-star luxury hotel Luang Prabang Laos. Data: QB GL (finance.*), PMS (pms.*), ICP (sales.icp_segments), media (media.*), YouTube (marketing.yt_*). Failing skills needing replacement: ' + (failingList.join(', ') || 'none') + '.\n\nCURATED AGENT FRAMEWORKS (e2b-dev/awesome-ai-agents):\n' + curatedCtx;
+  const usrGen = 'USER REQUEST: "' + userRequest + '"\n\nGITHUB REFS:\n' + (repoLines.join('\n') || '[use training knowledge + curated frameworks above]') + '\n\nEXISTING SKILLS (no duplicates): ' + existingNames + '\n\nGenerate ' + (maxProposals + 4) + ' proposals. Each must be a SPECIFIC agent flow for Namkhan. Reference curated frameworks where relevant. Return JSON array: [{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun_slug","display_name":"Human Name","source_repo":"owner/repo or framework name","framework":"CrewAI|AutoGen|LangChain|custom","namkhan_fit":"WHY this 24-room hotel needs this","effort":"Low|Medium|High","roi":"High|Medium|Low","value":"specific measurable outcome","integration":"exact table/view names from Namkhan DB","proposal":"2-3 sentences what to build","match_pct":70-99}]';
+
+  const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 3500 });
   if (!isLlmOk(gen)) return NextResponse.json({ error: gen.error }, { status: 502 });
 
   let rawProps: Array<Record<string,unknown>> = [];
   try { const m = gen.text.match(/\[[\s\S]*\]/); rawProps = m ? JSON.parse(m[0]) : []; } catch { rawProps = []; }
   if (rawProps.length === 0) return NextResponse.json({ error: 'no_proposals', raw: gen.text.slice(0,300) }, { status: 502 });
 
-  // STEP 2: SCORE (reasoning evaluation)
+  // STEP 2: SCORE
   const sysSco = 'You are a quality evaluator for AI agent proposals. ' + QUALITY_GATE + ' Return ONLY valid JSON.';
   const usrSco = 'Score each proposal 1-10 on: namkhan_fit, feasibility, uniqueness, data_integration, roi_clarity. DEDUCT 5 points on uniqueness if similar to existing skills.\nReturn: [{"index":0,"avg":8.2,"verdict":"PASS","scores":{"namkhan_fit":9,"feasibility":8,"uniqueness":8,"data_integration":8,"roi_clarity":8},"reason":"..."},...]\n\nProposals:\n' + rawProps.map((p, i) => i + ': ' + p.skill_name + ' | fit: ' + p.namkhan_fit + ' | data: ' + p.integration + ' | roi: ' + p.value).join('\n') + '\n\nExisting skills: ' + existingNames;
 
@@ -99,6 +114,7 @@ export async function POST(req: NextRequest) {
       passed_quality_gate: scoreMeta.passed,
       filtered_low_quality: scoreMeta.filtered,
       quality_gate: '7/10 average across 5 dimensions',
+      curated_source: 'e2b-dev/awesome-ai-agents (10 frameworks)',
       current_skill_count: (skills ?? []).length,
       failing_skills: failingList,
       repos_scanned: repoLines.length * 3,
