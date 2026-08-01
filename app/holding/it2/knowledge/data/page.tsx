@@ -1,14 +1,14 @@
 // app/holding/it2/knowledge/data/page.tsx
 // PBS 2026-07-30 — IT2 Knowledge → Data: one room for "what data exists and
-// how fresh is it". Schemas + Freshness are it2-native (consolidation r4
-// 2026-07-31); Sitemap + Platform Memory still at old cockpit URLs until the
-// next consolidation slice moves them.
+// how fresh is it". All four surfaces are it2-native (Schemas + Freshness
+// consolidation r4 2026-07-31; Sitemap + Platform Memory final slice
+// 2026-08-01).
 
 const CARDS = [
   { href: '/holding/it2/knowledge/data/schemas',   title: 'Schemas',         sub: 'Every schema, table and view in the platform DB' },
   { href: '/holding/it2/knowledge/data/freshness', title: 'Freshness',       sub: 'Per-tenant data coverage — what is stale, what is live' },
-  { href: '/holding/it/cockpit/sitemap',   title: 'Sitemap',         sub: 'Every route in the app, audited' },
-  { href: '/holding/it/cockpit/memory',    title: 'Platform Memory', sub: 'Doc diffs · ADR threads · rule consolidation · why-search' },
+  { href: '/holding/it2/knowledge/data/sitemap',   title: 'Sitemap',         sub: 'Every route in the app, audited' },
+  { href: '/holding/it2/knowledge/data/memory',    title: 'Platform Memory', sub: 'Doc diffs · ADR threads · rule consolidation · why-search' },
 ];
 
 export default function DataPage() {
