@@ -180,6 +180,13 @@ export default async function OperationsSuppliersPage() {
     >
       <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 16 }}>
 
+        {/* Cross-links to related mapping pages */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#5A5A5A' }}>Related:</span>
+          <Link href="/finance/supplier-mapping" style={{ fontSize: 11, color: '#084838', padding: '3px 10px', border: '1px solid #E6DFCC', borderRadius: 3, textDecoration: 'none', background: '#FFFFFF' }}>Supplier GL Mapping →</Link>
+          <Link href="/finance/suppliers" style={{ fontSize: 11, color: '#5A5A5A', padding: '3px 10px', border: '1px solid #E6DFCC', borderRadius: 3, textDecoration: 'none', background: '#FFFFFF' }}>Finance view →</Link>
+        </div>
+
         {/* KPI Tiles */}
         <Container title="Supplier headline" density="compact"
           subtitle={`Gold layer: USD and LAK split correctly · ${currentYear} YTD`}>
