@@ -6,9 +6,9 @@
 // Author: IT-team agent · 2026-05-13 · #58.
 
 import Link from 'next/link';
-import { fetchTicket } from '@/app/holding/it/cockpit/_lib/data-port';
+import { fetchTicket } from '@/lib/cockpit/data-port';
 import { ActionsBar } from './ActionsBar';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
