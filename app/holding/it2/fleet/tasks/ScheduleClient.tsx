@@ -7,7 +7,7 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 import { GROUPS, cronPlain, cronFireHours } from '@/lib/schedule/catalog';
 import { jobSetAction, masterSetAction } from './actions';
 
