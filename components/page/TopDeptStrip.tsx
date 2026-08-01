@@ -49,10 +49,9 @@ const HOLDING_DEPTS: DeptLink[] = [
   { label: 'Sales',        slug: 'sales',     href: '/holding/sales'     },
   { label: 'Legal',        slug: 'legal',     href: '/holding/legal'     },
   { label: 'Finance',      slug: 'finance',   href: '/holding/finance'   },
-  { label: 'IT',           slug: 'it',        href: '/holding/it'        },
-  // PBS 2026-07-30: IT2 — the reorganized IT area (brief it-area-reorg-v1),
-  // running in parallel next to IT. Once PBS approves + all is wired, the old
-  // IT entry and /holding/it/* retire and IT2 becomes IT.
+  // it-area-reorg-v1 final slice (2026-08-01): the legacy IT entry is retired —
+  // /holding/it now 307s to /holding/it2, so ONE strip entry remains. Renaming
+  // IT2 → IT (URL move) is the sequenced owner question on the brief.
   { label: 'IT2',          slug: 'it2',       href: '/holding/it2'       },
   // PBS 2026-07-09 pm: Tasks OUT of top strip. Still reachable via the DeptEntry
   // landing on /holding (Tasks box in Attention · Reports · Tasks · Bugs row).
