@@ -3,7 +3,7 @@
 // Status transition buttons for a build brief row.
 
 import { useState } from 'react';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 // PBS 2026-07-27 guardrails: humans NEVER 'Start' (ready = machine pulls it;
 // a manual in_progress just removes the brief from the queue with no worker)
