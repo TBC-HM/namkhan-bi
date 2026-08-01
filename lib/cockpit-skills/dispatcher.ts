@@ -18,6 +18,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { dispatchSkill as dispatchTsHandler } from '@/lib/cockpit-tools';
+import { checkSkillEntitlement } from '@/lib/entitlements';
 import type { LoadedSkill } from './loader';
 
 export type SkillCallResult = {
@@ -122,6 +123,34 @@ export async function executeSkill(args: DispatchInput): Promise<SkillCallResult
     return {
       status: 'failed',
       error: budgetErr,
+      duration_ms: Date.now() - t0,
+      cost_usd_milli: 0,
+      call_id: null,
+    };
+  }
+
+  // 1b. Entitlement gate (Monetization Engine v1 — "entitlements checked
+  // BEFORE task execution"). Only fires when the call carries a tenant
+  // context (property_id) and the skill maps to a tenancy module.
+  const ent = await checkSkillEntitlement({
+    supa,
+    skillName: skill.name,
+    servesModule: skill.serves_module,
+    input,
+  });
+  if (!ent.allowed) {
+    const entErr = `entitlement_denied: module=${ent.moduleCode ?? 'unknown'} property=${ent.propertyId} source=${ent.source}`;
+    await supa.from('cockpit_audit_log').insert({
+      agent: role,
+      action: 'skill_entitlement_blocked',
+      target: `skill:${skill.name}`,
+      success: false,
+      reasoning: entErr,
+      metadata: { skill_id: skill.skill_id, input, entitlement: ent },
+    });
+    return {
+      status: 'failed',
+      error: entErr,
       duration_ms: Date.now() - t0,
       cost_usd_milli: 0,
       call_id: null,
