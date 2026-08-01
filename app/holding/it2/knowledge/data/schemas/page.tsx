@@ -8,7 +8,7 @@
 //
 // Author: IT-team agent · 2026-05-13 · #77.
 
-import { fetchSchemaInventory } from '@/app/holding/it/cockpit/_lib/data';
+import { fetchSchemaInventory } from '@/lib/cockpit/data';
 import { SchemasView } from './SchemasView';
 
 export const dynamic = 'force-dynamic';
