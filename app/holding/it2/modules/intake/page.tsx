@@ -8,7 +8,6 @@
 // (verbatim canon → evaluate vs platform law → brief + queue row).
 
 import { DashboardPage } from '@/app/(cockpit)/_design';
-import { groupsAsTabs } from '@/app/holding/it/cockpit/_lib/groups';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { type GoalOption } from './SpecBuilderClient';
 import SpecNewTabs from './SpecNewTabs';
@@ -35,7 +34,6 @@ export default async function SpecNewPage() {
   return (
     <DashboardPage
       title="Spec Builder"
-      tabs={groupsAsTabs('build')}
       action={
         <a href="/holding/it2/modules/specs" style={{ fontSize: 11, color: '#5A5A5A', textDecoration: 'none', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
           ← All specs
