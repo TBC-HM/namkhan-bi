@@ -25,8 +25,8 @@ import type {
   Skill,
   AgentSkill,
   RoleRunStats,
-} from '@/app/holding/it/cockpit/_lib/types';
-import { PROPERTY_NAMKHAN, PROPERTY_DONNA } from '@/app/holding/it/cockpit/_lib/types';
+} from '@/lib/cockpit/types';
+import { PROPERTY_NAMKHAN, PROPERTY_DONNA } from '@/lib/cockpit/types';
 
 type Props = {
   agents: Agent[];
