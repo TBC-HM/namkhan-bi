@@ -3,7 +3,7 @@
 // TenantLink keeps the /h/{property_id} prefix on Donna; Namkhan stays unprefixed.
 
 import TenantLink from '@/components/nav/TenantLink';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 const ITEMS = [
   { key: 'overview',  label: 'Overview',  href: '/operations/spa' },
