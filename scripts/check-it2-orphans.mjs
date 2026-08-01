@@ -32,6 +32,8 @@ const ALLOWLIST = new Set([
   // Data surfaces — linked contextually from Knowledge → Data hub (consolidation 2026-07-31):
   '/holding/it2/knowledge/data/schemas',
   '/holding/it2/knowledge/data/freshness',
+  '/holding/it2/knowledge/data/sitemap',
+  '/holding/it2/knowledge/data/memory',
 ]);
 
 function walkPages(dir, out = []) {
@@ -60,9 +62,23 @@ for (const f of walkPages(IT2_DIR)) {
   if (f.includes('/_components/') || f.includes('/_lib/')) continue;
   const route = routeOf(f, IT2_DIR, '/holding/it2');
   // Dynamic segments ([id], [slug]) are detail pages: reachable when the
-  // nearest static ancestor route is reachable (consolidation pass 2026-07-30).
-  const staticBase = route.includes('[') ? route.slice(0, route.indexOf('[')).replace(/\/$/, '') : route;
-  if (!navHrefs.has(staticBase) && !ALLOWLIST.has(staticBase)) {
+  // NEAREST static ancestor route is reachable (consolidation pass 2026-07-30;
+  // final slice 2026-08-01: walk UP the ancestors — /fleet/team/agent/[role]
+  // is reachable via /fleet/team, not via the non-page /fleet/team/agent).
+  const reachable = (r) => navHrefs.has(r) || ALLOWLIST.has(r);
+  let ok = false;
+  if (!route.includes('[')) {
+    ok = reachable(route);
+  } else {
+    let base = route.slice(0, route.indexOf('[')).replace(/\/$/, '');
+    while (base.length >= '/holding/it2'.length) {
+      if (reachable(base)) { ok = true; break; }
+      const cut = base.lastIndexOf('/');
+      if (cut <= 0) break;
+      base = base.slice(0, cut);
+    }
+  }
+  if (!ok) {
     errors.push(`ORPHAN: ${route} (${f.slice(ROOT.length + 1)}) is not reachable from _lib/groups.ts`);
   }
 }
