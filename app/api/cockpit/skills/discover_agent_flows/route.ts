@@ -1,7 +1,7 @@
 // app/api/cockpit/skills/discover_agent_flows/route.ts
 // REASONING AGENT LOOP: Generate -> Score -> Filter -> Return
-// Design: hotel-generic discovery -- good flows come from any industry
-// Fix: TS syntax fix, maxTokens 6000, 6 proposals, parallel GitHub, 30-room hotel
+// Sources: GitHub (broad + CLAUDE.md repos + Anthropic cookbook), Reddit JSON API, curated list
+// Hotel-generic discovery -- good flows come from any industry
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-common';
@@ -10,18 +10,26 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
 
-const CURATED_FRAMEWORKS = [
-  'CrewAI (joaomdmoura/crewai) -- role-based multi-agent orchestration',
-  'GPT Researcher (assafelovic/gpt-researcher) -- autonomous deep research, market intel',
-  'AutoGen (microsoft/autogen) -- conversational multi-agent, report narration',
-  'Lemon Agent (felixbrock/lemon-agent) -- Plan-Validate-Solve with policy enforcement',
-  'MemGPT (cpacker/MemGPT) -- persistent memory across agent sessions',
-  'BabyAGI (yoheinakajima/babyagi) -- iterative task decomposition',
-  'Autonomous HR Bot (stepanogil/autonomous-hr-chatbot) -- tool-using Q&A, phone/chat pattern',
-  'FastAgency (airtai/fastagency) -- multi-agent deployment and orchestration',
+// Verified curated sources -- all exist and confirmed useful
+const CURATED_SOURCES = [
+  // Anthropic official patterns
+  'anthropics/anthropic-cookbook: official agent patterns -- tool_use/customer_service_agent, multimodal/using_sub_agents, patterns/agents/, managed_agents/, observability/',
+  // Proven multi-agent frameworks
+  'joaomdmoura/crewai: role-based multi-agent orchestration, excellent for sequential workflows',
+  'assafelovic/gpt-researcher: autonomous deep research agent, web + source synthesis',
+  'microsoft/autogen: conversational multi-agent, ideal for report narration and data analysis',
+  'felixbrock/lemon-agent: Plan-Validate-Solve with policy enforcement',
+  'cpacker/MemGPT: persistent memory across agent sessions',
+  'stepanogil/autonomous-hr-chatbot: tool-using Q&A pattern -- template for phone/chat bots',
+  // CLAUDE.md workflow patterns (verified real repos)
+  'ithiria894/awesome-claude-code-workflows (114 stars): hooks + MCP + skills + CLAUDE.md workflow recipes',
+  'MuhammadUsmanGM/claude-code-best-practices (67 stars): CLAUDE.md templates, multi-agent patterns, micro-agent setups under 150 lines',
+  'runtimenoteslabs/cc-rig (32 stars): project generator with CLAUDE.md + agents + hooks auto-configured',
+  // Reference blog
+  'simonwillison.net: parallel agent coding, worktree patterns, agentic search, Claude Code workflows',
 ];
 
-const QUALITY_GATE = 'PASS (7-10): clear value for a small hospitality team, technically feasible, measurable time or revenue impact, novel vs existing. FAIL (1-6): pure chatbot, no measurable outcome, duplicates existing, requires unavailable infrastructure.';
+const QUALITY_GATE = 'PASS (7-10): clear value for small hotel team, technically feasible with LLM + APIs, measurable time/revenue impact, novel vs existing. FAIL (1-6): pure chatbot, vague outcome, duplicates existing, unavailable infrastructure.';
 
 function extractJsonArray(text: string): Array<Record<string, unknown>> | null {
   let pos = 0;
@@ -40,7 +48,7 @@ function extractJsonArray(text: string): Array<Record<string, unknown>> | null {
       try {
         const parsed = JSON.parse(text.slice(pos, end + 1));
         if (Array.isArray(parsed) && parsed.length > 0) return parsed as Array<Record<string, unknown>>;
-      } catch { /* try next */ }
+      } catch { /* try next [ */ }
     }
     pos++;
   }
@@ -48,11 +56,26 @@ function extractJsonArray(text: string): Array<Record<string, unknown>> | null {
 }
 
 async function searchGitHub(query: string, token: string): Promise<string[]> {
-  const url = 'https://api.github.com/search/repositories?q=' + encodeURIComponent(query) + '&sort=stars&order=desc&per_page=3';
-  const res = await fetch(url, { headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json' }, cache: 'no-store' });
-  if (!res.ok) return [];
-  const data = await res.json() as { items?: Array<{ full_name: string; description: string | null; stargazers_count: number }> };
-  return (data.items ?? []).map(r => r.full_name + '(star' + r.stargazers_count + ') -- ' + (r.description ?? '').slice(0, 70));
+  try {
+    const url = 'https://api.github.com/search/repositories?q=' + encodeURIComponent(query) + '&sort=stars&order=desc&per_page=3';
+    const res = await fetch(url, { headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json' }, cache: 'no-store' });
+    if (!res.ok) return [];
+    const data = await res.json() as { items?: Array<{ full_name: string; description: string | null; stargazers_count: number }> };
+    return (data.items ?? []).map(r => r.full_name + '(star' + r.stargazers_count + ') -- ' + (r.description ?? '').slice(0, 65));
+  } catch { return []; }
+}
+
+async function searchReddit(query: string): Promise<string[]> {
+  try {
+    const url = 'https://www.reddit.com/search.json?q=' + encodeURIComponent(query) + '&sort=relevance&t=year&limit=5';
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'namkhan-discover-bot/1.0' },
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    const data = await res.json() as { data?: { children?: Array<{ data: { title: string; subreddit: string; score: number } }> } };
+    return (data.data?.children ?? []).map(p => 'r/' + p.data.subreddit + ': ' + p.data.title.slice(0, 80) + ' (' + p.data.score + ' upvotes)');
+  } catch { return []; }
 }
 
 export async function POST(req: NextRequest) {
@@ -71,40 +94,43 @@ export async function POST(req: NextRequest) {
     .filter((s: Record<string, unknown>) => s.health_status === 'failing')
     .map((s: Record<string, unknown>) => s.name as string);
 
-  // Parallel GitHub searches
-  const queries = [
-    userRequest + ' agent automation LLM workflow',
-    'hospitality hotel ' + userRequest + ' AI',
-    userRequest + ' crewai autogen multi-agent',
-  ];
-  const repoResults = await Promise.all(
-    queries.map(q => githubToken ? searchGitHub(q, githubToken) : Promise.resolve([]))
-  );
-  const repoLines = repoResults.flatMap(r => r).slice(0, 9);
+  // Parallel: GitHub (broad + Anthropic cookbook + CLAUDE.md focused) + Reddit
+  const [ghGeneral, ghAnthropic, ghClaudeMd, redditPosts] = await Promise.all([
+    githubToken ? searchGitHub(userRequest + ' agent automation LLM workflow', githubToken) : Promise.resolve([]),
+    githubToken ? searchGitHub('anthropics/anthropic-cookbook ' + userRequest, githubToken) : Promise.resolve([]),
+    githubToken ? searchGitHub('CLAUDE.md agent workflow skills hooks stars:>10', githubToken) : Promise.resolve([]),
+    searchReddit(userRequest + ' AI agent automation workflow'),
+  ]);
 
-  // STEP 1: GENERATE -- hotel-generic, not Namkhan-locked
+  const ghLines = [...ghGeneral, ...ghAnthropic, ...ghClaudeMd].slice(0, 9);
+  const rdLines = redditPosts.slice(0, 4);
+
+  // STEP 1: GENERATE -- hotel-generic, flows can come from any industry
   const sysGen = [
-    'You are an AI agent architect. Find high-value agent automation flows for the hospitality industry.',
-    'Context: 30-room luxury boutique hotel, small team (8-12 staff), systems: PMS, GL accounting, CRM, YouTube, email marketing.',
+    'You are an expert AI agent architect. Discover high-value agent automation flows for hospitality.',
+    'Context: 30-room luxury boutique hotel, small team (8-12 staff), systems: PMS, GL accounting, CRM, YouTube, email.',
     'Failing skills to replace: ' + (failingSkills.join(', ') || 'none') + '.',
-    'Curated frameworks: ' + CURATED_FRAMEWORKS.join('; '),
+    '',
+    'Verified sources to draw from:',
+    ...CURATED_SOURCES.map(s => '- ' + s),
     '',
     'CRITICAL: Output ONLY a valid JSON array starting with [ and ending with ].',
     'Every string value MUST be under 120 characters. No preamble. No markdown. No code blocks.',
-    'If you cannot comply output: []',
+    'If you cannot comply output exactly: []',
   ].join('\n');
 
   const usrGen = [
-    'Discover agent flows for: "' + userRequest + '"',
+    'Discover flows for: "' + userRequest + '"',
     '',
-    'GitHub refs: ' + (repoLines.length ? repoLines.join(' | ') : 'none'),
+    'GitHub refs: ' + (ghLines.length ? ghLines.join(' | ') : 'none'),
+    'Reddit signals: ' + (rdLines.length ? rdLines.join(' | ') : 'none'),
     'Skip (already built): ' + existingNames,
     '',
-    'Rules: flows can come from ANY industry (legal, finance, content, HR) -- if adaptable for a hotel, include it.',
-    'Focus on: time saved, revenue impact, guest experience, team productivity.',
+    'Flows can come from ANY industry -- legal, finance, content, HR. If adaptable for a 30-room hotel, include it.',
+    'Prioritise patterns from: Anthropic cookbook, CLAUDE.md workflow repos, proven multi-agent frameworks.',
     '',
     'Generate exactly ' + maxProps + ' proposals. Every field MAX 120 chars:',
-    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun_slug","display_name":"Human Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","value":"specific outcome eg saves 3h/week","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences: what to build and how","match_pct":85}]',
+    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun_slug","display_name":"Human Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","value":"specific outcome e.g. saves 3h/week","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences: what to build and how","match_pct":85}]',
   ].join('\n');
 
   const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 6000 });
@@ -119,7 +145,7 @@ export async function POST(req: NextRequest) {
     }, { status: 502 });
   }
 
-  // STEP 2: SCORE -- hotel fit, not DB-table fit
+  // STEP 2: SCORE -- hotel fit, not DB-table specificity
   const sysSco = 'Score AI agent proposals for a small luxury hotel. ' + QUALITY_GATE + ' Return ONLY valid JSON array.';
   const usrSco = [
     'Score each 1-10: hotel_fit, feasibility, uniqueness, effort_vs_value, roi_clarity.',
@@ -138,9 +164,8 @@ export async function POST(req: NextRequest) {
     if (scoreArr) {
       scoreMeta.scored = scoreArr.length;
       type ScoreRow = { index: number; avg: number; verdict: string; reason: string; scores: Record<string, number> };
-      const scores = scoreArr as ScoreRow[];
       const annotated = rawProps.map((p, i) => {
-        const s = scores.find(sc => sc.index === i);
+        const s = (scoreArr as ScoreRow[]).find(sc => sc.index === i);
         return { ...p, _avg: s?.avg ?? 5, _verdict: s?.verdict ?? 'UNKNOWN', _reason: s?.reason ?? '', _scores: s?.scores ?? {} };
       });
       finalProps = annotated.filter(p => (p._avg as number) >= 7).sort((a, b) => (b._avg as number) - (a._avg as number));
@@ -149,15 +174,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // STEP 3: PERSIST -- agent_handle=pbs_research so agents do not auto-read
+  // STEP 3: PERSIST -- pbs_research handle, not auto-read by agents
   if (finalProps.length > 0) {
     const content = [
       'DISCOVERY "' + userRequest + '" ' + new Date().toISOString().slice(0, 16),
+      'Sources: GitHub (' + ghLines.length + ') + Reddit (' + rdLines.length + ') + Anthropic cookbook + CLAUDE.md repos',
       'Passed ' + finalProps.length + '/' + rawProps.length,
       ...finalProps.map((p, i) =>
-        (i + 1) + '. [' + p.type + '] ' + p.skill_name + ' (' + p.framework + ') -- ' +
-        String(p.value).slice(0, 100) + ' | score: ' + String((p._avg as number)?.toFixed(1)) +
-        '\n   ' + String(p.proposal).slice(0, 150)
+        (i + 1) + '. [' + p.type + '] ' + p.skill_name + ' (' + p.framework + ') score:' + String((p._avg as number)?.toFixed(1)) + '\n   ' +
+        String(p.value).slice(0, 100) + '\n   ' + String(p.proposal).slice(0, 150)
       ),
     ].join('\n');
     try {
@@ -176,8 +201,9 @@ export async function POST(req: NextRequest) {
     metadata: {
       user_request: userRequest, generated: rawProps.length,
       passed_quality_gate: scoreMeta.passed, filtered_low_quality: scoreMeta.filtered,
-      curated_source: 'e2b-dev/awesome-ai-agents (8 frameworks)',
-      repos_scanned: repoLines.length, persisted: finalProps.length > 0,
+      sources: 'GitHub + Reddit + Anthropic cookbook + CLAUDE.md repos',
+      repos_scanned: ghLines.length, reddit_posts: rdLines.length,
+      persisted: finalProps.length > 0,
     },
   });
 }
