@@ -3,7 +3,7 @@
 
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 import BriefActions from '../_components/BriefActions';
 import { BriefQuestionInline } from '../_components/BriefQuestionPanel';
 import LiveActivityPanel from '../_components/LiveActivityPanel';
