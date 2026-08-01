@@ -8,7 +8,7 @@
 // in replies deep-link to /holding/it2/questions (Decision Inbox).
 
 import CentralChat from '@/components/chat/CentralChat';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
 
 export const dynamic = 'force-dynamic';
 
