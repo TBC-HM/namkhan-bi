@@ -4,7 +4,7 @@
 // Auto-refreshes every 30s. Stall flag if no update >90min while in_progress.
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 type PushEvent = {
   id: string;
