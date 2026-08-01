@@ -7,8 +7,8 @@
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Container } from '@/app/(cockpit)/_design';
-import { Markdown } from '@/app/holding/it/cockpit/_components/Markdown';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { Markdown } from '@/components/cockpit/Markdown';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 import type { Release } from './page';
 
 export function ReleasePicker({ releases }: { releases: Release[] }) {
