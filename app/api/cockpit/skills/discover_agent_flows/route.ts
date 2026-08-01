@@ -1,6 +1,6 @@
 // app/api/cockpit/skills/discover_agent_flows/route.ts
 // REASONING AGENT LOOP: Generate -> Score -> Filter -> Persist -> Return
-// Fix: TS error (cast p.skill_name/display_name), threshold 7.0, diversity prompt, generate 8
+// Fix: ScoredProp type (Record intersection preserves index sig), agent_handle='all' for brain access
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-common';
@@ -8,6 +8,15 @@ import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-com
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
+
+// ScoredProp: Record<string,unknown> intersection preserves index signature
+// so p.skill_name / p.display_name return unknown (compilable) not "does not exist"
+type ScoredProp = Record<string, unknown> & {
+  _avg: number;
+  _verdict: string;
+  _reason: string;
+  _scores: Record<string, number>;
+};
 
 const CURATED_SOURCES = [
   'anthropics/anthropic-cookbook: official -- tool_use/customer_service_agent, multimodal/using_sub_agents, patterns/agents/',
@@ -22,12 +31,11 @@ const CURATED_SOURCES = [
   'simonwillison.net: parallel agent coding, worktree patterns, Claude Code workflows',
 ];
 
-// Hard chatbot veto + threshold 7.0 (was 7.5 -- too aggressive for 6-8 proposals)
 const QUALITY_GATE = `Score 1-10 on: hotel_fit, feasibility, uniqueness, effort_vs_value, roi_clarity.
-HARD FAIL (score ≤ 2 on hotel_fit AND feasibility): proposal is fundamentally just "LLM answers questions" -- no tools, no pipeline, no structured action, output is only unstructured text, no DB write or API call. A chatbot with a clever name is still a chatbot.
+HARD FAIL (score <= 2 on hotel_fit AND feasibility): proposal is fundamentally just LLM answering questions with no tools, pipeline, or structured action. A chatbot with a clever name is still a chatbot.
 Deduct 5 on uniqueness if it duplicates an existing skill.
 Reward: multi-step reasoning, tool use, structured output, measurable number in ROI.
-Penalise: vague ROI, no named data source, generic prompts, output is just a summary.
+Penalise: vague ROI, no named data source, output is only unstructured text.
 Threshold to PASS: average >= 7.0.`.trim();
 
 function extractJsonArray(text: string): Array<Record<string, unknown>> | null {
@@ -95,27 +103,27 @@ export async function POST(req: NextRequest) {
   const ghLines = [...ghGeneral, ...ghAnthropic, ...ghClaudeMd].slice(0, 9);
   const rdLines = redditPosts.slice(0, 4);
 
-  // STEP 1: GENERATE -- enforce diversity: different concepts, not 6 variations of the same idea
+  // STEP 1: GENERATE with diversity rule
   const sysGen = [
     'You are an expert AI agent architect. Discover high-value agent automation flows for a 30-room luxury boutique hotel.',
     'Failing skills to replace: ' + (failingSkills.join(', ') || 'none') + '.',
     'Verified sources: ' + CURATED_SOURCES.join('; '),
     'CRITICAL: Output ONLY a valid JSON array starting with [ and ending with ].',
-    'Every string value MUST be under 120 characters. No preamble. No markdown.',
-    'If you cannot comply output: []',
+    'Every string value MUST be under 120 characters. No preamble. No markdown. If you cannot comply output: []',
   ].join('\n');
 
   const usrGen = [
-    'Discover flows for: "' + userRequest + '"',
-    'GitHub refs: ' + (ghLines.join(' | ') || 'none'),
-    'Reddit signals: ' + (rdLines.join(' | ') || 'none'),
+    'Discover: "' + userRequest + '"',
+    'GitHub: ' + (ghLines.join(' | ') || 'none'),
+    'Reddit: ' + (rdLines.join(' | ') || 'none'),
     'Skip (exist): ' + existingNames,
     '',
-    'DIVERSITY RULE: Generate ' + (maxProps + 2) + ' proposals that span DIFFERENT aspects of the problem space.',
-    'DO NOT generate multiple variations of the same core concept (e.g. if you propose a thumbnail generator, do NOT also propose thumbnail scorer AND thumbnail batch AND thumbnail guardrail -- pick the ONE best thumbnail concept, then find DIFFERENT ideas).',
-    'Think: (1) the direct answer to the query, (2) an adjacent upstream/downstream skill, (3) a different workflow that would complement it, (4) a replacement for a failing skill.',
+    'DIVERSITY RULE: Generate ' + (maxProps + 2) + ' proposals covering DIFFERENT aspects of the problem space.',
+    'If you have a thumbnail generator, do NOT also generate thumbnail scorer AND thumbnail batch AND thumbnail guardrail.',
+    'Instead: pick the ONE best concept for each angle, then find DIFFERENT complementary skills:',
+    '(1) direct answer to the query, (2) upstream/downstream skill, (3) complementary workflow, (4) failing skill replacement.',
     'Flows can come from ANY industry. Every field MAX 120 chars:',
-    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun","display_name":"Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","found_via":"exact source e.g. anthropics/anthropic-cookbook/using_sub_agents","value":"specific outcome with number e.g. cuts 3h to 20min","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences: what to build + how (name specific tools/data)","match_pct":85}]',
+    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun","display_name":"Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","found_via":"exact source","value":"outcome with number e.g. cuts 3h to 20min","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences: what to build + how","match_pct":85}]',
   ].join('\n');
 
   const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 6000 });
@@ -130,15 +138,16 @@ export async function POST(req: NextRequest) {
   const sysSco = 'You are a strict quality evaluator for AI agent proposals.\n' + QUALITY_GATE + '\nReturn ONLY a valid JSON array.';
   const usrSco = [
     'Existing skills (uniqueness check): ' + existingNames,
-    '[{"index":0,"avg":8.1,"verdict":"PASS","scores":{"hotel_fit":9,"feasibility":8,"uniqueness":8,"effort_vs_value":7,"roi_clarity":8},"reason":"passes chatbot veto: uses CrewAI sequential crew with real PMS data, output is structured EDL JSON"}]',
+    '[{"index":0,"avg":8.1,"verdict":"PASS","scores":{"hotel_fit":9,"feasibility":8,"uniqueness":8,"effort_vs_value":7,"roi_clarity":8},"reason":"passes chatbot veto: uses CrewAI with real PMS data, output is structured JSON"}]',
     'Proposals:',
     rawProps.map((p, i) => i + ': ' + String(p.skill_name) + '\n  ' + String(p.proposal).slice(0, 120) + '\n  value: ' + String(p.value).slice(0, 80)).join('\n'),
   ].join('\n');
 
   const sco = await callAnthropic({ systemPrompt: sysSco, userPrompt: usrSco, maxTokens: 2500 });
 
-  let finalProps = rawProps;
-  let rejectedProps: Array<{ skill_name: string; display_name?: string; _avg: number; _reason: string; _scores: Record<string, number> }> = [];
+  // Use ScoredProp so p.skill_name / p.display_name are accessible via Record index signature
+  let finalProps: ScoredProp[] = rawProps as ScoredProp[];
+  let rejectedProps: Array<{ skill_name: string; display_name?: string; _avg: number; _reason: string }> = [];
   let scoreMeta = { scored: 0, passed: 0, filtered: 0 };
 
   if (isLlmOk(sco)) {
@@ -147,50 +156,54 @@ export async function POST(req: NextRequest) {
       scoreMeta.scored = scoreArr.length;
       type ScoreRow = { index: number; avg: number; verdict: string; reason: string; scores: Record<string, number> };
       const scores = scoreArr as ScoreRow[];
-      const annotated = rawProps.map((p, i) => {
+      // Cast to ScoredProp to preserve Record index signature alongside typed fields
+      const annotated: ScoredProp[] = rawProps.map((p, i) => {
         const s = scores.find(sc => sc.index === i);
-        return { ...p, _avg: s?.avg ?? 5, _verdict: s?.verdict ?? 'UNKNOWN', _reason: s?.reason ?? '', _scores: s?.scores ?? {} };
+        return {
+          ...p,
+          _avg: s?.avg ?? 5,
+          _verdict: s?.verdict ?? 'UNKNOWN',
+          _reason: s?.reason ?? '',
+          _scores: s?.scores ?? {},
+        } as ScoredProp;
       });
-      // Threshold 7.0 (was 7.5 -- too aggressive)
-      finalProps = annotated.filter(p => (p._avg as number) >= 7.0).sort((a, b) => (b._avg as number) - (a._avg as number));
-      // Cast explicitly to avoid TS errors on spread-unknown types
+      finalProps = annotated.filter(p => p._avg >= 7.0).sort((a, b) => b._avg - a._avg);
+      // p.skill_name / p.display_name are unknown via Record index sig -- String() accepts unknown
       rejectedProps = annotated
-        .filter(p => (p._avg as number) < 7.0)
-        .sort((a, b) => (b._avg as number) - (a._avg as number))
+        .filter(p => p._avg < 7.0)
+        .sort((a, b) => b._avg - a._avg)
         .map(p => ({
           skill_name: String(p.skill_name ?? ''),
           display_name: p.display_name ? String(p.display_name) : undefined,
-          _avg: p._avg as number,
-          _reason: p._reason ? String(p._reason) : '',
-          _scores: (p._scores ?? {}) as Record<string, number>,
+          _avg: p._avg,
+          _reason: String(p._reason ?? ''),
         }));
       scoreMeta.passed = finalProps.length;
       scoreMeta.filtered = rejectedProps.length;
     }
   }
 
-  // STEP 3: PERSIST each individually (memory_type='pattern', agent_handle='pbs_research')
+  // STEP 3: PERSIST with agent_handle='all' so future Claude sessions can recall research
   let savedCount = 0;
   for (const p of finalProps) {
     const content = [
-      'AGENT FLOW: ' + String(p.display_name ?? p.skill_name),
-      'slug: ' + String(p.skill_name) + ' | framework: ' + String(p.framework ?? 'custom'),
-      'found_via: ' + String(p.found_via ?? 'n/a'),
-      'source: ' + String(p.source_repo ?? 'n/a'),
-      'roi: ' + String(p.roi) + ' | effort: ' + String(p.effort) + ' | score: ' + String((p._avg as number)?.toFixed(1) ?? 'n/a'),
+      'RESEARCH PROPOSAL (not yet built): ' + String(p.display_name ?? p.skill_name),
+      'slug: ' + String(p.skill_name) + ' | framework: ' + String(p.framework ?? 'custom') + ' | type: ' + String(p.type),
+      'found_via: ' + String(p.found_via ?? 'n/a') + ' | source: ' + String(p.source_repo ?? 'n/a'),
+      'roi: ' + String(p.roi) + ' | effort: ' + String(p.effort) + ' | score: ' + p._avg.toFixed(1),
       '',
       'VALUE: ' + String(p.value),
       'BUILDS: ' + String(p.proposal),
       p._reason ? 'SCORER: ' + String(p._reason) : '',
-      'query: ' + userRequest + ' | ' + new Date().toISOString().slice(0, 16),
+      'query: ' + userRequest + ' | saved: ' + new Date().toISOString().slice(0, 16),
     ].filter(Boolean).join('\n');
     try {
       await sb.rpc('fn_kb_add_entry', {
         p_content: content,
-        p_topics: ['discovery', userRequest.toLowerCase().replace(/\W+/g, '_').slice(0, 30), String(p.framework ?? 'custom').toLowerCase(), 'agent_flow'],
+        p_topics: ['research_proposal', userRequest.toLowerCase().replace(/\W+/g, '_').slice(0, 30), String(p.framework ?? 'custom').toLowerCase()],
         p_memory_type: 'pattern',
-        p_agent_handle: 'pbs_research',
-        p_importance: 3,
+        p_agent_handle: 'all',
+        p_importance: 2,
       });
       savedCount++;
     } catch { /* non-fatal */ }
@@ -203,7 +216,7 @@ export async function POST(req: NextRequest) {
     metadata: {
       user_request: userRequest, generated: rawProps.length,
       passed_quality_gate: scoreMeta.passed, filtered_low_quality: scoreMeta.filtered,
-      quality_gate: '7.0/10 avg + hard chatbot veto (no pure Q&A bots)',
+      quality_gate: '7.0/10 avg + hard chatbot veto',
       sources: 'GitHub + Reddit + Anthropic cookbook + CLAUDE.md repos',
       repos_scanned: ghLines.length, reddit_posts: rdLines.length,
       persisted: savedCount > 0, saved_count: savedCount,
