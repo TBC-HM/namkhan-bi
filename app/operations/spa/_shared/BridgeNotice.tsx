@@ -5,7 +5,7 @@
 // spa_rooms_and_bridges + spa_booking_functions), so in normal operation
 // this never renders — if it does, check DB migrations / grants.
 
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 export default function BridgeNotice({ what }: { what: string }) {
   return (
