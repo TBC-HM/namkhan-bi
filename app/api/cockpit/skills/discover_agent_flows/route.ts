@@ -1,6 +1,7 @@
 // app/api/cockpit/skills/discover_agent_flows/route.ts
-// REASONING AGENT LOOP: Generate -> Score -> Filter -> Persist individually -> Return
-// Fix: memory_type='pattern' (allowed), save each proposal individually, accurate persisted flag
+// REASONING AGENT LOOP: Generate -> Score(7.5 threshold) -> Filter -> Persist -> Return
+// Quality gate: threshold raised 7.0→7.5, hard chatbot veto, found_via attribution
+// Rejected proposals returned so panel can show what was filtered and why
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-common';
@@ -10,20 +11,29 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
 
 const CURATED_SOURCES = [
-  'anthropics/anthropic-cookbook: official agent patterns -- tool_use/customer_service_agent, multimodal/using_sub_agents, patterns/agents/, managed_agents/',
-  'joaomdmoura/crewai: role-based multi-agent orchestration, sequential workflows',
-  'assafelovic/gpt-researcher: autonomous deep research, web + source synthesis',
-  'microsoft/autogen: conversational multi-agent, report narration and data analysis',
+  'anthropics/anthropic-cookbook: official -- tool_use/customer_service_agent, multimodal/using_sub_agents, patterns/agents/',
+  'joaomdmoura/crewai: role-based multi-agent orchestration',
+  'assafelovic/gpt-researcher: autonomous deep research and web synthesis',
+  'microsoft/autogen: conversational multi-agent for analysis and narration',
   'felixbrock/lemon-agent: Plan-Validate-Solve with policy enforcement',
   'cpacker/MemGPT: persistent memory across agent sessions',
-  'stepanogil/autonomous-hr-chatbot: tool-using Q&A -- template for phone/chat bots',
-  'ithiria894/awesome-claude-code-workflows (114 stars): hooks + MCP + skills + CLAUDE.md workflow recipes',
-  'MuhammadUsmanGM/claude-code-best-practices (67 stars): CLAUDE.md templates, multi-agent patterns under 150 lines',
-  'runtimenoteslabs/cc-rig (32 stars): project generator with CLAUDE.md + agents auto-configured',
-  'simonwillison.net: parallel agent coding, worktree patterns, agentic search, Claude Code workflows',
+  'stepanogil/autonomous-hr-chatbot: tool-using Q&A -- phone/chat handler pattern',
+  'ithiria894/awesome-claude-code-workflows (114 stars): hooks + MCP + skills + CLAUDE.md recipes',
+  'MuhammadUsmanGM/claude-code-best-practices (67 stars): CLAUDE.md templates, multi-agent patterns',
+  'runtimenoteslabs/cc-rig: project generator with CLAUDE.md + agents',
+  'simonwillison.net: parallel agent coding, worktree patterns, Claude Code workflows',
 ];
 
-const QUALITY_GATE = 'PASS (7-10): clear value for small hotel team, technically feasible, measurable time/revenue impact, novel vs existing. FAIL (1-6): pure chatbot, vague outcome, duplicates existing, unavailable infrastructure.';
+// Hard chatbot veto: if fundamentally just Q&A with no pipeline, auto-fail
+const QUALITY_GATE = `
+SCORING RULES:
+- Score 1-10 on: hotel_fit, feasibility, uniqueness, effort_vs_value, roi_clarity
+- HARD FAIL (all scores ≤ 2) if the proposal is fundamentally just an LLM answering questions: no tools, no data pipeline, no multi-step workflow, output is only unstructured text, no DB write or API call. A chatbot with a clever name is still a chatbot.
+- Deduct 5 on uniqueness if it duplicates an existing skill.
+- Reward: specific data integration, multi-step reasoning, structured output, tool use, measurable outcome with a number.
+- Penalise: vague ROI like "saves time", generic prompts, no named data source, output is just a summary.
+- Threshold to PASS: average ≥ 7.5 (was 7.0 -- raised to cut crap).
+`.trim();
 
 function extractJsonArray(text: string): Array<Record<string, unknown>> | null {
   let pos = 0;
@@ -82,7 +92,7 @@ export async function POST(req: NextRequest) {
   const failingSkills = (skills ?? []).filter((s: Record<string, unknown>) => s.health_status === 'failing').map((s: Record<string, unknown>) => s.name as string);
 
   const [ghGeneral, ghAnthropic, ghClaudeMd, redditPosts] = await Promise.all([
-    githubToken ? searchGitHub(userRequest + ' agent automation LLM workflow', githubToken) : Promise.resolve([]),
+    githubToken ? searchGitHub(userRequest + ' agent automation workflow', githubToken) : Promise.resolve([]),
     githubToken ? searchGitHub('anthropics ' + userRequest + ' agent', githubToken) : Promise.resolve([]),
     githubToken ? searchGitHub('CLAUDE.md agent workflow skills stars:>10', githubToken) : Promise.resolve([]),
     searchReddit(userRequest + ' AI agent automation'),
@@ -90,25 +100,24 @@ export async function POST(req: NextRequest) {
   const ghLines = [...ghGeneral, ...ghAnthropic, ...ghClaudeMd].slice(0, 9);
   const rdLines = redditPosts.slice(0, 4);
 
+  // STEP 1: GENERATE with found_via attribution
   const sysGen = [
-    'You are an expert AI agent architect. Discover high-value agent automation flows for hospitality.',
-    'Context: 30-room luxury boutique hotel, small team (8-12 staff), systems: PMS, GL accounting, CRM, YouTube, email.',
+    'You are an expert AI agent architect. Discover high-value agent automation flows for a 30-room luxury boutique hotel.',
     'Failing skills to replace: ' + (failingSkills.join(', ') || 'none') + '.',
-    'Verified sources: ' + CURATED_SOURCES.join('; '),
+    'Verified sources to draw from: ' + CURATED_SOURCES.join('; '),
     'CRITICAL: Output ONLY a valid JSON array starting with [ and ending with ].',
     'Every string value MUST be under 120 characters. No preamble. No markdown.',
     'If you cannot comply output: []',
   ].join('\n');
 
   const usrGen = [
-    'Discover flows for: "' + userRequest + '"',
-    'GitHub: ' + (ghLines.length ? ghLines.join(' | ') : 'none'),
-    'Reddit: ' + (rdLines.length ? rdLines.join(' | ') : 'none'),
-    'Skip (already built): ' + existingNames,
-    'Flows can come from ANY industry -- legal, finance, content, HR. If adaptable for a 30-room hotel, include it.',
-    'Prioritise: Anthropic cookbook patterns, CLAUDE.md workflow repos, proven multi-agent frameworks.',
-    'Generate exactly ' + maxProps + ' proposals. Every field MAX 120 chars:',
-    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun_slug","display_name":"Human Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","value":"specific outcome e.g. saves 3h/week","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences: what to build and how","match_pct":85}]',
+    'Discover: "' + userRequest + '"',
+    'GitHub refs: ' + (ghLines.join(' | ') || 'none'),
+    'Reddit signals: ' + (rdLines.join(' | ') || 'none'),
+    'Skip (exist): ' + existingNames,
+    'Flows can come from ANY industry. If adaptable for a 30-room hotel, include it.',
+    'Generate ' + maxProps + ' proposals -- MAX 120 chars per field:',
+    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun","display_name":"Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","found_via":"exact source: e.g. anthropics/anthropic-cookbook/using_sub_agents or r/LocalLLaMA thread or jaomdmoura/crewai","value":"specific outcome with number e.g. cuts 3h to 20min","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences: what to build + how (name specific tools/data)","match_pct":85}]',
   ].join('\n');
 
   const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 6000 });
@@ -119,51 +128,55 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'no_proposals', stage: 'json_parse', raw_preview: gen.text.slice(0, 800), hint: 'LLM did not return a parseable JSON array' }, { status: 502 });
   }
 
-  const sysSco = 'Score AI agent proposals for a small luxury hotel. ' + QUALITY_GATE + ' Return ONLY valid JSON array.';
+  // STEP 2: SCORE with hard chatbot veto and 7.5 threshold
+  const sysSco = 'You are a strict quality evaluator for AI agent proposals.\n' + QUALITY_GATE + '\nReturn ONLY a valid JSON array.';
   const usrSco = [
-    'Score each 1-10: hotel_fit, feasibility, uniqueness, effort_vs_value, roi_clarity.',
-    'Deduct 5 on uniqueness if duplicates existing: ' + existingNames,
-    '[{"index":0,"avg":8.2,"verdict":"PASS","scores":{"hotel_fit":9,"feasibility":8,"uniqueness":8,"effort_vs_value":8,"roi_clarity":8},"reason":"brief"}]',
-    'Proposals:',
-    rawProps.map((p, i) => i + ': ' + p.skill_name + ' | ' + String(p.proposal).slice(0, 100) + ' | ' + p.value).join('\n'),
+    'Existing skills (for uniqueness check): ' + existingNames,
+    '[{"index":0,"avg":8.1,"verdict":"PASS","scores":{"hotel_fit":9,"feasibility":8,"uniqueness":8,"effort_vs_value":7,"roi_clarity":8},"reason":"specific reason including what makes it pass or fail the chatbot veto"}]',
+    'Proposals to score:',
+    rawProps.map((p, i) => i + ': ' + p.skill_name + '\n  ' + String(p.proposal).slice(0, 120) + '\n  value: ' + String(p.value).slice(0, 80) + '\n  found_via: ' + String(p.found_via ?? 'unknown')).join('\n'),
   ].join('\n');
 
-  const sco = await callAnthropic({ systemPrompt: sysSco, userPrompt: usrSco, maxTokens: 2000 });
+  const sco = await callAnthropic({ systemPrompt: sysSco, userPrompt: usrSco, maxTokens: 2500 });
+
   let finalProps = rawProps;
+  let rejectedProps: Array<Record<string, unknown>> = [];
   let scoreMeta = { scored: 0, passed: 0, filtered: 0 };
+
   if (isLlmOk(sco)) {
     const scoreArr = extractJsonArray(sco.text);
     if (scoreArr) {
       scoreMeta.scored = scoreArr.length;
       type ScoreRow = { index: number; avg: number; verdict: string; reason: string; scores: Record<string, number> };
+      const scores = scoreArr as ScoreRow[];
       const annotated = rawProps.map((p, i) => {
-        const s = (scoreArr as ScoreRow[]).find(sc => sc.index === i);
+        const s = scores.find(sc => sc.index === i);
         return { ...p, _avg: s?.avg ?? 5, _verdict: s?.verdict ?? 'UNKNOWN', _reason: s?.reason ?? '', _scores: s?.scores ?? {} };
       });
-      finalProps = annotated.filter(p => (p._avg as number) >= 7).sort((a, b) => (b._avg as number) - (a._avg as number));
+      // 7.5 threshold (raised from 7.0)
+      finalProps = annotated.filter(p => (p._avg as number) >= 7.5).sort((a, b) => (b._avg as number) - (a._avg as number));
+      rejectedProps = annotated.filter(p => (p._avg as number) < 7.5).sort((a, b) => (b._avg as number) - (a._avg as number))
+        .map(p => ({ skill_name: p.skill_name, display_name: p.display_name, _avg: p._avg, _reason: p._reason, _scores: p._scores }));
       scoreMeta.passed = finalProps.length;
-      scoreMeta.filtered = rawProps.length - finalProps.length;
+      scoreMeta.filtered = rejectedProps.length;
     }
   }
 
-  // Save each proposal individually as memory_type='pattern' (allowed enum value)
-  // agent_handle='pbs_research' keeps them separate from agent-readable memory
+  // STEP 3: PERSIST each individually (memory_type='pattern', agent_handle='pbs_research')
   let savedCount = 0;
   for (const p of finalProps) {
     const content = [
-      'AGENT FLOW PROPOSAL: ' + String(p.display_name ?? p.skill_name),
-      'slug: ' + String(p.skill_name) + ' | type: ' + String(p.type) + ' | framework: ' + String(p.framework ?? 'custom'),
-      'source: ' + String(p.source_repo ?? 'n/a') + ' | roi: ' + String(p.roi) + ' | effort: ' + String(p.effort),
-      'score: ' + String((p._avg as number)?.toFixed(1) ?? 'n/a'),
+      'AGENT FLOW: ' + String(p.display_name ?? p.skill_name),
+      'slug: ' + String(p.skill_name) + ' | framework: ' + String(p.framework ?? 'custom') + ' | type: ' + String(p.type),
+      'found_via: ' + String(p.found_via ?? 'n/a'),
+      'source: ' + String(p.source_repo ?? 'n/a'),
+      'roi: ' + String(p.roi) + ' | effort: ' + String(p.effort) + ' | score: ' + String((p._avg as number)?.toFixed(1) ?? 'n/a'),
       '',
       'VALUE: ' + String(p.value),
-      '',
-      'WHAT IT BUILDS: ' + String(p.proposal),
+      'BUILDS: ' + String(p.proposal),
       p._reason ? 'SCORER: ' + String(p._reason) : '',
-      '',
-      'query: ' + userRequest + ' | saved: ' + new Date().toISOString().slice(0, 16),
+      'query: ' + userRequest + ' | ' + new Date().toISOString().slice(0, 16),
     ].filter(Boolean).join('\n');
-
     try {
       await sb.rpc('fn_kb_add_entry', {
         p_content: content,
@@ -173,14 +186,17 @@ export async function POST(req: NextRequest) {
         p_importance: 3,
       });
       savedCount++;
-    } catch { /* non-fatal -- continue saving others */ }
+    } catch { /* non-fatal */ }
   }
 
   return NextResponse.json({
-    ok: true, proposals: finalProps,
+    ok: true,
+    proposals: finalProps,
+    rejected: rejectedProps,
     metadata: {
       user_request: userRequest, generated: rawProps.length,
       passed_quality_gate: scoreMeta.passed, filtered_low_quality: scoreMeta.filtered,
+      quality_gate: '7.5/10 avg (raised from 7.0) + hard chatbot veto',
       sources: 'GitHub + Reddit + Anthropic cookbook + CLAUDE.md repos',
       repos_scanned: ghLines.length, reddit_posts: rdLines.length,
       persisted: savedCount > 0, saved_count: savedCount,
