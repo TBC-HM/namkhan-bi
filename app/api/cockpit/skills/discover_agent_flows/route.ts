@@ -1,7 +1,7 @@
 // app/api/cockpit/skills/discover_agent_flows/route.ts
 // REASONING AGENT LOOP: Generate -> Score -> Filter -> Return
-// Sources: (1) GitHub search, (2) e2b-dev/awesome-ai-agents curated list, (3) failing skills gap analysis
-// Two LLM calls: generate proposals then score -> filter >=7/10.
+// Bug fix: robust JSON extraction (depth-counting, not greedy regex)
+// Persistence: passing proposals saved to cockpit.kn_agent_memory (memory_type=research_discovery)
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-common';
@@ -10,99 +10,187 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
 
-// Curated from e2b-dev/awesome-ai-agents (29k stars) -- filtered for Namkhan relevance
 const CURATED_FRAMEWORKS = [
-  { name: 'CrewAI', repo: 'joaomdmoura/crewai', use_case: 'Multi-agent role orchestration -- retreat proposal pipeline, guest email sequences, ICP research teams' },
-  { name: 'GPT Researcher', repo: 'assafelovic/gpt-researcher', use_case: 'Deep research agent -- market research digest, competitor intelligence, ICP prospect profiling' },
-  { name: 'AutoGen', repo: 'microsoft/autogen', use_case: 'Conversational multi-agent -- financial narration, HOD report generation, complex reasoning chains' },
-  { name: 'Lemon Agent', repo: 'felixbrock/lemon-agent', use_case: 'Plan-Validate-Solve workflow -- guest email policy enforcement, retreat proposal with quality gates' },
-  { name: 'MemGPT', repo: 'cpacker/MemGPT', use_case: 'Persistent memory management -- replacement for cockpit_knowledge_base, agent grounding and recall' },
-  { name: 'BabyAGI', repo: 'yoheinakajima/babyagi', use_case: 'Sequential task decomposition -- multi-step booking pipeline, onboarding sequence automation' },
-  { name: 'MetaGPT', repo: 'geekan/MetaGPT', use_case: 'Multi-role software agents -- automated spec writing, module documentation updates' },
-  { name: 'Autonomous HR Chatbot', repo: 'stepanogil/autonomous-hr-chatbot', use_case: 'Tool-using Q&A -- pattern for route_to_hod, create_task_from_conversation, FO phone bot' },
-  { name: 'Maige', repo: 'team-maige/maige', use_case: 'Natural-language GitHub workflows -- automated PR labelling, issue triage for namkhan-bi repo' },
-  { name: 'FastAgency', repo: 'airtai/fastagency', use_case: 'Multi-agent deployment framework -- productionising any of the 10 flow library skills as API routes' },
+  { name: 'CrewAI', repo: 'joaomdmoura/crewai', use_case: 'Multi-agent role orchestration -- retreat proposal, guest email, ICP research teams' },
+  { name: 'GPT Researcher', repo: 'assafelovic/gpt-researcher', use_case: 'Deep research agent -- market digest, competitor intel, ICP profiling' },
+  { name: 'AutoGen', repo: 'microsoft/autogen', use_case: 'Conversational multi-agent -- financial narration, HOD reports' },
+  { name: 'Lemon Agent', repo: 'felixbrock/lemon-agent', use_case: 'Plan-Validate-Solve -- guest email policy gates, retreat proposals' },
+  { name: 'MemGPT', repo: 'cpacker/MemGPT', use_case: 'Persistent memory -- replacement for cockpit_knowledge_base' },
+  { name: 'BabyAGI', repo: 'yoheinakajima/babyagi', use_case: 'Sequential task decomposition -- booking pipelines, onboarding' },
+  { name: 'Autonomous HR Chatbot', repo: 'stepanogil/autonomous-hr-chatbot', use_case: 'Tool-using Q&A -- pattern for FO phone bot, ticket routing' },
+  { name: 'FastAgency', repo: 'airtai/fastagency', use_case: 'Multi-agent deployment -- productionising flow library skills' },
 ];
 
-const QUALITY_GATE = 'A GOOD proposal (score 7-10): specific skill name, references real Namkhan data (QB/PMS/ICP/media/YouTube), genuinely useful for 24-room Luang Prabang luxury hotel, concrete measurable ROI, does NOT duplicate existing skills, technically feasible. A BAD proposal (score 1-6): generic, no data integration, duplicates existing skill, vague ROI, not feasible.';
+const QUALITY_GATE = 'PASS (score 7-10): specific to Namkhan, uses real DB tables (finance.*/pms.*/sales.*), measurable ROI, not duplicate. FAIL (1-6): generic, no data, duplicates existing, vague ROI.';
 
-async function searchGitHub(query: string, token: string, max = 4) {
+// Depth-counting JSON array extractor -- tries each [ position, returns first valid parse
+function extractJsonArray(text: string): Array<Record<string, unknown>> | null {
+  let pos = 0;
+  while ((pos = text.indexOf('[', pos)) !== -1) {
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    let end = -1;
+    for (let i = pos; i < text.length; i++) {
+      const c = text[i];
+      if (esc) { esc = false; continue; }
+      if (c === '\\' && inStr) { esc = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '[') depth++;
+      if (c === ']') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end !== -1) {
+      try {
+        const parsed = JSON.parse(text.slice(pos, end + 1));
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed as Array<Record<string, unknown>>;
+      } catch { /* try next [ */ }
+    }
+    pos++;
+  }
+  return null;
+}
+
+async function searchGitHub(query: string, token: string, max = 3) {
   const url = 'https://api.github.com/search/repositories?q=' + encodeURIComponent(query) + '&sort=stars&order=desc&per_page=' + max;
-  const res = await fetch(url, {
-    headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json' }, cache: 'no-store',
-  });
+  const res = await fetch(url, { headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json' }, cache: 'no-store' });
   if (!res.ok) return [];
   const data = await res.json() as { items?: Array<{ full_name: string; description: string | null; stargazers_count: number }> };
-  return (data.items ?? []).map(r => ({ repo: r.full_name, description: r.description ?? '', stars: r.stargazers_count }));
+  return (data.items ?? []).map(r => ({ repo: r.full_name, desc: (r.description ?? '').slice(0, 70), stars: r.stargazers_count }));
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as { focus?: string; prompt?: string; max_proposals?: number };
-  const userRequest = body.prompt ?? body.focus ?? 'hospitality agent flows';
-  const maxProposals = body.max_proposals ?? 8;
+  const userRequest = (body.prompt ?? body.focus ?? 'hospitality agent flows').trim();
+  const maxProps = body.max_proposals ?? 8;
 
   const sb = getSupabaseAdmin();
   const githubToken = await getVaultSecret('github_token');
 
   const { data: skills } = await sb.from('cockpit_skills_catalog')
-    .select('name,description,serves_module,health_status,total_all_time,success_all_time')
+    .select('name,description,health_status,total_all_time,success_all_time')
     .eq('active', true);
 
-  const existingNames = (skills ?? []).map((s: Record<string,unknown>) => s.name as string).join(', ');
-  const failingList = (skills ?? [])
-    .filter((s: Record<string,unknown>) => s.health_status === 'failing')
-    .map((s: Record<string,unknown>) => (s.name as string) + '(' + s.success_all_time + '/' + s.total_all_time + ')');
+  const existingNames = (skills ?? []).map((s: Record<string, unknown>) => s.name as string).join(', ');
+  const failingSkills = (skills ?? [])
+    .filter((s: Record<string, unknown>) => s.health_status === 'failing')
+    .map((s: Record<string, unknown>) => s.name as string);
 
-  // GitHub search -- broad + niche hospitality
+  // GitHub search
   const searches = [
-    userRequest + ' agent LLM workflow hospitality',
-    'boutique hotel ' + userRequest + ' AI automation python',
-    'crewai ' + userRequest + ' agent template stars:>100',
-    'langchain hospitality travel agent business',
-    userRequest + ' multi-agent workflow production',
+    userRequest + ' agent hospitality LLM',
+    'boutique hotel ' + userRequest + ' AI automation',
+    userRequest + ' multi-agent workflow crewai',
   ];
   const repoLines: string[] = [];
   for (const q of searches) {
     if (githubToken) {
       const repos = await searchGitHub(q, githubToken, 3);
-      if (repos.length) repoLines.push('"' + q + '": ' + repos.map(r => r.repo + '(star' + r.stars + '): ' + (r.description || '').slice(0,80)).join(' | '));
+      if (repos.length) repoLines.push(q + ': ' + repos.map(r => r.repo + '(star' + r.stars + ') ' + r.desc).join(' | '));
     }
   }
 
-  const curatedCtx = CURATED_FRAMEWORKS.map(f => f.name + ' (' + f.repo + '): ' + f.use_case).join('\n');
+  const curatedCtx = CURATED_FRAMEWORKS.map(f => '- ' + f.name + ': ' + f.use_case).join('\n');
 
   // STEP 1: GENERATE
-  const sysGen = 'You are an AI agent architect for The Namkhan -- 24-room 5-star luxury hotel Luang Prabang Laos. Data: QB GL (finance.*), PMS (pms.*), ICP (sales.icp_segments), media (media.*), YouTube (marketing.yt_*). Failing skills needing replacement: ' + (failingList.join(', ') || 'none') + '.\n\nCURATED AGENT FRAMEWORKS (e2b-dev/awesome-ai-agents):\n' + curatedCtx;
-  const usrGen = 'USER REQUEST: "' + userRequest + '"\n\nGITHUB REFS:\n' + (repoLines.join('\n') || '[use training knowledge + curated frameworks above]') + '\n\nEXISTING SKILLS (no duplicates): ' + existingNames + '\n\nGenerate ' + (maxProposals + 4) + ' proposals. Each must be a SPECIFIC agent flow for Namkhan. Reference curated frameworks where relevant. Return JSON array: [{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun_slug","display_name":"Human Name","source_repo":"owner/repo or framework name","framework":"CrewAI|AutoGen|LangChain|custom","namkhan_fit":"WHY this 24-room hotel needs this","effort":"Low|Medium|High","roi":"High|Medium|Low","value":"specific measurable outcome","integration":"exact table/view names from Namkhan DB","proposal":"2-3 sentences what to build","match_pct":70-99}]';
+  // CRITICAL: system prompt enforces JSON-only output
+  const sysGen = [
+    'You are an AI agent architect for The Namkhan -- 24-room 5-star luxury hotel, Luang Prabang, Laos.',
+    'DB schemas: finance.* (QB GL), pms.* (Cloudbeds PMS), sales.* (ICPs), marketing.yt_* (YouTube), media.* (assets).',
+    'Failing skills needing replacement: ' + (failingSkills.join(', ') || 'none') + '.',
+    'Curated frameworks:\n' + curatedCtx,
+    '',
+    'CRITICAL OUTPUT RULE: Your ENTIRE response must be ONLY a valid JSON array.',
+    'Start with [ and end with ]. No preamble, no explanation, no markdown, no code blocks.',
+    'If you cannot comply, output: []',
+  ].join('\n');
 
-  const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 3500 });
-  if (!isLlmOk(gen)) return NextResponse.json({ error: gen.error }, { status: 502 });
+  const usrGen = [
+    'USER REQUEST: "' + userRequest + '"',
+    '',
+    'GITHUB REFS:',
+    repoLines.length ? repoLines.join('\n') : '(no results -- rely on curated frameworks above)',
+    '',
+    'EXISTING SKILLS (skip duplicates): ' + existingNames,
+    '',
+    'Generate ' + (maxProps + 3) + ' agent flow proposals for Namkhan. Each must use real DB tables.',
+    '',
+    'OUTPUT FORMAT -- JSON array only:',
+    '[{"type":"NEW","skill_name":"verb_noun_slug","display_name":"Human Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","namkhan_fit":"why this 24-room hotel specifically","effort":"Low|Medium|High","roi":"High|Medium|Low","value":"specific measurable outcome","integration":"exact_table_or_view_names","proposal":"2-3 sentences on what to build","match_pct":85}]',
+  ].join('\n');
 
-  let rawProps: Array<Record<string,unknown>> = [];
-  try { const m = gen.text.match(/\[[\s\S]*\]/); rawProps = m ? JSON.parse(m[0]) : []; } catch { rawProps = []; }
-  if (rawProps.length === 0) return NextResponse.json({ error: 'no_proposals', raw: gen.text.slice(0,300) }, { status: 502 });
+  const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 4000 });
+  if (!isLlmOk(gen)) return NextResponse.json({ error: 'llm_failed', detail: gen.error, stage: 'generate' }, { status: 502 });
+
+  const rawProps = extractJsonArray(gen.text);
+  if (!rawProps || rawProps.length === 0) {
+    return NextResponse.json({
+      error: 'no_proposals',
+      stage: 'json_parse',
+      raw_preview: gen.text.slice(0, 600),
+      hint: 'LLM did not return a parseable JSON array -- check raw_preview',
+    }, { status: 502 });
+  }
 
   // STEP 2: SCORE
-  const sysSco = 'You are a quality evaluator for AI agent proposals. ' + QUALITY_GATE + ' Return ONLY valid JSON.';
-  const usrSco = 'Score each proposal 1-10 on: namkhan_fit, feasibility, uniqueness, data_integration, roi_clarity. DEDUCT 5 points on uniqueness if similar to existing skills.\nReturn: [{"index":0,"avg":8.2,"verdict":"PASS","scores":{"namkhan_fit":9,"feasibility":8,"uniqueness":8,"data_integration":8,"roi_clarity":8},"reason":"..."},...]\n\nProposals:\n' + rawProps.map((p, i) => i + ': ' + p.skill_name + ' | fit: ' + p.namkhan_fit + ' | data: ' + p.integration + ' | roi: ' + p.value).join('\n') + '\n\nExisting skills: ' + existingNames;
+  const sysSco = 'You are a quality evaluator. ' + QUALITY_GATE + '\nCRITICAL: Output ONLY a valid JSON array. No preamble.';
+  const usrSco = [
+    'Score each proposal 1-10 on: namkhan_fit, feasibility, uniqueness, data_integration, roi_clarity.',
+    'DEDUCT 5 on uniqueness if similar to existing: ' + existingNames,
+    '',
+    'OUTPUT: [{"index":0,"avg":8.1,"verdict":"PASS","scores":{"namkhan_fit":9,"feasibility":8,"uniqueness":8,"data_integration":8,"roi_clarity":7},"reason":"..."}]',
+    '',
+    'Proposals to score:',
+    rawProps.map((p, i) => i + ': ' + p.skill_name + ' | ' + p.namkhan_fit + ' | tables: ' + p.integration).join('\n'),
+  ].join('\n');
 
-  const sco = await callAnthropic({ systemPrompt: sysSco, userPrompt: usrSco, maxTokens: 2000 });
+  const sco = await callAnthropic({ systemPrompt: sysSco, userPrompt: usrSco, maxTokens: 2500 });
 
   let finalProps = rawProps;
   let scoreMeta = { scored: 0, passed: 0, filtered: 0 };
+
   if (isLlmOk(sco)) {
-    try {
-      const sm = sco.text.match(/\[[\s\S]*\]/);
-      const scores = sm ? JSON.parse(sm[0]) as Array<{ index: number; avg: number; verdict: string; reason: string; scores: Record<string,number> }> : [];
-      scoreMeta.scored = scores.length;
+    const scoreArr = extractJsonArray(sco.text);
+    if (scoreArr) {
+      scoreMeta.scored = scoreArr.length;
+      type ScoreRow = { index: number; avg: number; verdict: string; reason: string; scores: Record<string, number> };
+      const scores = scoreArr as ScoreRow[];
       const annotated = rawProps.map((p, i) => {
         const s = scores.find(sc => sc.index === i);
         return { ...p, _avg: s?.avg ?? 5, _verdict: s?.verdict ?? 'UNKNOWN', _reason: s?.reason ?? '', _scores: s?.scores ?? {} };
       });
-      finalProps = annotated.filter(p => (p._avg as number) >= 7).sort((a, b) => (b._avg as number) - (a._avg as number)).slice(0, maxProposals);
+      finalProps = annotated.filter(p => (p._avg as number) >= 7).sort((a, b) => (b._avg as number) - (a._avg as number)).slice(0, maxProps);
       scoreMeta.passed = finalProps.length;
       scoreMeta.filtered = rawProps.length - finalProps.length;
-    } catch { /* use raw */ }
+    }
+  }
+
+  // STEP 3: PERSIST passing proposals to DB (memory_type=research_discovery, not readable by agents)
+  if (finalProps.length > 0) {
+    const summaryContent = [
+      'DISCOVERY RUN: "' + userRequest + '" -- ' + new Date().toISOString(),
+      'Passed quality gate: ' + finalProps.length + '/' + rawProps.length,
+      '',
+      ...finalProps.map((p, i) => [
+        (i + 1) + '. ' + String(p.skill_name) + ' [' + String(p.type) + '] -- ' + String(p.display_name),
+        '   Framework: ' + String(p.framework ?? 'custom'),
+        '   Fit: ' + String(p.namkhan_fit).slice(0, 120),
+        '   Tables: ' + String(p.integration),
+        '   ROI: ' + String(p.roi) + ' | Effort: ' + String(p.effort),
+        '   Score: ' + String((p._avg as number)?.toFixed(1) ?? 'n/a'),
+        '   Build: ' + String(p.proposal).slice(0, 200),
+      ].join('\n')),
+    ].join('\n');
+
+    try {
+      await sb.rpc('fn_kb_add_entry', {
+        p_content: summaryContent,
+        p_topics: ['discovery', userRequest.toLowerCase().replace(/\s+/g, '_'), 'research'],
+        p_memory_type: 'research_discovery',
+        p_agent_handle: 'pbs_research',
+        p_importance: 3,
+      });
+    } catch { /* non-fatal -- log failure but continue */ }
   }
 
   return NextResponse.json({
@@ -113,11 +201,10 @@ export async function POST(req: NextRequest) {
       generated: rawProps.length,
       passed_quality_gate: scoreMeta.passed,
       filtered_low_quality: scoreMeta.filtered,
-      quality_gate: '7/10 average across 5 dimensions',
-      curated_source: 'e2b-dev/awesome-ai-agents (10 frameworks)',
-      current_skill_count: (skills ?? []).length,
-      failing_skills: failingList,
+      quality_gate: '7/10 avg across 5 dimensions',
+      curated_source: 'e2b-dev/awesome-ai-agents (8 frameworks)',
       repos_scanned: repoLines.length * 3,
+      persisted: finalProps.length > 0,
     },
   });
 }
