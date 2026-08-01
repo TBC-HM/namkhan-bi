@@ -7,7 +7,7 @@
 //
 // Author: IT-team agent · 2026-05-13 · #58.
 
-import { fetchCostBreakdown } from '@/app/holding/it/cockpit/_lib/data-port';
+import { fetchCostBreakdown } from '@/lib/cockpit/data-port';
 import { CostView } from './CostView';
 
 export const dynamic = 'force-dynamic';
