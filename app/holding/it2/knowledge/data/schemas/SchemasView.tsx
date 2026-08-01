@@ -8,8 +8,8 @@
 // Author: IT-team agent · 2026-05-13 · #77.
 
 import { useMemo, useState } from 'react';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
-import type { SchemaObject } from '@/app/holding/it/cockpit/_lib/types';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
+import type { SchemaObject } from '@/lib/cockpit/types';
 
 function fmtCount(n: number): string {
   if (n <= 0) return '—';
