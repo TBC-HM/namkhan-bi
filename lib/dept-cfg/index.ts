@@ -1246,6 +1246,10 @@ const HOLDING_FINANCE_CFG: DeptCfg = {
     { label: 'Clients',  href: '/holding/finance/clients'  },
     // cost-governance-v1 (2026-07-30): enterprise cost dashboard (schema costs.*).
     { label: 'Costs',    href: '/holding/finance/costs'    },
+    // monetization-engine-v1 (2026-08-01): platform commerce — catalogue,
+    // entitlements, shadow-price margins (schema commercial.*). Naming law:
+    // "Monetization", never "Revenue" (that name = hotel revenue module).
+    { label: 'Monetization', href: '/holding/finance/monetization' },
   ],
   quickChips: [],
   defaultAttn: [],
