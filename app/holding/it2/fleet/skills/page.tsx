@@ -5,7 +5,7 @@
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import Link from 'next/link';
-import { GROUPS } from '../_lib/groups';
+import { GROUPS } from '../../_lib/groups';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
