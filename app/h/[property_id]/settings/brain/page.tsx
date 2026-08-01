@@ -5,7 +5,7 @@
 // ask window. BrainClient fetches via /api/brain/* (service-role server-side).
 
 import { DashboardPage } from '@/app/(cockpit)/_design';
-import BrainClient from '@/app/holding/it/brain/BrainClient';
+import BrainClient from '@/components/brain/BrainClient';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
