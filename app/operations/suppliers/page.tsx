@@ -19,6 +19,7 @@ interface SupplierRow {
   gross_spend_usd: number; gross_spend_lak: number; net_amount_usd: number;
   ytd_spend_usd: number; ytd_spend_lak: number; ytd_txn_count: number;
   distinct_accounts: number; is_active_recent: boolean;
+  qb_ap_account: string;
 }
 
 async function getData(): Promise<SupplierRow[]> {
@@ -73,8 +74,10 @@ export default async function OperationsSuppliersPage() {
     active: s.href === '/operations/suppliers',
   }));
 
-  const usdRows = rows.filter(r => r.currency === 'USD').sort((a,b) => Number(b.ytd_spend_usd) - Number(a.ytd_spend_usd));
-  const lakRows = rows.filter(r => r.currency === 'LAK').sort((a,b) => Number(b.ytd_spend_lak) - Number(a.ytd_spend_lak));
+  const payrollRows = rows.filter(r => r.category === 'payroll');
+  const mainRows = rows.filter(r => r.category !== 'payroll');
+  const usdRows = mainRows.filter(r => r.currency === 'USD').sort((a,b) => Number(b.ytd_spend_usd) - Number(a.ytd_spend_usd));
+  const lakRows = mainRows.filter(r => r.currency === 'LAK').sort((a,b) => Number(b.ytd_spend_lak) - Number(a.ytd_spend_lak));
 
   const ytdUSD = rows.reduce((s,r) => s + Number(r.ytd_spend_usd || 0), 0);
   const ytdLAK = rows.reduce((s,r) => s + Number(r.ytd_spend_lak || 0), 0);
@@ -123,6 +126,8 @@ export default async function OperationsSuppliersPage() {
               <th style={{ ...thStyle, textAlign: 'right' }}>All-time</th>
               <th style={{ ...thStyle, textAlign: 'center' }}>Txns</th>
               <th style={{ ...thStyle }}>Last txn</th>
+              <th style={{ ...thStyle, textAlign: 'center' }}>QB AP Acct</th>
+              <th style={{ ...thStyle }}>Category</th>
               <th style={{ ...thStyle }}>Contact</th>
             </tr>
           </thead>
@@ -157,6 +162,14 @@ export default async function OperationsSuppliersPage() {
                         {r.last_txn_date.slice(0,7)}
                       </span>
                     ) : '—'}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'center', fontFamily: 'monospace', fontSize: 11, color: INK_M }}>
+                    {r.qb_ap_account || '—'}
+                  </td>
+                  <td style={tdStyle}>
+                    <span style={{ fontSize: 10, padding: '1px 7px', background: CREAM, borderRadius: 10, color: INK_M }}>
+                      {r.category || '—'}
+                    </span>
                   </td>
                   <td style={tdStyle}>
                     {r.email
@@ -201,6 +214,13 @@ export default async function OperationsSuppliersPage() {
           subtitle={`${usdRows.length} vendors · sorted by YTD spend · ${fmtUSD(ytdUSD)} total`}>
           <SupplierTable data={usdRows} showLAK={false} />
         </Container>
+
+        {/* Payroll excluded note */}
+        {payrollRows.length > 0 && (
+          <div style={{ padding: '8px 12px', background: '#FEF9F0', border: '1px solid #F0D9A0', borderRadius: 4, fontSize: 11, color: AMBER }}>
+            ⚠ {payrollRows.length} payroll entr{payrollRows.length === 1 ? 'y' : 'ies'} excluded from supplier tables ({payrollRows.map(r => r.vendor_name).join(', ')}). Wages are classified separately in GL.
+          </div>
+        )}
 
         {/* LAK Suppliers */}
         <Container
