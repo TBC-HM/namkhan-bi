@@ -7,7 +7,7 @@
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 import { ReleasePicker } from './ReleasePicker';
 
 export const dynamic = 'force-dynamic';
