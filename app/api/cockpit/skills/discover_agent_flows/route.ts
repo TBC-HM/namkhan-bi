@@ -1,6 +1,6 @@
 // app/api/cockpit/skills/discover_agent_flows/route.ts
 // REASONING AGENT LOOP: Generate -> Score -> Filter -> Persist -> Return
-// Fix: ScoredProp type (Record intersection preserves index sig), agent_handle='all' for brain access
+// TS fix: annotated typed as Array<Record<string,unknown>> -- index sig guarantees property access
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-common';
@@ -8,15 +8,6 @@ import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-com
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
-
-// ScoredProp: Record<string,unknown> intersection preserves index signature
-// so p.skill_name / p.display_name return unknown (compilable) not "does not exist"
-type ScoredProp = Record<string, unknown> & {
-  _avg: number;
-  _verdict: string;
-  _reason: string;
-  _scores: Record<string, number>;
-};
 
 const CURATED_SOURCES = [
   'anthropics/anthropic-cookbook: official -- tool_use/customer_service_agent, multimodal/using_sub_agents, patterns/agents/',
@@ -103,7 +94,6 @@ export async function POST(req: NextRequest) {
   const ghLines = [...ghGeneral, ...ghAnthropic, ...ghClaudeMd].slice(0, 9);
   const rdLines = redditPosts.slice(0, 4);
 
-  // STEP 1: GENERATE with diversity rule
   const sysGen = [
     'You are an expert AI agent architect. Discover high-value agent automation flows for a 30-room luxury boutique hotel.',
     'Failing skills to replace: ' + (failingSkills.join(', ') || 'none') + '.',
@@ -117,13 +107,11 @@ export async function POST(req: NextRequest) {
     'GitHub: ' + (ghLines.join(' | ') || 'none'),
     'Reddit: ' + (rdLines.join(' | ') || 'none'),
     'Skip (exist): ' + existingNames,
-    '',
-    'DIVERSITY RULE: Generate ' + (maxProps + 2) + ' proposals covering DIFFERENT aspects of the problem space.',
-    'If you have a thumbnail generator, do NOT also generate thumbnail scorer AND thumbnail batch AND thumbnail guardrail.',
-    'Instead: pick the ONE best concept for each angle, then find DIFFERENT complementary skills:',
-    '(1) direct answer to the query, (2) upstream/downstream skill, (3) complementary workflow, (4) failing skill replacement.',
+    'DIVERSITY RULE: Generate ' + (maxProps + 2) + ' proposals covering DIFFERENT aspects.',
+    'Do NOT generate multiple variations of the same core concept.',
+    'Think: (1) direct answer, (2) upstream/downstream skill, (3) complementary workflow, (4) failing skill replacement.',
     'Flows can come from ANY industry. Every field MAX 120 chars:',
-    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun","display_name":"Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","found_via":"exact source","value":"outcome with number e.g. cuts 3h to 20min","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences: what to build + how","match_pct":85}]',
+    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun","display_name":"Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","found_via":"exact source","value":"outcome with number","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences: what+how","match_pct":85}]',
   ].join('\n');
 
   const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 6000 });
@@ -134,19 +122,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'no_proposals', stage: 'json_parse', raw_preview: gen.text.slice(0, 800), hint: 'LLM did not return a parseable JSON array' }, { status: 502 });
   }
 
-  // STEP 2: SCORE with hard chatbot veto, threshold 7.0
-  const sysSco = 'You are a strict quality evaluator for AI agent proposals.\n' + QUALITY_GATE + '\nReturn ONLY a valid JSON array.';
+  const sysSco = 'You are a strict quality evaluator.\n' + QUALITY_GATE + '\nReturn ONLY a valid JSON array.';
   const usrSco = [
     'Existing skills (uniqueness check): ' + existingNames,
-    '[{"index":0,"avg":8.1,"verdict":"PASS","scores":{"hotel_fit":9,"feasibility":8,"uniqueness":8,"effort_vs_value":7,"roi_clarity":8},"reason":"passes chatbot veto: uses CrewAI with real PMS data, output is structured JSON"}]',
+    '[{"index":0,"avg":8.1,"verdict":"PASS","scores":{"hotel_fit":9,"feasibility":8,"uniqueness":8,"effort_vs_value":7,"roi_clarity":8},"reason":"passes chatbot veto: uses CrewAI with real data, structured output"}]',
     'Proposals:',
     rawProps.map((p, i) => i + ': ' + String(p.skill_name) + '\n  ' + String(p.proposal).slice(0, 120) + '\n  value: ' + String(p.value).slice(0, 80)).join('\n'),
   ].join('\n');
 
   const sco = await callAnthropic({ systemPrompt: sysSco, userPrompt: usrSco, maxTokens: 2500 });
 
-  // Use ScoredProp so p.skill_name / p.display_name are accessible via Record index signature
-  let finalProps: ScoredProp[] = rawProps as ScoredProp[];
+  // annotated as Array<Record<string,unknown>> -- preserves index signature so p.skill_name = unknown (compilable)
+  let finalProps: Array<Record<string, unknown>> = rawProps;
   let rejectedProps: Array<{ skill_name: string; display_name?: string; _avg: number; _reason: string }> = [];
   let scoreMeta = { scored: 0, passed: 0, filtered: 0 };
 
@@ -156,26 +143,19 @@ export async function POST(req: NextRequest) {
       scoreMeta.scored = scoreArr.length;
       type ScoreRow = { index: number; avg: number; verdict: string; reason: string; scores: Record<string, number> };
       const scores = scoreArr as ScoreRow[];
-      // Cast to ScoredProp to preserve Record index signature alongside typed fields
-      const annotated: ScoredProp[] = rawProps.map((p, i) => {
+      // Array<Record<string,unknown>> preserves index signature -- no type errors on property access
+      const annotated: Array<Record<string, unknown>> = rawProps.map((p, i) => {
         const s = scores.find(sc => sc.index === i);
-        return {
-          ...p,
-          _avg: s?.avg ?? 5,
-          _verdict: s?.verdict ?? 'UNKNOWN',
-          _reason: s?.reason ?? '',
-          _scores: s?.scores ?? {},
-        } as ScoredProp;
+        return { ...p, _avg: s?.avg ?? 5, _verdict: s?.verdict ?? 'UNKNOWN', _reason: s?.reason ?? '', _scores: s?.scores ?? {} };
       });
-      finalProps = annotated.filter(p => p._avg >= 7.0).sort((a, b) => b._avg - a._avg);
-      // p.skill_name / p.display_name are unknown via Record index sig -- String() accepts unknown
+      finalProps = annotated.filter(p => (p._avg as number) >= 7.0).sort((a, b) => (b._avg as number) - (a._avg as number));
       rejectedProps = annotated
-        .filter(p => p._avg < 7.0)
-        .sort((a, b) => b._avg - a._avg)
+        .filter(p => (p._avg as number) < 7.0)
+        .sort((a, b) => (b._avg as number) - (a._avg as number))
         .map(p => ({
           skill_name: String(p.skill_name ?? ''),
           display_name: p.display_name ? String(p.display_name) : undefined,
-          _avg: p._avg,
+          _avg: p._avg as number,
           _reason: String(p._reason ?? ''),
         }));
       scoreMeta.passed = finalProps.length;
@@ -183,14 +163,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // STEP 3: PERSIST with agent_handle='all' so future Claude sessions can recall research
+  // Persist with agent_handle='all' so future Claude sessions can recall research
   let savedCount = 0;
   for (const p of finalProps) {
     const content = [
       'RESEARCH PROPOSAL (not yet built): ' + String(p.display_name ?? p.skill_name),
       'slug: ' + String(p.skill_name) + ' | framework: ' + String(p.framework ?? 'custom') + ' | type: ' + String(p.type),
       'found_via: ' + String(p.found_via ?? 'n/a') + ' | source: ' + String(p.source_repo ?? 'n/a'),
-      'roi: ' + String(p.roi) + ' | effort: ' + String(p.effort) + ' | score: ' + p._avg.toFixed(1),
+      'roi: ' + String(p.roi) + ' | effort: ' + String(p.effort) + ' | score: ' + (p._avg as number).toFixed(1),
       '',
       'VALUE: ' + String(p.value),
       'BUILDS: ' + String(p.proposal),
