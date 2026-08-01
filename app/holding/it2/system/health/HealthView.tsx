@@ -6,12 +6,12 @@
 // Author: IT-team agent · 2026-05-13 · #58.
 
 import { useEffect, useState } from 'react';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
 import type {
   V2AuditRow,
   V2CronRow,
   V2Incident,
-} from '@/app/holding/it/cockpit/_lib/data-port';
+} from '@/lib/cockpit/data-port';
 
 type HealthBundle = {
   openIncidents: V2Incident[];
