@@ -12,10 +12,10 @@
 // preview shows the diff; only an explicit Publish button posts dry_run=false.
 
 import { useMemo, useState } from 'react';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
-import { Pill, StatusDot } from '@/app/holding/it/cockpit/_components/Pill';
-import type { Agent, AgentMemory, Prompt } from '@/app/holding/it/cockpit/_lib/types';
-import { PROPERTY_NAMKHAN, PROPERTY_DONNA } from '@/app/holding/it/cockpit/_lib/types';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
+import { Pill, StatusDot } from '@/components/cockpit/Pill';
+import type { Agent, AgentMemory, Prompt } from '@/lib/cockpit/types';
+import { PROPERTY_NAMKHAN, PROPERTY_DONNA } from '@/lib/cockpit/types';
 
 type Level = 'L1' | 'L2' | 'L3' | 'L4';
 
