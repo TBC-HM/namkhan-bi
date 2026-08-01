@@ -1,111 +1,152 @@
 // app/holding/it2/fleet/skills/page.tsx
-//
-// Skills cockpit — reads via getSupabaseAdmin() against PUBLIC views, since
-// PostgREST only exposes the public schema (claude_md §0.5). Previous
-// sbCockpit approach silently returned [] because cockpit schema is not
-// in the exposed schemas list. Views used:
-//   public.cockpit_skills_catalog     — cockpit.cap_skills (all cols incl. category)
-//   public.cockpit_agent_role_skills  — cockpit.cap_agent_skills (role,skill_id,enabled)
-//   public.cockpit_skill_calls        — cockpit.cap_skill_calls
-
-import Link from 'next/link';
+// Skills Registry — all platform capabilities built in cockpit.cap_skills.
+// Reads via public.cockpit_skills_catalog (bridge view, PostgREST-safe).
+import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
-import { SkillsTable } from './SkillsTable';
+import { GROUPS } from '../_lib/groups';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-async function fetchSkillsData() {
+const WHITE = '#FFFFFF'; const HAIR = '#E6DFCC'; const INK = '#1B1B1B';
+const INK_M = '#5A5A5A'; const CREAM = '#F5F0E1'; const FOREST = '#084838';
+const AMBER = '#B48A3A'; const RED = '#B03826'; const OK = '#0E7A4B';
+
+const CATEGORY_COLOR: Record<string, string> = {
+  platform: '#084838', marketing: '#B48A3A', it: '#1A3A5C',
+  hr: '#556B2F', background_check: '#4A1942', legal_analysis: '#8B0000',
+  knowledge: '#2D6A4F', guest: '#1F3A5F', operations: '#5A4000',
+  marketing_composer: '#B48A3A', sales: '#084838', strategy: '#5A5A5A',
+};
+
+const TYPE_LABEL: Record<string, string> = {
+  ts_handler: 'API route', sql_function: 'SQL fn', edge_function: 'Edge fn',
+};
+const TYPE_COLOR: Record<string, string> = {
+  ts_handler: '#1A3A5C', sql_function: '#084838', edge_function: '#4A1942',
+};
+
+interface Skill {
+  id: string; name: string; description: string | null;
+  category: string | null; implementation_type: string | null;
+  authority_level: string | null; requires_pbs_approval: boolean;
+  cost_class: string | null; active: boolean;
+}
+
+async function getSkills(): Promise<Skill[]> {
   const admin = getSupabaseAdmin();
-  const [{ data: skills }, { data: agentSkills }, { data: calls7d }] = await Promise.all([
-    admin.from('cockpit_skills_catalog')
-      .select('id, name, description, category, authority_level, requires_pbs_approval, estimated_cost_usd_milli, cost_class, active, implementation_type, archived_at, handler, error_codes')
-      .order('name'),
-    admin.from('cockpit_agent_role_skills').select('role, skill_id, enabled'),
-    admin.from('cockpit_skill_calls')
-      .select('skill_id, status, duration_ms, cost_usd_milli')
-      .gt('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString()),
-  ]);
-
-  const grantsBySkill = new Map<number, Set<string>>();
-  for (const g of agentSkills ?? []) {
-    if (g.enabled === false) continue;
-    if (!grantsBySkill.has(g.skill_id)) grantsBySkill.set(g.skill_id, new Set());
-    grantsBySkill.get(g.skill_id)!.add(g.role);
-  }
-
-  const callsBySkill = new Map<number, { n: number; errors: number; cost: number }>();
-  for (const c of calls7d ?? []) {
-    const cur = callsBySkill.get(c.skill_id) ?? { n: 0, errors: 0, cost: 0 };
-    cur.n += 1;
-    if (c.status === 'error' || c.status === 'failed') cur.errors += 1;
-    cur.cost += Number(c.cost_usd_milli) || 0;
-    callsBySkill.set(c.skill_id, cur);
-  }
-
-  const rows = (skills ?? []).map((s: any) => ({
-    id: s.id,
-    name: s.name,
-    description: s.description,
-    category: s.category,
-    authority_level: s.authority_level,
-    requires_pbs_approval: s.requires_pbs_approval,
-    cost_class: s.cost_class,
-    estimated_cost_usd_milli: s.estimated_cost_usd_milli,
-    active: s.active !== false,
-    archived: s.archived_at != null,
-    implementation_type: s.implementation_type,
-    agentCount: grantsBySkill.get(s.id)?.size ?? 0,
-    calls7d: callsBySkill.get(s.id)?.n ?? 0,
-    errors7d: callsBySkill.get(s.id)?.errors ?? 0,
-    cost7d: (callsBySkill.get(s.id)?.cost ?? 0) / 1000,
-  }));
-
-  return {
-    rows,
-    total: rows.length,
-    orphan: rows.filter((r) => r.agentCount === 0 && !r.archived).length,
-    archived: rows.filter((r) => r.archived).length,
-    approval: rows.filter((r) => r.requires_pbs_approval).length,
-    totalCalls7d: rows.reduce((s, r) => s + r.calls7d, 0),
-    totalErrors7d: rows.reduce((s, r) => s + r.errors7d, 0),
-  };
+  const { data, error } = await admin
+    .from('cockpit_skills_catalog')
+    .select('id,name,description,category,implementation_type,authority_level,requires_pbs_approval,cost_class,active')
+    .eq('active', true)
+    .order('category', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) { console.error('[skills]', error); return []; }
+  return (data ?? []) as Skill[];
 }
 
 export default async function SkillsPage() {
-  const d = await fetchSkillsData();
+  const skills = await getSkills();
+  const tabs = GROUPS.map(g => ({ key: g.key, label: g.label, href: g.href, active: false }));
+
+  // Group by category
+  const byCategory = new Map<string, Skill[]>();
+  for (const s of skills) {
+    const cat = s.category ?? 'uncategorized';
+    const arr = byCategory.get(cat) ?? [];
+    arr.push(s);
+    byCategory.set(cat, arr);
+  }
+  const categories = Array.from(byCategory.keys()).sort();
+
+  const thStyle = { padding: '6px 10px', fontSize: 10, textTransform: 'uppercase' as const,
+    letterSpacing: '.06em', color: INK_M, background: CREAM, borderBottom: `1px solid ${HAIR}` };
+  const tdStyle = { padding: '6px 10px', borderBottom: `1px solid ${HAIR}`, fontSize: 11, color: INK,
+    verticalAlign: 'top' as const };
 
   return (
-    <div style={{ color: TOKENS.text }}>
-      <header style={{ marginBottom: 14, display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <h1 style={{ fontFamily: SERIF, fontSize: 26, color: TOKENS.ink, margin: 0, fontWeight: 500 }}>Skills catalog</h1>
-        <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>cockpit.cap_skills · {d.total} rows</span>
-      </header>
+    <DashboardPage title="Platform Skills Registry"
+      subtitle={`${skills.length} active skills across ${categories.length} categories · cockpit.cap_skills`}
+      tabs={tabs}>
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 20 }}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 18 }}>
-        <Stat label="Total"            value={d.total} />
-        <Stat label="Orphan (0 agents)" value={d.orphan} tone={d.orphan > 0 ? '#E07856' : TOKENS.text3} />
-        <Stat label="Approval-gated"   value={d.approval} tone={TOKENS.brass} />
-        <Stat label="Archived"         value={d.archived} tone={TOKENS.text3} />
-        <Stat label="Calls (7d)"       value={d.totalCalls7d} />
-        <Stat label="Errors (7d)"      value={d.totalErrors7d} tone={d.totalErrors7d > 0 ? '#E07856' : TOKENS.forest} />
+        {/* Summary strip */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+          {categories.map(cat => {
+            const count = byCategory.get(cat)?.length ?? 0;
+            const color = CATEGORY_COLOR[cat] || INK_M;
+            return (
+              <div key={cat} style={{ background: WHITE, border: `1px solid ${HAIR}`,
+                borderRadius: 4, padding: '10px 12px', borderLeft: `4px solid ${color}` }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color, textTransform: 'uppercase',
+                  letterSpacing: '.07em', marginBottom: 2 }}>{cat}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: INK,
+                  fontVariantNumeric: 'tabular-nums' }}>{count}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Skills by category */}
+        {categories.map(cat => {
+          const catSkills = byCategory.get(cat) ?? [];
+          const color = CATEGORY_COLOR[cat] || INK_M;
+          return (
+            <div key={cat} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ background: color, padding: '8px 14px', display: 'flex',
+                justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: WHITE,
+                  textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                  {cat}
+                </div>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>{catSkills.length} skills</span>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...thStyle, textAlign: 'left', width: 220 }}>Name</th>
+                      <th style={{ ...thStyle, textAlign: 'left' }}>Description</th>
+                      <th style={{ ...thStyle }}>Type</th>
+                      <th style={{ ...thStyle }}>Authority</th>
+                      <th style={{ ...thStyle }}>Cost</th>
+                      <th style={{ ...thStyle }}>PBS approval</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {catSkills.map((s, i) => (
+                      <tr key={s.id} style={{ background: i % 2 === 0 ? WHITE : '#FAFAF7' }}>
+                        <td style={{ ...tdStyle, fontWeight: 600, fontFamily: 'monospace', fontSize: 10,
+                          color: FOREST }}>{s.name}</td>
+                        <td style={{ ...tdStyle, color: INK_M, maxWidth: 400 }}>
+                          {s.description?.slice(0, 120) ?? '—'}
+                          {s.description && s.description.length > 120 ? '…' : ''}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 10, fontWeight: 600,
+                            background: (TYPE_COLOR[s.implementation_type ?? ''] || INK_M) + '22',
+                            color: TYPE_COLOR[s.implementation_type ?? ''] || INK_M }}>
+                            {TYPE_LABEL[s.implementation_type ?? ''] ?? s.implementation_type ?? '—'}
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, fontSize: 10, color: INK_M }}>{s.authority_level ?? '—'}</td>
+                        <td style={{ ...tdStyle, textAlign: 'center', fontSize: 10, color: INK_M }}>
+                          {s.cost_class ?? '—'}
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: 'center' }}>
+                          {s.requires_pbs_approval
+                            ? <span style={{ fontSize: 10, color: RED, fontWeight: 700 }}>YES</span>
+                            : <span style={{ fontSize: 10, color: INK_M }}>No</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
       </div>
-
-      <SkillsTable rows={d.rows} />
-
-      <div style={{ marginTop: 16, fontFamily: MONO, fontSize: 10, color: TOKENS.text3 }}>
-        Click any row → /holding/it2/fleet/skills/[id] for description · agents granted · invocations · errors · handler.
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: number; tone?: string }) {
-  return (
-    <div style={{ padding: '10px 12px', background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`, borderRadius: 2 }}>
-      <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: TOKENS.text3 }}>{label}</div>
-      <div style={{ fontFamily: SERIF, fontSize: 22, color: tone ?? TOKENS.ink, marginTop: 2 }}>{value}</div>
-    </div>
+    </DashboardPage>
   );
 }
