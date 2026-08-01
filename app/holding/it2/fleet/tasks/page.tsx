@@ -6,8 +6,8 @@
 // Author: IT-team agent · 2026-05-13 · #58.
 
 import Link from 'next/link';
-import { fetchTickets } from '@/app/holding/it/cockpit/_lib/data-port';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { fetchTickets } from '@/lib/cockpit/data-port';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
 import { TicketActions } from './TicketActions';
 import ScheduleSection from './ScheduleSection';
 
