@@ -3,6 +3,7 @@
 // Per-version counts reset after each skill edit (updated_at). IT2 layout provides nav.
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import DiscoverPanel from './_client/DiscoverPanel';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -68,6 +69,7 @@ export default async function SkillsPage({ searchParams }: PageProps) {
     getSkills(), getSkills(surface, mod, cat, health),
   ]);
 
+  const failingSkills = allSkills.filter(s => s.health_status === 'failing').map(s => s.name as string);
   const surfaces = Array.from(new Set(allSkills.map(s => s.surface).filter(Boolean))).sort() as string[];
   const modules  = Array.from(new Set(allSkills.map(s => s.serves_module).filter(Boolean))).sort() as string[];
   const cats     = Array.from(new Set(allSkills.map(s => s.category).filter(Boolean))).sort() as string[];
@@ -116,6 +118,8 @@ export default async function SkillsPage({ searchParams }: PageProps) {
       <p style={{ fontSize: 12, color: INK_M, marginBottom: 16 }}>
         {filtered.length} of {allSkills.length} skills · live from cockpit.cap_skills · per-version metrics reset on each refinement
       </p>
+
+      <DiscoverPanel failingSkills={failingSkills} />
 
       {/* Health summary strip */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
