@@ -8,7 +8,7 @@
 
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '@/app/operations/_subpages';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 import SpaSubnav from './SpaSubnav';
 import BridgeNotice from './BridgeNotice';
 import { getSpaDeliveryRecords, getFolioSpaTransactions, localTimeStr } from './data';
