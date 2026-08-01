@@ -7,8 +7,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
-import type { V2CostBreakdown } from '@/app/holding/it/cockpit/_lib/data-port';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
+import type { V2CostBreakdown } from '@/lib/cockpit/data-port';
 import KpiPopoverButton from '@/app/(cockpit)/_design/tile/KpiPopoverButton';
 
 function fmtUsd(n: number): string {
