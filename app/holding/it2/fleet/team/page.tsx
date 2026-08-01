@@ -11,7 +11,7 @@ import {
   fetchSkills,
   fetchAgentSkills,
   fetchRoleRunStats,
-} from '@/app/holding/it/cockpit/_lib/data';
+} from '@/lib/cockpit/data';
 import { TeamView } from './TeamView';
 
 export const dynamic = 'force-dynamic';
