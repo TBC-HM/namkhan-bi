@@ -187,6 +187,33 @@ export default async function OperationsSuppliersPage() {
       <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 16 }}>
         <SupplierSubTabs tabs={OPS_SUPPLIER_TABS} />
 
+        {/* Spend-type summary blocks: Fixed | Variable | One-off */}
+        {(() => {
+          const fixed  = mainRows.filter(r => r.spend_type === 'fixed_recurring');
+          const variab = mainRows.filter(r => r.spend_type === 'variable' || !r.spend_type);
+          const oneoff = mainRows.filter(r => r.spend_type === 'one_off');
+          const fUSD   = fixed.reduce((s,r) => s + Number(r.ytd_spend_usd||0), 0);
+          const vUSD   = variab.reduce((s,r) => s + Number(r.ytd_spend_usd||0), 0);
+          const oUSD   = oneoff.reduce((s,r) => s + Number(r.ytd_spend_usd||0), 0);
+          const fLAK   = fixed.reduce((s,r) => s + Number(r.ytd_spend_lak||0)/FX_LAK_PER_USD, 0);
+          const vLAK   = variab.reduce((s,r) => s + Number(r.ytd_spend_lak||0)/FX_LAK_PER_USD, 0);
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {[
+                { label: 'Fixed / Recurring', vendors: fixed.length,  ytd: fUSD+fLAK, color: '#084838', sub: 'Utilities · SaaS · Leasing' },
+                { label: 'Variable',          vendors: variab.length, ytd: vUSD+vLAK, color: '#B48A3A', sub: 'Food · Supplies · Services' },
+                { label: 'One-off',            vendors: oneoff.length, ytd: oUSD,      color: '#5A5A5A', sub: 'Construction · Projects' },
+              ].map(b => (
+                <div key={b.label} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '12px 16px', borderLeft: `4px solid ${b.color}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: b.color, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>{b.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: INK, fontVariantNumeric: 'tabular-nums' }}>{fmtUSD(b.ytd)}</div>
+                  <div style={{ fontSize: 10, color: INK_M, marginTop: 2 }}>{b.vendors} vendors · {b.sub}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Cross-links to related mapping pages */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: '#5A5A5A' }}>Related:</span>
