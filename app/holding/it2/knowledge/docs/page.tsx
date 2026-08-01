@@ -4,7 +4,7 @@
 // documentation.documents. No caching; force-dynamic so every visit reads
 // fresh state from Supabase.
 
-import { fetchDocs } from '@/app/holding/it/cockpit/_lib/data';
+import { fetchDocs } from '@/lib/cockpit/data';
 import { DocsView } from './DocsView';
 
 export const dynamic = 'force-dynamic';
