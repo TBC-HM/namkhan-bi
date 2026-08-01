@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 const inp: React.CSSProperties = {
   padding: '7px 9px', fontSize: 13, borderRadius: 4, width: '100%',
