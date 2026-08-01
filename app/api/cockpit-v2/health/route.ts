@@ -5,7 +5,7 @@
 // Author: IT-team agent · 2026-05-13 · #58.
 
 import { NextResponse } from 'next/server';
-import { fetchHealth } from '@/app/holding/it/cockpit/_lib/data-port';
+import { fetchHealth } from '@/lib/cockpit/data-port';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
