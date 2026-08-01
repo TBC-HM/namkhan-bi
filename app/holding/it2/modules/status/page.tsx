@@ -1,10 +1,14 @@
 // app/holding/it2/modules/status/page.tsx
-// IT2 native module status page — replaces the cockpit/releases shim.
-// Renders v_module_completion_queue + doc-releases ledger with plain HTML
-// (no Container/MetricRow client components) to avoid cockpit context deps.
+// IT2 native module status page — THE single truth for module status
+// (one fact = one surface, it-area-reorg-v1). Renders the live
+// v_module_completion_queue table PLUS the rule-597 doc-release ledger and
+// cut-release form, consolidated here from /holding/it/cockpit/releases
+// (final slice 2026-08-01 — the old page is now a redirect stub).
 import Link from 'next/link';
+import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { ReleasePicker } from './ReleasePicker';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -43,11 +47,62 @@ const td: React.CSSProperties = {
   borderBottom: `1px solid ${TOKENS.border}`, verticalAlign: 'top',
 };
 
+// ── doc-release ledger (rule 597, consolidated from cockpit/releases) ────
+
+export type Release = {
+  id: number;
+  semver: string;
+  scope: string;
+  released_at: string;
+  approved_by: string;
+  changelog_md: string | null;
+  doc_snapshot_refs: Array<{
+    doc_type: string;
+    version: number;
+    hist_id: number | null;
+    sha256: string;
+  }> | null;
+};
+
+async function fetchReleases(): Promise<Release[]> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await (sb as any).from('v_doc_releases').select('*');
+  if (error) {
+    console.error('[it2/modules/status] releases fetch error', error);
+    return [];
+  }
+  return (data as Release[]) ?? [];
+}
+
+async function cutReleaseAction(formData: FormData) {
+  'use server';
+  const semver = String(formData.get('semver') ?? '').trim();
+  if (!semver) return;
+  const sb = getSupabaseAdmin();
+  const { data, error } = await (sb as any).rpc('fn_cut_platform_release', {
+    p_semver: semver,
+    p_actor: 'PBS',
+  });
+  if (error) console.error('[it2/modules/status] cut error', error);
+  else console.log('[it2/modules/status] cut result', data);
+  revalidatePath('/holding/it2/modules/status');
+}
+
+function nextSemverHint(current: string): string {
+  const major = parseInt(current.split('.')[0] || '1', 10);
+  return `${major + 1}.0`;
+}
+
 export default async function It2ModulesStatusPage() {
   const sb = getSupabaseAdmin();
+  const releasesPromise = fetchReleases();
   const { data, error } = await (sb as any)
     .from('v_module_completion_queue')
     .select('module_doc_type, display_name, priority, status, completion_estimate, brief_slug, entry_url, in_production, expected_delivery, open_questions');
+  const releases = await releasesPromise;
+  const platformReleases = releases.filter((r) => r.scope === 'platform');
+  const moduleReleases = releases.filter((r) => r.scope.startsWith('module:'));
+  const latestPlatform = platformReleases[0] ?? null;
 
   if (error) console.error('[it2/modules/status] fetch error', error);
   const raw = ((data as QueueRow[]) ?? []).slice();
@@ -76,6 +131,8 @@ export default async function It2ModulesStatusPage() {
           { label: 'In production', value: live, foot: `${raw.length} modules tracked` },
           { label: 'In flight', value: raw.length - live, foot: 'being built' },
           { label: 'Needs PBS', value: questions, foot: 'open questions' },
+          { label: 'Platform releases', value: platformReleases.length, foot: latestPlatform ? `latest ${latestPlatform.semver}` : 'none cut yet' },
+          { label: 'Module releases', value: moduleReleases.length, foot: 'via sign-off (rule 597)' },
         ].map(t => (
           <div key={t.label} style={{ background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`, borderRadius: 8, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: TOKENS.text2 }}>{t.label}</div>
@@ -149,9 +206,49 @@ export default async function It2ModulesStatusPage() {
         </div>
       </div>
 
-      <div style={{ fontSize: 12, color: TOKENS.text3 }}>
-        Doc-release ledger: <Link href="/holding/it/cockpit/releases" style={{ color: TOKENS.forest }}>view at /holding/it/cockpit/releases →</Link>
+      {/* Cut a platform release (rule 597) */}
+      <div style={{ background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`, borderRadius: 8, padding: '14px 16px', marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: TOKENS.ink, marginBottom: 2 }}>Cut a platform release</div>
+        <div style={{ fontSize: 12, color: TOKENS.text3, marginBottom: 10 }}>
+          Human approval = release (rule 597). Snapshots every doc_type version with a sha256 signature;
+          changelog is generated from documents_history diffs, known issues from open gap lists — never hand-written.
+        </div>
+        <form action={cutReleaseAction} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            name="semver"
+            placeholder={latestPlatform ? nextSemverHint(latestPlatform.semver) : '1.0'}
+            required
+            pattern="\d+\.\d+(\.\d+)?"
+            style={{
+              fontFamily: MONO, fontSize: 13, padding: '8px 10px',
+              border: `1px solid ${TOKENS.border}`, borderRadius: 6,
+              background: TOKENS.bgRaised, color: TOKENS.ink, width: 120,
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              fontFamily: MONO, fontSize: 12, letterSpacing: 0.5, cursor: 'pointer',
+              padding: '9px 16px', border: 'none', borderRadius: 6,
+              background: TOKENS.forest, color: '#FFFFFF',
+            }}
+          >
+            Cut release
+          </button>
+          <span style={{ fontSize: 12, color: TOKENS.text3 }}>
+            Append-only — a semver can never be re-cut or edited.
+          </span>
+        </form>
       </div>
+
+      {/* Doc-release ledger */}
+      {releases.length === 0 ? (
+        <div style={{ fontSize: 12, color: TOKENS.text3 }}>
+          No releases yet — cut release 1.0 above to sign the current doc corpus.
+        </div>
+      ) : (
+        <ReleasePicker releases={releases} />
+      )}
     </div>
   );
 }
