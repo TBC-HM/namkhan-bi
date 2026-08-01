@@ -6,7 +6,7 @@
 // Bug #107: answered-state shows recorded choice + consequence + where deliverable arrives.
 
 import { useState } from 'react';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 export interface OpenQ {
   kind: 'brief' | 'bug';
