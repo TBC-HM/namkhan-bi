@@ -1,11 +1,9 @@
 // app/h/[property_id]/settings/knowledge/page.tsx
 // knowledge-goals-intake-v1 — client Knowledge tab: tenant goal registry + judgment-doc intake.
-// Fix: use createClient() (not getSupabaseAdmin) + import JUDGMENT_SECTIONS from shared lib
-// (was: imported from 'use client' KnowledgeClient — RSC cross-boundary data import crash)
+// Fix: JUDGMENT_SECTIONS defined locally (no cross-boundary client import), createClient() matches other settings pages
 
 import { createClient } from '@/lib/supabase/server';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
-import { JUDGMENT_SECTIONS } from '@/lib/settings/judgment-sections';
 import KnowledgeClient, {
   type TenantGoalRow,
   type KnowledgeAnswerRow,
@@ -14,6 +12,16 @@ import KnowledgeClient, {
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// Defined here (not imported from KnowledgeClient) to avoid RSC cross-boundary client import crash
+const JUDGMENT_SECTIONS: Array<{ slug: string; questions: string[] }> = [
+  { slug: 'revenue_philosophy', questions: ['','','',''] },
+  { slug: 'playbook', questions: ['','',''] },
+  { slug: 'positioning', questions: ['','',''] },
+  { slug: 'guest_profile', questions: ['','',''] },
+  { slug: 'escalation_crisis', questions: ['','',''] },
+  { slug: 'compliance', questions: ['',''] },
+];
 
 export default async function KnowledgeSettingsPage({
   params,
