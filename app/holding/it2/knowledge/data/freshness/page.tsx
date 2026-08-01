@@ -8,7 +8,7 @@
 // Live read from public.v_tenant_data_coverage (returns ~215 rows · 60 tables × 2-3 tenants).
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
