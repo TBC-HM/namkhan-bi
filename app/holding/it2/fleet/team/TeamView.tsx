@@ -9,7 +9,7 @@
 //   · dormant toggle
 //   · roster / active / dormant / departments strip
 //   · org bands (CEO → HODs → workers) with live-blink dot on 60s activity
-//   · agent cards deep-link to /holding/it/cockpit/agent/[role]
+//   · agent cards deep-link to /holding/it2/fleet/team/agent/[role]
 //   · per-agent skill chips (top 8 / top 12 on CEO) with +N overflow
 //   · run counters (lifetime + 7d)
 //
@@ -305,7 +305,7 @@ function OrgGroupCard({
 }
 
 // ---------------------------------------------------------------------------
-// Agent card — clickable Link to /holding/it/cockpit/agent/[role]
+// Agent card — clickable Link to /holding/it2/fleet/team/agent/[role]
 // ---------------------------------------------------------------------------
 
 function AgentCard({
@@ -332,7 +332,7 @@ function AgentCard({
 
   return (
     <Link
-      href={`/holding/it/cockpit/agent/${encodeURIComponent(agent.role)}`}
+      href={`/holding/it2/fleet/team/agent/${encodeURIComponent(agent.role)}`}
       style={cardStyle}
     >
       <div
