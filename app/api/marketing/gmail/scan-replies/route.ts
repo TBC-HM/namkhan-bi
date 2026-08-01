@@ -23,11 +23,28 @@
 //   max_messages?: number,       // per-mailbox cap (default 500)
 // }
 
+// Brief newsletter-owner-test-feedback-writer-v1 (2026-08-01, goal 27, ADR-203):
+// owner-test feedback writer added. Replies FROM pb@/xl@ are matched to the
+// originating campaign (dual matcher: RFC Message-Id token OR its local part
+// vs email_send_history.message_id; fallback = sender + closest send within
+// 24h) and written to marketing.email_learnings as inactive learnings
+// (source='owner_test_feedback'). Idempotent via source_message_id.
+// Owner-class content routes to the Decision Inbox via
+// fn_set_brief_open_question (L10); everything else stays agent-class.
+// Owner query deliberately omits in:inbox — pb@'s own reply to gm@ lives in
+// pb@'s Sent, and gm@ is not (yet) a connected mailbox (R5c).
+
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { refreshAccessToken } from '@/lib/gmail';
+import { callAnthropicTool } from '@/lib/mail/anthropic';
+import {
+  parseOwnerReply,
+  messageIdCandidates,
+  type GmailPayloadPart,
+} from '@/lib/newsletter/parse-reply';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -259,6 +276,304 @@ async function scanMailbox(
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Owner-test feedback writer (brief newsletter-owner-test-feedback-writer-v1)
+// ---------------------------------------------------------------------------
+
+const OWNER_SENDERS = ['pb@thenamkhan.com', 'xl@thenamkhan.com'];
+const OWNER_QUESTION_BRIEF_SLUG = 'newsletter-owner-test-feedback-writer-v1';
+const FALLBACK_MATCH_WINDOW_MS = 24 * 3600 * 1000;
+
+interface OwnerScanResult {
+  account_email: string;
+  scanned: number;
+  matched: number;
+  inserted: number;
+  duplicates: number;
+  no_match: number;
+  error?: string;
+}
+
+interface FullMessage {
+  id: string;
+  from: string | null;
+  subject: string | null;
+  date_ms: number;
+  message_id: string | null;
+  in_reply_to: string | null;
+  references: string | null;
+  payload: GmailPayloadPart | null;
+}
+
+async function fetchFullMessage(access: string, id: string): Promise<FullMessage | null> {
+  try {
+    const r = await fetch(GMAIL_API + '/users/me/messages/' + id + '?format=full', {
+      headers: { authorization: 'Bearer ' + access },
+    });
+    if (!r.ok) return null;
+    const j = (await r.json()) as {
+      id: string;
+      internalDate?: string;
+      payload?: GmailPayloadPart & { headers?: Array<{ name: string; value: string }> };
+    };
+    const hdrs = j.payload?.headers ?? [];
+    const pick = (n: string) => hdrs.find((h) => h.name?.toLowerCase() === n.toLowerCase())?.value ?? null;
+    return {
+      id: j.id,
+      from: pick('From'),
+      subject: pick('Subject'),
+      date_ms: Number(j.internalDate ?? 0) || Date.now(),
+      message_id: pick('Message-ID'),
+      in_reply_to: pick('In-Reply-To'),
+      references: pick('References'),
+      payload: j.payload ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface SendHit {
+  id: number;
+  campaign_id: string | null;
+  property_id: number;
+  subscriber_email: string;
+  sent_at: string;
+}
+
+/**
+ * A2 dual matcher. Primary: In-Reply-To/References token OR its local part vs
+ * email_send_history.message_id (send-side stores Resend API UUIDs — R1).
+ * Fallback: closest send to this sender within 24h before the reply.
+ * Returns null on zero match (log + skip — no floating learnings).
+ */
+async function matchReplyToCampaign(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  sender: string,
+  refIds: string[],
+  replyDateMs: number,
+): Promise<SendHit | null> {
+  const candidates = messageIdCandidates(refIds);
+  if (candidates.length > 0) {
+    const { data: hits } = await admin
+      .schema('marketing')
+      .from('email_send_history')
+      .select('id, campaign_id, property_id, subscriber_email, sent_at')
+      .in('message_id', candidates)
+      .not('campaign_id', 'is', null)
+      .limit(5);
+    if (hits && hits.length > 0) return hits[0] as SendHit;
+  }
+  // Fallback: sender + 24h window, closest send wins.
+  const windowStart = new Date(replyDateMs - FALLBACK_MATCH_WINDOW_MS).toISOString();
+  const windowEnd = new Date(replyDateMs + 60_000).toISOString();
+  const { data: sends } = await admin
+    .schema('marketing')
+    .from('email_send_history')
+    .select('id, campaign_id, property_id, subscriber_email, sent_at')
+    .eq('subscriber_email', sender)
+    .not('campaign_id', 'is', null)
+    .gte('sent_at', windowStart)
+    .lte('sent_at', windowEnd)
+    .order('sent_at', { ascending: false })
+    .limit(10);
+  if (!sends || sends.length === 0) return null;
+  let best: SendHit | null = null;
+  let bestGap = Number.POSITIVE_INFINITY;
+  for (const s of sends as SendHit[]) {
+    const gap = Math.abs(replyDateMs - Date.parse(s.sent_at));
+    if (gap < bestGap) { bestGap = gap; best = s; }
+  }
+  return best;
+}
+
+interface OwnerClassVerdict {
+  owner_class: boolean;
+  question: string;
+  option_a_label: string;
+  option_a_consequence: string;
+  option_b_label: string;
+  option_b_consequence: string;
+  recommended: 'a' | 'b';
+}
+
+/**
+ * A7 — classify reply content. Owner-class (money, taste/brand, risk,
+ * priority) → park in the Decision Inbox via fn_set_brief_open_question.
+ * Never blocks the learning INSERT; classifier failure = agent-class.
+ */
+async function classifyAndRouteOwnerClass(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  propertyId: number,
+  campaignId: string,
+  replyText: string,
+): Promise<void> {
+  try {
+    const v = await callAnthropicTool<OwnerClassVerdict>({
+      system:
+        'You triage hotel-owner feedback on a test newsletter. Owner-class = the reply raises a decision about money, brand taste, business risk, or priority that only the owner can settle. Implementation details (wording tweaks, layout, links, typos, send mechanics) are NOT owner-class. If owner-class, phrase ONE plain-language question a hotel owner parses in one read, plus two options with consequences.',
+      prompt: 'Owner test-send reply:\n\n' + replyText.slice(0, 4000),
+      toolName: 'classify_owner_feedback',
+      toolDescription: 'Classify whether owner-test newsletter feedback contains an owner-class decision.',
+      toolSchema: {
+        type: 'object',
+        properties: {
+          owner_class: { type: 'boolean' },
+          question: { type: 'string' },
+          option_a_label: { type: 'string' },
+          option_a_consequence: { type: 'string' },
+          option_b_label: { type: 'string' },
+          option_b_consequence: { type: 'string' },
+          recommended: { type: 'string', enum: ['a', 'b'] },
+        },
+        required: ['owner_class'],
+      },
+      maxTokens: 600,
+      meter: { property_id: propertyId, agent_handle: 'owner_test_scan', source: 'owner-test-classify' },
+    });
+    if (!v.owner_class || !v.question) return;
+    await admin.rpc('fn_set_brief_open_question', {
+      p_slug: OWNER_QUESTION_BRIEF_SLUG,
+      p_question: {
+        question: v.question,
+        options: [
+          { label: v.option_a_label ?? 'Option A', consequence: v.option_a_consequence ?? '', recommended: v.recommended !== 'b' },
+          { label: v.option_b_label ?? 'Option B', consequence: v.option_b_consequence ?? '', recommended: v.recommended === 'b' },
+        ],
+        asked_by: 'owner_test_scan',
+        campaign_id: campaignId,
+      },
+    });
+  } catch {
+    // classifier is best-effort; the learning row already landed (agent-class default)
+  }
+}
+
+async function ownerTestScan(
+  row: SharedConnRow,
+  windowHours: number,
+  maxMessages: number,
+  budgetStart: number,
+): Promise<OwnerScanResult> {
+  const admin = getSupabaseAdmin();
+  const account = row.email;
+  const result: OwnerScanResult = {
+    account_email: account, scanned: 0, matched: 0, inserted: 0, duplicates: 0, no_match: 0,
+  };
+
+  let access: string;
+  try {
+    const t = await refreshAccessToken(row.refresh_token);
+    access = t.access_token;
+  } catch (err) {
+    result.error = 'token_' + (err instanceof Error ? err.message : String(err));
+    return result;
+  }
+
+  // Same cursor as the responder scan (bumped once per run, after both passes).
+  let sinceSeconds: number;
+  try {
+    const { data: cur } = await admin
+      .schema('marketing')
+      .from('gmail_reply_scan_state')
+      .select('last_scanned_at')
+      .eq('account_email', account.toLowerCase())
+      .maybeSingle();
+    const last = cur?.last_scanned_at ? Date.parse(cur.last_scanned_at as string) : 0;
+    const fallback = Date.now() - windowHours * 3600 * 1000;
+    sinceSeconds = Math.floor(Math.max(last, fallback) / 1000);
+  } catch {
+    sinceSeconds = Math.floor((Date.now() - windowHours * 3600 * 1000) / 1000);
+  }
+
+  // NO in:inbox — pb@'s reply to gm@ sits in pb@'s Sent folder (R5c).
+  const q = '(' + OWNER_SENDERS.map((s) => 'from:' + s).join(' OR ') + ') after:' + sinceSeconds;
+  let ids: string[] = [];
+  try {
+    let pageToken: string | undefined = undefined;
+    while (ids.length < maxMessages) {
+      const url = new URL(GMAIL_API + '/users/me/messages');
+      url.searchParams.set('q', q);
+      url.searchParams.set('maxResults', '100');
+      url.searchParams.set('includeSpamTrash', 'false');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const r = await fetch(url.toString(), { headers: { authorization: 'Bearer ' + access } });
+      if (!r.ok) throw new Error('list_' + r.status);
+      const j = (await r.json()) as { messages?: Array<{ id: string }>; nextPageToken?: string };
+      for (const m of j.messages ?? []) ids.push(m.id);
+      if (!j.nextPageToken || (j.messages?.length ?? 0) === 0) break;
+      pageToken = j.nextPageToken;
+    }
+    ids = ids.slice(0, maxMessages);
+  } catch (err) {
+    result.error = 'owner_list_' + (err instanceof Error ? err.message : String(err));
+    return result;
+  }
+
+  for (const id of ids) {
+    if (Date.now() - budgetStart > BUDGET_MS) break;
+    const msg = await fetchFullMessage(access, id);
+    if (!msg) continue;
+    const sender = parseSenderEmail(msg.from);
+    if (!sender || !OWNER_SENDERS.includes(sender)) continue;
+    result.scanned += 1;
+
+    // Only consider actual replies (In-Reply-To/References present) — a fresh
+    // outbound mail from pb@ is not owner-test feedback.
+    const refIds = [...parseMessageIds(msg.in_reply_to), ...parseMessageIds(msg.references)];
+    if (refIds.length === 0) continue;
+
+    const sourceMessageId = msg.message_id?.replace(/[<>]/g, '').trim() || 'gmail:' + msg.id;
+
+    // A4 idempotency: check-then-insert (partial unique index is the backstop).
+    const { data: existing } = await admin
+      .schema('marketing')
+      .from('email_learnings')
+      .select('learning_id')
+      .eq('source_message_id', sourceMessageId)
+      .limit(1);
+    if (existing && existing.length > 0) { result.duplicates += 1; continue; }
+
+    const hit = await matchReplyToCampaign(admin, sender, refIds, msg.date_ms);
+    if (!hit || !hit.campaign_id) {
+      result.no_match += 1;
+      console.warn('[owner-test-scan] zero campaign match, skipping', { sender, gmail_id: msg.id });
+      continue;
+    }
+    result.matched += 1;
+
+    const cleaned = parseOwnerReply(msg.payload);
+    if (!cleaned) { result.no_match += 1; continue; }
+
+    const { error: insErr } = await admin
+      .schema('marketing')
+      .from('email_learnings')
+      .insert({
+        property_id: hit.property_id,
+        campaign_id: hit.campaign_id,
+        source: 'owner_test_feedback',
+        field: 'body',
+        before_text: null,
+        after_text: cleaned,
+        edit_summary: msg.subject ?? '(no subject)',
+        learned_rule: null,
+        active: false,
+        created_by: 'owner_test_scan',
+        source_message_id: sourceMessageId,
+      });
+    if (insErr) {
+      if (/duplicate key/i.test(insErr.message)) result.duplicates += 1;
+      continue;
+    }
+    result.inserted += 1;
+
+    // A7 — owner-class routing (best-effort, after the row is safe).
+    await classifyAndRouteOwnerClass(admin, hit.property_id, hit.campaign_id, cleaned);
+  }
+
+  return result;
+}
+
 export async function POST(req: Request) {
   const cronOk = checkCronSecret(req);
   const adminOk = cronOk ? true : await checkAdminSession();
@@ -293,14 +608,24 @@ export async function POST(req: Request) {
 
   const started = Date.now();
   const results: MailboxScanResult[] = [];
+  const ownerResults: OwnerScanResult[] = [];
   for (const row of rows) {
     if (Date.now() - started > BUDGET_MS) break;
+    // Owner-test pass FIRST — it reads the same cursor scanMailbox bumps at
+    // its end; running it after would fast-forward past unseen replies.
+    const o = await ownerTestScan(row, windowHours, maxMessages, started);
+    ownerResults.push(o);
     const r = await scanMailbox(row, windowHours, maxMessages, started);
     results.push(r);
   }
 
   return NextResponse.json({
     ok: true,
+    // A1 contract: {ok, scanned, matched, inserted} for the owner-test writer.
+    scanned: ownerResults.reduce((a, b) => a + b.scanned, 0),
+    matched: ownerResults.reduce((a, b) => a + b.matched, 0),
+    inserted: ownerResults.reduce((a, b) => a + b.inserted, 0),
+    owner_results: ownerResults,
     scanned_mailboxes: results.length,
     total_scanned: results.reduce((a, b) => a + b.scanned, 0),
     total_candidates: results.reduce((a, b) => a + b.candidates, 0),
