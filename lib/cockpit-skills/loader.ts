@@ -30,6 +30,8 @@ export type LoadedSkill = AnthropicToolDef & {
   estimated_cost_usd_milli: number;
   requires_pbs_approval: boolean;
   authority_level: string;
+  /** cap_skills.serves_module — used by the entitlement gate (lib/entitlements.ts). */
+  serves_module: string | null;
 };
 
 type LoaderRow = {
@@ -47,6 +49,7 @@ type LoaderRow = {
         authority_level: string | null;
         active: boolean;
         archived_at: string | null;
+        serves_module: string | null;
       }
     | Array<{
         id: number;
@@ -60,6 +63,7 @@ type LoaderRow = {
         authority_level: string | null;
         active: boolean;
         archived_at: string | null;
+        serves_module: string | null;
       }>;
 };
 
@@ -126,7 +130,7 @@ export async function loadAgentSkills(role: string): Promise<LoadedSkill[]> {
   const { data, error } = await supa
     .from('cockpit_agent_role_skills')
     .select(
-      'enabled, cap_skills:cockpit_agent_skills!inner(id, name, description, input_schema, handler, implementation_type, estimated_cost_usd_milli, requires_pbs_approval, authority_level, active, archived_at)',
+      'enabled, cap_skills:cockpit_agent_skills!inner(id, name, description, input_schema, handler, implementation_type, estimated_cost_usd_milli, requires_pbs_approval, authority_level, active, archived_at, serves_module)',
     )
     .eq('role', role)
     .eq('enabled', true);
@@ -151,6 +155,7 @@ export async function loadAgentSkills(role: string): Promise<LoadedSkill[]> {
         estimated_cost_usd_milli: s.estimated_cost_usd_milli ?? 0,
         requires_pbs_approval: !!s.requires_pbs_approval,
         authority_level: s.authority_level ?? 'l1_read',
+        serves_module: s.serves_module ?? null,
       } as LoadedSkill;
     })
     .filter((s): s is LoadedSkill => s !== null);
