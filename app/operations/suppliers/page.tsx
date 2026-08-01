@@ -7,7 +7,7 @@ import SupplierSubTabs from './_components/SupplierSubTabs';
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { FX_LAK_PER_USD } from '@/lib/format';
+// FX rate fetched dynamically from gl.fx_rates via v_current_fx (not hardcoded)
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -25,6 +25,14 @@ interface SupplierRow {
   gross_spend_usd: number; gross_spend_lak: number; net_amount_usd: number;
   ytd_spend_usd: number; ytd_spend_lak: number; ytd_txn_count: number;
   distinct_accounts: number; is_active_recent: boolean;
+}
+
+async function getFxRate(): Promise<number> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data } = await sb.from('v_current_fx').select('lak_per_usd').single();
+    return Number((data as any)?.lak_per_usd ?? 21617);
+  } catch { return 21617; } // fallback to last known rate
 }
 
 async function getData(): Promise<SupplierRow[]> {
@@ -72,7 +80,7 @@ const tdStyle = { padding: '6px 10px', borderBottom: `1px solid ${HAIR}`, fontSi
 const thStyle = { padding: '7px 10px', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '.06em', color: INK_M, background: CREAM, borderBottom: `1px solid ${HAIR}` };
 
 export default async function OperationsSuppliersPage() {
-  const [rows, unpaidMap] = await Promise.all([getData(), getUnpaidAgg()]);
+  const [rows, unpaidMap, FX_LAK_PER_USD] = await Promise.all([getData(), getUnpaidAgg(), getFxRate()]);
   const cfg = DEPT_CFG.operations;
   const tabs: DashboardTab[] = cfg.subPages.map(s => ({
     key: s.href, label: s.label, href: s.href,
