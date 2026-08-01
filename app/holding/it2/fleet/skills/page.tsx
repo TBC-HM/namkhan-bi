@@ -2,7 +2,6 @@
 // Skills Registry — fully dynamic from cockpit.cap_skills via public bridge view.
 // Filters: surface (user_facing/agent_internal/backend) + module + category.
 // All filters via URL search params — server-side, no client component needed.
-import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import Link from 'next/link';
 
@@ -97,9 +96,9 @@ export default async function SkillsPage({ searchParams }: Props) {
   const isFiltered = !!(surface || mod || category);
 
   return (
-    <DashboardPage title="Platform Skills Registry"
-      subtitle={`${filtered.length} of ${allSkills.length} skills · cockpit.cap_skills · auto-updates when new skills ship`}
->
+    <div style={{ padding: '16px 24px', minHeight: '100vh', background: '#FFFFFF' }}>
+      <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1B1B1B', marginBottom: 4 }}>Platform Skills Registry</h1>
+      <p style={{ fontSize: 12, color: '#5A5A5A', marginBottom: 20 }}>{filtered.length} of {allSkills.length} skills · cockpit.cap_skills · auto-updates when new skills ship</p>
       <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 16 }}>
 
         {/* Surface filter — top priority */}
@@ -217,6 +216,6 @@ export default async function SkillsPage({ searchParams }: Props) {
           })
         )}
       </div>
-    </DashboardPage>
+    </div>
   );
 }
