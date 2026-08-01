@@ -10,7 +10,7 @@
 //
 // Author: IT-team agent · 2026-05-13 · #77.
 
-import { fetchActivityEvents } from '@/app/holding/it/cockpit/_lib/data';
+import { fetchActivityEvents } from '@/lib/cockpit/data';
 import { ActivityView } from './ActivityView';
 
 export const dynamic = 'force-dynamic';
