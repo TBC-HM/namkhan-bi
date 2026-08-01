@@ -82,6 +82,8 @@ const thStyle = { padding: '7px 10px', fontSize: 10, textTransform: 'uppercase' 
 
 export default async function OperationsSuppliersPage() {
   const [rows, unpaidMap, FX_LAK_PER_USD] = await Promise.all([getData(), getUnpaidAgg(), getFxRate()]);
+  const payrollRows = rows.filter(r => r.category === 'payroll');
+  const mainRows = rows.filter(r => r.category !== 'payroll');
   const cfg = DEPT_CFG.operations;
   const tabs: DashboardTab[] = cfg.subPages.map(s => ({
     key: s.href, label: s.label, href: s.href,
