@@ -328,7 +328,7 @@ export default async function SpecsPage() {
                           ✎ Goal
                         </Link>
                       )}
-                      <Link href={`/holding/it/module/${encodeURIComponent(doc.doc_type)}`} title="Read the spec document"
+                      <Link href={`/holding/it2/modules/specs/${encodeURIComponent(doc.doc_type)}`} title="Read the spec document"
                         style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
                           border: '1px solid #E6DFCC', color: '#1B1B1B', textDecoration: 'none', whiteSpace: 'nowrap' }}>
                         📄 Spec
