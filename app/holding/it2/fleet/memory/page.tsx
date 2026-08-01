@@ -5,7 +5,7 @@
 // Edit-prompt button on each agent card opens a versioned write flow that
 // goes through /api/holding/it/cockpit/prompt with a mandatory dry-run preview.
 
-import { fetchAgents, fetchMemories, fetchPrompts } from '@/app/holding/it/cockpit/_lib/data';
+import { fetchAgents, fetchMemories, fetchPrompts } from '@/lib/cockpit/data';
 import { KnowledgeView } from './KnowledgeView';
 
 export const dynamic = 'force-dynamic';
