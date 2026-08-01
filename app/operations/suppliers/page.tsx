@@ -25,6 +25,7 @@ interface SupplierRow {
   gross_spend_usd: number; gross_spend_lak: number; net_amount_usd: number;
   ytd_spend_usd: number; ytd_spend_lak: number; ytd_txn_count: number;
   distinct_accounts: number; is_active_recent: boolean;
+  spend_type: string | null; qb_ap_account: string;
 }
 
 async function getFxRate(): Promise<number> {
@@ -241,14 +242,14 @@ export default async function OperationsSuppliersPage() {
         <Container
           title={`USD Suppliers · ${currentYear} YTD`}
           subtitle={`${usdRows.length} vendors · sorted by YTD spend · ${fmtUSD(ytdUSD)} total`}>
-          <SupplierTable data={usdRows} showLAK={false} />
+          {SupplierTable({ data: usdRows, showLAK: false })}
         </Container>
 
         {/* LAK Suppliers */}
         <Container
           title={`LAK Suppliers · ${currentYear} YTD`}
           subtitle={`${lakRows.length} vendors · amounts in LAK · equiv ≈ ${fmtUSD(ytdLAKinUSD)} USD`}>
-          <SupplierTable data={lakRows} showLAK={true} />
+          {SupplierTable({ data: lakRows, showLAK: true })}
         </Container>
       </div>
     </DashboardPage>
