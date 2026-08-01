@@ -5,7 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
 
 interface SkillRow {
   id: number;
