@@ -1,56 +1,51 @@
 // app/operations/suppliers/page.tsx
-// PBS 2026-07-07 evening: Operations Suppliers page. Pulls active vendors for
-// Namkhan (property 260955) from public.v_operations_suppliers — a bridge
-// view over gl.vendors + finance.v_gl_supplier_overview.
-//
-// This is the ops-facing supplier list ("who do we buy from"). It complements
-// /finance/supplier-mapping (which is the USALI-dept mapping cockpit).
-import TenantLink from '@/components/nav/TenantLink';
+// PBS 2026-07-07 · Operations Supplier master list
+// 2026-08-01 · Gold-layer fix: split USD vs LAK vendors; KPI tiles → YTD;
+//              v_operations_suppliers rebuilt with ytd_spend_usd / ytd_spend_lak.
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 
+const LAK_RATE = 21800; // LAK per USD (Namkhan standard rate)
+
 interface SupplierRow {
-  vendor_name: string;
-  display_name: string | null;
-  category: string | null;
-  email: string | null;
-  phone: string | null;
-  currency: string | null;
-  terms: string | null;
-  is_active: boolean;
-  property_id: number;
-  line_count: number;
-  first_txn_date: string | null;
-  last_txn_date: string | null;
-  gross_spend_usd: number | string;
-  net_amount_usd: number | string;
-  distinct_accounts: number;
-  distinct_classes: number;
-  is_active_recent: boolean;
+  vendor_name: string; display_name: string | null; category: string | null;
+  email: string | null; phone: string | null; currency: string;
+  terms: string | null; is_active: boolean; property_id: number;
+  line_count: number; first_txn_date: string | null; last_txn_date: string | null;
+  gross_spend_usd: number; gross_spend_lak: number; net_amount_usd: number;
+  ytd_spend_usd: number; ytd_spend_lak: number; ytd_txn_count: number;
+  distinct_accounts: number; is_active_recent: boolean;
 }
 
 async function getData(): Promise<SupplierRow[]> {
-  let admin;
-  try { admin = getSupabaseAdmin(); }
-  catch (e) {
-    console.error('[ops/suppliers] supabaseAdmin', e);
-    return [];
-  }
-  const { data, error } = await admin
-    .from('v_operations_suppliers')
-    .select('*')
-    .limit(1500);
-  if (error) {
-    console.error('[ops/suppliers] fetch', error);
-    return [];
-  }
-  return (data ?? []) as SupplierRow[];
+  try {
+    const admin = getSupabaseAdmin();
+    const { data, error } = await admin.from('v_operations_suppliers').select('*').limit(1500);
+    if (error) { console.error('[ops/suppliers]', error); return []; }
+    return (data ?? []) as SupplierRow[];
+  } catch (e) { console.error('[ops/suppliers]', e); return []; }
 }
+
+function fmtUSD(n: number) {
+  return '$' + Math.round(n).toLocaleString('en-US');
+}
+function fmtLAK(n: number) {
+  if (n === 0) return '—';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M LAK`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K LAK`;
+  return `${Math.round(n)} LAK`;
+}
+
+const HAIR = '#E6DFCC'; const INK = '#1B1B1B'; const INK_M = '#5A5A5A';
+const CREAM = '#F5F0E1'; const OK = '#0E7A4B'; const AMBER = '#B48A3A';
+const RED = '#B03826'; const WHITE = '#FFFFFF';
+
+const tdStyle = { padding: '6px 10px', borderBottom: `1px solid ${HAIR}`, fontSize: 12, color: INK };
+const thStyle = { padding: '7px 10px', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '.06em', color: INK_M, background: CREAM, borderBottom: `1px solid ${HAIR}` };
 
 export default async function OperationsSuppliersPage() {
   const rows = await getData();
@@ -60,143 +55,126 @@ export default async function OperationsSuppliersPage() {
     active: s.href === '/operations/suppliers',
   }));
 
-  const totalSpend = rows.reduce((s, r) => s + Number(r.gross_spend_usd || 0), 0);
-  const withTxns   = rows.filter(r => Number(r.line_count || 0) > 0).length;
-  const recent     = rows.filter(r => r.is_active_recent).length;
-  const withEmail  = rows.filter(r => r.email && r.email.trim() !== '').length;
+  const usdRows = rows.filter(r => r.currency === 'USD').sort((a,b) => Number(b.ytd_spend_usd) - Number(a.ytd_spend_usd));
+  const lakRows = rows.filter(r => r.currency === 'LAK').sort((a,b) => Number(b.ytd_spend_lak) - Number(a.ytd_spend_lak));
+
+  const ytdUSD = rows.reduce((s,r) => s + Number(r.ytd_spend_usd || 0), 0);
+  const ytdLAK = rows.reduce((s,r) => s + Number(r.ytd_spend_lak || 0), 0);
+  const ytdLAKinUSD = ytdLAK / LAK_RATE;
+  const activeRecent = rows.filter(r => r.is_active_recent).length;
+  const missingContact = rows.filter(r => !r.email).length;
+  const currentYear = new Date().getFullYear();
 
   const tiles: KpiTileProps[] = [
-    { label: 'Active vendors',  value: rows.length,             size: 'sm', footnote: 'gl.vendors · property 260955' },
-    { label: 'With recent txns',value: recent,                   size: 'sm', footnote: 'activity in last period',   status: recent > 0 ? 'green' : 'amber' },
-    { label: 'With any txns',   value: withTxns,                 size: 'sm', footnote: 'ever booked in GL' },
-    { label: 'Spend (all-time)',value: Math.round(totalSpend), currency: 'USD', size: 'sm', footnote: 'gross · from overview view' },
-    { label: 'With email',      value: withEmail,                size: 'sm', footnote: 'contact hydrated',           status: withEmail > 0 ? 'green' : 'amber' },
-    { label: 'Missing email',   value: rows.length - withEmail,  size: 'sm', footnote: 'contact gap',                status: (rows.length - withEmail) > 0 ? 'amber' : 'green' },
+    { label: `USD suppliers · ${currentYear} YTD`,
+      value: fmtUSD(ytdUSD), size: 'sm',
+      footnote: `${usdRows.length} USD vendors · excl. LAK`, status: 'green' },
+    { label: `LAK suppliers · ${currentYear} YTD`,
+      value: fmtLAK(ytdLAK), size: 'sm',
+      footnote: `≈ ${fmtUSD(ytdLAKinUSD)} USD · ${lakRows.length} LAK vendors`, status: 'grey' },
+    { label: `Combined YTD · ${currentYear}`,
+      value: fmtUSD(ytdUSD + ytdLAKinUSD), size: 'sm',
+      footnote: 'USD direct + LAK÷21,800 equiv', status: 'grey' },
+    { label: 'Active suppliers',
+      value: activeRecent, size: 'sm',
+      footnote: 'txn in last 90 days', status: activeRecent > 0 ? 'green' : 'amber' },
+    { label: 'Total vendors',
+      value: rows.length, size: 'sm',
+      footnote: 'gl.vendors · property 260955' },
+    { label: 'Missing contact',
+      value: missingContact, size: 'sm',
+      footnote: 'no email on file', status: missingContact > 10 ? 'amber' : 'green' },
   ];
 
-  // sort by spend desc, then name
-  const sorted = [...rows].sort((a, b) => {
-    const sa = Number(a.gross_spend_usd || 0);
-    const sb = Number(b.gross_spend_usd || 0);
-    if (sb !== sa) return sb - sa;
-    return String(a.vendor_name).localeCompare(String(b.vendor_name));
-  });
-
-  const subtitle = `v_operations_suppliers · ${rows.length} active vendors · ${fmtMoney(totalSpend, 'USD')} tracked`;
+  function SupplierTable({ data, showLAK }: { data: SupplierRow[]; showLAK: boolean }) {
+    if (data.length === 0) return <div style={{ padding: 12, fontSize: 12, color: INK_M }}>No suppliers.</div>;
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={{ ...thStyle, textAlign: 'left', width: 240 }}>Vendor</th>
+              <th style={{ ...thStyle, textAlign: 'left' }}>Category</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>YTD Spend</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>All-time</th>
+              <th style={{ ...thStyle, textAlign: 'center' }}>Txns</th>
+              <th style={{ ...thStyle }}>Last txn</th>
+              <th style={{ ...thStyle }}>Contact</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((r, i) => {
+              const ytdAmt = showLAK ? Number(r.ytd_spend_lak) : Number(r.ytd_spend_usd);
+              const allAmt = showLAK ? Number(r.gross_spend_lak) : Number(r.gross_spend_usd);
+              return (
+                <tr key={i} style={{ background: i % 2 === 0 ? WHITE : '#FAFAF7' }}>
+                  <td style={tdStyle}>
+                    <div style={{ fontWeight: 500 }}>{r.display_name ?? r.vendor_name}</div>
+                    {r.display_name && <div style={{ fontSize: 10, color: INK_M }}>{r.vendor_name}</div>}
+                  </td>
+                  <td style={tdStyle}>
+                    {r.category
+                      ? <span style={{ fontSize: 10, padding: '1px 7px', background: CREAM, borderRadius: 10 }}>{r.category}</span>
+                      : <span style={{ fontSize: 10, color: AMBER }}>Unclassified</span>}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: ytdAmt > 0 ? INK : INK_M }}>
+                    {ytdAmt > 0 ? (showLAK ? fmtLAK(ytdAmt) : fmtUSD(ytdAmt)) : '—'}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right', color: INK_M, fontVariantNumeric: 'tabular-nums' }}>
+                    {allAmt > 0 ? (showLAK ? fmtLAK(allAmt) : fmtUSD(allAmt)) : '—'}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'center', color: INK_M }}>{r.ytd_txn_count || '—'}</td>
+                  <td style={{ ...tdStyle, color: INK_M }}>
+                    {r.last_txn_date ? (
+                      <span style={{ color: r.is_active_recent ? OK : INK_M }}>
+                        {r.last_txn_date.slice(0,7)}
+                      </span>
+                    ) : '—'}
+                  </td>
+                  <td style={tdStyle}>
+                    {r.email
+                      ? <a href={`mailto:${r.email}`} style={{ color: OK, fontSize: 11 }}>{r.email}</a>
+                      : <span style={{ fontSize: 10, color: AMBER }}>No email</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   return (
-    <DashboardPage title="Operations · Suppliers" subtitle={subtitle} tabs={tabs}>
-      <div style={fullRow}>
-        <Container title="Headline" subtitle="active vendor master · Namkhan property 260955" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+    <DashboardPage
+      title="Operations · Suppliers"
+      subtitle={`v_operations_suppliers · ${rows.length} vendors · YTD ${currentYear}: ${fmtUSD(ytdUSD)} USD + ${fmtLAK(ytdLAK)} LAK`}
+      tabs={tabs}
+    >
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 16 }}>
+
+        {/* KPI Tiles */}
+        <Container title="Supplier headline" density="compact"
+          subtitle={`Gold layer: USD and LAK split correctly · ${currentYear} YTD`}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
             {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
         </Container>
-      </div>
 
-      <div style={fullRow}>
+        {/* USD Suppliers */}
         <Container
-          title="Vendor list"
-          subtitle={`${sorted.length} active · sorted by spend desc · click Finance mapping to classify`}
-          density="compact"
-        >
-          <div style={{ overflowX: 'auto' }}>
-            <table style={tblStyle}>
-              <thead>
-                <tr>
-                  <th style={thL}>Name</th>
-                  <th style={thL}>Category</th>
-                  <th style={thL}>Contact</th>
-                  <th style={thL}>Terms</th>
-                  <th style={thR}>Currency</th>
-                  <th style={thR}>Spend USD</th>
-                  <th style={thR}>Txns</th>
-                  <th style={thL}>Last txn</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.length === 0 && (
-                  <tr>
-                    <td colSpan={8} style={{ ...tdL, textAlign: 'center', color: '#8A8A8A', padding: 20 }}>
-                      No active suppliers found for property 260955.
-                    </td>
-                  </tr>
-                )}
-                {sorted.map((r, i) => {
-                  const name = r.display_name || r.vendor_name;
-                  const spend = Number(r.gross_spend_usd || 0);
-                  return (
-                    <tr key={`${r.vendor_name}-${i}`} style={i % 2 === 0 ? trEven : trOdd}>
-                      <td style={tdL}><strong style={{ color: '#1B1B1B' }}>{name}</strong></td>
-                      <td style={tdL}>{r.category || <span style={muted}>—</span>}</td>
-                      <td style={tdL}>
-                        {r.email ? <div style={{ fontSize: 11 }}>{r.email}</div> : null}
-                        {r.phone ? <div style={{ fontSize: 11, color: '#5A5A5A' }}>{r.phone}</div> : null}
-                        {!r.email && !r.phone ? <span style={muted}>—</span> : null}
-                      </td>
-                      <td style={tdL}>{r.terms || <span style={muted}>—</span>}</td>
-                      <td style={tdR}>{r.currency || <span style={muted}>—</span>}</td>
-                      <td style={tdR}>{spend > 0 ? fmtMoney(spend, 'USD') : <span style={muted}>—</span>}</td>
-                      <td style={tdR}>{Number(r.line_count) || <span style={muted}>0</span>}</td>
-                      <td style={tdL}>{r.last_txn_date || <span style={muted}>—</span>}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          title={`USD Suppliers · ${currentYear} YTD`}
+          subtitle={`${usdRows.length} vendors · sorted by YTD spend · ${fmtUSD(ytdUSD)} total`}>
+          <SupplierTable data={usdRows} showLAK={false} />
         </Container>
-      </div>
 
-      <div style={fullRow}>
-        <Container title="Related" density="compact">
-          <div style={{ fontSize: 12, color: '#3A3A3A', lineHeight: 1.7 }}>
-            <p style={{ margin: '0 0 6px' }}>
-              <strong>Classify vendor spend</strong> → <TenantLink href="/finance/supplier-mapping" style={lnk}>Finance · Supplier mapping</TenantLink>
-              (vendor × USALI dept · no-class + unmapped-account leakage detection).
-            </p>
-            <p style={{ margin: '0 0 6px' }}>
-              <strong>Map GL accounts</strong> → <TenantLink href="/finance/mapping" style={lnk}>Finance · Account mapping</TenantLink>
-              (set USALI subcategory / line label on GL accounts).
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>Vendor list source</strong>: <code>public.v_operations_suppliers</code> — bridge over
-              <code> gl.vendors</code> (contact + terms) + <code>finance.v_gl_supplier_overview</code> (spend + activity).
-            </p>
-          </div>
+        {/* LAK Suppliers */}
+        <Container
+          title={`LAK Suppliers · ${currentYear} YTD`}
+          subtitle={`${lakRows.length} vendors · amounts in LAK · equiv ≈ ${fmtUSD(ytdLAKinUSD)} USD`}>
+          <SupplierTable data={lakRows} showLAK={true} />
         </Container>
       </div>
     </DashboardPage>
   );
 }
-
-const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
-const lnk: React.CSSProperties = { color: '#1F3A2E', textDecoration: 'underline', fontWeight: 600 };
-const muted: React.CSSProperties = { color: '#B8B8B8' };
-
-const tblStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: 12,
-  background: '#FFFFFF',
-  color: '#1B1B1B',
-};
-const thBase: React.CSSProperties = {
-  padding: '6px 10px',
-  fontSize: 10,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: 0.4,
-  color: '#5A5A5A',
-  borderBottom: '1px solid #E6DFCC',
-  background: '#FFFFFF',
-  position: 'sticky',
-  top: 0,
-};
-const thL: React.CSSProperties = { ...thBase, textAlign: 'left' };
-const thR: React.CSSProperties = { ...thBase, textAlign: 'right' };
-const tdBase: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid #F0EBDB', verticalAlign: 'top' };
-const tdL: React.CSSProperties = { ...tdBase, textAlign: 'left' };
-const tdR: React.CSSProperties = { ...tdBase, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
-const trEven: React.CSSProperties = { background: '#FFFFFF' };
-const trOdd:  React.CSSProperties = { background: '#FFFFFF' };
