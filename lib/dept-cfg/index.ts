@@ -773,6 +773,7 @@ const FINANCE_CFG: DeptCfg = {
     // cost-governance-v1 (2026-07-30): tenant-scoped platform usage at cost
     // (PBS placement correction: Administration -> Costs on the client surface).
     { label: 'Costs',           href: '/finance/costs'                    },
+    { label: 'Suppliers',      href: '/finance/suppliers'                },
   ],
   quickChips: [
     { label: 'HoD',            href: '/finance'             },
