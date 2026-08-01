@@ -1,5 +1,5 @@
 'use client';
-// DiscoverPanel: localStorage persist, dismiss per card, show rejected, Download MD, Add more
+// DiscoverPanel: localStorage persist, dismiss per card, show rejected, Download ALL MD, Add more
 import { useState, useEffect } from 'react';
 
 const WHITE='#FFFFFF';const HAIR='#E6DFCC';const INK='#1B1B1B';const INK_M='#5A5A5A';
@@ -16,8 +16,8 @@ interface Proposal {
   value:string;effort:string;proposal:string;match_pct?:number;roi?:string;
   _avg?:number;_reason?:string;
 }
-interface RejectedProposal { skill_name:string;display_name?:string;_avg?:number;_reason?:string; }
-interface RunMeta {
+interface RejectedProposal{skill_name:string;display_name?:string;_avg?:number;_reason?:string;}
+interface RunMeta{
   user_request?:string;generated?:number;passed_quality_gate?:number;
   filtered_low_quality?:number;repos_scanned?:number;reddit_posts?:number;
   quality_gate?:string;persisted?:boolean;saved_count?:number;
@@ -46,9 +46,9 @@ function FlowDiagram({steps}:{steps:string[]}){
 function inferFlow(name:string):string[]{
   const n=name.toLowerCase();
   if(n.includes('research')||n.includes('discover'))return['Web Search','GitHub Scan','Analysis','Proposals'];
-  if(n.includes('storyboard')||n.includes('image'))return['Image Gallery','Curator Agent','Writer Agent','EDL JSON','Shotstack'];
+  if(n.includes('storyboard')||n.includes('image'))return['Image Gallery','Curator','Writer Agent','EDL JSON','Shotstack'];
   if(n.includes('thumbnail')||n.includes('ab_'))return['Assets','Concept Agent','A/B Variants','CTR Score'];
-  if(n.includes('financial')||n.includes('narrative'))return['GL Pull','Variance Compute','Outlier Flag','Forecast','Report'];
+  if(n.includes('financial')||n.includes('narrative'))return['GL Pull','Variance','Outlier Flag','Forecast','Report'];
   if(n.includes('retreat'))return['Enquiry','ICP Match','Capacity','Pricing','PDF'];
   if(n.includes('reputation')||n.includes('review'))return['Review Text','Sentiment','Brand Voice','Response'];
   if(n.includes('phone')||n.includes('fo_'))return['Caller Intent','Context','Claude','Output'];
@@ -65,7 +65,6 @@ function ProposalCard({p,userRequest,expanded,onToggle,onDismiss}:{p:Proposal;us
   const topic=encodeURIComponent(userRequest||p.skill_name);
   return(
     <div style={{background:WHITE,border:'1px solid '+HAIR,borderRadius:6,overflow:'hidden',position:'relative' as const}}>
-      {/* Dismiss button */}
       <button onClick={onDismiss} title="Dismiss — won't show again"
         style={{position:'absolute' as const,top:8,right:10,fontSize:14,lineHeight:1,background:'none',border:'none',color:INK_M,cursor:'pointer',padding:'2px 4px',zIndex:1}}>✕</button>
       <div style={{padding:'12px 28px 12px 14px'}}>
@@ -120,11 +119,13 @@ function ProposalCard({p,userRequest,expanded,onToggle,onDismiss}:{p:Proposal;us
   );
 }
 
+// Downloads ALL accumulated proposals across ALL runs — dismissed included
+// This is the full research, not just the filtered view
 function downloadAllMd(proposals:Proposal[],userRequest:string){
   const date=new Date().toISOString().slice(0,10);
   const lines=[
     '# Agent Flow Research — '+(userRequest||'discovery'),
-    '_'+date+' · Sources: GitHub, Reddit, Anthropic cookbook, CLAUDE.md repos_',
+    '_'+date+' · Sources: GitHub, Reddit, Anthropic cookbook, CLAUDE.md repos · Saved to Supabase knowledge base_',
     '',
     ...proposals.map(p=>[
       '## '+(p.display_name||p.skill_name),
@@ -136,23 +137,23 @@ function downloadAllMd(proposals:Proposal[],userRequest:string){
       '| Framework | '+(p.framework??'custom')+' |',
       '| ROI | '+(p.roi??'—')+' |',
       '| Effort | '+p.effort+' |',
-      '| Score | '+(p._avg?.toFixed(1)??'n/a')+'/10 (gate: 7.5) |',
+      '| Score | '+(p._avg?.toFixed(1)??'n/a')+'/10 |',
       p.found_via?'| Found via | '+p.found_via+' |':'',
       p.source_repo?'| Source | https://github.com/'+p.source_repo+' |':'',
       '',
       '**Value:** '+p.value,
       '',
       '**What it builds:** '+p.proposal,
-      p._reason?'':'',
       p._reason?'**Scorer:** '+p._reason:'',
       '',
       '---',
-    ].filter(l=>l!==undefined).join('\n')),
+    ].filter(Boolean).join('\n')),
   ].join('\n');
   const blob=new Blob([lines],{type:'text/markdown;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download='agent-research-'+(userRequest||'discovery').replace(/\W+/g,'-').toLowerCase()+'-'+date+'.md';
+  a.href=url;
+  a.download='agent-research-'+(userRequest||'discovery').replace(/\W+/g,'-').toLowerCase()+'-'+date+'.md';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 
@@ -172,7 +173,6 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
   const [errDetail,setErrDetail]=useState<ErrDetail|null>(null);
   const [showRaw,setShowRaw]=useState(false);
 
-  // Restore from localStorage on mount (SSR-safe: useEffect only runs client-side)
   useEffect(()=>{
     const props=load<Proposal[]>(LS_PROPOSALS,[]);
     const dis=new Set(load<string[]>(LS_DISMISSED,[]));
@@ -182,10 +182,7 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
     if(req)setLastRequest(req);
   },[]);
 
-  // Persist proposals to localStorage whenever they change
-  useEffect(()=>{
-    save(LS_PROPOSALS,allProposals);
-  },[allProposals]);
+  useEffect(()=>{save(LS_PROPOSALS,allProposals);},[allProposals]);
 
   function dismiss(skillName:string){
     setDismissed(prev=>{
@@ -209,7 +206,6 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
         const newRej=(j.rejected??[]) as RejectedProposal[];
         setAllProposals(prev=>{
           const merged=append?[...prev,...newProps]:newProps;
-          // deduplicate by skill_name keeping highest score
           const map=new Map<string,Proposal>();
           for(const p of merged)if(!map.has(p.skill_name)||((p._avg??0)>(map.get(p.skill_name)!._avg??0)))map.set(p.skill_name,p);
           return [...map.values()];
@@ -218,10 +214,8 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
         else setRejected(prev=>[...prev,...newRej]);
         setLastMeta(j.metadata??null);
         const req=j.metadata?.user_request??focus;
-        setLastRequest(req);
-        save(LS_REQUEST,req);
-        setRunCount(n=>n+1);
-        setState('done');
+        setLastRequest(req);save(LS_REQUEST,req);
+        setRunCount(n=>n+1);setState('done');
       }else{
         setErrDetail({msg:j.error??'failed',stage:j.stage,raw:j.raw_preview,hint:j.hint});
         setState('error');
@@ -239,7 +233,6 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
 
   return(
     <div style={{background:WHITE,border:'2px solid '+FOREST,borderRadius:6,overflow:'hidden',marginBottom:20}}>
-      {/* Header */}
       <div style={{background:FOREST,padding:'12px 16px'}}>
         <div style={{fontSize:14,fontWeight:700,color:WHITE}}>🔍 Discover Agent Flows</div>
         <div style={{fontSize:11,color:'rgba(255,255,255,.75)'}}>
@@ -247,13 +240,12 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
         </div>
       </div>
 
-      {/* Prompt */}
       <div style={{padding:'12px 16px',background:CREAM,borderBottom:'1px solid '+HAIR,display:'flex',gap:10,alignItems:'flex-end'}}>
         <div style={{flex:1}}>
           <div style={{fontSize:10,fontWeight:700,color:INK_M,textTransform:'uppercase' as const,letterSpacing:'.08em',marginBottom:6}}>What do you want to discover or build?</div>
           <textarea value={focus} onChange={e=>setFocus(e.target.value)} rows={2}
             style={{width:'100%',fontSize:12,padding:'8px 12px',borderRadius:4,border:'1px solid '+HAIR,resize:'vertical' as const,fontFamily:'inherit',background:WHITE,color:INK,boxSizing:'border-box' as const}}
-            placeholder={'"financial analyst 2-stage forecast"  ·  "youtube storyboard from images"  ·  "reputation review bot"  ·  "retreat proposal"'}/>
+            placeholder={'"financial analyst 2-stage"  ·  "youtube storyboard from images"  ·  "reputation review bot"  ·  "retreat proposal"'}/>
         </div>
         <div style={{display:'flex',flexDirection:'column' as const,gap:6,flexShrink:0}}>
           <button onClick={()=>runDiscover(false)} disabled={state==='loading'}
@@ -269,14 +261,12 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
         </div>
       </div>
 
-      {/* Failing alert */}
       {failingSkills.length>0&&(
         <div style={{padding:'8px 16px',background:'#FEF2F2',borderBottom:'1px solid '+HAIR,fontSize:11,color:RED}}>
           ⚠ {failingSkills.length} failing — discovery will prioritise replacements: {failingSkills.slice(0,5).join(', ')}{failingSkills.length>5?' +'+(failingSkills.length-5):''}
         </div>
       )}
 
-      {/* Error */}
       {state==='error'&&errDetail&&(
         <div style={{padding:16}}>
           <div style={{color:RED,fontWeight:700,fontSize:13,marginBottom:6}}>✗ {errDetail.msg}{errDetail.stage?' · stage: '+errDetail.stage:''}</div>
@@ -292,10 +282,8 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
         </div>
       )}
 
-      {/* Results */}
       {(state==='done'||visible.length>0)&&(
         <div style={{padding:16}}>
-          {/* Stats + CTAs */}
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,flexWrap:'wrap' as const,gap:8}}>
             <div style={{fontSize:11,color:INK_M,display:'flex',gap:12,flexWrap:'wrap' as const}}>
               <span>💡 {visible.length} proposals · {runCount} run{runCount!==1?'s':''}</span>
@@ -311,9 +299,11 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
             </div>
             <div style={{display:'flex',gap:8}}>
               {allProposals.length>0&&(
-                <button onClick={()=>downloadAllMd(visible,lastRequest)}
+                <button
+                  onClick={()=>downloadAllMd(allProposals,lastRequest)}
+                  title="Downloads ALL research — all runs, including dismissed proposals"
                   style={{fontSize:11,padding:'6px 14px',background:NAVY,color:WHITE,border:'none',borderRadius:4,cursor:'pointer',fontWeight:600}}>
-                  📄 Download MD
+                  📄 Download all research
                 </button>
               )}
               {allProposals.length>0&&(
@@ -325,7 +315,6 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
             </div>
           </div>
 
-          {/* Filters */}
           <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap' as const,alignItems:'center'}}>
             <span style={{fontSize:10,fontWeight:700,color:INK_M,textTransform:'uppercase' as const}}>Filter:</span>
             {(['All','NEW','IMPROVE','REPLACE'] as const).map(t=>(
@@ -341,10 +330,9 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
             ))}
           </div>
 
-          {/* Proposals grid */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(340px,1fr))',gap:12}}>
             {filtered.length===0
-              ?<div style={{padding:24,color:INK_M,fontSize:12,gridColumn:'1/-1'}}>No proposals match filters.{dismissed.size>0?' Some were dismissed — click "N dismissed" above to see them.':''}</div>
+              ?<div style={{padding:24,color:INK_M,fontSize:12,gridColumn:'1/-1'}}>No proposals match filters.{dismissed.size>0?' Some dismissed — click above to see.':''}</div>
               :filtered.map(p=>(
                 <ProposalCard key={p.skill_name} p={p} userRequest={lastRequest}
                   expanded={!!expanded[p.skill_name]}
@@ -354,7 +342,6 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
             }
           </div>
 
-          {/* Dismissed section */}
           {dismissedList.length>0&&showDismissed&&(
             <div style={{marginTop:16,padding:12,background:CREAM,borderRadius:4,border:'1px solid '+HAIR}}>
               <div style={{fontSize:11,fontWeight:700,color:INK_M,marginBottom:8}}>Dismissed ({dismissedList.length})</div>
@@ -368,12 +355,11 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
             </div>
           )}
 
-          {/* Rejected section */}
           {rejected.length>0&&(
             <div style={{marginTop:12}}>
               <button onClick={()=>setShowRejected(s=>!s)}
                 style={{fontSize:11,color:INK_M,background:'none',border:'none',cursor:'pointer',textDecoration:'underline',padding:0}}>
-                {showRejected?'▲ Hide':'▼ Show'} 🚫 filtered out ({rejected.length}) — scored below 7.5
+                {showRejected?'▲ Hide':'▼ Show'} 🚫 filtered out ({rejected.length}) — scored below 7.0
               </button>
               {showRejected&&(
                 <div style={{marginTop:8,display:'flex',flexDirection:'column' as const,gap:6}}>
@@ -381,7 +367,7 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
                     <div key={p.skill_name} style={{padding:'8px 12px',background:'#FEF2F2',borderRadius:4,border:'1px solid '+RED+'33'}}>
                       <div style={{display:'flex',justifyContent:'space-between'}}>
                         <span style={{fontSize:11,fontWeight:700,fontFamily:'monospace',color:INK}}>{p.skill_name}</span>
-                        <span style={{fontSize:10,color:RED}}>★ {p._avg?.toFixed(1)??'<7.5'} — FILTERED</span>
+                        <span style={{fontSize:10,color:RED}}>★ {p._avg?.toFixed(1)??'<7.0'} — FILTERED</span>
                       </div>
                       {p.display_name&&<div style={{fontSize:11,color:INK_M}}>{p.display_name}</div>}
                       {p._reason&&<div style={{fontSize:10,color:INK_M,marginTop:4,fontStyle:'italic'}}>Reason: {p._reason}</div>}
@@ -398,8 +384,8 @@ export default function DiscoverPanel({failingSkills}:{failingSkills:string[]}){
         <div style={{padding:'20px 16px',fontSize:12,color:INK_M,textAlign:'center' as const,lineHeight:1.9}}>
           Type what you want to discover, then press ▶ Run Discovery.<br/>
           Sources: GitHub · Reddit · Anthropic cookbook · CLAUDE.md repos · 8 proven frameworks<br/>
-          Each proposal is saved individually to Supabase + 📄 Download MD keeps a local copy.<br/>
-          <span style={{color:OK,fontSize:11}}>Research persists between sessions. Dismiss proposals to hide them permanently.</span>
+          Each proposal saved to Supabase (memory_type=pattern, accessible to future Claude sessions).<br/>
+          <span style={{color:OK,fontSize:11}}>Research persists between sessions. 📄 Download saves ALL research as MD backup.</span>
         </div>
       )}
     </div>
