@@ -354,7 +354,7 @@ export async function fetchActivityEvents(limit = 200): Promise<ActivityEvent[]>
           status: r.status ?? null,
           detail: typeof r.duration_ms === 'number' ? `${r.duration_ms}ms` : null,
           // Link to /agent/[role] (debug surface replaces old archive drawer)
-          link: `/holding/it/cockpit/agent/${encodeURIComponent(r.role)}`,
+          link: `/holding/it2/fleet/team/agent/${encodeURIComponent(r.role)}`,
         });
       }
     }
