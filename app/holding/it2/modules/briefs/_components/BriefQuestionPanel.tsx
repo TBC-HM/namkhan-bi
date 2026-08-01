@@ -3,7 +3,7 @@
 // Client component for answering open_question on needs_input briefs.
 
 import { useState } from 'react';
-import { TOKENS, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 interface Option { label: string; consequence: string; recommended?: boolean }
 interface OpenQuestion { question: string; options: Option[]; asked_by?: string; asked_at?: string }
