@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, CHAT_MODE_TOOLS } from "@/lib/cockpit-tools";
-import { loadAgentSkills, toAnthropicTools, findSkill } from "@/lib/cockpit-skills/loader";
+import { loadAgentSkills, toAnthropicTools, findSkill, type LoadedSkill } from "@/lib/cockpit-skills/loader";
 import { executeSkill } from "@/lib/cockpit-skills/dispatcher";
 
 // ─── Unified-chat enrichment (KB #291) — added 2026-05-07 ──────────────────
@@ -234,6 +234,38 @@ function pickTier(args: { message: string; historyChars: number; systemChars: nu
 function tierCostMilli(tier: ModelTier, tokensIn: number, tokensOut: number): number {
   const t = MODEL_TIERS[tier];
   return Math.round((tokensIn * t.inPerM + tokensOut * t.outPerM) / 1000);
+}
+
+// ─── Module-scope narrowing (central-chat-v1 · §0.V3 objection 1) ──────────
+// Second Brain knowledge scope derives from PLACEMENT: the module/capability
+// the CentralChat instance is embedded in + the tenant of the /h/[pid]
+// context. Enforced SERVER-SIDE here — the client's moduleScope prop selects
+// the scope, but this route decides what that scope may load. An unknown or
+// unmapped scope falls back to a knowledge-read-only roster, never full
+// context (same principle as the V3 general-mode seal: the client label is
+// not load-bearing).
+//   scope key → the HoD role whose cap_agent_skills grants ARE the module's
+//   tool roster (verified live 2026-08-01: revenue_hod 42 · finance_hod 72 ·
+//   operations_hod 39 · marketing_hod 44 · sales_hod 45 granted skills;
+//   _donna tenant siblings identical). 'brain' = the global second-brain
+//   surface → full persona roster. 'university[:slug]' has no HoD →
+//   knowledge-read-only slice.
+const MODULE_SCOPE_HOD: Record<string, { role: string; label: string }> = {
+  revenue:    { role: "revenue_hod",    label: "the revenue module (pricing, pace, channels, pickup, leakage)" },
+  finance:    { role: "finance_hod",    label: "the finance module (P&L, GL, AR/AP, banks, archive documents)" },
+  operations: { role: "operations_hod", label: "the operations module (SOPs, housekeeping, maintenance, service standards)" },
+  marketing:  { role: "marketing_hod",  label: "the marketing module (campaigns, content, media, reviews)" },
+  sales:      { role: "sales_hod",      label: "the sales module (inquiries, proposals, DMC contracts, groups)" },
+  it:         { role: "it_manager",     label: "the IT / platform module (tickets, deploys, system health)" },
+};
+const DONNA_PROPERTY_ID = 1000001;
+
+/** Roster filter for scopes without an HoD roster (university, unknown):
+ *  read-verb skills only — the instance can look things up, never mutate. */
+function knowledgeReadOnly(skills: LoadedSkill[]): LoadedSkill[] {
+  return skills.filter(
+    (s) => /^(read_|list_|search_|query_|get_)/.test(s.name) && !s.requires_pbs_approval,
+  );
 }
 
 // IT Manager prompt now lives in DB (cockpit_agent_prompts where role='it_manager').
@@ -1136,10 +1168,38 @@ export async function POST(req: Request) {
       // Now we load the role's roster, pass it as `tools`, and run an agentic
       // loop. Each tool_use block is dispatched via executeSkill which logs to
       // cockpit.cap_skill_calls + cockpit_audit_log.
-      const chatSkills = await loadAgentSkills(personaRole).catch((e) => {
-        console.error(`[chat] loadAgentSkills(${personaRole}) failed:`, e);
-        return [];
-      });
+      // ─── Scope-narrowed tool roster (central-chat-v1 §0.V3 obj.1) ───────
+      // module_scope comes from the embedding instance (CentralChat prop).
+      // ''/null/'brain' → global second-brain surface, full persona roster.
+      // Known module → that module's HoD roster (tenant-aware: _donna grants
+      // for Donna, base roster fallback). university/unknown → read-only
+      // knowledge slice. Server-side: a Revenue-page instance cannot load
+      // Marketing tools regardless of what the client claims.
+      const scopeKeyFull = (module_scope ?? "").trim().toLowerCase();
+      const scopeKey = scopeKeyFull.split(":")[0];
+      const scopeNarrowed = scopeKey.length > 0 && scopeKey !== "brain";
+      const hodScope = scopeNarrowed ? MODULE_SCOPE_HOD[scopeKey] : undefined;
+      let scopeSkillRole = personaRole;
+      let chatSkills: LoadedSkill[] = [];
+      if (!scopeNarrowed) {
+        chatSkills = await loadAgentSkills(personaRole).catch((e) => {
+          console.error(`[chat] loadAgentSkills(${personaRole}) failed:`, e);
+          return [];
+        });
+      } else if (hodScope) {
+        scopeSkillRole = property_id === DONNA_PROPERTY_ID ? `${hodScope.role}_donna` : hodScope.role;
+        chatSkills = await loadAgentSkills(scopeSkillRole).catch(() => []);
+        if (chatSkills.length === 0 && scopeSkillRole !== hodScope.role) {
+          // Tenant sibling has no grants → fall back to the base module roster.
+          scopeSkillRole = hodScope.role;
+          chatSkills = await loadAgentSkills(hodScope.role).catch(() => []);
+        }
+      } else {
+        // university[:slug] or unknown scope → read-only knowledge slice of
+        // the persona roster (never the full roster, never write skills).
+        scopeSkillRole = `${personaRole}:read-only`;
+        chatSkills = knowledgeReadOnly(await loadAgentSkills(personaRole).catch(() => []));
+      }
       const chatTools = toAnthropicTools(chatSkills);
       // Augment the persona prompt with a short note about tool availability —
       // the legacy voice strings tell personas they have "no tools" which is
@@ -1151,6 +1211,19 @@ export async function POST(req: Request) {
       // System prompt construction order (2026-05-14): TBC bootstrap →
       // full role prompt from cockpit_agent_prompts → synthesized voice
       // style fingerprint → tool note.
+      // Scope contract (server-enforced; §0.V3 obj.1). Appended AFTER the
+      // agent prompt so it wins on conflict — the instance's placement, not
+      // the persona's ambitions, bounds what this chat may discuss.
+      const scopeContract = scopeNarrowed
+        ? [
+            '',
+            'SCOPE CONTRACT (server-enforced · central-chat-v1):',
+            `This chat instance is embedded in the "${scopeKeyFull}" surface${property_id ? ` of property ${property_id}` : ''}.`,
+            `Knowledge scope = the platform constitution + ${hodScope ? hodScope.label : 'the read-only knowledge corpus for this surface'}. The tools offered are that scope's roster only.`,
+            "Questions about other modules are OUT OF SCOPE in this embedded chat: say so briefly and point the user to that module's page or the global chat at /holding/it2/fleet/chat. Do not answer them from general knowledge.",
+          ].join('\n')
+        : '';
+
       const personaVoice = [
         TBC_BOOTSTRAP,
         fullRolePrompt || '',
@@ -1159,6 +1232,7 @@ export async function POST(req: Request) {
         'STYLE FINGERPRINT:',
         persona.voice,
         toolNote,
+        scopeContract,
       ].filter(Boolean).join('\n');
 
       let replyText = `Hi — I'm here. What do you want to work on?`;
@@ -1179,7 +1253,7 @@ export async function POST(req: Request) {
           intent: "chat",
           status: "triaging",
           parsed_summary: `**Request**: ${message}`,
-          notes: JSON.stringify({ chat_reply: true, mode: "second-brain", recommended_role: personaRole, persona: persona.name, in_progress: true }),
+          notes: JSON.stringify({ chat_reply: true, mode: "second-brain", module_scope: scopeKeyFull || null, property_id: property_id ?? null, scope_narrowed: scopeNarrowed, scope_skill_role: scopeNarrowed ? scopeSkillRole : null, recommended_role: personaRole, persona: persona.name, in_progress: true }),
           iterations: 0,
         })
         .select()
@@ -1267,6 +1341,9 @@ export async function POST(req: Request) {
                 tools_offered: chatTools.length,
                 chat_mode: true,
                 mode: "second-brain",
+                module_scope: scopeKeyFull || null,
+                scope_narrowed: scopeNarrowed,
+                scope_skill_role: scopeNarrowed ? scopeSkillRole : null,
               },
               reasoning: `Anthropic call #${iter + 1} for ${persona.name} (${personaRole}); ${callTokensIn}in/${callTokensOut}out tokens`,
             }).then(({ error }) => {
@@ -1314,6 +1391,8 @@ export async function POST(req: Request) {
                   .update({
                     notes: JSON.stringify({
                       chat_reply: true, mode: "second-brain", recommended_role: personaRole,
+                      module_scope: scopeKeyFull || null, property_id: property_id ?? null,
+                      scope_narrowed: scopeNarrowed, scope_skill_role: scopeNarrowed ? scopeSkillRole : null,
                       persona: persona.name, in_progress: true, iter: iter + 1,
                       skill_calls: skillCallLog,
                       llm_tokens_in: llmTokensIn, llm_tokens_out: llmTokensOut,
@@ -1387,6 +1466,10 @@ export async function POST(req: Request) {
       const finalNotes = JSON.stringify({
         chat_reply: true,
         mode: "second-brain",
+        module_scope: scopeKeyFull || null,
+        property_id: property_id ?? null,
+        scope_narrowed: scopeNarrowed,
+        scope_skill_role: scopeNarrowed ? scopeSkillRole : null,
         recommended_role: personaRole,
         recommended_agent: personaRole,
         persona: persona.name,
@@ -1455,6 +1538,9 @@ export async function POST(req: Request) {
             model: sbModel,
             tier: sbTier,
             mode: "second-brain",
+            module_scope: scopeKeyFull || null,
+            scope_narrowed: scopeNarrowed,
+            scope_skill_role: scopeNarrowed ? scopeSkillRole : null,
           },
           reasoning: `Chat turn for ${persona.name}: ${llmCallCount} LLM call(s), ${llmTokensIn}in/${llmTokensOut}out tokens, ${llmCostMilli} milli-USD`,
         });
