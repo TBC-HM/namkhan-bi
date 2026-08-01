@@ -5,7 +5,6 @@
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import Link from 'next/link';
-import { GROUPS } from '../../_lib/groups';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -62,7 +61,6 @@ export default async function SkillsPage({ searchParams }: Props) {
     getSkills(surface, mod, category), // filtered display
   ]);
 
-  const tabs = GROUPS.map(g => ({ key: g.key, label: g.label, href: g.href, active: false }));
 
   // Compute filter options from full dataset
   const surfaces = Array.from(new Set(allSkills.map(s => s.surface).filter(Boolean))) as string[];
@@ -101,7 +99,7 @@ export default async function SkillsPage({ searchParams }: Props) {
   return (
     <DashboardPage title="Platform Skills Registry"
       subtitle={`${filtered.length} of ${allSkills.length} skills · cockpit.cap_skills · auto-updates when new skills ship`}
-      tabs={tabs}>
+>
       <div style={{ gridColumn: '1 / -1', display: 'grid', gap: 16 }}>
 
         {/* Surface filter — top priority */}
