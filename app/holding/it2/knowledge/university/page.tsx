@@ -8,7 +8,7 @@
 // change-gated: no relevant kpi_catalog / kpi-DDL movement → logged skip.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { TOKENS } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS } from '@/components/cockpit/tokens';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
