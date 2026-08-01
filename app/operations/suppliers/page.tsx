@@ -6,11 +6,10 @@ import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { FX_LAK_PER_USD } from '@/lib/format';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
-
-const LAK_RATE = 21800; // LAK per USD (Namkhan standard rate)
 
 interface SupplierRow {
   vendor_name: string; display_name: string | null; category: string | null;
@@ -31,6 +30,24 @@ async function getData(): Promise<SupplierRow[]> {
   } catch (e) { console.error('[ops/suppliers]', e); return []; }
 }
 
+async function getUnpaidAgg(): Promise<Map<string, { open_lak: number; count: number }>> {
+  try {
+    const admin = getSupabaseAdmin();
+    const { data } = await (admin as any).schema('messy').from('unpaid_bills')
+      .select('supplier,balance_lak,human_status').limit(2000);
+    const m = new Map<string, { open_lak: number; count: number }>();
+    for (const r of (data ?? []) as Array<{ supplier: string; balance_lak: number | null; human_status: string | null }>) {
+      const status = r.human_status ?? 'open';
+      if (status === 'reconciled' || status === 'paid_off_book') continue;
+      const cur = m.get(r.supplier) ?? { open_lak: 0, count: 0 };
+      cur.open_lak += Number(r.balance_lak ?? 0);
+      cur.count += 1;
+      m.set(r.supplier, cur);
+    }
+    return m;
+  } catch { return new Map(); }
+}
+
 function fmtUSD(n: number) {
   return '$' + Math.round(n).toLocaleString('en-US');
 }
@@ -49,7 +66,7 @@ const tdStyle = { padding: '6px 10px', borderBottom: `1px solid ${HAIR}`, fontSi
 const thStyle = { padding: '7px 10px', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '.06em', color: INK_M, background: CREAM, borderBottom: `1px solid ${HAIR}` };
 
 export default async function OperationsSuppliersPage() {
-  const rows = await getData();
+  const [rows, unpaidMap] = await Promise.all([getData(), getUnpaidAgg()]);
   const cfg = DEPT_CFG.operations;
   const tabs: DashboardTab[] = cfg.subPages.map(s => ({
     key: s.href, label: s.label, href: s.href,
@@ -61,7 +78,7 @@ export default async function OperationsSuppliersPage() {
 
   const ytdUSD = rows.reduce((s,r) => s + Number(r.ytd_spend_usd || 0), 0);
   const ytdLAK = rows.reduce((s,r) => s + Number(r.ytd_spend_lak || 0), 0);
-  const ytdLAKinUSD = ytdLAK / LAK_RATE;
+  const ytdLAKinUSD = ytdLAK / FX_LAK_PER_USD;
   const activeRecent = rows.filter(r => r.is_active_recent).length;
   const missingContact = rows.filter(r => !r.email).length;
   const currentYear = new Date().getFullYear();
@@ -85,6 +102,12 @@ export default async function OperationsSuppliersPage() {
     { label: 'Missing contact',
       value: missingContact, size: 'sm',
       footnote: 'no email on file', status: missingContact > 10 ? 'amber' : 'green' },
+    { label: 'Open AP · supplier debt',
+      value: fmtUSD(Array.from(unpaidMap.values()).reduce((s,v) => s + v.open_lak, 0) / FX_LAK_PER_USD), size: 'sm',
+      footnote: 'messy.unpaid_bills · unreconciled', status: unpaidMap.size > 0 ? 'amber' : 'green' },
+    { label: 'Suppliers with debt',
+      value: unpaidMap.size, size: 'sm',
+      footnote: 'distinct vendors · open bills', status: unpaidMap.size > 0 ? 'amber' : 'green' },
   ];
 
   function SupplierTable({ data, showLAK }: { data: SupplierRow[]; showLAK: boolean }) {
