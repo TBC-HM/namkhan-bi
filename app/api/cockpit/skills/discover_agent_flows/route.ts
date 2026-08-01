@@ -1,6 +1,7 @@
 // app/api/cockpit/skills/discover_agent_flows/route.ts
 // REASONING AGENT LOOP: Generate -> Score -> Filter -> Return
-// Fix: maxTokens 6000 (was 4000 -- JSON was truncating mid-array), proposals capped at 8
+// Design: hotel-generic discovery (not Namkhan-locked) -- good flows come from any industry
+// Fix: maxTokens 6000, 6 proposals max, parallel GitHub search
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropic, isLlmOk, getVaultSecret } from '@/lib/youtube/skills-common';
@@ -10,17 +11,20 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
 
 const CURATED_FRAMEWORKS = [
-  { name: 'CrewAI', repo: 'joaomdmoura/crewai', use_case: 'Multi-agent role orchestration -- retreat proposal, guest email, ICP research teams' },
-  { name: 'GPT Researcher', repo: 'assafelovic/gpt-researcher', use_case: 'Deep research agent -- market digest, competitor intel, ICP profiling' },
-  { name: 'AutoGen', repo: 'microsoft/autogen', use_case: 'Conversational multi-agent -- financial narration, HOD reports' },
-  { name: 'Lemon Agent', repo: 'felixbrock/lemon-agent', use_case: 'Plan-Validate-Solve -- guest email policy gates, retreat proposals' },
-  { name: 'MemGPT', repo: 'cpacker/MemGPT', use_case: 'Persistent memory -- replacement for cockpit_knowledge_base' },
-  { name: 'BabyAGI', repo: 'yoheinakajima/babyagi', use_case: 'Sequential task decomposition -- booking pipelines, onboarding' },
-  { name: 'Autonomous HR Chatbot', repo: 'stepanogil/autonomous-hr-chatbot', use_case: 'Tool-using Q&A -- pattern for FO phone bot, ticket routing' },
-  { name: 'FastAgency', repo: 'airtai/fastagency', use_case: 'Multi-agent deployment -- productionising flow library skills' },
+  'CrewAI (joaomdmoura/crewai) -- role-based multi-agent orchestration, excellent for sequential hospitality workflows',
+  'GPT Researcher (assafelovic/gpt-researcher) -- autonomous deep research, market intel, competitor analysis',
+  'AutoGen (microsoft/autogen) -- conversational multi-agent, ideal for report narration and data summarisation',
+  'Lemon Agent (felixbrock/lemon-agent) -- Plan-Validate-Solve loop with policy enforcement',
+  'MemGPT (cpacker/MemGPT) -- persistent memory management across agent sessions',
+  'BabyAGI (yoheinakajima/babyagi) -- iterative task decomposition for long-running pipelines',
+  'Autonomous HR Bot (stepanogil/autonomous-hr-chatbot) -- tool-using Q&A pattern, phone/chat handler',
+  'FastAgency (airtai/fastagency) -- multi-agent deployment and orchestration framework',
 ];
 
-const QUALITY_GATE = 'PASS (7-10): specific to Namkhan, uses real DB tables, measurable ROI, not duplicate. FAIL (1-6): generic, no data, duplicates existing, vague ROI.';
+const QUALITY_GATE = [
+  'PASS (7-10): clear business value for a small hospitality team, technically feasible with LLM + APIs, not a generic chatbot, measurable time or revenue impact, novel vs existing skills.',
+  'FAIL (1-6): pure chatbot wrapper, no measurable outcome, duplicates an existing skill, requires unavailable infrastructure.',
+].join(' ');
 
 function extractJsonArray(text: string): Array<Record<string, unknown>> | null {
   let pos = 0;
@@ -39,72 +43,75 @@ function extractJsonArray(text: string): Array<Record<string, unknown>> | null {
       try {
         const parsed = JSON.parse(text.slice(pos, end + 1));
         if (Array.isArray(parsed) && parsed.length > 0) return parsed as Array<Record<string, unknown>>;
-      } catch { /* try next [ */ }
+      } catch { /* try next */ }
     }
     pos++;
   }
   return null;
 }
 
-async function searchGitHub(query: string, token: string, max = 3) {
-  const url = 'https://api.github.com/search/repositories?q=' + encodeURIComponent(query) + '&sort=stars&order=desc&per_page=' + max;
+async function searchGitHub(query: string, token: string) {
+  const url = 'https://api.github.com/search/repositories?q=' + encodeURIComponent(query) + '&sort=stars&order=desc&per_page=3';
   const res = await fetch(url, { headers: { Authorization: 'token ' + token, Accept: 'application/vnd.github.v3+json' }, cache: 'no-store' });
   if (!res.ok) return [];
   const data = await res.json() as { items?: Array<{ full_name: string; description: string | null; stargazers_count: number }> };
-  return (data.items ?? []).map(r => ({ repo: r.full_name, desc: (r.description ?? '').slice(0, 60), stars: r.stargazers_count }));
+  return (data.items ?? []).map(r => r.repo: r.full_name + '(★' + r.stargazers_count + ') -- ' + (r.description ?? '').slice(0, 70));
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as { focus?: string; prompt?: string; max_proposals?: number };
-  const userRequest = (body.prompt ?? body.focus ?? 'hospitality agent flows').trim();
-  const maxProps = Math.min(body.max_proposals ?? 6, 8);
+  const userRequest = (body.prompt ?? body.focus ?? 'hospitality automation').trim();
+  const maxProps = Math.min(body.max_proposals ?? 6, 6);
 
   const sb = getSupabaseAdmin();
   const githubToken = await getVaultSecret('github_token');
 
   const { data: skills } = await sb.from('cockpit_skills_catalog')
-    .select('name,description,health_status,total_all_time,success_all_time')
-    .eq('active', true);
+    .select('name,health_status').eq('active', true);
 
   const existingNames = (skills ?? []).map((s: Record<string, unknown>) => s.name as string).join(', ');
   const failingSkills = (skills ?? [])
     .filter((s: Record<string, unknown>) => s.health_status === 'failing')
     .map((s: Record<string, unknown>) => s.name as string);
 
-  // GitHub searches -- run in parallel for speed
-  const searches = [
-    userRequest + ' agent hospitality LLM',
-    'boutique hotel ' + userRequest + ' AI automation',
-    userRequest + ' crewai autogen multi-agent',
+  // Parallel GitHub searches
+  const queries = [
+    userRequest + ' agent automation LLM',
+    'hospitality hotel ' + userRequest + ' AI workflow',
+    userRequest + ' crewai autogen workflow github',
   ];
   const repoResults = await Promise.all(
-    searches.map(q => githubToken ? searchGitHub(q, githubToken, 2) : Promise.resolve([]))
+    queries.map(q => githubToken ? searchGitHub(q, githubToken) : Promise.resolve([]))
   );
-  const repoLines = repoResults
-    .map((repos, i) => repos.length ? searches[i] + ': ' + repos.map(r => r.repo + '(★' + r.stars + ') ' + r.desc).join(' | ') : '')
-    .filter(Boolean);
+  const repoLines = repoResults.flatMap(r => r).slice(0, 8);
 
-  const curatedCtx = CURATED_FRAMEWORKS.map(f => '- ' + f.name + ': ' + f.use_case).join('\n');
-
-  // STEP 1: GENERATE -- 6000 tokens to avoid truncation
+  // STEP 1: GENERATE
+  // Hotel-generic prompt -- good flows come from ANY industry, not just Namkhan
   const sysGen = [
-    'You are an AI agent architect for The Namkhan -- 24-room 5-star hotel, Luang Prabang, Laos.',
-    'DB: finance.* (QB GL), pms.* (Cloudbeds), sales.* (ICPs), marketing.yt_* (YouTube), media.*.',
-    'Failing skills to replace: ' + (failingSkills.join(', ') || 'none') + '.',
-    'Curated frameworks:\n' + curatedCtx,
+    'You are an expert AI agent architect. Your job is to discover high-value agent automation flows for the hospitality industry.',
+    'Context: A 30-room luxury boutique hotel with a small team (8-12 staff). Systems: PMS, accounting GL, CRM, YouTube channel, email marketing.',
+    'Failing skills that need replacement: ' + (failingSkills.join(', ') || 'none') + '.',
     '',
-    'CRITICAL: Output ONLY a valid JSON array. Start with [ end with ].',
-    'Keep ALL field values under 100 characters. No preamble. No markdown. No code blocks.',
-    'If you cannot comply, output exactly: []',
+    'Curated frameworks to draw from:',
+    ...CURATED_FRAMEWORKS.map(f => '- ' + f),
+    '',
+    'CRITICAL: Output ONLY a valid JSON array starting with [ and ending with ].',
+    'Keep every string value under 120 characters. No preamble. No markdown.',
   ].join('\n');
 
   const usrGen = [
-    'REQUEST: "' + userRequest + '"',
-    'GITHUB: ' + (repoLines.length ? repoLines.join(' | ') : 'none'),
-    'SKIP (already exist): ' + existingNames,
+    'User is researching: "' + userRequest + '"',
     '',
-    'Generate exactly ' + maxProps + ' proposals. Each field MAX 100 chars.',
-    '[{"type":"NEW","skill_name":"verb_noun","display_name":"Name","framework":"CrewAI|AutoGen|custom","source_repo":"owner/repo","namkhan_fit":"why this hotel specifically","effort":"Low|Medium|High","roi":"High|Medium|Low","value":"measurable outcome","integration":"table_name","proposal":"what to build in 2 sentences","match_pct":85}]',
+    'GitHub search results:',
+    repoLines.length ? repoLines.join('\n') : '(no results)',
+    '',
+    'Already built (do not duplicate): ' + existingNames,
+    '',
+    'Generate ' + maxProps + ' agent flow proposals. These can come from ANY industry -- if a flow works for legal research, financial analysis, or content creation, it can be adapted for a hotel.',
+    'Focus on: time savings, revenue impact, guest experience, team productivity.',
+    '',
+    'Return JSON array -- each field MAX 120 chars:',
+    '[{"type":"NEW|IMPROVE|REPLACE","skill_name":"verb_noun_slug","display_name":"Human Name","framework":"CrewAI|AutoGen|LangChain|custom","source_repo":"owner/repo or framework","value":"specific outcome eg saves 3h/week or adds $500/mo","effort":"Low|Medium|High","roi":"High|Medium|Low","proposal":"2 sentences what to build and how","match_pct":85}]',
   ].join('\n');
 
   const gen = await callAnthropic({ systemPrompt: sysGen, userPrompt: usrGen, maxTokens: 6000 });
@@ -115,13 +122,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       error: 'no_proposals', stage: 'json_parse',
       raw_preview: gen.text.slice(0, 800),
-      hint: 'LLM output above -- check if truncated or wrong format',
+      hint: 'LLM did not return a parseable JSON array -- see raw_preview above',
     }, { status: 502 });
   }
 
-  // STEP 2: SCORE
-  const sysSco = 'Quality evaluator. ' + QUALITY_GATE + ' Output ONLY a valid JSON array. No preamble.';
-  const usrSco = 'Score 1-10 on: namkhan_fit, feasibility, uniqueness, data_integration, roi_clarity. Deduct 5 on uniqueness if duplicates: ' + existingNames + '\n[{"index":0,"avg":8.1,"verdict":"PASS","scores":{"namkhan_fit":9,"feasibility":8,"uniqueness":8,"data_integration":8,"roi_clarity":7},"reason":"brief"}]\nProposals:\n' + rawProps.map((p, i) => i + ': ' + p.skill_name + ' | ' + String(p.namkhan_fit).slice(0,80) + ' | ' + p.integration).join('\n');
+  // STEP 2: SCORE -- hotel fit, not Namkhan-table fit
+  const sysSco = 'Score AI agent proposals for a luxury boutique hotel. ' + QUALITY_GATE + '\nReturn ONLY a valid JSON array.';
+  const usrSco = [
+    'Score each 1-10 on: hotel_fit, feasibility, uniqueness, effort_vs_value, roi_clarity.',
+    'Deduct 5 on uniqueness if it duplicates: ' + existingNames,
+    '',
+    '[{"index":0,"avg":8.2,"verdict":"PASS","scores":{"hotel_fit":9,"feasibility":8,"uniqueness":8,"effort_vs_value":8,"roi_clarity":8},"reason":"brief reason"}]',
+    '',
+    'Proposals:',
+    rawProps.map((p, i) => i + ': ' + p.skill_name + ' | ' + String(p.proposal).slice(0, 100) + ' | value: ' + p.value).join('\n'),
+  ].join('\n');
 
   const sco = await callAnthropic({ systemPrompt: sysSco, userPrompt: usrSco, maxTokens: 2000 });
 
@@ -143,16 +158,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // STEP 3: PERSIST to research KB (agent_handle=pbs_research -- not auto-read by agents)
+  // STEP 3: PERSIST passing proposals (not auto-read by agents)
   if (finalProps.length > 0) {
-    const summaryContent = [
-      'DISCOVERY: "' + userRequest + '" ' + new Date().toISOString(),
-      'Passed: ' + finalProps.length + '/' + rawProps.length,
-      ...finalProps.map((p, i) => (i + 1) + '. ' + p.skill_name + ' [' + p.type + '] ' + p.framework + ' | ' + String(p.namkhan_fit).slice(0, 100) + ' | tables: ' + p.integration + ' | score: ' + String((p._avg as number)?.toFixed(1)) + ' | ' + String(p.proposal).slice(0, 150)),
+    const content = [
+      'DISCOVERY "' + userRequest + '" ' + new Date().toISOString().slice(0, 16),
+      'Passed ' + finalProps.length + '/' + rawProps.length + ' quality gate',
+      ...finalProps.map((p, i) =>
+        (i + 1) + '. [' + p.type + '] ' + p.skill_name + ' (' + p.framework + ') -- ' + String(p.value).slice(0, 100) + ' | score: ' + String((p._avg as number)?.toFixed(1)) + ' | ' + String(p.proposal).slice(0, 150)
+      ),
     ].join('\n');
     try {
       await sb.rpc('fn_kb_add_entry', {
-        p_content: summaryContent,
+        p_content: content,
         p_topics: ['discovery', userRequest.toLowerCase().replace(/\W+/g, '_')],
         p_memory_type: 'research_discovery',
         p_agent_handle: 'pbs_research',
@@ -167,7 +184,7 @@ export async function POST(req: NextRequest) {
       user_request: userRequest, generated: rawProps.length,
       passed_quality_gate: scoreMeta.passed, filtered_low_quality: scoreMeta.filtered,
       curated_source: 'e2b-dev/awesome-ai-agents (8 frameworks)',
-      repos_scanned: repoLines.length * 2, persisted: finalProps.length > 0,
+      repos_scanned: repoLines.length, persisted: finalProps.length > 0,
     },
   });
 }
