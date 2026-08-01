@@ -93,7 +93,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: 12 }}>
             {(grants ?? []).map((g) => (
-              <Link key={g.role} href={`/holding/it/cockpit/agent/${g.role}`}
+              <Link key={g.role} href={`/holding/it2/fleet/team/agent/${g.role}`}
                 style={{
                   padding: '6px 12px', background: TOKENS.bgRaised,
                   border: `1px solid ${g.enabled === false ? TOKENS.text3 : TOKENS.brass}`,
@@ -122,7 +122,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
                 <tr key={c.id} style={{ borderBottom: `1px solid ${TOKENS.borderSoft}` }}>
                   <td style={tdR()}>{new Date(c.created_at).toLocaleString()}</td>
                   <td style={tdR()}>
-                    {c.role ? <Link href={`/holding/it/cockpit/agent/${c.role}`} style={{ color: TOKENS.brass, textDecoration: 'none' }}>{c.role}</Link> : '—'}
+                    {c.role ? <Link href={`/holding/it2/fleet/team/agent/${c.role}`} style={{ color: TOKENS.brass, textDecoration: 'none' }}>{c.role}</Link> : '—'}
                   </td>
                   <td style={{ ...tdR(), color: '#E07856' }}>{typeof c.error === 'string' ? c.error.slice(0, 200) : JSON.stringify(c.error).slice(0, 200)}</td>
                 </tr>
@@ -148,7 +148,7 @@ export default async function SkillDetailPage({ params }: PageProps) {
                 <tr key={c.id} style={{ borderBottom: `1px solid ${TOKENS.borderSoft}` }}>
                   <td style={tdR()}>{new Date(c.created_at).toLocaleString()}</td>
                   <td style={tdR()}>
-                    {c.role ? <Link href={`/holding/it/cockpit/agent/${c.role}`} style={{ color: TOKENS.brass, textDecoration: 'none' }}>{c.role}</Link> : '—'}
+                    {c.role ? <Link href={`/holding/it2/fleet/team/agent/${c.role}`} style={{ color: TOKENS.brass, textDecoration: 'none' }}>{c.role}</Link> : '—'}
                   </td>
                   <td style={{ ...tdR(), textAlign: 'right' }}>{c.duration_ms ?? '—'}ms</td>
                   <td style={{ ...tdR(), textAlign: 'right' }}>{c.cost_usd_milli != null ? `${c.cost_usd_milli}m$` : '—'}</td>
