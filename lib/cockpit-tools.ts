@@ -16,6 +16,7 @@
 // approval token, one-shot, expires).
 
 import { createClient } from "@supabase/supabase-js";
+import { checkSkillEntitlement } from "@/lib/entitlements";
 import fs from "fs/promises";
 import path from "path";
 
@@ -1968,6 +1969,23 @@ export async function dispatchSkillGated(
   ticketId: number | null = null,
 ): Promise<ToolResult> {
   const t0 = Date.now();
+  // 0. Entitlement gate (Monetization Engine v1 — "entitlements checked BEFORE
+  // task execution"). Fires only when the call carries a property_id and the
+  // skill maps to a tenancy module (see lib/entitlements.ts semantics).
+  const ent = await checkSkillEntitlement({ supa: supabase, skillName, input: args });
+  if (!ent.allowed) {
+    const entErr = `entitlement_denied: module=${ent.moduleCode ?? "unknown"} property=${ent.propertyId} source=${ent.source}`;
+    await supabase.from("cockpit_audit_log").insert({
+      ticket_id: ticketId,
+      agent: role,
+      action: "skill_entitlement_blocked",
+      target: `skill:${skillName}`,
+      success: false,
+      reasoning: entErr,
+      metadata: { skill_name: skillName, handler, input: args, entitlement: ent },
+    });
+    return { ok: false, error: entErr };
+  }
   // 1. Authorization gate.
   const { data: authData, error: authErr } = await supabase.rpc("call_skill", {
     p_role: role,
