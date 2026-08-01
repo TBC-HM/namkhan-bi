@@ -8,7 +8,7 @@
 // Tokens reused from the existing cockpit design system (not re-invented).
 
 import { useEffect, useState } from 'react';
-import { TOKENS, SERIF, MONO } from '@/app/holding/it/cockpit/_components/tokens';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
 
 export type LiveRow = {
   heartbeat_id: number;
