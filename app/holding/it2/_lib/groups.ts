@@ -53,6 +53,7 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it2/system/health',   label: 'Health' },
       { href: '/holding/it2/system/activity', label: 'Activity' },
       { href: '/holding/it2/system/cost',     label: 'Cost' },
+      { href: '/holding/settings',             label: '⚙ Settings' },
     ],
   },
 ];
