@@ -132,21 +132,29 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
       : sb.rpc('fn_brain_docfind', { p_q: question, p_max_sensitivity: tier, p_limit: 12, p_property_id: propertyId ?? null }),
     // BRAIN v5: live structured HR source — SQL-gated to owner tiers, returns {} below.
     // Fetched fresh per question; NEVER chunked, embedded, or preserved.
-    sb.rpc('fn_brain_hr_context', { p_q: question, p_max_sensitivity: tier }),
+    sb.rpc('fn_brain_hr_context', { p_q: question, p_max_sensitivity: tier, p_property_id: propertyId ?? null }),
     // BRAIN v6: live structured SOPs (knowledge.sop_content) — SOP scope only
     scope === 'sops'
       ? sb.rpc('fn_brain_sop_search', { p_q: question, p_limit: 5 })
       : Promise.resolve({ data: [] }),
     // BRAIN v7: ops live-data router v1 — KPIs (occ/ADR/RevPAR/revenue) from the
     // same canonical views the dashboards use, fetched live, never stored.
-    sb.rpc('fn_brain_ops_context', { p_q: question, p_max_sensitivity: tier }),
+    sb.rpc('fn_brain_ops_context', { p_q: question, p_max_sensitivity: tier, p_property_id: propertyId ?? null }),
     // BRAIN v8: platform knowledge — docs/briefs/rules/ADRs. Owner tier only.
-    tier === 'owner_only'
+    tier === 'owner_only' && (propertyId === 0 || propertyId == null)
       ? sb.rpc('fn_brain_platform_search', { p_q: question, p_limit: 8 })
       : Promise.resolve({ data: [] }),
     // BRAIN v8b: live agent roster + cron schedules. Owner tier + agent-intent only.
-    tier === 'owner_only' && AGENT_INTENT_RE.test(question)
+    tier === 'owner_only' && AGENT_INTENT_RE.test(question) && (propertyId === 0 || propertyId == null)
       ? sb.rpc('fn_brain_agents_context')
+      : Promise.resolve({ data: null }),
+    // Tenant knowledge docs — property-scoped judgment MDs (approved only)
+    propertyId != null && propertyId > 0
+      ? sb.rpc('fn_brain_tenant_knowledge', { p_q: question, p_property_id: propertyId })
+      : Promise.resolve({ data: null }),
+    // Skills directory — holding brain only
+    propertyId === 0 || propertyId == null
+      ? sb.rpc('fn_brain_skills_context', { p_q: question, p_limit: 12 })
       : Promise.resolve({ data: null }),
   ]);
   const sops = ((sopRes.data ?? []) as SopHit[]).filter(s => s.score >= 1);
