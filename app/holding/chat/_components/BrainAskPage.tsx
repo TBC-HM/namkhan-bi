@@ -6,6 +6,7 @@
 // Auto-submits the initial question from the ?q= URL param.
 
 import { useEffect, useRef, useState } from 'react';
+import AskFeedback from '@/components/brain/AskFeedback';
 
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
 
@@ -134,6 +135,11 @@ export default function BrainAskPage({ initialQuestion, propertyId, dept }: Prop
                     <a href={s.link} target="_blank" rel="noreferrer" style={{ color: '#084838', textDecoration: 'underline' }}>{s.title}</a>
                   </div>
                 ))}
+              </div>
+            )}
+            {!answer.startsWith('Error:') && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #E6DFCC' }}>
+                <AskFeedback question={question} answer={answer} sources={sources} />
               </div>
             )}
           </div>
