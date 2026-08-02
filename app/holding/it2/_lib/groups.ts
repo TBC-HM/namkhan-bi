@@ -1,11 +1,5 @@
 // app/holding/it2/_lib/groups.ts
 // FINAL PERMANENT NAV — PBS approved 2026-08-02.
-// NAV LAWS (locked):
-//   1. Max 5 groups. Sub-tabs scroll horizontally if many.
-//   2. One fact = one surface. No duplicates.
-//   3. Every IT2 page.tsx must be reachable from this array (orphan checker enforces this).
-//   4. Chat removed from IT2: exists in CEO/Sales/Marketing front nav.
-//   5. Fleet retired: Tasks/Bugs→Action Center, Skills/Memory→Knowledge, Team→Agents.
 
 export type It2GroupKey = 'home' | 'knowledge' | 'agents' | 'build' | 'system';
 
@@ -20,8 +14,9 @@ export const GROUPS: GroupSpec[] = [
   {
     key: 'home', label: 'Action Center', href: '/holding/it2',
     subs: [
-      { href: '/holding/it2/fleet/tasks', label: 'Tasks' },
-      { href: '/holding/it2/fleet/bugs',  label: 'Bugs' },
+      { href: '/holding/it2/fleet/tasks',  label: 'Tasks' },
+      { href: '/holding/it2/fleet/bugs',   label: 'Bugs' },
+      { href: '/holding/it2/system/live',  label: '⬤ Live' },
     ],
   },
   {
@@ -53,7 +48,6 @@ export const GROUPS: GroupSpec[] = [
   {
     key: 'system', label: 'System', href: '/holding/it2/system/deploys',
     subs: [
-      { href: '/holding/it2/system/live',     label: '⬤ Live' },
       { href: '/holding/it2/system/deploys',  label: 'Deploys' },
       { href: '/holding/it2/system/checks',   label: 'Checks' },
       { href: '/holding/it2/system/health',   label: 'Health' },
