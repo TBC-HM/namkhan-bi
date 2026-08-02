@@ -12,7 +12,7 @@ import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_de
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 import DocsTableClient from './_components/DocsTableClient';
-import SettingsDrawerButton from './_components/SettingsDrawerButton';
+
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -207,18 +207,6 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
           title="Document register"
           subtitle="Triage queue · classify, archive, link to cases/collections · inline remap clears needs_review"
           density="compact"
-          action={
-            <SettingsDrawerButton
-              propertyId={propertyId}
-              families={familiesWithCounts}
-              subtypeVocab={(vocab ?? []) as any[]}
-              projects={projects}
-              cases={cases}
-              collections={collections}
-              tags={tags}
-              authors={authors}
-            />
-          }
         >
           <DocsTableClient
             propertyId={propertyId}
