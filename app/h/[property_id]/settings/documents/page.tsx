@@ -6,7 +6,6 @@
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DocRegistrySettingsPanel } from '@/app/h/[property_id]/finance/legal/docs/_components/SettingsDrawerButton';
-import UploadDropzone from '@/app/marketing/media/_client/UploadDropzone';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -70,11 +69,25 @@ export default async function DocumentsSettingsPage({ params }: { params: { prop
       subtitle={`Document register vocabulary · ${d.families.length} families · ${d.subtypeVocab.length} subtypes · property ${propertyId}`}
       tabs={SETTINGS_TABS(propertyId)}
     >
-      {/* Upload documents */}
+      {/* Document upload — goes to DMS pipeline, not media pipeline */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Upload documents" subtitle="PDF · contracts · certificates · policies — lands in register with status=needs_review, then classify in Finance → Legal → Docs">
-          <div style={{ padding: 16 }}>
-            <UploadDropzone />
+        <Container
+          title="Upload documents"
+          subtitle="PDF · DOCX · XLSX · contracts · certificates · policies · SOPs — go to the Document Register, not the media library"
+        >
+          <div style={{ padding: '12px 16px' }}>
+            <div style={{ padding: '14px 16px', background: '#FFF8E1', border: '1px solid #F57F17', borderRadius: 6, marginBottom: 12 }}>
+              <strong style={{ color: '#E65100', fontSize: 12 }}>Upload via the Document Register</strong>
+              <p style={{ fontSize: 12, color: '#5A5A5A', margin: '4px 0 8px' }}>
+                Documents (.docx, .pdf, .xlsx, etc.) go through a different pipeline than photos. Use the Document Register to upload — files land in the brain pipeline for extraction and classification.
+              </p>
+              <a href={`/h/${propertyId}/finance/legal/docs`} style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, display: 'inline-block' }}>
+                Open Document Register →
+              </a>
+            </div>
+            <p style={{ fontSize: 11, color: '#888', margin: 0 }}>
+              Accepted: PDF, DOCX, DOC, XLSX, XLS, PPTX, TXT, CSV, ODS · After upload: needs_review status → classify family + subtype → enters brain pipeline
+            </p>
           </div>
         </Container>
       </div>
