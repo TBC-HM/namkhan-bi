@@ -69,7 +69,7 @@ export function ReleasePicker({ releases }: { releases: Release[] }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {(current.doc_snapshot_refs ?? []).map((ref) => (
+                  {(Array.isArray(current.doc_snapshot_refs) ? current.doc_snapshot_refs : []).map((ref) => (
                     <tr key={ref.doc_type}>
                       <td style={S.td}>{ref.doc_type}</td>
                       <td style={S.td}>v{ref.version}</td>
