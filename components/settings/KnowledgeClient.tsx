@@ -11,7 +11,7 @@ export type KnowledgeAnswerRow = { section: string; question: string; answer: st
 export type KnowledgeDocRow = { doc_id: number; section: string; version: number; status: string; content_md: string; owner_comments: string | null; drafted_by: string | null; decided_by: string | null; decided_at: string | null; updated_at: string; };
 
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
-export const MODULES = ['revenue','marketing','sales','finance','operations','guest','fnb','spa','hr'] as const;
+export const MODULES = ['revenue','marketing','sales','finance','operations','guest','fnb','spa','hr','administration'] as const;
 export const GUARDRAIL_TYPES = [{ value:'',label:'— none —' },{ value:'floor',label:'Floor — never go below this number' },{ value:'ceiling',label:'Ceiling — never go above this number' },{ value:'approval_required',label:'Approval required — agents must ask before acting on it' },{ value:'watch',label:'Watch — alert me when it moves, no hard limit' }];
 
 export const JUDGMENT_SECTIONS: Array<{ slug: string; label: string; intro: string; questions: string[] }> = [
