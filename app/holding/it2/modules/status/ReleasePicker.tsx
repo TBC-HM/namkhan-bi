@@ -38,7 +38,7 @@ export function ReleasePicker({ releases }: { releases: Release[] }) {
                   {isPlatform ? `Platform ${r.semver}` : `${r.scope.slice(7)} ${r.semver}`}
                 </span>
                 <span style={S.tabMeta}>
-                  {new Date(r.released_at).toISOString().slice(0,10)} · {r.approved_by.split('·')[0].trim()}
+                  {r.released_at.slice(0,10)} · {r.approved_by.split('·')[0].trim()}
                 </span>
               </span>
             </button>
@@ -50,7 +50,7 @@ export function ReleasePicker({ releases }: { releases: Release[] }) {
         <>
           <Container
             title={current.scope === 'platform' ? `Platform release ${current.semver}` : `Module release · ${current.scope.slice(7)} · ${current.semver}`}
-            subtitle={`released ${new Date(current.released_at).toISOString().slice(0,16).replace('T','' ')} · approved by ${current.approved_by} · append-only row #${current.id}`}
+            subtitle={`released ${current.released_at.slice(0,10)} · approved by ${current.approved_by} · append-only row #${current.id}`}
           >
             <Markdown source={current.changelog_md ?? '_no changelog generated_'} />
           </Container>
