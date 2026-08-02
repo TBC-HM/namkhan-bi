@@ -3028,3 +3028,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - lib/content/reviewEngine.ts: validator registry (placeholders, links vs policy + dead links, images vs policy + hero-required, subject/body formatting, past dates, CTA, LLM pass for spelling/grammar/tone/legal/factual) → marketing.content_reviews
 - Enqueue fns (broadcast + lifecycle) refuse recipients when latest review verdict = fail
 - /api/cron/newsletter-quality-sweep: nightly review of all scheduled campaigns + on-demand per campaign
+
+### 2026-08-02 — bug-agent · fix #153
+- # Bug #153 – Remove `<Container>` wrapper from Property Settings page  ## Problem The report says: *"take out the container"* on the Property Settings page (`/h
+- touched `app/h/[property_id]/settings/property/page.tsx`
