@@ -3,6 +3,7 @@
 // Importing from `@/app/(cockpit)/_design/...` deep paths is forbidden.
 // PBS 2026-07-25: withCk HOC adds data-ck (display:contents) to 6 primary
 // primitives so walkthrough feedback mode can anchor findings to components.
+// FloatingMira removed from barrel 2026-08-03 (PR #375 — legacy widget retirement).
 
 import type { ComponentType } from 'react';
 import { createElement } from 'react';
@@ -45,7 +46,6 @@ export { default as MetricRow } from './layout/MetricRow';
 export { default as SplitContainer } from './layout/SplitContainer';
 export { default as BookingActivity } from './BookingActivity';
 export { default as PickupTabs } from './PickupTabs';
-export { default as FloatingMira } from './FloatingMira';
 
 // Walkthrough feedback engine entry-point
 export { BugWidget } from './BugWidget';
