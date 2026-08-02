@@ -1,48 +1,37 @@
 // app/holding/chat/page.tsx
-// Brain chat destination — receives params from /cockpit/chat redirect.
-// Uses CentralChat (Central Chat v1, brief central-chat-v1) — NOT the legacy ChatShell.
-// Felix is the sole dispatcher; moduleScope narrows the knowledge context.
-// 2026-08-03: corrected to use the new brain-integrated CentralChat component.
+// Brain Q&A destination — receives params from /cockpit/chat redirect.
+// Queries the DOCUMENT BRAIN (/api/brain/ask) not Felix's general chat.
+// The brain searches DMS documents, contracts, SOPs, certifications via embeddings.
+// Question pre-filled from ?q= URL param.
+// 2026-08-03: correct target for ASK THE BRAIN button.
 
-import CentralChat from '@/components/chat/CentralChat';
+import BrainAskPage from './_components/BrainAskPage';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// dept → property context mapping
-const DEPT_PROPERTY: Record<string, number | undefined> = {
+// dept → property_id mapping for brain isolation
+const DEPT_PROPERTY: Record<string, number | null> = {
   sales:      260955,
   revenue:    260955,
   marketing:  260955,
   operations: 260955,
   finance:    260955,
   legal:      260955,
-  // holding-level depts have no property scope
-  architect:  undefined,
-  lead:       undefined,
-  it:         undefined,
-  it_manager: undefined,
+  architect:  null,
+  lead:       null,
+  it:         null,
+  it_manager: null,
 };
 
 export default function HoldingChatPage({
   searchParams,
 }: {
-  searchParams: {
-    q?: string; dept?: string; role?: string;
-    name?: string; emoji?: string; label?: string;
-  };
+  searchParams: { q?: string; dept?: string; role?: string; label?: string };
 }) {
   const dept        = searchParams.dept ?? searchParams.role ?? 'lead';
-  const moduleScope = dept;
-  const propertyId  = DEPT_PROPERTY[dept];
+  const propertyId  = DEPT_PROPERTY[dept] ?? null;
+  const initialQ    = searchParams.q ?? '';
 
-  return (
-    <div style={{ minHeight: '100vh', background: '#F4EFE2' }}>
-      <CentralChat
-        mode="second-brain"
-        moduleScope={moduleScope}
-        propertyId={propertyId}
-      />
-    </div>
-  );
+  return <BrainAskPage initialQuestion={initialQ} propertyId={propertyId} dept={dept} />;
 }
