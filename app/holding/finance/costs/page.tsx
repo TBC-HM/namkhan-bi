@@ -191,7 +191,6 @@ export default async function HoldingCostsPage() {
           xKey="month"
           series={classKeys.map((k) => ({ key: k, label: k.replace(/_/g, ' ') }))}
           height={260}
-          formatY={(v) => `$${v}`}
           empty={{ title: 'No cost events yet', hint: 'ingest runs hourly (costs-ingest-hourly)' }}
         />
       </Container>
