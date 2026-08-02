@@ -60,7 +60,7 @@ function renderAnswer(md: string) {
   });
 }
 
-export default function BrainClient() {
+export default function BrainClient({ propertyId }: { propertyId?: number | null }) {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [missing, setMissing] = useState<MissingSummary | null>(null);
   const [battery, setBattery] = useState<BatteryRun[]>([]);
@@ -151,7 +151,7 @@ export default function BrainClient() {
     try {
       const res = await fetch('/api/brain/ask', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, property_id: propertyId ?? null }),
       });
       const j = await res.json();
       if (j.ok) { setAnswer(j.answer as string); setSources((j.sources ?? []) as Source[]); setUsedHr(!!j.used_hr); }
@@ -189,9 +189,11 @@ export default function BrainClient() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
       <div>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Company Brain</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>
+            {propertyId === 260955 ? 'Namkhan Brain' : propertyId === 1000001 ? 'Donna Brain' : propertyId === 0 ? 'Holding Brain' : 'Company Brain'}
+          </h1>
         <p style={{ fontSize: 13, opacity: 0.7, margin: '4px 0 0' }}>
-          Document pipeline · human review · ask window. HR/payroll is excluded from retrieval by policy.
+          Document pipeline · human review · ask window · isolated per tenant. No cross-tenant retrieval. HR/payroll excluded by policy.
         </p>
       </div>
 
