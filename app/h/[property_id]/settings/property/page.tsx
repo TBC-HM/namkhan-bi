@@ -6,7 +6,7 @@
 //                  the restored /h/[pid]/settings/property/audience page tabs strip).
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { DashboardPage } from '@/app/(cockpit)/_design';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -122,9 +122,7 @@ export default async function PropertySettingsPage({
       ]}
     >
       <div style={fullRow}>
-        <Container title="Property" subtitle="identity · brand · rooms · facilities · activities · seasons · team">
-          <PropertySettingsClient data={data} propertyId={propertyId} />
-        </Container>
+        <PropertySettingsClient data={data} propertyId={propertyId} />
       </div>
     </DashboardPage>
   );
