@@ -129,19 +129,27 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
   const [mode, setMode] = useState<CentralChatMode>(defaultMode);
   // Thread starts fresh on mount (PBS 2026-05-09 rule — no stale localStorage).
   const [threadStart, setThreadStart] = useState<string>(() => new Date().toISOString());
+  // V5 conversation store (round 5): the server returns a cockpit.conversations
+  // id on the first turn; subsequent turns carry it so the whole thread lands
+  // in ONE conversation row. React state only — no localStorage (platform law).
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const startNewChat = () => {
     setThreadStart(new Date().toISOString());
+    setConversationId(null);
     setInput('');
   };
 
-  // Switching modes starts a fresh thread — scopes never mix in one thread.
+  // Switching modes starts a fresh thread — scopes never mix in one thread
+  // (the server double-checks: a conversation_id replayed across a mode
+  // switch gets a fresh conversation row).
   const switchMode = (m: CentralChatMode) => {
     if (m === mode) return;
     setMode(m);
     setTickets([]);
     setThreadStart(new Date().toISOString());
+    setConversationId(null);
   };
 
   function buildConversationHistory(): Array<{ role: 'user' | 'assistant'; content: string }> {
@@ -213,7 +221,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
     setInput('');
     setSending(true);
     try {
-      await fetch('/api/cockpit/chat', {
+      const res = await fetch('/api/cockpit/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -225,8 +233,18 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
           mode,
           module_scope: moduleScope ?? null,
           property_id: propertyId ?? null,
+          // V5 store: thread continuity — null on the first turn, then the
+          // id the server minted for this conversation.
+          conversation_id: conversationId,
         }),
       });
+      // Adopt the server's conversation id so the next turn continues the
+      // same cockpit.conversations row. Defensive parse — older deploys
+      // don't return it and the ticket thread still renders regardless.
+      try {
+        const j = await res.json();
+        if (j && typeof j.conversation_id === 'string') setConversationId(j.conversation_id);
+      } catch { /* body not JSON — ignore, ticket polling carries the UI */ }
       load();
     } catch {
       setTickets((prev) =>
