@@ -1,16 +1,17 @@
 // app/finance/archive/_components/ArchiveOverviewPage.tsx
 // Archive overview — the Administration · Archive tab (PBS 2026-07-24).
 // NOT the doc registry: a brain-backed landing page in the Revenue-HoD design
-// language — headline KPI stripes + a prompt window on top.
+// language — headline KPI stripes + a chat window on top.
 //   Stripe 1 · registry health (v_doc_register counts, property-scoped)
 //   Stripe 2 · documents by family (doc_type tallies)
 //   Stripe 3 · company brain coverage (v_brain_pipeline_status, global) + cases
 // The full editable register stays one click away (quiet link at the bottom) —
 // the two "Open Docs register" buttons on the Legal page were retired for this.
+// ArchiveAskClient retired 2026-08-03 — replaced by CentralChat (PR #375).
 
 import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import ArchiveAskClient from './ArchiveAskClient';
+import CentralChat from '@/components/chat/CentralChat';
 
 interface Props {
   propertyId: number;
@@ -42,7 +43,6 @@ const FAMILY_LABEL: Record<string, string> = {
 };
 
 async function fetchAllDocTypes(sb: ReturnType<typeof getSupabaseAdmin>, propertyId: number): Promise<string[]> {
-  // PostgREST caps result pages — page through doc_type only (cheap column).
   const out: string[] = [];
   const PAGE = 1000;
   for (let from = 0; from < 20000; from += PAGE) {
@@ -97,10 +97,10 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
 
   return (
     <DashboardPage title={title} subtitle={subtitle} tabs={tabs.length ? tabs : undefined}>
-      {/* Prompt window — the primary way in */}
+      {/* Chat window — the primary way in */}
       <div style={fullRow}>
         <Container title="Ask the archive" subtitle="Cited answers from the company archive · live KPIs · plain language" density="compact">
-          <ArchiveAskClient />
+          <CentralChat mode="second-brain" moduleScope="finance" propertyId={propertyId} />
         </Container>
       </div>
 
@@ -155,7 +155,7 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
         </Container>
       </div>
 
-      {/* Resurfaced · needs attention (BRAIN v3 — the "review loop" kernel) */}
+      {/* Resurfaced · needs attention */}
       <div style={fullRow}>
         <Container title="Resurfaced · needs attention" subtitle="The brain proactively resurfaces what is about to matter — expiries, case deadlines, questions it could not answer" density="compact">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12.5 }}>
