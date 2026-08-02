@@ -1,13 +1,8 @@
 // app/holding/it2/page.tsx
 // PBS 2026-07-30 — ACTION CENTER: the IT2 home (brief it-area-reorg-v1).
-// PBS's words: "I need one cockpit where I have all CTAs … at the moment I
-// don't find anything." This page is the ONE surface that collects everything
-// waiting on the owner:
-//   Zone 1 · NEEDS YOU   — open questions (briefs + bugs + module queue) +
-//                          awaits-user tickets → one list, one inbox link.
-//   Zone 2 · STATUS      — modules in production / pipeline / fleet / deploys.
-//   Zone 3 · LAST 24H    — what the machine shipped while PBS was away.
-// Empty Zone 1 = the machine is running on its own.
+// Fix 2026-08-02: brief/bug questions now link directly to their specific page,
+// not the generic /questions inbox. Module questions link to their brief when
+// brief_slug is available.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
@@ -27,11 +22,6 @@ export default async function ActionCenterPage() {
   const sb = getSupabaseAdmin();
 
   const [briefsRes, bugsRes, mcqRes, ticketsRes, auditRes, ops] = await Promise.all([
-    // it-area-reorg-v1 gap 1 (2026-07-30): briefs park owner questions while in
-    // 'verifying' too (verifier writes open_question + sets status=verifying).
-    // Filtering on needs_input alone made 3 live questions invisible (youtube
-    // Analytics-API sat unanswered 2 days). Nav law: anything needing PBS
-    // surfaces in the Action Center automatically.
     (sb as any).from('v_build_briefs_index')
       .select('slug, title, status, open_question')
       .in('status', ['needs_input', 'verifying'])
@@ -64,11 +54,14 @@ export default async function ActionCenterPage() {
   const items: NeedsYouItem[] = [];
   for (const b of briefs) {
     const q = b.open_question ?? {};
+    // Skip briefs that are already answered (have answer_key) — they're waiting for verifier
+    if (q.answer_key) continue;
     items.push({
       kind: 'question',
       title: b.title ?? b.slug,
       detail: typeof q.question === 'string' ? q.question : 'Open question on this brief',
-      href: '/holding/it2/questions',
+      // Link directly to the specific brief so PBS can read context and answer inline
+      href: `/holding/it2/modules/briefs/${b.slug}`,
     });
   }
   for (const bug of bugs) {
@@ -77,20 +70,25 @@ export default async function ActionCenterPage() {
       kind: 'question',
       title: `Bug #${bug.id} · ${(bug.body ?? '').split('\n')[0].slice(0, 60)}`,
       detail: typeof q.question === 'string' ? q.question : 'Open question on this bug',
-      href: '/holding/it2/questions',
+      href: `/holding/it2/fleet/bugs`,
     });
   }
   for (const m of mcq) {
     const oq = (m.open_questions ?? '').trim();
     if (!oq) continue;
+    // Skip already-resolved questions
+    if (oq.startsWith('RESOLVED') || oq.startsWith('ANSWERED')) continue;
     items.push({
       kind: 'module-question',
       title: m.display_name ?? m.module_doc_type,
       detail: oq,
-      // PBS 2026-07-30: a module question that is BLOCKED on an owner answer must
-      // route to the Decision Inbox (answer inline), never to the module's entry
-      // page — clicking the Central Chat question landed PBS on legacy /chat.
-      href: oq.startsWith('BLOCKED') ? '/holding/it2/questions' : (m.entry_url || '/holding/it2/modules/status'),
+      // If there's a brief for this module, link there for context + inline answer
+      // BLOCKED = send to Decision Inbox; has brief = send to brief; else entry_url
+      href: oq.startsWith('BLOCKED')
+        ? '/holding/it2/questions'
+        : m.brief_slug
+          ? `/holding/it2/modules/briefs/${m.brief_slug}`
+          : (m.entry_url || '/holding/it2/modules/status'),
     });
   }
   for (const t of tickets) {
@@ -199,7 +197,7 @@ export default async function ActionCenterPage() {
               borderBottom: i < audit.length - 1 ? `1px solid ${TOKENS.border}` : 'none', fontSize: 12,
             }}>
               <span style={{ fontFamily: MONO, fontSize: 10.5, color: TOKENS.text3, whiteSpace: 'nowrap' }}>
-                {new Date(a.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                {(a.created_at as string).slice(11, 16)}
               </span>
               <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{a.agent ?? '—'}</span>
               <span style={{ color: TOKENS.text2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
