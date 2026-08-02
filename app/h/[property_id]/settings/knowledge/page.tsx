@@ -21,6 +21,14 @@ const JUDGMENT_SECTIONS: Array<{ slug: string; questions: string[] }> = [
   { slug: 'guest_profile', questions: ['','',''] },
   { slug: 'escalation_crisis', questions: ['','',''] },
   { slug: 'compliance', questions: ['',''] },
+  { slug: 'activities', questions: ['','','',''] },
+  { slug: 'retreats', questions: ['','','',''] },
+  { slug: 'fnb_ops', questions: ['','','',''] },
+  { slug: 'spa_ops', questions: ['','','',''] },
+  { slug: 'transport_ops', questions: ['','','',''] },
+  { slug: 'retail_ops', questions: ['','','',''] },
+  { slug: 'finance_ops', questions: ['','','',''] },
+  { slug: 'hr_ops', questions: ['','','',''] },
 ];
 
 export default async function KnowledgeSettingsPage({
