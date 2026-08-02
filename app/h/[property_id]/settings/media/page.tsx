@@ -1,13 +1,13 @@
 // app/h/[property_id]/settings/media/page.tsx
-// PBS 2026-08-02 — All photo settings consolidated here.
-// Imports SettingsTab directly from marketing/media/_client so the component
-// is NOT duplicated — same code, rendered in property settings context.
-// Marketing/media > Photo Settings tab to be redirected here in follow-up.
+// PBS 2026-08-02 — All photo settings + upload consolidated in property settings.
+// Photo upload → existing media pipeline (sign+finalize+Iris QA).
+// SettingsTab imported from marketing/media — no code duplication.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import MediaQaPanel from '@/components/settings/panels/MediaQaPanel';
 import SettingsTab from '@/app/marketing/media/_client/SettingsTab';
+import UploadDropzone from '@/app/marketing/media/_client/UploadDropzone';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -18,7 +18,6 @@ async function fetchAllSettingsData(propertyId: number) {
     naming, captions, altText, tiers, ratios, textPolicy, palette,
     channelSpecs, rulesActive, reality, categories, rooms, facilities,
   ] = await Promise.all([
-    // Photo guardrails (already in this page)
     sb.from('v_media_naming_conventions').select('*'),
     sb.from('v_media_caption_rules').select('*'),
     sb.from('v_media_alt_text_rules').select('*'),
@@ -26,7 +25,6 @@ async function fetchAllSettingsData(propertyId: number) {
     sb.from('v_media_aspect_ratio_rules').select('*'),
     sb.from('v_media_text_policy').select('*').eq('id', 1).maybeSingle(),
     sb.from('v_media_brand_palette').select('*'),
-    // Photo settings (new — feeds SettingsTab)
     sb.from('v_media_channel_specs').select('*'),
     sb.from('v_media_rules_active').select('*'),
     sb.from('v_reality_profile').select('*').eq('property_id', propertyId).maybeSingle(),
@@ -34,16 +32,15 @@ async function fetchAllSettingsData(propertyId: number) {
     sb.from('v_room_grounding').select('*').eq('property_id', propertyId).order('room_type_id', { ascending: true }),
     sb.from('v_facility_grounding').select('*').eq('property_id', propertyId).eq('active', true).order('sort_order', { ascending: true }),
   ]);
-
   return {
     guardrails: {
-      naming:          (naming.data ?? []) as any[],
-      captions:        (captions.data ?? []) as any[],
-      altText:         (altText.data ?? []) as any[],
-      tierThresholds:  (tiers.data ?? []) as any[],
-      aspectRatios:    (ratios.data ?? []) as any[],
-      textPolicy:      (textPolicy.data ?? null) as any,
-      brandPalette:    (palette.data ?? []) as any[],
+      naming:         (naming.data ?? []) as any[],
+      captions:       (captions.data ?? []) as any[],
+      altText:        (altText.data ?? []) as any[],
+      tierThresholds: (tiers.data ?? []) as any[],
+      aspectRatios:   (ratios.data ?? []) as any[],
+      textPolicy:     (textPolicy.data ?? null) as any,
+      brandPalette:   (palette.data ?? []) as any[],
     },
     channelSpecs:  (channelSpecs.data ?? []) as any[],
     rulesActive:   (rulesActive.data ?? []) as any[],
@@ -54,29 +51,39 @@ async function fetchAllSettingsData(propertyId: number) {
   };
 }
 
+const SETTINGS_TABS = (pid: number) => [
+  { key: 'property',   label: 'Property',   href: `/h/${pid}/settings/property`   },
+  { key: 'media',      label: 'Media',      href: `/h/${pid}/settings/media`, active: true },
+  { key: 'rate_plans', label: 'Rate Plans', href: `/h/${pid}/settings/rate-plans` },
+  { key: 'guardrails', label: 'Guardrails', href: `/h/${pid}/settings/guardrails` },
+  { key: 'documents',  label: 'Documents',  href: `/h/${pid}/settings/documents`  },
+  { key: 'archive',    label: 'Archive',    href: `/h/${pid}/settings/archive`    },
+  { key: 'data',       label: 'Data',       href: `/h/${pid}/settings/data`       },
+  { key: 'brain',      label: 'Brain',      href: `/h/${pid}/settings/brain`      },
+  { key: 'knowledge',  label: 'Knowledge',  href: `/h/${pid}/settings/knowledge`  },
+];
+
 export default async function MediaSettingsPage({ params }: { params: { property_id: string } }) {
   const propertyId = Number(params.property_id);
   const d = await fetchAllSettingsData(propertyId);
 
-  const TABS = [
-    { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
-    { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media`, active: true },
-    { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
-    { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
-    { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-    { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
-    { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
-    { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
-  ];
-
   return (
     <DashboardPage
       title="Settings · Media"
-      subtitle={`Photo settings · naming rules · scoring · guardrails · channels · AI profiles · property ${propertyId}`}
-      tabs={TABS}
+      subtitle={`Photo upload · settings · guardrails · channels · AI profiles · property ${propertyId}`}
+      tabs={SETTINGS_TABS(propertyId)}
     >
-      {/* Media QA — backfill re-score + naming conventions */}
+      {/* Upload — goes through existing sign+finalize+Iris QA pipeline */}
       <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Upload photos & videos" subtitle="Drag & drop or click — routed through existing Iris QA scoring and mapping pipeline">
+          <div style={{ padding: 16 }}>
+            <UploadDropzone />
+          </div>
+        </Container>
+      </div>
+
+      {/* Media QA — naming conventions + backfill re-score */}
+      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
         <Container title="Media QA" subtitle="naming convention rules · scoring · backfill re-score">
           <div style={{ padding: 16 }}>
             <MediaQaPanel propertyId={propertyId} />
@@ -84,11 +91,11 @@ export default async function MediaSettingsPage({ params }: { params: { property
         </Container>
       </div>
 
-      {/* Photo Settings — full 6-tab panel (Link Photos · Guardrails · Output Channels · AI Profiles · Photo Guardrails · Prompt Categories) */}
+      {/* Photo Settings — 6-tab panel: Link Photos · Guardrails · Output Channels · AI Profiles · Photo Guardrails · Prompt Categories */}
       <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
         <Container
           title="Photo Settings"
-          subtitle="Link photos · guardrails · output channels · AI profiles · photo guardrails · prompt categories — same content as Marketing › Media › Photo Settings"
+          subtitle="Link photos · guardrails · output channels · AI profiles · photo guardrails · prompt categories"
         >
           <SettingsTab
             propertyId={propertyId}
