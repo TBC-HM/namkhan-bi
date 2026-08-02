@@ -20,10 +20,10 @@ const SOURCE_META: Record<
   cockpit_audit_log: { label: 'Audit', color: '#9a8866', bg: 'rgba(154,136,102,0.18)' },
 };
 
-function fmtAge(iso: string): string {
+function fmtAge(iso: string, now: number = 0): string {
   const t = new Date(iso).getTime();
   if (!Number.isFinite(t)) return '—';
-  const secs = Math.floor((Date.now() - t) / 1000);
+  if (!now) return iso.slice(0, 10); const secs = Math.floor((now - t) / 1000);
   if (secs < 60) return `${secs}s ago`;
   const mins = Math.floor(secs / 60);
   if (mins < 60) return `${mins}m ago`;
@@ -63,7 +63,7 @@ export function ActivityView({
     cap_skill_calls: true,
     cockpit_audit_log: true,
   });
-  const [refreshedAt, setRefreshedAt] = useState<number>(Date.now());
+  const [refreshedAt, setRefreshedAt] = useState<number>(0);
   const [pending, setPending] = useState(false);
 
   // 30s poll
