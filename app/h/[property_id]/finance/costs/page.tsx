@@ -100,7 +100,6 @@ export default async function TenantCostsPage({ params }: { params: { property_i
           xKey="month"
           series={[{ key: 'total', label: 'Total USD' }, { key: 'ai', label: 'AI USD' }]}
           height={220}
-          formatY={(v) => `$${v}`}
           empty={{ title: 'No attributed cost yet', hint: 'agent runs for this property appear after the hourly ingest' }}
         />
       </Container>
