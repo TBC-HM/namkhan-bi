@@ -94,7 +94,11 @@ export default async function HoldingSettingsPage() {
       title="Holding · Settings"
       subtitle="Entity identity · banking · contacts · brand · shared across every /holding surface"
       tabs={[
-        { key: 'back', label: 'HoD', href: '/holding' },
+        { key: 'back',       label: '← HoD',      href: '/holding'                         },
+        { key: 'platform',   label: 'Platform',    href: '/holding/settings', active: true  },
+        { key: 'guardrails', label: 'Guardrails',  href: '/holding/settings/guardrails'     },
+        { key: 'documents',  label: 'Documents',   href: '/holding/settings/documents'      },
+        { key: 'media',      label: 'Media',       href: '/holding/settings/media'          },
       ]}
     >
       {SECTIONS.map((section) => (
