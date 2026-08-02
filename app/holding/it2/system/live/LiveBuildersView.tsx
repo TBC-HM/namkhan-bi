@@ -54,7 +54,7 @@ export function LiveBuildersView({
 }) {
   const [rows, setRows] = useState<LiveRow[]>(initial);
   const [error, setError] = useState<string | null>(initialError);
-  const [refreshedAt, setRefreshedAt] = useState<number>(Date.now());
+  const [refreshedAt, setRefreshedAt] = useState<number>(0);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -99,7 +99,7 @@ export function LiveBuildersView({
       >
         <h2 style={{ fontFamily: SERIF, fontSize: 22, margin: 0 }}>Live builders</h2>
         <div style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>
-          {live.length} live now · refreshed {fmtAge(Math.round((Date.now() - refreshedAt) / 1000))} ago
+          {live.length} live now · {refreshedAt > 0 && fmtAge(Math.round((Date.now() - refreshedAt) / 1000))}
           {pending && <span style={{ marginLeft: 6, color: TOKENS.sand }}>· refreshing…</span>}
         </div>
       </div>
