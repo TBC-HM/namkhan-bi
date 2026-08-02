@@ -1,32 +1,42 @@
 'use server';
 // app/holding/it2/system/health/actions.ts
-// Server action for manual sweep trigger.
-// Runs the sweep DIRECTLY (no HTTP round-trip) so middleware never blocks it.
-// The /api/cockpit/health-sweep route is kept for the pg_net cron (CRON_SHARED_SECRET auth).
+// Manual sweep — runs directly (no HTTP round-trip, bypasses middleware).
+// Covers full application: IT2 + holding pages + property pages.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 const BASE = 'https://namkhan-bi.vercel.app';
 
 const URLS = [
+  // IT2 — Action Center
   '/holding/it2',
   '/holding/it2/fleet/tasks',
   '/holding/it2/fleet/bugs',
+  '/holding/it2/system/live',
+  // IT2 — Knowledge
   '/holding/it2/knowledge/docs',
   '/holding/it2/knowledge/goals',
   '/holding/it2/fleet/skills',
   '/holding/it2/fleet/memory',
   '/holding/it2/fleet/team',
+  // IT2 — Build + System
+  '/holding/it2/modules/status',
   '/holding/it2/system/deploys',
   '/holding/it2/system/health',
   '/holding/it2/system/activity',
-  '/holding/it2/modules/status',
+  // Holding
   '/holding/finance/costs',
   '/holding/sales/onboarding',
+  // Namkhan property (260955)
   '/h/260955',
+  '/h/260955/revenue',
+  '/h/260955/marketing',
+  '/h/260955/operations',
+  '/h/260955/sales',
   '/h/260955/finance/costs',
   '/h/260955/settings/knowledge',
-  '/api/health',
+  '/h/260955/reports',
+  '/h/260955/guests',
 ];
 
 export async function runHealthSweep(): Promise<{
