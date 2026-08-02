@@ -4,10 +4,11 @@
 // view ships), articles from public.v_university_articles. Grouped IA
 // sections per _lib/ia.ts; a module with no live articles gets a friendly
 // "being written" state instead of an empty page.
+// AskWindow retired 2026-08-03 — replaced by CentralChat (PR #375).
 
 import type { CSSProperties } from 'react';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import AskWindow from '../_components/AskWindow';
+import CentralChat from '@/components/chat/CentralChat';
 import Breadcrumbs from '../_components/Breadcrumbs';
 import { FALLBACK_MODULES, groupArticles, type ArticleMeta, type ModuleCard } from '../_lib/ia';
 import { INK, INK_SOFT, HAIR, GREEN, GOLD, WARM, SANS } from '../_lib/theme';
@@ -57,7 +58,7 @@ export default async function ModuleGuidePage({ params }: { params: { module: st
         )}
       </header>
 
-      <AskWindow module={moduleSlug} placeholder={`Ask about ${title.toLowerCase()} — plain words are fine.`} />
+      <CentralChat mode="second-brain" moduleScope={moduleSlug} />
 
       {loadError && (
         <div style={{ marginTop: 14, fontSize: 13, color: '#B03826' }}>Could not load articles: {loadError}</div>
