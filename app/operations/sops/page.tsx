@@ -3,6 +3,7 @@
 //   SOP catalog. Property-scoped via `v_sop_catalog.property_id`
 //   (NULL = shared, else per-tenant). Shows shared ∪ own for the caller.
 //   Search + dept filter live client-side. Sub-pages: Generate SOP, Propose SOPs.
+// SopChat retired 2026-08-03 — replaced by CentralChat (PR #375).
 
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -10,7 +11,7 @@ import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import SopBrowser, { type SopRow } from './_components/SopBrowser';
-import SopChat from './_components/SopChat';
+import CentralChat from '@/components/chat/CentralChat';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -19,7 +20,6 @@ interface Props { propertyId?: number }
 
 export default async function OperationsSopsPage({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
-  // Property scope: shared (property_id IS NULL) ∪ this tenant's rows.
   const { data } = await supabase
     .from('v_sop_catalog')
     .select('*')
@@ -27,7 +27,6 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
     .order('sop_code');
   const sops: SopRow[] = (data as SopRow[]) ?? [];
 
-  // KPI strip counts
   const distinctDepts = new Set(sops.map((s) => s.dept_code)).size;
   const tiles: KpiTileProps[] = [
     { label: 'Total SOPs',   value: sops.length, size: 'sm' },
@@ -62,7 +61,7 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
             duplicate that broke the industry-standard SubTab visual. */}
 
         <div style={{ gridColumn: '1 / -1' }}>
-          <SopChat />
+          <CentralChat mode="second-brain" moduleScope="operations" />
           <SopBrowser sops={sops} />
         </div>
       </DashboardPage>
