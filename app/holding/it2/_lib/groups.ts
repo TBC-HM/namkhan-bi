@@ -5,7 +5,7 @@
 //   2. One fact = one surface. No duplicates.
 //   3. Every IT2 page.tsx must be reachable from this array (orphan checker enforces this).
 //   4. Chat removed from IT2: exists in CEO/Sales/Marketing front nav.
-//   5. Fleet retired: Tasks→Action Center, Skills/Memory→Knowledge, Team→Agents.
+//   5. Fleet retired: Tasks/Bugs→Action Center, Skills/Memory→Knowledge, Team→Agents.
 
 export type It2GroupKey = 'home' | 'knowledge' | 'agents' | 'build' | 'system';
 
@@ -21,6 +21,7 @@ export const GROUPS: GroupSpec[] = [
     key: 'home', label: 'Action Center', href: '/holding/it2',
     subs: [
       { href: '/holding/it2/fleet/tasks', label: 'Tasks' },
+      { href: '/holding/it2/fleet/bugs',  label: 'Bugs' },
     ],
   },
   {
