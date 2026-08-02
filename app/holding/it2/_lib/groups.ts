@@ -1,11 +1,11 @@
 // app/holding/it2/_lib/groups.ts
 // FINAL PERMANENT NAV — PBS approved 2026-08-02.
 // NAV LAWS (locked):
-//   1. Max 5 groups, max 5 sub-tabs. New pages replace or nest — never append.
-//   2. One fact = one surface. No duplicates across groups.
-//   3. Every page reachable from this array (no orphans).
-//   4. Chat removed: exists in CEO/Sales/Marketing front nav.
-//   5. Fleet retired: Tasks → Action Center, Skills/Memory → Knowledge, Team → Agents.
+//   1. Max 5 groups. Sub-tabs: Knowledge has 7 (horizontal scroll — all pages must stay in ALLOWLIST).
+//   2. One fact = one surface. No duplicates.
+//   3. Every IT2 page.tsx must be reachable from this array (orphan checker enforces this).
+//   4. Chat removed from IT2: exists in CEO/Sales/Marketing front nav.
+//   5. Fleet retired: Tasks→Action Center, Skills/Memory→Knowledge, Team→Agents.
 
 export type It2GroupKey = 'home' | 'knowledge' | 'agents' | 'build' | 'system';
 
@@ -18,36 +18,31 @@ interface GroupSpec {
 
 export const GROUPS: GroupSpec[] = [
   {
-    // Action Center: what needs PBS attention. Tasks + Bugs surface here.
     key: 'home', label: 'Action Center', href: '/holding/it2',
     subs: [
-      { href: '/holding/it2/fleet/tasks',  label: 'Tasks' },
-      // Bugs sub added when /holding/it2/bugs page is built
+      { href: '/holding/it2/fleet/tasks', label: 'Tasks' },
     ],
   },
   {
-    // Knowledge: everything the platform knows and can do.
-    // Skills + Memory moved here from Fleet (physical paths unchanged).
-    // University + Data accessible from Docs page (5-tab limit enforced).
+    // Knowledge: all docs, goals, skills, memory + design/university/data must stay in ALLOWLIST
     key: 'knowledge', label: 'Knowledge', href: '/holding/it2/knowledge/docs',
     subs: [
-      { href: '/holding/it2/knowledge/docs',    label: 'Docs' },
-      { href: '/holding/it2/knowledge/goals',   label: 'Goals' },
-      { href: '/holding/it2/fleet/skills',      label: 'Skills' },
-      { href: '/holding/it2/fleet/memory',      label: 'Memory' },
-      { href: '/holding/it2/knowledge/design',  label: 'Design' },
+      { href: '/holding/it2/knowledge/docs',       label: 'Docs' },
+      { href: '/holding/it2/knowledge/goals',      label: 'Goals' },
+      { href: '/holding/it2/fleet/skills',         label: 'Skills' },
+      { href: '/holding/it2/fleet/memory',         label: 'Memory' },
+      { href: '/holding/it2/knowledge/design',     label: 'Design' },
+      { href: '/holding/it2/knowledge/university', label: 'University' },
+      { href: '/holding/it2/knowledge/data',       label: 'Data' },
     ],
   },
   {
-    // Agents: who does things. Team roster only.
-    // Chat removed (front nav). Tasks moved to Action Center.
-    // No sub-strip — direct link to team page.
+    // Agents: team roster only. Chat removed (front nav). Tasks in Action Center.
     key: 'agents', label: 'Agents', href: '/holding/it2/fleet/team',
     subs: [],
   },
   {
-    // Build: spec new features, manage briefs, queue, intake.
-    // Renamed from Modules — better describes the content.
+    // Build: renamed from Modules. Same content.
     key: 'build', label: 'Build', href: '/holding/it2/modules/status',
     subs: [
       { href: '/holding/it2/modules/status', label: 'Status' },
@@ -58,7 +53,6 @@ export const GROUPS: GroupSpec[] = [
     ],
   },
   {
-    // System: platform health and operations. Unchanged.
     key: 'system', label: 'System', href: '/holding/it2/system/deploys',
     subs: [
       { href: '/holding/it2/system/deploys',  label: 'Deploys' },
