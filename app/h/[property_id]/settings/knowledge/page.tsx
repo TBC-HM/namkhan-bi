@@ -70,7 +70,11 @@ export default async function KnowledgeSettingsPage({
   const hasBigGoal = goalRows.some((g) => g.kind === 'big_goal');
   const hasModuleGoal = goalRows.some((g) => g.kind === 'module_goal');
   const goalsScore = (hasBigGoal ? 1 : 0) + (hasModuleGoal ? 1 : 0);
-  const completeness = Math.round(((judgmentAnswered + goalsScore) / (judgmentTotal + 2)) * 100);
+  // approvedSections: only sections with an approved doc count as done — pending drafts do not
+  const approvedSections = new Set(docRows.filter(d => d.status === 'approved').map(d => d.section)).size;
+  const completeness = Math.round(
+    ((judgmentAnswered + approvedSections + goalsScore) / (judgmentTotal + JUDGMENT_SECTIONS.length + 2)) * 100
+  );
 
   return (
     <DashboardPage
