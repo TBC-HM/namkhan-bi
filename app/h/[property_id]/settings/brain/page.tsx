@@ -29,7 +29,7 @@ export default function PropertyBrainSettingsPage({ params }: { params: { proper
       ]}
     >
       <div style={{ gridColumn: '1 / -1' }}>
-        <BrainClient />
+        <BrainClient propertyId={propertyId} />
       </div>
     </DashboardPage>
   );
