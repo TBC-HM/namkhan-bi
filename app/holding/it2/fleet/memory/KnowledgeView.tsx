@@ -549,7 +549,7 @@ function MemoryList({ items }: { items: AgentMemory[] }) {
             <span style={{ fontFamily: MONO, fontSize: 10, color: TOKENS.text3 }}>@{m.agent_handle}</span>
             {m.updated_at && (
               <span style={{ fontFamily: MONO, fontSize: 10, color: TOKENS.text3, marginLeft: 'auto' }}>
-                {new Date(m.updated_at).toLocaleString()}
+                {new Date(m.updated_at).toISOString().slice(0,16).replace('T','' ')}
               </span>
             )}
           </div>
