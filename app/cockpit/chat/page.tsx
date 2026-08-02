@@ -1,33 +1,44 @@
 // app/cockpit/chat/page.tsx
-// DeptEntry submitChat navigates here with ?q=...&dept=...&role=...
-// Server-side redirect to the correct dept HoD page.
+// DeptEntry submitChat navigates here with ?q=...&dept=...&role=...&name=...&emoji=...
+// Restores the full-screen chat window using ChatShell.
+// Server Component reads searchParams → passes to client wrapper → ChatShell renders.
+// initialInput pre-fills the question the user typed.
 // 2026-08-03: restored after fleet/chat redirect broke the brain button.
-// Uses searchParams prop (RSC) — no useSearchParams, no Suspense needed.
 
-import { redirect } from 'next/navigation';
+import ChatShell from '@/components/chat/ChatShell';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-const DEPT_ROUTES: Record<string, string> = {
-  sales:      '/sales',
-  revenue:    '/revenue',
-  marketing:  '/marketing',
-  operations: '/operations',
-  finance:    '/finance',
-  legal:      '/holding/legal',
-  it:         '/holding/it2',
-  architect:  '/holding/ceo',
-  lead:       '/holding/ceo',
-  it_manager: '/holding/it2',
-};
-
-export default function CockpitChatRouter({
+export default function CockpitChatPage({
   searchParams,
 }: {
-  searchParams: { dept?: string; role?: string; q?: string };
+  searchParams: {
+    q?: string;
+    dept?: string;
+    role?: string;
+    name?: string;
+    emoji?: string;
+    label?: string;
+    project?: string;
+  };
 }) {
-  const dept = searchParams.dept ?? '';
-  const role = searchParams.role ?? '';
-  const target = DEPT_ROUTES[dept] ?? DEPT_ROUTES[role] ?? '/holding/ceo';
-  redirect(target);
+  const role        = searchParams.role  ?? 'lead';
+  const displayName = searchParams.name  ?? 'Felix';
+  const emoji       = searchParams.emoji ?? '🌐';
+  const dept        = searchParams.dept  ?? searchParams.label ?? '';
+  const initialInput = searchParams.q   ?? '';
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0D0D0D' }}>
+      <ChatShell
+        role={role}
+        displayName={displayName}
+        emoji={emoji}
+        dept={dept}
+        initialInput={initialInput}
+        storageKey={`cockpit.chat.${role}`}
+      />
+    </div>
+  );
 }
