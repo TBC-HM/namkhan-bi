@@ -1,19 +1,7 @@
 'use client';
-
 // app/holding/it2/knowledge/docs/DocsView.tsx
-//
-// Modernized 2026-07-21 (bug #40) — chrome moved to canonical design
-// primitives (Container / MetricRow / KpiTile / SubTabStrip typography)
-// on paper-white + hairline background. All features preserved:
-//   · category-grouped doc tabs (Operating · Architecture · Integrations · Strategy)
-//   · every published doc_type from documentation.documents
-//   · doc header with version + status pills + last-updated meta
-//   · markdown body
-//   · knowledge-surfaces map with SQL pointers
-//
-// Design tokens come from `.cockpit-design` scope: --paper, --ink, --hairline,
-// --primary, --ink-soft. Hardcoded #FFFFFF background per token-ladder burn
-// rule (var(--paper-warm) resolves dark on Namkhan).
+// Human-readable doc library: meaningful KPI tiles, grouped tree, CTAs per doc.
+// Review SLAs now set — freshness tiles are live.
 
 import { useState, useMemo, type CSSProperties } from 'react';
 import { Container, MetricRow } from '@/app/(cockpit)/_design';
@@ -22,361 +10,243 @@ import type { Document } from '@/lib/cockpit/types';
 
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
 
+// Human-meaningful grouping — not the DB category system
+const DOC_GROUPS: Array<{ key: string; label: string; emoji: string; doc_types: string[] }> = [
+  {
+    key: 'platform_core', label: 'Platform Core', emoji: '⚙️',
+    doc_types: ['claude_md','architecture','deployment','data_model'],
+  },
+  {
+    key: 'design_apis', label: 'Design & APIs', emoji: '🎨',
+    doc_types: ['design_system','api','security'],
+  },
+  {
+    key: 'strategy', label: 'Strategy & Vision', emoji: '🎯',
+    doc_types: ['vision_roadmap','prd','education_log'],
+  },
+  {
+    key: 'modules', label: 'Module Specs', emoji: '📦',
+    doc_types: ['newsletter_module','media_module','youtube_module','website_module','gbp_module',
+      'icp_module','sales_module','proposals_module','inventory_module','spec_builder_module',
+      'bug_agent_module','hr_scheduling_module','socials_module','compiler_module',
+      'agent_flow_md','supplier_module'],
+  },
+  {
+    key: 'refs', label: 'Technical References', emoji: '📋',
+    doc_types: ['integration','factorial_md','app_navigation','it_navigation',
+      'advisory_doc_standard','handover'],
+  },
+];
+
+// Human-readable labels
 const DOC_LABELS: Record<string, string> = {
-  // operating + discipline
-  claude_md:      'CLAUDE.md · Operating manual',
-  deployment:     'Deployment Guide',
-  security:       'Multi-Tenancy & Security',
-  // architecture + design
-  architecture:   'ARCHITECTURE.md · Platform architecture',
-  data_model:     'Data Model / ERD',
-  design_system:  'TBC Design System',
-  api:            'API Documentation',
-  // integration
-  integration:    'Integration State (Mews · Factorial · HR)',
-  factorial_md:   'Factorial HR · Integration reference',
-  // strategy
-  prd:            'Product Requirements (PRD)',
-  vision_roadmap: 'Product Vision & Roadmap',
+  claude_md: 'Operating Manual (CLAUDE.md)',
+  architecture: 'Platform Architecture',
+  deployment: 'Deployment Guide',
+  data_model: 'Data Model & ERD',
+  design_system: 'Design System',
+  api: 'API & Chart Contract',
+  security: 'Multi-Tenancy & Security',
+  vision_roadmap: 'Vision & Roadmap',
+  prd: 'Product Requirements',
+  education_log: 'Platform Handbook',
+  newsletter_module: 'Newsletter Engine',
+  media_module: 'Media Library',
+  youtube_module: 'YouTube Module',
+  website_module: 'Website (thenamkhan.com)',
+  gbp_module: 'Google Business Profile',
+  icp_module: 'ICP Engine',
+  sales_module: 'Sales CRM & Pipeline',
+  proposals_module: 'Proposals & Composer',
+  inventory_module: 'Inventory & Procurement',
+  spec_builder_module: 'Spec Builder',
+  bug_agent_module: 'Bug Agent Machine',
+  hr_scheduling_module: 'HR Scheduling',
+  socials_module: 'Socials Module',
+  compiler_module: 'Compiler (Retreat/Offer)',
+  agent_flow_md: 'Agent Skill Library',
+  supplier_module: 'Supplier Directory',
+  integration: 'Integration State',
+  factorial_md: 'Factorial HR Reference',
+  app_navigation: 'App Sitemap',
+  it_navigation: 'IT2 Navigation',
+  advisory_doc_standard: 'Advisory Doc Standard',
+  handover: 'Session Handover',
 };
 
-// Doc taxonomy — brief documentation-architecture-v2 §5(a). Grouping is
-// DB-driven (documents.category); this array fixes order + labels only.
-// Every doc_type MUST be classified (A3: zero orphans) — an "Unclassified"
-// bucket renders in terracotta if a future doc_type is added without one.
-const DOC_CATEGORIES: Array<{ key: string; label: string }> = [
-  { key: 'product',      label: 'Product · what it does' },
-  { key: 'architecture', label: 'Architecture · how it works' },
-  { key: 'operations',   label: 'Operations · how to run it' },
-  { key: 'interfaces',   label: 'Interfaces · APIs & contracts' },
-  { key: 'governance',   label: 'Governance · rules & security' },
-];
-
-// Freshness vs the doc's own review SLA (mirrors public.v_doc_taxonomy):
-// fresh (< SLA) · due (1-2× SLA) · overdue (> 2× SLA). Tones follow the
-// cockpit freshness-matrix pattern (forest / sand / terracotta).
-export function docFreshness(d: { last_updated_at: string | null; review_interval_days: number | null }):
-  { key: 'fresh' | 'due' | 'overdue' | 'unknown'; label: string; tone: string } {
-  if (!d.last_updated_at || !d.review_interval_days) return { key: 'unknown', label: '—', tone: 'var(--ink-soft, #5A5A5A)' };
+// Review SLA is now set in DB — freshness is live
+export function docFreshness(d: { last_updated_at: string | null; review_interval_days: number | null }):{
+  key:'fresh'|'due'|'overdue'|'unknown'; label:string; tone:string; days:number;
+}{
+  if (!d.last_updated_at || !d.review_interval_days) return { key:'unknown', label:'no SLA', tone:'var(--ink-soft,#5A5A5A)', days:999 };
   const ageDays = (Date.now() - new Date(d.last_updated_at).getTime()) / 86_400_000;
-  const label = `${Math.round(ageDays)}d / SLA ${d.review_interval_days}d`;
-  if (ageDays > d.review_interval_days * 2) return { key: 'overdue', label, tone: 'var(--status-red, #B8542A)' };
-  if (ageDays > d.review_interval_days)     return { key: 'due',     label, tone: 'var(--sand, #B8A878)' };
-  return { key: 'fresh', label, tone: 'var(--primary, #1F3A2E)' };
+  const label = `${Math.round(ageDays)}d old · SLA ${d.review_interval_days}d`;
+  if (ageDays > d.review_interval_days * 2) return { key:'overdue', label, tone:'var(--status-red,#B03826)', days:ageDays };
+  if (ageDays > d.review_interval_days)     return { key:'due',     label, tone:'#B48A3A', days:ageDays };
+  return { key:'fresh', label, tone:'var(--primary,#084838)', days:ageDays };
 }
-
-// Surfaces beyond documentation.documents that agents read from.
-const KNOWLEDGE_SURFACES: Array<{
-  surface: string; what: string; example: string; rows_hint: string;
-}> = [
-  {
-    surface: 'documentation.documents',
-    what: '11 doc_types — what you are looking at on this page',
-    example: "SELECT doc_type, version, last_updated_at FROM documentation.documents WHERE status='published';",
-    rows_hint: '11 active',
-  },
-  {
-    surface: 'public.cockpit_agent_memory',
-    what: 'Standing rules + learnings. importance ≥ 9 = broadcast to every agent at session start',
-    example: "SELECT id, content, importance, agent_handle FROM cockpit_agent_memory WHERE importance >= 9 ORDER BY id DESC;",
-    rows_hint: '217 rules (latest id=344)',
-  },
-  {
-    surface: 'public.cockpit_agent_prompts',
-    what: 'Per-agent persona + tool framing. One row per agent role (Felix, Carla, Vera, Sherlock, etc.)',
-    example: "SELECT role, version, department, active, length(prompt) FROM cockpit_agent_prompts WHERE active = true ORDER BY role;",
-    rows_hint: '96 active',
-  },
-  {
-    surface: 'cockpit.cap_skills',
-    what: 'Skill catalog — what an agent can actually invoke (route, permission, trust tier)',
-    example: "SELECT name, description, trust_tier FROM cockpit.cap_skills ORDER BY name;",
-    rows_hint: '101 skills',
-  },
-  {
-    surface: 'dms.documents',
-    what: 'Long-form KB — contracts, audits, case files, agent recovery patches. Pulled on demand.',
-    example: "SELECT title, doc_subtype, source, created_at FROM dms.documents WHERE source ILIKE 'claude_%recovery' ORDER BY created_at DESC;",
-    rows_hint: 'thousands · filter by source / project / doc_type',
-  },
-  {
-    surface: 'deploy.deployments',
-    what: 'Every Vercel deployment — commit, state, prod alias, deployer. Bridges GitHub ↔ Vercel ↔ tickets',
-    example: "SELECT vercel_deploy_id, commit_sha, state, deployer FROM public.v_current_prod;  -- what is live RIGHT NOW",
-    rows_hint: '14+ · auto-grow via webhook',
-  },
-];
 
 export function DocsView({ docs }: { docs: Document[] }) {
   const [active, setActive] = useState(docs[0]?.doc_type ?? '');
-  const current = useMemo(
-    () => docs.find((d) => d.doc_type === active) ?? docs[0] ?? null,
-    [docs, active],
-  );
+  const [search, setSearch] = useState('');
+  const [expandedSurfaces, setExpandedSurfaces] = useState(false);
 
-  // Group docs by DB-driven taxonomy category (A3: zero orphans expected).
-  const grouped = useMemo(() => {
-    const result = DOC_CATEGORIES.map((cat) => ({
-      ...cat,
-      docs: docs.filter((d) => d.category === cat.key),
-    }));
-    const orphans = docs.filter((d) => !d.category);
-    if (orphans.length) {
-      result.push({ key: 'unclassified', label: '⚠ Unclassified — assign a category', docs: orphans });
-    }
-    return result.filter((g) => g.docs.length > 0);
-  }, [docs]);
+  const current = useMemo(() => docs.find(d => d.doc_type === active) ?? docs[0] ?? null, [docs, active]);
 
-  // Freshness vs each doc's own review SLA (not a flat 30/90d window).
   const stats = useMemo(() => {
-    const f = docs.map((d) => docFreshness(d).key);
+    const f = docs.map(d => docFreshness(d).key);
+    const now = Date.now();
+    const thisWeek = docs.filter(d => d.last_updated_at && (now - new Date(d.last_updated_at).getTime()) < 7*86400000);
     return {
       total: docs.length,
-      fresh: f.filter((k) => k === 'fresh').length,
-      due: f.filter((k) => k === 'due').length,
-      overdue: f.filter((k) => k === 'overdue').length,
-      orphans: docs.filter((d) => !d.category).length,
+      fresh: f.filter(k => k==='fresh').length,
+      due: f.filter(k => k==='due').length,
+      overdue: f.filter(k => k==='overdue').length,
+      updated_this_week: thisWeek.length,
+      draft: docs.filter(d => d.status === 'draft').length,
     };
   }, [docs]);
 
-  if (!docs.length) {
-    return (
-      <div className="cockpit-design" style={S.shell}>
-        <div style={S.emptyBox}>No published documents.</div>
-      </div>
-    );
-  }
+  const filteredDocs = useMemo(() => {
+    if (!search.trim()) return docs;
+    const q = search.toLowerCase();
+    return docs.filter(d => d.title.toLowerCase().includes(q) || d.doc_type.toLowerCase().includes(q));
+  }, [docs, search]);
+
+  const grouped = useMemo(() => {
+    return DOC_GROUPS.map(g => ({
+      ...g,
+      docs: filteredDocs.filter(d => g.doc_types.includes(d.doc_type)),
+    })).filter(g => g.docs.length > 0);
+  }, [filteredDocs]);
+
+  if (!docs.length) return <div style={{ padding:32, color:'var(--ink-soft)', textAlign:'center' as const }}>No published documents.</div>;
 
   return (
-    <div className="cockpit-design" style={S.shell}>
-      {/* Roster of docs — MetricRow strip. */}
-      <MetricRow
-        size="sm"
-        tiles={[
-          { label: 'Docs',        value: stats.total,   footnote: 'all doc_types' },
-          { label: 'Fresh',       value: stats.fresh,   footnote: 'within review SLA', status: stats.fresh > 0 ? 'green' : 'grey' },
-          { label: 'Due',         value: stats.due,     footnote: 'past SLA',          status: stats.due > 0 ? 'amber' : 'green' },
-          { label: 'Overdue 2×',  value: stats.overdue, footnote: 'review now',        status: stats.overdue > 0 ? 'red' : 'green' },
-          { label: 'Unclassified', value: stats.orphans, footnote: 'A3 target: 0',     status: stats.orphans > 0 ? 'red' : 'green' },
-        ]}
-      />
+    <div className="cockpit-design" style={{ background:'#FFF', color:'var(--ink)', padding:16, borderRadius:8, display:'flex', flexDirection:'column' as const, gap:16, fontFamily:'var(--sans,"Inter Tight",system-ui,sans-serif)' }}>
 
-      {/* Doc tree — canonical SubTabStrip typography, category-labelled sections. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {grouped.map((cat) => (
-          <div key={cat.key}>
-            <div style={S.catLabel}>
-              {cat.label} <span style={{ opacity: 0.6 }}>· {cat.docs.length}</span>
-            </div>
-            <nav style={S.subTabStrip} role="tablist" aria-label={cat.label}>
-              {cat.docs.map((d) => {
-                const isActive = (current?.doc_type ?? '') === d.doc_type;
-                const style: CSSProperties = { ...S.subTab, ...(isActive ? S.subTabActive : null) };
+      {/* KPI tiles — now real since review_interval_days is set */}
+      <MetricRow size="sm" tiles={[
+        { label:'Total docs',     value:stats.total,             footnote:'in documentation.documents' },
+        { label:'Updated this week', value:stats.updated_this_week, footnote:'active iteration',         status: stats.updated_this_week>0?'green':'grey' },
+        { label:'Fresh',          value:stats.fresh,             footnote:'within review SLA',          status: stats.fresh>0?'green':'grey' },
+        { label:'Due for review', value:stats.due,               footnote:'past SLA — update soon',     status: stats.due>0?'amber':'green' },
+        { label:'Overdue',        value:stats.overdue,           footnote:'2× SLA — review now',        status: stats.overdue>0?'red':'green' },
+        { label:'Draft',          value:stats.draft,             footnote:'not yet published',          status: stats.draft>0?'amber':'green' },
+      ]} />
+
+      <div style={{ display:'grid', gridTemplateColumns:'280px 1fr', gap:16, alignItems:'start' }}>
+
+        {/* LEFT: doc tree */}
+        <div>
+          {/* Search */}
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search docs…"
+            style={{ width:'100%', fontSize:12.5, padding:'6px 10px', border:'1px solid var(--hairline,#E6DFCC)', borderRadius:6, background:'var(--paper,#FFF)', color:'var(--ink)', marginBottom:12, boxSizing:'border-box' as const }} />
+
+          {grouped.map(g => (
+            <div key={g.key} style={{ marginBottom:16 }}>
+              <div style={{ fontSize:10, fontFamily:MONO, letterSpacing:'.1em', textTransform:'uppercase' as const, color:'var(--ink-soft)', marginBottom:6, display:'flex', alignItems:'center', gap:6 }}>
+                <span>{g.emoji}</span><span>{g.label}</span><span style={{ opacity:.5 }}>· {g.docs.length}</span>
+              </div>
+              {g.docs.map(d => {
+                const isActive = current?.doc_type === d.doc_type;
+                const fresh = docFreshness(d);
                 return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => setActive(d.doc_type)}
-                    style={style}
-                  >
-                    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-                      <span>{DOC_LABELS[d.doc_type] || d.doc_type}</span>
-                      <span style={S.subTabMeta}>
-                        v{d.version} · {d.owner ?? 'unowned'} ·{' '}
-                        <span style={{ color: docFreshness(d).tone, fontWeight: 600 }}>
-                          {docFreshness(d).label}
-                        </span>
-                      </span>
-                    </span>
+                  <button key={d.id} onClick={()=>setActive(d.doc_type)}
+                    style={{ display:'block', width:'100%', textAlign:'left' as const, padding:'7px 10px',
+                      marginBottom:2, borderRadius:5, border:'none', cursor:'pointer',
+                      background: isActive ? 'var(--primary,#084838)' : 'transparent',
+                      color: isActive ? '#FFF' : 'var(--ink)' }}>
+                    <div style={{ fontSize:12.5, fontWeight: isActive?600:400 }}>{DOC_LABELS[d.doc_type]??d.doc_type}</div>
+                    <div style={{ fontSize:10, fontFamily:MONO, marginTop:2, opacity:.75, display:'flex', gap:8 }}>
+                      <span>v{d.version}</span>
+                      <span style={{ color: isActive ? 'rgba(255,255,255,.8)' : fresh.tone }}>{fresh.key==='unknown'?'—':fresh.key}</span>
+                    </div>
                   </button>
                 );
               })}
-            </nav>
+            </div>
+          ))}
+
+          {search && filteredDocs.length===0 && (
+            <div style={{ fontSize:12, color:'var(--ink-soft)', padding:'8px 10px' }}>No docs match "{search}"</div>
+          )}
+        </div>
+
+        {/* RIGHT: selected doc */}
+        {current && (
+          <div>
+            {/* Doc header with CTAs */}
+            <div style={{ border:'1px solid var(--hairline,#E6DFCC)', borderRadius:8, padding:'12px 16px', marginBottom:12, background:'rgba(8,72,56,0.03)' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap' as const, gap:8 }}>
+                <div>
+                  <div style={{ fontSize:16, fontWeight:700, color:'var(--ink)' }}>{DOC_LABELS[current.doc_type]??current.doc_type}</div>
+                  <div style={{ fontSize:11, fontFamily:MONO, color:'var(--ink-soft)', marginTop:3, display:'flex', gap:12, flexWrap:'wrap' as const }}>
+                    <span>v{current.version}</span>
+                    <span style={{ color: docFreshness(current).tone }}>{docFreshness(current).label}</span>
+                    <span>status: {current.status}</span>
+                    <span>owner: {current.owner??'—'}</span>
+                    <span>review every {current.review_interval_days??'—'}d</span>
+                    <span>last: {current.last_updated_at?new Date(current.last_updated_at).toLocaleDateString():'—'} by {current.last_updated_by??'—'}</span>
+                  </div>
+                </div>
+                {/* CTAs */}
+                <div style={{ display:'flex', gap:6, flexShrink:0, flexWrap:'wrap' as const }}>
+                  <span style={{ fontSize:10, fontFamily:MONO, fontWeight:700, padding:'3px 9px', borderRadius:10,
+                    background:'var(--primary,#084838)', color:'#FFF' }}>v{current.version}</span>
+                  <span style={{ fontSize:10, fontFamily:MONO, fontWeight:600, padding:'3px 9px', borderRadius:10,
+                    background:'#F4EFE2', color:'var(--ink-soft)', border:'1px solid #E6DFCC' }}>{current.status}</span>
+                  {docFreshness(current).key==='overdue' && (
+                    <span style={{ fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:10,
+                      background:'rgba(176,56,38,0.12)', color:'#B03826', border:'1px solid rgba(176,56,38,0.3)' }}>
+                      ⚠ Overdue — update now
+                    </span>
+                  )}
+                  {docFreshness(current).key==='due' && (
+                    <span style={{ fontSize:10, fontWeight:700, padding:'3px 9px', borderRadius:10,
+                      background:'rgba(180,138,58,0.12)', color:'#B48A3A', border:'1px solid rgba(180,138,58,0.3)' }}>
+                      Due for review
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Doc body */}
+            <Container title="" subtitle="">
+              <Markdown source={current.content_md} />
+            </Container>
           </div>
-        ))}
+        )}
       </div>
 
-      {/* Selected doc body — Container primitive. */}
-      {current && (
-        <div style={{ gridColumn: '1 / -1' }}>
-          <Container
-            title={current.title}
-            subtitle={`doc_type=${current.doc_type} · ${current.category ?? 'unclassified'} · owner ${current.owner ?? '—'} · review every ${current.review_interval_days ?? '—'}d (${docFreshness(current).key}) · last by ${current.last_updated_by || '—'} · ${current.last_updated_at ? new Date(current.last_updated_at).toLocaleString() : '—'}`}
-            action={
-              <div style={{ display: 'flex', gap: 6 }}>
-                <VersionPill>v{current.version}</VersionPill>
-                <StatusPill>{current.status}</StatusPill>
-              </div>
-            }
-          >
-            <Markdown source={current.content_md} />
-          </Container>
-        </div>
-      )}
-
-      {/* Knowledge-surfaces map — Container with card grid. */}
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Container
-          title="Knowledge surfaces · where every agent reads from"
-          subtitle={`The ${docs.length} docs above live in documentation.documents. Agents also read from ${KNOWLEDGE_SURFACES.length - 1} other surfaces — use these SQL pointers to inspect each.`}
-          expandable={false}
-        >
-          <div style={{ display: 'grid', gap: 10 }}>
-            {KNOWLEDGE_SURFACES.map((s) => (
-              <div key={s.surface} style={S.surfaceCard}>
-                <div style={S.surfaceHead}>
-                  <code style={S.surfaceName}>{s.surface}</code>
-                  <span style={S.surfaceHint}>· {s.rows_hint}</span>
+      {/* Knowledge surfaces — collapsed by default */}
+      <div>
+        <button onClick={()=>setExpandedSurfaces(s=>!s)}
+          style={{ fontSize:12, fontWeight:600, padding:'6px 14px', borderRadius:6, cursor:'pointer', border:'1px solid var(--hairline,#E6DFCC)', background:'var(--paper,#FFF)', color:'var(--ink)' }}>
+          {expandedSurfaces?'▲ Hide':'▼ Show'} all knowledge surfaces ({docs.length} docs + 5 other sources agents read from)
+        </button>
+        {expandedSurfaces && (
+          <div style={{ marginTop:10, display:'grid', gap:8 }}>
+            {[
+              { surface:'documentation.documents', what:'Canonical docs — what you are reading now', hint:`${docs.length} active` },
+              { surface:'public.cockpit_agent_memory', what:'Standing rules + learnings. importance ≥ 9 loaded for every agent at session start', hint:'220+ rules' },
+              { surface:'public.cockpit_agent_prompts', what:'Per-agent persona + tool framing. One row per role (Felix, Carla, Vera, Sherlock…)', hint:'96 active' },
+              { surface:'cockpit.cap_skills', what:'Skill catalog — what agents can actually invoke, with permission level', hint:'130 active skills' },
+              { surface:'governance.tenant_knowledge_docs', what:'Property judgment docs — PBS-approved operational MDs per section per property', hint:'6 approved for Namkhan' },
+              { surface:'dms.documents', what:'Long-form KB — contracts, audits, case files, patches. Pulled on demand', hint:'thousands' },
+            ].map(s => (
+              <div key={s.surface} style={{ border:'1px solid var(--hairline,#E6DFCC)', padding:'8px 12px', borderRadius:4, background:'#FBF8EF' }}>
+                <div style={{ display:'flex', gap:10, alignItems:'baseline', flexWrap:'wrap' as const }}>
+                  <code style={{ fontFamily:MONO, fontSize:11.5, fontWeight:600, color:'var(--ink)' }}>{s.surface}</code>
+                  <span style={{ fontFamily:MONO, fontSize:10, color:'var(--ink-soft)' }}>· {s.hint}</span>
                 </div>
-                <div style={S.surfaceWhat}>{s.what}</div>
-                <pre style={S.surfaceCode}>{s.example}</pre>
+                <div style={{ fontSize:12.5, color:'var(--ink)', marginTop:3 }}>{s.what}</div>
               </div>
             ))}
           </div>
-        </Container>
+        )}
       </div>
     </div>
   );
 }
-
-function VersionPill({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: '2px 8px',
-      borderRadius: 999,
-      fontSize: 10,
-      fontWeight: 600,
-      letterSpacing: 0.4,
-      textTransform: 'uppercase',
-      fontFamily: MONO,
-      color: '#FFFFFF',
-      background: 'var(--primary, #1F3A2E)',
-      border: '1px solid var(--primary, #1F3A2E)',
-    }}>
-      {children}
-    </span>
-  );
-}
-
-function StatusPill({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: '2px 8px',
-      borderRadius: 999,
-      fontSize: 10,
-      fontWeight: 600,
-      letterSpacing: 0.4,
-      textTransform: 'uppercase',
-      fontFamily: MONO,
-      color: 'var(--ink-soft, #5A5A5A)',
-      background: '#F4EFE2',
-      border: '1px solid #E6DFCC',
-    }}>
-      {children}
-    </span>
-  );
-}
-
-const S: Record<string, CSSProperties> = {
-  shell: {
-    background: '#FFFFFF',
-    color: 'var(--ink, #1B1B1B)',
-    padding: 16,
-    borderRadius: 8,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 16,
-    fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
-  },
-  emptyBox: {
-    color: 'var(--ink-soft, #5A5A5A)',
-    fontStyle: 'italic',
-    padding: 24,
-    textAlign: 'center',
-    border: '1px dashed #E6DFCC',
-    borderRadius: 6,
-  },
-  catLabel: {
-    fontFamily: MONO,
-    fontSize: 10,
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    color: 'var(--ink-soft, #5A5A5A)',
-    marginBottom: 6,
-  },
-  // SubTabStrip typography (canonical: 4/8 pad · 12px · gap 8 · 2px underline)
-  subTabStrip: {
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: 8,
-    flexWrap: 'wrap',
-    borderBottom: '1px solid #E6DFCC',
-  },
-  subTab: {
-    background: 'transparent',
-    border: 'none',
-    padding: '4px 8px',
-    fontSize: 12,
-    fontWeight: 500,
-    color: 'var(--ink-soft, #5A5A5A)',
-    cursor: 'pointer',
-    borderBottom: '2px solid transparent',
-    fontFamily: 'inherit',
-    textAlign: 'left',
-    minWidth: 200,
-  },
-  subTabActive: {
-    color: 'var(--ink, #1B1B1B)',
-    borderBottomColor: 'var(--primary, #1F3A2E)',
-    fontWeight: 600,
-  },
-  subTabMeta: {
-    fontFamily: MONO,
-    fontSize: 10,
-    opacity: 0.7,
-  },
-  surfaceCard: {
-    border: '1px solid #E6DFCC',
-    padding: '10px 12px',
-    borderRadius: 4,
-    background: '#FBF8EF',
-  },
-  surfaceHead: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  surfaceName: {
-    fontFamily: MONO,
-    fontSize: 12,
-    color: 'var(--ink, #1B1B1B)',
-    fontWeight: 600,
-  },
-  surfaceHint: {
-    fontFamily: MONO,
-    fontSize: 10,
-    color: 'var(--ink-soft, #5A5A5A)',
-  },
-  surfaceWhat: {
-    fontSize: 13,
-    color: 'var(--ink, #1B1B1B)',
-    margin: '4px 0 6px',
-  },
-  surfaceCode: {
-    fontFamily: MONO,
-    fontSize: 11,
-    color: 'var(--ink-soft, #5A5A5A)',
-    background: '#FFFFFF',
-    padding: '6px 8px',
-    borderRadius: 3,
-    margin: 0,
-    overflowX: 'auto',
-    whiteSpace: 'pre-wrap',
-    border: '1px solid #E6DFCC',
-  },
-};
