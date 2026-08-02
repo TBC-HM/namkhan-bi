@@ -1,44 +1,23 @@
 // app/cockpit/chat/page.tsx
-// DeptEntry submitChat navigates here with ?q=...&dept=...&role=...&name=...&emoji=...
-// Restores the full-screen chat window using ChatShell.
-// Server Component reads searchParams → passes to client wrapper → ChatShell renders.
-// initialInput pre-fills the question the user typed.
-// 2026-08-03: restored after fleet/chat redirect broke the brain button.
+// Legacy redirect stub — required by check-it2-orphans.mjs (all /cockpit/* must be stubs).
+// Passes query params through to the live chat at /holding/chat.
+// 2026-08-03: DeptEntry submitChat navigates here — redirected to /holding/chat.
 
-import ChatShell from '@/components/chat/ChatShell';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-export default function CockpitChatPage({
+export default function CockpitChatRedirect({
   searchParams,
 }: {
-  searchParams: {
-    q?: string;
-    dept?: string;
-    role?: string;
-    name?: string;
-    emoji?: string;
-    label?: string;
-    project?: string;
-  };
+  searchParams: Record<string, string | undefined>;
 }) {
-  const role        = searchParams.role  ?? 'lead';
-  const displayName = searchParams.name  ?? 'Felix';
-  const emoji       = searchParams.emoji ?? '🌐';
-  const dept        = searchParams.dept  ?? searchParams.label ?? '';
-  const initialInput = searchParams.q   ?? '';
-
-  return (
-    <div style={{ minHeight: '100vh', background: '#0D0D0D' }}>
-      <ChatShell
-        role={role}
-        displayName={displayName}
-        emoji={emoji}
-        dept={dept}
-        initialInput={initialInput}
-        storageKey={`cockpit.chat.${role}`}
-      />
-    </div>
-  );
+  const params = new URLSearchParams();
+  if (searchParams.q)     params.set('q',     searchParams.q);
+  if (searchParams.dept)  params.set('dept',  searchParams.dept);
+  if (searchParams.role)  params.set('role',  searchParams.role);
+  if (searchParams.name)  params.set('name',  searchParams.name);
+  if (searchParams.emoji) params.set('emoji', searchParams.emoji);
+  if (searchParams.label) params.set('label', searchParams.label);
+  redirect(`/holding/chat?${params.toString()}`);
 }
