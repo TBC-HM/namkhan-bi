@@ -1,13 +1,14 @@
 // app/university/page.tsx
-// TBC University · landing. THE ASK WINDOW sits on top (owner mandate:
+// TBC University · landing. THE CHAT WINDOW sits on top (owner mandate:
 // "prompt window on top"), module cards below. Module cards render from
 // public.v_university_modules (read contract); until that view exists the
 // FALLBACK_MODULES list keeps the landing rendering. A KPI reference card
 // links to /university/kpis.
+// AskWindow retired 2026-08-03 — replaced by CentralChat (PR #375).
 
 import type { CSSProperties } from 'react';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import AskWindow from './_components/AskWindow';
+import CentralChat from '@/components/chat/CentralChat';
 import { FALLBACK_MODULES, type ModuleCard } from './_lib/ia';
 import { INK, INK_SOFT, HAIR, GREEN, GOLD, WARM, SANS } from './_lib/theme';
 
@@ -67,14 +68,11 @@ export default async function UniversityPage() {
         </p>
       </header>
 
-      <AskWindow />
+      <CentralChat mode="second-brain" moduleScope="university" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 20 }}>
         {modules.map((m) => {
           const s = (m.status || '').toLowerCase().replace(/_/g, '-');
-          // A module that HAS articles is always clickable — the landing only
-          // renders modules with >0 live articles (filter above), so a dead
-          // card here would contradict the 0-empty-cards mandate.
           const clickable = s === 'live' || s === 'being-written' || s === 'draft' || s === 'skeleton';
           const n = counts.get(m.slug) ?? 0;
           const inner = (
