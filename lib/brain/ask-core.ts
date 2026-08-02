@@ -78,18 +78,18 @@ export const SCOPE_CFG: Record<Exclude<BrainScope, 'all'>, { kinds: string[] | n
   },
 };
 
-export async function brainRetrieve(question: string, tier: BrainTier, qVec?: number[] | null, scope: BrainScope = 'all'): Promise<BrainHit[]> {
+export async function brainRetrieve(question: string, tier: BrainTier, qVec?: number[] | null, scope: BrainScope = 'all', propertyId?: number | null): Promise<BrainHit[]> {
   const sb = getSupabaseAdmin();
   const kinds = scope === 'all' ? null : SCOPE_CFG[scope].kinds;
   const { data: ftsHits, error } = await sb.rpc('fn_brain_search', {
-    p_q: question, p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds,
+    p_q: question, p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds, p_property_id: propertyId ?? null,
   });
   if (error) throw new Error('fn_brain_search: ' + error.message);
   const hits = (ftsHits ?? []) as BrainHit[];
   try {
     if (qVec) {
       const { data: vecHits } = await sb.rpc('fn_brain_search_vec', {
-        p_embedding: JSON.stringify(qVec), p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds,
+        p_embedding: JSON.stringify(qVec), p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds, p_property_id: propertyId ?? null,
       });
       const seen = new Set(hits.map(h => h.chunk_id));
       for (const h of (vecHits ?? []) as BrainHit[]) {
@@ -115,21 +115,21 @@ export type PlatformHit = {
 
 const AGENT_INTENT_RE = /\b(agents?|cron|schedul\w*|workflow|loop|felix|vector|lumen|intel|forge|mercer|sherlock|brain)\b/i;
 
-export async function brainAsk(question: string, tier: BrainTier, scope: BrainScope = 'all'): Promise<AskResult> {
+export async function brainAsk(question: string, tier: BrainTier, scope: BrainScope = 'all', propertyId?: number | null): Promise<AskResult> {
   const sb = getSupabaseAdmin();
 
   let qVec: number[] | null = null;
   try { const v = await embedTexts([question]); qVec = v?.[0] ?? null; } catch { /* fts-only */ }
 
   const [hits, verifiedRes, registryRes, hrRes, sopRes, opsRes, platformRes, agentsRes] = await Promise.all([
-    brainRetrieve(question, tier, qVec, scope),
+    brainRetrieve(question, tier, qVec, scope, propertyId),
     sb.rpc('fn_brain_verified_search', {
       p_q: question, p_embedding: qVec ? JSON.stringify(qVec) : null,
       p_max_sensitivity: tier, p_limit: 3,
     }),
     scope === 'sops'
       ? Promise.resolve({ data: [] })
-      : sb.rpc('fn_brain_docfind', { p_q: question, p_max_sensitivity: tier, p_limit: 12 }),
+      : sb.rpc('fn_brain_docfind', { p_q: question, p_max_sensitivity: tier, p_limit: 12, p_property_id: propertyId ?? null }),
     // BRAIN v5: live structured HR source — SQL-gated to owner tiers, returns {} below.
     // Fetched fresh per question; NEVER chunked, embedded, or preserved.
     sb.rpc('fn_brain_hr_context', { p_q: question, p_max_sensitivity: tier }),
