@@ -586,3 +586,54 @@ const delBtn: React.CSSProperties = {
 };
 const trStyle: React.CSSProperties = { borderBottom: `1px solid ${HAIRLINE}` };
 const tdStyle: React.CSSProperties = { padding: '6px 8px', verticalAlign: 'top', color: INK };
+
+
+// ─── Inline panel (no drawer) — for property settings/documents page ───────
+// Same tabs as Drawer but rendered directly on page without portal/overlay.
+// Added 2026-08-02: consolidated into Settings → Documents.
+export function DocRegistrySettingsPanel(props: Props) {
+  const [tab, setTab] = useState<Tab>('Families');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setTab('Families'); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+
+  async function rpc(name: string, args: Record<string, unknown>): Promise<boolean> {
+    setError(null);
+    const { error: e } = await supabase.rpc(name, args);
+    if (e) { setError(`${name}: ${e.message}`); return false; }
+    startTransition(() => router.refresh());
+    return true;
+  }
+
+  return (
+    <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <nav style={{ ...tabBar, padding: '8px 0 0 0', borderBottom: `1px solid ${HAIRLINE}`, marginBottom: 16 }}>
+        {TABS.map((t) => (
+          <button key={t} onClick={() => setTab(t)} style={tabBtn(tab === t)}>{t}</button>
+        ))}
+      </nav>
+      {error && (
+        <div style={{ background: '#FBEAEA', color: '#C62828', padding: '6px 10px',
+          border: '1px solid #C62828', borderRadius: 3, marginBottom: 12, fontSize: 11 }}>
+          {error}
+        </div>
+      )}
+      <div>
+        {tab === 'Families'    && <FamiliesTab    propertyId={props.propertyId} families={props.families} rpc={rpc} />}
+        {tab === 'Subtypes'    && <SubtypesTab    propertyId={props.propertyId} families={props.families} vocab={props.subtypeVocab} rpc={rpc} />}
+        {tab === 'Matters'     && <MattersTab     propertyId={props.propertyId} projects={props.projects} rpc={rpc} />}
+        {tab === 'Cases'       && <CasesTab       propertyId={props.propertyId} cases={props.cases} rpc={rpc} />}
+        {tab === 'Collections' && <CollectionsTab propertyId={props.propertyId} collections={props.collections} rpc={rpc} />}
+        {tab === 'Tags'        && <TagsTab        propertyId={props.propertyId} tags={props.tags} rpc={rpc} />}
+        {tab === 'Authors'     && <AuthorsTab     propertyId={props.propertyId} authors={props.authors} rpc={rpc} />}
+        {pending && <div style={{ color: INK_SOFT, fontSize: 11, padding: 8 }}>refreshing…</div>}
+      </div>
+    </div>
+  );
+}
