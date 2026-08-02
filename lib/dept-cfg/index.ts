@@ -1194,6 +1194,7 @@ const HOLDING_CEO_CFG: DeptCfg = {
     // dataroom-module-v1 round 2 (verifier gap: module was URL-only): the
     // holding data-room cockpit lives under the CEO stripe per brief §2.
     { label: 'Data Room', href: '/holding/ceo/dataroom' },
+    { label: '⚙ Settings', href: '/holding/settings' },
   ],
   quickChips: [],
   defaultAttn: [
