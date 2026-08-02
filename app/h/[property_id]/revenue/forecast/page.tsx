@@ -12,6 +12,12 @@
 // Donna branch: canonical empty-state surface, untouched (Donna deferred,
 // ADR-173).
 //
+// §0.V3 round (2026-08-02): accuracy tile split — "current engine" coverage
+// (scored rows filtered to the latest run's engine version, min-n guard 20)
+// is the ship gate; the blended 90d tile remains as disclosed history.
+// Requires `method` exposed in public.v_forecast_vs_actual (migration
+// forecast_v1_expose_method_in_vs_actual).
+//
 // Extension (brief forecasting-module-v1, build/forecasting): 12-month
 // statistical outlook from the deterministic TS engine in lib/forecast/
 // (STLY baseline + OTB + pickup-pace projection, variance bands) rendered
@@ -63,6 +69,7 @@ interface ScoredRow {
   occ_ape_pct: number | null;
   occ_abs_err_pp: number | null;
   within_band: boolean | null;
+  method: string | null;
 }
 
 // LLM commentary layer (forecast-commentary edge fn → forecast.run_commentary,
@@ -115,7 +122,7 @@ async function getScored90d(pid: number, todayIso: string): Promise<ScoredRow[]>
   for (let offset = 0; offset < 40000; offset += PAGE) {
     const { data, error } = await supabase
       .from('v_forecast_vs_actual')
-      .select('days_out, occ_ape_pct, occ_abs_err_pp, within_band')
+      .select('days_out, occ_ape_pct, occ_abs_err_pp, within_band, method')
       .eq('property_id', pid)
       .gte('stay_date', from)
       .range(offset, offset + PAGE - 1);
@@ -459,6 +466,21 @@ export default async function RevenueForecastPage({
   const inBand = scored.filter((r) => r.within_band === true).length;
   const coverage90 = scored.length ? (100 * inBand) / scored.length : null;
 
+  // ── Current-engine coverage (verifier §0.V3 objection) ──
+  // The blended 90d pool is dominated by retired-engine rows, so it can never
+  // open the ship gate on time — it measures history, not the engine that is
+  // actually running. Filter scored rows to the engine version of the LATEST
+  // run (method strings are versioned: "v1.3 additive pickup: …") and judge
+  // the live engine on its own rows, with a min-n guard so a thin sample never
+  // shows green. The blended tile stays — disclosed history, never hidden.
+  const engineVersion = (fc[0]?.method ?? '').match(/^v\d+(?:\.\d+)?/)?.[0] ?? null;
+  const curScored = engineVersion
+    ? scored.filter((r) => (r.method ?? '').startsWith(engineVersion + ' ') || r.method === engineVersion)
+    : [];
+  const curInBand = curScored.filter((r) => r.within_band === true).length;
+  const curCoverage = curScored.length ? (100 * curInBand) / curScored.length : null;
+  const CUR_MIN_N = 20; // below this the sample cannot validate the 80% band design
+
   const mapeStatus: KpiTileProps['status'] =
     mape90 == null ? 'grey' : mape90 <= 10 ? 'green' : mape90 <= 20 ? 'amber' : 'red';
 
@@ -478,11 +500,30 @@ export default async function RevenueForecastPage({
       kpiKey: 'forecast_accuracy_pct',
     },
     {
-      label: 'Band coverage · 90d',
+      label: `Band coverage · current engine${engineVersion ? ` (${engineVersion})` : ''}`,
+      value:
+        curCoverage == null
+          ? '—'
+          : curScored.length < CUR_MIN_N
+            ? 'calibrating'
+            : `${curCoverage.toFixed(0)}%`,
+      status:
+        curCoverage == null || curScored.length < CUR_MIN_N
+          ? 'grey'
+          : curCoverage >= 75 ? 'green' : curCoverage >= 60 ? 'amber' : 'red',
+      footnote:
+        curCoverage == null
+          ? 'no scored rows from the live engine yet — forecasts need a few nights to mature'
+          : curScored.length < CUR_MIN_N
+            ? `n=${curScored.length} live-engine scored rows (needs ≥${CUR_MIN_N}) · interim coverage ${curCoverage.toFixed(0)}% · ship gate ≥75%`
+            : `${curScored.length.toLocaleString('en-US')} live-engine scored rows · ship gate ≥75%`,
+      kpiKey: 'forecast_confidence_band',
+    },
+    {
+      label: 'Band coverage · 90d all engines',
       value: coverage90 == null ? '—' : `${coverage90.toFixed(0)}%`,
       status: coverage90 != null && coverage90 >= 80 ? 'green' : coverage90 != null && coverage90 >= 60 ? 'amber' : 'red',
-      footnote: 'actuals landing inside p10–p90 · design target 80% · bands widen in v2',
-      kpiKey: 'forecast_confidence_band',
+      footnote: 'actuals inside p10–p90, every engine version ever run · disclosed history, includes retired engines',
     },
     {
       label: 'Next 30 days · occupancy forecast',
