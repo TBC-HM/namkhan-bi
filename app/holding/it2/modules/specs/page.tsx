@@ -6,7 +6,7 @@
 
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -173,7 +173,7 @@ function nextAction(q: any, briefStatus: string | null, signedOff: boolean):
 async function signOffAction(formData: FormData) {
   'use server';
   const docType = String(formData.get('doc_type') ?? '');
-  if (docType) await (supabase as any).rpc('fn_module_sign_off', { p_doc_type: docType, p_actor: 'PBS' });
+  if (docType) await (getSupabaseAdmin() as any).rpc('fn_module_sign_off', { p_doc_type: docType, p_actor: 'PBS' });
   // PBS 2026-07-27: "i press and visibly nothing happens" — the action worked
   // but the page never re-rendered. Revalidate so the card flips immediately.
   revalidatePath('/holding/it2/modules/specs');
@@ -182,7 +182,7 @@ async function signOffAction(formData: FormData) {
 async function reauditAction(formData: FormData) {
   'use server';
   const docType = String(formData.get('doc_type') ?? '');
-  if (docType) await (supabase as any).rpc('fn_module_reaudit', { p_doc_type: docType, p_actor: 'PBS' });
+  if (docType) await (getSupabaseAdmin() as any).rpc('fn_module_reaudit', { p_doc_type: docType, p_actor: 'PBS' });
   revalidatePath('/holding/it2/modules/specs');
 }
 
