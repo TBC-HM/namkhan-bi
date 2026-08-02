@@ -39,7 +39,7 @@ function userEmailFromCookies(): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { question?: string; scope?: string } = {};
+  let body: { question?: string; scope?: string; property_id?: number | null } = {};
   try { body = await req.json(); } catch { /* noop */ }
   const question = (body.question ?? '').trim().slice(0, 2000);
   if (!question) return NextResponse.json({ ok: false, error: 'question required' }, { status: 400 });
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   const asker = userEmailFromCookies();
 
   try {
-    const result = await brainAsk(question, tier, scope);
+    const result = await brainAsk(question, tier, scope, body.property_id ?? null);
     try {
       await sb.rpc('fn_brain_log_question', {
         p_question: question, p_asker_email: asker, p_role_used: V1_ROLE,
