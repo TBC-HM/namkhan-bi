@@ -1,13 +1,28 @@
 // app/holding/chat/page.tsx
-// Live full-screen chat — receives params from /cockpit/chat redirect.
-// Renders ChatShell with the correct agent and pre-fills the question via initialInput.
-// Outside legacy trees — no orphan-checker constraint applies here.
-// 2026-08-03: proper home for the brain chat button target.
+// Brain chat destination — receives params from /cockpit/chat redirect.
+// Uses CentralChat (Central Chat v1, brief central-chat-v1) — NOT the legacy ChatShell.
+// Felix is the sole dispatcher; moduleScope narrows the knowledge context.
+// 2026-08-03: corrected to use the new brain-integrated CentralChat component.
 
-import ChatShell from '@/components/chat/ChatShell';
+import CentralChat from '@/components/chat/CentralChat';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// dept → property context mapping
+const DEPT_PROPERTY: Record<string, number | undefined> = {
+  sales:      260955,
+  revenue:    260955,
+  marketing:  260955,
+  operations: 260955,
+  finance:    260955,
+  legal:      260955,
+  // holding-level depts have no property scope
+  architect:  undefined,
+  lead:       undefined,
+  it:         undefined,
+  it_manager: undefined,
+};
 
 export default function HoldingChatPage({
   searchParams,
@@ -17,21 +32,16 @@ export default function HoldingChatPage({
     name?: string; emoji?: string; label?: string;
   };
 }) {
-  const role         = searchParams.role  ?? 'lead';
-  const displayName  = searchParams.name  ?? 'Felix';
-  const emoji        = searchParams.emoji ?? '🌐';
-  const dept         = searchParams.dept  ?? searchParams.label ?? '';
-  const initialInput = searchParams.q    ?? '';
+  const dept        = searchParams.dept ?? searchParams.role ?? 'lead';
+  const moduleScope = dept;
+  const propertyId  = DEPT_PROPERTY[dept];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0D0D0D' }}>
-      <ChatShell
-        role={role}
-        displayName={displayName}
-        emoji={emoji}
-        dept={dept}
-        initialInput={initialInput}
-        storageKey={`cockpit.chat.${role}`}
+    <div style={{ minHeight: '100vh', background: '#F4EFE2' }}>
+      <CentralChat
+        mode="second-brain"
+        moduleScope={moduleScope}
+        propertyId={propertyId}
       />
     </div>
   );
