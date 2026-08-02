@@ -33,7 +33,7 @@ import ArchiveTab from './ArchiveTab';
 import type { PromptCategory, RoomOption, FacilityOption, MediaTaxonomy, GuardrailsData, AreaTaxonomyRow, LibraryCountsRow } from './MediaHub';
 
 // PBS 2026-07-21 · 'review' removed from Sub union — was the standalone Review tab key.
-type Sub = 'library' | 'ai' | 'clarify' | 'coverage' | 'profiles' | 'archive' | 'settings';
+type Sub = 'library' | 'ai' | 'clarify' | 'coverage' | 'profiles' | 'archive';
 
 interface Props {
   propertyId: number;
@@ -103,7 +103,6 @@ export default function PhotoHub(props: Props) {
     { key: 'coverage', label: 'Coverage'        },
     { key: 'profiles', label: 'Profiles'         },
     { key: 'archive',  label: 'Archive',        badge: archiveCount },  // PBS 2026-07-21 · new sub-tab (between Profiles + Photo Settings)
-    { key: 'settings', label: 'Photo Settings'  },
   ];
 
   function handleSendToAi(assetId: string) {
@@ -197,19 +196,6 @@ export default function PhotoHub(props: Props) {
           taxonomy={props.taxonomy}
           areaTaxonomy={props.areaTaxonomy}
           libraryCounts={props.libraryCounts ?? null}
-        />
-      )}
-      {sub === 'settings' && (
-        <SettingsTab
-          propertyId={props.propertyId}
-          channelSpecs={props.channelSpecs}
-          rulesActive={props.rulesActive}
-          reality={props.reality}
-          categories={props.categories}
-          rooms={props.rooms}
-          facilities={props.facilities}
-          mediaPage={props.mediaPage}
-          guardrails={props.guardrails}
         />
       )}
     </div>
