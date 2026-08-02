@@ -28,8 +28,11 @@ export default function HoldingExtras() {
   return (
     <div style={S.wrap}>
       <section style={S.cockpitRow}>
-        <TenantLink href="/holding/it/cockpit" style={S.cockpitButton}>
+        <TenantLink href="/holding/it2" style={S.cockpitButton}>
           → Cockpit · operations command
+        </TenantLink>
+        <TenantLink href="/holding/settings" style={{ ...S.cockpitButton, background: 'transparent', border: `1px solid ${BC_PEACH}`, color: BC_PEACH, boxShadow: 'none', marginLeft: 10 }}>
+          ⚙ Settings
         </TenantLink>
       </section>
 
