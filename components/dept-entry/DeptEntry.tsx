@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCurrentProperty } from '@/lib/property-context';
 import type { DeptCfg } from '@/lib/dept-cfg/types';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
@@ -326,6 +327,7 @@ interface AttachedFile {
 // ─── component ──────────────────────────────────────────────────────────────
 export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
   const router = useRouter();
+  const { propertyId } = useCurrentProperty();
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef  = useRef<HTMLInputElement>(null);
   const docFileRef = useRef<HTMLInputElement>(null);
@@ -673,6 +675,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
     // doesn't fall back to Felix for non-canonical dept surfaces (e.g.
     // /holding/legal where cfg.slug='architect' but ownerRole='legal_specialist_donna').
     const params = new URLSearchParams({ q: body, dept: cfg.slug });
+    params.set('pid', String(propertyId));
     if (cfg.ownerRole) params.set('role', cfg.ownerRole);
     if (cfg.hodName)   params.set('name', cfg.hodName);
     if (cfg.hodEmoji)  params.set('emoji', cfg.hodEmoji);
