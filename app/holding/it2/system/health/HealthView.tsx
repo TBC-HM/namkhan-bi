@@ -25,7 +25,7 @@ const VENDORS = [
 
 function age(iso: string | null): string {
   if (!iso) return '—';
-  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (typeof window === 'undefined') return iso.slice(0,10); const m = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
   if (m < 1) return 'just now';
   if (m < 60) return `${m}m ago`;
   if (m < 1440) return `${Math.round(m / 60)}h ago`;
@@ -33,7 +33,7 @@ function age(iso: string | null): string {
 }
 function fmtTime(iso: string | null): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return iso.slice(0,16);
 }
 function sevColor(sev: number | null): string {
   if (sev == null) return TOKENS.text3;
@@ -74,7 +74,7 @@ const cell:    React.CSSProperties = { padding: '7px 12px', borderBottom: `1px s
 
 export function HealthView({ initial }: { initial: HealthBundle }) {
   const [data, setData]           = useState<HealthBundle>(initial);
-  const [refreshedAt, setRefAt]   = useState<number>(Date.now());
+  const [refreshedAt, setRefAt]   = useState<number>(0);
   const [polling, setPolling]     = useState(false);
 
   useEffect(() => {
