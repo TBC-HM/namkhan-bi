@@ -1,12 +1,11 @@
 // app/h/[property_id]/settings/documents/page.tsx
-// PBS 2026-08-02 — Document register settings consolidated in property settings.
-// Each tenant has their own Families/Subtypes/Matters/Cases/Collections/Tags/Authors.
-// SettingsDrawerButton imported from legal/docs — no code duplication.
-// The panel opens as a drawer (existing UX preserved).
+// PBS 2026-08-02 — Document register settings inline (no drawer).
+// All 7 tabs visible directly: Families · Subtypes · Matters · Cases · Collections · Tags · Authors
+// Uses DocRegistrySettingsPanel export from SettingsDrawerButton — no code duplication.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import SettingsDrawerButton from '@/app/h/[property_id]/finance/legal/docs/_components/SettingsDrawerButton';
+import { DocRegistrySettingsPanel } from '@/app/h/[property_id]/finance/legal/docs/_components/SettingsDrawerButton';
 import UploadDropzone from '@/app/marketing/media/_client/UploadDropzone';
 
 export const dynamic = 'force-dynamic';
@@ -36,7 +35,6 @@ async function fetchDocSettings(propertyId: number) {
     sb.from('v_doc_authors').select('author_name, n_docs').eq('property_id', propertyId).order('n_docs', { ascending: false }),
   ]);
 
-  // Build family counts
   const familyCounts = new Map<string, number>();
   for (const r of (familyRows.data ?? []) as { doc_type: string | null }[]) {
     const k = String(r.doc_type ?? '');
@@ -45,7 +43,6 @@ async function fetchDocSettings(propertyId: number) {
   const familiesWithCounts = Array.from(familyCounts.entries())
     .map(([doc_type, n]) => ({ doc_type, n })).sort((a, b) => b.n - a.n);
 
-  // Build tag counts
   const tagCounts = new Map<string, number>();
   for (const r of (tagRows.data ?? []) as { tags: string[] | null }[]) {
     for (const t of r.tags ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
@@ -70,28 +67,26 @@ export default async function DocumentsSettingsPage({ params }: { params: { prop
   return (
     <DashboardPage
       title="Settings · Documents"
-      subtitle={`Document register vocabulary · families · subtypes · matters · cases · collections · tags · authors · property ${propertyId}`}
+      subtitle={`Document register vocabulary · ${d.families.length} families · ${d.subtypeVocab.length} subtypes · property ${propertyId}`}
       tabs={SETTINGS_TABS(propertyId)}
     >
-      {/* Document upload — goes through DMS ingestion pipeline */}
+      {/* Upload documents */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Upload documents" subtitle="PDF · contracts · certificates · policies — routed through document register pipeline">
+        <Container title="Upload documents" subtitle="PDF · contracts · certificates · policies — lands in register with status=needs_review, then classify in Finance → Legal → Docs">
           <div style={{ padding: 16 }}>
             <UploadDropzone />
-            <p style={{ fontSize: 11, color: '#5A5A5A', marginTop: 8 }}>
-              Documents land in the register with status=needs_review. Open the register (Finance → Legal → Docs) to classify family, subtype and matter.
-            </p>
           </div>
         </Container>
       </div>
 
-      {/* Document register vocabulary — tenant-scoped */}
+      {/* Document register vocabulary — 7 tabs inline, no drawer */}
       <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
         <Container
-          title="Document register · vocabulary"
-          subtitle={`Families · subtypes · matters · cases · collections · tags · authors — scoped to property ${propertyId}`}
-          action={
-            <SettingsDrawerButton
+          title="Document register · settings"
+          subtitle="Families · Subtypes · Matters · Cases · Collections · Tags · Authors — tenant-scoped, changes apply immediately"
+        >
+          <div style={{ padding: '8px 16px 16px' }}>
+            <DocRegistrySettingsPanel
               propertyId={propertyId}
               families={d.families}
               subtypeVocab={d.subtypeVocab}
@@ -101,27 +96,7 @@ export default async function DocumentsSettingsPage({ params }: { params: { prop
               tags={d.tags}
               authors={d.authors}
             />
-          }
-        >
-          <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-            {[
-              { label: 'Families',    value: d.families.length    },
-              { label: 'Subtypes',    value: d.subtypeVocab.length },
-              { label: 'Matters',     value: d.projects.length    },
-              { label: 'Cases',       value: d.cases.length       },
-              { label: 'Collections', value: d.collections.length },
-              { label: 'Tags',        value: d.tags.length        },
-              { label: 'Authors',     value: d.authors.length     },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 6, padding: '10px 12px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#5A5A5A' }}>{label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'JetBrains Mono, ui-monospace, monospace', color: '#1B1B1B', margin: '2px 0' }}>{value}</div>
-              </div>
-            ))}
           </div>
-          <p style={{ fontSize: 11, color: '#5A5A5A', padding: '0 16px 12px', margin: 0 }}>
-            Click the ⚙ gear above to manage vocabulary. Changes apply immediately across all documents for this property.
-          </p>
         </Container>
       </div>
     </DashboardPage>
