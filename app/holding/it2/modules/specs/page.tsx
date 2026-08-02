@@ -6,7 +6,7 @@
 
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -100,21 +100,21 @@ function TypePill({ docType }: { docType: string }) {
 
 async function fetchData() {
   const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }] = await Promise.all([
-    supabase
+    getSupabaseAdmin()
       .from('v_documents_latest')
       .select('id, doc_type, title, status, version, last_updated_at')
       .like('doc_type', '%_module')
       .order('doc_type'),
-    (supabase as any)
+    (getSupabaseAdmin() as any)
       .from('v_build_briefs')
       .select('id, slug, title, status, tags, created_at, shipped_at')
       .order('created_at', { ascending: false })
       .limit(30),
-    (supabase as any)
+    (getSupabaseAdmin() as any)
       .from('v_module_status')
       .select('doc_type, completion_pct, is_live, signed_off_at')
       .like('doc_type', '%_module'),
-    (supabase as any)
+    (getSupabaseAdmin() as any)
       .from('v_module_completion_queue')
       .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at, entry_url, testing_target, testing_ok, gap_list'),
   ]);
@@ -173,7 +173,7 @@ function nextAction(q: any, briefStatus: string | null, signedOff: boolean):
 async function signOffAction(formData: FormData) {
   'use server';
   const docType = String(formData.get('doc_type') ?? '');
-  if (docType) await (getSupabaseAdmin() as any).rpc('fn_module_sign_off', { p_doc_type: docType, p_actor: 'PBS' });
+  if (docType) await (supabase as any).rpc('fn_module_sign_off', { p_doc_type: docType, p_actor: 'PBS' });
   // PBS 2026-07-27: "i press and visibly nothing happens" — the action worked
   // but the page never re-rendered. Revalidate so the card flips immediately.
   revalidatePath('/holding/it2/modules/specs');
@@ -182,7 +182,7 @@ async function signOffAction(formData: FormData) {
 async function reauditAction(formData: FormData) {
   'use server';
   const docType = String(formData.get('doc_type') ?? '');
-  if (docType) await (getSupabaseAdmin() as any).rpc('fn_module_reaudit', { p_doc_type: docType, p_actor: 'PBS' });
+  if (docType) await (supabase as any).rpc('fn_module_reaudit', { p_doc_type: docType, p_actor: 'PBS' });
   revalidatePath('/holding/it2/modules/specs');
 }
 
