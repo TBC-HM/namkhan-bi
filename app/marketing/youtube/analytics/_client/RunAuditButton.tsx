@@ -1,10 +1,7 @@
-// app/marketing/youtube/analytics/_client/RunAuditButton.tsx
-// PBS 2026-07-13 — Client button that POSTs to /api/marketing/youtube/audit-run.
-// Fix 2026-08-03: progress message was shown backwards (shown after the 60s wait,
-// not during). router.refresh() replaced with window.location.reload() which is
-// reliable for RSC pages — router cache could serve stale data after refresh().
 'use client';
-
+// app/marketing/youtube/analytics/_client/RunAuditButton.tsx
+// Fix 2026-08-03: progress message now reflects actual runtime (1-3 min).
+// window.location.reload replaces router.refresh (reliable for RSC pages).
 import { useState } from 'react';
 
 const WHITE  = '#FFFFFF';
@@ -19,7 +16,7 @@ export default function RunAuditButton() {
 
   async function run() {
     setBusy(true); setErr(null);
-    setProgress('Lens is auditing — reading channel, playlists and videos… (30–60 s)');
+    setProgress('Lens is auditing — reading channel, playlists and videos… (1–3 min)');
     try {
       const res = await fetch('/api/marketing/youtube/audit-run', { method: 'POST' });
       const j = await res.json();
@@ -30,8 +27,6 @@ export default function RunAuditButton() {
         return;
       }
       setProgress(`Done · ${j.video_count} videos · overall ${j.overall_grade} · reloading…`);
-      // window.location.reload is reliable for RSC pages; router.refresh() can
-      // serve a cached version when the router has not yet invalidated its store.
       setTimeout(() => { window.location.reload(); }, 1400);
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'network error');
