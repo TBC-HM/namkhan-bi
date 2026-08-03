@@ -48,11 +48,12 @@ export const GROUPS: GroupSpec[] = [
   {
     key: 'system', label: 'System', href: '/holding/it2/system/deploys',
     subs: [
-      { href: '/holding/it2/system/deploys',  label: 'Deploys' },
-      { href: '/holding/it2/system/checks',   label: 'Checks' },
-      { href: '/holding/it2/system/health',   label: 'Health' },
-      { href: '/holding/it2/system/activity', label: 'Activity' },
-      { href: '/holding/it2/system/cost',     label: 'Cost' },
+      { href: '/holding/it2/system/deploys',   label: 'Deploys' },
+      { href: '/holding/it2/system/checks',    label: 'Checks' },
+      { href: '/holding/it2/system/health',    label: 'Health' },
+      { href: '/holding/it2/system/activity',  label: 'Activity' },
+      { href: '/holding/it2/system/cost',      label: 'Cost' },
+      { href: '/holding/it2/system/recovery',  label: 'Recovery' },
       { href: '/holding/settings',             label: '⚙ Settings' },
     ],
   },
