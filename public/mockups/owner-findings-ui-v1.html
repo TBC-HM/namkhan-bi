@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — owner-findings-ui-v1 (ADR-218)</title>
+<style>
+  body { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; background: #FAFAF7; color: #1B1B1B; margin: 0; padding: 28px 24px; }
+  .note { font-size: 12px; color: #5A5A5A; max-width: 640px; margin-bottom: 20px; }
+  .card { background: #FFF; border: 1px solid #E6DFCC; border-radius: 6px; padding: 14px 16px; max-width: 340px; display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 6px; }
+  .pill { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; background: #FDECE4; color: #B04A2F; }
+  .badge-unproven { font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: #FFF3E0; color: #B26A00; }
+  .lab { font-size: 9px; font-weight: 700; color: #8A8A8A; width: 38px; }
+  .bar { flex: 1; height: 4px; background: #F0EBE0; border-radius: 99px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 99px; }
+  .pct { font-size: 10px; font-weight: 700; }
+  .btn { font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 3px; text-decoration: none; white-space: nowrap; cursor: pointer; }
+  .panel { max-width: 560px; margin-top: 28px; }
+  .finding { background: #FFF; border: 1px solid #B71C1C; border-radius: 6px; padding: 12px 16px; margin-bottom: 10px; font-size: 12px; }
+  .sev { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; text-transform: uppercase; }
+  h2 { font-size: 14px; }
+  form.add { background: #FFF; border: 1px solid #E6DFCC; border-radius: 6px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  textarea, select, input { font-size: 12px; padding: 6px 8px; border: 1px solid #E6DFCC; border-radius: 4px; font-family: inherit; }
+  .toast { position: fixed; top: 16px; right: 16px; background: #B71C1C; color: #FFF; font-size: 12px; font-weight: 600; padding: 10px 16px; border-radius: 6px; display: none; }
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<h1 style="font-size:18px">Mockup — module card truth split + owner findings (ADR-218)</h1>
+<p class="note">Clickable mockup, realistic fixture = live <b>cost_governance</b> row (spec 95 / tested 0 · 0/50 / 3 open blocking findings).
+The card stops lying: SPEC % is the agent's own conformance estimate, TESTED % is evidence. FROZEN appears only when
+completed + tested 100% (or waiver) + zero open blocking findings. The ⚑ Findings button is your feedback channel — filing
+a finding blocks completion at the database trigger until it is resolved with a note.</p>
+
+<!-- CARD -->
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <span class="pill">cost governance</span>
+    <span class="row" style="gap:5px">
+      <span class="badge-unproven">UNPROVEN</span>
+      <span style="font-size:10px;font-weight:700;color:#B8A878">v3 · published</span>
+    </span>
+  </div>
+  <div class="row"><span class="lab">SPEC</span><div class="bar"><div style="width:95%;background:#2E7D32"></div></div><span class="pct" style="color:#5A5A5A">95%</span></div>
+  <div class="row"><span class="lab">TESTED</span><div class="bar"><div style="width:0%;background:#D32F2F"></div></div><span class="pct" style="color:#B71C1C">0% · 0/50 runs</span></div>
+  <div style="font-size:12px;font-weight:600">Cost Governance — full ledger, budgets, alerts (ADR-196)</div>
+  <div class="row" style="justify-content:flex-end;gap:6px">
+    <span class="btn" style="background:#B71C1C;color:#FFF" onclick="showToast('cost_governance: 3 open blocking finding(s) — resolve before sign-off')">⚠ Unproven</span>
+    <a class="btn" href="#panel" style="background:#B71C1C;color:#FFF">⚑ Findings (3)</a>
+    <span class="btn" style="border:1px solid #E6DFCC">📄 Spec</span>
+  </div>
+</div>
+
+<!-- FINDINGS PANEL -->
+<div class="panel" id="panel">
+  <h2>cost governance — findings <span class="badge-unproven">UNPROVEN</span></h2>
+  <p class="note">SPEC 95% · TESTED 0% (0/50 runs) · <b style="color:#B71C1C">3 open blocking findings</b> ·
+  Open blocking findings stop completion at the database trigger — resolving them here is the only way through.</p>
+
+  <form class="add" onsubmit="showToast('Finding #9 filed'); return false;">
+    <b style="font-size:12px">FILE A FINDING</b>
+    <textarea rows="3" placeholder="What is wrong, in plain language. This blocks completion until resolved."></textarea>
+    <div class="row">
+      <select><option>low</option><option selected>medium</option><option>high</option><option>critical</option></select>
+      <input type="file">
+      <button class="btn" style="margin-left:auto;background:#1F3A2E;color:#FFF;border:none;padding:8px 18px">File finding</button>
+    </div>
+  </form>
+  <div style="height:14px"></div>
+
+  <div class="finding">
+    <div class="row"><b style="color:#8A8A8A">#3</b> <span class="sev" style="background:#B71C1C;color:#FFF">critical</span>
+      <span class="sev" style="background:#FFEBEE;color:#B71C1C">BLOCKING</span>
+      <b style="color:#B71C1C">OPEN</b><span style="margin-left:auto;font-size:10px;color:#8A8A8A">pbs · 2026-08-03 · owner</span></div>
+    <p>DRIFT A — stale brief section overrode ADR-196. PBS chose "Full ledger now" but the build followed the stale CLIENT-GATED list.</p>
+    <span class="btn" style="border:1px solid #E6DFCC" onclick="showToast('resolution_note is mandatory (min 5 chars) to set fixed/refuted/waived')">Resolve…</span>
+  </div>
+  <div class="finding">
+    <div class="row"><b style="color:#8A8A8A">#4</b> <span class="sev" style="background:#FFEBEE;color:#B71C1C">high</span>
+      <span class="sev" style="background:#FFEBEE;color:#B71C1C">BLOCKING</span>
+      <b style="color:#B71C1C">OPEN</b><span style="margin-left:auto;font-size:10px;color:#8A8A8A">pbs · 2026-08-03 · owner</span></div>
+    <p>DRIFT B — task_run identity dropped silently. Owner MD Phase-1 bullet #1 requires every run to carry identity.</p>
+    <span class="btn" style="border:1px solid #E6DFCC">Resolve…</span>
+  </div>
+  <div class="finding">
+    <div class="row"><b style="color:#8A8A8A">#5</b> <span class="sev" style="background:#FFEBEE;color:#B71C1C">high</span>
+      <span class="sev" style="background:#FFEBEE;color:#B71C1C">BLOCKING</span>
+      <b style="color:#B71C1C">OPEN</b><span style="margin-left:auto;font-size:10px;color:#8A8A8A">pbs · 2026-08-03 · owner</span></div>
+    <p>DRIFT C — UI shipped with zero visual verification ("live pixel check" missing).</p>
+    <span class="btn" style="border:1px solid #E6DFCC">Resolve…</span>
+  </div>
+</div>
+
+<script>
+function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(function(){t.style.display='none'},5000);}
+</script>
+</body>
+</html>
