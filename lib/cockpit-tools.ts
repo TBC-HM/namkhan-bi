@@ -1667,6 +1667,68 @@ async function cite_convenio_article(args: Record<string, unknown>): Promise<Too
   return { ok: true, result: { topic, hits: ranked.length, articles: ranked } };
 }
 
+// ============================================================================
+// forecast_run_scenario — Central Chat scenario intent (forecasting-module-v1
+// §V1.1 B). "What if rate +8%?" from chat: runs the DETERMINISTIC scenario
+// engine (public.fn_forecast_scenario_custom_run / fn_forecast_run_scenario).
+// A run is a simulation row only — recommend-never-execute, BINDING. The
+// Scenario Agent (edge fn forecast-scenario-narrate, hourly sweep) narrates
+// the run afterwards; this handler returns the engine numbers immediately.
+// ============================================================================
+async function forecast_run_scenario(args: {
+  property_id?: number;
+  scenario_id?: number;
+  adr_delta_pct?: number;
+  demand_uplift_pct?: number;
+  one_off_cost?: number;
+  horizon_days?: number;
+  title?: string;
+}): Promise<ToolResult> {
+  const propertyId = Number(args.property_id ?? 260955);
+  if (![260955, 1000001].includes(propertyId)) {
+    return { ok: false, error: "property_id must be 260955 (Namkhan) or 1000001 (Donna)" };
+  }
+
+  if (args.scenario_id) {
+    const { data, error } = await supabase.rpc("fn_forecast_run_scenario", {
+      p_property_id: propertyId,
+      p_scenario_id: Number(args.scenario_id),
+      p_actor: "central-chat",
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, result: data };
+  }
+
+  const adr = Number(args.adr_delta_pct ?? 0);
+  const uplift = Number(args.demand_uplift_pct ?? 0);
+  if (!adr && !uplift) {
+    return {
+      ok: false,
+      error:
+        "Provide scenario_id (a seeded scenario) or at least one of adr_delta_pct / demand_uplift_pct for a free-form what-if.",
+    };
+  }
+  const params: Record<string, number> = { horizon_days: Number(args.horizon_days ?? 90) };
+  if (adr) params.adr_delta_pct = adr;
+  if (uplift) params.demand_uplift_pct = uplift;
+  if (args.one_off_cost) params.one_off_cost = Number(args.one_off_cost);
+
+  const { data, error } = await supabase.rpc("fn_forecast_scenario_custom_run", {
+    p_property_id: propertyId,
+    p_title: typeof args.title === "string" ? args.title : "",
+    p_params: params,
+    p_actor: "central-chat",
+  });
+  if (error) return { ok: false, error: error.message };
+  return {
+    ok: true,
+    result: {
+      run: data,
+      note: "Deterministic simulation only — nothing was executed. Full comparison at /h/" + propertyId + "/revenue/forecast.",
+    },
+  };
+}
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
   cite_convenio_article,
   read_google_sheet,
@@ -1717,6 +1779,7 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolRe
   request_skill_approval: (a) => request_skill_approval(a as Parameters<typeof request_skill_approval>[0]),
   list_vercel_crons: (a) => list_vercel_crons(a as Parameters<typeof list_vercel_crons>[0]),
   run_typecheck: (a) => run_typecheck(a as Parameters<typeof run_typecheck>[0]),
+  forecast_run_scenario: (a) => forecast_run_scenario(a as Parameters<typeof forecast_run_scenario>[0]),
 };
 
 // ============================================================================
