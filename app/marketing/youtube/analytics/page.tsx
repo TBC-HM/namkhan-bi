@@ -1,6 +1,7 @@
 // app/marketing/youtube/analytics/page.tsx
 // PBS 2026-07-13 — Analytics · Channel Audit. Renders the latest Lens audit run
 // with per-video grades + playlist verdicts + top wins/fixes. "Run new audit" button.
+// Fix 2026-08-03: top-fixes rows now have CTA links (anchor to playlist or video section).
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -57,10 +58,9 @@ interface VidRow {
   issues: any;
 }
 
-// Extract "rename to 'New Title'" from Lens audit notes
 function extractSuggestedTitle(notes: string | null): string | null {
   if (!notes) return null;
-  const m = notes.match(/rename(?:\s+(?:this\s+)?to)?\s+['"‘’]([^'"‘’]{3,})['"‘’]/i);
+  const m = notes.match(/rename(?:\s+(?:this\s+)?to)?\s+['\"'']([^'\"'']{3,})['\"'']/i);
   return m?.[1]?.trim() ?? null;
 }
 
@@ -73,13 +73,19 @@ function gradeColor(g: string | null): string {
   return INK_M;
 }
 
+// Heuristic: does this fix relate to playlists or video-level changes?
+function fixAnchor(fix: string): string {
+  return /playlist/i.test(fix) ? '#playlist-verdicts' : '#video-audit';
+}
+function fixLabel(fix: string): string {
+  return /playlist/i.test(fix) ? '↓ Playlists' : '↓ Videos';
+}
+
 export default async function YtAnalyticsPage() {
   const sb = getSupabaseAdmin();
 
-  // Proactive auto-refresh of YT OAuth token via SECURITY DEFINER RPC. No-op if token still valid.
   try { await sb.rpc('fn_yt_refresh_if_expired', { p_property_id: NAMKHAN }); } catch { /* silent */ }
 
-  // Historical analytics — token + channel identity for AnalyticsKPIs
   const tok = await getFreshAccessToken(NAMKHAN);
   let channelStats: { subs: number; views: number; videos: number; ok: boolean; access_token?: string; channel_id?: string } = { subs: 0, views: 0, videos: 0, ok: false };
   if (tok.ok && tok.access_token && tok.channel_id) {
@@ -101,13 +107,11 @@ export default async function YtAnalyticsPage() {
     videos = (data ?? []) as VidRow[];
   }
 
-  // Playlist actions log — completed playlists show ✓ Done on load
   const { data: actionLogData } = await sb.from('yt_action_log')
     .select('entity_id, action, new_value')
     .eq('property_id', NAMKHAN).eq('entity_type', 'playlist');
   const doneMap = new Map((actionLogData ?? []).map(r => [r.entity_id, r.action + (r.new_value ? ' → ' + r.new_value : '')]));
 
-  // Video applied log — ApplyAuditButton starts as ✓ Applied for already-applied videos
   const { data: videoLogData } = await sb.from('yt_action_log')
     .select('entity_id')
     .eq('property_id', NAMKHAN).eq('entity_type', 'video').eq('action', 'applied');
@@ -116,14 +120,17 @@ export default async function YtAnalyticsPage() {
   const tabs = MARKETING_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
   const cardStyle: React.CSSProperties = { background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 20, gridColumn: '1 / -1' };
   const sectionH: React.CSSProperties = { fontSize: 12, textTransform: 'uppercase', letterSpacing: '.08em', color: INK_M, marginBottom: 12, fontWeight: 500 };
+  const ctaLink: React.CSSProperties = {
+    fontSize: 10, fontWeight: 600, color: FOREST, textDecoration: 'none',
+    border: `1px solid ${FOREST}`, borderRadius: 2, padding: '2px 7px',
+    whiteSpace: 'nowrap', flexShrink: 0,
+  };
 
   return (
     <DashboardPage title="YouTube · channel management" tabs={tabs}>
       <div style={{ display: 'grid', gap: 16 }}>
         <YtSubTabs current="analytics" />
 
-        {/* PBS 2026-07-13: historical analytics + KPI dashboard lives at top of Analytics tab.
-            Falls back to a reconnect banner when the yt-analytics.readonly scope is missing. */}
         {channelStats.ok && channelStats.access_token && channelStats.channel_id && (
           <AnalyticsKPIs
             accessToken={channelStats.access_token}
@@ -172,21 +179,39 @@ export default async function YtAnalyticsPage() {
                   {latest.brand_voice_notes && <div style={{ fontSize: 12, color: INK_S, lineHeight: 1.5 }}>{latest.brand_voice_notes}</div>}
                 </div>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 20 }}>
+                {/* Wins — no CTAs needed, already good */}
                 <div>
                   <div style={sectionH}>Top wins</div>
-                  {(latest.top_wins ?? []).map((w, i) => <div key={i} style={{ fontSize: 12, color: INK, padding: '4px 0', borderBottom: `1px dashed ${HAIR}` }}>✓ {w}</div>)}
+                  {(latest.top_wins ?? []).map((w, i) => (
+                    <div key={i} style={{ fontSize: 12, color: INK, padding: '6px 0', borderBottom: `1px dashed ${HAIR}` }}>
+                      ✓ {w}
+                    </div>
+                  ))}
                 </div>
+
+                {/* Fixes — each row gets a jump CTA to the relevant section */}
                 <div>
                   <div style={sectionH}>Top fixes</div>
-                  {(latest.top_fixes ?? []).map((f, i) => <div key={i} style={{ fontSize: 12, color: INK, padding: '4px 0', borderBottom: `1px dashed ${HAIR}` }}>→ {f}</div>)}
+                  {(latest.top_fixes ?? []).map((f, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, padding: '6px 0', borderBottom: `1px dashed ${HAIR}` }}>
+                      <span style={{ fontSize: 12, color: INK }}>→ {f}</span>
+                      <a href={fixAnchor(f)} style={ctaLink}>{fixLabel(f)}</a>
+                    </div>
+                  ))}
+                  {(latest.top_fixes ?? []).length > 0 && (
+                    <div style={{ marginTop: 10, fontSize: 11, color: INK_M }}>
+                      {videos.filter(v => v.current_grade && ['C','D','F'].includes(v.current_grade)).length} videos graded C or below · use Apply per row
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Playlist verdicts */}
             {Array.isArray(latest.playlist_verdicts) && latest.playlist_verdicts.length > 0 && (
-              <div style={cardStyle}>
+              <div id="playlist-verdicts" style={cardStyle}>
                 <div style={sectionH}>Playlist verdicts ({latest.playlist_verdicts.length})</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
                   {(latest.playlist_verdicts as any[]).map((p, i) => (
@@ -208,8 +233,8 @@ export default async function YtAnalyticsPage() {
                         verdict={p.verdict ?? ''}
                         currentTitle={p.playlist_title ?? p.playlist_id ?? ''}
                         suggestedTitle={p.verdict === 'rename' ? extractSuggestedTitle(p.notes) : null}
-                      initialDone={doneMap.has(p.playlist_id ?? '')}
-                      initialAction={doneMap.get(p.playlist_id ?? '')}
+                        initialDone={doneMap.has(p.playlist_id ?? '')}
+                        initialAction={doneMap.get(p.playlist_id ?? '')}
                       />
                     </div>
                   ))}
@@ -218,8 +243,13 @@ export default async function YtAnalyticsPage() {
             )}
 
             {/* Per-video audit table */}
-            <div style={cardStyle}>
-              <div style={sectionH}>Video-by-video audit ({videos.length})</div>
+            <div id="video-audit" style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                <div style={sectionH}>Video-by-video audit ({videos.length})</div>
+                <div style={{ fontSize: 11, color: INK_M }}>
+                  {videos.filter(v => appliedVideos.has(v.video_id)).length} applied · {videos.filter(v => v.current_grade === 'A').length} already grade A
+                </div>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {videos.map((v) => (
                   <div key={v.id} style={{ border: `1px solid ${HAIR}`, borderRadius: 4, padding: 12 }}>
