@@ -115,6 +115,13 @@ export default async function YtAnalyticsPage() {
   const { data: videoLogData } = await sb.from('yt_action_log')
     .select('entity_id')
     .eq('property_id', NAMKHAN).eq('entity_type', 'video').eq('action', 'applied');
+  const addedByPlaylist = new Map<string, string[]>();
+  for (const r of (actionLogData ?? [])) {
+    if (r.action === 'video_added' && r.new_value) {
+      const existing = addedByPlaylist.get(r.entity_id) ?? [];
+      addedByPlaylist.set(r.entity_id, [...existing, r.new_value]);
+    }
+  }
   const appliedVideos = new Set((videoLogData ?? []).map(r => r.entity_id));
 
   const tabs = MARKETING_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
@@ -234,7 +241,7 @@ export default async function YtAnalyticsPage() {
                         currentTitle={p.playlist_title ?? p.playlist_id ?? ''}
                         suggestedTitle={p.verdict === 'rename' ? extractSuggestedTitle(p.notes) : null}
                         notes={p.notes}
-                        initialAddedVideos={addedByPlaylist.get(p.playlist_id ?? ') ?? []}
+                        initialAddedVideos={addedByPlaylist.get(p.playlist_id ?? '') ?? []}
                         initialDone={doneMap.has(p.playlist_id ?? '')}
                         initialAction={doneMap.get(p.playlist_id ?? '')}
                       />
