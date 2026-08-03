@@ -1097,9 +1097,10 @@ export async function POST(req: Request) {
           .eq("id", pendingTicket.id);
       }
 
-      // V5 store: assistant turn with per-message metering (fire-and-forget —
-      // reply latency is not hostage to the store).
-      void recordAssistantMessage({
+      // V5 store: assistant turn with per-message metering. AWAITED (round 6,
+      // §0.V6 finding 2): a void call can be frozen by the serverless runtime
+      // after the response returns — the store write must settle first.
+      await recordAssistantMessage({
         conversationId: convId,
         content: replyText,
         agentRole: null,
@@ -1599,9 +1600,10 @@ export async function POST(req: Request) {
         });
       }
 
-      // V5 store: assistant turn with per-message metering + tool-call trail
-      // (fire-and-forget; the reply is already finalized on the ticket).
-      void recordAssistantMessage({
+      // V5 store: assistant turn with per-message metering + tool-call trail.
+      // AWAITED (round 6, §0.V6 finding 2): a void call can be frozen by the
+      // serverless runtime after the response returns.
+      await recordAssistantMessage({
         conversationId: convId,
         content: replyText,
         agentRole: personaRole,
