@@ -42,6 +42,7 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/cron') ||
     pathname.startsWith('/api/cockpit/webhooks') ||
     pathname.startsWith('/api/cockpit/docs/backup') || // CI pre-deploy backup
+    pathname.startsWith('/api/cockpit/health-sweep') || // bug #157 2026-08-03: cron job 188 — internal Bearer gate lives inside the route
     pathname.startsWith('/api/auth/') || // login / request-access / callback exchange
     pathname.startsWith('/api/marketing/media/preview') || // PBS 2026-07-14
     pathname.startsWith('/api/marketing/contacts/extract') || // PBS 2026-07-16 · cron+admin gate lives inside the route
