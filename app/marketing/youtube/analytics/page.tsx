@@ -281,7 +281,8 @@ export default async function YtAnalyticsPage() {
                           suggestedTitle={v.suggested_title}
                           suggestedDescription={v.suggested_description}
                           suggestedTags={v.suggested_tags}
-                          initialApplied={appliedVideos.has(v.video_id)}
+                          currentGrade={v.current_grade}
+                        initialApplied={appliedVideos.has(v.video_id)}
                         />
                       </div>
                     </div>
