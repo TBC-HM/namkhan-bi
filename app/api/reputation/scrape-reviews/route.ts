@@ -17,11 +17,22 @@ const ACTORS: Record<string, { slug: string; buildInput: (url: string, max: numb
       sortReviewsBy: 'f_recent_desc',
     }),
   },
-  // Placeholder — swap in tri_angle~hotel-review-aggregator or similar when tested
   expedia: {
     slug: 'tri_angle~hotel-review-aggregator',
     buildInput: (url, max) => ({ startUrls: [{ url }], maxReviews: max }),
   },
+};
+
+// Per-source canonical target URLs (GBP brief §0.V.7 objection fix, 2026-08-03).
+// ROOT CAUSE of expedia=0-rows-ever: the single fallback in POST was the
+// BOOKING.COM url for every source, so the expedia actor scraped the wrong
+// site and returned an empty dataset with HTTP 200 (items_returned:0 on the
+// 07-29 dry-run and the 08-02 live fire — actor-input bug, not transport).
+// The expedia URL is the canonical row from property.social
+// (property_id 260955, platform='expedia') — looked up, never invented.
+const SOURCE_URLS: Record<string, string> = {
+  booking: 'https://www.booking.com/hotel/la/namkhan-ecolodge.html',
+  expedia: 'https://www.expedia.com/Luang-Prabang-Hotels-NamKhan-Ecolodge.h39493734.Hotel-Information',
 };
 
 interface Req {
@@ -65,6 +76,46 @@ function mapBookingReview(it: Record<string, unknown>): Record<string, unknown> 
   };
 }
 
+// Map a tri_angle~hotel-review-aggregator item (expedia source) onto
+// marketing.reviews. The aggregator's exact schema varies by platform, so
+// every field falls back across the common key spellings; anything unmapped
+// survives in `raw`. Rating scale is detected (Expedia is 10-scale; some
+// aggregator outputs normalize to 5) and disclosed via rating_scale — the
+// ingest fn normalizes from rating_raw + rating_scale.
+function mapExpediaReview(it: Record<string, unknown>): Record<string, unknown> | null {
+  const rid = String(it.reviewId ?? it.review_id ?? it.id ?? '');
+  if (!rid) return null;
+  const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
+  const ratingRaw = num(it.rating) ?? num(it.score) ?? num(it.stars) ?? num(it.overallRating) ?? null;
+  const ratingScale = ratingRaw != null && ratingRaw <= 5 ? 5 : 10;
+  const responseText =
+    str(it.propertyResponse) ?? str(it.managementResponse) ?? str(it.ownerResponse) ?? null;
+  const hasResponse = responseText != null && responseText.length > 5;
+  return {
+    source_review_id: rid,
+    reviewer_name:
+      str(it.userName) ?? str(it.user_name) ?? str(it.author) ?? str(it.reviewerName) ?? str(it.name) ?? null,
+    reviewer_country: str(it.userCountry) ?? str(it.country) ?? null,
+    rating_raw: ratingRaw,
+    rating_scale: ratingScale,
+    title: str(it.reviewTitle) ?? str(it.title) ?? str(it.heading) ?? null,
+    body: str(it.text) ?? str(it.reviewText) ?? str(it.body) ?? str(it.comment) ?? str(it.description) ?? null,
+    language: str(it.reviewLanguage) ?? str(it.language) ?? str(it.locale) ?? null,
+    reviewed_at:
+      str(it.reviewedAt) ?? str(it.reviewDate) ?? str(it.publishedDate) ?? str(it.date) ?? str(it.submissionTime) ?? null,
+    response_status: hasResponse ? 'responded' : 'unanswered',
+    response_text: hasResponse ? responseText : null,
+    responded_by: hasResponse ? 'the_namkhan' : null,
+    raw: it,
+  };
+}
+
+const MAPPERS: Record<string, (it: Record<string, unknown>) => Record<string, unknown> | null> = {
+  booking: mapBookingReview,
+  expedia: mapExpediaReview,
+};
+
 export async function POST(req: Request) {
   const started = Date.now();
   let body: Req;
@@ -79,9 +130,9 @@ export async function POST(req: Request) {
     .from('review_scrape_targets_v')  // fallback if we don't have a public view
     .select('url, property_id')
     .maybeSingle();
-  // Fallback: hardcode Namkhan Booking URL if the view lookup fails.
-  const url = body.url
-    ?? 'https://www.booking.com/hotel/la/namkhan-ecolodge.html';
+  // Per-source canonical fallback — the old single booking.com fallback sent
+  // the expedia actor to the wrong site (0 items forever, GBP §0.V.7).
+  const url = body.url ?? SOURCE_URLS[source];
   const property_id = body.property_id ?? cfg?.property_id ?? 260955;
   const max = Math.max(1, Math.min(500, body.max ?? 10));
 
@@ -110,7 +161,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'apify_fetch_failed', detail: e instanceof Error ? e.message : String(e) }, { status: 502 });
   }
 
-  const mapped = items.map(mapBookingReview).filter(Boolean) as Record<string, unknown>[];
+  const mapped = items.map(MAPPERS[source] ?? mapBookingReview).filter(Boolean) as Record<string, unknown>[];
 
   const { data: ingestData, error: ingestErr } = await sb.rpc('fn_reviews_ingest_apify', {
     p_source: source,
