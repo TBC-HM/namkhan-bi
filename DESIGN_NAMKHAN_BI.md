@@ -3032,3 +3032,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-02 — bug-agent · fix #153
 - # Bug #153 – Remove `<Container>` wrapper from Property Settings page  ## Problem The report says: *"take out the container"* on the Property Settings page (`/h
 - touched `app/h/[property_id]/settings/property/page.tsx`
+
+### 2026-08-03 — bug-agent · fix #148
+- ## Fix BUG #148: TS2448 / ReferenceError — `playlists` used before declaration  ### Root cause In both early-return branches (no connection, expired token), the
+- touched `app/marketing/youtube/playlists/page.tsx`

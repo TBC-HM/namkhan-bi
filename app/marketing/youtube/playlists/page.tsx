@@ -14,14 +14,16 @@ import DeletePlaylistButton from '../analytics/_client/DeletePlaylistButton';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const NAMKHAN = 260955;
-const WHITE  = '#FFFFFF';
-const HAIR   = '#E6DFCC';
-const INK    = '#1B1B1B';
-const INK_M  = '#5A5A5A';
-const FOREST = '#084838';
-const CREAM  = '#F5F0E1';
-const RED    = '#B03826';
+const NAMKHAN  = 260955;
+const WHITE    = '#FFFFFF';
+const HAIR     = '#E6DFCC';
+const INK      = '#1B1B1B';
+const INK_M    = '#5A5A5A';
+const FOREST   = '#084838';
+const CREAM    = '#F5F0E1';
+const RED      = '#B03826';
+const SAGE     = '#E8F0EC';
+const OFFWHITE = '#FAFAFA';
 
 export default async function YouTubePlaylistsPage() {
   const sb = getSupabaseAdmin();
@@ -41,7 +43,7 @@ export default async function YouTubePlaylistsPage() {
       <DashboardPage title="YouTube · channel management" tabs={tabs}>
         <YtSubTabs current="playlists" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 12, color: '#5A5A5A' }}>
+          <div style={{ fontSize: 12, color: INK_M }}>
             0 playlists · sorted A–Z · click any to view videos, scheduling + calendar
           </div>
           <CreatePlaylistForm />
@@ -56,7 +58,7 @@ export default async function YouTubePlaylistsPage() {
       <DashboardPage title="YouTube · channel management" tabs={tabs}>
         <YtSubTabs current="playlists" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 12, color: '#5A5A5A' }}>
+          <div style={{ fontSize: 12, color: INK_M }}>
             0 playlists · sorted A–Z · click any to view videos, scheduling + calendar
           </div>
           <CreatePlaylistForm />
@@ -81,7 +83,7 @@ export default async function YouTubePlaylistsPage() {
       <div style={{ display: 'grid', gap: 16 }}>
         <YtSubTabs current="playlists" />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ fontSize: 12, color: '#5A5A5A' }}>
+          <div style={{ fontSize: 12, color: INK_M }}>
             {playlists.length} playlists · sorted A–Z · click any to view videos, scheduling + calendar
           </div>
           <CreatePlaylistForm />
@@ -113,7 +115,7 @@ export default async function YouTubePlaylistsPage() {
                           {pl.privacyStatus && <span>· {pl.privacyStatus}</span>}
                         </div>
                         {linkedPillar ? (
-                          <div style={{ marginTop: 6, fontSize: 10, color: FOREST, background: '#E8F0EC', padding: '2px 6px', borderRadius: 2, display: 'inline-block' }}>
+                          <div style={{ marginTop: 6, fontSize: 10, color: FOREST, background: SAGE, padding: '2px 6px', borderRadius: 2, display: 'inline-block' }}>
                             🎬 {linkedPillar.label}{linkedPillar.cadence ? ` · ${linkedPillar.cadence}` : ''}
                           </div>
                         ) : (
@@ -121,7 +123,7 @@ export default async function YouTubePlaylistsPage() {
                         )}
                       </div>
                     </Link>
-                    <div style={{ padding: '6px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', justifyContent: 'flex-end', background: '#FAFAFA' }}>
+                    <div style={{ padding: '6px 10px', borderTop: `1px solid ${HAIR}`, display: 'flex', justifyContent: 'flex-end', background: OFFWHITE }}>
                       <DeletePlaylistButton playlistId={pl.id} playlistTitle={pl.title} />
                     </div>
                   </div>
