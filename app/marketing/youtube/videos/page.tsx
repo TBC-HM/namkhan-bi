@@ -230,6 +230,7 @@ export default async function YtVideosPage() {
                   {audit && (
                     <ApplyAuditButton
                       videoId={v.id}
+                      currentGrade={audit.current_grade}
                       suggestedTitle={audit.suggested_title}
                       suggestedDescription={audit.suggested_description}
                       suggestedTags={audit.suggested_tags}
