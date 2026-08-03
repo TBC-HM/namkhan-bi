@@ -234,6 +234,7 @@ export default async function YtAnalyticsPage() {
                         currentTitle={p.playlist_title ?? p.playlist_id ?? ''}
                         suggestedTitle={p.verdict === 'rename' ? extractSuggestedTitle(p.notes) : null}
                         notes={p.notes}
+                        initialAddedVideos={addedByPlaylist.get(p.playlist_id ?? ') ?? []}
                         initialDone={doneMap.has(p.playlist_id ?? '')}
                         initialAction={doneMap.get(p.playlist_id ?? '')}
                       />
