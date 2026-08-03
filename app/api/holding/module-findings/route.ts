@@ -5,6 +5,12 @@
 //       bucket + getPublicUrl returns dead links) → public.fn_module_finding_add.
 // PATCH json {id, status, resolution_note?, actor?} → public.fn_module_finding_resolve
 //       (SECURITY DEFINER bridge; governance.* is not PostgREST-reachable).
+// PUT   json {finding_id, body, author_role ('pbs'|'agent'), author?, restatement?, confirms?}
+//       → public.fn_finding_comment (finding_threads_v1). Agent restatement path:
+//       {author_role:'agent', restatement:true} flips finding open→acknowledged.
+//       PBS confirm path: {author_role:'pbs', confirms:true} — the fn refuses
+//       confirms from any other role; tg_finding_resolution_guard blocks
+//       fixed/refuted until a confirmed comment exists on the thread.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -49,6 +55,38 @@ export async function POST(req: Request) {
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, id: data, screenshot: screenshotUrl }, { status: 201 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Unexpected error' }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const findingId = Number(body?.finding_id);
+    const text = String(body?.body ?? '').trim();
+    const authorRole = String(body?.author_role ?? '').trim();
+    const author = String(body?.author ?? (authorRole === 'pbs' ? 'PBS' : 'it2-ui')).trim();
+    const restatement = body?.restatement === true;
+    const confirms = body?.confirms === true;
+
+    if (!findingId) return NextResponse.json({ error: 'finding_id is required' }, { status: 400 });
+    if (!['pbs', 'agent'].includes(authorRole))
+      return NextResponse.json({ error: "author_role must be 'pbs' or 'agent'" }, { status: 400 });
+    if (text.length < 5) return NextResponse.json({ error: 'comment body is required (min 5 chars)' }, { status: 400 });
+
+    const sb = getSupabaseAdmin();
+    const { data, error } = await (sb as any).rpc('fn_finding_comment', {
+      p_finding_id: findingId,
+      p_author_role: authorRole,
+      p_author: author,
+      p_body: text,
+      p_restatement: restatement,
+      p_confirms: confirms,
+    });
+    // Surface fn refusals (e.g. "Only PBS confirms understanding") verbatim.
+    if (error) return NextResponse.json({ error: error.message }, { status: 422 });
+    return NextResponse.json({ ok: true, comment_id: data }, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'Unexpected error' }, { status: 500 });
   }
