@@ -123,14 +123,18 @@ export interface AssistantMessageArgs {
 
 /**
  * Persist the assistant turn + bump the conversation (last_turn_at,
- * legacy_ticket_ids). Fire-and-forget-safe: call with `void` where latency
- * matters; all failures are logged, never thrown.
+ * legacy_ticket_ids). Round-6 hardening (§0.V6 finding 2): the insert is
+ * retried once, and a final failure writes a cockpit_audit_log row
+ * (action=chat_store_persist_failed) so a dropped persist is never silent.
+ * Callers must AWAIT this (a `void` call on a serverless runtime can be
+ * frozen mid-flight after the response returns — the 2026-08-02 22:53 UTC
+ * dropped turn). Still non-throwing: a store failure never breaks the reply.
  */
 export async function recordAssistantMessage(args: AssistantMessageArgs): Promise<void> {
   if (!args.conversationId) return;
   try {
     const sb = admin().schema("cockpit");
-    const { error } = await sb.from("messages").insert({
+    const row = {
       conversation_id: args.conversationId,
       turn_role: "assistant",
       agent_role: args.agentRole ?? null,
@@ -143,8 +147,32 @@ export async function recordAssistantMessage(args: AssistantMessageArgs): Promis
       output_tokens: args.outputTokens,
       latency_ms: args.latencyMs ?? null,
       cost_usd: Math.round(args.costUsd * 1e6) / 1e6,
-    });
-    if (error) console.warn("[conversation-store] assistant message insert failed:", error.message);
+    };
+    let { error } = await sb.from("messages").insert(row);
+    if (error) {
+      console.warn("[conversation-store] assistant insert failed, retrying once:", error.message);
+      ({ error } = await sb.from("messages").insert(row));
+    }
+    if (error) {
+      console.warn("[conversation-store] assistant message insert failed after retry:", error.message);
+      // Loud trail: audit row so the drop is visible (never silent again).
+      const { error: auditErr } = await admin().from("cockpit_audit_log").insert({
+        agent: args.agentRole ?? "central-chat",
+        action: "chat_store_persist_failed",
+        target: `conversation:${args.conversationId}`,
+        success: false,
+        metadata: {
+          conversation_id: args.conversationId,
+          legacy_ticket_id: args.legacyTicketId ?? null,
+          model_id: args.modelId,
+          model_tier: args.modelTier,
+          error: error.message,
+          content_chars: args.content.length,
+        },
+        reasoning: "conversation-store: assistant message insert failed twice; turn exists in audit/ticket trail but not in cockpit.messages",
+      });
+      if (auditErr) console.warn("[conversation-store] persist-failure audit row failed too:", auditErr.message);
+    }
 
     // Bump the conversation. Read-modify-write on legacy_ticket_ids is fine
     // at v1 concurrency (one owner, one turn in flight per thread).
