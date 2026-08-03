@@ -1,28 +1,28 @@
 // app/holding/chat/page.tsx
-// Brain Q&A destination — receives params from /cockpit/chat redirect.
-// ?pid=<propertyId> now passed directly by DeptEntry (2026-08-03 fix).
-// Queries the DOCUMENT BRAIN (/api/brain/ask) — NOT Felix's general chat.
-// propertyId from URL ensures correct tenant brain isolation.
+// Central chat — Felix (Second Brain) + General (model-only) mode toggle.
+// This is the main conversational interface: ask anything, switch modes freely.
+// Receives ?pid= from DeptEntry so Felix knows which tenant context to load.
+// Document-only brain Q&A (citation view) lives at /holding/brain/ask.
 
-import BrainAskPage from './_components/BrainAskPage';
+import CentralChat from '@/components/chat/CentralChat';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 export default function HoldingChatPage({
   searchParams,
 }: {
-  searchParams: {
-    q?: string; pid?: string; dept?: string; role?: string; label?: string;
-  };
+  searchParams: { pid?: string; dept?: string };
 }) {
-  // pid is now passed directly from DeptEntry — prefer it over dept-based mapping
-  const propertyId = searchParams.pid != null
-    ? (Number(searchParams.pid) || null)   // 0 = holding brain (null)
-    : null;                                 // fallback = holding brain
+  const propertyId = searchParams.pid ? (Number(searchParams.pid) || undefined) : undefined;
+  const moduleScope = searchParams.dept ?? undefined;
 
-  const dept = searchParams.dept ?? searchParams.role ?? 'lead';
-  const initialQ = searchParams.q ?? '';
-
-  return <BrainAskPage initialQuestion={initialQ} propertyId={propertyId} dept={dept} />;
+  return (
+    <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 20px 60px' }}>
+      <CentralChat
+        mode="second-brain"
+        moduleScope={moduleScope}
+        propertyId={propertyId}
+      />
+    </div>
+  );
 }
