@@ -31,7 +31,7 @@ async function getPlaylistItems(playlistId: string): Promise<string[]> {
 
 // Extract YouTube video IDs (11-char base64url strings) from Lens notes text
 function extractVideoIds(notes: string): string[] {
-  const ids = notes.match(/\b([A-Za-z0-9_-]{11})\b/g) ?? [];
+  const ids: string[] = notes.match(/[A-Za-z0-9_-]{11}/g) ?? [];
   // Filter out common false positives (short words, known non-IDs)
   return [...new Set(ids.filter(id => id.length === 11 && /[A-Za-z0-9_-]{11}/.test(id)))];
 }
