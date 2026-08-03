@@ -39,8 +39,6 @@ interface RunRow {
   top_wins: string[] | null;
   top_fixes: string[] | null;
   playlist_verdicts: any;
-  // hotfix 2026-08-03 (owner-findings-ui-v1 run): field read at line ~166 but
-  // missing from the type — pre-existing tsc red on main blocked all pushes.
   next_page_token?: string | null;
 }
 interface VidRow {
