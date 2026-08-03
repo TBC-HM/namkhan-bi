@@ -1,31 +1,28 @@
 // app/h/[property_id]/revenue/forecast/page.tsx
-// Namkhan: Forecasting module v1 dashboard (brief module-forecasting-v1, A7).
-// PBS gate ruling 2026-07-27: "Ship the dashboard now, with the rolling MAPE
-// accuracy tile front and center." Accuracy is shown honestly — the model's
-// tracked error leads the page; nothing is presented as more certain than it is.
+// Namkhan: Forecasting module v1.1 — narrative-first redesign (brief
+// forecasting-module-v1 §V1.1, owner findings 7-8: "UI is a dead fish").
 //
-// Data: public.v_forecast_current (latest nightly run, 365d horizon) ·
-// public.v_forecast_vs_actual (every past forecast scored vs actuals) ·
-// public.mv_kpi_daily (LY actual rooms). All reads via public bridges
-// (claude_md §0.5). Currency layer: PMS/transaction USD (ADR-111/173).
+// The page now answers the owner MD's four questions, in order, at the top:
+//   What will probably happen · Why · How confident (and WHY that confidence,
+//   per the MD Confidence Model components) · What could improve the outcome.
+// Then: risks / opportunities / recommended actions (with accept·dismiss·
+// executed tracking — MD success metric), the statistical sections, the
+// Scenario Engine comparison (deterministic recompute, recommend-never-
+// execute), forecast error history + calibration, learning-journal lessons,
+// and the reforecast-trigger timeline. A findings button files straight into
+// governance.module_findings (rule 729).
 //
-// Donna branch: canonical empty-state surface, untouched (Donna deferred,
-// ADR-173).
+// BINDING rule 1 intact: every number on this page is deterministic
+// (nightly SQL engine, lib/forecast TS engine, scenario SQL engine).
+// LLM layers (Challenger/Insight) narrate; they never compute the numbers.
 //
-// §0.V3 round (2026-08-02): accuracy tile split — "current engine" coverage
-// (scored rows filtered to the latest run's engine version, min-n guard 20)
-// is the ship gate; the blended 90d tile remains as disclosed history.
-// Requires `method` exposed in public.v_forecast_vs_actual (migration
-// forecast_v1_expose_method_in_vs_actual).
+// Data: public.v_forecast_current · v_forecast_vs_actual · mv_kpi_daily ·
+// v_forecast_commentary · v_forecast_scenarios · v_forecast_scenario_runs ·
+// v_forecast_recommendations (+stats) · v_forecast_learning_journal ·
+// v_forecast_reforecast_log. All reads via public bridges (claude_md §0.5).
+// Currency layer: PMS/transaction USD (ADR-111/173).
 //
-// Extension (brief forecasting-module-v1, build/forecasting): 12-month
-// statistical outlook from the deterministic TS engine in lib/forecast/
-// (STLY baseline + OTB + pickup-pace projection, variance bands) rendered
-// below the nightly-run sections, plus clearly-marked placeholder slots for
-// the v2 LLM layers (Challenger / Insight / Scenario+Recommendation —
-// recommend-never-execute, BINDING rule 1). The engine section also renders
-// when the nightly run is missing, so the page degrades honestly instead of
-// going dark.
+// Donna branch: canonical empty-state surface, untouched (ADR-173).
 
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import {
@@ -44,6 +41,13 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import DonnaRevenueCanonical from '../_DonnaRevenueCanonical';
 import { REVENUE_SURFACES } from '../_surfaces';
 import { runMonthlyForecast, type EngineRun } from '@/lib/forecast';
+import {
+  RecommendationList,
+  ScenarioRunButtons,
+  FindingButton,
+  type RecommendationRow,
+  type ScenarioDef,
+} from './ForecastActions';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -72,10 +76,8 @@ interface ScoredRow {
   method: string | null;
 }
 
-// LLM commentary layer (forecast-commentary edge fn → forecast.run_commentary,
-// read via public.v_forecast_commentary). Content is agent-written jsonb —
-// every field is optional and rendered defensively. BINDING rule 1: this layer
-// never alters the statistical numbers above it.
+// LLM commentary layer (forecast-commentary edge fn → forecast.run_commentary).
+// Content is agent-written jsonb — every field optional, rendered defensively.
 interface CommentaryRow {
   run_date: string;
   kind: 'challenger' | 'insight';
@@ -100,6 +102,33 @@ interface InsightContent {
   recommended_actions?: Array<{ action?: string; rationale?: string }>;
 }
 
+interface ScenarioRunRow {
+  scenario_id: number;
+  base_run_date: string;
+  horizon_days: number;
+  outputs: Record<string, unknown> | null;
+  method: string;
+  created_at: string;
+}
+
+interface JournalRow {
+  period_start: string;
+  grain: string;
+  metric: string;
+  forecast_value: number | null;
+  actual_value: number | null;
+  variance_pct: number | null;
+  classification: string | null;
+  reason: string | null;
+  lesson: string | null;
+}
+
+interface ReforecastRow {
+  checked_at: string;
+  reasons: unknown;
+  rows_written: number | null;
+}
+
 // ─── Fetchers ─────────────────────────────────────────────────────────────
 
 async function getForecastCurrent(pid: number): Promise<ForecastRow[]> {
@@ -108,13 +137,12 @@ async function getForecastCurrent(pid: number): Promise<ForecastRow[]> {
     .select('run_date, stay_date, days_out, otb_rooms, rooms_fc, occ_fc, adr_fc, rooms_rev_fc, p10, p90, method')
     .eq('property_id', pid)
     .order('stay_date')
-    .limit(1000); // horizon is 365 rows — well under the PostgREST cap
+    .limit(1000);
   if (error) { console.error('[forecast] v_forecast_current', error); return []; }
   return (data ?? []) as ForecastRow[];
 }
 
-// v_forecast_vs_actual grows daily (one row per run×stay pair). Page through
-// PostgREST's 1000-row window (§0.66 lesson — never trust a single fetch).
+// v_forecast_vs_actual grows daily — page through PostgREST's 1000-row window.
 async function getScored90d(pid: number, todayIso: string): Promise<ScoredRow[]> {
   const from = shiftDays(todayIso, -90);
   const out: ScoredRow[] = [];
@@ -149,8 +177,77 @@ async function getCommentary(pid: number): Promise<{ challenger: CommentaryRow |
   };
 }
 
+async function getScenarios(pid: number): Promise<ScenarioDef[]> {
+  const { data, error } = await supabase
+    .from('v_forecast_scenarios')
+    .select('id, scenario_kind, title, description')
+    .eq('property_id', pid)
+    .eq('active', true)
+    .order('id');
+  if (error) { console.error('[forecast] v_forecast_scenarios', error); return []; }
+  return (data ?? []) as ScenarioDef[];
+}
+
+async function getLatestScenarioRuns(pid: number): Promise<Map<number, ScenarioRunRow>> {
+  const { data, error } = await supabase
+    .from('v_forecast_scenario_runs')
+    .select('scenario_id, base_run_date, horizon_days, outputs, method, created_at')
+    .eq('property_id', pid)
+    .order('created_at', { ascending: false })
+    .limit(60);
+  if (error) { console.error('[forecast] v_forecast_scenario_runs', error); return new Map(); }
+  const out = new Map<number, ScenarioRunRow>();
+  for (const r of (data ?? []) as ScenarioRunRow[]) {
+    if (!out.has(r.scenario_id)) out.set(r.scenario_id, r); // newest first
+  }
+  return out;
+}
+
+async function getRecommendations(pid: number): Promise<RecommendationRow[]> {
+  const { data, error } = await supabase
+    .from('v_forecast_recommendations')
+    .select('id, run_date, action, rationale, status, acted_by')
+    .eq('property_id', pid)
+    .order('run_date', { ascending: false })
+    .order('id')
+    .limit(30);
+  if (error) { console.error('[forecast] v_forecast_recommendations', error); return []; }
+  return (data ?? []) as RecommendationRow[];
+}
+
+async function getRecommendationStats(pid: number): Promise<{ total: number; accepted: number; executed: number; dismissed: number; acceptance_rate_pct: number | null } | null> {
+  const { data, error } = await supabase
+    .from('v_forecast_recommendation_stats')
+    .select('total, accepted, executed, dismissed, acceptance_rate_pct')
+    .eq('property_id', pid)
+    .maybeSingle();
+  if (error) { console.error('[forecast] v_forecast_recommendation_stats', error); return null; }
+  return data as { total: number; accepted: number; executed: number; dismissed: number; acceptance_rate_pct: number | null } | null;
+}
+
+async function getLearningJournal(pid: number): Promise<JournalRow[]> {
+  const { data, error } = await supabase
+    .from('v_forecast_learning_journal')
+    .select('period_start, grain, metric, forecast_value, actual_value, variance_pct, classification, reason, lesson')
+    .eq('property_id', pid)
+    .order('period_start', { ascending: false })
+    .limit(14);
+  if (error) { console.error('[forecast] v_forecast_learning_journal', error); return []; }
+  return (data ?? []) as JournalRow[];
+}
+
+async function getReforecastLog(pid: number): Promise<ReforecastRow[]> {
+  const { data, error } = await supabase
+    .from('v_forecast_reforecast_log')
+    .select('checked_at, reasons, rows_written')
+    .eq('property_id', pid)
+    .order('checked_at', { ascending: false })
+    .limit(12);
+  if (error) { console.error('[forecast] v_forecast_reforecast_log', error); return []; }
+  return (data ?? []) as ReforecastRow[];
+}
+
 async function getLyRoomsByMonth(pid: number, fromIso: string, toIso: string): Promise<Map<string, number>> {
-  // LY window = forecast window shifted −1 year; bucket by the FORECAST month key.
   const { data, error } = await supabase
     .from('mv_kpi_daily')
     .select('night_date, rooms_sold')
@@ -189,12 +286,79 @@ function monthEnd(ym: string): string {
   d.setUTCMonth(d.getUTCMonth() + 1);
   return new Date(d.getTime() - 86400000).toISOString().slice(0, 10);
 }
+function daysBetween(aIso: string, bIso: string): number {
+  return Math.round((new Date(bIso + 'T00:00:00Z').getTime() - new Date(aIso + 'T00:00:00Z').getTime()) / 86400000);
+}
 
-// ─── Statistical engine v1 section (lib/forecast) ─────────────────────────
-// Monthly-grain 12-month outlook: Occupancy %, ADR, RevPAR, Rooms Revenue
-// (USALI names, PMS-layer USD). Deterministic statistics only — the three
-// panels after the table are PLACEHOLDER SLOTS for the v2 LLM layers and
-// render no generated content in v1.
+// ─── Confidence Model (owner MD) — deterministic components ───────────────
+// "Confidence is calculated from: historical accuracy, data freshness, signal
+//  quality, agreement between models, data completeness, current volatility.
+//  Confidence is always shown. Never hide uncertainty." — and never hide WHY.
+// Every component below is computed from data already on this page; the
+// composite formula is disclosed in the UI. The LLM Challenger's adjustment is
+// applied last and shown separately — it never rewrites the components.
+
+interface ConfidenceComponent { name: string; score: number; note: string }
+
+function computeConfidence(args: {
+  curMape: number | null;
+  blendMape: number | null;
+  curCoverage: number | null;
+  curN: number;
+  blendCoverage: number | null;
+  runAgeDays: number;
+  completenessPct: number;
+  agreementGapPp: number | null;
+  reforecasts7d: number;
+  challengerAdj: number | null;
+}): { components: ConfidenceComponent[]; base: number; adjusted: number } {
+  const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
+  const mape = args.curN >= 6 ? args.curMape : args.blendMape;
+  const mapeSrc = args.curN >= 6 ? 'live engine' : 'all engines (live sample too thin)';
+  const cov = args.curN >= 6 ? args.curCoverage : args.blendCoverage;
+
+  const components: ConfidenceComponent[] = [
+    {
+      name: 'Historical accuracy',
+      score: mape == null ? 50 : clamp(100 - mape * 2),
+      note: mape == null ? 'no scored forecasts yet' : `${mape.toFixed(1)}% occupancy MAPE, ${mapeSrc} · score = 100 − 2×MAPE`,
+    },
+    {
+      name: 'Data freshness',
+      score: args.runAgeDays <= 1 ? 100 : args.runAgeDays <= 2 ? 70 : args.runAgeDays <= 4 ? 40 : 10,
+      note: `latest engine run is ${args.runAgeDays} day${args.runAgeDays === 1 ? '' : 's'} old (nightly cadence expected)`,
+    },
+    {
+      name: 'Signal quality (calibration)',
+      score: cov == null ? 50 : clamp(cov),
+      note: cov == null ? 'no band-coverage evidence yet' : `${cov.toFixed(0)}% of actuals landed inside the stated p10–p90 band (target 80%)`,
+    },
+    {
+      name: 'Model agreement',
+      score: args.agreementGapPp == null ? 50 : clamp(100 - args.agreementGapPp * 5),
+      note: args.agreementGapPp == null
+        ? 'second model unavailable this run'
+        : `nightly SQL engine vs independent TS engine differ by ${args.agreementGapPp.toFixed(1)} occupancy points over the next 30 days`,
+    },
+    {
+      name: 'Data completeness',
+      score: clamp(args.completenessPct),
+      note: `${args.completenessPct.toFixed(0)}% of forecast rows carry full ADR + revenue values`,
+    },
+    {
+      name: 'Current volatility',
+      score: clamp(100 - args.reforecasts7d * 15),
+      note: args.reforecasts7d === 0
+        ? 'no event-driven reforecasts in the last 7 days — demand is stable'
+        : `${args.reforecasts7d} event-driven reforecast${args.reforecasts7d === 1 ? '' : 's'} in the last 7 days (pickup/cancellation shocks)`,
+    },
+  ];
+  const base = Math.round(components.reduce((a, c) => a + c.score, 0) / components.length);
+  const adjusted = clamp(base + (args.challengerAdj ?? 0));
+  return { components, base, adjusted };
+}
+
+// ─── Shared display helpers (module scope — §0.60) ────────────────────────
 
 function placeholderNote(text: string) {
   return (
@@ -215,6 +379,147 @@ function listBlock(label: string, items: string[] | undefined) {
     </div>
   );
 }
+
+const fmtNum = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : '—');
+const fmtSigned = (v: unknown) =>
+  typeof v === 'number' && Number.isFinite(v) ? `${v >= 0 ? '+' : ''}${Math.round(v).toLocaleString('en-US')}` : '—';
+
+// ─── Executive summary (the four MD questions, in order) ──────────────────
+
+function ExecutiveSummary({
+  insight,
+  challenger,
+  conf,
+  runDate,
+  occ30,
+  rev30,
+  occ90,
+}: {
+  insight: CommentaryRow | null;
+  challenger: CommentaryRow | null;
+  conf: { components: ConfidenceComponent[]; base: number; adjusted: number };
+  runDate: string;
+  occ30: number;
+  rev30: number;
+  occ90: number;
+}) {
+  const ic = (insight?.content ?? null) as InsightContent | null;
+  const cc = (challenger?.content ?? null) as ChallengerContent | null;
+  const verdict = String(cc?.verdict ?? '');
+  const confStatus = conf.adjusted >= 70 ? 'green' : conf.adjusted >= 45 ? 'amber' : 'red';
+
+  const improve: string[] = [
+    ...(ic?.opportunities ?? []).slice(0, 3),
+    ...((cc?.challenges ?? []).slice(0, 2).map((ch) => (ch.issue ? `Investigate: ${ch.issue}${ch.detail ? ` — ${ch.detail}` : ''}` : '')).filter(Boolean) as string[]),
+  ];
+
+  return (
+    <Container
+      title="Executive summary — what will probably happen, and why"
+      subtitle={`Engine run ${runDate} · statistical numbers, LLM narration · confidence always shown, never hidden`}
+      status={confStatus as 'green' | 'amber' | 'red'}
+      action={<FindingButton />}
+    >
+      <div style={{ display: 'grid', gap: 14 }}>
+        {/* 1 · What will probably happen */}
+        <div>
+          <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            What will probably happen
+          </p>
+          <p style={{ margin: 0, color: 'var(--ink)', fontSize: 13.5, lineHeight: 1.65 }}>
+            {ic?.summary ??
+              `Next 30 days: ${(occ30 * 100).toFixed(0)}% occupancy forecast, $${Math.round(rev30).toLocaleString('en-US')} rooms revenue. Next 90 days: ${(occ90 * 100).toFixed(0)}% occupancy. The nightly Insight narration has not landed for this run yet — numbers above are the raw statistical forecast.`}
+          </p>
+        </div>
+
+        {/* 2 · Why */}
+        {ic?.drivers && ic.drivers.length > 0 ? (
+          <div>
+            <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              Why — major drivers
+            </p>
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink)', fontSize: 12.5, lineHeight: 1.7 }}>
+              {ic.drivers.map((d, i) => (<li key={i}>{d}</li>))}
+            </ul>
+          </div>
+        ) : null}
+
+        {/* 3 · How confident — and WHY that confidence */}
+        <div>
+          <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            How confident — {conf.adjusted}%{verdict ? ` · challenger verdict: ${verdict}` : ''}
+          </p>
+          <div style={{ display: 'grid', gap: 4 }}>
+            {conf.components.map((c) => (
+              <div key={c.name} style={{ display: 'grid', gridTemplateColumns: '170px 44px 1fr', gap: 8, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 12.5, color: 'var(--ink)' }}>{c.name}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: c.score >= 70 ? 'var(--status-green, #2E7D32)' : c.score >= 45 ? 'var(--sand, #B8A878)' : 'var(--terracotta, #B8542A)' }}>
+                  {c.score}
+                </span>
+                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{c.note}</span>
+              </div>
+            ))}
+          </div>
+          <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--ink-soft)' }}>
+            Composite = mean of the six components ({conf.base}){typeof challenger?.confidence_adjustment === 'number' && challenger.confidence_adjustment !== 0 ? ` ${challenger.confidence_adjustment > 0 ? '+' : ''}${challenger.confidence_adjustment} challenger adjustment` : ''} → {conf.adjusted}%. Deterministic formula — the Challenger may adjust, never rewrite.
+          </p>
+        </div>
+
+        {/* 4 · What could improve the outcome */}
+        {improve.length > 0 ? (
+          <div>
+            <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              What could improve the outcome
+            </p>
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink)', fontSize: 12.5, lineHeight: 1.7 }}>
+              {improve.map((d, i) => (<li key={i}>{d}</li>))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </Container>
+  );
+}
+
+// ─── Risks · opportunities · findings (Insight narration) ─────────────────
+
+function InsightSection({ row }: { row: CommentaryRow | null }) {
+  const c = (row?.content ?? null) as InsightContent | null;
+  return (
+    <Container
+      title="Findings, risks & opportunities"
+      subtitle={
+        row
+          ? `LLM framing of run ${row.run_date} · narration only — the forecast itself stays statistical · ${row.model ?? ''}`
+          : 'Numbers → business findings (e.g. demand shifted later than the historical booking window)'
+      }
+      status={c ? undefined : 'grey'}
+    >
+      {c ? (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {(c.findings ?? []).length > 0 ? (
+            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.7 }}>
+              {(c.findings ?? []).map((f, i) => (
+                <li key={i}>
+                  <strong style={{ color: 'var(--ink)' }}>{f.title ?? 'finding'}</strong>
+                  {f.confidence ? ` (${f.confidence} confidence)` : ''}{f.detail ? ` — ${f.detail}` : ''}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {listBlock('Risks', c.risks)}
+          {listBlock('Opportunities', c.opportunities)}
+        </div>
+      ) : (
+        placeholderNote(
+          'No Insight yet for the latest run. The nightly forecast-commentary agent (19:00 UTC) turns the engine output into named business findings with confidence levels.',
+        )
+      )}
+    </Container>
+  );
+}
+
+// ─── Challenger ───────────────────────────────────────────────────────────
 
 function ChallengerSection({ row }: { row: CommentaryRow | null }) {
   const c = (row?.content ?? null) as ChallengerContent | null;
@@ -251,63 +556,204 @@ function ChallengerSection({ row }: { row: CommentaryRow | null }) {
           {listBlock('Stale-data flags', c.stale_data_flags)}
         </div>
       ) : (
-        placeholderNote(
-          'No Challenger review yet for the latest run. The nightly forecast-commentary agent (19:00 UTC) attempts to prove the forecast wrong and adjusts confidence. It never changes the statistical numbers above.',
-        )
+        placeholderNote('No Challenger review yet for the latest run. The nightly forecast-commentary agent (19:00 UTC) attempts to prove the forecast wrong and adjusts confidence.')
       )}
     </Container>
   );
 }
 
-function InsightSection({ row }: { row: CommentaryRow | null }) {
-  const c = (row?.content ?? null) as InsightContent | null;
+// ─── Scenario Engine comparison ───────────────────────────────────────────
+
+function ScenarioSection({
+  propertyId,
+  scenarios,
+  latestRuns,
+}: {
+  propertyId: number;
+  scenarios: ScenarioDef[];
+  latestRuns: Map<number, ScenarioRunRow>;
+}) {
+  const base = scenarios.find((s) => s.scenario_kind === 'no_intervention');
+  const baseRun = base ? latestRuns.get(base.id) : undefined;
+  const baseOut = (baseRun?.outputs ?? null) as Record<string, unknown> | null;
+
+  const rows = scenarios.map((s) => {
+    const run = latestRuns.get(s.id);
+    const o = (run?.outputs ?? null) as Record<string, unknown> | null;
+    return {
+      scenario: s.title,
+      occ: o ? `${o['occ_scenario_pct'] ?? '—'}%` : '—',
+      adr: o ? `$${fmtNum(o['adr_scenario'])}` : '—',
+      revenue: o ? `$${fmtNum(o['revenue_scenario'])}` : '—',
+      rev_delta: o ? `$${fmtSigned(o['revenue_delta'])}` : '—',
+      gop_impact: o ? `$${fmtSigned(o['gop_impact'])}` : '—',
+      confidence: o ? `${o['confidence_pct'] ?? '—'}%` : 'not run yet',
+      run_date: run ? run.base_run_date.slice(0, 10) : '—',
+    };
+  });
+  const series: ChartSeries[] = [
+    { key: 'occ', label: 'Occupancy' },
+    { key: 'adr', label: 'ADR' },
+    { key: 'revenue', label: 'Rooms revenue' },
+    { key: 'rev_delta', label: 'Δ revenue vs base' },
+    { key: 'gop_impact', label: 'GOP impact' },
+    { key: 'confidence', label: 'Confidence' },
+    { key: 'run_date', label: 'Base run' },
+  ];
+
+  const anyRun = Array.from(latestRuns.values())[0];
+  const risks = scenarios
+    .map((s) => {
+      const o = (latestRuns.get(s.id)?.outputs ?? null) as Record<string, unknown> | null;
+      return o && typeof o['risk'] === 'string' && s.scenario_kind !== 'no_intervention'
+        ? `${s.title}: ${o['risk']}`
+        : null;
+    })
+    .filter(Boolean) as string[];
+
   return (
     <Container
-      title="Insight — findings, drivers, risks, opportunities"
-      subtitle={
-        row
-          ? `LLM framing of run ${row.run_date} · recommendations only, humans and Vector execute · ${row.model ?? ''}`
-          : 'Numbers → business findings (e.g. demand shifted later than the historical booking window)'
-      }
-      status={c ? undefined : 'grey'}
+      title="Scenario Engine — alternative futures, compared"
+      subtitle={`Deterministic recompute over the current statistical forecast (${anyRun ? `horizon ${anyRun.horizon_days}d` : 'no runs yet'}) · simulations only — recommend, never execute`}
+      status={latestRuns.size > 0 ? undefined : 'grey'}
     >
-      {c ? (
-        <div style={{ display: 'grid', gap: 10 }}>
-          {c.summary ? <p style={{ margin: 0, color: 'var(--ink)', fontSize: 13, lineHeight: 1.6 }}>{c.summary}</p> : null}
-          {(c.findings ?? []).length > 0 ? (
-            <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.7 }}>
-              {(c.findings ?? []).map((f, i) => (
-                <li key={i}>
-                  <strong style={{ color: 'var(--ink)' }}>{f.title ?? 'finding'}</strong>
-                  {f.confidence ? ` (${f.confidence} confidence)` : ''}{f.detail ? ` — ${f.detail}` : ''}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {listBlock('Drivers', c.drivers)}
-          {listBlock('Risks', c.risks)}
-          {listBlock('Opportunities', c.opportunities)}
-          {(c.recommended_actions ?? []).length > 0 ? (
-            <div>
-              <p style={{ margin: '0 0 4px', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>
-                Recommended actions — recommend only, never execute
-              </p>
-              <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink-soft)', fontSize: 12.5, lineHeight: 1.7 }}>
-                {(c.recommended_actions ?? []).map((a, i) => (
-                  <li key={i}>{a.action ?? ''}{a.rationale ? ` — ${a.rationale}` : ''}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
+      <div style={{ display: 'grid', gap: 12 }}>
+        {rows.length > 0 ? (
+          <Chart variant="table" data={rows} xKey="scenario" series={series} />
+        ) : (
+          placeholderNote('No scenarios defined for this property yet.')
+        )}
+        {baseOut ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-soft)' }}>
+            Base ({base?.title}): {String(baseOut['occ_base_pct'] ?? '—')}% occupancy · ${fmtNum(baseOut['revenue_base'])} rooms revenue over the horizon. Every scenario line above is measured against this.
+          </p>
+        ) : null}
+        {risks.length > 0 ? listBlock('Scenario risks — read before acting', risks) : null}
+        <ScenarioRunButtons propertyId={propertyId} scenarios={scenarios} />
+        {anyRun ? (
+          <details>
+            <summary style={{ cursor: 'pointer', color: 'var(--primary, #1F3A2E)', fontSize: 13, fontWeight: 600 }}>
+              Method — transparent formula, no black box
+            </summary>
+            <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 12, lineHeight: 1.7, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {anyRun.method}
+            </p>
+          </details>
+        ) : null}
+      </div>
+    </Container>
+  );
+}
+
+// ─── Error history · calibration · learning journal ───────────────────────
+
+function ErrorHistorySection({
+  scored,
+  journal,
+  accuracyData,
+  accuracySeries,
+}: {
+  scored: ScoredRow[];
+  journal: JournalRow[];
+  accuracyData: Array<Record<string, string>>;
+  accuracySeries: ChartSeries[];
+}) {
+  const journalRows = journal.map((j) => ({
+    period: j.period_start.slice(0, 10),
+    grain: j.grain,
+    metric: j.metric,
+    forecast: fmtNum(j.forecast_value),
+    actual: fmtNum(j.actual_value),
+    variance: j.variance_pct == null ? '—' : `${Number(j.variance_pct) >= 0 ? '+' : ''}${Number(j.variance_pct).toFixed(1)}%`,
+    classification: j.classification ?? '—',
+  }));
+  const journalSeries: ChartSeries[] = [
+    { key: 'grain', label: 'Grain' },
+    { key: 'metric', label: 'Metric' },
+    { key: 'forecast', label: 'Forecast' },
+    { key: 'actual', label: 'Actual' },
+    { key: 'variance', label: 'Variance' },
+    { key: 'classification', label: 'Cause' },
+  ];
+  const lessons = journal.map((j) => j.lesson ?? j.reason).filter((x): x is string => !!x && x.length > 3).slice(0, 5);
+
+  return (
+    <Container
+      title="Forecast error history & calibration"
+      subtitle={`${scored.length.toLocaleString('en-US')} scored forecasts, rolling 90 days · every night's prediction is graded against reality — nothing is forgotten`}
+    >
+      <div style={{ display: 'grid', gap: 12 }}>
+        <Chart variant="table" data={accuracyData} xKey="bucket" series={accuracySeries} />
+        <p style={{ margin: 0, color: 'var(--ink-soft)', fontSize: 12 }}>
+          A 24-room property moves ~4 occupancy points per room — judge accuracy at month grain, not
+          day grain. Coverage = how often actuals landed inside the stated p10–p90 band (design target 80%).
+        </p>
+        {journalRows.length > 0 ? (
+          <div>
+            <p style={{ margin: '0 0 6px', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>
+              Learning journal — forecast vs actual vs lesson (append-only)
+            </p>
+            <Chart variant="table" data={journalRows} xKey="period" series={journalSeries} />
+            {lessons.length > 0 ? <div style={{ marginTop: 8 }}>{listBlock('Lessons the engine has recorded', lessons)}</div> : null}
+          </div>
+        ) : (
+          placeholderNote('Learning journal is empty — the nightly writer (18:40 UTC) appends one scored lesson per completed period.')
+        )}
+      </div>
+    </Container>
+  );
+}
+
+// ─── Reforecast trigger timeline ──────────────────────────────────────────
+
+function reasonToWords(r: unknown): string {
+  if (typeof r === 'string') return r;
+  if (r && typeof r === 'object') {
+    const o = r as Record<string, unknown>;
+    const kind = String(o['kind'] ?? o['reason'] ?? 'trigger');
+    const label =
+      kind === 'big_pickup' ? 'Large pickup — demand arrived faster than forecast'
+      : kind === 'large_cancellation' ? 'Large cancellation — booked rooms fell away'
+      : kind === 'group_booking_spike' ? 'Group booking spike — a single night jumped'
+      : kind;
+    const detail = o['stay_date'] ? ` (${String(o['stay_date']).slice(0, 10)}${o['delta'] != null ? `, ${fmtSigned(Number(o['delta']))} RN` : ''})` : '';
+    return label + detail;
+  }
+  return 'trigger';
+}
+
+function ReforecastTimeline({ rows }: { rows: ReforecastRow[] }) {
+  return (
+    <Container
+      title="Event-driven reforecasts — what shook the forecast, in words"
+      subtitle="Large cancellations, group bookings and pickup spikes re-run the engine within the hour (6h debounce)"
+      status={rows.length > 0 ? undefined : 'grey'}
+    >
+      {rows.length === 0 ? (
+        placeholderNote('No event-driven reforecasts yet — the hourly trigger check has not seen a threshold breach. Quiet is a valid state.')
       ) : (
-        placeholderNote(
-          'No Insight yet for the latest run. The nightly forecast-commentary agent (19:00 UTC) turns the engine output into named business findings with confidence levels. Framing only — the forecast itself stays statistical.',
-        )
+        <div style={{ display: 'grid', gap: 8 }}>
+          {rows.map((r, i) => {
+            const reasons = Array.isArray(r.reasons) ? r.reasons : [r.reasons];
+            return (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 10, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontVariantNumeric: 'tabular-nums' }}>
+                  {String(r.checked_at).slice(0, 16).split('T').join(' ')} UTC
+                </span>
+                <span style={{ fontSize: 12.5, color: 'var(--ink)', lineHeight: 1.6 }}>
+                  {reasons.map(reasonToWords).join(' · ')}
+                  {r.rows_written ? ` → engine re-ran, ${Number(r.rows_written).toLocaleString('en-US')} forecast rows rewritten` : ''}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       )}
     </Container>
   );
 }
+
+// ─── 12-month statistical outlook (TS engine, module scope) ───────────────
 
 function EngineOutlookSection({ run }: { run: EngineRun | null }) {
   const fmtUsd = (v: number) => `$${Math.round(v).toLocaleString('en-US')}`;
@@ -350,51 +796,35 @@ function EngineOutlookSection({ run }: { run: EngineRun | null }) {
   ];
 
   return (
-    <>
-      <Container
-        title="12-month statistical outlook — engine v1 (monthly grain)"
-        subtitle={
-          run
-            ? `Deterministic TS engine (lib/forecast) · run ${run.runDate} · pace ratio ${run.pace.ratio.toFixed(2)} over ${run.pace.observedDays}d · USALI metrics · PMS layer USD`
-            : 'Deterministic TS engine (lib/forecast) — no inputs available'
-        }
-      >
-        {run ? (
-          <div style={{ display: 'grid', gap: 12 }}>
-            <Chart variant="combo" data={engineChart} xKey="month" series={engineChartSeries} height={260} />
-            <Chart variant="table" data={engineTable} xKey="month" series={engineTableSeries} />
-            <details>
-              <summary style={{ cursor: 'pointer', color: 'var(--primary, #1F3A2E)', fontSize: 13, fontWeight: 600 }}>
-                Method — transparent formula, no black box
-              </summary>
-              <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 12, lineHeight: 1.7, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-                {run.method}
-              </p>
-              <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 12, lineHeight: 1.6 }}>
-                STLY occupancy is shown against current capacity (24 → 30 rooms on 2026-07-01), so
-                LY room nights read low as a percentage by design. Cancellation risk is modeled at
-                daily grain by the nightly engine, not at monthly grain in v1. Confidence is always
-                shown — never hidden.
-              </p>
-            </details>
-          </div>
-        ) : (
-          placeholderNote(
-            'Engine inputs unavailable (v_kpi_daily / v_otb_pace returned no rows). Statistical outlook cannot be computed.',
-          )
-        )}
-      </Container>
-
-      <Container
-        title="Scenarios & recommendations — placeholder (v2 LLM slot)"
-        subtitle="What-if comparisons over engine runs · options only — recommend, never execute"
-        status="grey"
-      >
-        {placeholderNote(
-          'Not yet active. In v2 the Scenario agent compares alternative futures and the Recommendation agent proposes commercial responses. Nothing here will ever execute a price, inventory or channel change — humans and Vector decide.',
-        )}
-      </Container>
-    </>
+    <Container
+      title="12-month statistical outlook — engine v1 (monthly grain)"
+      subtitle={
+        run
+          ? `Deterministic TS engine (lib/forecast) · run ${run.runDate} · pace ratio ${run.pace.ratio.toFixed(2)} over ${run.pace.observedDays}d · USALI metrics · PMS layer USD`
+          : 'Deterministic TS engine (lib/forecast) — no inputs available'
+      }
+    >
+      {run ? (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Chart variant="combo" data={engineChart} xKey="month" series={engineChartSeries} height={260} />
+          <Chart variant="table" data={engineTable} xKey="month" series={engineTableSeries} />
+          <details>
+            <summary style={{ cursor: 'pointer', color: 'var(--primary, #1F3A2E)', fontSize: 13, fontWeight: 600 }}>
+              Method — transparent formula, no black box
+            </summary>
+            <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 12, lineHeight: 1.7, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+              {run.method}
+            </p>
+            <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 12, lineHeight: 1.6 }}>
+              STLY occupancy is shown against current capacity (24 → 30 rooms on 2026-07-01), so LY
+              room nights read low as a percentage by design. Confidence is always shown — never hidden.
+            </p>
+          </details>
+        </div>
+      ) : (
+        placeholderNote('Engine inputs unavailable (v_kpi_daily / v_otb_pace returned no rows). Statistical outlook cannot be computed.')
+      )}
+    </Container>
   );
 }
 
@@ -429,20 +859,25 @@ export default async function RevenueForecastPage({
   }));
 
   const fc = await getForecastCurrent(propertyId);
-
-  // TS engine v1 (lib/forecast) — independent of the nightly run, so the
-  // statistical outlook still renders when forecast-daily-run is down.
   const todayIso = new Date().toISOString().slice(0, 10);
-  const [engineRun, commentary] = await Promise.all([
-    runMonthlyForecast(propertyId, fc[0]?.run_date ?? todayIso),
-    getCommentary(propertyId),
-  ]);
+
+  const [engineRun, commentary, scenarios, latestRuns, recommendations, recStats, journal, reforecasts] =
+    await Promise.all([
+      runMonthlyForecast(propertyId, fc[0]?.run_date ?? todayIso),
+      getCommentary(propertyId),
+      getScenarios(propertyId),
+      getLatestScenarioRuns(propertyId),
+      getRecommendations(propertyId),
+      getRecommendationStats(propertyId),
+      getLearningJournal(propertyId),
+      getReforecastLog(propertyId),
+    ]);
 
   if (fc.length === 0) {
     return (
       <DashboardPage title="Revenue · Forecast" subtitle="365-day occupancy, ADR and revenue forecast · The Namkhan" tabs={tabs}>
         <div style={{ display: 'grid', gap: 16 }}>
-          <Container title="No forecast run available" status="red">
+          <Container title="No forecast run available" status="red" action={<FindingButton />}>
             <p style={{ margin: 0, color: 'var(--ink)', fontSize: 14 }}>
               The nightly job <code>forecast-daily-run</code> has not produced a current run.
               Check pg_cron job status and <code>public.v_forecast_current</code>.
@@ -466,30 +901,45 @@ export default async function RevenueForecastPage({
   const inBand = scored.filter((r) => r.within_band === true).length;
   const coverage90 = scored.length ? (100 * inBand) / scored.length : null;
 
-  // ── Current-engine coverage (verifier §0.V3 objection) ──
-  // The blended 90d pool is dominated by retired-engine rows, so it can never
-  // open the ship gate on time — it measures history, not the engine that is
-  // actually running. Filter scored rows to the engine version of the LATEST
-  // run (method strings are versioned: "v1.3 additive pickup: …") and judge
-  // the live engine on its own rows, with a min-n guard so a thin sample never
-  // shows green. The blended tile stays — disclosed history, never hidden.
+  // ── Current-engine coverage (ship gate, §0.V3) ──
   const engineVersion = (fc[0]?.method ?? '').match(/^v\d+(?:\.\d+)?/)?.[0] ?? null;
   const curScored = engineVersion
     ? scored.filter((r) => (r.method ?? '').startsWith(engineVersion + ' ') || r.method === engineVersion)
     : [];
   const curInBand = curScored.filter((r) => r.within_band === true).length;
   const curCoverage = curScored.length ? (100 * curInBand) / curScored.length : null;
-  const CUR_MIN_N = 20; // below this the sample cannot validate the 80% band design
+  const curApes = curScored.map((r) => Number(r.occ_ape_pct)).filter((v) => Number.isFinite(v));
+  const curMape = curApes.length ? curApes.reduce((a, b) => a + b, 0) / curApes.length : null;
+  const CUR_MIN_N = 20;
 
   const mapeStatus: KpiTileProps['status'] =
     mape90 == null ? 'grey' : mape90 <= 10 ? 'green' : mape90 <= 20 ? 'amber' : 'red';
 
-  // ── Next-30-day outlook ──
+  // ── Outlook aggregates ──
   const next30 = fc.filter((r) => r.days_out <= 30);
-  const occ30 = next30.length
-    ? next30.reduce((a, r) => a + Number(r.occ_fc ?? 0), 0) / next30.length
-    : 0;
+  const occ30 = next30.length ? next30.reduce((a, r) => a + Number(r.occ_fc ?? 0), 0) / next30.length : 0;
   const rev30 = next30.reduce((a, r) => a + Number(r.rooms_rev_fc ?? 0), 0);
+  const next90 = fc.filter((r) => r.days_out <= 90);
+  const occ90 = next90.length ? next90.reduce((a, r) => a + Number(r.occ_fc ?? 0), 0) / next90.length : 0;
+
+  // ── Confidence Model components (owner MD) ──
+  const complete = fc.filter((r) => r.adr_fc != null && r.rooms_rev_fc != null).length;
+  const completenessPct = fc.length ? (100 * complete) / fc.length : 0;
+  const engineMonth1Occ = engineRun?.months?.[0]?.occupancyPctForecast ?? null;
+  const agreementGapPp = engineMonth1Occ != null && next30.length ? Math.abs(occ30 * 100 - engineMonth1Occ) : null;
+  const reforecasts7d = reforecasts.filter((r) => daysBetween(String(r.checked_at).slice(0, 10), todayIso) <= 7).length;
+  const conf = computeConfidence({
+    curMape,
+    blendMape: mape90,
+    curCoverage,
+    curN: curScored.length,
+    blendCoverage: coverage90,
+    runAgeDays: Math.max(0, daysBetween(runDate, todayIso)),
+    completenessPct,
+    agreementGapPp,
+    reforecasts7d,
+    challengerAdj: commentary.challenger?.confidence_adjustment ?? null,
+  });
 
   const tiles: KpiTileProps[] = [
     {
@@ -533,11 +983,12 @@ export default async function RevenueForecastPage({
       kpiKey: 'pickup_vs_forecast',
     },
     {
-      label: 'Horizon · latest run',
-      value: `${fc.length}d`,
-      status: 'green',
-      footnote: `nightly run ${runDate} · pg_cron forecast-daily-run 18:15 UTC`,
-      kpiKey: 'forecast_horizon_days',
+      label: 'Recommendation acceptance',
+      value: recStats?.acceptance_rate_pct == null ? '—' : `${recStats.acceptance_rate_pct}%`,
+      status: recStats?.acceptance_rate_pct == null ? 'grey' : 'green',
+      footnote: recStats
+        ? `${recStats.total} proposed · ${recStats.accepted} accepted · ${recStats.executed} executed · ${recStats.dismissed} dismissed`
+        : 'no recommendations tracked yet',
     },
   ];
 
@@ -605,7 +1056,7 @@ export default async function RevenueForecastPage({
     { key: 'occ_fc', label: 'Occ forecast' },
   ];
 
-  // ── Accuracy by lead time (drill) ──
+  // ── Accuracy by lead time (error-history panel) ──
   const buckets: Array<{ label: string; min: number; max: number }> = [
     { label: '0–7 days out', min: 0, max: 7 },
     { label: '8–14 days out', min: 8, max: 14 },
@@ -638,10 +1089,33 @@ export default async function RevenueForecastPage({
   return (
     <DashboardPage
       title="Revenue · Forecast"
-      subtitle="365-day occupancy, ADR and revenue forecast · The Namkhan"
+      subtitle="What will happen, why, how confident — and what could improve it · The Namkhan"
       tabs={tabs}
     >
       <div style={{ display: 'grid', gap: 16 }}>
+        {/* 1 · The four MD questions, answered in plain language */}
+        <ExecutiveSummary
+          insight={commentary.insight}
+          challenger={commentary.challenger}
+          conf={conf}
+          runDate={runDate}
+          occ30={occ30}
+          rev30={rev30}
+          occ90={occ90}
+        />
+
+        {/* 2 · Findings, risks, opportunities as narrative */}
+        <InsightSection row={commentary.insight} />
+
+        {/* 3 · Recommended actions with acceptance tracking (MD success metric) */}
+        <Container
+          title="Recommended actions — options only, humans and Vector execute"
+          subtitle="Accept / dismiss / mark executed — acceptance and execution feed the module's success metrics"
+        >
+          <RecommendationList rows={recommendations} />
+        </Container>
+
+        {/* 4 · The numbers: tiles + forecast band + pickup */}
         <MetricRow tiles={tiles} />
 
         <Container
@@ -658,6 +1132,16 @@ export default async function RevenueForecastPage({
           <Chart variant="table" data={tableData} xKey="month" series={tableSeries} />
         </Container>
 
+        {/* 5 · Scenario Engine comparison */}
+        <ScenarioSection propertyId={propertyId} scenarios={scenarios} latestRuns={latestRuns} />
+
+        {/* 6 · Error history, calibration, learning journal */}
+        <ErrorHistorySection scored={scored} journal={journal} accuracyData={accuracyData} accuracySeries={accuracySeries} />
+
+        {/* 7 · Reforecast triggers in words */}
+        <ReforecastTimeline rows={reforecasts} />
+
+        {/* 8 · Transparency: how the forecast is computed */}
         <Container
           title="How this forecast is computed"
           subtitle="Transparent formula — no black box. Every component reads a named view."
@@ -680,25 +1164,12 @@ export default async function RevenueForecastPage({
             <p style={{ margin: 0, color: 'var(--ink-soft)', fontSize: 12 }}>
               Engine method string (stored on every forecast row): {method}
             </p>
-            <details>
-              <summary style={{ cursor: 'pointer', color: 'var(--primary, #1F3A2E)', fontSize: 13, fontWeight: 600 }}>
-                Accuracy by lead time (rolling 90 days)
-              </summary>
-              <div style={{ marginTop: 12 }}>
-                <Chart variant="table" data={accuracyData} xKey="bucket" series={accuracySeries} />
-                <p style={{ margin: '8px 0 0', color: 'var(--ink-soft)', fontSize: 12 }}>
-                  A 24-room property moves ~4 occupancy points per room — judge accuracy at month
-                  grain, not day grain. The model self-corrects as pace history accrues; every
-                  night adds scored observations.
-                </p>
-              </div>
-            </details>
           </div>
         </Container>
 
+        {/* 9 · Independent second model + adversarial review */}
         <EngineOutlookSection run={engineRun} />
         <ChallengerSection row={commentary.challenger} />
-        <InsightSection row={commentary.insight} />
       </div>
     </DashboardPage>
   );
