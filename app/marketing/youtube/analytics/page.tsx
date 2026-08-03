@@ -31,6 +31,7 @@ const OK     = '#0E7A4B';
 interface RunRow {
   id: string;
   generated_at: string;
+  next_page_token: string | null;
   model: string | null;
   video_count: number | null;
   overall_grade: string | null;
