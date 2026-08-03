@@ -12,6 +12,7 @@ interface Props {
   currentTitle: string;
   suggestedTitle?: string | null;
   notes?: string | null;
+  initialAddedVideos?: string[];
   initialDone?: boolean;
   initialAction?: string | null;
 }
@@ -48,7 +49,7 @@ export default function PlaylistVerdictActions({
   const [open, setOpen] = useState(false);
   const [newTitle, setNewTitle] = useState(suggestedTitle ?? currentTitle);
   const [addingVideo, setAddingVideo] = useState<string | null>(null);
-  const [addedVideos, setAddedVideos] = useState<Set<string>>(new Set());
+  const [addedVideos, setAddedVideos] = useState<Set<string>>(new Set(initialAddedVideos ?? []));
 
   // Merge state
   const [mergeOpen, setMergeOpen] = useState(false);
