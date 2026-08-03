@@ -18,8 +18,17 @@ const ACTORS: Record<string, { slug: string; buildInput: (url: string, max: numb
     }),
   },
   expedia: {
-    slug: 'tri_angle~hotel-review-aggregator',
-    buildInput: (url, max) => ({ startUrls: [{ url }], maxReviews: max }),
+    // 2026-08-03 (GBP brief §0.B expedia round 2): tri_angle~hotel-review-aggregator
+    // is a proven dead end for this property — its provider "Get Urls" matcher finds
+    // no Booking/Expedia pages for The Namkhan even from a valid Google place id
+    // (run Q3e0HHPqSbbdGH3Qd log: "[booking] Failed to get any URLs"), and its input
+    // schema accepts no direct provider URLs. tri_angle~expedia-hotels-com-reviews-
+    // scraper is blocked by its ghost-fetch gateway (403 insufficient-permissions for
+    // this token); shahidirfan~expedia-reviews-scraper 402s on the plan's remaining
+    // usage. mof1re~expedia-reviews-scraper runs on the existing token/plan and
+    // returned real Namkhan reviews on the 2026-08-03 dry-run (net resp 1061110).
+    slug: 'mof1re~expedia-reviews-scraper',
+    buildInput: (url, max) => ({ listingUrls: [url], maxResults: max, sortBy: 'most_recent' }),
   },
 };
 
@@ -76,34 +85,48 @@ function mapBookingReview(it: Record<string, unknown>): Record<string, unknown> 
   };
 }
 
-// Map a tri_angle~hotel-review-aggregator item (expedia source) onto
-// marketing.reviews. The aggregator's exact schema varies by platform, so
-// every field falls back across the common key spellings; anything unmapped
-// survives in `raw`. Rating scale is detected (Expedia is 10-scale; some
-// aggregator outputs normalize to 5) and disclosed via rating_scale — the
-// ingest fn normalizes from rating_raw + rating_scale.
+// Map a mof1re~expedia-reviews-scraper item onto marketing.reviews.
+// Verified item shape from the 2026-08-03 dry-run (net resp 1061110):
+// review_id, rating_number (10-scale), rating_value "10/10", rating_text,
+// review_locale ("ja_JP"|null), review_title, review_text, what_liked,
+// what_disliked, review_date "Jun 30, 2026", review_reply_title,
+// review_reply_text, reviewer_name, review_is_verified, travel_type.
+// Old aggregator key spellings are kept as fallbacks; unmapped keys survive in `raw`.
 function mapExpediaReview(it: Record<string, unknown>): Record<string, unknown> | null {
-  const rid = String(it.reviewId ?? it.review_id ?? it.id ?? '');
+  const rid = String(it.review_id ?? it.reviewId ?? it.id ?? '');
   if (!rid) return null;
   const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
-  const ratingRaw = num(it.rating) ?? num(it.score) ?? num(it.stars) ?? num(it.overallRating) ?? null;
+  const ratingRaw = num(it.rating_number) ?? num(it.rating) ?? num(it.score) ?? num(it.overallRating) ?? null;
   const ratingScale = ratingRaw != null && ratingRaw <= 5 ? 5 : 10;
+  // Body: review text plus the structured liked/disliked lines Expedia appends.
+  const text = str(it.review_text) ?? str(it.text) ?? str(it.reviewText) ?? str(it.body) ?? null;
+  const liked = str(it.what_liked);
+  const disliked = str(it.what_disliked);
+  const body = [text, liked && `+ ${liked}`, disliked && `- ${disliked}`].filter(Boolean).join('\n\n') || null;
   const responseText =
-    str(it.propertyResponse) ?? str(it.managementResponse) ?? str(it.ownerResponse) ?? null;
+    str(it.review_reply_text) ?? str(it.propertyResponse) ?? str(it.managementResponse) ?? null;
   const hasResponse = responseText != null && responseText.length > 5;
+  // review_date arrives as "Jun 30, 2026" — normalize to ISO for reviewed_at.
+  const rawDate = str(it.review_date) ?? str(it.reviewedAt) ?? str(it.reviewDate) ?? str(it.publishedDate) ?? null;
+  let reviewedAt: string | null = null;
+  if (rawDate) {
+    const parsed = new Date(rawDate);
+    reviewedAt = Number.isNaN(parsed.getTime()) ? rawDate : parsed.toISOString();
+  }
+  // review_locale "ja_JP" → language "ja".
+  const locale = str(it.review_locale) ?? str(it.reviewLanguage) ?? str(it.language) ?? null;
+  const language = locale ? locale.split(/[_-]/)[0] : null;
   return {
     source_review_id: rid,
-    reviewer_name:
-      str(it.userName) ?? str(it.user_name) ?? str(it.author) ?? str(it.reviewerName) ?? str(it.name) ?? null,
+    reviewer_name: str(it.reviewer_name) ?? str(it.userName) ?? str(it.author) ?? str(it.reviewerName) ?? null,
     reviewer_country: str(it.userCountry) ?? str(it.country) ?? null,
     rating_raw: ratingRaw,
     rating_scale: ratingScale,
-    title: str(it.reviewTitle) ?? str(it.title) ?? str(it.heading) ?? null,
-    body: str(it.text) ?? str(it.reviewText) ?? str(it.body) ?? str(it.comment) ?? str(it.description) ?? null,
-    language: str(it.reviewLanguage) ?? str(it.language) ?? str(it.locale) ?? null,
-    reviewed_at:
-      str(it.reviewedAt) ?? str(it.reviewDate) ?? str(it.publishedDate) ?? str(it.date) ?? str(it.submissionTime) ?? null,
+    title: str(it.review_title) ?? str(it.reviewTitle) ?? str(it.title) ?? null,
+    body,
+    language,
+    reviewed_at: reviewedAt,
     response_status: hasResponse ? 'responded' : 'unanswered',
     response_text: hasResponse ? responseText : null,
     responded_by: hasResponse ? 'the_namkhan' : null,
