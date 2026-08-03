@@ -162,7 +162,10 @@ export default async function YtAnalyticsPage() {
                 </div>
               )}
             </div>
-            <RunAuditButton />
+            <RunAuditButton
+              initialNextToken={latest?.next_page_token ?? null}
+              batchCount={runs.length}
+            />
           </div>
         </div>
 
