@@ -12,17 +12,21 @@ export const revalidate = 0;
 
 async function fetchData(moduleName: string) {
   const sb = getSupabaseAdmin() as any;
-  const [{ data: truthRows }, { data: findings }] = await Promise.all([
+  const [{ data: truthRows }, { data: findings }, { data: comments }] = await Promise.all([
     sb.from('v_module_truth').select('*').eq('module_doc_type', moduleName).limit(1),
     sb.from('v_module_findings').select('*').eq('module_doc_type', moduleName)
       .order('created_at', { ascending: false }),
+    // finding_threads_v1: dialogue thread per finding. Resolution (fixed/refuted)
+    // is gated at trigger level on a PBS-confirmed restatement in this thread.
+    sb.from('v_finding_threads').select('*').eq('module_doc_type', moduleName)
+      .order('created_at', { ascending: true }),
   ]);
-  return { truth: truthRows?.[0] ?? null, findings: findings ?? [] };
+  return { truth: truthRows?.[0] ?? null, findings: findings ?? [], comments: comments ?? [] };
 }
 
 export default async function ModuleFindingsPage({ params }: { params: { module: string } }) {
   const moduleName = decodeURIComponent(params.module);
-  const { truth, findings } = await fetchData(moduleName);
+  const { truth, findings, comments } = await fetchData(moduleName);
 
   const specPct = truth?.spec_pct ?? null;
   const testedPct = truth?.tested_pct ?? null;
@@ -61,7 +65,7 @@ export default async function ModuleFindingsPage({ params }: { params: { module:
         )}
         {' '}· Open blocking findings stop completion at the database trigger — resolving them here is the only way through.
       </p>
-      <FindingsClient module={moduleName} findings={findings} />
+      <FindingsClient module={moduleName} findings={findings} comments={comments} />
     </div>
   );
 }
