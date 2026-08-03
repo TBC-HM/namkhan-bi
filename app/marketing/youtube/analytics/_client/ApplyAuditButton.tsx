@@ -1,8 +1,7 @@
 'use client';
 // app/marketing/youtube/analytics/_client/ApplyAuditButton.tsx
-// Apply audit suggestions (title / description / tags) to YouTube for one video.
-// Shows inline progress and a ✓ badge on success.
-
+// Fix 2026-08-03: initialApplied now ignored when currentGrade < A — a previously
+// applied video that Lens still grades B/D needs re-action, not a frozen ✓ badge.
 import { useState } from 'react';
 
 interface Props {
@@ -10,24 +9,35 @@ interface Props {
   suggestedTitle?: string | null;
   suggestedDescription?: string | null;
   suggestedTags?: string[] | null;
-  initialApplied?: boolean; // pre-populated from yt_action_log — survives refresh
+  initialApplied?: boolean;
+  currentGrade?: string | null;
 }
 
 const FOREST = '#084838';
-const AMBER  = '#B48A3A';
 const RED    = '#B03826';
 const OK     = '#0E7A4B';
 const WHITE  = '#FFFFFF';
 const INK_M  = '#5A5A5A';
 const HAIR   = '#E6DFCC';
 
-export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDescription, suggestedTags, initialApplied }: Props) {
-  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>(initialApplied ? 'done' : 'idle');
+export default function ApplyAuditButton({
+  videoId, suggestedTitle, suggestedDescription, suggestedTags,
+  initialApplied, currentGrade,
+}: Props) {
+  // Only start as 'done' if previously applied AND Lens is now happy (grade A).
+  // If grade is B/D, Lens still has suggestions — show the action button.
+  const gradeA = currentGrade?.toUpperCase() === 'A';
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>(
+    (initialApplied && gradeA) ? 'done' : 'idle'
+  );
   const [errMsg, setErrMsg] = useState('');
   const [open, setOpen] = useState(false);
 
   const hasChanges = suggestedTitle || suggestedDescription || (suggestedTags && suggestedTags.length > 0);
-  if (!hasChanges) return null;
+  if (!hasChanges && !gradeA) return null;
+  if (!hasChanges && gradeA) {
+    return <span style={{ fontSize: 10, color: OK, fontWeight: 700, padding: '3px 8px', border: `1px solid ${OK}`, borderRadius: 3 }}>✓ Grade A</span>;
+  }
 
   async function apply() {
     setState('busy');
@@ -37,24 +47,18 @@ export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDes
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          video_id:    videoId,
+          video_id: videoId,
           ...(suggestedTitle       ? { title:       suggestedTitle }       : {}),
           ...(suggestedDescription ? { description: suggestedDescription } : {}),
           ...(suggestedTags?.length ? { tags:       suggestedTags }        : {}),
         }),
       });
       const j = await res.json();
-      if (!res.ok || !j.ok) {
-        setErrMsg(j.detail ?? j.error ?? 'unknown error');
-        setState('error');
-        return;
-      }
+      if (!res.ok || !j.ok) { setErrMsg(j.detail ?? j.error ?? 'unknown error'); setState('error'); return; }
       setState('done');
       setOpen(false);
-      // Persist applied state so it survives page refreshes
       fetch('/api/marketing/youtube/log-action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entity_type: 'video', entity_id: videoId, action: 'applied' }),
       }).catch(() => {});
     } catch (e: unknown) {
@@ -65,8 +69,7 @@ export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDes
 
   if (state === 'done') {
     return (
-      <span style={{ fontSize: 10, color: OK, fontWeight: 700, padding: '3px 8px',
-        border: `1px solid ${OK}`, borderRadius: 3 }}>
+      <span style={{ fontSize: 10, color: OK, fontWeight: 700, padding: '3px 8px', border: `1px solid ${OK}`, borderRadius: 3 }}>
         ✓ Applied
       </span>
     );
@@ -93,10 +96,7 @@ export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDes
           padding: 14, width: 340, boxShadow: '0 6px 20px rgba(0,0,0,.12)',
           fontSize: 11.5, color: '#1B1B1B',
         }}>
-          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 12 }}>
-            Push these changes to YouTube?
-          </div>
-
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 12 }}>Push these changes to YouTube?</div>
           {suggestedTitle && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ color: INK_M, fontSize: 10, marginBottom: 2 }}>TITLE</div>
@@ -123,11 +123,7 @@ export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDes
               </div>
             </div>
           )}
-
-          {state === 'error' && (
-            <div style={{ color: RED, fontSize: 10, marginBottom: 8 }}>Error: {errMsg}</div>
-          )}
-
+          {state === 'error' && <div style={{ color: RED, fontSize: 10, marginBottom: 8 }}>Error: {errMsg}</div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button onClick={apply} style={{
               flex: 1, padding: '7px 0', background: FOREST, color: WHITE,
@@ -138,9 +134,7 @@ export default function ApplyAuditButton({ videoId, suggestedTitle, suggestedDes
             <button onClick={() => setOpen(false)} style={{
               padding: '7px 12px', background: WHITE, color: INK_M,
               border: `1px solid ${HAIR}`, borderRadius: 4, fontSize: 11, cursor: 'pointer',
-            }}>
-              Cancel
-            </button>
+            }}>Cancel</button>
           </div>
         </div>
       )}
