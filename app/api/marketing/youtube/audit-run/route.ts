@@ -292,5 +292,6 @@ export async function POST(req: Request) {
     video_count:     parsed.videos.length,
     playlist_count:  parsed.playlists.length,
     overall_grade:   parsed.overall_channel_grade,
+    next_page_token: nextPageToken,
   });
 }
