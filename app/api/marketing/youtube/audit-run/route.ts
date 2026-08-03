@@ -283,6 +283,7 @@ export async function POST(req: Request) {
     p_playlist_verdicts: parsed.playlists,
     p_raw_response:      parsed,
     p_videos:            videoRowsJson,
+    p_next_page_token:   nextPageToken,
   });
   if (rpcErr) return err('audit_persist_failed', 500, { detail: rpcErr.message });
   const runId = typeof runIdRaw === 'string' ? runIdRaw : String(runIdRaw ?? '');
