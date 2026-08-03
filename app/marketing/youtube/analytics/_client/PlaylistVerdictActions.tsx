@@ -32,8 +32,9 @@ async function getPlaylistItems(playlistId: string): Promise<string[]> {
 // Extract YouTube video IDs (11-char base64url strings) from Lens notes text
 function extractVideoIds(notes: string): string[] {
   const ids: string[] = notes.match(/[A-Za-z0-9_-]{11}/g) ?? [];
-  // Filter out common false positives (short words, known non-IDs)
-  return [...new Set(ids.filter(id => id.length === 11 && /[A-Za-z0-9_-]{11}/.test(id)))];
+  // YouTube IDs always contain at least one uppercase letter or digit.
+  // English words like "commercial-" are all-lowercase+dash and have neither — filter them out.
+  return [...new Set(ids.filter(id => /[A-Z]/.test(id) || /[0-9]/.test(id)))];
 }
 
 export default function PlaylistVerdictActions({
