@@ -31,7 +31,6 @@ const OK     = '#0E7A4B';
 interface RunRow {
   id: string;
   generated_at: string;
-  next_page_token: string | null;
   model: string | null;
   video_count: number | null;
   overall_grade: string | null;
@@ -40,6 +39,9 @@ interface RunRow {
   top_wins: string[] | null;
   top_fixes: string[] | null;
   playlist_verdicts: any;
+  // hotfix 2026-08-03 (owner-findings-ui-v1 run): field read at line ~166 but
+  // missing from the type — pre-existing tsc red on main blocked all pushes.
+  next_page_token?: string | null;
 }
 interface VidRow {
   id: number;
