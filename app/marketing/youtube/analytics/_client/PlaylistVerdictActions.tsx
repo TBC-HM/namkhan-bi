@@ -1,10 +1,10 @@
 'use client';
-// Playlist verdict CTAs v3 — merge uses live playlist dropdown (no manual ID paste).
+// Playlist verdict CTAs v4 — keep verdict now shows notes + extracted video IDs with Add CTA.
 import { useState } from 'react';
 
 const FOREST = '#084838'; const RED = '#B03826'; const AMBER = '#B48A3A';
 const OK = '#0E7A4B'; const WHITE = '#FFFFFF'; const HAIR = '#E6DFCC';
-const INK = '#1B1B1B'; const INK_M = '#5A5A5A';
+const INK = '#1B1B1B'; const INK_M = '#5A5A5A'; const CREAM = '#F4EFE2';
 
 interface Props {
   playlistId: string;
@@ -29,13 +29,25 @@ async function getPlaylistItems(playlistId: string): Promise<string[]> {
   return j.video_ids ?? [];
 }
 
-export default function PlaylistVerdictActions({ playlistId, verdict, currentTitle, suggestedTitle, initialDone, initialAction }: Props) {
+// Extract YouTube video IDs (11-char base64url strings) from Lens notes text
+function extractVideoIds(notes: string): string[] {
+  const ids = notes.match(/\b([A-Za-z0-9_-]{11})\b/g) ?? [];
+  // Filter out common false positives (short words, known non-IDs)
+  return [...new Set(ids.filter(id => id.length === 11 && /[A-Za-z0-9_-]{11}/.test(id)))];
+}
+
+export default function PlaylistVerdictActions({
+  playlistId, verdict, currentTitle, suggestedTitle, notes,
+  initialDone, initialAction,
+}: Props) {
   const [done, setDone] = useState(initialDone ?? false);
   const [doneLabel, setDoneLabel] = useState(initialAction ?? '');
   const [busy, setBusy_] = useState(false);
   const [errMsg, setErr] = useState('');
   const [open, setOpen] = useState(false);
   const [newTitle, setNewTitle] = useState(suggestedTitle ?? currentTitle);
+  const [addingVideo, setAddingVideo] = useState<string | null>(null);
+  const [addedVideos, setAddedVideos] = useState<Set<string>>(new Set());
 
   // Merge state
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -91,6 +103,20 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
     setBusy(false);
   }
 
+  async function addVideo(videoId: string) {
+    setAddingVideo(videoId);
+    try {
+      const res = await fetch('/api/marketing/youtube/manage-playlist', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add_video', playlist_id: playlistId, video_id: videoId }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setErr(j.detail ?? j.error ?? 'failed'); }
+      else { setAddedVideos(prev => new Set([...prev, videoId])); await logAction(playlistId, 'video_added', videoId); }
+    } catch (e: unknown) { setErr(e instanceof Error ? e.message : 'network'); }
+    setAddingVideo(null);
+  }
+
   async function doMerge() {
     if (!targetId) { setErr('Select a target playlist'); return; }
     const targetTitle = playlists.find(p => p.id === targetId)?.title ?? targetId;
@@ -131,7 +157,51 @@ export default function PlaylistVerdictActions({ playlistId, verdict, currentTit
   }
 
   if (v === 'keep') {
-    return <div style={{ marginTop: 6 }}><span style={{ fontSize: 10, color: OK, fontWeight: 600, padding: '2px 8px', border: '1px solid ' + OK, borderRadius: 3 }}>✓ Keep</span></div>;
+    const suggestedIds = notes ? extractVideoIds(notes) : [];
+    return (
+      <div style={{ marginTop: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 10, color: OK, fontWeight: 600, padding: '2px 8px', border: '1px solid ' + OK, borderRadius: 3 }}>✓ Keep</span>
+          {notes && (
+            <button onClick={() => setOpen(o => !o)}
+              style={{ fontSize: 10, color: FOREST, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 600 }}>
+              {open ? 'Close ▴' : 'Lens notes ▾'}
+            </button>
+          )}
+        </div>
+        {open && notes && (
+          <div style={{ marginTop: 8, background: CREAM, border: '1px solid ' + HAIR, borderRadius: 3, padding: '10px 12px' }}>
+            <div style={{ fontSize: 11, color: INK, lineHeight: 1.5, marginBottom: suggestedIds.length > 0 ? 10 : 0 }}>{notes}</div>
+            {suggestedIds.length > 0 && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: INK_M, textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>
+                  Videos to add ({suggestedIds.length}):
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  {suggestedIds.map(vid => (
+                    <div key={vid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <a href={`https://youtube.com/watch?v=${vid}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 10, color: FOREST, fontFamily: 'ui-monospace,monospace', textDecoration: 'underline' }}>
+                        {vid}
+                      </a>
+                      {addedVideos.has(vid) ? (
+                        <span style={{ fontSize: 10, color: OK, fontWeight: 600 }}>✓ added</span>
+                      ) : (
+                        <button onClick={() => addVideo(vid)} disabled={addingVideo === vid}
+                          style={{ fontSize: 10, padding: '2px 8px', background: FOREST, color: WHITE, border: 'none', borderRadius: 2, cursor: 'pointer', fontWeight: 600, opacity: addingVideo === vid ? 0.5 : 1 }}>
+                          {addingVideo === vid ? '…' : '+ Add to playlist'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {errMsg && <div style={{ fontSize: 10, color: RED, marginTop: 6 }}>{errMsg}</div>}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (v === 'kill') {
