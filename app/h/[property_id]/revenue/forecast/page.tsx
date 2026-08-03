@@ -44,6 +44,7 @@ import { runMonthlyForecast, type EngineRun } from '@/lib/forecast';
 import {
   RecommendationList,
   ScenarioRunButtons,
+  CustomScenarioForm,
   FindingButton,
   type RecommendationRow,
   type ScenarioDef,
@@ -108,6 +109,7 @@ interface ScenarioRunRow {
   horizon_days: number;
   outputs: Record<string, unknown> | null;
   method: string;
+  narrative: string | null;
   created_at: string;
 }
 
@@ -191,7 +193,7 @@ async function getScenarios(pid: number): Promise<ScenarioDef[]> {
 async function getLatestScenarioRuns(pid: number): Promise<Map<number, ScenarioRunRow>> {
   const { data, error } = await supabase
     .from('v_forecast_scenario_runs')
-    .select('scenario_id, base_run_date, horizon_days, outputs, method, created_at')
+    .select('scenario_id, base_run_date, horizon_days, outputs, method, narrative, created_at')
     .eq('property_id', pid)
     .order('created_at', { ascending: false })
     .limit(60);
@@ -629,7 +631,47 @@ function ScenarioSection({
           </p>
         ) : null}
         {risks.length > 0 ? listBlock('Scenario risks — read before acting', risks) : null}
+        {(() => {
+          // Scenario Agent narration — LLM narrates finished deterministic runs
+          // (owner MD Scenario Agent element; numbers never come from the model).
+          const narrated = scenarios
+            .map((s) => {
+              const run = latestRuns.get(s.id);
+              return run ? { title: s.title, narrative: run.narrative } : null;
+            })
+            .filter(Boolean) as Array<{ title: string; narrative: string | null }>;
+          if (narrated.length === 0) return null;
+          const pendingCount = narrated.filter((n) => !n.narrative).length;
+          return (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {narrated
+                .filter((n) => n.narrative)
+                .map((n) => (
+                  <div
+                    key={n.title}
+                    style={{
+                      padding: '8px 10px',
+                      border: '1px solid var(--hairline, #E6DFCC)',
+                      borderRadius: 8,
+                      background: 'var(--paper, #FFFFFF)',
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--ink, #1B1B1B)' }}>{n.title}</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
+                      {n.narrative}
+                    </p>
+                  </div>
+                ))}
+              {pendingCount > 0 ? (
+                <p style={{ margin: 0, fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+                  {pendingCount} run{pendingCount > 1 ? 's' : ''} awaiting Scenario Agent narration (hourly sweep) — the numbers above are final either way.
+                </p>
+              ) : null}
+            </div>
+          );
+        })()}
         <ScenarioRunButtons propertyId={propertyId} scenarios={scenarios} />
+        <CustomScenarioForm propertyId={propertyId} />
         {anyRun ? (
           <details>
             <summary style={{ cursor: 'pointer', color: 'var(--primary, #1F3A2E)', fontSize: 13, fontWeight: 600 }}>
