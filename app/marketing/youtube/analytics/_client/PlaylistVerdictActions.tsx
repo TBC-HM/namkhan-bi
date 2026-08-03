@@ -40,7 +40,7 @@ function extractVideoIds(notes: string): string[] {
 
 export default function PlaylistVerdictActions({
   playlistId, verdict, currentTitle, suggestedTitle, notes,
-  initialDone, initialAction,
+  initialAddedVideos, initialDone, initialAction,
 }: Props) {
   const [done, setDone] = useState(initialDone ?? false);
   const [doneLabel, setDoneLabel] = useState(initialAction ?? '');
