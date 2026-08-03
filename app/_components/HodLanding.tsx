@@ -67,14 +67,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   // PBS 2026-07-14 HOTFIX: compute report catalogue BEFORE the Promise.all
   // so the .in('template_key', allowedTemplateKeys) filters are legal (no TDZ).
   const reportTypes = cfg.reportTypes ?? [];
-  // Generic daily/weekly/monthly template keys belong to Revenue's canonical
-  // report catalogue. Other HoDs (operations, finance, marketing, holding_*)
-  // surface ONLY their dept-specific report types so their Scheduled reports
-  // + Send log don't pick up Revenue's daily digests.
   const includeGenericScheduled = slug === 'revenue';
-  // PBS 2026-07-14 · Ops HoD surfaces the operations_daily template so the
-  // Report Scheduler dropdown has a "Daily" that maps to render-operations-report
-  // (not the revenue daily). Preview URL is dept-aware via previewHrefBuilder below.
   const includeOperationsScheduled = slug === 'operations';
   const reportOptions = [
     ...(includeGenericScheduled ? [
@@ -88,7 +81,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
     ...reportTypes.map((rt) => ({ value: rt.value, label: rt.label })),
   ];
   const allowedTemplateKeys = reportOptions.map((o) => o.value);
-  // Sentinel avoids Supabase .in('template_key', []) throwing on empty allow-list.
   const templateFilter = allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'];
 
   const [dueTasksRes, scheduledRes, sendsRes, myReportsRes, shortcutsRes] = await Promise.all([
@@ -136,11 +128,9 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
     active: s.label === 'HoD',
   }));
 
-  // One-channel command law (rule 658) + it-area-reorg-v1 gap 2: the old
-  // /cockpit/chat persona-tab surface is retired (redirect stub) and the dept
-  // param died in the redirect anyway. Central Chat is the ONE channel —
-  // Felix dispatches; no per-dept chat context.
-  const chatHref = '/holding/it2/fleet/chat';
+  // Central Chat is the ONE channel — Felix dispatches per one-channel law.
+  // /holding/chat renders CentralChat with Second Brain / General mode toggle.
+  const chatHref = '/holding/chat';
 
   const actionBar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -154,7 +144,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   return (
     <DashboardPage
       title={`${cfg.pillTitle ?? slug} · ${cfg.hodName}`}
-      subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      subtitle={new Date().toISOString().slice(0, 10)}
       tabs={hodTabs}
       action={actionBar}
     >
@@ -183,7 +173,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
               {myReportRows.map((r) => (
                 <li key={r.id} style={{ fontSize: 11, color: '#1B1B1B', display: 'flex', gap: 6, alignItems: 'baseline' }}>
                   <span style={{ fontWeight: 600 }}>{r.report_name}</span>
-                  <span style={{ color: '#5A5A5A' }}>· {new Date(r.sent_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span style={{ color: '#5A5A5A' }}>· {r.sent_at.slice(0, 10)}</span>
                 </li>
               ))}
             </ul>
@@ -197,8 +187,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </Container>
       </div>
 
-      {/* PBS 2026-07-23 · optional 2nd row · same 4-col grid so caller's Container sits under Shortcuts */}
-      {/* PBS 2026-07-24: full-width block, no inner grid — caller controls its own layout */}
+      {/* PBS 2026-07-23 · optional 2nd row */}
       {secondRow && (
         <div style={fullRow}>
           {secondRow}
@@ -218,8 +207,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </div>
       )}
 
-      {/* PBS 2026-07-14: Build-a-report container hidden on Operations HoD — duplicated
-         function of the "Scheduled reports" recipient form below. Kept for Revenue etc. */}
       {reportTypes.length > 0 && slug !== 'operations' && (
         <div style={fullRow}>
           <Container title="Build a report" subtitle="pick a type · narrow with chips · open print-ready render" density="compact">
@@ -230,7 +217,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
 
       {extraContainers}
 
-      {/* Scheduled reports + Send log — bottom of every HoD landing */}
       <div style={fullRow}>
         <Container title="Scheduled reports"
                    subtitle="Pick any report · pick a cadence · fires at 08:00 UTC · Preview per row · check + Dismiss to cancel"
