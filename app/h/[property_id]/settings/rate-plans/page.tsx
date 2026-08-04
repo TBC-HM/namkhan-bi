@@ -3,6 +3,7 @@
 // (inside Property Settings) to its own top-level Settings page,
 // positioned between Media and Guardrails.
 import { createClient } from '@/lib/supabase/server';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import RatePlansHygienePanel from '@/components/settings/panels/RatePlansHygienePanel';
 
@@ -27,18 +28,7 @@ export default async function RatePlansSettingsPage({ params }: { params: { prop
     <DashboardPage
       title="Settings · Rate Plans"
       subtitle={`${rows.length} plans · feature toggle · LoS · deposit · cancel · payment terms · property ${propertyId}`}
-      tabs={[
-        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
-        { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
-        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans`, active: true },
-        { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
-        { key: 'documents',  label: 'Documents',  href: `/h/${propertyId}/settings/documents`  },
-        { key: 'archive',    label: 'Archive',    href: `/h/${propertyId}/settings/archive`    },
-        { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-        { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
-        { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
-        { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
-      ]}
+      tabs={getSettingsTabs(propertyId, 'rate_plans')}
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Rate plan hygiene" subtitle="feature which plans appear in the composer · deposit · cancellation · payment terms">
