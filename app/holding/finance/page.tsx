@@ -22,6 +22,7 @@ export const revalidate = 0;
 const HOLDING_PID = 0;
 
 const REPORT_PRESETS: { code: string; label: string; desc: string; href: string }[] = [
+  { code: 'commercial_os', label: 'Commercial OS (v2)',  desc: 'Business models · meters · price books · rating · assurance', href: '/holding/commercial'          },
   { code: 'invoice_new',   label: 'Create invoice',      desc: 'Issue a new Beyond Circle invoice',                   href: '/holding/finance/invoices/create'   },
   { code: 'invoice_log',   label: 'Invoices · Send log', desc: 'Every invoice ever issued · sortable + Preview',      href: '/holding/finance/invoices/send-log' },
   { code: 'invoice_tpl',   label: 'Invoice template',    desc: 'Edit brand + Sender + defaults · live A4 preview',    href: '/holding/finance/invoices/template' },
