@@ -8,11 +8,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { extractText } from '@/lib/docs/extract';
+import { ocrPlainText, ocrMediaKindFor } from '@/lib/docs/visionOcr';
 import { callAnthropic, isLlmOk } from '@/lib/legal-memo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const maxDuration = 180; // OCR fallback adds a Haiku vision pass on scanned PDFs
 
 const LANG_LABEL: Record<string, string> = {
   en: 'English',
@@ -58,9 +59,26 @@ export async function POST(req: NextRequest) {
   if (dlErr || !blob) return NextResponse.json({ ok: false, error: `download: ${dlErr?.message ?? 'no blob'}` }, { status: 500 });
   const buffer = Buffer.from(await blob.arrayBuffer());
 
-  const text = await extractText({ buffer, mimeType: row.mime ?? '', fileName: row.file_name ?? 'doc' });
+  let text = await extractText({ buffer, mimeType: row.mime ?? '', fileName: row.file_name ?? 'doc' });
+  let usedOcr = false;
+
+  // OCR fallback (owner finding #34, legal_module-owner-findings-v1):
+  // scanned PDFs and document photos come back empty from extractText —
+  // most Lao legal docs are exactly that. Fall back to Vision OCR before
+  // giving up, same worker contract as brain-extract.
   if (!text.trim()) {
-    return NextResponse.json({ ok: false, error: 'no extractable text (try OCR-first for scanned PDFs)' }, { status: 422 });
+    const media = ocrMediaKindFor(row.mime ?? '', row.file_name ?? '');
+    if (media) {
+      try {
+        text = await ocrPlainText({ buffer, fileName: row.file_name ?? 'doc', media });
+        usedOcr = true;
+      } catch (e: any) {
+        return NextResponse.json({ ok: false, error: `ocr: ${e?.message ?? 'failed'}` }, { status: 502 });
+      }
+    }
+  }
+  if (!text.trim()) {
+    return NextResponse.json({ ok: false, error: 'no extractable text (native extraction and OCR both empty)' }, { status: 422 });
   }
 
   // Translation budget: cap input + give Claude room for the full translation.
@@ -80,6 +98,7 @@ export async function POST(req: NextRequest) {
     translation: r.text.trim(),
     file_name: row.file_name,
     truncated: wasClipped,
+    ocr: usedOcr,
     usage: r.usage,
   });
 }
