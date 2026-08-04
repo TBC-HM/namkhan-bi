@@ -1,10 +1,10 @@
 // app/api/brain/review/route.ts
-// BRAIN v1 · review-queue endpoints for /holding/it/brain.
-//   GET  → { status, queue }  (pipeline tiles + needs_human rows)
+// BRAIN v1 · review-queue endpoints.
+//   GET  ?pid=<property_id> → { status, queue, missing, battery } scoped to that brain.
+//          pid=0   → Holding brain (dms.documents WHERE property_id IS NULL)
+//          pid=n   → Tenant brain  (dms.documents WHERE property_id = n)
+//          no pid  → all three brains combined
 //   POST → { doc_id, doc_kind, sensitivity, note? } → fn_brain_review_confirm.
-// Confirm sets classification_status='human_confirmed'; newly-included docs are
-// picked up by the classify worker's chunk stage on its next pass.
-// Session-gated by middleware like every /api/* route; DB via service role.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -16,15 +16,18 @@ export const dynamic = 'force-dynamic';
 const KINDS = new Set<string>(BRAIN_DOC_KINDS);
 const TIERS = new Set<string>(BRAIN_TIERS);
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const pidStr = req.nextUrl.searchParams.get('pid');
+  const propertyId = pidStr !== null && pidStr !== '' ? parseInt(pidStr, 10) : null;
+
   const sb = getSupabaseAdmin();
-  // BRAIN v5: + missing-file summary (D4b) + battery last runs (D7/A9)
   const [statusRes, queueRes, missingRes, batteryRes] = await Promise.all([
-    sb.from('v_brain_pipeline_status').select('*').single(),
-    sb.from('v_brain_review_queue').select('*').limit(200),
-    sb.from('v_brain_missing_summary').select('*').single(),
+    sb.rpc('fn_brain_pipeline_status', { p_property_id: propertyId }).single(),
+    sb.rpc('fn_brain_review_queue', { p_property_id: propertyId }),
+    sb.rpc('fn_brain_missing_summary', { p_property_id: propertyId }).single(),
     sb.from('v_brain_battery_recent').select('*').limit(5),
   ]);
+
   if (statusRes.error) return NextResponse.json({ ok: false, error: statusRes.error.message }, { status: 500 });
   return NextResponse.json({
     ok: true,
