@@ -3,6 +3,7 @@
 // missing integrations surfaced with setup CTAs.
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import IntegrationDetail from './_client/IntegrationDetail';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -18,6 +19,9 @@ interface IntRow {
   last_check_status: string | null; purpose: string | null;
   vault_secret_names: string[] | null; notes: string | null;
   last_check_at: string | null; website_url: string | null; api_docs_url: string | null;
+  managed_by: string | null;
+  linked_sync_entity: string | null; linked_cron_name: string | null;
+  check_frequency_hours: number | null;
 }
 
 // What each slug powers in the product
