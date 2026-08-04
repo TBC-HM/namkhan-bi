@@ -167,7 +167,14 @@ export default async function WebsitePreviewPage() {
 
   const home = siteData?.pages?.find((p) => p.slug === '/') ?? null;
   const logo = home?.images?.find((i) => i.role === 'logo') ?? home?.images?.[0] ?? null;
-  const bodyMd = home?.sections?.[0]?.body_md ?? '';
+  // CMS-1: sections are typed blocks now — join them all (nav/footer blocks
+  // are site chrome duplicated by the crawl; skip). Single legacy 'copy'
+  // sections join to the identical blob, so behavior is unchanged pre/post
+  // block migration.
+  const bodyMd = (home?.sections ?? [])
+    .filter((s) => s.kind !== 'nav' && s.kind !== 'footer')
+    .map((s) => s.body_md ?? '')
+    .join('\n');
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0E0' }}>
