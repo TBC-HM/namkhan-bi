@@ -5,7 +5,7 @@
 // PBS 2026-07-27 (v2) — DECISION INBOX. His words: "i need one cockpit where i
 // have all ctas i cannot dig around in 3 pages to find whatever to approve."
 // This page is now the ONE place with every pending owner action:
-//   1. Questions the machine is waiting on (briefs + bugs walkthrough)
+//   1. Questions the machine is waiting on (briefs + bugs + law proposals walkthrough)
 //   2. Sign-offs ready (brief shipped, module awaiting PBS freeze — one click here)
 //   3. PRs awaiting merge (agent runs that opened a PR the loop could not auto-merge)
 
@@ -30,7 +30,7 @@ async function signOffAction(formData: FormData) {
 
 export default async function QuestionsPage() {
   const sb = getSupabaseAdmin();
-  const [{ data: briefs }, { data: bugs }, { data: queue }, { data: statuses }, { data: agentRuns }] = await Promise.all([
+  const [{ data: briefs }, { data: bugs }, { data: queue }, { data: statuses }, { data: agentRuns }, { data: lawProps }] = await Promise.all([
     // it-area-reorg-v1 gap 1 (2026-07-30): include 'verifying' — verifiers park
     // owner questions on briefs without flipping them to needs_input. The inbox
     // must show every open_question regardless of which loop stage parked it.
@@ -52,6 +52,11 @@ export default async function QuestionsPage() {
       .eq('phase', 'done')
       .gte('started_at', new Date(Date.now() - 7 * 86400_000).toISOString())
       .order('started_at', { ascending: false }),
+    // laws-page-v1 (2026-08-04): law change/retire proposals are question
+    // contracts too — they surface here and are decided via /api/cockpit/laws/answer.
+    (sb as any).from('v_law_change_proposals')
+      .select('id, law_id, kind, question, law_excerpt')
+      .eq('status', 'open'),
   ]);
 
   // ---- Section 1: open questions (walkthrough) ----
@@ -72,6 +77,16 @@ export default async function QuestionsPage() {
       kind: 'bug', ref: String(bug.id), title: (bug.body ?? '').split('\n')[0].slice(0, 80),
       question: q.question, options: q.options, asked_by: q.asked_by,
       link: `/holding/bugs`,
+    });
+  }
+  for (const p of (lawProps ?? [])) {
+    const q = p.question as RawQ;
+    if (!q?.question || !q?.options?.length) continue;
+    questions.push({
+      kind: 'law', ref: String(p.id),
+      title: `Law #${p.law_id} · ${p.kind === 'retire' ? 'retire?' : 'change wording?'} — ${(p.law_excerpt ?? '').slice(0, 60)}`,
+      question: q.question, options: q.options, asked_by: q.asked_by,
+      link: `/holding/it2/system/laws?law=${p.law_id}`,
     });
   }
 
