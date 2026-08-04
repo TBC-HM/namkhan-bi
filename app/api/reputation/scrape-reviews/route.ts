@@ -98,7 +98,21 @@ function mapExpediaReview(it: Record<string, unknown>): Record<string, unknown> 
   const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
   const ratingRaw = num(it.rating_number) ?? num(it.rating) ?? num(it.score) ?? num(it.overallRating) ?? null;
-  const ratingScale = ratingRaw != null && ratingRaw <= 5 ? 5 : 10;
+  // Scale (§0.V.8 fix): Expedia is ALWAYS 10-scale — a raw "4/10 Poor" stored as
+  // scale 5 reads as a GOOD review to normalized consumers. Prefer the explicit
+  // denominator in rating_value ("4/10"); mof1re items (rating_number present)
+  // are 10-scale by contract. The <=5 value heuristic survives ONLY for legacy
+  // aggregator-shaped items, which carry neither rating_value nor rating_number.
+  const denomMatch =
+    typeof it.rating_value === 'string' ? (it.rating_value as string).match(/\/\s*(\d+)/) : null;
+  const ratingScale =
+    denomMatch != null
+      ? Number(denomMatch[1])
+      : num(it.rating_number) != null
+        ? 10
+        : ratingRaw != null && ratingRaw <= 5
+          ? 5
+          : 10;
   // Body: review text plus the structured liked/disliked lines Expedia appends.
   const text = str(it.review_text) ?? str(it.text) ?? str(it.reviewText) ?? str(it.body) ?? null;
   const liked = str(it.what_liked);
