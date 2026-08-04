@@ -32,6 +32,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'guest_name required' }, { status: 400 });
     }
 
+    // Finding #38: an outside guest (no reservation link) must carry phone AND
+    // email so confirmations/reminders have a channel. Hotel guests are linked
+    // to a Cloudbeds reservation and inherit its contact details.
+    const hasReservation = typeof body.reservation_id === 'string' && body.reservation_id.trim() !== '';
+    if (!hasReservation) {
+      const email = typeof body.guest_email === 'string' ? body.guest_email.trim() : '';
+      const phone = typeof body.guest_phone === 'string' ? body.guest_phone.trim() : '';
+      if (!phone || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        return NextResponse.json(
+          { error: 'outside guests require phone and a valid email (or pick a hotel guest with a reservation)' },
+          { status: 400 },
+        );
+      }
+    }
+
     const sb = getSupabaseAdmin();
 
     // Resolve catalogue treatment (bigint) → operational spa.treatments uuid.
