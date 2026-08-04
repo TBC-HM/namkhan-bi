@@ -13,9 +13,9 @@ async function fetchArchiveStats(propertyId: number) {
   const sb = getSupabaseAdmin();
   const [totalRes, byTypeRes, recentRes] = await Promise.all([
     sb.from('dms.documents' as any).select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId),
-    sb.rpc('fn_doc_archive_stats_by_type' as any, { p_property_id: propertyId }).catch(() => ({ data: null, error: null })),
-    sb.from('v_doc_register').select('doc_type, project, last_updated_at, status').eq('property_id', propertyId)
-      .order('last_updated_at', { ascending: false }).limit(10).catch(() => ({ data: null, error: null })),
+    Promise.resolve(sb.rpc('fn_doc_archive_stats_by_type' as any, { p_property_id: propertyId })).catch(() => ({ data: null, error: null })),
+    Promise.resolve(sb.from('v_doc_register').select('doc_type, project, last_updated_at, status').eq('property_id', propertyId)
+      .order('last_updated_at', { ascending: false }).limit(10)).catch(() => ({ data: null, error: null })),
   ]);
   return {
     total: totalRes.count ?? 0,
