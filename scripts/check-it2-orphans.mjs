@@ -30,6 +30,7 @@ const ALLOWLIST = new Set([
   '/holding/it2/questions',   // Decision Inbox — linked from Action Center Zone 1
   '/holding/it2/system/live', // Live Builders heartbeat — linked contextually from System (ADR-209)
   '/holding/it2/fleet/chat',  // redirect stub — Chat lives in front nav bar (CEO/Sales/Marketing), not IT2 sub-tabs
+  '/holding/it2/fleet/tasks', // redirect stub — Tasks KILLED by action-center-inbox-v1 (2026-08-04); tickets backend-only
   // Data surfaces — linked contextually from Knowledge → Data hub (consolidation 2026-07-31):
   '/holding/it2/knowledge/data/schemas',
   '/holding/it2/knowledge/data/freshness',
