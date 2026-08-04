@@ -1,14 +1,16 @@
 // app/marketing/website/preview/[...slug]/page.tsx
-// v4: photos wired from media library (mkt_media_assets). Placeholder shown
-// when no photo available for a slot. Room pages use room_type_id FK;
-// others use property_area text match.
+// v5 (CMS-1): sections are typed blocks (block catalog, website-module-v1
+// CMS v1) rendered via _site/blocks.tsx; nav/footer blocks are skipped as
+// chrome. Legacy single 'copy' sections render exactly as v4 (renderMd
+// fallback). Photos stay wired from media library (mkt_media_assets);
+// room pages use room_type_id FK; others use property_area text match.
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { SiteNav, PreviewBanner, BOOK_URL } from '../_site/Nav';
 import { SiteFooter } from '../_site/Footer';
-import { renderMd } from '../_site/md';
+import { renderBlocks, type BlockRow } from '../_site/blocks';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -20,7 +22,7 @@ type PageRow = {
   status: string | null; meta: Record<string, unknown> | null;
   room_type_id: number | null; retreat_ref: string | null; updated_at: string | null;
 };
-type SectionRow = { id: number; heading: string | null; body_md: string | null; sort_order: number | null };
+type SectionRow = BlockRow;
 type ImgMeta   = { id: number; alt: string | null; role: string | null };
 type BlogImg   = { page_id: number; role: string | null };
 type MediaRow  = { master_path: string | null; caption: string | null; alt_text: string | null; primary_tier: string | null };
@@ -114,14 +116,16 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
   const page = pd as PageRow;
 
   const [{ data: sd }, { data: imgd }] = await Promise.all([
-    sb.from('v_website_sections').select('id,heading,body_md,sort_order')
+    sb.from('v_website_sections').select('id,kind,heading,body_md,sort_order,data')
       .eq('property_id', PROPERTY_ID).eq('page_id', page.id).order('sort_order', { ascending: true }),
     sb.from('v_website_media').select('id,alt,role')
       .eq('property_id', PROPERTY_ID).eq('page_id', page.id),
   ]);
   const sections = (sd ?? []) as SectionRow[];
   const crawlImgs = (imgd ?? []) as ImgMeta[];
-  const rawBody   = sections[0]?.body_md ?? '';
+  // Joined markdown of all blocks = the original crawled blob (used only for
+  // label/lead extraction); rendering goes block-by-block via renderBlocks.
+  const rawBody   = sections.map(s => s.body_md ?? '').join('\n');
   const body      = stripTitle(rawBody);
   const hasHero   = crawlImgs.some(i => i.role === 'hero' || i.role === 'og');
   const galCount  = crawlImgs.filter(i => i.role === 'gallery').length;
@@ -182,18 +186,18 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
       <PreviewBanner slug={slug} />
       <SiteNav slug={slug} />
       {kind === 'blog_index'  ? <BlogIndex page={page} posts={blogPosts} hasImg={blogHasImg} photos={photos} /> :
-       kind === 'blog_post'   ? <BlogPost  page={page} hasHero={hasHero} body={body} heroUrl={photos[0] ?? null} /> :
-       kind === 'legal'       ? <Legal     page={page} body={body} /> :
-       kind === 'room'        ? <Room      page={page} photos={photos} galCount={galCount} body={body} metaDesc={metaDesc} /> :
-                                <Core      page={page} hasHero={hasHero} photos={photos} galCount={galCount} body={body} metaDesc={metaDesc} />}
+       kind === 'blog_post'   ? <BlogPost  page={page} hasHero={hasHero} sections={sections} body={body} heroUrl={photos[0] ?? null} /> :
+       kind === 'legal'       ? <Legal     page={page} sections={sections} /> :
+       kind === 'room'        ? <Room      page={page} photos={photos} galCount={galCount} sections={sections} body={body} metaDesc={metaDesc} /> :
+                                <Core      page={page} hasHero={hasHero} photos={photos} galCount={galCount} sections={sections} body={body} metaDesc={metaDesc} />}
       <SiteFooter />
     </div>
   );
 }
 
 // ── Room ───────────────────────────────────────────────────────────────────
-function Room({ page, photos, galCount, body, metaDesc }: {
-  page: PageRow; photos: string[]; galCount: number; body: string; metaDesc: string | null;
+function Room({ page, photos, galCount, sections, body, metaDesc }: {
+  page: PageRow; photos: string[]; galCount: number; sections: SectionRow[]; body: string; metaDesc: string | null;
 }) {
   const heroUrl = photos[0] ?? null;
   const galUrls = photos.slice(1);
@@ -230,7 +234,7 @@ function Room({ page, photos, galCount, body, metaDesc }: {
 
       {/* Body + gallery */}
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '52px 24px 80px' }}>
-        <div style={{ marginBottom: 40 }}>{renderMd(body)}</div>
+        <div style={{ marginBottom: 40 }}>{renderBlocks(sections, { stripFirstH1: true })}</div>
         {galCount > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10, marginBottom: 48 }}>
             {Array.from({ length: galCount }).map((_, i) => (
@@ -250,8 +254,8 @@ function Room({ page, photos, galCount, body, metaDesc }: {
 }
 
 // ── Core ───────────────────────────────────────────────────────────────────
-function Core({ page, hasHero, photos, galCount, body, metaDesc }: {
-  page: PageRow; hasHero: boolean; photos: string[]; galCount: number; body: string; metaDesc: string | null;
+function Core({ page, hasHero, photos, galCount, sections, body, metaDesc }: {
+  page: PageRow; hasHero: boolean; photos: string[]; galCount: number; sections: SectionRow[]; body: string; metaDesc: string | null;
 }) {
   return (
     <main>
@@ -263,7 +267,7 @@ function Core({ page, hasHero, photos, galCount, body, metaDesc }: {
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '52px 24px 80px' }}>
         {!hasHero && <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '1rem', letterSpacing: '-0.02em' }}>{page.title}</h1>}
         {metaDesc && !body && <p style={{ fontSize: '1.1rem', lineHeight: 1.8, color: INK2, marginBottom: '2rem' }}>{metaDesc}</p>}
-        {body && <div>{renderMd(body)}</div>}
+        {body && <div>{renderBlocks(sections, { stripFirstH1: true })}</div>}
         {galCount > 0 && (
           <div style={{ marginTop: 56, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
             {Array.from({ length: galCount }).map((_, i) => <Img key={i} url={photos[i + 1] ?? null} />)}
@@ -275,7 +279,7 @@ function Core({ page, hasHero, photos, galCount, body, metaDesc }: {
 }
 
 // ── Blog post ──────────────────────────────────────────────────────────────
-function BlogPost({ page, hasHero, body, heroUrl }: { page: PageRow; hasHero: boolean; body: string; heroUrl: string | null }) {
+function BlogPost({ page, hasHero, sections, body, heroUrl }: { page: PageRow; hasHero: boolean; sections: SectionRow[]; body: string; heroUrl: string | null }) {
   const date = (page.meta as Record<string, string>)?.date ?? null;
   return (
     <main>
@@ -284,7 +288,7 @@ function BlogPost({ page, hasHero, body, heroUrl }: { page: PageRow; hasHero: bo
         <Link href="/marketing/website/preview/blog" style={{ fontSize: 12, color: GREEN, textDecoration: 'none', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 24 }}>← The Namkhan Journal</Link>
         {date && <div style={{ fontSize: 13, color: '#8B7355', marginBottom: 8 }}>{date}</div>}
         <h1 style={{ fontSize: '2.2rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '1.5rem', lineHeight: 1.3, letterSpacing: '-0.02em' }}>{page.title}</h1>
-        <div>{renderMd(body)}</div>
+        <div>{renderBlocks(sections, { stripFirstH1: true })}</div>
       </div>
     </main>
   );
@@ -315,11 +319,11 @@ function BlogIndex({ page, posts, hasImg, photos }: { page: PageRow; posts: Page
 }
 
 // ── Legal ──────────────────────────────────────────────────────────────────
-function Legal({ page, body }: { page: PageRow; body: string }) {
+function Legal({ page, sections }: { page: PageRow; sections: SectionRow[] }) {
   return (
     <main style={{ maxWidth: 740, margin: '0 auto', padding: '52px 24px 80px' }}>
       <h1 style={{ fontSize: '2rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '2rem' }}>{page.title}</h1>
-      <div style={{ fontSize: 14, lineHeight: 1.85, color: INK2 }}>{renderMd(body)}</div>
+      <div style={{ fontSize: 14, lineHeight: 1.85, color: INK2 }}>{renderBlocks(sections, { stripFirstH1: true })}</div>
     </main>
   );
 }
