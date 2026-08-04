@@ -2,6 +2,7 @@
 // PBS 2026-08-02 — All photo settings + upload consolidated in property settings.
 // Photo upload → existing media pipeline (sign+finalize+Iris QA).
 // SettingsTab imported from marketing/media — no code duplication.
+// 2026-08-03 — SettingsTab moved to top of page (PBS: sub-menu was hidden at bottom).
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -74,26 +75,8 @@ export default async function MediaSettingsPage({ params }: { params: { property
       subtitle={`Photo upload · settings · guardrails · channels · AI profiles · property ${propertyId}`}
       tabs={SETTINGS_TABS(propertyId)}
     >
-      {/* Upload — goes through existing sign+finalize+Iris QA pipeline */}
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Upload photos & videos" subtitle="Drag & drop or click — routed through existing Iris QA scoring and mapping pipeline">
-          <div style={{ padding: 16 }}>
-            <UploadDropzone />
-          </div>
-        </Container>
-      </div>
-
-      {/* Media QA — naming conventions + backfill re-score */}
-      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
-        <Container title="Media QA" subtitle="naming convention rules · scoring · backfill re-score">
-          <div style={{ padding: 16 }}>
-            <MediaQaPanel propertyId={propertyId} />
-          </div>
-        </Container>
-      </div>
-
       {/* Photo Settings — 6-tab panel: Link Photos · Guardrails · Output Channels · AI Profiles · Photo Guardrails · Prompt Categories */}
-      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
+      <div style={{ gridColumn: '1 / -1' }}>
         <Container
           title="Photo Settings"
           subtitle="Link photos · guardrails · output channels · AI profiles · photo guardrails · prompt categories"
@@ -109,6 +92,24 @@ export default async function MediaSettingsPage({ params }: { params: { property
             mediaPage={[]}
             guardrails={d.guardrails}
           />
+        </Container>
+      </div>
+
+      {/* Upload — goes through existing sign+finalize+Iris QA pipeline */}
+      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
+        <Container title="Upload photos & videos" subtitle="Drag & drop or click — routed through existing Iris QA scoring and mapping pipeline">
+          <div style={{ padding: 16 }}>
+            <UploadDropzone />
+          </div>
+        </Container>
+      </div>
+
+      {/* Media QA — naming conventions + backfill re-score */}
+      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
+        <Container title="Media QA" subtitle="naming convention rules · scoring · backfill re-score">
+          <div style={{ padding: 16 }}>
+            <MediaQaPanel propertyId={propertyId} />
+          </div>
         </Container>
       </div>
     </DashboardPage>
