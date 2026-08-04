@@ -200,9 +200,12 @@ async function main() {
     ];
 
     let turns = 0;
-    while (turns < MAX_TURNS && Date.now() - STARTED < WALL_MS && !finished) {
+    while (!finished && turns < MAX_TURNS && Date.now() - STARTED < WALL_MS) {
       turns++;
       const resp = await anthropic(messages);
+      if (resp.stop_reason === 'max_tokens')
+        throw new Error('model hit max_tokens — brief too complex for single slice');
+
       messages.push({ role: 'assistant', content: resp.content });
 
       const toolUses = (resp.content as any[]).filter((c) => c.type === 'tool_use');
@@ -277,9 +280,10 @@ async function main() {
     if (!finished) {
       const reason = turns >= MAX_TURNS ? 'turn budget exhausted' : 'wall clock exhausted';
       console.error('run ended without finish:', reason);
+      // ZOMBIE-LEAK FIX (owner-signal-responder-v1 §0.E): reset brief to ready so it can be re-fired
       await sql(
-        `UPDATE documentation.build_briefs SET content_md = content_md || ${sqlLit(
-          `\n\n> GHA brief-builder run ${RUN_ID}: ended without clean finish (${reason}) after ${turns} turns — brief left for auto-unstall/next round.\n`
+        `UPDATE documentation.build_briefs SET status = 'ready', content_md = content_md || ${sqlLit(
+          `\n\n> BUILDER-FAILED (${WORKER}): ${reason} after ${turns} turns — brief reset to ready for retry.\n`
         )}, version = version + 1, last_updated_at = now(), last_updated_by = ${sqlLit(WORKER)} WHERE slug = ${sqlLit(
           BRIEF_SLUG
         )}`
