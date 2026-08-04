@@ -1,5 +1,6 @@
 // app/holding/it2/_lib/groups.ts
 // FINAL PERMANENT NAV — PBS approved 2026-08-02.
+// 2026-08-03 — Settings removed from System subs; gear lives in top bar now.
 
 export type It2GroupKey = 'home' | 'knowledge' | 'agents' | 'build' | 'system';
 
@@ -13,9 +14,6 @@ interface GroupSpec {
 export const GROUPS: GroupSpec[] = [
   {
     key: 'home', label: 'Action Center', href: '/holding/it2',
-    // action-center-inbox-v1 (2026-08-04): Tasks subtab KILLED (PBS: "kind of
-    // crap ... no cta") — tickets are backend-only; awaits_user notices render
-    // in the Action Center response strip.
     subs: [
       { href: '/holding/it2/fleet/bugs',   label: 'Bugs' },
       { href: '/holding/it2/system/live',  label: '⬤ Live' },
@@ -56,7 +54,6 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it2/system/activity',  label: 'Activity' },
       { href: '/holding/it2/system/cost',      label: 'Cost' },
       { href: '/holding/it2/system/recovery',  label: 'Recovery' },
-      { href: '/holding/settings',             label: '⚙ Settings' },
     ],
   },
 ];
