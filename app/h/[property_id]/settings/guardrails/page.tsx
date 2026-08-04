@@ -4,6 +4,7 @@
 // via lib/rules/wiring.ts + server-side data probes.
 
 import { DashboardPage } from '@/app/(cockpit)/_design';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import GuardrailsClient from '@/app/settings/guardrails/_components/GuardrailsClient';
 import { computeRuleStatus, type ProbeResult, type RuleStatus } from '@/lib/rules/wiring';
@@ -109,18 +110,7 @@ export default async function PropertyGuardrailsPage({
     <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
       <DashboardPage
         title="Settings · Guardrails"
-        tabs={[
-          { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
-          { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
-          { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
-          { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails`, active: true },
-          { key: 'documents',  label: 'Documents',  href: `/h/${propertyId}/settings/documents`  },
-          { key: 'archive',    label: 'Archive',    href: `/h/${propertyId}/settings/archive`    },
-          { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-          { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
-          { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
-          { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
-        ]}
+        tabs={getSettingsTabs(propertyId, 'guardrails')}
       >
         <div style={{ gridColumn: '1 / -1' }}>
           <GuardrailsClient
