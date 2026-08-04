@@ -10,10 +10,18 @@
 #
 # Secrets reused from agent-runner.yml: ANTHROPIC_API_KEY,
 # NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_KEY.
+#
+# Trigger note (2026-08-04 smoke test): the vault PATs have contents:write but
+# NOT actions:write — workflow_dispatch via API returns 403. repository_dispatch
+# only needs contents:write and returned 204, so it is the PRIMARY trigger
+# (event_type 'brief-builder', client_payload.brief_slug). workflow_dispatch is
+# kept for manual firing from the Actions UI.
 
 name: brief-builder
 
 on:
+  repository_dispatch:
+    types: [brief-builder]
   workflow_dispatch:
     inputs:
       brief_slug:
@@ -24,7 +32,7 @@ on:
 # One run per brief at a time; a second dispatch for the same slug queues
 # rather than double-claiming (fn_builder_claim would refuse anyway).
 concurrency:
-  group: brief-builder-${{ github.event.inputs.brief_slug }}
+  group: brief-builder-${{ github.event.inputs.brief_slug || github.event.client_payload.brief_slug }}
   cancel-in-progress: false
 
 permissions:
@@ -54,5 +62,5 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          BRIEF_SLUG: ${{ github.event.inputs.brief_slug }}
+          BRIEF_SLUG: ${{ github.event.inputs.brief_slug || github.event.client_payload.brief_slug }}
         run: npx tsx scripts/brief-builder-agent.ts
