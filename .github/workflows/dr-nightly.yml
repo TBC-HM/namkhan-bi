@@ -276,23 +276,63 @@ jobs:
             echo "secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}"
           } > ~/.config/rclone/rclone.conf
 
-      - name: Restore the dump and assert it is usable
+      - name: Prepare scratch database
+        run: |
+          set -euo pipefail
+          # A logical dump of this database references Supabase roles and extensions
+          # that a stock postgres:17 image does not have. Creating them first removes
+          # an entire class of restore error (Addendum v2, 2026-08-03).
+          for ROLE in anon authenticated service_role authenticator supabase_admin \
+                      supabase_auth_admin supabase_storage_admin supabase_functions_admin \
+                      supabase_replication_admin supabase_read_only_user dashboard_user; do
+            PGPASSWORD=drill psql -h localhost -p 5433 -U postgres -qtAX -c \
+              "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${ROLE}') THEN CREATE ROLE \"${ROLE}\" NOLOGIN; END IF; END \$\$;"
+          done
+          for EXT in pgcrypto uuid-ossp pg_stat_statements pg_trgm btree_gin btree_gist unaccent; do
+            PGPASSWORD=drill psql -h localhost -p 5433 -U postgres -qtAX -c \
+              "CREATE EXTENSION IF NOT EXISTS \"${EXT}\";" || echo "::warning::extension ${EXT} unavailable in scratch image"
+          done
+          echo "scratch prepared: 11 roles + stock extensions"
+
+      - name: Restore and compare against source
         run: |
           set -euo pipefail
           KEY="${{ needs.backup.outputs.db_key }}"
           if [ -z "$KEY" ]; then echo "no dump produced - nothing to drill"; exit 1; fi
           START=$(date -u +%s)
+          # Expected counts come from the SOURCE database - a comparative assertion
+          # cannot drift as the schema grows (Addendum v2).
+          EXP_TABLES=$(psql -qtAX -c "SELECT count(*) FROM pg_tables WHERE schemaname NOT LIKE 'pg\_%' AND schemaname <> 'information_schema';")
+          EXP_SCHEMAS=$(psql -qtAX -c "SELECT count(*) FROM information_schema.schemata WHERE schema_name NOT LIKE 'pg\_%' AND schema_name <> 'information_schema';")
           rclone copyto "r2:${R2_BUCKET}/${KEY}" ./restore.sql.gz
           # A backup nobody has restored is a hypothesis, not a backup.
           gunzip -c restore.sql.gz | PGPASSWORD=drill psql -h localhost -p 5433 -U postgres -d postgres -v ON_ERROR_STOP=0 -q > /dev/null 2> restore.err || true
-          SCHEMAS=$(PGPASSWORD=drill psql -h localhost -p 5433 -U postgres -qtAX -c "SELECT count(*) FROM information_schema.schemata WHERE schema_name NOT LIKE 'pg\_%' AND schema_name <> 'information_schema';")
+          GOT_TABLES=$(PGPASSWORD=drill psql -h localhost -p 5433 -U postgres -qtAX -c "SELECT count(*) FROM pg_tables WHERE schemaname NOT LIKE 'pg\_%' AND schemaname <> 'information_schema';")
+          GOT_SCHEMAS=$(PGPASSWORD=drill psql -h localhost -p 5433 -U postgres -qtAX -c "SELECT count(*) FROM information_schema.schemata WHERE schema_name NOT LIKE 'pg\_%' AND schema_name <> 'information_schema';")
           ROWS=$(PGPASSWORD=drill psql -h localhost -p 5433 -U postgres -qtAX -c "SELECT COALESCE(sum(n_live_tup),0) FROM pg_stat_user_tables;")
+          ERRS=$(grep -c '^ERROR' restore.err || true)
+          PCT=0
+          if [ "$EXP_TABLES" -gt 0 ]; then PCT=$(( GOT_TABLES * 100 / EXP_TABLES )); fi
+          # Failures are diagnosed, not just counted: top five recurring reasons.
+          TOP=$( (grep '^ERROR' restore.err || true) | cut -c1-160 | sort | uniq -c | sort -rn | head -5 | sed 's/^ *//' | jq -R -s 'split("\n") | map(select(length>0))')
+          [ -n "$TOP" ] || TOP='[]'
           DUR=$(( $(date -u +%s) - START ))
           PASS=false
-          if [ "$SCHEMAS" -ge 20 ] && [ "$ROWS" -gt 100000 ]; then PASS=true; fi
-          echo "restored $SCHEMAS schemas, ~$ROWS rows in ${DUR}s -> passed=$PASS"
-          psql -qtAX -c "INSERT INTO governance.dr_drills (run_id,drill_type,source_key,finished_at,duration_secs,schemas_checked,rows_asserted,passed) VALUES (${{ needs.backup.outputs.run_id }},'restore_db','${KEY}',now(),${DUR},${SCHEMAS},${ROWS},${PASS});"
+          # Pass = >=90% of tables restored AND >=20 schemas. Do NOT lower the threshold:
+          # the number is the honest measure of how much of the platform comes back.
+          if [ "$PCT" -ge 90 ] && [ "$GOT_SCHEMAS" -ge 20 ]; then PASS=true; fi
+          DETAIL=$(jq -n \
+            --argjson tables_expected "$EXP_TABLES" \
+            --argjson tables_restored "$GOT_TABLES" \
+            --argjson table_pct "$PCT" \
+            --argjson schemas_expected "$EXP_SCHEMAS" \
+            --argjson restore_errors "$ERRS" \
+            --argjson top_errors "$TOP" \
+            '{tables_expected:$tables_expected, tables_restored:$tables_restored, table_pct:$table_pct, schemas_expected:$schemas_expected, restore_errors:$restore_errors, top_errors:$top_errors}')
+          echo "restored ${GOT_TABLES}/${EXP_TABLES} tables (${PCT}%), ${GOT_SCHEMAS}/${EXP_SCHEMAS} schemas, ~${ROWS} rows, ${ERRS} restore errors in ${DUR}s -> passed=$PASS"
+          psql -qtAX -v detail="$DETAIL" -c "INSERT INTO governance.dr_drills (run_id,drill_type,source_key,finished_at,duration_secs,schemas_checked,rows_asserted,passed,detail) VALUES (${{ needs.backup.outputs.run_id }},'restore_db','${KEY}',now(),${DUR},${GOT_SCHEMAS},${ROWS},${PASS},:'detail'::jsonb);"
           if [ "$PASS" != "true" ]; then
-            echo "::error::Restore drill FAILED - the backup did not restore cleanly"
+            echo "::error::Restore drill FAILED - ${PCT}% of tables restored (threshold 90%). Top reasons:"
+            tail -40 restore.err
             exit 1
           fi
