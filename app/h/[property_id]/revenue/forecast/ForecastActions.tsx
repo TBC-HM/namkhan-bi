@@ -174,6 +174,115 @@ export function ScenarioRunButtons({ propertyId, scenarios }: { propertyId: numb
   );
 }
 
+// ─── Custom what-if form ──────────────────────────────────────────────────
+// Free-form "what if rate +X%?" (owner MD parameter form, brief §V1.1 B).
+// Posts op run_custom → public.fn_forecast_scenario_custom_run (validated,
+// deterministic recompute server-side; the Scenario Agent narrates after).
+
+const input: React.CSSProperties = {
+  border: '1px solid var(--hairline, #E6DFCC)',
+  borderRadius: 6,
+  padding: '4px 8px',
+  fontSize: 12.5,
+  width: 90,
+  color: 'var(--ink, #1B1B1B)',
+  background: 'var(--paper, #FFFFFF)',
+};
+
+export function CustomScenarioForm({ propertyId }: { propertyId: number }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [adr, setAdr] = useState('');
+  const [uplift, setUplift] = useState('');
+  const [cost, setCost] = useState('');
+  const [horizon, setHorizon] = useState('90');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button style={btn} onClick={() => setOpen(true)}>
+        Ask your own what-if…
+      </button>
+    );
+  }
+
+  const submit = () => {
+    const adrN = adr === '' ? 0 : Number(adr);
+    const upliftN = uplift === '' ? 0 : Number(uplift);
+    const costN = cost === '' ? 0 : Number(cost);
+    if (Number.isNaN(adrN) || Number.isNaN(upliftN) || Number.isNaN(costN)) {
+      setErr('Numbers only.');
+      return;
+    }
+    if (adrN === 0 && upliftN === 0) {
+      setErr('Change the rate, the demand, or both — otherwise this is the base forecast.');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    void post({
+      op: 'run_custom',
+      property_id: propertyId,
+      adr_delta_pct: adrN,
+      demand_uplift_pct: upliftN,
+      one_off_cost: costN,
+      horizon_days: Number(horizon),
+    }).then((res) => {
+      setBusy(false);
+      if (res.error) setErr(res.error);
+      else {
+        setOpen(false);
+        setAdr(''); setUplift(''); setCost('');
+        startTransition(() => router.refresh());
+      }
+    });
+  };
+
+  return (
+    <div style={{ display: 'grid', gap: 6, padding: '8px 10px', border: '1px dashed var(--hairline, #E6DFCC)', borderRadius: 8 }}>
+      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: 'var(--ink, #1B1B1B)' }}>
+        What if… (free-form scenario)
+      </p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <label style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' }}>
+          Rate change %{' '}
+          <input style={input} inputMode="decimal" placeholder="+8" value={adr} onChange={(e) => setAdr(e.target.value)} />
+        </label>
+        <label style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' }}>
+          Demand uplift %{' '}
+          <input style={input} inputMode="decimal" placeholder="+10" value={uplift} onChange={(e) => setUplift(e.target.value)} />
+        </label>
+        <label style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' }}>
+          One-off cost{' '}
+          <input style={input} inputMode="decimal" placeholder="2000" value={cost} onChange={(e) => setCost(e.target.value)} />
+        </label>
+        <label style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' }}>
+          Horizon{' '}
+          <select value={horizon} onChange={(e) => setHorizon(e.target.value)} style={{ ...btn, padding: '4px 6px' }}>
+            <option value="30">30d</option>
+            <option value="60">60d</option>
+            <option value="90">90d</option>
+            <option value="180">180d</option>
+          </select>
+        </label>
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <button style={btnPrimary} disabled={busy || pending} onClick={submit}>
+          {busy ? 'Computing…' : 'Run scenario'}
+        </button>
+        <button style={btn} onClick={() => setOpen(false)}>Close</button>
+      </div>
+      {err ? <p style={{ margin: 0, fontSize: 12, color: 'var(--terracotta, #B8542A)' }}>{err}</p> : null}
+      <p style={{ margin: 0, fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)' }}>
+        Deterministic recompute over the current forecast — a simulation row, never a price change.
+        The Scenario Agent adds a plain-language narrative within the hour.
+      </p>
+    </div>
+  );
+}
+
 // ─── Findings button ──────────────────────────────────────────────────────
 
 export function FindingButton() {
