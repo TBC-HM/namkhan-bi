@@ -330,7 +330,7 @@ jobs:
             --argjson top_errors "$TOP" \
             '{tables_expected:$tables_expected, tables_restored:$tables_restored, table_pct:$table_pct, schemas_expected:$schemas_expected, restore_errors:$restore_errors, top_errors:$top_errors}')
           echo "restored ${GOT_TABLES}/${EXP_TABLES} tables (${PCT}%), ${GOT_SCHEMAS}/${EXP_SCHEMAS} schemas, ~${ROWS} rows, ${ERRS} restore errors in ${DUR}s -> passed=$PASS"
-          psql -qtAX -v detail="$DETAIL" -c "INSERT INTO governance.dr_drills (run_id,drill_type,source_key,finished_at,duration_secs,schemas_checked,rows_asserted,passed,detail) VALUES (${{ needs.backup.outputs.run_id }},'restore_db','${KEY}',now(),${DUR},${GOT_SCHEMAS},${ROWS},${PASS},:'detail'::jsonb);"
+          echo "INSERT INTO governance.dr_drills (run_id,drill_type,source_key,finished_at,duration_secs,schemas_checked,rows_asserted,passed,detail) VALUES (${{ needs.backup.outputs.run_id }},'restore_db','${KEY}',now(),${DUR},${GOT_SCHEMAS},${ROWS},${PASS},:'detail'::jsonb);" | psql -qtAX -v detail="$DETAIL"
           if [ "$PASS" != "true" ]; then
             echo "::error::Restore drill FAILED - ${PCT}% of tables restored (threshold 90%). Top reasons:"
             tail -40 restore.err
