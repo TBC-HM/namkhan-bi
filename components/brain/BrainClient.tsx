@@ -83,7 +83,8 @@ export default function BrainClient({ propertyId }: { propertyId?: number | null
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/brain/review', { cache: 'no-store' });
+      const reviewUrl = propertyId != null ? `/api/brain/review?pid=${propertyId}` : '/api/brain/review';
+      const res = await fetch(reviewUrl, { cache: 'no-store' });
       const j = await res.json();
       if (!j.ok) { setLoadErr(j.error ?? 'load failed'); return; }
       setStatus(j.status as PipelineStatus);
