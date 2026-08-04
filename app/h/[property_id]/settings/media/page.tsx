@@ -5,6 +5,7 @@
 // 2026-08-03 — SettingsTab moved to top of page (PBS: sub-menu was hidden at bottom).
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import MediaQaPanel from '@/components/settings/panels/MediaQaPanel';
 import SettingsTab from '@/app/marketing/media/_client/SettingsTab';
@@ -52,18 +53,6 @@ async function fetchAllSettingsData(propertyId: number) {
   };
 }
 
-const SETTINGS_TABS = (pid: number) => [
-  { key: 'property',   label: 'Property',   href: `/h/${pid}/settings/property`   },
-  { key: 'media',      label: 'Media',      href: `/h/${pid}/settings/media`, active: true },
-  { key: 'rate_plans', label: 'Rate Plans', href: `/h/${pid}/settings/rate-plans` },
-  { key: 'guardrails', label: 'Guardrails', href: `/h/${pid}/settings/guardrails` },
-  { key: 'documents',  label: 'Documents',  href: `/h/${pid}/settings/documents`  },
-  { key: 'archive',    label: 'Archive',    href: `/h/${pid}/settings/archive`    },
-  { key: 'data',       label: 'Data',       href: `/h/${pid}/settings/data`       },
-  { key: 'brain',      label: 'Brain',      href: `/h/${pid}/settings/brain`      },
-  { key: 'send_logs',  label: 'Send Logs',  href: `/h/${pid}/settings/send-logs`  },
-  { key: 'knowledge',  label: 'Knowledge',  href: `/h/${pid}/settings/knowledge`  },
-];
 
 export default async function MediaSettingsPage({ params }: { params: { property_id: string } }) {
   const propertyId = Number(params.property_id);
@@ -73,7 +62,7 @@ export default async function MediaSettingsPage({ params }: { params: { property
     <DashboardPage
       title="Settings · Media"
       subtitle={`Photo upload · settings · guardrails · channels · AI profiles · property ${propertyId}`}
-      tabs={SETTINGS_TABS(propertyId)}
+      tabs={getSettingsTabs(propertyId, 'media')}
     >
       {/* Photo Settings — 6-tab panel: Link Photos · Guardrails · Output Channels · AI Profiles · Photo Guardrails · Prompt Categories */}
       <div style={{ gridColumn: '1 / -1' }}>
