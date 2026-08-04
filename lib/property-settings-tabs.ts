@@ -17,7 +17,6 @@ export function getSettingsTabs(propertyId: number, activeKey: string): Settings
     { key: 'rate_plans',     label: 'Rate Plans',     path: `${base}/rate-plans`     },
     { key: 'guardrails',     label: 'Guardrails',     path: `${base}/guardrails`     },
     { key: 'documents',      label: 'Documents',      path: `${base}/documents`      },
-    { key: 'archive',        label: 'Archive',        path: `${base}/archive`        },
     { key: 'data',           label: 'Data',           path: `${base}/data`           },
     { key: 'brain',          label: 'Brain',          path: `${base}/brain`          },
     { key: 'send_logs',      label: 'Send Logs',      path: `${base}/send-logs`      },
