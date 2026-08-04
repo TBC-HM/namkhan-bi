@@ -6,6 +6,7 @@
 // PBS 2026-07-20 · Rate Plans tab inserted between Media and Guardrails.
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import SendLogsPanel from '@/components/settings/panels/SendLogsPanel';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
