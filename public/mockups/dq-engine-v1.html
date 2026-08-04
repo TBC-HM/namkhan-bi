@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — dq-engine-v1 · /holding/it2/system/data-quality</title>
+<style>
+  body { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; background: #FAFAF7; color: #1B1B1B; margin: 0; padding: 28px 24px; }
+  h1 { font-size: 18px; } h2 { font-size: 14px; margin: 26px 0 8px; }
+  .note { font-size: 12px; color: #5A5A5A; max-width: 720px; margin-bottom: 18px; }
+  .card { background: #FFF; border: 1px solid #E6DFCC; border-radius: 6px; padding: 14px 16px; max-width: 760px; margin-bottom: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th { text-align: left; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: #8A8A8A; padding: 4px 8px; border-bottom: 1px solid #E6DFCC; }
+  td { padding: 6px 8px; border-bottom: 1px solid #F0EBE0; vertical-align: top; }
+  tr.clickable:hover { background: #FBF7EC; cursor: pointer; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 99px; margin-right: 6px; }
+  .g { background: #2E7D32; } .r { background: #B71C1C; } .a { background: #B26A00; }
+  .pill { font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 99px; }
+  .pill.crit { background: #FDECE4; color: #B04A2F; } .pill.warn { background: #FFF3E0; color: #B26A00; } .pill.info { background: #EEF3EE; color: #2E7D32; }
+  .pill.gr { background: #E8F0FE; color: #1A56A0; } .pill.legacy { background: #F0EBE0; color: #6A5F44; }
+  .btn { font-size: 10px; font-weight: 700; padding: 4px 9px; border-radius: 3px; cursor: pointer; border: 1px solid #E6DFCC; background: #FFF; white-space: nowrap; }
+  .btn.primary { background: #B71C1C; color: #FFF; border-color: #B71C1C; }
+  .btn.ok { background: #2E7D32; color: #FFF; border-color: #2E7D32; }
+  .empty { font-size: 12px; color: #2E7D32; font-weight: 600; padding: 10px; background: #EEF3EE; border-radius: 4px; }
+  .toast { position: fixed; top: 16px; right: 16px; background: #1B1B1B; color: #FFF; font-size: 12px; font-weight: 600; padding: 10px 16px; border-radius: 6px; display: none; z-index: 9; max-width: 360px; }
+  .modal { display:none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 8; }
+  .modal .box { background:#FFF; max-width: 420px; margin: 12vh auto; padding: 18px; border-radius: 8px; }
+  .bars { display: flex; align-items: flex-end; gap: 10px; height: 90px; padding: 8px 4px 0; }
+  .wk { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9px; color: #8A8A8A; cursor: pointer; }
+  .wk .o { width: 60%; background: #B26A00; border-radius: 2px 2px 0 0; }
+  .wk .res { width: 60%; background: #2E7D32; border-radius: 2px 2px 0 0; }
+  .tag { font-size: 9px; color: #8A8A8A; }
+  .hdr { display: flex; justify-content: space-between; align-items: center; }
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<h1>DQ Engine v1 — Data Quality <span class="tag">· /holding/it2/system/data-quality · nested under System → Health (no new tab, nav law 659)</span></h1>
+<p class="note">Clickable mockup, realistic fixtures from the live DB (real matview names, real guardrail keys, real legacy rule ids).
+Answers PBS's 4 owner questions top-to-bottom: fresh &amp; trustworthy now? → what's stale/broken? → what violates rules and who fixes it? → getting better or worse?</p>
+
+<!-- 1 FRESHNESS BOARD -->
+<div class="card">
+  <div class="hdr"><h2 style="margin:0">1 · Freshness board <span class="tag">source: public.v_dq_posture · last full run 07:00 UTC (3 min ago)</span></h2>
+  <button class="btn primary" onclick="t('⚑ Findings panel opens (standard module findings flow, law 729)')">⚑ Findings</button></div>
+  <table>
+    <tr><th>Source</th><th>Class</th><th>Last data</th><th>Target</th><th>Status</th><th></th></tr>
+    <tr class="clickable" onclick="t('Drill: last-sync detail + affected pages (Daily Pickup, OTB Pace, KPI Daily)')"><td><span class="dot g"></span>Cloudbeds bronze (Namkhan)</td><td>feed watermark</td><td>12 min ago</td><td>45 min</td><td><b style="color:#2E7D32">FRESH</b></td><td class="tag">→ drill</td></tr>
+    <tr class="clickable" onclick="t('Drill: TDP_BI_HUB webhook log, last event 08:41')"><td><span class="dot g"></span>Mews via TDP hub (Donna)</td><td>feed watermark</td><td>19 min ago</td><td>60 min</td><td><b style="color:#2E7D32">FRESH</b></td><td class="tag">→ drill</td></tr>
+    <tr class="clickable" onclick="t('Drill: POS sync queue — 2 requests pending since 03:48 UTC. Affected: F&B revenue tiles, capture-rate KPI')"><td><span class="dot r"></span>Roots POS transactions</td><td>feed watermark</td><td>3.2 h ago</td><td>60 min</td><td><b style="color:#B71C1C">STALE 3.2×</b> <span class="tag">→ alarm-visible</span></td><td class="tag">→ drill</td></tr>
+    <tr class="clickable" onclick="t('Drill: kpi.freshness_log — mv_kpi_daily_by_segment, mv_revenue_by_usali_dept, v_leakage_action_pointers stale >30min')"><td><span class="dot a"></span>KPI matviews (13 watched)</td><td>refresh (kpi.freshness_log)</td><td>10 of 13 fresh</td><td>30 min</td><td><b style="color:#B26A00">3 STALE</b></td><td class="tag">→ drill</td></tr>
+    <tr class="clickable" onclick="t('Drill: gl.fx_rates latest 2026-08-01 — within 7d target')"><td><span class="dot g"></span>QuickBooks GL / FX</td><td>row age</td><td>2 d ago</td><td>7 d</td><td><b style="color:#2E7D32">FRESH</b></td><td class="tag">→ drill</td></tr>
+    <tr class="clickable" onclick="t('Drill: plan.forecast_runs latest 06:10 UTC today')"><td><span class="dot g"></span>Forecast engine</td><td>run heartbeat</td><td>1 h ago</td><td>26 h</td><td><b style="color:#2E7D32">FRESH</b></td><td class="tag">→ drill</td></tr>
+  </table>
+  <p class="tag" style="margin:8px 0 0">Empty-state (never blank): if no sources registered → red banner “no sources registered — engine misconfigured”.</p>
+</div>
+
+<!-- 2 OPEN EXCEPTIONS -->
+<div class="card">
+  <h2 style="margin-top:0">2 · Open exceptions <span class="tag">source: public.v_dq_exceptions_open · grouped by rule · 11 open</span></h2>
+  <table>
+    <tr><th>Rule</th><th>Sev</th><th>Open</th><th>Oldest</th><th>Example record</th><th></th></tr>
+    <tr><td>Future checkout in past <span class="tag">(legacy R-007 class)</span></td><td><span class="pill crit">critical</span></td><td>1</td><td>2 d</td><td class="tag">res #4771203 · checkout 2026-07-28, status in-house</td><td><button class="btn ok" onclick="m()">Resolve</button> <button class="btn" onclick="t('Deep link → reservation surface /h/260955/frontoffice/reservations/4771203')">→ record</button></td></tr>
+    <tr><td>Negative / zero ADR <span class="tag">(legacy R-006)</span></td><td><span class="pill crit">critical</span></td><td>2</td><td>1 d</td><td class="tag">res #4771388 · rate 0.00 LAK · source walk-in</td><td><button class="btn ok" onclick="m()">Resolve</button> <button class="btn" onclick="t('Deep link → reservation surface')">→ record</button></td></tr>
+    <tr><td>Reservation orphan (room ref missing)</td><td><span class="pill warn">warning</span></td><td>3</td><td>6 d</td><td class="tag">reservation_rooms → room_id 508412-1 (Tent 7, closed)</td><td><button class="btn ok" onclick="m()">Resolve</button> <button class="btn" onclick="t('Known-issue overlap: Tent 7 waived — provenance shown')">→ record</button></td></tr>
+    <tr><td>Missing guest email <span class="pill gr">guardrail no_email_share ≤5%</span></td><td><span class="pill warn">warning</span></td><td>—</td><td>—</td><td class="tag">share 4.2% — INSIDE guardrail, no exception (threshold single-sourced)</td><td><button class="btn" onclick="t('Threshold lives in public.guardrails — edit there, not here')">threshold</button></td></tr>
+    <tr><td>Duplicate guest profiles <span class="tag">(legacy R-019)</span></td><td><span class="pill info">info</span></td><td>5</td><td>12 d</td><td class="tag">“NOK AIR …” ×3 variants</td><td><button class="btn ok" onclick="m()">Resolve</button> <button class="btn" onclick="t('Deep link → guest profiles')">→ record</button></td></tr>
+  </table>
+  <p class="tag" style="margin:8px 0 0">Empty-state: <span class="empty" style="padding:2px 8px">0 open — last full run 07:00 UTC, 12 rules green</span></p>
+</div>
+
+<!-- 3 RULE CATALOG -->
+<div class="card">
+  <h2 style="margin-top:0">3 · Rule catalog <span class="tag">source: dq.rules · 12 seeded · toggle/threshold = PBS only</span></h2>
+  <table>
+    <tr><th>Rule</th><th>Sev</th><th>Threshold</th><th>Provenance</th><th>Active</th></tr>
+    <tr><td>cb_freshness_45m</td><td><span class="pill crit">critical</span></td><td>45 min <span class="tag">(goal 16 t-cb-freshness)</span></td><td><span class="pill legacy">migrated R-001</span></td><td><input type="checkbox" checked onclick="t('PBS-only toggle — audited')"></td></tr>
+    <tr><td>adr_negative_or_zero</td><td><span class="pill crit">critical</span></td><td>≤ 0</td><td><span class="pill legacy">migrated R-006</span></td><td><input type="checkbox" checked onclick="t('PBS-only toggle — audited')"></td></tr>
+    <tr><td>guest_email_missing_share</td><td><span class="pill warn">warning</span></td><td>ref → guardrail <b>no_email_share</b></td><td><span class="pill gr">guardrail-linked</span></td><td><input type="checkbox" checked onclick="t('Threshold edited in guardrails, never here')"></td></tr>
+    <tr><td>guest_country_missing_share</td><td><span class="pill warn">warning</span></td><td>ref → guardrail <b>no_country_share</b></td><td><span class="pill gr">guardrail-linked</span></td><td><input type="checkbox" checked onclick="t('Threshold edited in guardrails, never here')"></td></tr>
+    <tr><td>newsletter_contactable_share</td><td><span class="pill warn">warning</span></td><td>≥ 95%</td><td>new</td><td><input type="checkbox" checked onclick="t('PBS-only toggle')"></td></tr>
+    <tr><td>reservation_orphan_rooms · checkout_in_past · dup_guests · currency_vs_property · null_property_id · cost_unattributed_5pct · forecast_staleness</td><td class="tag" colspan="4">…7 more, same contract (12 total; legacy heuristics H-002/H-003 &amp; trend rules routed to alarm/revenue watch — NOT migrated, see §0.R R1)</td></tr>
+  </table>
+</div>
+
+<!-- 4 TREND -->
+<div class="card" style="max-width:520px">
+  <h2 style="margin-top:0">4 · Trend <span class="tag">source: dq.runs weekly rollup · click week → run detail</span></h2>
+  <div class="bars">
+    <div class="wk" onclick="t('Week 28: 14 opened / 9 resolved — run detail')"><div class="o" style="height:42px"></div><div class="res" style="height:27px"></div>W28</div>
+    <div class="wk" onclick="t('Week 29: 11 opened / 12 resolved')"><div class="o" style="height:33px"></div><div class="res" style="height:36px"></div>W29</div>
+    <div class="wk" onclick="t('Week 30: 8 opened / 10 resolved')"><div class="o" style="height:24px"></div><div class="res" style="height:30px"></div>W30</div>
+    <div class="wk" onclick="t('Week 31: 6 opened / 8 resolved — improving')"><div class="o" style="height:18px"></div><div class="res" style="height:24px"></div>W31</div>
+  </div>
+  <p class="tag"><span class="dot a" style="width:7px;height:7px"></span>opened · <span class="dot g" style="width:7px;height:7px"></span>resolved — 4-week trend: improving. Any stale feed caps the page verdict (green never shown on stale data).</p>
+</div>
+
+<!-- RESOLVE MODAL -->
+<div class="modal" id="modal">
+  <div class="box">
+    <h2 style="margin-top:0">Resolve exception</h2>
+    <p class="note">fn_dq_exception_resolve(id, status, note) — note mandatory, lifecycle open → acknowledged → fixed / waived. Fix happens in the SOURCE system (Cloudbeds); next run auto-verifies.</p>
+    <select style="width:100%;font-size:12px;padding:6px"><option>fixed — corrected in Cloudbeds</option><option>waived — accepted with reason</option><option>acknowledged — assigned, in progress</option></select>
+    <textarea style="width:100%;margin-top:8px;font-size:12px" rows="2" placeholder="Resolution note (required)"></textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+      <button class="btn" onclick="document.getElementById('modal').style.display='none'">Cancel</button>
+      <button class="btn ok" onclick="document.getElementById('modal').style.display='none';t('Resolved with note — audit row written, re-verified next run')">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function t(msg){var x=document.getElementById('toast');x.textContent=msg;x.style.display='block';clearTimeout(window._t);window._t=setTimeout(function(){x.style.display='none'},3200);}
+function m(){document.getElementById('modal').style.display='block';}
+</script>
+</body>
+</html>
