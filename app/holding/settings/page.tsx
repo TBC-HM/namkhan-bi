@@ -99,6 +99,8 @@ export default async function HoldingSettingsPage() {
         { key: 'guardrails', label: 'Guardrails',  href: '/holding/settings/guardrails'     },
         { key: 'documents',  label: 'Documents',   href: '/holding/settings/documents'      },
         { key: 'media',      label: 'Media',       href: '/holding/settings/media'          },
+        { key: 'brain',      label: 'Brain',       href: '/holding/settings/brain'          },
+        { key: 'integrations', label: 'Integrations', href: '/holding/settings/integrations' },
       ]}
     >
       {SECTIONS.map((section) => (
