@@ -1,0 +1,58 @@
+# owner-signal-responder-v1 design item 3 / A3 (dispatch-on-ready, 2026-08-04).
+# Fired by workflow_dispatch from public.fn_owner_signal_sweep() when ready-
+# unclaimed build briefs exist and alive builder sessions < concurrency_cap
+# (governance.responder_config). Runs a bounded Claude tool-use loop
+# (scripts/brief-builder-agent.ts) that claims the brief via fn_builder_claim,
+# honors law 763 (module spec doc at claim), builds ONE coherent slice under
+# the standing-builder laws, appends its build log to the brief, and closes
+# via fn_builder_done. This is the sanctioned GHA mechanism (no third path);
+# runner-v3 (single-shot ticket diffs) is deliberately NOT touched.
+#
+# Secrets reused from agent-runner.yml: ANTHROPIC_API_KEY,
+# NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_KEY.
+
+name: brief-builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      brief_slug:
+        description: 'documentation.build_briefs.slug to build'
+        required: true
+        type: string
+
+# One run per brief at a time; a second dispatch for the same slug queues
+# rather than double-claiming (fn_builder_claim would refuse anyway).
+concurrency:
+  group: brief-builder-${{ github.event.inputs.brief_slug }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Run brief-builder agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          BRIEF_SLUG: ${{ github.event.inputs.brief_slug }}
+        run: npx tsx scripts/brief-builder-agent.ts
