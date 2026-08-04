@@ -5,6 +5,7 @@
 // PBS 2026-07-22 · Newsletter tab restored between Rate Plans and Guardrails (mirrors
 //                  the restored /h/[pid]/settings/property/audience page tabs strip).
 import { createClient } from '@/lib/supabase/server';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
 import { DashboardPage } from '@/app/(cockpit)/_design';
 
@@ -109,18 +110,7 @@ export default async function PropertySettingsPage({
     <DashboardPage
       title={`Settings · ${data.identity?.trading_name ?? 'Property'}`}
       subtitle={subtitleParts}
-      tabs={[
-        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`,   active: true },
-        { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
-        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
-        { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
-        { key: 'documents',  label: 'Documents',  href: `/h/${propertyId}/settings/documents`  },
-        { key: 'archive',    label: 'Archive',    href: `/h/${propertyId}/settings/archive`    },
-        { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-        { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
-        { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
-        { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
-      ]}
+      tabs={getSettingsTabs(propertyId, 'property')}
     >
       <div style={fullRow}>
         <PropertySettingsClient data={data} propertyId={propertyId} />
