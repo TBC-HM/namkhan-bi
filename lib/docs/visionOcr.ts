@@ -211,6 +211,21 @@ export type OcrMediaKind =
   | { kind: 'image'; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' };
 
 /**
+ * Map mime/extension → Vision OCR media kind. Returns null for formats OCR
+ * can't help with (docx, xlsx, ...) so callers can fail honestly instead of
+ * shipping an empty-text prompt to the model. (owner finding #34)
+ */
+export function ocrMediaKindFor(mime: string, fileName: string): OcrMediaKind | null {
+  const lower = fileName.toLowerCase();
+  if (mime === 'application/pdf' || lower.endsWith('.pdf')) return { kind: 'pdf' };
+  if (mime === 'image/jpeg' || lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return { kind: 'image', mediaType: 'image/jpeg' };
+  if (mime === 'image/png' || lower.endsWith('.png')) return { kind: 'image', mediaType: 'image/png' };
+  if (mime === 'image/webp' || lower.endsWith('.webp')) return { kind: 'image', mediaType: 'image/webp' };
+  if (mime === 'image/gif' || lower.endsWith('.gif')) return { kind: 'image', mediaType: 'image/gif' };
+  return null;
+}
+
+/**
  * Plain-text OCR (D1/D6) — used by the brain-extract OCR worker for scanned
  * PDFs (whole or page-range segments) and document photos/images.
  */
