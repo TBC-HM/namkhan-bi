@@ -1,12 +1,11 @@
-// app/h/[property_id]/settings/archive/page.tsx
-// PBS 2026-08-02 — Archive settings consolidated in property settings.
-// Covers: document archive vocabulary (tenant-scoped folders) + photo archive thresholds.
-// Upload goes through existing pipelines — docs → DMS ingestion, photos → Iris QA.
+// app/h/[property_id]/settings/documents/page.tsx
+// PBS 2026-08-02 — Document register settings inline (no drawer).
+// All 7 tabs visible directly: Families · Subtypes · Matters · Cases · Collections · Tags · Authors
+// Uses DocRegistrySettingsPanel export from SettingsDrawerButton — no code duplication.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import UploadDropzone from '@/app/marketing/media/_client/UploadDropzone';
-import Link from 'next/link';
+import { DocRegistrySettingsPanel } from '@/app/h/[property_id]/finance/legal/docs/_components/SettingsDrawerButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -16,129 +15,101 @@ const SETTINGS_TABS = (pid: number) => [
   { key: 'media',      label: 'Media',      href: `/h/${pid}/settings/media`      },
   { key: 'rate_plans', label: 'Rate Plans', href: `/h/${pid}/settings/rate-plans` },
   { key: 'guardrails', label: 'Guardrails', href: `/h/${pid}/settings/guardrails` },
-  { key: 'documents',  label: 'Documents',  href: `/h/${pid}/settings/documents`  },
-  { key: 'archive',    label: 'Archive',    href: `/h/${pid}/settings/archive`, active: true },
+  { key: 'documents',  label: 'Documents',  href: `/h/${pid}/settings/documents`, active: true },
+  { key: 'archive',    label: 'Archive',    href: `/h/${pid}/settings/archive`    },
   { key: 'data',       label: 'Data',       href: `/h/${pid}/settings/data`       },
   { key: 'brain',      label: 'Brain',      href: `/h/${pid}/settings/brain`      },
+  { key: 'send_logs',  label: 'Send Logs',  href: `/h/${pid}/settings/send-logs`  },
   { key: 'knowledge',  label: 'Knowledge',  href: `/h/${pid}/settings/knowledge`  },
 ];
 
-async function fetchArchiveStats(propertyId: number) {
+async function fetchDocSettings(propertyId: number) {
   const sb = getSupabaseAdmin();
-  const [photoArchive, docArchive, tierThresholds] = await Promise.all([
-    sb.from('v_marketing_media_page')
-      .select('asset_id', { count: 'exact', head: true })
-      .eq('property_id', propertyId)
-      .eq('primary_tier', 'tier_archive'),
-    sb.from('v_doc_register')
-      .select('id', { count: 'exact', head: true })
-      .eq('property_id', propertyId)
-      .eq('status', 'archived'),
-    sb.from('v_media_tier_thresholds').select('*'),
+  const [familyRows, vocab, cases, collections, projects, tagRows, authors] = await Promise.all([
+    sb.from('v_doc_register').select('doc_type').eq('property_id', propertyId),
+    sb.from('v_doc_subtype_vocab').select('doc_type, subtype_slug, label, time_model, sort_order').order('doc_type').order('label'),
+    sb.from('v_doc_cases').select('case_ref, title, matter_type, status').eq('property_id', propertyId).order('case_ref'),
+    sb.from('v_doc_collections').select('name, description, is_smart').eq('property_id', propertyId).order('name'),
+    sb.from('v_doc_projects').select('project_name, n_docs').eq('property_id', propertyId).order('n_docs', { ascending: false }),
+    sb.from('v_doc_register').select('tags').eq('property_id', propertyId),
+    sb.from('v_doc_authors').select('author_name, n_docs').eq('property_id', propertyId).order('n_docs', { ascending: false }),
   ]);
+
+  const familyCounts = new Map<string, number>();
+  for (const r of (familyRows.data ?? []) as { doc_type: string | null }[]) {
+    const k = String(r.doc_type ?? '');
+    if (k) familyCounts.set(k, (familyCounts.get(k) ?? 0) + 1);
+  }
+  const familiesWithCounts = Array.from(familyCounts.entries())
+    .map(([doc_type, n]) => ({ doc_type, n })).sort((a, b) => b.n - a.n);
+
+  const tagCounts = new Map<string, number>();
+  for (const r of (tagRows.data ?? []) as { tags: string[] | null }[]) {
+    for (const t of r.tags ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  }
+  const tags = Array.from(tagCounts.entries()).map(([tag, n]) => ({ tag, n })).sort((a, b) => b.n - a.n);
+
   return {
-    photoArchiveCount: photoArchive.count ?? 0,
-    docArchiveCount:   docArchive.count ?? 0,
-    tierThresholds:    (tierThresholds.data ?? []) as any[],
+    families: familiesWithCounts,
+    subtypeVocab: (vocab.data ?? []) as any[],
+    cases: (cases.data ?? []) as any[],
+    collections: (collections.data ?? []) as any[],
+    projects: ((projects.data ?? []) as any[]).map((p: any) => ({ project: p.project_name, n: p.n_docs ?? 0 })),
+    tags,
+    authors: ((authors.data ?? []) as any[]).map((a: any) => ({ author: a.author_name, n: a.n_docs ?? 0 })),
   };
 }
 
-export default async function ArchiveSettingsPage({ params }: { params: { property_id: string } }) {
+export default async function DocumentsSettingsPage({ params }: { params: { property_id: string } }) {
   const propertyId = Number(params.property_id);
-  const d = await fetchArchiveStats(propertyId);
-
-  const archiveTier = d.tierThresholds.find((t: any) => t.tier === 'tier_archive');
-  const archiveMin = archiveTier?.min_quality ?? 25;
-  const archiveMax = archiveTier?.max_quality ?? 49;
+  const d = await fetchDocSettings(propertyId);
 
   return (
     <DashboardPage
-      title="Settings · Archive"
-      subtitle={`Document archive · photo archive · upload directly to archive · property ${propertyId}`}
+      title="Settings · Documents"
+      subtitle={`Document register vocabulary · ${d.families.length} families · ${d.subtypeVocab.length} subtypes · property ${propertyId}`}
       tabs={SETTINGS_TABS(propertyId)}
     >
-      {/* Archive overview tiles */}
+      {/* Document upload — goes to DMS pipeline, not media pipeline */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Archive overview" subtitle="current archive state for this property">
-          <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            {[
-              { label: 'Archived photos',    value: d.photoArchiveCount, foot: 'quality 25–49 or manual',  href: `/marketing/media` },
-              { label: 'Archived documents', value: d.docArchiveCount,   foot: 'status = archived',        href: `/h/${propertyId}/finance/legal/docs` },
-              { label: 'Photo archive band', value: `${archiveMin}–${archiveMax}`, foot: 'quality index threshold', href: `/h/${propertyId}/settings/media` },
-            ].map(({ label, value, foot, href }) => (
-              <Link key={label} href={href} style={{ textDecoration: 'none', color: 'inherit', background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 6, padding: '12px 14px', display: 'block' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#5A5A5A' }}>{label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'JetBrains Mono, ui-monospace, monospace', color: '#1B1B1B', margin: '2px 0' }}>{value}</div>
-                <div style={{ fontSize: 10.5, color: '#5A5A5A' }}>{foot} →</div>
-              </Link>
-            ))}
-          </div>
-        </Container>
-      </div>
-
-      {/* Upload to archive — media goes through Iris QA, docs through DMS */}
-      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
         <Container
-          title="Upload to archive"
-          subtitle="Photos and videos → Iris QA pipeline then auto-archived if quality 25–49 · Documents → Document register (classify after upload)"
-        >
-          <div style={{ padding: 16 }}>
-            <UploadDropzone />
-            <div style={{ marginTop: 12, padding: '10px 14px', background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 6, fontSize: 11, color: '#5A5A5A' }}>
-              <strong style={{ color: '#1B1B1B' }}>Routing:</strong> Photos with quality 25–49 auto-land in tier_archive. Photos below 25 = Junk. Photos above 49 = classified into OTA/social/website tiers by Iris. Documents land in the register with status=needs_review — open Finance → Legal → Docs to archive them.
-            </div>
-          </div>
-        </Container>
-      </div>
-
-      {/* Archive folder structure — tenant-scoped via document families */}
-      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
-        <Container
-          title="Archive folder structure"
-          subtitle="Document families define archive folders — each tenant has their own. Manage in Settings → Documents → Families tab"
-          action={
-            <Link href={`/h/${propertyId}/settings/documents`} style={{ fontSize: 11, fontWeight: 700, color: '#084838', textDecoration: 'none' }}>
-              Manage document families →
-            </Link>
-          }
-        >
-          <div style={{ padding: '12px 16px', fontSize: 12, color: '#5A5A5A' }}>
-            <p style={{ margin: '0 0 8px' }}>Archive folder = document family (e.g. <code>hr_doc</code>, <code>legal</code>, <code>financial</code>, <code>compliance</code>). Different tenants have different families.</p>
-            <p style={{ margin: 0 }}>To add a new archive folder: open <strong>Settings → Documents</strong> and click the ⚙ gear → Families tab → set the family on any document to introduce it. To bulk-rename a folder, use the Rename column.</p>
-          </div>
-        </Container>
-      </div>
-
-      {/* Photo archive thresholds — managed via Photo Settings */}
-      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
-        <Container
-          title="Photo archive thresholds"
-          subtitle="Quality bands that determine when photos go to archive — managed in Settings → Media → Photo Settings → Guardrails"
-          action={
-            <Link href={`/h/${propertyId}/settings/media`} style={{ fontSize: 11, fontWeight: 700, color: '#084838', textDecoration: 'none' }}>
-              Edit in Media settings →
-            </Link>
-          }
+          title="Upload documents"
+          subtitle="PDF · DOCX · XLSX · contracts · certificates · policies · SOPs — go to the Document Register, not the media library"
         >
           <div style={{ padding: '12px 16px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#FAFAF7' }}>
-                  {['Tier', 'Quality band', 'Auto-assigned'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '6px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' as const, color: '#5A5A5A', borderBottom: '1px solid #E6DFCC' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {d.tierThresholds.sort((a: any, b: any) => (b.min_quality ?? 0) - (a.min_quality ?? 0)).map((t: any) => (
-                  <tr key={t.tier}>
-                    <td style={{ padding: '7px 10px', fontFamily: 'JetBrains Mono, ui-monospace, monospace', fontSize: 11, borderBottom: '1px solid #E6DFCC' }}>{t.tier}</td>
-                    <td style={{ padding: '7px 10px', fontFamily: 'JetBrains Mono, ui-monospace, monospace', fontSize: 11, borderBottom: '1px solid #E6DFCC' }}>{t.min_quality ?? '—'} – {t.max_quality ?? '—'}</td>
-                    <td style={{ padding: '7px 10px', fontSize: 11, color: '#5A5A5A', borderBottom: '1px solid #E6DFCC' }}>{t.description ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ padding: '14px 16px', background: '#FFF8E1', border: '1px solid #F57F17', borderRadius: 6, marginBottom: 12 }}>
+              <strong style={{ color: '#E65100', fontSize: 12 }}>Upload via the Document Register</strong>
+              <p style={{ fontSize: 12, color: '#5A5A5A', margin: '4px 0 8px' }}>
+                Documents (.docx, .pdf, .xlsx, etc.) go through a different pipeline than photos. Use the Document Register to upload — files land in the brain pipeline for extraction and classification.
+              </p>
+              <a href={`/h/${propertyId}/finance/legal/docs`} style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, display: 'inline-block' }}>
+                Open Document Register →
+              </a>
+            </div>
+            <p style={{ fontSize: 11, color: '#888', margin: 0 }}>
+              Accepted: PDF, DOCX, DOC, XLSX, XLS, PPTX, TXT, CSV, ODS · After upload: needs_review status → classify family + subtype → enters brain pipeline
+            </p>
+          </div>
+        </Container>
+      </div>
+
+      {/* Document register vocabulary — 7 tabs inline, no drawer */}
+      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
+        <Container
+          title="Document register · settings"
+          subtitle="Families · Subtypes · Matters · Cases · Collections · Tags · Authors — tenant-scoped, changes apply immediately"
+        >
+          <div style={{ padding: '8px 16px 16px' }}>
+            <DocRegistrySettingsPanel
+              propertyId={propertyId}
+              families={d.families}
+              subtypeVocab={d.subtypeVocab}
+              projects={d.projects}
+              cases={d.cases}
+              collections={d.collections}
+              tags={d.tags}
+              authors={d.authors}
+            />
           </div>
         </Container>
       </div>
