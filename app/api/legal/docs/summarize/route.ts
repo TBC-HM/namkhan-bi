@@ -9,11 +9,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { extractText } from '@/lib/docs/extract';
+import { ocrPlainText, ocrMediaKindFor } from '@/lib/docs/visionOcr';
 import { callAnthropic, isLlmOk } from '@/lib/legal-memo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 90;
+export const maxDuration = 180; // OCR fallback adds a Haiku vision pass on scanned PDFs
 
 const SYSTEM = `You are a senior in-house counsel producing one-paragraph summaries of legal documents for a CLO dashboard.
 Audience: a hospitality-group operator + outside counsel who skim summaries to triage their next action.
@@ -48,9 +49,30 @@ export async function POST(req: NextRequest) {
   if (dlErr || !blob) return NextResponse.json({ ok: false, error: `download: ${dlErr?.message ?? 'no blob'}` }, { status: 500 });
   const buffer = Buffer.from(await blob.arrayBuffer());
 
-  // Extract text. Empty string is fine — Claude can still summarize from
-  // filename + title if the body is empty, though quality drops.
-  const text = await extractText({ buffer, mimeType: row.mime ?? '', fileName: row.file_name ?? 'doc' });
+  // Extract text; fall back to Vision OCR for scanned PDFs / document photos
+  // (owner finding #34, legal_module-owner-findings-v1). Previously this route
+  // claimed an OCR fallback but had none: empty text went straight to Claude,
+  // which fabricated a "summary" from filename + title and PERSISTED it to
+  // dms.documents.summary. Now: OCR first; if still empty, fail honestly.
+  let text = await extractText({ buffer, mimeType: row.mime ?? '', fileName: row.file_name ?? 'doc' });
+  let usedOcr = false;
+  if (!text.trim()) {
+    const media = ocrMediaKindFor(row.mime ?? '', row.file_name ?? '');
+    if (media) {
+      try {
+        text = await ocrPlainText({ buffer, fileName: row.file_name ?? 'doc', media });
+        usedOcr = true;
+      } catch (e: any) {
+        return NextResponse.json({ ok: false, error: `ocr: ${e?.message ?? 'failed'}` }, { status: 502 });
+      }
+    }
+  }
+  if (!text.trim()) {
+    return NextResponse.json(
+      { ok: false, error: 'no extractable text (native extraction and OCR both empty) — refusing to fabricate a summary' },
+      { status: 422 },
+    );
+  }
 
   // Pull title for context (via the public bridge view).
   const { data: meta } = await supabase
@@ -75,8 +97,8 @@ export async function POST(req: NextRequest) {
   const { error: remapErr } = await supabase.rpc('fn_doc_remap', { p_doc_id: docId, p_summary: summary });
   if (remapErr) {
     // If persistence fails we still return the summary — caller can show it.
-    return NextResponse.json({ ok: true, summary, doc_id: docId, persist_error: remapErr.message });
+    return NextResponse.json({ ok: true, summary, doc_id: docId, ocr: usedOcr, persist_error: remapErr.message });
   }
 
-  return NextResponse.json({ ok: true, summary, doc_id: docId });
+  return NextResponse.json({ ok: true, summary, doc_id: docId, ocr: usedOcr });
 }
