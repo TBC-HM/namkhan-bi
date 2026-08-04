@@ -198,8 +198,11 @@ function nextAction(q: any, briefStatus: string | null, signedOff: boolean, froz
     if (ok < target) return { label: `🧪 ${ok}/${target} runs`, tone: 'gold' };
     return { label: '🧊 Freeze', rpc: 'sign_off', tone: 'green' };
   }
+  // finding #31 (PBS: "what am i watching?"): Watch = the LIVE BOARD filtered
+  // to this brief — pulsing heartbeat box + landed commits, one click. The
+  // brief TEXT stays reachable via the ✎ Goal / 📄 Spec buttons on the card.
   if (briefStatus && ['research', 'in_progress', 'verifying'].includes(briefStatus) && q?.brief_slug)
-    return { label: '👁 Watch', href: `/holding/it2/modules/briefs/${q.brief_slug}`, tone: 'gold' };
+    return { label: '👁 Watch', href: `/holding/it2/system/live?brief=${encodeURIComponent(q.brief_slug)}`, tone: 'gold' };
   // No estimate, or audit older than 3 days → the number on the card is not trustworthy
   const auditAgeDays = q?.updated_at ? (Date.now() - new Date(q.updated_at).getTime()) / 86400000 : Infinity;
   if (q?.completion_estimate == null || auditAgeDays > 3)
