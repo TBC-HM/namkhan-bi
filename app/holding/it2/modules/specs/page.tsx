@@ -137,10 +137,16 @@ async function fetchData() {
   for (const qr of (queue ?? [])) queueMap[qr.module_doc_type] = qr;
   const truthMap: Record<string, any> = {};
   for (const t of (truth ?? [])) truthMap[t.module_doc_type] = t;
+  // PBS 2026-08-04: split finding counts — red = needs HIM (open, unconfirmed),
+  // amber = confirmed, in build (acknowledged). Card must show whose move it is.
   const openFindings: Record<string, number> = {};
+  const redFindings: Record<string, number> = {};
+  const amberFindings: Record<string, number> = {};
   for (const f of (findingRows ?? [])) {
     if (f.status === 'open' || f.status === 'acknowledged') {
       openFindings[f.module_doc_type] = (openFindings[f.module_doc_type] ?? 0) + 1;
+      if (f.status === 'open') redFindings[f.module_doc_type] = (redFindings[f.module_doc_type] ?? 0) + 1;
+      else amberFindings[f.module_doc_type] = (amberFindings[f.module_doc_type] ?? 0) + 1;
     }
   }
   const briefStatusBySlug: Record<string, string> = {};
@@ -159,7 +165,7 @@ async function fetchData() {
     }
   }
   docs.sort((a: any, b: any) => String(a.doc_type).localeCompare(String(b.doc_type)));
-  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, openFindings };
+  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, openFindings, redFindings, amberFindings };
 }
 
 // ADR-218 freeze gate — derived from v_module_truth, never from completion_estimate.
@@ -238,7 +244,7 @@ const CTA_TONE: Record<string, { bg: string; color: string }> = {
 };
 
 export default async function SpecsPage({ searchParams }: { searchParams?: { toast?: string } }) {
-  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, openFindings } = await fetchData();
+  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, openFindings, redFindings, amberFindings } = await fetchData();
   const toast = searchParams?.toast ?? null;
 
   return (
@@ -293,6 +299,8 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
               const testTarget = t?.testing_target ?? q?.testing_target ?? null;
               const frozen = isFrozen(t);
               const nOpen = openFindings[doc.doc_type] ?? 0;
+              const nRed = redFindings[doc.doc_type] ?? 0;
+              const nAmber = amberFindings[doc.doc_type] ?? 0;
               const auditDate = q?.updated_at ? shortDate(q.updated_at) : null;
               const live = st?.is_live ?? false;
               const signedOff = !!st?.signed_off_at;
@@ -401,15 +409,16 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
                           ↗ Open
                         </Link>
                       )}
-                      {/* A4: owner findings channel — red when open findings exist */}
+                      {/* A4: owner findings channel — PBS 2026-08-04: red/amber split,
+                          red = needs HIM, amber = confirmed & in build */}
                       <Link href={`/holding/it2/modules/findings/${encodeURIComponent(doc.doc_type)}`}
-                        title="Owner findings — file or resolve feedback on this module"
                         style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
-                          background: nOpen > 0 ? '#B71C1C' : '#FFFFFF',
-                          color: nOpen > 0 ? '#FFFFFF' : '#1B1B1B',
-                          border: nOpen > 0 ? '1px solid #B71C1C' : '1px solid #E6DFCC',
-                          textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                        ⚑ Findings ({nOpen})
+                          background: nRed > 0 ? '#B71C1C' : nAmber > 0 ? '#FFF3E0' : '#FFFFFF',
+                          color: nRed > 0 ? '#FFFFFF' : nAmber > 0 ? '#B26A00' : '#1B1B1B',
+                          border: nRed > 0 ? '1px solid #B71C1C' : nAmber > 0 ? '1px solid #E8A13C' : '1px solid #E6DFCC',
+                          textDecoration: 'none', whiteSpace: 'nowrap' }}
+                        title={nRed > 0 ? `${nRed} finding(s) need YOU (unconfirmed)` : nAmber > 0 ? `${nAmber} confirmed — in build` : 'Owner findings — file feedback on this module'}>
+                        ⚑ {nRed > 0 ? `${nRed} need you` : nAmber > 0 ? `${nAmber} in build` : 'Findings'}{nRed > 0 && nAmber > 0 ? ` · ${nAmber} in build` : ''}
                       </Link>
                       {/* PBS 2026-07-27: refine-goal restored + compact symbol row */}
                       {q?.brief_slug && (
