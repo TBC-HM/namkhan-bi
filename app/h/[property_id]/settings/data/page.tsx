@@ -1,8 +1,10 @@
 // app/h/[property_id]/settings/data/page.tsx
 // Rebuilt 2026-08-04: subtab navigation at top to prevent endless scrolling.
+// 2026-08-04 v2: canonical tabs, financial config section, PMS shows all (not just active).
 // URL: ?tab=pms|finance|google|revenue|content|ai|infra
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import IntegrationDetail from './_client/IntegrationDetail';
 import Link from 'next/link';
 
@@ -25,6 +27,8 @@ interface IntRow {
   email_ingest_enabled: boolean | null; email_ingest_address: string | null;
   email_ingest_subject_pattern: string | null; email_ingest_from_pattern: string | null;
 }
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const POWERS: Record<string, string> = {
   cloudbeds_pms: 'Revenue · Pace · F&B · Spa · HR · Guest',
@@ -103,7 +107,7 @@ function EmailBlock({ r }: { r: IntRow }) {
       <b style={{ color: T.amber }}>📧 Email ingest active</b>
       <div style={{ color: T.inkSoft, marginTop: 2 }}>Forward to: <code style={{ fontFamily: 'ui-monospace,monospace', background: T.paper, padding: '1px 5px', borderRadius: 2 }}>{r.email_ingest_address}</code></div>
       {r.email_ingest_subject_pattern && <div style={{ color: T.inkSoft }}>Subject matches: <code style={{ fontFamily: 'ui-monospace,monospace', background: T.paper, padding: '1px 5px', borderRadius: 2 }}>{r.email_ingest_subject_pattern}</code></div>}
-      <div style={{ color: T.grey, fontSize: 10, marginTop: 2 }}>Picked up automatically by Gmail scan cron · uses existing email pickup infrastructure</div>
+      <div style={{ color: T.grey, fontSize: 10, marginTop: 2 }}>Picked up automatically by Gmail scan cron</div>
     </div>
   );
 }
@@ -154,40 +158,61 @@ export default async function DataSettingsPage({
   const propertyId = Number(params.property_id);
   const activeTab = searchParams.tab ?? 'pms';
   const sb = getSupabaseAdmin();
-  const { data } = await sb.from('v_property_data_integrations')
-    .select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false });
-  const rows = (data ?? []) as IntRow[];
-  const bySlug = new Map(rows.map(r => [r.slug, r]));
+
+  const [intRes, identityRes] = await Promise.all([
+    sb.from('v_property_data_integrations')
+      .select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }),
+    sb.schema('property').from('identity')
+      .select('financial_year_start, default_currency, trading_name')
+      .eq('property_id', propertyId).maybeSingle(),
+  ]);
+
+  const rows = (intRes.data ?? []) as IntRow[];
+  const identity = identityRes.data as { financial_year_start?: number; default_currency?: string; trading_name?: string } | null;
 
   const TAB_ROWS: Record<string, IntRow[]> = {
-    pms: rows.filter(r => r.category === 'pms' && r.is_active),
+    pms:     rows.filter(r => r.category === 'pms'),
     finance: rows.filter(r => ['quickbooks'].includes(r.slug)),
-    google: rows.filter(r => GOOGLE_SLUGS.has(r.slug)),
+    google:  rows.filter(r => GOOGLE_SLUGS.has(r.slug)),
     revenue: rows.filter(r => ['lighthouse'].includes(r.slug)),
     content: rows.filter(r => ['canva'].includes(r.slug)),
-    ai: rows.filter(r => AI_SLUGS.has(r.slug)),
-    infra: rows.filter(r => PLATFORM_SLUGS.has(r.slug) && !AI_SLUGS.has(r.slug)),
+    ai:      rows.filter(r => AI_SLUGS.has(r.slug)),
+    infra:   rows.filter(r => PLATFORM_SLUGS.has(r.slug) && !AI_SLUGS.has(r.slug)),
   };
 
   const currentRows = TAB_ROWS[activeTab] ?? [];
   const missing = MISSING_BY_TAB[activeTab] ?? [];
-
   const baseHref = `/h/${propertyId}/settings/data`;
   const okCount = rows.filter(r => r.is_active && (r.last_check_status ?? '').toLowerCase() === 'ok').length;
 
-  const settingsTabs = [
-    { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property` },
-    { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
-    { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
-    { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
-    { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data`, active: true },
-    { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
-    { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
-  ];
+  const fyMonth = identity?.financial_year_start ?? 1;
+  const currency = identity?.default_currency ?? '—';
 
   return (
-    <DashboardPage title="Settings · Data" subtitle={`${okCount} active connections · ${rows.length} registered`} tabs={settingsTabs}>
+    <DashboardPage
+      title="Settings · Data"
+      subtitle={`${okCount} active connections · ${rows.length} registered`}
+      tabs={getSettingsTabs(propertyId, 'data')}
+    >
       <div style={{ maxWidth: 860 }}>
+
+        {/* Financial config strip */}
+        <div style={{ display: 'flex', gap: 24, padding: '10px 14px', background: T.bg, border: `1px solid ${T.border}`, borderRadius: 3, marginBottom: 20, fontSize: 12, alignItems: 'center' }}>
+          <div>
+            <span style={{ color: T.grey, fontWeight: 500 }}>Fiscal year starts </span>
+            <span style={{ color: T.ink, fontWeight: 700 }}>{MONTHS[(fyMonth - 1) % 12]} 1</span>
+          </div>
+          <div style={{ width: 1, background: T.border, alignSelf: 'stretch' }} />
+          <div>
+            <span style={{ color: T.grey, fontWeight: 500 }}>Reporting currency </span>
+            <span style={{ color: T.ink, fontWeight: 700 }}>{currency}</span>
+          </div>
+          <div style={{ marginLeft: 'auto' }}>
+            <Link href={`/h/${propertyId}/settings/property`} style={{ fontSize: 11, color: T.forest, textDecoration: 'none', fontWeight: 500 }}>
+              Edit in Property Settings →
+            </Link>
+          </div>
+        </div>
 
         {/* Section subtabs */}
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${T.border}`, marginBottom: 24, overflowX: 'auto' }}>
@@ -208,7 +233,6 @@ export default async function DataSettingsPage({
 
         {/* Current tab content */}
         {activeTab === 'google' ? (
-          // Google: nested inside gateway card
           <div>
             <div style={{ background: T.paper, border: `1px solid ${T.border}`, borderRadius: 3, overflow: 'hidden' }}>
               <div style={{ padding: '10px 14px', borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 11, fontWeight: 600, color: T.ink }}>
@@ -221,7 +245,6 @@ export default async function DataSettingsPage({
             </div>
             <div style={{ marginTop: 12, fontSize: 10.5, color: T.inkSoft }}>
               One Google Cloud project → one OAuth client → enable each service API separately in GCP.
-              Missing services require enabling the API in GCP console + granting the correct OAuth scope.
             </div>
           </div>
         ) : (
@@ -234,18 +257,15 @@ export default async function DataSettingsPage({
           </div>
         )}
 
-        {/* Email ingest note on relevant tabs */}
         {['finance','revenue'].includes(activeTab) && (
           <div style={{ marginTop: 16, background: T.amberTint, border: `1px solid ${T.amber}`, borderRadius: 3, padding: '10px 14px', fontSize: 11.5 }}>
             <b style={{ color: T.amber }}>📧 Email ingest</b>
             <span style={{ color: T.inkSoft, marginLeft: 8 }}>
-              These integrations are email-based — no API key required. Configure the email address and subject pattern above (expand "Details ▾").
-              The Gmail scan cron picks up matching emails automatically using the same pickup infrastructure as newsletters.
+              These integrations are email-based — no API key required. Expand the Details panel above to configure the ingest email address and subject pattern.
             </span>
           </div>
         )}
 
-        {/* Platform note on AI/infra tabs */}
         {['ai','infra'].includes(activeTab) && (
           <div style={{ marginTop: 16, fontSize: 10.5, color: T.inkSoft }}>
             🏢 Platform-managed · provisioned centrally by TBC · no setup required from property ·
