@@ -1,116 +1,111 @@
-// app/h/[property_id]/settings/documents/page.tsx
-// PBS 2026-08-02 — Document register settings inline (no drawer).
-// All 7 tabs visible directly: Families · Subtypes · Matters · Cases · Collections · Tags · Authors
-// Uses DocRegistrySettingsPanel export from SettingsDrawerButton — no code duplication.
+// app/h/[property_id]/settings/archive/page.tsx
+// Archive settings — document archive stats, folder config, retention thresholds.
+// Distinct from Documents tab (which handles doc registry: families/types/matters).
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { DocRegistrySettingsPanel } from '@/app/h/[property_id]/finance/legal/docs/_components/SettingsDrawerButton';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const SETTINGS_TABS = (pid: number) => [
-  { key: 'property',   label: 'Property',   href: `/h/${pid}/settings/property`   },
-  { key: 'media',      label: 'Media',      href: `/h/${pid}/settings/media`      },
-  { key: 'rate_plans', label: 'Rate Plans', href: `/h/${pid}/settings/rate-plans` },
-  { key: 'guardrails', label: 'Guardrails', href: `/h/${pid}/settings/guardrails` },
-  { key: 'documents',  label: 'Documents',  href: `/h/${pid}/settings/documents`, active: true },
-  { key: 'archive',    label: 'Archive',    href: `/h/${pid}/settings/archive`    },
-  { key: 'data',       label: 'Data',       href: `/h/${pid}/settings/data`       },
-  { key: 'brain',      label: 'Brain',      href: `/h/${pid}/settings/brain`      },
-  { key: 'send_logs',  label: 'Send Logs',  href: `/h/${pid}/settings/send-logs`  },
-  { key: 'knowledge',  label: 'Knowledge',  href: `/h/${pid}/settings/knowledge`  },
-];
-
-async function fetchDocSettings(propertyId: number) {
+async function fetchArchiveStats(propertyId: number) {
   const sb = getSupabaseAdmin();
-  const [familyRows, vocab, cases, collections, projects, tagRows, authors] = await Promise.all([
-    sb.from('v_doc_register').select('doc_type').eq('property_id', propertyId),
-    sb.from('v_doc_subtype_vocab').select('doc_type, subtype_slug, label, time_model, sort_order').order('doc_type').order('label'),
-    sb.from('v_doc_cases').select('case_ref, title, matter_type, status').eq('property_id', propertyId).order('case_ref'),
-    sb.from('v_doc_collections').select('name, description, is_smart').eq('property_id', propertyId).order('name'),
-    sb.from('v_doc_projects').select('project_name, n_docs').eq('property_id', propertyId).order('n_docs', { ascending: false }),
-    sb.from('v_doc_register').select('tags').eq('property_id', propertyId),
-    sb.from('v_doc_authors').select('author_name, n_docs').eq('property_id', propertyId).order('n_docs', { ascending: false }),
+  const [totalRes, byTypeRes, recentRes] = await Promise.all([
+    sb.from('dms.documents' as any).select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId),
+    sb.rpc('fn_doc_archive_stats_by_type' as any, { p_property_id: propertyId }).catch(() => ({ data: null, error: null })),
+    sb.from('v_doc_register').select('doc_type, project, last_updated_at, status').eq('property_id', propertyId)
+      .order('last_updated_at', { ascending: false }).limit(10).catch(() => ({ data: null, error: null })),
   ]);
-
-  const familyCounts = new Map<string, number>();
-  for (const r of (familyRows.data ?? []) as { doc_type: string | null }[]) {
-    const k = String(r.doc_type ?? '');
-    if (k) familyCounts.set(k, (familyCounts.get(k) ?? 0) + 1);
-  }
-  const familiesWithCounts = Array.from(familyCounts.entries())
-    .map(([doc_type, n]) => ({ doc_type, n })).sort((a, b) => b.n - a.n);
-
-  const tagCounts = new Map<string, number>();
-  for (const r of (tagRows.data ?? []) as { tags: string[] | null }[]) {
-    for (const t of r.tags ?? []) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
-  }
-  const tags = Array.from(tagCounts.entries()).map(([tag, n]) => ({ tag, n })).sort((a, b) => b.n - a.n);
-
   return {
-    families: familiesWithCounts,
-    subtypeVocab: (vocab.data ?? []) as any[],
-    cases: (cases.data ?? []) as any[],
-    collections: (collections.data ?? []) as any[],
-    projects: ((projects.data ?? []) as any[]).map((p: any) => ({ project: p.project_name, n: p.n_docs ?? 0 })),
-    tags,
-    authors: ((authors.data ?? []) as any[]).map((a: any) => ({ author: a.author_name, n: a.n_docs ?? 0 })),
+    total: totalRes.count ?? 0,
+    byType: (byTypeRes as any).data ?? null,
+    recent: (recentRes as any).data ?? [],
   };
 }
 
-export default async function DocumentsSettingsPage({ params }: { params: { property_id: string } }) {
-  const propertyId = Number(params.property_id);
-  const d = await fetchDocSettings(propertyId);
+function StatRow({ label, value }: { label: string; value: string | number | null }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, padding: '7px 0', borderBottom: '1px solid #F5F1EA' }}>
+      <span style={{ width: 220, flexShrink: 0, fontSize: 12, color: '#5A5A5A', fontWeight: 500 }}>{label}</span>
+      <span style={{ fontSize: 13, color: value != null ? '#1B1B1B' : '#B0A896', fontStyle: value != null ? 'normal' : 'italic' }}>
+        {value ?? '—'}
+      </span>
+    </div>
+  );
+}
+
+export default async function ArchiveSettingsPage({ params }: { params: { property_id: string } }) {
+  const pid = Number(params.property_id);
+  const stats = await fetchArchiveStats(pid).catch(() => ({ total: 0, byType: null, recent: [] }));
 
   return (
     <DashboardPage
-      title="Settings · Documents"
-      subtitle={`Document register vocabulary · ${d.families.length} families · ${d.subtypeVocab.length} subtypes · property ${propertyId}`}
-      tabs={SETTINGS_TABS(propertyId)}
+      title="Settings · Archive"
+      subtitle={`Document archive pipeline · stats · retention configuration · property ${pid}`}
+      tabs={getSettingsTabs(pid, 'archive')}
     >
-      {/* Document upload — goes to DMS pipeline, not media pipeline */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container
-          title="Upload documents"
-          subtitle="PDF · DOCX · XLSX · contracts · certificates · policies · SOPs — go to the Document Register, not the media library"
-        >
-          <div style={{ padding: '12px 16px' }}>
-            <div style={{ padding: '14px 16px', background: '#FFF8E1', border: '1px solid #F57F17', borderRadius: 6, marginBottom: 12 }}>
-              <strong style={{ color: '#E65100', fontSize: 12 }}>Upload via the Document Register</strong>
-              <p style={{ fontSize: 12, color: '#5A5A5A', margin: '4px 0 8px' }}>
-                Documents (.docx, .pdf, .xlsx, etc.) go through a different pipeline than photos. Use the Document Register to upload — files land in the brain pipeline for extraction and classification.
-              </p>
-              <a href={`/h/${propertyId}/finance/legal/docs`} style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, display: 'inline-block' }}>
-                Open Document Register →
-              </a>
-            </div>
-            <p style={{ fontSize: 11, color: '#888', margin: 0 }}>
-              Accepted: PDF, DOCX, DOC, XLSX, XLS, PPTX, TXT, CSV, ODS · After upload: needs_review status → classify family + subtype → enters brain pipeline
+        <Container title="Archive Pipeline" subtitle="DMS document counts by extraction and classification status">
+          <div style={{ padding: '4px 16px 12px' }}>
+            <StatRow label="Total documents registered"  value={stats.total} />
+            <StatRow label="Archive path"                value={`/h/${pid}/finance/legal/docs`} />
+            <StatRow label="Brain pipeline"              value={`/h/${pid}/settings/brain`} />
+          </div>
+          <div style={{ padding: '12px 16px', borderTop: '1px solid #F5F1EA' }}>
+            <a
+              href={`/h/${pid}/finance/legal/docs`}
+              style={{ fontSize: 12, fontWeight: 600, color: '#1F3A2E', textDecoration: 'none', marginRight: 24 }}
+            >
+              Open Document Archive →
+            </a>
+            <a
+              href={`/h/${pid}/settings/brain`}
+              style={{ fontSize: 12, fontWeight: 600, color: '#1F3A2E', textDecoration: 'none' }}
+            >
+              Brain Pipeline →
+            </a>
+          </div>
+        </Container>
+      </div>
+
+      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
+        <Container title="Retention & Thresholds" subtitle="Auto-archive rules · expiry · sensitivity — managed in Brain settings">
+          <div style={{ padding: '12px 16px', color: '#5A5A5A', fontSize: 13 }}>
+            <p style={{ margin: 0 }}>
+              Retention rules and sensitivity thresholds are configured in the{' '}
+              <a href={`/h/${pid}/settings/brain`} style={{ color: '#1F3A2E', fontWeight: 600 }}>Brain settings</a>.
+              {' '}Classification status, excluded docs, and nightly battery reports are all managed there.
             </p>
           </div>
         </Container>
       </div>
 
-      {/* Document register vocabulary — 7 tabs inline, no drawer */}
       <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
-        <Container
-          title="Document register · settings"
-          subtitle="Families · Subtypes · Matters · Cases · Collections · Tags · Authors — tenant-scoped, changes apply immediately"
-        >
-          <div style={{ padding: '8px 16px 16px' }}>
-            <DocRegistrySettingsPanel
-              propertyId={propertyId}
-              families={d.families}
-              subtypeVocab={d.subtypeVocab}
-              projects={d.projects}
-              cases={d.cases}
-              collections={d.collections}
-              tags={d.tags}
-              authors={d.authors}
-            />
-          </div>
+        <Container title="Recent Documents" subtitle="Last 10 registered by update time — open archive for full list">
+          {stats.recent.length === 0 ? (
+            <div style={{ padding: 16, fontSize: 13, color: '#5A5A5A', fontStyle: 'italic' }}>No documents registered yet.</div>
+          ) : (
+            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: '#F9F7F3', borderBottom: '1px solid #E6DFCC' }}>
+                  {['Type','Project','Status','Last Updated'].map(h => (
+                    <th key={h} style={{ padding: '7px 12px', textAlign: 'left', fontWeight: 600, color: '#5A5A5A' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(stats.recent as any[]).map((r: any, i: number) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #F5F1EA' }}>
+                    <td style={{ padding: '7px 12px', fontWeight: 500 }}>{r.doc_type || '—'}</td>
+                    <td style={{ padding: '7px 12px' }}>{r.project || '—'}</td>
+                    <td style={{ padding: '7px 12px' }}>{r.status || '—'}</td>
+                    <td style={{ padding: '7px 12px' }}>{r.last_updated_at ? r.last_updated_at.slice(0,10) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Container>
       </div>
     </DashboardPage>
