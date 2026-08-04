@@ -1,10 +1,9 @@
 // app/h/[property_id]/settings/brain/page.tsx
-// PBS 2026-07-24 · the Brain is property-level (this is The Namkhan's brain,
-// not the holding's). Console moved here from /holding/it/brain (which now
-// redirects): pipeline tiles · human review queue · classifier rules editor ·
-// ask window. BrainClient fetches via /api/brain/* (service-role server-side).
+// PBS 2026-07-24 · property-level brain console.
+// 2026-08-04 · canonical tabs via getSettingsTabs.
 
 import { DashboardPage } from '@/app/(cockpit)/_design';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import BrainClient from '@/components/brain/BrainClient';
 
 export const dynamic = 'force-dynamic';
@@ -16,18 +15,7 @@ export default function PropertyBrainSettingsPage({ params }: { params: { proper
     <DashboardPage
       title="Settings · Brain"
       subtitle={`Company document brain · pipeline · review queue · classifier rules · property ${propertyId}`}
-      tabs={[
-        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
-        { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
-        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
-        { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
-        { key: 'documents',  label: 'Documents',  href: `/h/${propertyId}/settings/documents`  },
-        { key: 'archive',    label: 'Archive',    href: `/h/${propertyId}/settings/archive`    },
-        { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-        { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain`, active: true },
-        { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
-        { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
-      ]}
+      tabs={getSettingsTabs(propertyId, 'brain')}
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <BrainClient propertyId={propertyId} />
