@@ -101,6 +101,19 @@ export default async function CockpitV2HealthPage() {
           Cron 188 · 0 */6 * * * · stores results in public.health_check_runs
         </div>
 
+        {/* Alarms link card (alarm-system-v1 — no free System tab, law 659) */}
+        <a href="/holding/it2/system/alarms" style={{
+          display: 'block', marginTop: 16, padding: '12px 16px', border: '1px solid #E6DFCC',
+          borderRadius: 8, textDecoration: 'none', background: '#FFFFFF',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#5A5A5A' }}>
+            🔔 Alarms →
+          </div>
+          <div style={{ fontSize: 12, color: '#5A5A5A', marginTop: 4 }}>
+            Watchdog cockpit — every failure surface on one page, silence itself is an alert. Red alarms, watchdog-of-watchdogs health, 7-day log, noise control.
+          </div>
+        </a>
+
         {/* DQ Engine link card (dq-engine-v1 — no free System tab, law 659) */}
         <a href="/holding/it2/system/data-quality" style={{
           display: 'block', marginTop: 16, padding: '12px 16px', border: '1px solid #E6DFCC',
