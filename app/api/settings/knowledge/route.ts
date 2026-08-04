@@ -25,6 +25,7 @@ const KINDS = ['big_goal', 'module_goal'];
 const GUARDRAILS = ['floor', 'ceiling', 'approval_required', 'watch'];
 const DOC_SECTIONS = [
   'revenue_philosophy', 'playbook', 'positioning', 'guest_profile', 'escalation_crisis', 'compliance',
+  'activities', 'retreats', 'fnb_ops', 'spa_ops', 'transport_ops', 'retail_ops', 'finance_ops', 'hr_ops',
 ];
 const SECTION_LABELS: Record<string, string> = {
   revenue_philosophy: 'Revenue Philosophy',
