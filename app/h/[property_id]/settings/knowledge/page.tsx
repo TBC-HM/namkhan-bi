@@ -3,6 +3,7 @@
 // Fix: JUDGMENT_SECTIONS defined locally (no cross-boundary client import), createClient() matches other settings pages
 
 import { createClient } from '@/lib/supabase/server';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import KnowledgeClient, {
   type TenantGoalRow,
@@ -88,18 +89,7 @@ export default async function KnowledgeSettingsPage({
     <DashboardPage
       title="Settings · Knowledge"
       subtitle={`What the platform knows about how you run this hotel · Property ID ${propertyId} · ${completeness}% complete`}
-      tabs={[
-        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
-        { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
-        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
-        { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
-        { key: 'documents',  label: 'Documents',  href: `/h/${propertyId}/settings/documents`  },
-        { key: 'archive',    label: 'Archive',    href: `/h/${propertyId}/settings/archive`    },
-        { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-        { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
-        { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
-        { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge`, active: true },
-      ]}
+      tabs={getSettingsTabs(propertyId, 'knowledge')}
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <Container
