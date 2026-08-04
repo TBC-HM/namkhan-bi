@@ -51,7 +51,7 @@ function pipelineState(q: any, briefStatus: string | null, frozen?: boolean): { 
 }
 
 async function fetchData() {
-  const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }, { data: truth }, { data: findingRows }, { data: reauditSignals }] = await Promise.all([
+  const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }, { data: truth }, { data: findingRows }, { data: threadRows }, { data: reauditSignals }] = await Promise.all([
     getSupabaseAdmin()
       .from('v_documents_latest')
       .select('id, doc_type, title, status, version, last_updated_at')
@@ -75,6 +75,10 @@ async function fetchData() {
     (getSupabaseAdmin() as any)
       .from('v_module_findings')
       .select('id, module_doc_type, status'),
+    // PBS 2026-08-04 #2: badge must show WHOSE move — thread state per finding
+    (getSupabaseAdmin() as any)
+      .from('v_finding_threads')
+      .select('finding_id, is_restatement, confirms_understanding'),
     // Scope 3 (modules-specs-redesign-v1): last re-audit request per module —
     // payload carries prev_spec/prev_gaps captured at press time, so the card
     // can show the post-audit delta ("was 45% → now 60%, gaps closed 2").
@@ -90,12 +94,28 @@ async function fetchData() {
   for (const t of (truth ?? [])) truthMap[t.module_doc_type] = t;
   const signalMap: Record<string, any> = {};
   for (const s of (reauditSignals ?? [])) signalMap[s.module_doc_type] = s;
-  // PBS 2026-08-04: red = needs HIM (open), amber = confirmed, in build.
+  // PBS 2026-08-04 #2 (bf42dff, re-ported after clobber): THREE states —
+  // red = restated, waiting for PBS confirm (HIS move); blue = filed, with
+  // agents, restatement pending; amber = confirmed / acknowledged, in build.
   const redFindings: Record<string, number> = {};
+  const blueFindings: Record<string, number> = {};
   const amberFindings: Record<string, number> = {};
+  const restated = new Set<number>();
+  const confirmed = new Set<number>();
+  for (const t of (threadRows ?? [])) {
+    if (t.is_restatement) restated.add(t.finding_id);
+    if (t.confirms_understanding) confirmed.add(t.finding_id);
+  }
   for (const f of (findingRows ?? [])) {
-    if (f.status === 'open') redFindings[f.module_doc_type] = (redFindings[f.module_doc_type] ?? 0) + 1;
-    else if (f.status === 'acknowledged') amberFindings[f.module_doc_type] = (amberFindings[f.module_doc_type] ?? 0) + 1;
+    if (f.status === 'open' || f.status === 'acknowledged') {
+      if (f.status === 'acknowledged' || confirmed.has(f.id)) {
+        amberFindings[f.module_doc_type] = (amberFindings[f.module_doc_type] ?? 0) + 1;
+      } else if (restated.has(f.id)) {
+        redFindings[f.module_doc_type] = (redFindings[f.module_doc_type] ?? 0) + 1;
+      } else {
+        blueFindings[f.module_doc_type] = (blueFindings[f.module_doc_type] ?? 0) + 1;
+      }
+    }
   }
   const briefStatusBySlug: Record<string, string> = {};
   for (const b of (briefs ?? [])) briefStatusBySlug[b.slug] = b.status;
@@ -112,7 +132,7 @@ async function fetchData() {
     }
   }
   docs.sort((a: any, b: any) => String(a.doc_type).localeCompare(String(b.doc_type)));
-  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, amberFindings, signalMap };
+  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap };
 }
 
 // ADR-218 freeze gate — derived from v_module_truth, never from completion_estimate.
@@ -180,7 +200,7 @@ async function reauditAction(formData: FormData) {
 }
 
 export default async function SpecsPage({ searchParams }: { searchParams?: { toast?: string } }) {
-  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, amberFindings, signalMap } = await fetchData();
+  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap } = await fetchData();
   const toast = searchParams?.toast ?? null;
 
   // Assemble one serializable row per module for the client explorer.
@@ -196,6 +216,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
     const stage = pipelineState(q, briefStatus, frozen);
     const cta = nextAction(q, briefStatus, signedOff, frozen, doc.doc_type);
     const nRed = redFindings[doc.doc_type] ?? 0;
+    const nBlue = blueFindings[doc.doc_type] ?? 0;
     const nAmber = amberFindings[doc.doc_type] ?? 0;
     // Post-audit delta: only meaningful when an audit ran AFTER the request.
     const sig = signalMap[doc.doc_type];
@@ -223,6 +244,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
       signedOff,
       live: st?.is_live ?? false,
       nRed,
+      nBlue,
       nAmber,
       gapList: Array.isArray(q?.gap_list) ? q.gap_list : [],
       stageDone: stage.done,
