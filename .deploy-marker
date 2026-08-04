@@ -1,0 +1,1 @@
+deploy: redeploy HEAD 2026-08-04 11:5x CEST — intermediate commit 4e7a6e2 failed prebuild orphan gate (page pushed before allowlist); HEAD verified green locally (npm run build incl. prebuild gate + tsc). Includes finding #15 dark-mode fix + DQ surface.
