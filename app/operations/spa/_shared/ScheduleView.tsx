@@ -14,7 +14,7 @@ import StatusActions from './StatusActions';
 import NotifyActions from './NotifyActions';
 import {
   getSpaBookingsForDay, getSpaTherapists, getSpaRooms, getSpaCatalogue,
-  localTimeStr, localHour, todayIsoAtProperty,
+  getSpaBookableGuests, localTimeStr, localHour, todayIsoAtProperty,
   type SpaBookingRow,
 } from './data';
 
@@ -48,11 +48,12 @@ export default async function ScheduleView({
   const dRaw = typeof searchParams.d === 'string' ? searchParams.d : todayIso;
   const dayIso = /^\d{4}-\d{2}-\d{2}$/.test(dRaw) ? dRaw : todayIso;
 
-  const [bookingsB, therapistsB, roomsB, catalogue] = await Promise.all([
+  const [bookingsB, therapistsB, roomsB, catalogue, bookableGuests] = await Promise.all([
     getSpaBookingsForDay(propertyId, dayIso),
     getSpaTherapists(propertyId),
     getSpaRooms(propertyId),
     getSpaCatalogue(propertyId),
+    getSpaBookableGuests(propertyId, dayIso),
   ]);
 
   const bridgeMissing = bookingsB.bridgeMissing;
@@ -140,6 +141,12 @@ export default async function ScheduleView({
             }))}
             therapists={therapistsB.rows.map((t) => ({ id: t.therapist_id, label: t.display_name }))}
             rooms={roomsB.rows.map((r) => ({ id: String(r.room_id), label: r.name + (r.couples_capable ? ' · couples' : '') }))}
+            guests={bookableGuests.map((g) => ({
+              reservation_id: g.reservation_id, guest_name: g.guest_name,
+              guest_email: g.guest_email, room_type_name: g.room_type_name,
+              check_in_date: g.check_in_date, check_out_date: g.check_out_date,
+              is_in_house: g.is_in_house,
+            }))}
           />
         )}
 
