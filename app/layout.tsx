@@ -72,6 +72,18 @@ document.documentElement.setAttribute('data-property',v);}catch(e){}})();
             --moss:#2D6A4F; --sage:#5A7A62; --brass-soft:#C79A6B; --brass-pale:#E6D4B0;
           }
           .site-paper-scope { background: #FFFFFF; }
+          /* PBS finding #15 (2026-08-04): dark-mode browsers rendered form
+             controls with dark UA backgrounds while text stayed ink -> black
+             on black in the findings form, question panels, spec builder.
+             Force light form rendering site-wide. */
+          :root { color-scheme: light; }
+          .site-paper-scope input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+          .site-paper-scope textarea,
+          .site-paper-scope select {
+            background: #FFFFFF; color: #1B1B1B; color-scheme: light;
+          }
+          .site-paper-scope input::placeholder,
+          .site-paper-scope textarea::placeholder { color: #8A8A8A; opacity: 1; }
         `}</style>
         <PropertyThemeWatcher />
         <CapacityResetOnPillarChange />
