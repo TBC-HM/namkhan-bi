@@ -9,8 +9,8 @@ import { useState } from 'react';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 export interface OpenQ {
-  kind: 'brief' | 'bug';
-  ref: string;              // brief slug or bug id
+  kind: 'brief' | 'bug' | 'law';
+  ref: string;              // brief slug, bug id, or law-proposal id
   title: string;            // human title
   question: string;
   options: { label: string; consequence: string; recommended?: boolean }[];
@@ -32,8 +32,12 @@ export default function QuestionWalkthrough({ questions }: { questions: OpenQ[] 
   async function answer(q: OpenQ, opt: { label: string; consequence: string }) {
     setBusy(true); setErr(null);
     try {
-      const url = q.kind === 'brief' ? '/api/cockpit/briefs/answer' : '/api/cockpit/bugs/answer';
-      const body = q.kind === 'brief' ? { slug: q.ref, choice: opt.label } : { bug_id: Number(q.ref), choice: opt.label };
+      const url = q.kind === 'brief' ? '/api/cockpit/briefs/answer'
+        : q.kind === 'law' ? '/api/cockpit/laws/answer'
+        : '/api/cockpit/bugs/answer';
+      const body = q.kind === 'brief' ? { slug: q.ref, choice: opt.label }
+        : q.kind === 'law' ? { proposal_id: Number(q.ref), choice: opt.label }
+        : { bug_id: Number(q.ref), choice: opt.label };
       const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(j.error ?? `failed (${r.status})`); return; }
@@ -153,7 +157,7 @@ export default function QuestionWalkthrough({ questions }: { questions: OpenQ[] 
       {/* Card */}
       <div style={{ background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`, borderRadius: 10, padding: '20px 22px' }}>
         <div style={{ fontSize: 10, fontFamily: MONO, color: TOKENS.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-          {q.kind === 'brief' ? 'build brief' : `bug #${q.ref}`} · {q.title}
+          {q.kind === 'brief' ? 'build brief' : q.kind === 'law' ? 'operating law' : `bug #${q.ref}`} · {q.title}
           {q.asked_by ? ` · asked by ${q.asked_by}` : ''}
         </div>
         <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.5, color: TOKENS.ink, marginBottom: 14 }}>
