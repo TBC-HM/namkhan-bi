@@ -13,8 +13,10 @@ interface GroupSpec {
 export const GROUPS: GroupSpec[] = [
   {
     key: 'home', label: 'Action Center', href: '/holding/it2',
+    // action-center-inbox-v1 (2026-08-04): Tasks subtab KILLED (PBS: "kind of
+    // crap ... no cta") — tickets are backend-only; awaits_user notices render
+    // in the Action Center response strip.
     subs: [
-      { href: '/holding/it2/fleet/tasks',  label: 'Tasks' },
       { href: '/holding/it2/fleet/bugs',   label: 'Bugs' },
       { href: '/holding/it2/system/live',  label: '⬤ Live' },
     ],
