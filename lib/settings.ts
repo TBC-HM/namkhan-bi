@@ -56,6 +56,9 @@ export const SECTION_TO_TABLE: Record<
   // by /api/settings/upsert while the editor is single-property).
   social_rules:      { table: 'social_channel_rules', pk: 'id',      multiRow: true,  hasPropertyId: true },
   social_programs:   { table: 'social_programs',  pk: 'id',          multiRow: true,  hasPropertyId: true },
+  // Financial & legal identity — new sections 2026-08-04
+  banking:           { table: 'property_banking', pk: 'property_id', multiRow: false, hasPropertyId: true },
+  licenses:          { table: 'property_licenses', pk: 'license_id', multiRow: true,  hasPropertyId: true },
 };
 
 // Field whitelists for sections that share a physical table (property_profile).
