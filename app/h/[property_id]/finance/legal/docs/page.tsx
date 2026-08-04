@@ -204,6 +204,11 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Upload documents" subtitle="PDF · DOCX · XLSX · TXT · CSV · ODS — enters brain pipeline for extraction and classification" density="compact">
+          <DocUploadDropzone propertyId={propertyId} />
+        </Container>
+      </div>
+      <div style={{ gridColumn: '1 / -1' }}>
         <Container
           title="Document register"
           subtitle="Triage queue · classify, archive, link to cases/collections · inline remap clears needs_review"
