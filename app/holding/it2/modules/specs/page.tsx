@@ -2,30 +2,18 @@
 // Module Docs hub — lists module specs + build briefs.
 // Uses public.v_documents_latest + public.v_build_briefs (bridge views over documentation schema).
 // v2 2026-07-25: pipeline lifecycle strip per module (Audit → Spec → Repair → Check → Frozen)
-// driven by public.v_module_completion_queue + brief statuses (standing pipeline, ADR-165/166).
+// v3 2026-08-04 (modules-specs-redesign-v1, PBS): department subtabs + audience
+// toggle + compact expandable rows via SpecsExplorer (client). This server file
+// assembles one serializable row per module and owns the two server actions.
 
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import SpecsExplorer, { type ModuleRow } from './SpecsExplorer';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const BADGE: Record<string, { bg: string; color: string }> = {
-  bug_agent_module:    { bg: '#EDE7F6', color: '#4527A0' },
-  compiler_module:     { bg: '#E8EAF6', color: '#283593' },
-  gbp_module:          { bg: '#FCE4EC', color: '#880E4F' },
-  inventory_module:    { bg: '#E8F5E9', color: '#1B5E20' },
-  media_module:        { bg: '#E3F2FD', color: '#0D47A1' },
-  newsletter_module:   { bg: '#FFF3E0', color: '#E65100' },
-  proposals_module:    { bg: '#F3E5F5', color: '#6A1B9A' },
-  sales_module:        { bg: '#E0F7FA', color: '#006064' },
-  socials_module:      { bg: '#FFEBEE', color: '#B71C1C' },
-  spec_builder_module: { bg: '#E0F2F1', color: '#004D40' },
-  university_module:   { bg: '#F1F8E9', color: '#33691E' },
-  youtube_module:      { bg: '#FFEBEE', color: '#C62828' },
-};
 
 const BRIEF_STATUS: Record<string, { label: string; bg: string; color: string }> = {
   ready:       { label: 'ready for agent', bg: '#E3F2FD', color: '#1565C0' },
@@ -38,13 +26,8 @@ const BRIEF_STATUS: Record<string, { label: string; bg: string; color: string }>
   archived:    { label: 'archived',        bg: '#F4EFE2', color: '#8A8A8A' },
 };
 
-// PBS 2026-07-27: TESTING bracket between Check and Frozen — a module only
-// freezes after testing_target (default 50) evidence-counted successful runs.
-const STAGES = ['Audit', 'Spec', 'Repair', 'Check', 'Testing', 'Frozen'];
-
-// Compute (doneUpTo index, active label, alert) from queue row + its brief status.
-// ADR-218: 'completed' alone no longer renders FROZEN — the truth gate
-// (tested 100% or waiver, zero open blocking findings) decides.
+// PBS 2026-07-27: TESTING bracket between Check and Frozen.
+// ADR-218: 'completed' alone never renders FROZEN — the truth gate decides.
 function pipelineState(q: any, briefStatus: string | null, frozen?: boolean): { done: number; active: string; alert: boolean } {
   if (!q || q.status === 'skipped') return { done: -1, active: 'not queued', alert: false };
   if (q.status === 'pending')   return { done: -1, active: 'queued for audit', alert: false };
@@ -54,7 +37,6 @@ function pipelineState(q: any, briefStatus: string | null, frozen?: boolean): { 
     return { done: 4, active: 'completed claim — UNPROVEN', alert: true };
   }
   const testing = `testing · ${q?.testing_ok ?? 0} of ${q?.testing_target ?? 50} good runs`;
-  // spec_created / in_pipeline → refine from the brief
   switch (briefStatus) {
     case 'research':    return { done: 1, active: 'research running', alert: false };
     case 'ready':       return { done: 1, active: 'repair queued', alert: false };
@@ -68,44 +50,8 @@ function pipelineState(q: any, briefStatus: string | null, frozen?: boolean): { 
   }
 }
 
-function PipelineStrip({ q, briefStatus, frozen }: { q: any; briefStatus: string | null; frozen?: boolean }) {
-  const st = pipelineState(q, briefStatus, frozen);
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-        {STAGES.map((label, i) => {
-          const isDone = i <= st.done;
-          const isNext = i === st.done + 1;
-          return (
-            <div key={label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <div style={{ width: '100%', height: 3, borderRadius: 99,
-                background: isDone ? '#2E7D32' : isNext ? (st.alert ? '#B71C1C' : '#B8A878') : '#F0EBE0' }} />
-              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-                color: isDone ? '#2E7D32' : isNext ? (st.alert ? '#B71C1C' : '#8A8A8A') : '#C9C2B2' }}>{label}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ fontSize: 9.5, fontWeight: 600, color: st.alert ? '#B71C1C' : '#5A5A5A', marginTop: 2 }}>
-        {st.active}{q?.completion_estimate != null ? ` · agent-audited: ${q.completion_estimate}% complete` : ''}
-      </div>
-    </div>
-  );
-}
-
-function TypePill({ docType }: { docType: string }) {
-  const b = BADGE[docType] ?? { bg: '#F4EFE2', color: '#5A5A5A' };
-  const label = docType.replace(/_module$/, '').replace(/_/g, ' ');
-  return (
-    <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-      padding: '2px 8px', borderRadius: 99, background: b.bg, color: b.color }}>
-      {label}
-    </span>
-  );
-}
-
 async function fetchData() {
-  const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }, { data: truth }, { data: findingRows }, { data: threadRows }] = await Promise.all([
+  const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }, { data: truth }, { data: findingRows }, { data: reauditSignals }] = await Promise.all([
     getSupabaseAdmin()
       .from('v_documents_latest')
       .select('id, doc_type, title, status, version, last_updated_at')
@@ -122,18 +68,19 @@ async function fetchData() {
       .like('doc_type', '%_module'),
     (getSupabaseAdmin() as any)
       .from('v_module_completion_queue')
-      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at, entry_url, testing_target, testing_ok, gap_list'),
-    // ADR-218 truth layer: spec% vs tested% + blocking findings, per module.
+      .select('module_doc_type, display_name, status, completion_estimate, brief_slug, priority, updated_at, entry_url, testing_target, testing_ok, gap_list, department, audience'),
     (getSupabaseAdmin() as any)
       .from('v_module_truth')
-      .select('module_doc_type, status, spec_pct, tested_pct, testing_ok, testing_target, open_blocking_findings, owner_test_waiver, owner_signoff_at'),
+      .select('module_doc_type, status, spec_pct, tested_pct, testing_ok, testing_target, open_blocking_findings, owner_test_waiver, owner_signoff_at, department, audience'),
     (getSupabaseAdmin() as any)
       .from('v_module_findings')
       .select('id, module_doc_type, status'),
-    // PBS 2026-08-04 #2: badge must show WHOSE move — thread state per finding
+    // Scope 3 (modules-specs-redesign-v1): last re-audit request per module —
+    // payload carries prev_spec/prev_gaps captured at press time, so the card
+    // can show the post-audit delta ("was 45% → now 60%, gaps closed 2").
     (getSupabaseAdmin() as any)
-      .from('v_finding_threads')
-      .select('finding_id, is_restatement, confirms_understanding'),
+      .from('v_module_reaudit_last')
+      .select('module_doc_type, created_at, payload'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
@@ -141,34 +88,18 @@ async function fetchData() {
   for (const qr of (queue ?? [])) queueMap[qr.module_doc_type] = qr;
   const truthMap: Record<string, any> = {};
   for (const t of (truth ?? [])) truthMap[t.module_doc_type] = t;
-  // PBS 2026-08-04: split finding counts — red = needs HIM (open, unconfirmed),
-  // amber = confirmed, in build (acknowledged). Card must show whose move it is.
-  const openFindings: Record<string, number> = {};
-  const redFindings: Record<string, number> = {};   // restated → waiting for PBS confirm (HIS move)
-  const blueFindings: Record<string, number> = {};  // no restatement yet → with agents (PBS 2026-08-04 #2)
-  const amberFindings: Record<string, number> = {}; // acknowledged → confirmed, in build
-  const restated = new Set<number>();
-  const confirmed = new Set<number>();
-  for (const t of (threadRows ?? [])) {
-    if (t.is_restatement) restated.add(t.finding_id);
-    if (t.confirms_understanding) confirmed.add(t.finding_id);
-  }
+  const signalMap: Record<string, any> = {};
+  for (const s of (reauditSignals ?? [])) signalMap[s.module_doc_type] = s;
+  // PBS 2026-08-04: red = needs HIM (open), amber = confirmed, in build.
+  const redFindings: Record<string, number> = {};
+  const amberFindings: Record<string, number> = {};
   for (const f of (findingRows ?? [])) {
-    if (f.status === 'open' || f.status === 'acknowledged') {
-      openFindings[f.module_doc_type] = (openFindings[f.module_doc_type] ?? 0) + 1;
-      if (f.status === 'acknowledged' || confirmed.has(f.id)) {
-        amberFindings[f.module_doc_type] = (amberFindings[f.module_doc_type] ?? 0) + 1;
-      } else if (restated.has(f.id)) {
-        redFindings[f.module_doc_type] = (redFindings[f.module_doc_type] ?? 0) + 1;
-      } else {
-        blueFindings[f.module_doc_type] = (blueFindings[f.module_doc_type] ?? 0) + 1;
-      }
-    }
+    if (f.status === 'open') redFindings[f.module_doc_type] = (redFindings[f.module_doc_type] ?? 0) + 1;
+    else if (f.status === 'acknowledged') amberFindings[f.module_doc_type] = (amberFindings[f.module_doc_type] ?? 0) + 1;
   }
   const briefStatusBySlug: Record<string, string> = {};
   for (const b of (briefs ?? [])) briefStatusBySlug[b.slug] = b.status;
-  // PBS 2026-07-27: new modules must get a box the moment they are drafted.
-  // Any queue entry without a spec doc yet renders as a synthesized card.
+  // PBS 2026-07-27: new modules get a box the moment they are drafted.
   const docs = [...(moduleDocs ?? [])];
   const haveDoc = new Set(docs.map((d: any) => d.doc_type));
   for (const qr of (queue ?? [])) {
@@ -181,7 +112,7 @@ async function fetchData() {
     }
   }
   docs.sort((a: any, b: any) => String(a.doc_type).localeCompare(String(b.doc_type)));
-  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, openFindings, redFindings, blueFindings, amberFindings };
+  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, amberFindings, signalMap };
 }
 
 // ADR-218 freeze gate — derived from v_module_truth, never from completion_estimate.
@@ -191,16 +122,14 @@ function isFrozen(t: any): boolean {
     && (t.open_blocking_findings ?? 0) === 0;
 }
 
+// Rule 712: ISO slice, identical on every environment.
 function shortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return String(iso).slice(0, 10);
 }
 
-// ONE next action per card, derived from real pipeline state (PBS 2026-07-27:
-// "no CTAs, which input they need, when is a module finished").
+// ONE next action per card, derived from real pipeline state.
 function nextAction(q: any, briefStatus: string | null, signedOff: boolean, frozen: boolean, moduleDocType: string):
   { label: string; href?: string; rpc?: 'sign_off' | 'reaudit'; tone: 'red' | 'green' | 'gold' | 'grey' } {
-  // PBS 2026-07-27: compact labels with symbols humans know — fit ONE row.
-  // ADR-218: 'completed'/signed-off shows Frozen ONLY when the truth gate passes.
   if (frozen) return { label: '🧊 Frozen', tone: 'grey' };
   if (signedOff || q?.status === 'completed')
     return { label: '⚠ Unproven', href: `/holding/it2/modules/findings/${encodeURIComponent(moduleDocType)}`, tone: 'red' };
@@ -210,16 +139,11 @@ function nextAction(q: any, briefStatus: string | null, signedOff: boolean, froz
     return { label: '⏳ Queued', href: `/holding/it2/modules/briefs/${q.brief_slug}`, tone: 'gold' };
   if (briefStatus === 'shipped') {
     const ok = q?.testing_ok ?? 0; const target = q?.testing_target ?? 50;
-    // TESTING bracket: freeze only after target successful runs.
     if (ok < target) return { label: `🧪 ${ok}/${target} runs`, tone: 'gold' };
     return { label: '🧊 Freeze', rpc: 'sign_off', tone: 'green' };
   }
-  // finding #31 (PBS: "what am i watching?"): Watch = the LIVE BOARD filtered
-  // to this brief — pulsing heartbeat box + landed commits, one click. The
-  // brief TEXT stays reachable via the ✎ Goal / 📄 Spec buttons on the card.
   if (briefStatus && ['research', 'in_progress', 'verifying'].includes(briefStatus) && q?.brief_slug)
     return { label: '👁 Watch', href: `/holding/it2/system/live?brief=${encodeURIComponent(q.brief_slug)}`, tone: 'gold' };
-  // No estimate, or audit older than 3 days → the number on the card is not trustworthy
   const auditAgeDays = q?.updated_at ? (Date.now() - new Date(q.updated_at).getTime()) / 86400000 : Infinity;
   if (q?.completion_estimate == null || auditAgeDays > 3)
     return { label: '⟳ Re-audit', rpc: 'reaudit', tone: 'gold' };
@@ -230,9 +154,8 @@ async function signOffAction(formData: FormData) {
   'use server';
   const docType = String(formData.get('doc_type') ?? '');
   if (!docType) return;
-  // ADR-218 (law 730 addendum): sign-off goes through fn_module_signoff, which
-  // REFUSES while open blocking findings exist. Surface that refusal (and any
-  // truth-gate trigger error) verbatim as a toast — never a silent failure.
+  // ADR-218 (law 730 addendum): fn_module_signoff refuses while open blocking
+  // findings exist — surface the refusal verbatim as a toast, never silently.
   let errMsg: string | null = null;
   try {
     const { data, error } = await (getSupabaseAdmin() as any)
@@ -242,8 +165,6 @@ async function signOffAction(formData: FormData) {
   } catch (e: any) {
     errMsg = e?.message ?? 'sign-off failed';
   }
-  // PBS 2026-07-27: "i press and visibly nothing happens" — the action worked
-  // but the page never re-rendered. Revalidate so the card flips immediately.
   revalidatePath('/holding/it2/modules/specs');
   if (errMsg) redirect(`/holding/it2/modules/specs?toast=${encodeURIComponent(`${docType}: ${errMsg}`)}`);
 }
@@ -251,23 +172,84 @@ async function signOffAction(formData: FormData) {
 async function reauditAction(formData: FormData) {
   'use server';
   const docType = String(formData.get('doc_type') ?? '');
+  // fn_module_reaudit (module_reaudit_signal_v1): flips queue to pending AND
+  // writes governance.owner_action_signals kind='reaudit_requested' with
+  // prev_spec/prev_gaps in payload (scope 3, modules-specs-redesign-v1).
   if (docType) await (getSupabaseAdmin() as any).rpc('fn_module_reaudit', { p_doc_type: docType, p_actor: 'PBS' });
   revalidatePath('/holding/it2/modules/specs');
 }
 
-const CTA_TONE: Record<string, { bg: string; color: string }> = {
-  red:   { bg: '#B71C1C', color: '#FFFFFF' },
-  green: { bg: '#1F3A2E', color: '#FFFFFF' },
-  gold:  { bg: '#B8A878', color: '#1B1B1B' },
-  grey:  { bg: '#F0EBE0', color: '#5A5A5A' },
-};
-
 export default async function SpecsPage({ searchParams }: { searchParams?: { toast?: string } }) {
-  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, openFindings, redFindings, blueFindings, amberFindings } = await fetchData();
+  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, amberFindings, signalMap } = await fetchData();
   const toast = searchParams?.toast ?? null;
 
+  // Assemble one serializable row per module for the client explorer.
+  const modules: ModuleRow[] = moduleDocs.map((doc: any) => {
+    const st = statusMap[doc.doc_type];
+    const q = queueMap[doc.doc_type];
+    const briefStatus = q?.brief_slug ? (briefStatusBySlug[q.brief_slug] ?? null) : null;
+    const t = truthMap[doc.doc_type];
+    const specPct = t?.spec_pct ?? q?.completion_estimate ?? null;
+    const testedPct = t?.tested_pct ?? null;
+    const frozen = isFrozen(t);
+    const signedOff = !!st?.signed_off_at;
+    const stage = pipelineState(q, briefStatus, frozen);
+    const cta = nextAction(q, briefStatus, signedOff, frozen, doc.doc_type);
+    const nRed = redFindings[doc.doc_type] ?? 0;
+    const nAmber = amberFindings[doc.doc_type] ?? 0;
+    // Post-audit delta: only meaningful when an audit ran AFTER the request.
+    const sig = signalMap[doc.doc_type];
+    const audited = q?.updated_at ?? null;
+    const sigBefore = sig && audited && String(sig.created_at) < String(audited) ? sig : null;
+    const prevSpec = sigBefore?.payload?.prev_spec ?? null;
+    const prevGaps = sigBefore?.payload?.prev_gaps ?? null;
+    const curGaps = Array.isArray(q?.gap_list) ? q.gap_list.length : 0;
+    const unregistered = !q;
+    return {
+      docType: doc.doc_type,
+      title: doc.title,
+      version: doc.version ?? 0,
+      docStatus: doc.status ?? 'draft',
+      // Unregistered spec docs (no queue row) have no owner classification —
+      // agent-class decision (law 736): park them under IT/Platform, backend
+      // audience, until the registration law forces a real classification.
+      department: q?.department ?? 'it_platform',
+      audience: (q?.audience ?? (unregistered ? 'backend' : 'owner')) as ModuleRow['audience'],
+      specPct,
+      testedPct,
+      testOk: t?.testing_ok ?? q?.testing_ok ?? 0,
+      testTarget: t?.testing_target ?? q?.testing_target ?? null,
+      frozen,
+      signedOff,
+      live: st?.is_live ?? false,
+      nRed,
+      nAmber,
+      gapList: Array.isArray(q?.gap_list) ? q.gap_list : [],
+      stageDone: stage.done,
+      stageActive: stage.active,
+      stageAlert: stage.alert,
+      completionEstimate: q?.completion_estimate ?? null,
+      briefSlug: q?.brief_slug ?? null,
+      briefStatus,
+      entryUrl: q?.entry_url ?? null,
+      lastUpdated: doc.last_updated_at ? shortDate(doc.last_updated_at) : null,
+      lastUpdatedIso: (q?.updated_at ?? doc.last_updated_at) ? String(q?.updated_at ?? doc.last_updated_at) : null,
+      auditDate: audited ? shortDate(audited) : null,
+      prevSpec: typeof prevSpec === 'number' ? prevSpec : null,
+      gapsClosed: typeof prevGaps === 'number' ? Math.max(0, prevGaps - curGaps) : null,
+      ctaLabel: cta.label,
+      ctaHref: cta.href,
+      ctaRpc: cta.rpc,
+      ctaTone: cta.tone,
+      // "needs you" = whose move is it: unconfirmed findings, a parked
+      // question, or an unproven completed claim.
+      needsYou: nRed > 0 || briefStatus === 'needs_input' || (stage.alert && !frozen),
+      unregistered,
+    };
+  });
+
   return (
-    <div style={{ maxWidth: 960, padding: '28px 24px' }}>
+    <div style={{ maxWidth: 1080, padding: '28px 24px' }}>
       {/* A8: truth-gate refusals surface here, verbatim — never a silent failure */}
       {toast && (
         <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 6, background: '#B71C1C',
@@ -281,11 +263,11 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1B1B1B', margin: 0 }}>Module Documentation</h1>
           <p style={{ fontSize: 12, color: '#5A5A5A', margin: '4px 0 0' }}>
-            Spec docs for all modules · auditor every 6h · builder + checker hourly · each card shows ONE next action
+            Spec docs for all modules · auditor every 6h · builder + checker hourly · pick a department, expand a row for detail
           </p>
           <p style={{ fontSize: 11, color: '#1B1B1B', margin: '6px 0 0', fontWeight: 600 }}>
             SPEC % = the agent&apos;s conformance estimate — NOT proof it works. TESTED % = evidence-counted good runs.
-            FROZEN needs: completed + tested 100% (or your waiver) + zero open blocking findings. Everything else is UNPROVEN.
+            FROZEN needs: completed + tested 100% (or your waiver) + zero open blocking findings.
           </p>
         </div>
         <Link href="/holding/it2/modules/intake" style={{
@@ -294,173 +276,8 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
         }}>+ New spec</Link>
       </div>
 
-      {/* Module spec docs */}
-      <section style={{ marginBottom: 36 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 700, color: '#1B1B1B', margin: '0 0 12px', letterSpacing: '0.04em' }}>
-          MODULE SPECS ({moduleDocs.length})
-        </h2>
-        {moduleDocs.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#8A8A8A', padding: '20px 0' }}>
-            Loading module specs — if this persists, check v_documents_latest.
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
-            {moduleDocs.map((doc: any) => {
-              const st = statusMap[doc.doc_type];
-              const q = queueMap[doc.doc_type];
-              const briefStatus = q?.brief_slug ? (briefStatusBySlug[q.brief_slug] ?? null) : null;
-              // ADR-218: TWO numbers from v_module_truth — SPEC (conformance
-              // estimate) is NOT evidence the module works; TESTED is.
-              const t = truthMap[doc.doc_type];
-              const specPct = t?.spec_pct ?? q?.completion_estimate ?? null;
-              const testedPct = t?.tested_pct ?? null;
-              const testOk = t?.testing_ok ?? q?.testing_ok ?? 0;
-              const testTarget = t?.testing_target ?? q?.testing_target ?? null;
-              const frozen = isFrozen(t);
-              const nOpen = openFindings[doc.doc_type] ?? 0;
-              const nRed = redFindings[doc.doc_type] ?? 0;
-              const nBlue = blueFindings[doc.doc_type] ?? 0;
-              const nAmber = amberFindings[doc.doc_type] ?? 0;
-              const auditDate = q?.updated_at ? shortDate(q.updated_at) : null;
-              const live = st?.is_live ?? false;
-              const signedOff = !!st?.signed_off_at;
-              const cta = nextAction(q, briefStatus, signedOff, frozen, doc.doc_type);
-              const tone = CTA_TONE[cta.tone];
-              return (
-                <div key={doc.doc_type} style={{
-                  background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6,
-                  padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                    <TypePill docType={doc.doc_type} />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {/* A2: FROZEN only via the truth gate; everything else is UNPROVEN */}
-                      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
-                        background: frozen ? '#E8F5E9' : '#FFF3E0', color: frozen ? '#2E7D32' : '#B26A00' }}>
-                        {frozen ? 'FROZEN' : 'UNPROVEN'}
-                      </span>
-                      <span style={{ fontSize: 10, fontWeight: 700,
-                        color: signedOff ? '#2E7D32' : doc.status === 'published' ? '#2E7D32' : '#B8A878' }}>
-                        v{doc.version} · {signedOff ? 'signed off' : doc.status}
-                      </span>
-                    </div>
-                  </div>
-                  {/* A1: SPEC vs TESTED split (v_module_truth). SPEC = agent-audited
-                      conformance estimate; TESTED = evidence-counted good runs. */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: '#8A8A8A', width: 38 }}>SPEC</span>
-                    <div style={{ flex: 1, height: 4, background: '#F0EBE0', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${specPct ?? 0}%`, borderRadius: 99,
-                        background: (specPct ?? 0) >= 80 ? '#2E7D32' : (specPct ?? 0) >= 50 ? '#F57F17' : '#D32F2F' }} />
-                    </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: specPct == null ? '#B71C1C' : '#5A5A5A' }}>
-                      {specPct == null ? 'no audit yet' : `${specPct}%`}
-                    </span>
-                    {live && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px',
-                      borderRadius: 99, background: '#E8F5E9', color: '#2E7D32' }}>live</span>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -4 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, color: '#8A8A8A', width: 38 }}>TESTED</span>
-                    <div style={{ flex: 1, height: 4, background: '#F0EBE0', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${testedPct ?? 0}%`, borderRadius: 99,
-                        background: (testedPct ?? 0) >= 100 ? '#2E7D32' : (testedPct ?? 0) > 0 ? '#F57F17' : '#D32F2F' }} />
-                    </div>
-                    {testTarget == null ? (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: '#B26A00' }}>no test target</span>
-                    ) : (
-                      <span style={{ fontSize: 10, fontWeight: 700, color: testOk === 0 ? '#B71C1C' : '#5A5A5A' }}>
-                        {testedPct ?? 0}% · {testOk}/{testTarget} runs
-                      </span>
-                    )}
-                  </div>
-                  {auditDate && specPct != null && (
-                    <div style={{ fontSize: 9, color: '#8A8A8A', marginTop: -4 }}>audited {auditDate}</div>
-                  )}
-                  {/* Bug #88 (PBS): "% without gap list is meaningless" — show
-                      WHAT is missing to reach 100%. Plan from agent PR #339,
-                      re-implemented on current main (the PR conflicted). */}
-                  {Array.isArray(q?.gap_list) && q.gap_list.length > 0 ? (
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: -2 }}>
-                      {q.gap_list.slice(0, 3).map((g: any, i: number) => (
-                        <span key={i} title={String(g?.gap ?? '')} style={{
-                          fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-                          background: '#FDECE4', color: '#B04A2F', maxWidth: 220, overflow: 'hidden',
-                          textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block',
-                        }}>−{g?.weight_pct ?? '?'}% · {String(g?.gap ?? '').slice(0, 60)}</span>
-                      ))}
-                      {q.gap_list.length > 3 && (
-                        <span style={{ fontSize: 9, color: '#8A8A8A' }}>+{q.gap_list.length - 3} more</span>
-                      )}
-                    </div>
-                  ) : specPct != null && specPct < 100 ? (
-                    <div style={{ fontSize: 9, color: '#B8A878', marginTop: -2 }}>no gap data · ⟳ re-audit to populate</div>
-                  ) : null}
-                  {/* Pipeline lifecycle strip */}
-                  <PipelineStrip q={q} briefStatus={briefStatus} frozen={frozen} />
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#1B1B1B', lineHeight: 1.4 }}>{doc.title}</div>
-                  {/* ONE next action per card (CTA) + spec link */}
-                  <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 'auto', display: 'flex',
-                    justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                    <span>{doc.last_updated_at ? shortDate(doc.last_updated_at) : '—'}</span>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {cta.href ? (
-                        <Link href={cta.href} style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
-                          borderRadius: 3, background: tone.bg, color: tone.color, textDecoration: 'none' }}>
-                          {cta.label}
-                        </Link>
-                      ) : cta.rpc ? (
-                        <form action={cta.rpc === 'sign_off' ? signOffAction : reauditAction} style={{ margin: 0 }}>
-                          <input type="hidden" name="doc_type" value={doc.doc_type} />
-                          <button type="submit" style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
-                            borderRadius: 3, background: tone.bg, color: tone.color, border: 'none', cursor: 'pointer' }}>
-                            {cta.label}
-                          </button>
-                        </form>
-                      ) : (
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px',
-                          borderRadius: 3, background: tone.bg, color: tone.color }}>{cta.label}</span>
-                      )}
-                      {/* PBS 2026-07-27: "when a module is finished put a link
-                          in the module container" — the module's front door,
-                          shown whenever a UI exists (governance queue entry_url). */}
-                      {q?.entry_url && (
-                        <Link href={q.entry_url} title="Open the module's live page" style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px',
-                          borderRadius: 3, background: '#1F3A2E', color: '#FFFFFF', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                          ↗ Open
-                        </Link>
-                      )}
-                      {/* A4: owner findings channel — PBS 2026-08-04 #2: THREE states,
-                          badge shows WHOSE move: red=confirm(PBS), blue=with agents, amber=in build */}
-                      <Link href={`/holding/it2/modules/findings/${encodeURIComponent(doc.doc_type)}`}
-                        style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
-                          background: nRed > 0 ? '#B71C1C' : nBlue > 0 ? '#E3F2FD' : nAmber > 0 ? '#FFF3E0' : '#FFFFFF',
-                          color: nRed > 0 ? '#FFFFFF' : nBlue > 0 ? '#1565C0' : nAmber > 0 ? '#B26A00' : '#1B1B1B',
-                          border: nRed > 0 ? '1px solid #B71C1C' : nBlue > 0 ? '1px solid #90CAF9' : nAmber > 0 ? '1px solid #E8A13C' : '1px solid #E6DFCC',
-                          textDecoration: 'none', whiteSpace: 'nowrap' }}
-                        title={nRed > 0 ? `${nRed} restated — waiting for YOUR confirm` : nBlue > 0 ? `${nBlue} filed — with agents, restatement pending` : nAmber > 0 ? `${nAmber} confirmed — in build` : 'Owner findings — file feedback on this module'}>
-                        ⚑ {nRed > 0 ? `${nRed} confirm` : nBlue > 0 ? `${nBlue} with agents` : nAmber > 0 ? `${nAmber} in build` : 'Findings'}{nRed > 0 && (nBlue + nAmber) > 0 ? ` +${nBlue + nAmber}` : nBlue > 0 && nAmber > 0 ? ` +${nAmber}` : ''}
-                      </Link>
-                      {/* PBS 2026-07-27: refine-goal restored + compact symbol row */}
-                      {q?.brief_slug && (
-                        <Link href={`/holding/it2/modules/briefs/${q.brief_slug}`} title="Refine the goal / read the brief"
-                          style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
-                            border: '1px solid #E6DFCC', color: '#1B1B1B', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                          ✎ Goal
-                        </Link>
-                      )}
-                      <Link href={`/holding/it2/modules/specs/${encodeURIComponent(doc.doc_type)}`} title="Read the spec document"
-                        style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
-                          border: '1px solid #E6DFCC', color: '#1B1B1B', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                        📄 Spec
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      {/* Department subtabs + audience toggle + compact rows (client) */}
+      <SpecsExplorer modules={modules} signOffAction={signOffAction} reauditAction={reauditAction} />
 
       {/* Build briefs */}
       <section>
@@ -468,7 +285,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
           BUILD BRIEFS ({briefs.length})
         </h2>
         <p style={{ fontSize: 11, color: '#5A5A5A', margin: '0 0 12px' }}>
-          Briefs from + New spec and the module auditor · lifecycle: ready → research → in_progress → verifying → shipped · "needs PBS" = the loop has a question only you can answer
+          Briefs from + New spec and the module auditor · lifecycle: ready → research → in_progress → verifying → shipped · &quot;needs PBS&quot; = the loop has a question only you can answer
         </p>
         <div style={{ border: '1px solid #E6DFCC', borderRadius: 6, overflow: 'hidden' }}>
           {briefs.length === 0 ? (
