@@ -198,9 +198,9 @@ const S: Record<string, CSSProperties> = {
   // — that's what "on the same level as the sub-menu" means. It scrolls with
   // the sub-strip and never drifts off screen.
   actionInline: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 },
-  tabStrip: { display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--hairline, #E6DFCC)', flexWrap: 'wrap' },
+  tabStrip: { display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--hairline, #E6DFCC)', flexWrap: 'nowrap', overflowX: 'auto' },
   parentGroup: { display: 'flex', gap: 4, paddingRight: 12, borderRight: '1px solid var(--hairline, #E6DFCC)' },
-  tabGroup: { display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 },
+  tabGroup: { display: 'flex', gap: 4, flexWrap: 'nowrap', flex: 1 },
   parentLink: {
     background: 'transparent',
     border: 'none',
@@ -234,7 +234,8 @@ const S: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
+    overflowX: 'auto',
     marginTop: 2,
   },
   subTab: {
