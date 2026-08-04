@@ -60,6 +60,7 @@ const SETTINGS_TABS = (pid: number) => [
   { key: 'archive',    label: 'Archive',    href: `/h/${pid}/settings/archive`    },
   { key: 'data',       label: 'Data',       href: `/h/${pid}/settings/data`       },
   { key: 'brain',      label: 'Brain',      href: `/h/${pid}/settings/brain`      },
+  { key: 'send_logs',  label: 'Send Logs',  href: `/h/${pid}/settings/send-logs`  },
   { key: 'knowledge',  label: 'Knowledge',  href: `/h/${pid}/settings/knowledge`  },
 ];
 
