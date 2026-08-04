@@ -38,6 +38,9 @@ const ALLOWLIST = new Set([
   // DQ Engine — linked contextually from System → Health link card (dq-engine-v1,
   // 2026-08-04): System group already has 7 sub-tabs, law 659 forbids an 8th.
   '/holding/it2/system/data-quality',
+  // Operating Laws — linked contextually from System → Health link card
+  // (laws-page-v1, 2026-08-04): same law-659 pattern as data-quality above.
+  '/holding/it2/system/laws',
 ]);
 
 function walkPages(dir, out = []) {
