@@ -1,9 +1,11 @@
 'use client';
 // app/operations/spa/_shared/BookingForm.tsx
-// Spa module v1 — create-booking form (brief spa-module-v1, gap 2).
-// Treatment picker auto-fills duration + price from the catalogue; therapist
-// and room optional (fn_spa_create_booking accepts NULL and stays conflict-safe
-// on whatever is assigned). POSTs /api/spa/bookings, then router.refresh().
+// Spa module v1 — create-booking form (brief spa-module-v1, gap 2 + finding #38).
+// Guest source toggle: HOTEL GUEST picks from in-house / upcoming Cloudbeds
+// reservations (auto-fills name, email, reservation link); OUTSIDE GUEST
+// requires phone AND email (finding #38). Treatment picker auto-fills
+// duration + price; therapist list is HR-sourced (spa dept, on payroll) via
+// fn_spa_sync_therapists_from_hr. POSTs /api/spa/bookings, then router.refresh().
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,6 +15,15 @@ export interface BookingFormOption { id: string; label: string; }
 export interface BookingFormTreatment {
   treatment_id: number; name: string;
   duration_min: number | null; price_usd: number | null;
+}
+export interface BookingFormGuest {
+  reservation_id: string;
+  guest_name: string;
+  guest_email: string | null;
+  room_type_name: string | null;
+  check_in_date: string;
+  check_out_date: string;
+  is_in_house: boolean;
 }
 
 const inp: React.CSSProperties = {
@@ -25,18 +36,20 @@ const lbl: React.CSSProperties = {
 };
 
 export default function BookingForm({
-  propertyId, dayIso, treatments, therapists, rooms,
+  propertyId, dayIso, treatments, therapists, rooms, guests = [],
 }: {
   propertyId: number;
   dayIso: string;
   treatments: BookingFormTreatment[];
   therapists: BookingFormOption[];
   rooms: BookingFormOption[];
+  guests?: BookingFormGuest[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [guestMode, setGuestMode] = useState<'hotel' | 'outside'>('hotel');
   const [guest, setGuest] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
@@ -59,9 +72,44 @@ export default function BookingForm({
     }
   };
 
+  const pickHotelGuest = (reservationId: string) => {
+    setResId(reservationId);
+    const g = guests.find((x) => x.reservation_id === reservationId);
+    if (g) {
+      setGuest(g.guest_name);
+      setGuestEmail(g.guest_email ?? '');
+    } else {
+      setGuest(''); setGuestEmail('');
+    }
+  };
+
+  const switchMode = (mode: 'hotel' | 'outside') => {
+    setGuestMode(mode);
+    setErr(null);
+    // Reset guest identity fields on switch so hotel data never leaks into an
+    // outside-guest booking (and vice versa).
+    setGuest(''); setGuestEmail(''); setGuestPhone(''); setResId('');
+  };
+
+  const guestLabel = (g: BookingFormGuest) => {
+    const stay = g.is_in_house
+      ? `in-house · departs ${g.check_out_date}`
+      : `arrives ${g.check_in_date}`;
+    return `${g.guest_name} · ${stay}${g.room_type_name ? ` · ${g.room_type_name}` : ''}`;
+  };
+
   const submit = async () => {
     setErr(null);
+    if (guestMode === 'hotel' && !resId) {
+      setErr('Pick a hotel guest (in-house or upcoming reservation) — or switch to Outside guest.'); return;
+    }
     if (!guest.trim()) { setErr('Guest name is required.'); return; }
+    if (guestMode === 'outside') {
+      if (!guestPhone.trim()) { setErr('Phone is required for outside guests.'); return; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(guestEmail.trim())) {
+        setErr('A valid email is required for outside guests.'); return;
+      }
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
       setErr('Date and time are required.'); return;
     }
@@ -99,6 +147,7 @@ export default function BookingForm({
       }
       setOpen(false);
       setGuest(''); setResId(''); setNotes(''); setGuestEmail(''); setGuestPhone('');
+      setGuestMode('hotel');
       router.refresh();
     } catch {
       setErr('Network error — booking not created.');
@@ -122,25 +171,63 @@ export default function BookingForm({
     );
   }
 
+  const modeBtn = (mode: 'hotel' | 'outside', label: string): React.CSSProperties => ({
+    padding: '6px 12px', fontFamily: MONO, fontSize: 11, letterSpacing: '0.04em',
+    textTransform: 'uppercase', borderRadius: 4, cursor: 'pointer',
+    border: `1px solid ${guestMode === mode ? TOKENS.forest : TOKENS.border}`,
+    background: guestMode === mode ? TOKENS.forest : TOKENS.bgRaised,
+    color: guestMode === mode ? TOKENS.bgRaised : TOKENS.ink,
+    fontWeight: guestMode === mode ? 600 : 400,
+  });
+
   return (
     <div style={{ border: `1px solid ${TOKENS.border}`, borderRadius: 6, background: TOKENS.bgRaised, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button onClick={() => switchMode('hotel')} style={modeBtn('hotel', 'Hotel guest')}>Hotel guest</button>
+        <button onClick={() => switchMode('outside')} style={modeBtn('outside', 'Outside guest')}>Outside guest</button>
+        <span style={{ fontSize: 11, color: TOKENS.inkSoft, fontFamily: MONO }}>
+          {guestMode === 'hotel'
+            ? 'in-house & upcoming reservations · links the booking to the Cloudbeds folio'
+            : 'walk-in / external — phone and email required'}
+        </span>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
-        <div>
-          <span style={lbl}>Guest name *</span>
-          <input style={inp} value={guest} onChange={(e) => setGuest(e.target.value)} placeholder="Guest name" />
-        </div>
-        <div>
-          <span style={lbl}>Reservation (in-house)</span>
-          <input style={inp} value={resId} onChange={(e) => setResId(e.target.value)} placeholder="Cloudbeds res. ID — optional" />
-        </div>
-        <div>
-          <span style={lbl}>Guest email</span>
-          <input style={inp} type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} placeholder="for confirmations — optional" />
-        </div>
-        <div>
-          <span style={lbl}>Guest phone (WhatsApp)</span>
-          <input style={inp} value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="+856… — optional" />
-        </div>
+        {guestMode === 'hotel' ? (
+          <>
+            <div style={{ gridColumn: 'span 2' }}>
+              <span style={lbl}>Hotel guest * (in-house first, then arrivals)</span>
+              <select style={inp} value={resId} onChange={(e) => pickHotelGuest(e.target.value)}>
+                <option value="">— select guest —</option>
+                {guests.map((g) => (
+                  <option key={g.reservation_id} value={g.reservation_id}>{guestLabel(g)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span style={lbl}>Guest email</span>
+              <input style={inp} type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} placeholder="auto from reservation — editable" />
+            </div>
+            <div>
+              <span style={lbl}>Guest phone (WhatsApp)</span>
+              <input style={inp} value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="+856… — optional" />
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <span style={lbl}>Guest name *</span>
+              <input style={inp} value={guest} onChange={(e) => setGuest(e.target.value)} placeholder="Guest name" />
+            </div>
+            <div>
+              <span style={lbl}>Guest phone (WhatsApp) *</span>
+              <input style={inp} value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="+856…" />
+            </div>
+            <div>
+              <span style={lbl}>Guest email *</span>
+              <input style={inp} type="email" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} placeholder="for confirmations" />
+            </div>
+          </>
+        )}
         <div>
           <span style={lbl}>Treatment</span>
           <select style={inp} value={treatmentId} onChange={(e) => pickTreatment(e.target.value)}>
