@@ -42,6 +42,9 @@ const ALLOWLIST = new Set([
   // Operating Laws — linked contextually from System → Health link card
   // (laws-page-v1, 2026-08-04): same law-659 pattern as data-quality above.
   '/holding/it2/system/laws',
+  // Alarms / Watchdog Cockpit — linked contextually from System → Health link
+  // card (alarm-system-v1, 2026-08-04): same law-659 pattern as above.
+  '/holding/it2/system/alarms',
 ]);
 
 function walkPages(dir, out = []) {
