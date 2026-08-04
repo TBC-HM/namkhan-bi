@@ -105,7 +105,7 @@ function TypePill({ docType }: { docType: string }) {
 }
 
 async function fetchData() {
-  const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }, { data: truth }, { data: findingRows }] = await Promise.all([
+  const [{ data: moduleDocs }, { data: briefs }, { data: statuses }, { data: queue }, { data: truth }, { data: findingRows }, { data: threadRows }] = await Promise.all([
     getSupabaseAdmin()
       .from('v_documents_latest')
       .select('id, doc_type, title, status, version, last_updated_at')
@@ -130,6 +130,10 @@ async function fetchData() {
     (getSupabaseAdmin() as any)
       .from('v_module_findings')
       .select('id, module_doc_type, status'),
+    // PBS 2026-08-04 #2: badge must show WHOSE move — thread state per finding
+    (getSupabaseAdmin() as any)
+      .from('v_finding_threads')
+      .select('finding_id, is_restatement, confirms_understanding'),
   ]);
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
@@ -140,13 +144,25 @@ async function fetchData() {
   // PBS 2026-08-04: split finding counts — red = needs HIM (open, unconfirmed),
   // amber = confirmed, in build (acknowledged). Card must show whose move it is.
   const openFindings: Record<string, number> = {};
-  const redFindings: Record<string, number> = {};
-  const amberFindings: Record<string, number> = {};
+  const redFindings: Record<string, number> = {};   // restated → waiting for PBS confirm (HIS move)
+  const blueFindings: Record<string, number> = {};  // no restatement yet → with agents (PBS 2026-08-04 #2)
+  const amberFindings: Record<string, number> = {}; // acknowledged → confirmed, in build
+  const restated = new Set<number>();
+  const confirmed = new Set<number>();
+  for (const t of (threadRows ?? [])) {
+    if (t.is_restatement) restated.add(t.finding_id);
+    if (t.confirms_understanding) confirmed.add(t.finding_id);
+  }
   for (const f of (findingRows ?? [])) {
     if (f.status === 'open' || f.status === 'acknowledged') {
       openFindings[f.module_doc_type] = (openFindings[f.module_doc_type] ?? 0) + 1;
-      if (f.status === 'open') redFindings[f.module_doc_type] = (redFindings[f.module_doc_type] ?? 0) + 1;
-      else amberFindings[f.module_doc_type] = (amberFindings[f.module_doc_type] ?? 0) + 1;
+      if (f.status === 'acknowledged' || confirmed.has(f.id)) {
+        amberFindings[f.module_doc_type] = (amberFindings[f.module_doc_type] ?? 0) + 1;
+      } else if (restated.has(f.id)) {
+        redFindings[f.module_doc_type] = (redFindings[f.module_doc_type] ?? 0) + 1;
+      } else {
+        blueFindings[f.module_doc_type] = (blueFindings[f.module_doc_type] ?? 0) + 1;
+      }
     }
   }
   const briefStatusBySlug: Record<string, string> = {};
@@ -165,7 +181,7 @@ async function fetchData() {
     }
   }
   docs.sort((a: any, b: any) => String(a.doc_type).localeCompare(String(b.doc_type)));
-  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, openFindings, redFindings, amberFindings };
+  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, openFindings, redFindings, blueFindings, amberFindings };
 }
 
 // ADR-218 freeze gate — derived from v_module_truth, never from completion_estimate.
@@ -247,7 +263,7 @@ const CTA_TONE: Record<string, { bg: string; color: string }> = {
 };
 
 export default async function SpecsPage({ searchParams }: { searchParams?: { toast?: string } }) {
-  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, openFindings, redFindings, amberFindings } = await fetchData();
+  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, openFindings, redFindings, blueFindings, amberFindings } = await fetchData();
   const toast = searchParams?.toast ?? null;
 
   return (
@@ -303,6 +319,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
               const frozen = isFrozen(t);
               const nOpen = openFindings[doc.doc_type] ?? 0;
               const nRed = redFindings[doc.doc_type] ?? 0;
+              const nBlue = blueFindings[doc.doc_type] ?? 0;
               const nAmber = amberFindings[doc.doc_type] ?? 0;
               const auditDate = q?.updated_at ? shortDate(q.updated_at) : null;
               const live = st?.is_live ?? false;
@@ -412,16 +429,16 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
                           ↗ Open
                         </Link>
                       )}
-                      {/* A4: owner findings channel — PBS 2026-08-04: red/amber split,
-                          red = needs HIM, amber = confirmed & in build */}
+                      {/* A4: owner findings channel — PBS 2026-08-04 #2: THREE states,
+                          badge shows WHOSE move: red=confirm(PBS), blue=with agents, amber=in build */}
                       <Link href={`/holding/it2/modules/findings/${encodeURIComponent(doc.doc_type)}`}
                         style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
-                          background: nRed > 0 ? '#B71C1C' : nAmber > 0 ? '#FFF3E0' : '#FFFFFF',
-                          color: nRed > 0 ? '#FFFFFF' : nAmber > 0 ? '#B26A00' : '#1B1B1B',
-                          border: nRed > 0 ? '1px solid #B71C1C' : nAmber > 0 ? '1px solid #E8A13C' : '1px solid #E6DFCC',
+                          background: nRed > 0 ? '#B71C1C' : nBlue > 0 ? '#E3F2FD' : nAmber > 0 ? '#FFF3E0' : '#FFFFFF',
+                          color: nRed > 0 ? '#FFFFFF' : nBlue > 0 ? '#1565C0' : nAmber > 0 ? '#B26A00' : '#1B1B1B',
+                          border: nRed > 0 ? '1px solid #B71C1C' : nBlue > 0 ? '1px solid #90CAF9' : nAmber > 0 ? '1px solid #E8A13C' : '1px solid #E6DFCC',
                           textDecoration: 'none', whiteSpace: 'nowrap' }}
-                        title={nRed > 0 ? `${nRed} finding(s) need YOU (unconfirmed)` : nAmber > 0 ? `${nAmber} confirmed — in build` : 'Owner findings — file feedback on this module'}>
-                        ⚑ {nRed > 0 ? `${nRed} need you` : nAmber > 0 ? `${nAmber} in build` : 'Findings'}{nRed > 0 && nAmber > 0 ? ` · ${nAmber} in build` : ''}
+                        title={nRed > 0 ? `${nRed} restated — waiting for YOUR confirm` : nBlue > 0 ? `${nBlue} filed — with agents, restatement pending` : nAmber > 0 ? `${nAmber} confirmed — in build` : 'Owner findings — file feedback on this module'}>
+                        ⚑ {nRed > 0 ? `${nRed} confirm` : nBlue > 0 ? `${nBlue} with agents` : nAmber > 0 ? `${nAmber} in build` : 'Findings'}{nRed > 0 && (nBlue + nAmber) > 0 ? ` +${nBlue + nAmber}` : nBlue > 0 && nAmber > 0 ? ` +${nAmber}` : ''}
                       </Link>
                       {/* PBS 2026-07-27: refine-goal restored + compact symbol row */}
                       {q?.brief_slug && (
