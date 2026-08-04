@@ -208,6 +208,42 @@ export async function POST(req: Request) {
 
   if (eventType === "deployment.error") {
     const deployRow = await recordDeployment(eventType, payload);
+    // 2026-08-04 PBS incident (branch forecast-v10-nav-fixes): failed deploys
+    // were invisible to the machine — cockpit_audit_log had 3225
+    // deploy_succeeded rows and zero failures, so the hourly sweep could
+    // never detect a red deploy. Every deployment.error now writes a
+    // deploy_failed audit row (branch + target in metadata) so sweeps and
+    // owner surfaces see failures without PBS screenshotting the dashboard.
+    const meta = (deployment.meta ?? {}) as Record<string, unknown>;
+    const failedBranch = (meta.githubCommitRef ?? null) as string | null;
+    const failedTarget = (((payload.payload as Record<string, unknown>)?.target ??
+      deployment.target) ?? null) as string | null;
+    await supabase.from("cockpit_audit_log").insert({
+      agent: "vercel",
+      action: "deploy_failed",
+      target: deploymentUrl || deploymentId,
+      success: false,
+      metadata: {
+        deployment: deploymentId,
+        name: deploymentName,
+        branch: failedBranch,
+        deploy_target: failedTarget,
+        error: errorMessage || null,
+        deploy_row: deployRow,
+      },
+    });
+    // 2026-08-04: rollback guard — only a PRODUCTION deploy failure may
+    // trigger auto-promotion of the previous prod deploy. Before this guard,
+    // a failed preview/branch deploy would attempt a prod rollback (wrong
+    // deploy promoted for a failure that never touched prod).
+    if (failedTarget !== "production") {
+      return NextResponse.json({
+        event: eventType,
+        rolled_back: false,
+        reason: `non-production target (${failedTarget ?? "preview"}) — audit logged, no rollback`,
+        deploy_row: deployRow,
+      });
+    }
     const result = await rollback(deploymentId, deploymentName, errorMessage);
     return NextResponse.json({ event: eventType, ...result, deploy_row: deployRow });
   }
