@@ -1,0 +1,44 @@
+-- 006 — APPLIED 2026-08-04 (migration: spa_therapist_hr_link_and_guest_picker)
+-- Brief spa-module-v1 · owner finding #38 (blocking, confirmed 2026-08-04):
+--   "choose a customer which are in house or booked for this day in the future
+--    or i toggle outside guest and then i need phone and email an when i link
+--    to therapist it must show the names of the actual spa therapists from hr
+--    module spa department actual on the payroll"
+--
+-- WHAT WAS APPLIED (additive only):
+--
+-- 1. spa.therapists + staff_employment_id uuid (unique where not null)
+--                   + employee_code text
+--    → hard link from spa roster to HR employment rows.
+--
+-- 2. public.fn_spa_sync_therapists_from_hr(p_property_id bigint) → jsonb
+--    SECURITY DEFINER, service_role-only.
+--    Source of truth: ops.staff_employment (NOT hr.employees — that table holds
+--    only Donna/Factorial rows; the Namkhan roster lives in ops.staff_employment,
+--    found via DATA-EXISTS law search). Filter: property-scoped, is_active=true,
+--    position_title ~ therapist|spa|massage|wellness. Upserts by
+--    staff_employment_id, deactivates spa.therapists whose HR employment ended.
+--    Payroll evidence at seed time: all 3 synced therapists have
+--    ops.payroll_monthly rows through 2026-06 ("actual on the payroll").
+--    SEED RESULT (260955): inserted=3 — Horm (TNK 1004), Parn Phatthana
+--    (TNK 1001), Pouy Chittavongsa (TNK 1002). Assistant Spa Managers excluded
+--    (both is_active=false in HR).
+--
+-- 3. public.fn_spa_bookable_guests(p_property_id bigint, p_day date) → SETOF
+--    SECURITY DEFINER, service_role-only (guest PII stays server-side).
+--    In-house (checked_in) + confirmed future arrivals (≤120 days out,
+--    not cancelled) from pms.reservations_cb, in-house first. Feeds the
+--    hotel-guest picker in BookingForm (auto-fills name/email/reservation link).
+--
+-- OPS ACTIONS SAME RUN (no DDL):
+--   - Stale test bookings adbc45fa + bd6bd9d6 cancelled (test artifacts,
+--     §V disposition item 3).
+--   - Fresh walk-in test booking 31c5335c created for the next day 10:00
+--     Vientiane (Lao Oil 90', therapist Horm, room 1, contact
+--     pb@thenamkhan.com) — created BEFORE the 02:00 UTC reminder fire so
+--     cron 187 has a real target; complete it via UI to exercise event (b).
+--
+-- Rollback: DROP FUNCTION public.fn_spa_sync_therapists_from_hr(bigint);
+--           DROP FUNCTION public.fn_spa_bookable_guests(bigint, date);
+--           ALTER TABLE spa.therapists DROP COLUMN staff_employment_id,
+--             DROP COLUMN employee_code;
