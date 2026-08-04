@@ -29,8 +29,9 @@ export type ModuleRow = {
   frozen: boolean;
   signedOff: boolean;
   live: boolean;
-  nRed: number;
-  nAmber: number;
+  nRed: number;   // restated — waiting for PBS confirm (HIS move)
+  nBlue?: number; // filed — with agents, restatement pending (optional: push-order 759, intermediate commit stays green)
+  nAmber: number; // confirmed / acknowledged — in build
   gapList: { gap?: string; weight_pct?: number }[];
   stageDone: number;
   stageActive: string;
@@ -239,14 +240,16 @@ function ModuleCard({ m, signOffAction, reauditAction, queued, onReaudit }: {
               ↗ Open
             </Link>
           )}
+          {/* PBS 2026-08-04 #2 (bf42dff, re-ported): THREE states — whose move:
+              red=confirm(PBS), blue=with agents, amber=in build */}
           <Link href={`/holding/it2/modules/findings/${encodeURIComponent(m.docType)}`}
             style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
-              background: m.nRed > 0 ? '#B71C1C' : m.nAmber > 0 ? '#FFF3E0' : '#FFFFFF',
-              color: m.nRed > 0 ? '#FFFFFF' : m.nAmber > 0 ? '#B26A00' : '#1B1B1B',
-              border: m.nRed > 0 ? '1px solid #B71C1C' : m.nAmber > 0 ? '1px solid #E8A13C' : '1px solid #E6DFCC',
+              background: m.nRed > 0 ? '#B71C1C' : (m.nBlue ?? 0) > 0 ? '#E3F2FD' : m.nAmber > 0 ? '#FFF3E0' : '#FFFFFF',
+              color: m.nRed > 0 ? '#FFFFFF' : (m.nBlue ?? 0) > 0 ? '#1565C0' : m.nAmber > 0 ? '#B26A00' : '#1B1B1B',
+              border: m.nRed > 0 ? '1px solid #B71C1C' : (m.nBlue ?? 0) > 0 ? '1px solid #90CAF9' : m.nAmber > 0 ? '1px solid #E8A13C' : '1px solid #E6DFCC',
               textDecoration: 'none', whiteSpace: 'nowrap' }}
-            title={m.nRed > 0 ? `${m.nRed} finding(s) need YOU (unconfirmed)` : m.nAmber > 0 ? `${m.nAmber} confirmed — in build` : 'Owner findings — file feedback on this module'}>
-            ⚑ {m.nRed > 0 ? `${m.nRed} need you` : m.nAmber > 0 ? `${m.nAmber} in build` : 'Findings'}{m.nRed > 0 && m.nAmber > 0 ? ` · ${m.nAmber} in build` : ''}
+            title={m.nRed > 0 ? `${m.nRed} restated — waiting for YOUR confirm` : (m.nBlue ?? 0) > 0 ? `${m.nBlue ?? 0} filed — with agents, restatement pending` : m.nAmber > 0 ? `${m.nAmber} confirmed — in build` : 'Owner findings — file feedback on this module'}>
+            ⚑ {m.nRed > 0 ? `${m.nRed} confirm` : (m.nBlue ?? 0) > 0 ? `${m.nBlue ?? 0} with agents` : m.nAmber > 0 ? `${m.nAmber} in build` : 'Findings'}{m.nRed > 0 && ((m.nBlue ?? 0) + m.nAmber) > 0 ? ` +${(m.nBlue ?? 0) + m.nAmber}` : (m.nBlue ?? 0) > 0 && m.nAmber > 0 ? ` +${m.nAmber}` : ''}
           </Link>
           {m.briefSlug && (
             <Link href={`/holding/it2/modules/briefs/${m.briefSlug}`} title="Refine the goal / read the brief"
@@ -413,10 +416,11 @@ export default function SpecsExplorer({ modules, signOffAction, reauditAction }:
                     {m.testedPct == null ? '—' : `${m.testedPct}%`}
                   </span>
                 </span>
-                {(m.nRed > 0 || m.nAmber > 0) && (
+                {(m.nRed > 0 || (m.nBlue ?? 0) > 0 || m.nAmber > 0) && (
                   <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 99, flexShrink: 0,
-                    background: m.nRed > 0 ? '#B71C1C' : '#FFF3E0', color: m.nRed > 0 ? '#FFFFFF' : '#B26A00' }}>
-                    ⚑ {m.nRed > 0 ? `${m.nRed} need you` : `${m.nAmber} in build`}
+                    background: m.nRed > 0 ? '#B71C1C' : (m.nBlue ?? 0) > 0 ? '#E3F2FD' : '#FFF3E0',
+                    color: m.nRed > 0 ? '#FFFFFF' : (m.nBlue ?? 0) > 0 ? '#1565C0' : '#B26A00' }}>
+                    ⚑ {m.nRed > 0 ? `${m.nRed} confirm` : (m.nBlue ?? 0) > 0 ? `${m.nBlue ?? 0} with agents` : `${m.nAmber} in build`}
                   </span>
                 )}
                 <span style={{ flex: 1, fontSize: 10, fontWeight: 600, textAlign: 'right',
