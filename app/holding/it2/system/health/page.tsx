@@ -100,6 +100,19 @@ export default async function CockpitV2HealthPage() {
         <div style={{ marginTop: 5, fontSize: 11, color: '#AAA' }}>
           Cron 188 · 0 */6 * * * · stores results in public.health_check_runs
         </div>
+
+        {/* DQ Engine link card (dq-engine-v1 — no free System tab, law 659) */}
+        <a href="/holding/it2/system/data-quality" style={{
+          display: 'block', marginTop: 16, padding: '12px 16px', border: '1px solid #E6DFCC',
+          borderRadius: 8, textDecoration: 'none', background: '#FFFFFF',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#5A5A5A' }}>
+            Data Quality →
+          </div>
+          <div style={{ fontSize: 12, color: '#5A5A5A', marginTop: 4 }}>
+            Feed freshness, rule exceptions, and week-over-week data-quality trend — is the data on this platform trustworthy right now?
+          </div>
+        </a>
       </div>
 
       <HealthView initial={data} />
