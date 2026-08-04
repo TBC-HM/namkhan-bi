@@ -1,9 +1,7 @@
-# PENDING INSTALL — move this file to .github/workflows/metric-drift-gate.yml
-# The fn_gh_push_file bridge token lacks GitHub `workflow` scope (403 on
-# 2026-07-29, request 956846), so it cannot write under .github/workflows/.
-# Any session with direct git push (or a token with workflow scope) should:
-#   git mv ci/pending/metric-drift-gate.yml .github/workflows/metric-drift-gate.yml
-# Content below is final and YAML-validated. Brief: autospec-university_module-20260725.
+# INSTALLED 2026-08-04 — this workflow is now LIVE at .github/workflows/metric-drift-gate.yml
+# (push request 1070679, GitHub 201, sha 9767f57d, standing retry #27 after PAT workflow scope
+# was granted per owner answer B 2026-07-31). This parked copy is retained as the source
+# record only; all future edits go to the live file.
 name: Metric drift gate
 
 # TBC University freshness-ops (brief autospec-university_module-20260725,
