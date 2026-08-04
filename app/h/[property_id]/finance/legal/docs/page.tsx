@@ -12,6 +12,7 @@ import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_de
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 import DocsTableClient from './_components/DocsTableClient';
+import DocUploadDropzone from './_components/DocUploadDropzone';
 
 
 export const dynamic = 'force-dynamic';
