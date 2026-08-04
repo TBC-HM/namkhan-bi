@@ -4,23 +4,13 @@
 // Uses DocRegistrySettingsPanel export from SettingsDrawerButton — no code duplication.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DocRegistrySettingsPanel } from '@/app/h/[property_id]/finance/legal/docs/_components/SettingsDrawerButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const SETTINGS_TABS = (pid: number) => [
-  { key: 'property',   label: 'Property',   href: `/h/${pid}/settings/property`   },
-  { key: 'media',      label: 'Media',      href: `/h/${pid}/settings/media`      },
-  { key: 'rate_plans', label: 'Rate Plans', href: `/h/${pid}/settings/rate-plans` },
-  { key: 'guardrails', label: 'Guardrails', href: `/h/${pid}/settings/guardrails` },
-  { key: 'documents',  label: 'Documents',  href: `/h/${pid}/settings/documents`, active: true },
-  { key: 'archive',    label: 'Archive',    href: `/h/${pid}/settings/archive`    },
-  { key: 'data',       label: 'Data',       href: `/h/${pid}/settings/data`       },
-  { key: 'brain',      label: 'Brain',      href: `/h/${pid}/settings/brain`      },
-  { key: 'knowledge',  label: 'Knowledge',  href: `/h/${pid}/settings/knowledge`  },
-];
 
 async function fetchDocSettings(propertyId: number) {
   const sb = getSupabaseAdmin();
@@ -67,7 +57,7 @@ export default async function DocumentsSettingsPage({ params }: { params: { prop
     <DashboardPage
       title="Settings · Documents"
       subtitle={`Document register vocabulary · ${d.families.length} families · ${d.subtypeVocab.length} subtypes · property ${propertyId}`}
-      tabs={SETTINGS_TABS(propertyId)}
+      tabs={getSettingsTabs(propertyId, 'documents')}
     >
       {/* Document upload — goes to DMS pipeline, not media pipeline */}
       <div style={{ gridColumn: '1 / -1' }}>
