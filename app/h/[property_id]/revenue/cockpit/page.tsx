@@ -110,7 +110,7 @@ async function getDqIssues(pid: number): Promise<DqRow[]> {
     .from('v_dq_posture')
     .select('source,label,status,age_minutes')
     .eq('property_id', pid)
-    .neq('status', 'ok');
+    .in('status', ['stale', 'unknown']);
   if (error) return [];
   return (data ?? []) as DqRow[];
 }
@@ -336,19 +336,27 @@ export default async function RevenueCockpitPage({
                 (100 = priced level with compset; MPI/RGI need comp occupancy — not in the feed)
               </span>
             </span>
-            <span>
-              OTA share 30d:{' '}
-              <strong>{fmtPct(ota?.ota_share_pct != null ? Number(ota.ota_share_pct) : null)}</strong>{' '}
-              vs guardrail ≤{' '}
-              {fmt0(ota?.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}%{' '}
-              {otaOver ? (
-                <strong style={{ color: 'var(--terracotta, #B8542A)' }}>
-                  — OVER, direct push needed
-                </strong>
-              ) : (
-                <span style={{ color: 'var(--status-green, #2E7D32)' }}>— inside guardrail</span>
-              )}
-            </span>
+            {ota == null ? (
+              <span style={{ color: 'var(--terracotta, #B8542A)' }}>
+                OTA share 30d: unavailable — the channel feed (channel_metrics) has no rows in
+                the 30d window, so the meter is suppressed rather than rendered as zero. Feed
+                freshness is tracked in the data-freshness banner (v_dq_posture).
+              </span>
+            ) : (
+              <span>
+                OTA share 30d:{' '}
+                <strong>{fmtPct(ota.ota_share_pct != null ? Number(ota.ota_share_pct) : null)}</strong>{' '}
+                vs guardrail ≤{' '}
+                {fmt0(ota.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}%{' '}
+                {otaOver ? (
+                  <strong style={{ color: 'var(--terracotta, #B8542A)' }}>
+                    — OVER, direct push needed
+                  </strong>
+                ) : (
+                  <span style={{ color: 'var(--status-green, #2E7D32)' }}>— inside guardrail</span>
+                )}
+              </span>
+            )}
             <a href="compset" style={{ color: 'var(--primary, #1F3A2E)', fontSize: 12 }}>
               Full comp-set analysis →
             </a>
