@@ -106,6 +106,17 @@ export interface SpaPassRedemptionRow {
   note: string | null;
 }
 
+export interface BookableGuestRow {
+  reservation_id: string;
+  guest_name: string;
+  guest_email: string | null;
+  room_type_name: string | null;
+  check_in_date: string;
+  check_out_date: string;
+  status: string;
+  is_in_house: boolean;
+}
+
 export interface FolioSellerRow {
   description: string;
   total_revenue_usd: number;
@@ -223,6 +234,21 @@ export async function getSpaPassRedemptions(propertyId: number, limit = 100): Pr
     .limit(limit);
   if (error) return { rows: [], bridgeMissing: true };
   return { rows: (data ?? []) as SpaPassRedemptionRow[], bridgeMissing: false };
+}
+
+/**
+ * Hotel-guest picker for the booking form (finding #38): in-house guests +
+ * upcoming confirmed Cloudbeds arrivals via public.fn_spa_bookable_guests
+ * (SECURITY DEFINER, service_role-only — PII stays server-side).
+ */
+export async function getSpaBookableGuests(propertyId: number, dayIso: string): Promise<BookableGuestRow[]> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await (sb as any).rpc('fn_spa_bookable_guests', {
+    p_property_id: propertyId,
+    p_day: dayIso,
+  });
+  if (error) return [];
+  return (data ?? []) as BookableGuestRow[];
 }
 
 /** LIVE bridge — property.spa_treatments via v_property_spa_treatments. */
