@@ -1,0 +1,9 @@
+# Probe: proves the bridge PAT has workflow write scope (2026-08-04).
+# Manual-only, does nothing on its own. Safe to delete.
+name: token-scope-probe
+on: workflow_dispatch
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "bridge token has workflow scope"
