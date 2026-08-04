@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website CMS v1 — clickable mockup (website-module-v1 · rule 598b)</title>
+<style>
+  :root{
+    --ink:#1a1d21; --ink-2:#5c6470; --ink-3:#9aa3ad; --line:#e5e8ec; --bg:#f6f7f9;
+    --card:#ffffff; --accent:#0f6b5c; --accent-soft:#e6f2ef; --warn:#b45309; --warn-soft:#fef3e2;
+    --blue:#1d4ed8; --blue-soft:#e8eefc; --danger:#b91c1c; --radius:10px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+  .banner{background:var(--ink);color:#fff;padding:8px 16px;font-size:12px;display:flex;gap:10px;align-items:center}
+  .banner b{color:#7dd3c0}
+  .top{display:flex;align-items:center;gap:14px;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px}
+  .top .crumb{color:var(--ink-2);font-size:13px}
+  .top .crumb b{color:var(--ink)}
+  .chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .chip.draft{background:var(--warn-soft);color:var(--warn)}
+  .chip.pub{background:var(--accent-soft);color:var(--accent)}
+  .chip.miss{background:#f1f2f4;color:var(--ink-3)}
+  .btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}
+  .btn:hover{border-color:var(--ink-3)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.small{padding:4px 10px;font-size:12px}
+  .layout{display:grid;grid-template-columns:250px 300px 1fr;height:calc(100vh - 88px)}
+  .rail{background:var(--card);border-right:1px solid var(--line);overflow-y:auto}
+  .rail h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);padding:14px 14px 6px}
+  .pageitem{padding:8px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px;border-left:3px solid transparent}
+  .pageitem:hover{background:var(--bg)}
+  .pageitem.active{background:var(--accent-soft);border-left-color:var(--accent)}
+  .pageitem .slug{color:var(--ink-3);font-size:11px}
+  .locdots{font-size:10px;letter-spacing:.03em}
+  .outline{background:#fbfcfd;border-right:1px solid var(--line);overflow-y:auto;padding-bottom:20px}
+  .outline .head{padding:14px;border-bottom:1px solid var(--line)}
+  .outline .head h2{font-size:15px}
+  .loctabs{display:flex;gap:4px;margin-top:10px}
+  .loctab{padding:4px 12px;border-radius:6px;border:1px solid var(--line);cursor:pointer;font-size:12px;font-weight:600;background:var(--card)}
+  .loctab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .loctab .pct{font-weight:400;opacity:.7;font-size:11px}
+  .block{margin:8px 12px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);cursor:pointer;position:relative}
+  .block:hover{border-color:var(--ink-3)}
+  .block.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  .block .kind{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700}
+  .block .prev{color:var(--ink-2);font-size:12px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .block .grip{position:absolute;right:8px;top:10px;color:var(--ink-3);font-size:13px;cursor:grab}
+  .addblock{margin:10px 12px;width:calc(100% - 24px);border-style:dashed;color:var(--ink-2)}
+  .main{overflow-y:auto;padding:18px 22px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px;max-width:760px}
+  .panel h3{font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2);margin-bottom:4px}
+  .field input,.field textarea,.field select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;font-family:inherit;background:#fff;color:var(--ink)}
+  .field textarea{min-height:74px;resize:vertical}
+  .field .hint{font-size:11px;color:var(--ink-3);margin-top:3px}
+  .rtbar{display:flex;gap:4px;margin-bottom:-1px;border:1px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;padding:5px 8px;background:#fbfcfd}
+  .rtbar span{padding:2px 8px;border-radius:5px;font-size:12px;color:var(--ink-2);cursor:pointer}
+  .rtbar span:hover{background:var(--bg)}
+  .rtbar .off{opacity:.3;text-decoration:line-through;cursor:not-allowed}
+  .mediarow{display:flex;gap:8px;flex-wrap:wrap}
+  .thumb{width:86px;height:60px;border-radius:8px;background:linear-gradient(135deg,#c8d8cf,#8fae9e);position:relative;cursor:pointer;border:2px solid transparent;overflow:hidden}
+  .thumb:hover{border-color:var(--accent)}
+  .thumb .tag{position:absolute;bottom:2px;left:4px;font-size:9px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+  .thumb.add{background:var(--bg);border:1px dashed var(--ink-3);display:flex;align-items:center;justify-content:center;color:var(--ink-2);font-size:20px}
+  .sxs{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .sxs .ref{background:#fbfcfd;border:1px dashed var(--line);border-radius:8px;padding:10px;font-size:12px;color:var(--ink-2)}
+  .sxs .ref .rl{font-size:10px;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-bottom:4px}
+  .note{background:var(--blue-soft);color:var(--blue);border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px;max-width:760px}
+  .modal-bg{position:fixed;inset:0;background:rgba(20,24,28,.45);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--card);border-radius:14px;width:640px;max-width:92vw;max-height:84vh;overflow-y:auto;padding:22px}
+  .modal h2{font-size:16px;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:11px;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:7px 8px;border-bottom:1px solid var(--line)}
+  .vrow:hover{background:var(--bg)}
+  .footer-note{padding:14px 22px;color:var(--ink-3);font-size:11px;border-top:1px solid var(--line);background:var(--card)}
+  .mgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
+  .mgrid .thumb{width:100%;height:70px}
+  .searchbar{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px}
+  .seorow{display:flex;gap:10px}
+  .seorow .field{flex:1}
+  .pill-ok{color:var(--accent);font-weight:700}
+  .pill-warn{color:var(--warn);font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <b>MOCKUP</b> Website CMS v1 · brief <b>website-module-v1</b> · rule 598b — nothing here is functional; fake data over the real block model. The three things to try: click a <b>page</b>, click a <b>block</b>, switch <b>EN/LO</b>, hit <b>Publish</b>.
+</div>
+
+<div class="top">
+  <span class="crumb">Marketing → Website → <b id="crumbPage">Riverfront Suite</b></span>
+  <span class="chip draft" id="pageStatus">draft — autosaved 12s ago</span>
+  <span style="flex:1"></span>
+  <button class="btn" onclick="openModal('historyModal')">History (v7)</button>
+  <button class="btn" onclick="alert('MOCKUP — opens /marketing/website/preview/accommodation/riverview-suite?draft=token in a new tab. Preview renders the DRAFT on the real site components, shareable to your phone.')">Preview draft</button>
+  <button class="btn primary" onclick="openModal('publishModal')">Publish…</button>
+</div>
+
+<div class="layout">
+
+  <!-- PAGES RAIL -->
+  <div class="rail">
+    <h3>Pages · The Namkhan (53)</h3>
+    <div id="pagelist"></div>
+  </div>
+
+  <!-- BLOCK OUTLINE -->
+  <div class="outline">
+    <div class="head">
+      <h2 id="outlineTitle">Riverfront Suite</h2>
+      <div style="font-size:11px;color:var(--ink-3);margin-top:2px">/accommodation/riverview-suite · room page (linked to PMS room type 555876 — occupancy &amp; amenities join live, not retyped)</div>
+      <div class="loctabs">
+        <div class="loctab active" id="tabEN" onclick="setLoc('en')">EN <span class="pct">100%</span></div>
+        <div class="loctab" id="tabLO" onclick="setLoc('lo')">ລາວ LO <span class="pct">3/6 blocks</span></div>
+      </div>
+    </div>
+    <div id="blocks"></div>
+    <button class="btn addblock" onclick="openModal('blockPicker')">＋ Add block</button>
+  </div>
+
+  <!-- EDIT PANEL -->
+  <div class="main">
+    <div class="note" id="locNote" style="display:none">
+      Editing <b>Lao</b>. Untranslated blocks fall back to English on the live site (marked below). The reference column shows the English source — translate beside it, never from memory.
+    </div>
+    <div id="editor"></div>
+
+    <div class="panel">
+      <h3>SEO <span class="chip pub">auto-generated where empty</span></h3>
+      <div class="seorow">
+        <div class="field"><label>Meta title</label><input value="Riverfront Suite | The Namkhan – Luang Prabang"></div>
+        <div class="field"><label>Slug (locked — SEO mandate)</label><input value="/accommodation/riverview-suite" disabled></div>
+      </div>
+      <div class="field"><label>Meta description</label><textarea>A 68 m² suite above the Nam Khan river — private terrace, open-air bathtub and uninterrupted jungle views, ten minutes from the heart of Luang Prabang.</textarea></div>
+      <div class="field"><label>Structured data</label>
+        <div class="hint">schema.org <b>HotelRoom</b> emitted automatically from the linked PMS room type — occupancy 2, size 68 m², rate-from pulls the live "from USD" rule. Nothing to fill in.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-note">
+  Mockup accompanies the §0.R CMS research in brief <b>website-module-v1</b>. Reuses what already exists: 53 crawled pages as rows · media library (2,229 QC'd assets) · publish→versioned snapshot pipeline · audit trail on every save. New in CMS v1: typed blocks (this editor), Lao translations with fallback, per-page version history/restore.
+</div>
+
+<!-- PUBLISH MODAL -->
+<div class="modal-bg" id="publishModal" onclick="if(event.target===this)closeModal('publishModal')">
+  <div class="modal">
+    <h2>Publish “Riverfront Suite”</h2>
+    <table>
+      <tr><th>What</th><th>Change</th></tr>
+      <tr><td>Hero</td><td>headline edited (EN)</td></tr>
+      <tr><td>Gallery</td><td>2 photos added from media library</td></tr>
+      <tr><td>FAQ</td><td>new block (EN only — LO falls back)</td></tr>
+      <tr><td>Meta description</td><td>edited (EN)</td></tr>
+    </table>
+    <div class="field" style="margin-top:14px"><label>Publish note (goes into version history)</label><input placeholder="e.g. refreshed suite photos for high season"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+      <button class="btn primary" onclick="alert('MOCKUP — real flow: saves version v8 (append-only), regenerates siteData snapshot, fires the deploy hook. Live in ~60s. Every publish is one-click reversible from History.');closeModal('publishModal')">Publish now</button>
+      <button class="btn" onclick="alert('MOCKUP — schedules the publish (e.g. for an offer going live Monday 06:00).')">Schedule…</button>
+      <span style="font-size:12px;color:var(--ink-3)">Rollback: History → any version → “Restore as draft”.</span>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY MODAL -->
+<div class="modal-bg" id="historyModal" onclick="if(event.target===this)closeModal('historyModal')">
+  <div class="modal">
+    <h2>Version history — Riverfront Suite</h2>
+    <table>
+      <tr><th>v</th><th>When</th><th>By</th><th>Note</th><th></th></tr>
+      <tr class="vrow"><td>7</td><td>today 14:02</td><td>PBS</td><td>draft — current</td><td><span class="chip draft">draft</span></td></tr>
+      <tr class="vrow"><td>6</td><td>Aug 1</td><td>marketing</td><td>high-season photo refresh</td><td><button class="btn small" onclick="alert('MOCKUP — restores v6 as a NEW draft. Nothing is deleted; history stays linear.')">Restore as draft</button></td></tr>
+      <tr class="vrow"><td>5</td><td>Jul 31</td><td>system (crawl)</td><td>imported from thenamkhan.com</td><td><button class="btn small">Restore as draft</button></td></tr>
+      <tr class="vrow"><td>4</td><td>Jul 31</td><td>system</td><td>media re-pointed to own storage</td><td><button class="btn small">Restore as draft</button></td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- MEDIA PICKER -->
+<div class="modal-bg" id="mediaModal" onclick="if(event.target===this)closeModal('mediaModal')">
+  <div class="modal">
+    <h2>Media library <span style="font-weight:400;font-size:12px;color:var(--ink-3)">— the existing 2,229-asset library (QC score, licences, alt text already managed there)</span></h2>
+    <input class="searchbar" placeholder="Search: “riverfront suite terrace”, “pool dusk”, area:wellness …">
+    <div class="mgrid">
+      <div class="thumb" onclick="pick()"><span class="tag">suite terrace · QC 9.1</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#d9c9a8,#a88d5f)" onclick="pick()"><span class="tag">open-air bath · QC 8.8</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#9db8c9,#5f7f96)" onclick="pick()"><span class="tag">nam khan dawn · QC 9.4</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#c9b8d8,#8f7fa6)" onclick="pick()"><span class="tag">suite interior · QC 8.5</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#b8c9a8,#7f965f)" onclick="pick()"><span class="tag">jungle path · QC 8.9</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#c8d8cf,#8fae9e)" onclick="pick()"><span class="tag">pool villa · QC 9.0</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#d8cfc8,#ae9e8f)" onclick="pick()"><span class="tag">breakfast deck · QC 8.7</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#a8b8d9,#5f6fa8)" onclick="pick()"><span class="tag">spa sala · QC 9.2</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#d9a8a8,#a85f5f)" onclick="pick()"><span class="tag">sunset bar · QC 8.6</span></div>
+      <div class="thumb" style="background:linear-gradient(135deg,#a8d9c9,#5fa88d)" onclick="pick()"><span class="tag">river kayak · QC 8.4</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- BLOCK PICKER -->
+<div class="modal-bg" id="blockPicker" onclick="if(event.target===this)closeModal('blockPicker')">
+  <div class="modal">
+    <h2>Add a block <span style="font-weight:400;font-size:12px;color:var(--ink-3)">— the full catalog. No custom blocks, no layout controls: design stays intact by construction.</span></h2>
+    <table>
+      <tr><th>Block</th><th>What it's for</th></tr>
+      <tr class="vrow" onclick="pickBlock('Hero')"><td><b>Hero</b></td><td>Full-width opening image/video + headline + booking CTA</td></tr>
+      <tr class="vrow" onclick="pickBlock('Prose')"><td><b>Prose</b></td><td>Simple text (bold/italic/links/lists only — no fonts, no colors)</td></tr>
+      <tr class="vrow" onclick="pickBlock('Media + Text')"><td><b>Media + Text</b></td><td>Photo beside text, alternating rows</td></tr>
+      <tr class="vrow" onclick="pickBlock('Gallery')"><td><b>Gallery</b></td><td>Photo grid / carousel with lightbox</td></tr>
+      <tr class="vrow" onclick="pickBlock('Card Grid')"><td><b>Card Grid</b></td><td>Auto cards: all rooms / experiences / retreats / latest journal posts</td></tr>
+      <tr class="vrow" onclick="pickBlock('CTA Banner')"><td><b>CTA Banner</b></td><td>Conversion banner → booking engine deep link (dates/room/promo prefilled)</td></tr>
+      <tr class="vrow" onclick="pickBlock('Quote')"><td><b>Quote</b></td><td>Guest testimonial or press quote</td></tr>
+      <tr class="vrow" onclick="pickBlock('Feature List')"><td><b>Feature List</b></td><td>Amenities / inclusions with icons</td></tr>
+      <tr class="vrow" onclick="pickBlock('Menu / Price List')"><td><b>Menu / Price List</b></td><td>Dining menus, spa treatments, day passes — prices are rows, edits go live without a rebuild request</td></tr>
+      <tr class="vrow" onclick="pickBlock('FAQ')"><td><b>FAQ</b></td><td>Q&amp;A — also feeds Google FAQ rich results automatically</td></tr>
+      <tr class="vrow" onclick="pickBlock('Map & Directions')"><td><b>Map &amp; Directions</b></td><td>Arrival info + transfer request CTA</td></tr>
+      <tr class="vrow" onclick="pickBlock('Video')"><td><b>Video</b></td><td>YouTube/Vimeo embed, performance-safe</td></tr>
+      <tr class="vrow" onclick="pickBlock('Form')"><td><b>Form</b></td><td>Inquiry / retreat request / newsletter — leads land in the platform, not just email</td></tr>
+      <tr class="vrow" onclick="pickBlock('Logo Strip')"><td><b>Logo Strip</b></td><td>“As featured in” press &amp; award logos</td></tr>
+    </table>
+  </div>
+</div>
+
+<script>
+var pages=[
+ {t:"Home",s:"/",st:"pub",lo:"◐"},
+ {t:"Accommodation",s:"/accommodation",st:"pub",lo:"●"},
+ {t:"Art Deluxe Room",s:"/accommodation/art-deluxe-room",st:"pub",lo:"○"},
+ {t:"Art Deluxe Family Room",s:"/accommodation/family-room",st:"pub",lo:"○"},
+ {t:"Art Deluxe Suite",s:"/accommodation/art-deluxe-suite",st:"pub",lo:"○"},
+ {t:"Riverfront Suite",s:"/accommodation/riverview-suite",st:"draft",lo:"◐",active:true},
+ {t:"Nam Khan River Suite",s:"/accommodation/river-suite",st:"pub",lo:"○"},
+ {t:"Sunset Luang Prabang Villa",s:"/accommodation/sunset-villa",st:"pub",lo:"○"},
+ {t:"Sunset Namkhan River Villa",s:"/accommodation/sunset-river-villa",st:"pub",lo:"○"},
+ {t:"Dining",s:"/dining",st:"pub",lo:"◐"},
+ {t:"Wellness Center",s:"/wellness-center",st:"pub",lo:"○"},
+ {t:"Retreats",s:"/retreats",st:"pub",lo:"○"},
+ {t:"Experiences",s:"/experiences",st:"pub",lo:"◐"},
+ {t:"Offers",s:"/offers",st:"pub",lo:"○"},
+ {t:"The Namkhan Journal",s:"/blog · 9 posts",st:"pub",lo:"○"},
+ {t:"About · Contact · FAQ · Legal…",s:"38 more pages",st:"pub",lo:"○"}
+];
+var blocksEN=[
+ {k:"Hero",p:"“A suite above the river” — hero photo + Book Your Stay CTA",f:[
+   ["Headline","A suite above the river"],
+   ["Subline","68 m² of teak, linen and morning mist — the Nam Khan below your terrace."],
+   ["CTA label → booking engine","Book Your Stay → deep link, room code RFS prefilled"]]},
+ {k:"Media + Text",p:"The open-air bathtub — photo left, story right",f:[
+   ["Heading","Bathe under the canopy"],
+   ["Body","An open-air stone bathtub on your private terrace, drawn each evening at turndown…"]]},
+ {k:"Gallery",p:"6 photos · grid",media:true},
+ {k:"Feature List",p:"Amenities — joined live from the PMS room type, not retyped",f:[
+   ["Source","PMS room type 555876 (occupancy 2 · 68 m² · A/C · minibar…) — read-only join"]]},
+ {k:"FAQ",p:"3 questions — feeds Google rich results",f:[
+   ["Q1","Can the Riverfront Suite accommodate a third guest?"],
+   ["A1","An extra bed is available for children under 12…"]]},
+ {k:"CTA Banner",p:"“From USD 245/night” — price is a row, not baked into a build",f:[
+   ["Headline","Reserve the river for yourself"],
+   ["Rate-from display","pulls the live from-USD rule (+10% SC) — edited in settings, live everywhere"]]}
+];
+var loDone={0:true,1:true,3:true};
+var sel=0, loc='en';
+function esc(x){return x.replace(/&/g,"&amp;").replace(/</g,"&lt;")}
+function renderPages(){
+ var h="";pages.forEach(function(p,i){
+  h+='<div class="pageitem'+(p.active?' active':'')+'" onclick="alert(\'MOCKUP — loads '+p.s.replace(/'/g,"")+' into the editor. Same editor, any page.\')">'
+   +'<div><div>'+esc(p.t)+'</div><div class="slug">'+esc(p.s)+'</div></div>'
+   +'<div style="text-align:right"><span class="chip '+(p.st==='pub'?'pub':'draft')+'">'+(p.st==='pub'?'live':'draft')+'</span><div class="locdots" title="Lao translation status">LO '+p.lo+'</div></div></div>';
+ });
+ document.getElementById('pagelist').innerHTML=h;
+}
+function renderBlocks(){
+ var h="";blocksEN.forEach(function(b,i){
+  var missing=(loc==='lo'&&!loDone[i]);
+  h+='<div class="block'+(i===sel?' sel':'')+'" onclick="selBlock('+i+')"><span class="grip">⋮⋮</span>'
+   +'<div class="kind">'+b.k+(missing?' <span style="color:var(--warn)">· EN fallback</span>':'')+'</div>'
+   +'<div class="prev">'+esc(b.p)+'</div></div>';
+ });
+ document.getElementById('blocks').innerHTML=h;
+}
+function selBlock(i){sel=i;renderBlocks();renderEditor();}
+function setLoc(l){loc=l;
+ document.getElementById('tabEN').className='loctab'+(l==='en'?' active':'');
+ document.getElementById('tabLO').className='loctab'+(l==='lo'?' active':'');
+ document.getElementById('locNote').style.display=(l==='lo')?'block':'none';
+ renderBlocks();renderEditor();}
+function renderEditor(){
+ var b=blocksEN[sel];var h='<div class="panel"><h3>'+b.k+' <span class="chip '+(loc==='lo'&&!loDone[sel]?'miss':'pub')+'">'+(loc==='lo'?(loDone[sel]?'ລາວ translated':'not translated — English shows on the live site'):'English')+'</span></h3>';
+ if(b.media){
+  h+='<div class="field"><label>Photos (from the media library — alt text &amp; licences come with the asset)</label><div class="mediarow">'
+   +'<div class="thumb" onclick="openModal(\'mediaModal\')"><span class="tag">suite terrace</span></div>'
+   +'<div class="thumb" style="background:linear-gradient(135deg,#d9c9a8,#a88d5f)" onclick="openModal(\'mediaModal\')"><span class="tag">open-air bath</span></div>'
+   +'<div class="thumb" style="background:linear-gradient(135deg,#9db8c9,#5f7f96)" onclick="openModal(\'mediaModal\')"><span class="tag">nam khan dawn</span></div>'
+   +'<div class="thumb" style="background:linear-gradient(135deg,#c9b8d8,#8f7fa6)" onclick="openModal(\'mediaModal\')"><span class="tag">interior</span></div>'
+   +'<div class="thumb add" onclick="openModal(\'mediaModal\')">＋</div></div>'
+   +'<div class="hint">Click a photo to swap it. Cropping uses the asset\'s focal point — the same photo frames correctly as hero, card and share image.</div></div>';
+ } else if(b.f){
+  if(loc==='lo'){
+   h+='<div class="sxs"><div>';
+   b.f.forEach(function(fd){
+    h+='<div class="field"><label>'+esc(fd[0])+' — ລາວ</label>';
+    h+=(fd[1].length>70?'<textarea placeholder="'+(loDone[sel]?'…ຄຳແປລາວ…':'not translated yet — type the Lao here')+'"></textarea>':'<input placeholder="'+(loDone[sel]?'…ລາວ…':'not translated yet')+'">');
+    h+='</div>';
+   });
+   h+='<button class="btn small" onclick="alert(\'MOCKUP — one-click AI prefill of the Lao draft from the English source. Always lands as a DRAFT for a human to review — never auto-publishes.\')">✨ Prefill Lao from English (draft)</button>';
+   h+='</div><div class="ref"><div class="rl">English source (read-only)</div>';
+   b.f.forEach(function(fd){h+='<div style="margin-bottom:10px"><b style="font-size:11px">'+esc(fd[0])+'</b><br>'+esc(fd[1])+'</div>';});
+   h+='</div></div>';
+  } else {
+   b.f.forEach(function(fd){
+    h+='<div class="field"><label>'+esc(fd[0])+'</label>';
+    if(fd[1].length>70){
+     h+='<div class="rtbar"><span><b>B</b></span><span><i>I</i></span><span>🔗</span><span>• list</span><span>H2</span><span class="off" title="deliberately not available">font</span><span class="off" title="deliberately not available">color</span><span class="off" title="deliberately not available">center</span></div>';
+     h+='<textarea style="border-radius:0 0 8px 8px">'+esc(fd[1])+'</textarea>';
+    } else {
+     h+='<input value="'+esc(fd[1]).replace(/"/g,'&quot;')+'">';
+    }
+    h+='</div>';
+   });
+  }
+ }
+ h+='<div style="display:flex;gap:8px;margin-top:6px"><button class="btn small" onclick="alert(\'MOCKUP — moves the block. Order is the only layout control an editor has; the design itself cannot be broken.\')">↑ Move up</button><button class="btn small">↓ Move down</button><button class="btn small" style="color:var(--danger)" onclick="alert(\'MOCKUP — removes the block (recoverable from version history).\')">Remove</button></div>';
+ h+='</div>';
+ document.getElementById('editor').innerHTML=h;
+}
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+function pick(){alert('MOCKUP — inserts the asset. Alt text, licence and QC score travel with it from the media library.');closeModal('mediaModal')}
+function pickBlock(k){alert('MOCKUP — adds a '+k+' block to the outline.');closeModal('blockPicker')}
+renderPages();renderBlocks();renderEditor();
+</script>
+</body>
+</html>
