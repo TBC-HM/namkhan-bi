@@ -77,6 +77,15 @@ interface EventRow {
 }
 interface BuildRow { month: string; initiative: string; labor_usd: number | null; ai_usd: number | null; total_usd: number }
 interface UnallocRow { month: string; unallocated_usd: number | null; total_usd: number; unallocated_pct: number | null }
+interface AppYtdRow {
+  app: string; ytd_usd: number; ytd_metered_usd: number | null; ytd_invoiced_usd: number | null;
+  mtd_usd: number | null; events: number; last_event_at: string | null;
+}
+interface AppMonthlyRow { month: string; app: string; events: number; amount_usd: number; metered_usd: number | null; invoiced_usd: number | null }
+interface AiUsageMonthlyRow {
+  month: string; provider_key: string; model_key: string; calls: number;
+  input_units: number; cached_input_units: number; output_units: number; cost_usd: number;
+}
 
 const PROPERTY_LABEL: Record<number, string> = { 260955: 'Namkhan', 1000001: 'Donna' };
 const usd = (n: number | null | undefined, dp = 2): string =>
@@ -87,7 +96,7 @@ const tenantLabel = (pid: number | null): string =>
 export default async function HoldingCostsPage({ searchParams }: { searchParams?: { month?: string } }) {
   const sb = getSupabaseAdmin();
   const [sumRes, whereRes, allocRes, factRes, budRes, alertRes, taskRes, parityRes,
-    reqRes, closeRes, evRes, buildRes, unallocRes] = await Promise.all([
+    reqRes, closeRes, evRes, buildRes, unallocRes, appYtdRes, appMonRes, aiUseRes] = await Promise.all([
     sb.from('v_costs_summary_monthly').select('*').order('month', { ascending: true }),
     sb.from('v_costs_where_matrix').select('*'),
     sb.from('v_costs_allocation_status').select('*').order('period', { ascending: false }).limit(12),
@@ -101,6 +110,9 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
     sb.from('v_costs_events_recent').select('*').limit(60),
     sb.from('v_costs_build_portfolio').select('*').order('month', { ascending: false }),
     sb.from('v_costs_unallocated').select('*').order('month', { ascending: false }),
+    sb.from('v_costs_app_ytd').select('*').order('ytd_usd', { ascending: false }),
+    sb.from('v_costs_app_monthly').select('*').order('month', { ascending: false }).limit(60),
+    sb.from('v_costs_ai_usage_monthly').select('*').order('month', { ascending: false }).limit(36),
   ]);
   if (sumRes.error) throw new Error(`v_costs_summary_monthly: ${sumRes.error.message}`);
 
@@ -117,6 +129,9 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
   const events = (evRes.data ?? []) as EventRow[];
   const build = (buildRes.data ?? []) as BuildRow[];
   const unalloc = (unallocRes.data ?? []) as UnallocRow[];
+  const appYtd = (appYtdRes.data ?? []) as AppYtdRow[];
+  const appMonthly = (appMonRes.data ?? []) as AppMonthlyRow[];
+  const aiUsage = (aiUseRes.data ?? []) as AiUsageMonthlyRow[];
 
   // ── Month picker (server-side links; ?month=YYYY-MM) ──
   const months = Array.from(new Set(summary.map((r) => r.month))).sort();
@@ -273,6 +288,34 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
     { key: 'ai', label: 'AI USD' }, { key: 'total', label: 'Total USD' },
   ];
 
+  // ── Applications: monthly + YTD (owner F5) + A-OWNER-1 Claude data-gap banner ──
+  const anthroYtd = Number(appYtd.find((a) => a.app === 'anthropic')?.ytd_usd ?? 0);
+  const claudeGap = anthroYtd < 10000; // A-OWNER-1: ≥$10k or an explicit data-gap banner naming the missing source
+  const appRows = appYtd.map((a) => ({
+    app: a.app,
+    ytd: usd(Number(a.ytd_usd), 2),
+    mtd: usd(Number(a.mtd_usd ?? 0), 2),
+    metered: usd(Number(a.ytd_metered_usd ?? 0), 2),
+    invoiced: a.ytd_invoiced_usd == null ? 'none ingested' : usd(Number(a.ytd_invoiced_usd), 2),
+    events: String(a.events),
+  }));
+  const appCols: ChartSeries[] = [
+    { key: 'ytd', label: 'YTD USD' }, { key: 'mtd', label: 'This month' },
+    { key: 'metered', label: 'Metered (per-call)' }, { key: 'invoiced', label: 'Invoiced' },
+    { key: 'events', label: 'Events' },
+  ];
+  const aiUsageRows = aiUsage.slice(0, 14).map((u) => ({
+    month: u.month.slice(0, 7), model: u.model_key, calls: String(u.calls),
+    tokens_in: Number(u.input_units).toLocaleString('en-US'),
+    tokens_out: Number(u.output_units).toLocaleString('en-US'),
+    cost: usd(Number(u.cost_usd), 4),
+  }));
+  const aiUsageCols: ChartSeries[] = [
+    { key: 'model', label: 'Model' }, { key: 'calls', label: 'Calls' },
+    { key: 'tokens_in', label: 'Tokens in' }, { key: 'tokens_out', label: 'Tokens out' },
+    { key: 'cost', label: 'Cost USD' },
+  ];
+
   // ── Ledger drill ──
   const eventRows = events.map((e) => ({
     at: e.event_at.slice(0, 16).replace('T', ' '),
@@ -298,6 +341,29 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
         density="compact" action={<FindingButton />}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
+      </Container>
+
+      <Container title="Applications — monthly + YTD"
+        subtitle="per provider · public.v_costs_app_ytd / v_costs_app_monthly · per-call detail: costs.ai_usage_events (owner MD §7)">
+        {claudeGap ? (
+          <div style={{
+            marginBottom: 12, padding: '10px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+            border: '1px solid var(--status-red, #B3261E)', background: 'var(--status-red-bg, #FCEEEE)',
+            color: 'var(--ink, #1B1B1B)',
+          }}>
+            <strong>Data gap — Claude spend incomplete.</strong> Platform-metered Claude API calls YTD: {usd(anthroYtd)}.
+            Owner-reported Claude spend exceeds $10,000 — the difference is Claude subscription + console usage whose
+            invoices are not ingested (no Anthropic rows in costs.infra_charges). Until those invoices are captured via
+            Manual capture below (or automated invoice ingest lands), every Claude number on this page is metered API
+            usage only, not total spend.
+          </div>
+        ) : null}
+        <Chart variant="table" data={appRows} xKey="app" series={appCols}
+          empty={{ title: 'No application costs in the ledger', hint: 'AI metering ingests hourly; app invoices enter via Manual capture' }} />
+        <div style={{ marginTop: 16 }}>
+          <Chart variant="table" data={aiUsageRows} xKey="month" series={aiUsageCols}
+            empty={{ title: 'No per-call AI usage yet', hint: 'costs.fn_ingest_ai_usage runs on the hourly cron' }} />
         </div>
       </Container>
 
