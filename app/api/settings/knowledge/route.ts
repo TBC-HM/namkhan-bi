@@ -34,6 +34,14 @@ const SECTION_LABELS: Record<string, string> = {
   guest_profile: 'Guest Profile',
   escalation_crisis: 'Escalation & Crisis',
   compliance: 'Compliance Additions',
+  activities: 'Activities & Experiences',
+  retreats: 'Retreats & Groups',
+  fnb_ops: 'Food & Beverage (Roots)',
+  spa_ops: 'Jungle Spa',
+  transport_ops: 'Transport & Transfers',
+  retail_ops: 'Retail',
+  finance_ops: 'Finance & Payments',
+  hr_ops: 'People & Service Standards',
 };
 
 function num(v: unknown): number | null {
