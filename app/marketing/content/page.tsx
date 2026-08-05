@@ -3,14 +3,21 @@
 // NAV_SUBGROUPS lookup in DashboardPage. The old link-card grid is gone; the
 // sub-strip [Products & Offers · Compiler · Campaigns · Newsletter · Media] IS the nav.
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
-import { MARKETING_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 
+const CONTENT_SUBPAGES: { label: string; href: string }[] = [
+  { label: 'Products & Offers', href: '/marketing/offers'    },
+  { label: 'Compiler',          href: '/marketing/compiler'  },
+  { label: 'Campaigns',         href: '/marketing/campaigns' },
+  { label: 'Newsletter',        href: '/marketing/newsletter' },
+  { label: 'Media',             href: '/marketing/gallery'   },
+];
+
 export default function ContentHubPage() {
-  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map(s => ({
+  const tabs: DashboardTab[] = CONTENT_SUBPAGES.map(s => ({
     key: s.href, label: s.label, href: s.href,
-    active: s.href === '/marketing/content',
+    active: false,
   }));
   return (
     <DashboardPage
