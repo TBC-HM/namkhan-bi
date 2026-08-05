@@ -546,7 +546,7 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                             <div style={{ fontSize: 11, fontWeight: 700, color: '#084838', background: '#EAF1EE', borderRadius: 6, padding: '8px 10px', alignSelf: 'start' }}>
                               🔋 Battery-owned calculation finding — repairs nightly (20:30Z), evidence-gated, closes itself. Nothing to click.
                             </div>
-                          ) : r.agent_phase === 'needs_human' && (
+                          ) : (r.open_question || r.agent_phase === 'needs_human') && (
                             <div>
                               {r.open_question ? (
                                 <QuestionPanel
