@@ -5,6 +5,7 @@
 // column with an honest confidence range and a per-row "build now" dispatch CTA.
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
@@ -47,7 +48,10 @@ async function setPriority(formData: FormData) {
   // bump: top = 1 (front of queue), up = -10, down = +10
   const next = dir === 'top' ? 1 : dir === 'up' ? Math.max(1, current - 10) : current + 10;
   const sb = getSupabaseAdmin();
-  await (sb as any).rpc('fn_set_work_priority', { p_kind: kind, p_ref: ref, p_priority: next });
+  const { data, error } = await (sb as any).rpc('fn_set_work_priority', { p_kind: kind, p_ref: ref, p_priority: next });
+  if (error) {
+    redirect(`/holding/it2/modules/queue?err=${encodeURIComponent(error.message ?? 'Priority change failed')}`);
+  }
   revalidatePath('/holding/it2/modules/queue');
 }
 
@@ -58,7 +62,14 @@ async function dispatchNow(formData: FormData) {
   if (!kind || !ref) return;
   const sb = getSupabaseAdmin();
   // writes governance.owner_action_signals (kind=dispatch_requested) + priority=1
-  await (sb as any).rpc('fn_queue_dispatch_now', { p_kind: kind, p_ref: ref, p_actor: 'pbs' });
+  const { data, error } = await (sb as any).rpc('fn_queue_dispatch_now', { p_kind: kind, p_ref: ref, p_actor: 'pbs' });
+  if (error) {
+    redirect(`/holding/it2/modules/queue?err=${encodeURIComponent(error.message ?? 'Dispatch failed')}`);
+  }
+  // check for function-level {ok:false} returns
+  if (data && typeof data === 'object' && data.ok === false) {
+    redirect(`/holding/it2/modules/queue?err=${encodeURIComponent(data.error ?? 'Dispatch rejected')}`);
+  }
   revalidatePath('/holding/it2/modules/queue');
 }
 
@@ -151,7 +162,7 @@ const KIND_TONE: Record<string, { bg: string; fg: string }> = {
   bug:   { bg: '#FDECE4', fg: '#B04A2F' },
 };
 
-export default async function QueuePage() {
+export default async function QueuePage({ searchParams }: { searchParams: { err?: string } }) {
   const sb = getSupabaseAdmin();
   const [{ data }, { data: modelRows }] = await Promise.all([
     (sb as any).from('v_work_queue').select('*').order('queue_position'),
@@ -180,6 +191,11 @@ export default async function QueuePage() {
 
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1200, color: TOKENS.ink }}>
+      {searchParams.err && (
+        <div style={{ background: '#FEE', border: '1px solid #C33', borderRadius: 6, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#933' }}>
+          <strong>Action failed:</strong> {searchParams.err}
+        </div>
+      )}
       <div style={{ marginBottom: 6 }}>
         <div style={{ fontSize: 18, fontWeight: 700 }}>Work Queue ({rows.length})</div>
         <p style={{ fontSize: 12, color: TOKENS.text2, margin: '4px 0 0' }}>
