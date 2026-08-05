@@ -3036,3 +3036,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-03 — bug-agent · fix #148
 - ## Fix BUG #148: TS2448 / ReferenceError — `playlists` used before declaration  ### Root cause In both early-return branches (no connection, expired token), the
 - touched `app/marketing/youtube/playlists/page.tsx`
+
+### 2026-08-05 — bug-agent · fix #164
+- # Bug #164 — Digital sub-strip (Web · Funnels · YouTube) missing  ## Root cause  `app/marketing/digital/page.tsx` renders the Digital hub page. It builds its `t
+- touched `app/marketing/digital/page.tsx`
