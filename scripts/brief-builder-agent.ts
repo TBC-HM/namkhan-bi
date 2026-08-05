@@ -138,8 +138,36 @@ async function anthropic(messages: any[]): Promise<any> {
     const errText = await res.text();
     throw new Error(`anthropic ${res.status}: ${errText.slice(0, 300)}`);
   }
-  return res.json();
+  const json = await res.json();
+  // ADR-230 §3: builders were invisible — 475 duplicate sessions over 7 days cost
+  // thousands while costs.ai_usage_events recorded $2.23 and cost_burn_alarm watched a
+  // number that could not move. Every model call now meters itself into the EXISTING
+  // costs table (map-don't-duplicate; cost-governance-v2 owns task_runs and budgets).
+  try {
+    const u = json?.usage ?? {};
+    await sql(
+      `INSERT INTO costs.ai_usage_events
+         (agent_handle, model_key, request_type, input_units, cached_input_units,
+          output_units, succeeded, source_table, source_id, occurred_at)
+       VALUES ('gha-brief-builder', ${sqlLit(String(MODEL))}, 'messages',
+               ${Number(u.input_tokens ?? 0)}, ${Number(u.cache_read_input_tokens ?? 0)},
+               ${Number(u.output_tokens ?? 0)}, true,
+               'governance.builder_heartbeats', ${sqlLit(String(BRIEF_SLUG))}, now())`
+    );
+  } catch {
+    /* metering must never break a build */
+  }
+  return json;
 }
+
+let BEAT_TIMER: any = null;
+function startBeatTimer(hb: number) {
+  BEAT_TIMER = setInterval(() => {
+    rpc('fn_builder_beat', { p_heartbeat_id: hb, p_step: 'wall-clock beat' }).catch(() => {});
+  }, 120_000);
+  if (BEAT_TIMER.unref) BEAT_TIMER.unref();
+}
+function stopBeatTimer() { if (BEAT_TIMER) clearInterval(BEAT_TIMER); BEAT_TIMER = null; }
 
 async function main() {
   // kill switch
@@ -166,6 +194,7 @@ async function main() {
   }
   const hb = claim.heartbeat_id as number;
   console.log(`claimed ${BRIEF_SLUG}, heartbeat ${hb}`);
+  startBeatTimer(hb);   // ADR-230 §4
 
   let finished = false;
   try {
