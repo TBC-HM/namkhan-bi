@@ -13,19 +13,21 @@
 // so v_deployments is the FIRST fallback (full sha/branch/message/state rows);
 // the lossy audit_log fallback is kept as last resort only.
 
+// ADR-231 (finding #69, PBS 2026-08-05): this route built its OWN Supabase client at
+// MODULE level with a "build-placeholder-key" fallback. Module-level evaluation captured
+// the placeholder, so every query silently returned zero rows — the page read
+// "No deployments found" while v_deployments held 1,017 rows, 109 in the last 24h, newest
+// at the exact minute of the screenshot. No error, no log, just an empty page.
+// getSupabaseAdmin() reads the SAME env vars but LAZILY inside a function, which is why
+// every other surface in the app works. Never construct a Supabase client at module scope.
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 const VERCEL_TEAM = "team_vKod3ZYFgteGCHsam7IG8tEb";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key",
-);
 
 type RawDeploy = {
   uid: string;
@@ -71,7 +73,8 @@ async function listDeploysFromVercel(project: string, token: string, limit: numb
 }
 
 async function listDeploysFromVDeployments(slug: string, limit: number): Promise<{ deploys: Deploy[] }> {
-  const { data } = await supabase
+  const supabase = getSupabaseAdmin();   // ADR-231: lazy, per-call
+  const { data } = await (supabase as any)
     .from("v_deployments")
     .select("vercel_deploy_id, state, created_at, commit_sha, branch, commit_message, preview_url")
     .eq("vercel_project_name", slug)
@@ -93,7 +96,8 @@ async function listDeploysFromVDeployments(slug: string, limit: number): Promise
 }
 
 async function listDeploysFromAuditLog(slug: string, limit: number): Promise<{ deploys: Deploy[] }> {
-  const { data } = await supabase
+  const supabase = getSupabaseAdmin();   // ADR-231: lazy, per-call
+  const { data } = await (supabase as any)
     .from("cockpit_audit_log")
     .select("id, created_at, action, target, success, reasoning, metadata")
     .eq("agent", "vercel")
