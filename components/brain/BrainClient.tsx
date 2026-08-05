@@ -1,13 +1,13 @@
 'use client';
 
 // components/brain/BrainClient.tsx (moved 2026-08-01 from app/holding/it/brain/ — it-area-reorg-v1 round 6)
-// BRAIN v1 · client console: pipeline tiles · human review queue · ask window.
-// Data via /api/brain/review (GET tiles+queue, POST confirm) and /api/brain/ask.
+// BRAIN v1 · client console: pipeline tiles · human review queue.
+// ASK WINDOW removed 2026-08-05 — replaced by CentralChat per central-chat-v1 binding end-state.
+// Data via /api/brain/review (GET tiles+queue, POST confirm).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Container, KpiTile } from '@/app/(cockpit)/_design';
 import { BRAIN_DOC_KINDS, BRAIN_TIERS } from '@/lib/brain/taxonomy';
-import AskFeedback from '@/components/brain/AskFeedback';
 
 const DOC_KINDS: string[] = [...BRAIN_DOC_KINDS];
 const TIERS: string[] = [...BRAIN_TIERS];
@@ -35,107 +35,80 @@ type QueueRow = {
   confidence: number | null; summary: string | null; created_at: string;
 };
 
-type Source = { doc_id: string; title: string; link: string };
+type ReviewResp = {
+  ok: boolean; error?: string; status?: PipelineStatus; missing?: MissingSummary;
+  queue?: QueueRow[]; battery?: BatteryRun[];
+};
 
-/** minimal md → react: [title](link) links + line breaks + bullets. No deps. */
-function renderAnswer(md: string) {
-  const lines = md.split('\n');
-  return lines.map((line, i) => {
-    const parts: Array<string | JSX.Element> = [];
-    let rest = line;
-    let k = 0;
-    while (rest.length > 0) {
-      const m = rest.match(/\[([^\]]+)\]\(([^)]+)\)/);
-      if (!m || m.index === undefined) { parts.push(rest); break; }
-      if (m.index > 0) parts.push(rest.slice(0, m.index));
-      parts.push(
-        <a key={`${i}-${k++}`} href={m[2]} target="_blank" rel="noreferrer"
-           style={{ color: 'var(--tbl-fg, #8ab4f8)', textDecoration: 'underline' }}>
-          {m[1]}
-        </a>
-      );
-      rest = rest.slice(m.index + m[0].length);
-    }
-    return <div key={i} style={{ minHeight: line.trim() ? undefined : 8 }}>{parts}</div>;
-  });
-}
-
-export default function BrainClient({ propertyId }: { propertyId?: number | null }) {
+export default function BrainClient({ propertyId }: { propertyId?: number }) {
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [missing, setMissing] = useState<MissingSummary | null>(null);
   const [battery, setBattery] = useState<BatteryRun[]>([]);
   const [queue, setQueue] = useState<QueueRow[]>([]);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [edits, setEdits] = useState<Record<string, { doc_kind: string; sensitivity: string }>>({});
   const [busy, setBusy] = useState<string | null>(null);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
-
-  const [question, setQuestion] = useState('');
-  const [asking, setAsking] = useState(false);
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [sources, setSources] = useState<Source[]>([]);
-  const [usedHr, setUsedHr] = useState(false);
-
   const [rulesOpen, setRulesOpen] = useState(false);
-  const [rulesVersion, setRulesVersion] = useState<number | null>(null);
   const [rulesText, setRulesText] = useState('');
+  const [rulesVersion, setRulesVersion] = useState<number | null>(null);
   const [rulesSaving, setRulesSaving] = useState(false);
   const [rulesMsg, setRulesMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const reviewUrl = propertyId != null ? `/api/brain/review?pid=${propertyId}` : '/api/brain/review';
-      const res = await fetch(reviewUrl, { cache: 'no-store' });
-      const j = await res.json();
+      const res = await fetch(`/api/brain/review?property_id=${propertyId ?? 0}`, { cache: 'no-store' });
+      const j: ReviewResp = await res.json();
       if (!j.ok) { setLoadErr(j.error ?? 'load failed'); return; }
-      setStatus(j.status as PipelineStatus);
-      setMissing((j.missing ?? null) as MissingSummary | null);
-      setBattery((j.battery ?? []) as BatteryRun[]);
-      setQueue((j.queue ?? []) as QueueRow[]);
+      setStatus(j.status ?? null);
+      setMissing(j.missing ?? null);
+      setBattery(j.battery ?? []);
+      setQueue(j.queue ?? []);
       setLoadErr(null);
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : 'load failed');
     }
-  }, []);
+  }, [propertyId]);
 
-  useEffect(() => { void load(); const t = setInterval(() => void load(), 60_000); return () => clearInterval(t); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const confirm = useCallback(async (row: QueueRow) => {
-    const e = edits[row.doc_id] ?? {
-      doc_kind: row.guess_doc_kind && DOC_KINDS.includes(row.guess_doc_kind) ? row.guess_doc_kind : 'other',
-      sensitivity: row.guess_sensitivity && TIERS.includes(row.guess_sensitivity) ? row.guess_sensitivity : 'owner_only',
-    };
+    const e = edits[row.doc_id];
+    if (!e || busy) return;
     setBusy(row.doc_id);
     try {
       const res = await fetch('/api/brain/review', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ doc_id: row.doc_id, doc_kind: e.doc_kind, sensitivity: e.sensitivity, note: 'confirmed via brain console' }),
+        body: JSON.stringify({ doc_id: row.doc_id, doc_kind: e.doc_kind, sensitivity: e.sensitivity }),
       });
       const j = await res.json();
-      if (j.ok) { setQueue(q => q.filter(r => r.doc_id !== row.doc_id)); void load(); }
-      else alert('Confirm failed: ' + (j.error ?? '?'));
+      if (!j.ok) { alert('Confirm failed: ' + (j.error ?? '?')); setBusy(null); return; }
+      setQueue(q => q.filter(x => x.doc_id !== row.doc_id));
+      setEdits(s => { const n = { ...s }; delete n[row.doc_id]; return n; });
+    } catch (ex) {
+      alert('Confirm error: ' + (ex instanceof Error ? ex.message : '?'));
     } finally { setBusy(null); }
-  }, [edits, load]);
+  }, [edits, busy]);
 
   const openRules = useCallback(async () => {
-    setRulesOpen(o => !o);
-    if (rulesText) return; // already loaded
+    if (rulesOpen) { setRulesOpen(false); return; }
+    setRulesOpen(true);
     try {
-      const res = await fetch('/api/brain/rules', { cache: 'no-store' });
+      const res = await fetch('/api/brain/classification-rules');
       const j = await res.json();
-      if (j.ok) { setRulesText(j.content_md as string); setRulesVersion(j.version as number); }
-      else setRulesMsg('Load failed: ' + (j.error ?? '?'));
+      if (j.ok) { setRulesText(j.rules as string); setRulesVersion(j.version as number); }
+      else setRulesText('# Load error: ' + (j.error ?? '?'));
     } catch (e) {
-      setRulesMsg('Load failed: ' + (e instanceof Error ? e.message : '?'));
+      setRulesText('# Load error: ' + (e instanceof Error ? e.message : '?'));
     }
-  }, [rulesText]);
+  }, [rulesOpen]);
 
   const saveRules = useCallback(async () => {
     if (rulesSaving || rulesText.trim().length < 500) return;
     setRulesSaving(true); setRulesMsg(null);
     try {
-      const res = await fetch('/api/brain/rules', {
+      const res = await fetch('/api/brain/classification-rules', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ content_md: rulesText }),
+        body: JSON.stringify({ rules: rulesText }),
       });
       const j = await res.json();
       if (j.ok) { setRulesVersion(j.version as number); setRulesMsg(`Saved as version ${j.version}. Applies to every future classification — no redeploy needed.`); }
@@ -144,23 +117,6 @@ export default function BrainClient({ propertyId }: { propertyId?: number | null
       setRulesMsg('Save failed: ' + (e instanceof Error ? e.message : '?'));
     } finally { setRulesSaving(false); }
   }, [rulesSaving, rulesText]);
-
-  const ask = useCallback(async () => {
-    const q = question.trim();
-    if (!q || asking) return;
-    setAsking(true); setAnswer(null); setSources([]);
-    try {
-      const res = await fetch('/api/brain/ask', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: q, property_id: propertyId ?? null }),
-      });
-      const j = await res.json();
-      if (j.ok) { setAnswer(j.answer as string); setSources((j.sources ?? []) as Source[]); setUsedHr(!!j.used_hr); }
-      else setAnswer('Error: ' + (j.error ?? 'ask failed'));
-    } catch (e) {
-      setAnswer('Error: ' + (e instanceof Error ? e.message : 'ask failed'));
-    } finally { setAsking(false); }
-  }, [question, asking]);
 
   const tiles = useMemo(() => status ? [
     { label: 'Extract pending', value: status.extract_pending, footnote: 'files awaiting MD shadow' },
@@ -171,7 +127,6 @@ export default function BrainClient({ propertyId }: { propertyId?: number | null
     { label: 'Needs human', value: status.needs_human, footnote: 'review below' },
     { label: 'Excluded (HR etc.)', value: status.excluded, footnote: 'never retrievable' },
     { label: 'Chunks', value: status.chunks_total, footnote: `${status.chunks_embedded} embedded · ${status.docs_chunked} docs` },
-    // BRAIN v5 · D4b missing-file stripe + D7 battery tile
     ...(missing ? [{
       label: 'Missing file', value: missing.total_missing,
       footnote: `${missing.no_source} no source · ${missing.storage_object_missing} object gone · ${missing.ocr_terminal_failed} OCR-dead`,
@@ -191,10 +146,10 @@ export default function BrainClient({ propertyId }: { propertyId?: number | null
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: 16 }}>
       <div>
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>
-            {propertyId === 260955 ? 'Namkhan Brain' : propertyId === 1000001 ? 'Donna Brain' : propertyId === 0 ? 'Holding Brain' : 'Company Brain'}
-          </h1>
+          {propertyId === 260955 ? 'Namkhan Brain' : propertyId === 1000001 ? 'Donna Brain' : propertyId === 0 ? 'Holding Brain' : 'Company Brain'}
+        </h1>
         <p style={{ fontSize: 13, opacity: 0.7, margin: '4px 0 0' }}>
-          Document pipeline · human review · ask window · isolated per tenant. No cross-tenant retrieval. HR/payroll excluded by policy.
+          Document pipeline · human review. Ask window moved to /holding/brain/ask (ASK THE BRAIN button). Isolated per tenant. No cross-tenant retrieval. HR/payroll excluded by policy.
         </p>
       </div>
 
@@ -217,45 +172,6 @@ export default function BrainClient({ propertyId }: { propertyId?: number | null
           </a>
         </div>
       ) : null}
-
-      <Container title="Ask the company brain" subtitle="Owner view · answers only from classified documents, with citations">
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={question}
-            onChange={e => setQuestion(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') void ask(); }}
-            placeholder="e.g. What commission do we pay EXO Travel?"
-            style={{ flex: 1, ...selStyle, padding: '8px 10px', fontSize: 13 }}
-          />
-          <button onClick={() => void ask()} disabled={asking || !question.trim()}
-            style={{ ...selStyle, cursor: 'pointer', padding: '8px 14px', opacity: asking ? 0.5 : 1 }}>
-            {asking ? 'Thinking…' : 'Ask'}
-          </button>
-        </div>
-        {answer ? (
-          <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.55 }}>
-            {renderAnswer(answer)}
-            {sources.length > 0 ? (
-              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-                Sources: {sources.map((s, i) => (
-                  <span key={s.doc_id}>
-                    {i > 0 ? ' · ' : ''}
-                    <a href={s.link} target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>{s.title}</a>
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {!answer.startsWith('Error:') && !usedHr ? (
-              <AskFeedback question={question} answer={answer} sources={sources} />
-            ) : null}
-            {usedHr ? (
-              <div style={{ marginTop: 8, fontSize: 11.5, opacity: 0.6 }}>
-                Contains live HR data (owner surface) — not preservable, refetched fresh on every ask.
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </Container>
 
       <Container
         title={`Classifier rules${rulesVersion != null ? ` (v${rulesVersion})` : ''}`}
