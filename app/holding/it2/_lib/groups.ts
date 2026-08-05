@@ -54,6 +54,8 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it2/system/activity',  label: 'Activity' },
       { href: '/holding/it2/system/cost',      label: 'Cost' },
       { href: '/holding/it2/system/recovery',  label: 'Recovery' },
+      // ADR-230: the global stop. Was SQL-only until 2026-08-05.
+      { href: '/holding/it2/system/automation', label: '⏻ Automation' },
     ],
   },
 ];
