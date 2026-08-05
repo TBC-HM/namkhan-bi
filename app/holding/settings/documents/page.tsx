@@ -9,13 +9,7 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const TABS = [
-  { key: 'back',       label: '← HoD',     href: '/holding'                      },
-  { key: 'platform',   label: 'Platform',   href: '/holding/settings'             },
-  { key: 'guardrails', label: 'Guardrails', href: '/holding/settings/guardrails'  },
-  { key: 'documents',  label: 'Documents',  href: '/holding/settings/documents', active: true },
-  { key: 'media',      label: 'Media',      href: '/holding/settings/media'       },
-];
+import { settingsTabs } from '@/app/holding/settings/_components/tabs';
 
 async function fetchHoldingDocSettings() {
   const sb = getSupabaseAdmin();
@@ -56,7 +50,7 @@ export default async function HoldingDocumentsSettingsPage() {
     <DashboardPage
       title="Holding · Documents"
       subtitle={`${d.totalDocs} holding-wide docs · ${d.families.length} families · separate from tenant documents`}
-      tabs={TABS}
+      tabs={settingsTabs('documents')}
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Holding document register" subtitle="Board resolutions, group contracts, holding compliance — no property assignment">
