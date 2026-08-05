@@ -196,8 +196,32 @@ export async function reviewCampaign(campaignId: string, triggeredBy: string): P
 
   const fails = issues.filter((i) => i.severity === 'fail').length;
   const warns = issues.filter((i) => i.severity === 'warn').length;
-  const verdict: ReviewResult['verdict'] = fails > 0 ? 'fail' : warns > 0 ? 'warn' : 'pass';
   const score = Math.max(0, 100 - fails * 25 - warns * 5);
+
+  // ── ADR-233 · PASS WAS UNREACHABLE BY CONSTRUCTION ────────────────────────
+  // v1.3 computed: fails>0 ? fail : warns>0 ? warn : pass.
+  // "pass" therefore required ZERO warnings across ~10 validators INCLUDING an
+  // LLM that returns up to 5 spelling + 5 grammar + tone + 5 factual flags.
+  // Measured 2026-08-05 over the whole history of the engine:
+  //   176 reviews · 14 campaigns · 156 warn (avg 77.0) · 20 fail (avg 47.0) · ZERO pass.
+  // Because the enqueue fns only block on 'fail', "warn" silently became the
+  // success state and EVERY newsletter ever sent went out on a warning —
+  // including the ones behind finding #18 (90% of links 404).
+  // A gate whose best attainable outcome is "warn, send anyway" is a logger.
+  //
+  // v1.4 makes the verdict SCORE-based, so the top state is reachable and the
+  // bottom state actually blocks:
+  //   any hard fail            -> 'fail'  (blocks — unchanged)
+  //   score < BLOCK_BELOW      -> 'fail'  (blocks — NEW: a 47-score email must not ship)
+  //   score < PASS_AT          -> 'warn'  (sends, logged — unchanged behaviour)
+  //   otherwise                -> 'pass'  (reachable for the first time)
+  // Thresholds are deliberately calibrated to the observed distribution:
+  // avg warn score is 77, so PASS_AT 85 means "at most 3 warnings" — demanding
+  // but attainable — and BLOCK_BELOW 70 catches only genuinely bad drafts.
+  const PASS_AT = 85;
+  const BLOCK_BELOW = 70;
+  const verdict: ReviewResult['verdict'] =
+    fails > 0 || score < BLOCK_BELOW ? 'fail' : score < PASS_AT ? 'warn' : 'pass';
 
   await sb.rpc('fn_content_review_insert', {
     p_campaign_id: campaignId, p_verdict: verdict, p_score: score,
@@ -210,4 +234,4 @@ export async function reviewCampaign(campaignId: string, triggeredBy: string): P
   return { verdict, score, issues };
 }
 
-export const VALIDATOR_VERSION = 'v1.3';
+export const VALIDATOR_VERSION = 'v1.4';
