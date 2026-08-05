@@ -10,21 +10,14 @@ import CentralChat from '@/components/chat/CentralChat';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const TABS = [
-  { key: 'back',       label: '← HoD',     href: '/holding'                      },
-  { key: 'platform',   label: 'Platform',   href: '/holding/settings'             },
-  { key: 'guardrails', label: 'Guardrails', href: '/holding/settings/guardrails'  },
-  { key: 'documents',  label: 'Documents',  href: '/holding/settings/documents'   },
-  { key: 'media',      label: 'Media',      href: '/holding/settings/media'       },
-  { key: 'brain',      label: 'Brain',      href: '/holding/settings/brain', active: true },
-];
+import { settingsTabs } from '@/app/holding/settings/_components/tabs';
 
 export default function HoldingBrainPage() {
   return (
     <DashboardPage
       title="Holding Brain"
       subtitle="54 holding-wide docs only · no Namkhan · no Donna · enter property settings for property-specific brains"
-      tabs={TABS}
+      tabs={settingsTabs('brain')}
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <CentralChat mode="second-brain" moduleScope="brain" propertyId={0} />
