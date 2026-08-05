@@ -28,11 +28,11 @@ export default async function It2BugsPage() {
   const oneDayAgo  = now - 24 * 3600 * 1000;
   const sevenDaysAgo = now - 7 * 24 * 3600 * 1000;
 
-  // ADR-223: was `!r.done_at && status not in (wont_fix,dismissed)`. 20 bugs had
+  // ADR-224: was `!r.done_at && status not in (wont_fix,dismissed)`. 20 bugs had
   // status='done' with done_at NULL — the terminal transition never wrote a timestamp —
   // so the tile read 35 when 15 were open. Status is the truth; the clock is evidence.
   const openCount  = rows.filter((r) => r.status === 'new' || r.status === 'acked' || r.status === 'processing').length;
-  // ADR-223: PBS 2026-08-05 — "we have no bucket indicated human needed". waiting_on was
+  // ADR-224: PBS 2026-08-05 — "we have no bucket indicated human needed". waiting_on was
   // already computed in v_bugs_with_agent_state and rendered nowhere.
   const needsYou   = rows.filter((r) => r.waiting_on === 'you'
     && (r.status === 'new' || r.status === 'acked' || r.status === 'processing')).length;
