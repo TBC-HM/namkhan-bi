@@ -335,7 +335,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
                     <tr key={b.id} style={{ borderBottom: i < briefs.length - 1 ? '1px solid #E6DFCC' : 'none' }}>
                       <td style={{ padding: '10px 14px', color: '#1B1B1B', fontWeight: 500,
                         maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {/* ADR-223: brief rows were dead text — PBS could not reopen a brief
+                        {/* ADR-224: brief rows were dead text — PBS could not reopen a brief
                             to remember what he had already filed. */}
                         <Link href={`/holding/it2/modules/briefs/${encodeURIComponent(b.slug)}`}
                           style={{ color: '#1B1B1B', textDecoration: 'none' }}>
@@ -351,7 +351,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
                       <td style={{ padding: '10px 14px', color: '#5A5A5A' }}>
                         {b.created_at ? shortDate(b.created_at) : '—'}
                       </td>
-                      {/* ADR-223: this column rendered shipped_at under a "LAST AGENT RUN"
+                      {/* ADR-224: this column rendered shipped_at under a "LAST AGENT RUN"
                           header, so every row read "—" while agents were actively working.
                           Last agent run is last_updated_at; shipped gets its own column. */}
                       <td style={{ padding: '10px 14px', color: b.last_updated_at ? '#1B1B1B' : '#8A8A8A' }}>
