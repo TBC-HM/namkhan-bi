@@ -1,8 +1,9 @@
 'use client';
 
 // components/chat/ConversationHistory.tsx
-// Brief: central-chat-missing-ui-features (2026-08-05)
-// Conversation history browser — reads v_chat_conversations via GET /api/cockpit/chat?list=1
+// Conversation history sidebar for CentralChat
+// Brief: central-chat-missing-ui-features
+// Shows past conversations, allows filtering and resuming threads
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
@@ -21,20 +22,12 @@ const C = {
   border: '#E6DFCC',
   forest: '#1F3A2E',
   sand: '#B8A878',
-  terracotta: '#B8542A',
 };
+
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
 
-export interface ConversationHistoryProps {
-  mode?: string | null;
-  moduleScope?: string | null;
-  propertyId?: number | null;
-  onSelectConversation?: (conversationId: string) => void;
-}
-
-type Conversation = {
+interface Conversation {
   id: string;
-  property_id: number | null;
   mode: string;
   module_scope: string | null;
   title: string | null;
@@ -42,49 +35,63 @@ type Conversation = {
   status: string;
   started_at: string;
   last_turn_at: string;
-};
+}
+
+interface Props {
+  onSelectConversation: (conversationId: string) => void;
+  currentConversationId?: string | null;
+  mode?: string;
+  moduleScope?: string;
+  propertyId?: number;
+}
 
 export default function ConversationHistory({
+  onSelectConversation,
+  currentConversationId,
   mode,
   moduleScope,
   propertyId,
-  onSelectConversation,
-}: ConversationHistoryProps) {
+}: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<string | null>(null);
 
-  const load = async () => {
+  useEffect(() => {
+    loadConversations();
+    // Poll every 30s for new conversations
+    const interval = setInterval(loadConversations, 30000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMode, mode, moduleScope, propertyId]);
+
+  const loadConversations = async () => {
     try {
-      setLoading(true);
-      const params = new URLSearchParams({ list: '1', limit: '50' });
-      if (mode) params.set('mode', mode);
-      if (moduleScope) params.set('module_scope', moduleScope);
-      if (propertyId != null) params.set('property_id', String(propertyId));
+      let query = supabase
+        .from('v_chat_conversations')
+        .select('*')
+        .order('last_turn_at', { ascending: false })
+        .limit(50);
 
-      const res = await fetch(`/api/cockpit/chat?${params}`, { cache: 'no-store' });
-      const data = await res.json();
-      
-      if (!res.ok) {
-        setError(data.error ?? 'Failed to load conversations');
-        return;
+      if (filterMode) {
+        query = query.eq('mode', filterMode);
       }
-      
-      setConversations(data.conversations ?? []);
-      setError(null);
+      if (moduleScope) {
+        query = query.eq('module_scope', moduleScope);
+      }
+      if (propertyId) {
+        query = query.eq('property_id', propertyId);
+      }
+
+      const { data } = await query;
+      setConversations((data as Conversation[]) ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
+      console.error('Failed to load conversations:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, moduleScope, propertyId]);
-
-  const formatDate = (iso: string): string => {
+  const formatDate = (iso: string) => {
     const d = new Date(iso);
     const now = new Date();
     const diffMs = now.getTime() - d.getTime();
@@ -96,146 +103,143 @@ export default function ConversationHistory({
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString();
   };
-
-  const getModeBadge = (m: string) => {
-    if (m === 'second-brain') return { label: 'Brain', color: C.forest };
-    if (m === 'general') return { label: 'General', color: C.sand };
-    return { label: m, color: C.text3 };
-  };
-
-  if (loading) {
-    return (
-      <div style={S.container}>
-        <div style={{ ...S.header, borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Conversation History</div>
-        </div>
-        <div style={{ padding: 20, textAlign: 'center', color: C.text3, fontSize: 13 }}>
-          Loading conversations...
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={S.container}>
-        <div style={{ ...S.header, borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Conversation History</div>
-        </div>
-        <div style={{ padding: 20, textAlign: 'center', color: C.terracotta, fontSize: 12 }}>
-          {error}
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div style={S.container}>
-      <div style={{ ...S.header, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Conversation History</div>
-        <div style={{ fontFamily: MONO, fontSize: 10, color: C.text3 }}>
-          {conversations.length} conversation{conversations.length === 1 ? '' : 's'}
+    <div style={S.shell}>
+      <div style={S.header}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>Conversation history</div>
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <button
+            onClick={() => setFilterMode(null)}
+            style={{
+              ...S.filterBtn,
+              background: filterMode === null ? C.forest : C.bg,
+              color: filterMode === null ? '#FFFFFF' : C.text2,
+            }}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setFilterMode('second-brain')}
+            style={{
+              ...S.filterBtn,
+              background: filterMode === 'second-brain' ? C.forest : C.bg,
+              color: filterMode === 'second-brain' ? '#FFFFFF' : C.text2,
+            }}
+          >
+            Second Brain
+          </button>
+          <button
+            onClick={() => setFilterMode('general')}
+            style={{
+              ...S.filterBtn,
+              background: filterMode === 'general' ? C.forest : C.bg,
+              color: filterMode === 'general' ? '#FFFFFF' : C.text2,
+            }}
+          >
+            General
+          </button>
         </div>
       </div>
 
       <div style={S.list}>
-        {conversations.length === 0 ? (
-          <div style={{ padding: 20, textAlign: 'center', color: C.text3, fontSize: 13 }}>
+        {loading && (
+          <div style={{ padding: 20, textAlign: 'center', color: C.text3, fontSize: 12 }}>
+            Loading…
+          </div>
+        )}
+
+        {!loading && conversations.length === 0 && (
+          <div style={{ padding: 20, textAlign: 'center', color: C.text3, fontSize: 12 }}>
             No conversations yet
           </div>
-        ) : (
-          conversations.map((conv) => {
-            const badge = getModeBadge(conv.mode);
-            return (
-              <div
-                key={conv.id}
-                style={S.item}
-                onClick={() => onSelectConversation?.(conv.id)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <div
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: '0.05em',
-                      color: '#FFFFFF',
-                      background: badge.color,
-                      borderRadius: 2,
-                      padding: '2px 6px',
-                    }}
-                  >
-                    {badge.label.toUpperCase()}
-                  </div>
-                  {conv.module_scope && (
-                    <div
-                      style={{
-                        fontFamily: MONO,
-                        fontSize: 9,
-                        color: C.text3,
-                        letterSpacing: 0.3,
-                      }}
-                    >
-                      {conv.module_scope}
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      marginLeft: 'auto',
-                      fontFamily: MONO,
-                      fontSize: 9,
-                      color: C.text3,
-                    }}
-                  >
-                    {formatDate(conv.last_turn_at)}
-                  </div>
-                </div>
-                <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.4, fontWeight: 500 }}>
-                  {conv.title || '(untitled)'}
-                </div>
-                {conv.summary_md && (
-                  <div style={{ fontSize: 11, color: C.text3, lineHeight: 1.5, marginTop: 4 }}>
-                    {conv.summary_md.slice(0, 100)}
-                    {conv.summary_md.length > 100 ? '...' : ''}
-                  </div>
-                )}
-              </div>
-            );
-          })
         )}
+
+        {conversations.map((c) => {
+          const isActive = c.id === currentConversationId;
+          return (
+            <button
+              key={c.id}
+              onClick={() => onSelectConversation(c.id)}
+              style={{
+                ...S.item,
+                background: isActive ? C.bg : C.paper,
+                borderLeft: isActive ? `3px solid ${C.forest}` : `3px solid transparent`,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={S.modeIcon}>
+                  {c.mode === 'general' ? '◦' : 'F'}
+                </span>
+                <span style={{ fontSize: 11, color: C.text3, fontFamily: MONO }}>
+                  {c.mode === 'general' ? 'general' : c.module_scope || 'second-brain'}
+                </span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: C.text3 }}>
+                  {formatDate(c.last_turn_at)}
+                </span>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: C.ink, lineHeight: 1.3 }}>
+                {c.title || c.summary_md?.slice(0, 60) || 'Untitled conversation'}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 const S: Record<string, React.CSSProperties> = {
-  container: {
+  shell: {
     display: 'flex',
     flexDirection: 'column',
     background: C.paper,
     border: `1px solid ${C.border}`,
     borderRadius: 2,
-    maxHeight: '78vh',
+    height: '100%',
     overflow: 'hidden',
-    fontFamily: '-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif',
   },
   header: {
-    padding: '10px 16px',
-    flexShrink: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    padding: '12px 14px',
+    borderBottom: `1px solid ${C.border}`,
+    background: C.paper,
+  },
+  filterBtn: {
+    fontSize: 10,
+    fontFamily: MONO,
+    padding: '4px 8px',
+    border: 0,
+    borderRadius: 2,
+    cursor: 'pointer',
+    fontWeight: 600,
   },
   list: {
     flex: 1,
     overflowY: 'auto',
-    padding: '4px 0',
+    background: C.paper,
   },
   item: {
-    padding: '10px 16px',
+    width: '100%',
+    textAlign: 'left',
+    padding: '10px 12px',
+    border: 0,
     borderBottom: `1px solid ${C.border}`,
     cursor: 'pointer',
     transition: 'background 0.15s',
+  },
+  modeIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: '50%',
+    background: C.forest,
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 700,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
 };
