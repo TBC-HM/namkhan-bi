@@ -32,7 +32,7 @@ export interface BugRow {
   agent_commit_sha?: string | null;
   // PBS 2026-07-27 — open_question from bug agent needs_human
   open_question?: OpenQuestion | null;
-  // ADR-223 — whose-move columns. Already computed in v_bugs_with_agent_state and
+  // ADR-224 — whose-move columns. Already computed in v_bugs_with_agent_state and
   // already selected by both bug pages; the type never declared them, so nothing
   // could read them. waiting_on in (you | agent | blocked | contract_gap | closed).
   owner_answer?: string | null;
