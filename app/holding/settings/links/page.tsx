@@ -18,6 +18,8 @@
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
+import { DashboardPage } from '@/app/(cockpit)/_design';
+import { settingsTabs } from '@/app/holding/settings/_components/tabs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -89,8 +91,8 @@ export default async function HoldingLinkCatalogPage() {
   const failing = rows.filter((r) => r.has_measured_failure && r.active && r.measured_failure_status !== '403');
 
   return (
-    <div style={{ maxWidth: 1100, color: TOKENS.ink }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 2px' }}>Holding link catalog</h1>
+    <DashboardPage title="Holding · Links" tabs={settingsTabs('links')}>
+    <div style={{ gridColumn: '1 / -1', maxWidth: 1100, color: TOKENS.ink }}>
       <p style={{ fontSize: 12, color: TOKENS.text2, margin: '0 0 18px', maxWidth: 800 }}>
         TBC&apos;s own URLs — conversion funnel, prospect outreach, data room, investor material.
         Stored with no <code>property_id</code>, so these can never leak into a Namkhan or Donna
@@ -184,5 +186,6 @@ export default async function HoldingLinkCatalogPage() {
         </div>
       )}
     </div>
+    </DashboardPage>
   );
 }
