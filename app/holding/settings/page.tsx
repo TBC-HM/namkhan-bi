@@ -6,6 +6,7 @@
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import SettingsEditor from './_components/SettingsEditor';
+import { settingsTabs } from '@/app/holding/settings/_components/tabs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -93,15 +94,7 @@ export default async function HoldingSettingsPage() {
     <DashboardPage
       title="Holding · Settings"
       subtitle="Entity identity · banking · contacts · brand · shared across every /holding surface"
-      tabs={[
-        { key: 'back',       label: '← HoD',      href: '/holding'                         },
-        { key: 'platform',   label: 'Platform',    href: '/holding/settings', active: true  },
-        { key: 'guardrails', label: 'Guardrails',  href: '/holding/settings/guardrails'     },
-        { key: 'documents',  label: 'Documents',   href: '/holding/settings/documents'      },
-        { key: 'media',      label: 'Media',       href: '/holding/settings/media'          },
-        { key: 'brain',      label: 'Brain',       href: '/holding/settings/brain'          },
-        { key: 'integrations', label: 'Integrations', href: '/holding/settings/integrations' },
-      ]}
+      tabs={settingsTabs('platform')}
     >
       {SECTIONS.map((section) => (
         <div key={section.key} style={{ gridColumn: '1 / -1' }}>
