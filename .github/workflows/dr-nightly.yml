@@ -1,5 +1,4 @@
 # Disaster Recovery - nightly off-site backup + proven-restore drill
-# Build round 5: testing psql stdin fix after verifier objection §0.V2
 #
 # Runs on GitHub Actions deliberately: an independent failure domain from both
 # Supabase and Vercel. A backup job hosted inside the system it protects dies with it.
@@ -108,21 +107,45 @@ jobs:
         id: db
         continue-on-error: true
         run: |
-          set -euo pipefail
+          set +e  # Don't exit on error - we need to record failures
+          RID=${{ steps.start.outputs.run_id }}
           DAY=${{ steps.start.outputs.day }}
           TIER=${{ steps.start.outputs.tier }}
           OUT=db-${DAY}.sql.gz
+          
           # backup_log excluded by data: 5 GB of superseded inline payload.
           # documents_history already carries the same content.
           pg_dump --format=plain --no-owner --no-privileges --quote-all-identifiers \
-                  --exclude-table-data=documentation.backup_log | gzip -9 > "$OUT"
+                  --exclude-table-data=documentation.backup_log 2>db.err | gzip -9 > "$OUT"
+          DUMP_EXIT=$?
+          
+          if [ $DUMP_EXIT -ne 0 ]; then
+            ERR=$(head -5 db.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'database', 'failed', 'pg_dump exit $DUMP_EXIT: $ERR');"
+            echo "::error::Database dump failed (exit $DUMP_EXIT): $ERR"
+            exit 0  # continue-on-error handles this
+          fi
+          
           BYTES=$(stat -c%s "$OUT")
+          if [ "$BYTES" -lt 100000 ]; then
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'database', 'failed', 'dump too small: $BYTES bytes');"
+            echo "::error::Database dump suspiciously small: $BYTES bytes"
+            exit 0
+          fi
+          
           SUM=$(sha256sum "$OUT" | cut -d' ' -f1)
           KEY="db/${TIER}/${OUT}"
-          rclone copyto "$OUT" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket
+          
+          if ! rclone copyto "$OUT" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket 2>upload.err; then
+            ERR=$(head -3 upload.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'database', 'failed', 'upload failed: $ERR');"
+            echo "::error::R2 upload failed: $ERR"
+            exit 0
+          fi
+          
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
-          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, checksum, status) VALUES (${{ steps.start.outputs.run_id }}, 'database', '${KEY}', ${BYTES}, '${SUM}', 'ok');"
-          echo "database -> ${KEY}"
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, checksum, status) VALUES ($RID, 'database', '${KEY}', ${BYTES}, '${SUM}', 'ok');"
+          echo "database -> ${KEY} (${BYTES} bytes)"
 
       - name: File mirror
         id: storage
