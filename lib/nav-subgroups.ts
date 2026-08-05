@@ -65,6 +65,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Leakage',    href: '/revenue/leakage'              },
     ],
   },
+
   // PBS 2026-08-05 (F8): Forecast sub-tabs — Forecast (main summary) + Scenarios.
   // Property-scoped only (/h/[pid]/revenue/forecast).
   {
@@ -108,175 +109,227 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/rooms',
       '/operations/restaurant',
       '/operations/spa',
-      '/operations/sports',
-      '/operations/wellness',
-      '/operations/dive',
-      '/operations/events',
+      '/operations/activities',
+      '/operations/retail',
+      '/operations/transport',
+      '/operations/other',
     ],
     tabs: [
       { label: 'Rooms',      href: '/operations/rooms'      },
-      { label: 'Restaurant', href: '/operations/restaurant' },
+      { label: 'F&B',        href: '/operations/restaurant' },
       { label: 'Spa',        href: '/operations/spa'        },
-      { label: 'Sports',     href: '/operations/sports'     },
-      { label: 'Wellness',   href: '/operations/wellness'   },
-      { label: 'Dive',       href: '/operations/dive'       },
-      { label: 'Events',     href: '/operations/events'     },
+      { label: 'Activities', href: '/operations/activities' },
+      { label: 'Retail',     href: '/operations/retail'     },
+      { label: 'Transport',  href: '/operations/transport'  },
+      { label: 'Other',      href: '/operations/other'      },
     ],
   },
+  // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
+  // 2026-07-30: + Dishes + Spa (PBS 2026-07-24 pages, registered per inventory
+  // completion brief A7 — were direct-URL only).
   {
     parentHref: '/operations/inventory',
     members: [
       '/operations/inventory',
-      '/operations/suppliers',
-      '/operations/catalog-cleanup',
+      '/operations/inventory/assets',
+      '/operations/inventory/capex',
+      '/operations/inventory/catalog',
+      '/operations/inventory/counts',
+      '/operations/inventory/dishes',
+      '/operations/inventory/items',
+      '/operations/inventory/orders',
+      '/operations/inventory/par',
+      '/operations/inventory/requests',
+      '/operations/inventory/shop',
+      '/operations/inventory/spa',
+      '/operations/inventory/stock',
+      '/operations/inventory/suppliers',
     ],
     tabs: [
-      { label: 'Inventory',        href: '/operations/inventory'        },
-      { label: 'Suppliers',        href: '/operations/suppliers'        },
-      { label: 'Catalog cleanup',  href: '/operations/catalog-cleanup'  },
-    ],
-  },
-
-  // ─── Guest ────────────────────────────────────────────────
-  {
-    parentHref: '/guest/stay-timeline',
-    members: ['/guest/stay-timeline', '/guest/repeat', '/guest/preferences', '/guest/conversations'],
-    tabs: [
-      { label: 'Timeline',      href: '/guest/stay-timeline'    },
-      { label: 'Repeat',        href: '/guest/repeat'           },
-      { label: 'Preferences',   href: '/guest/preferences'      },
-      { label: 'Conversations', href: '/guest/conversations'    },
-    ],
-  },
-
-  // ─── Finance ──────────────────────────────────────────────
-  {
-    parentHref: '/finance/hr',
-    members: ['/finance/hr', '/finance/hr/recruitment', '/finance/hr/onboarding', '/finance/hr/holidays', '/finance/hr/offboarding', '/finance/hr/payroll', '/finance/hr/staff'],
-    tabs: [
-      { label: 'Overview',    href: '/finance/hr'              },
-      { label: 'Recruitment', href: '/finance/hr/recruitment'  },
-      { label: 'Onboarding',  href: '/finance/hr/onboarding'   },
-      { label: 'Holidays',    href: '/finance/hr/holidays'     },
-      { label: 'Offboarding', href: '/finance/hr/offboarding'  },
-      { label: 'Payroll',     href: '/finance/hr/payroll'      },
-      { label: 'Staff',       href: '/finance/hr/staff'        },
-    ],
-  },
-  {
-    parentHref: '/finance/procurement',
-    members: ['/finance/procurement', '/finance/procurement/approval-needed', '/finance/procurement/archive'],
-    tabs: [
-      { label: 'Procurement',      href: '/finance/procurement'                  },
-      { label: 'Approval needed',  href: '/finance/procurement/approval-needed'  },
-      { label: 'Archive',          href: '/finance/procurement/archive'          },
-    ],
-  },
-
-  // ─── Sales ────────────────────────────────────────────────
-  {
-    parentHref: '/sales/pipeline',
-    members: ['/sales/pipeline', '/sales/accounts', '/sales/history'],
-    tabs: [
-      { label: 'Pipeline', href: '/sales/pipeline' },
-      { label: 'Accounts', href: '/sales/accounts' },
-      { label: 'History',  href: '/sales/history'  },
+      { label: 'Overview',  href: '/operations/inventory'           },
+      { label: 'Assets',    href: '/operations/inventory/assets'    },
+      { label: 'Capex',     href: '/operations/inventory/capex'     },
+      { label: 'Catalog',   href: '/operations/inventory/catalog'   },
+      { label: 'Counts',    href: '/operations/inventory/counts'    },
+      { label: 'Dishes',    href: '/operations/inventory/dishes'    },
+      { label: 'Items',     href: '/operations/inventory/items'     },
+      { label: 'Orders',    href: '/operations/inventory/orders'    },
+      { label: 'Par',       href: '/operations/inventory/par'       },
+      { label: 'Requests',  href: '/operations/inventory/requests'  },
+      { label: 'Shop',      href: '/operations/inventory/shop'      },
+      { label: 'Spa',       href: '/operations/inventory/spa'       },
+      { label: 'Stock',     href: '/operations/inventory/stock'     },
+      { label: 'Suppliers', href: '/operations/inventory/suppliers' },
     ],
   },
 
   // ─── Marketing ────────────────────────────────────────────
+  // PBS 2026-07-21 · IA v2: Channels top tab killed; Socials + Digital promoted
+  // to top-strip peers. YouTube moved into Digital sub-strip. SEO dropped from nav.
+  // /marketing/{content,digital} are nav-hubs — their bodies are empty; the sub-strip
+  // IS the nav. Order matters — findSubGroup returns FIRST match. Content is placed
+  // first because its members (offers/compiler/campaigns/newsletter/media) must beat
+  // the legacy /marketing/acquisition subgroup below on /marketing/campaigns.
   {
-    parentHref: '/marketing/campaigns',
-    members: ['/marketing/campaigns', '/marketing/ads', '/marketing/email', '/marketing/social', '/marketing/content'],
+    // PBS 2026-07-21 · Content sub-strip · replaces box grid on /marketing/content hub
+    parentHref: '/marketing/content',
+    members: [
+      '/marketing/content',
+      '/marketing/offers',
+      '/marketing/compiler',
+      '/marketing/campaigns',
+      '/marketing/newsletter',
+      '/marketing/media',
+    ],
+    tabs: [
+      { label: 'Products & Offers', href: '/marketing/offers'     },
+      { label: 'Compiler',          href: '/marketing/compiler'   },
+      { label: 'Campaigns',         href: '/marketing/campaigns'  },
+      { label: 'Newsletter',        href: '/marketing/newsletter' },
+      { label: 'Media',             href: '/marketing/media'      },
+    ],
+  },
+  // PBS 2026-07-21 · Digital sub-strip · YouTube moved here from Channels · SEO restored as 4th tab per PBS
+  {
+    parentHref: '/marketing/digital',
+    members: [
+      '/marketing/digital',
+      '/marketing/digital/web',
+      '/marketing/web',
+      '/marketing/funnels',
+      '/marketing/youtube',
+      '/marketing/youtube/dashboard',
+      '/marketing/youtube/playlists',
+      '/marketing/youtube/planning',
+      '/marketing/youtube/production',
+      '/marketing/youtube/analytics',
+      '/marketing/seo',
+      '/marketing/website',
+    ],
+    tabs: [
+      { label: 'Web',     href: '/marketing/digital/web'       },
+      { label: 'Funnels', href: '/marketing/funnels'           },
+      { label: 'YouTube', href: '/marketing/youtube/dashboard' },
+      { label: 'SEO',     href: '/marketing/seo'               },
+      // website-module-v1 P3 (2026-07-30): Website capability — editor over
+      // website.* rows + publish. Brief §MENU: Marketing substripe → Website.
+      { label: 'Website', href: '/marketing/website'           },
+    ],
+  },
+  // PBS 2026-07-21 · Channels subgroup deleted — Socials + Digital are now top-strip peers.
+  // PBS 2026-07-07 night: Overview lands on /marketing/library. Info sub-tab
+  // removed; Library + Docs sit directly under Overview alongside Reports.
+  // PBS 2026-07-09 pm: Gallery folded under Overview (was Content top-strip · same DB source as Library).
+  // PBS 2026-07-09 pm (later): Social restored — was hidden because the standalone
+  // /marketing/gallery subgroup below never triggered (Overview matched first).
+  {
+    // PBS 2026-07-11 pm: /marketing/library now 307-redirects to /marketing/media.
+    // Library UI lives inside the Media Hub as a sub-tab. Kept Gallery/Social/Docs
+    // accessible from a slim strip, but they no longer share a parent with Library.
+    parentHref: '/marketing/gallery',
+    members: ['/marketing/gallery', '/marketing/docs'],
+    tabs: [
+      { label: 'Gallery', href: '/marketing/gallery' },
+      { label: 'Docs',    href: '/marketing/docs'    },
+    ],
+  },
+  {
+    parentHref: '/marketing/acquisition',
+    // PBS 2026-07-21: /marketing/campaigns + /marketing/funnels removed from
+    // this subgroup — they now belong to Content and Digital respectively.
+    // Kept acquisition landing itself + prospects references.
+    members: ['/marketing/acquisition', '/marketing/prospects', '/guest/prospects'],
     tabs: [
       { label: 'Campaigns', href: '/marketing/campaigns' },
-      { label: 'Ads',       href: '/marketing/ads'       },
-      { label: 'Email',     href: '/marketing/email'     },
-      { label: 'Social',    href: '/marketing/social'    },
-      { label: 'Content',   href: '/marketing/content'   },
+      { label: 'Funnels',   href: '/marketing/funnels'   },
+      { label: 'Prospects', href: '/guest/prospects'     },
     ],
   },
-  // PBS 2026-07-17: Newsletter sub-tabs (Newsletter · Archive · Templates)
+  // PBS 2026-07-21: standalone /marketing/offers subgroup removed — its only
+  // sub-tab (Compiler) is now part of the Content sub-strip above.
+  // PBS 2026-07-21: standalone /marketing/digital (Web + YouTube) subgroup
+  // removed — replaced by the new Digital sub-sub-strip declared above.
+  // (The old /marketing/library standalone subgroup is now merged into Overview
+  //  above — Library + Docs live directly under Overview.)
+
+  // ─── Administration (Finance) ─────────────────────────────
+  // PBS 2026-07-07 night: sub-tabs also show on /finance HoD + /finance/overview
+  // so P&L/Ledger/Transactions/Budget are visible even before you click Finance.
   {
-    parentHref: '/marketing/newsletter',
-    members: ['/marketing/newsletter', '/marketing/newsletter/archive', '/marketing/newsletter/templates'],
+    parentHref: '/finance/pnl',
+    // 2026-07-30: + Studio (Spreadsheet Studio v1, brief module-spreadsheet-studio-v1 —
+    // Administration substripe placement per PBS 2026-07-29 menu directive).
+    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/banks', '/finance/pos', '/finance/budget', '/finance/studio'],
     tabs: [
-      { label: 'Newsletter', href: '/marketing/newsletter'           },
-      { label: 'Archive',    href: '/marketing/newsletter/archive'   },
-      { label: 'Templates',  href: '/marketing/newsletter/templates' },
+      { label: 'P&L',          href: '/finance/pnl'          },
+      { label: 'Ledger',       href: '/finance/ledger'       },
+      { label: 'Transactions', href: '/finance/transactions' },
+      { label: 'Banks',        href: '/finance/banks'        },
+      { label: 'POS',          href: '/finance/pos'          },
+      { label: 'Budget',       href: '/finance/budget'       },
+      { label: 'Studio',       href: '/finance/studio'       },
     ],
   },
 
-  // ─── IT ───────────────────────────────────────────────────
+  // ─── Finance · HR sub-strip ─────────────────────────────────
+  // PBS 2026-07-09 pm: HR area sub-menu — was missing entirely for both
+  // properties. Donna Finance HR is Factorial-fed and much richer than
+  // Namkhan, but neither could see the child pages without this strip.
   {
-    parentHref: '/it/network',
-    members: ['/it/network', '/it/servers', '/it/security', '/it/support'],
-    tabs: [
-      { label: 'Network',  href: '/it/network'  },
-      { label: 'Servers',  href: '/it/servers'  },
-      { label: 'Security', href: '/it/security' },
-      { label: 'Support',  href: '/it/support'  },
+    parentHref: '/finance/hr',
+    members: [
+      '/finance/hr',
+      '/finance/hr/attendance',
+      '/finance/hr/data',
+      '/finance/hr/holidays',
+      '/finance/hr/lifecycle',
+      '/finance/hr/onboarding',
+      '/finance/hr/offboarding',
+      '/finance/hr/schedule',
+      '/finance/hr/recruitment',
     ],
-  },
-
-  // ─── Holding ──────────────────────────────────────────────
-  {
-    parentHref: '/holding/ceo',
-    members: ['/holding/ceo', '/holding/ceo/dashboard', '/holding/ceo/board', '/holding/ceo/calendar', '/holding/ceo/strategy', '/holding/ceo/goals'],
     tabs: [
-      { label: 'CEO',      href: '/holding/ceo'           },
-      { label: 'Dashboard',href: '/holding/ceo/dashboard' },
-      { label: 'Board',    href: '/holding/ceo/board'     },
-      { label: 'Calendar', href: '/holding/ceo/calendar'  },
-      { label: 'Strategy', href: '/holding/ceo/strategy'  },
-      { label: 'Goals',    href: '/holding/ceo/goals'     },
-    ],
-  },
-  // PBS 2026-07-17: IT2 sub-tabs (Modules · Spec Source + Brain Chat from July PR move)
-  {
-    parentHref: '/holding/it2/modules',
-    members: ['/holding/it2/modules', '/holding/it2/modules/specs', '/holding/it2/brain'],
-    tabs: [
-      { label: 'Modules',      href: '/holding/it2/modules'       },
-      { label: 'Spec source',  href: '/holding/it2/modules/specs' },
-      { label: 'Brain chat',   href: '/holding/it2/brain'         },
+      { label: 'HoD',          href: '/finance/hr'              },
+      { label: 'Schedule',     href: '/finance/hr/schedule'     },
+      { label: 'Attendance',   href: '/finance/hr/attendance'   },
+      { label: 'Holidays',     href: '/finance/hr/holidays'     },
+      { label: 'Lifecycle',    href: '/finance/hr/lifecycle'    },
+      { label: 'Onboarding',   href: '/finance/hr/onboarding'   },
+      { label: 'Offboarding',  href: '/finance/hr/offboarding'  },
+      { label: 'Recruitment',  href: '/finance/hr/recruitment'  },
+      { label: 'Data',         href: '/finance/hr/data'         },
     ],
   },
 ];
 
-// ─── Path utilities ───────────────────────────────────────────────────────
-
-export function findSubGroup(pathname: string): SubGroup | undefined {
-  const clean = pathname.split('?')[0];
-  const { unprefixedPath } = stripTenantPrefix(clean);
-  for (const grp of NAV_SUBGROUPS) {
-    // First check members against the stripped path (so /h/260955/revenue/forecast
-    // matches /revenue/forecast in members).
-    if (grp.members.includes(unprefixedPath)) return grp;
-    // Then check against the original clean (allows /h/260955/... prefixed paths
-    // in members too).
-    if (grp.members.includes(clean)) return grp;
-  }
-  return undefined;
+// PBS 2026-07-07 pm: sub-strip matching must survive the tenant `/h/{id}` prefix.
+// Members are declared as unprefixed paths (e.g. `/revenue/pickup`), so on Donna
+// URLs like `/h/1000001/revenue/pickup` we need to strip the prefix before matching
+// AND re-apply it when rendering tab hrefs.
+function stripTenantPrefix(p: string): { normalized: string; tenantPrefix: string } {
+  const m = p.match(/^\/h\/(\d+)/);
+  return m
+    ? { normalized: p.slice(m[0].length) || '/', tenantPrefix: m[0] }
+    : { normalized: p, tenantPrefix: '' };
 }
 
+export function findSubGroup(pathname: string): SubGroup | null {
+  const { normalized } = stripTenantPrefix(pathname);
+  for (const g of NAV_SUBGROUPS) {
+    if (g.members.includes(normalized)) return g;
+  }
+  return null;
+}
+
+/**
+ * Rewrite an unprefixed subgroup tab href to include the current tenant prefix.
+ * Returns href unchanged when there's no tenant prefix in the current pathname,
+ * or the href is already tenant-prefixed / non-root.
+ */
 export function prefixTabHref(pathname: string, href: string): string {
   const { tenantPrefix } = stripTenantPrefix(pathname);
   if (!tenantPrefix) return href;
   if (href.startsWith('/h/')) return href; // already prefixed
   if (href.startsWith('/'))  return tenantPrefix + href;
   return href;
-}
-
-/**
- * Given /h/260955/revenue/forecast?win=30d, returns:
- *   { tenantPrefix: '/h/260955', unprefixedPath: '/revenue/forecast' }
- * Given /revenue/pulse, returns:
- *   { tenantPrefix: '', unprefixedPath: '/revenue/pulse' }
- */
-export function stripTenantPrefix(pathname: string): { tenantPrefix: string; unprefixedPath: string } {
-  const clean = pathname.split('?')[0];
-  const m = clean.match(/^(\/h\/\d+)(\/.*)?$/);
-  if (!m) return { tenantPrefix: '', unprefixedPath: clean };
-  return { tenantPrefix: m[1], unprefixedPath: m[2] ?? '/' };
 }
