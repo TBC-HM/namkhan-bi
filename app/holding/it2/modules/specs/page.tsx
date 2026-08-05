@@ -60,7 +60,7 @@ async function fetchData() {
       .order('doc_type'),
     (getSupabaseAdmin() as any)
       .from('v_build_briefs')
-      .select('id, slug, title, status, tags, created_at, shipped_at')
+      .select('id, slug, title, status, tags, created_at, last_updated_at, shipped_at')
       .order('created_at', { ascending: false })
       .limit(30),
     (getSupabaseAdmin() as any)
@@ -322,7 +322,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#FAFAF7', borderBottom: '1px solid #E6DFCC' }}>
-                  {['TITLE', 'STATUS', 'CREATED', 'LAST AGENT RUN'].map(h => (
+                  {['TITLE', 'STATUS', 'CREATED', 'LAST AGENT RUN', 'SHIPPED'].map(h => (
                     <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700,
                       color: '#5A5A5A', fontSize: 11, letterSpacing: '0.05em' }}>{h}</th>
                   ))}
@@ -335,7 +335,12 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
                     <tr key={b.id} style={{ borderBottom: i < briefs.length - 1 ? '1px solid #E6DFCC' : 'none' }}>
                       <td style={{ padding: '10px 14px', color: '#1B1B1B', fontWeight: 500,
                         maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {b.title ?? b.slug}
+                        {/* ADR-223: brief rows were dead text — PBS could not reopen a brief
+                            to remember what he had already filed. */}
+                        <Link href={`/holding/it2/modules/briefs/${encodeURIComponent(b.slug)}`}
+                          style={{ color: '#1B1B1B', textDecoration: 'none' }}>
+                          {b.title ?? b.slug}
+                        </Link>
                       </td>
                       <td style={{ padding: '10px 14px' }}>
                         <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px',
@@ -345,6 +350,12 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
                       </td>
                       <td style={{ padding: '10px 14px', color: '#5A5A5A' }}>
                         {b.created_at ? shortDate(b.created_at) : '—'}
+                      </td>
+                      {/* ADR-223: this column rendered shipped_at under a "LAST AGENT RUN"
+                          header, so every row read "—" while agents were actively working.
+                          Last agent run is last_updated_at; shipped gets its own column. */}
+                      <td style={{ padding: '10px 14px', color: b.last_updated_at ? '#1B1B1B' : '#8A8A8A' }}>
+                        {b.last_updated_at ? shortDate(b.last_updated_at) : '—'}
                       </td>
                       <td style={{ padding: '10px 14px', color: b.shipped_at ? '#2E7D32' : '#8A8A8A' }}>
                         {b.shipped_at ? shortDate(b.shipped_at) : '—'}
