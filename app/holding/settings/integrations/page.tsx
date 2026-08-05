@@ -13,14 +13,7 @@ const T = {
   amber: '#B48A3A', amberTint: '#FAF6E9', red: '#B03826', redTint: '#F5D5CE', grey: '#8A8A8A',
 };
 
-const TABS = [
-  { key: 'platform',      label: 'Platform',      href: '/holding/settings'                   },
-  { key: 'guardrails',    label: 'Guardrails',    href: '/holding/settings/guardrails'        },
-  { key: 'documents',     label: 'Documents',     href: '/holding/settings/documents'         },
-  { key: 'media',         label: 'Media',         href: '/holding/settings/media'             },
-  { key: 'brain',         label: 'Brain',         href: '/holding/settings/brain'             },
-  { key: 'integrations',  label: 'Integrations',  href: '/holding/settings/integrations', active: true },
-];
+import { settingsTabs } from '@/app/holding/settings/_components/tabs';
 
 // Platform-managed integrations (holding provides these to all tenants)
 const PLATFORM_TOOLS = [
@@ -74,7 +67,7 @@ export default async function HoldingIntegrationsPage() {
   const hdr: React.CSSProperties = { ...cell, fontWeight: 600, fontSize: 10.5, color: T.inkSoft, textTransform: 'uppercase', letterSpacing: '.04em', background: T.bg };
 
   return (
-    <DashboardPage title="Holding · Integrations" subtitle="Platform tools managed by TBC · per-property connection status" tabs={TABS}>
+    <DashboardPage title="Holding · Integrations" subtitle="Platform tools managed by TBC · per-property connection status" tabs={settingsTabs('integrations')}>
       <div style={{ maxWidth: 960 }}>
 
         {/* ── PLATFORM TOOLS ── */}
