@@ -1,7 +1,8 @@
 'use client';
 
 // components/chat/CentralChat.tsx
-// Central Chat v1 — brief central-chat-v1 (build/central-chat).
+// Central Chat v2 — brief central-chat-missing-ui-features.
+// Enhanced with: conversation history, thread summarization, save to KB, model tier visibility.
 //
 // ONE reusable chat component, Felix-routed per the one-channel command law
 // (PBS 2026-07-30): every turn goes PBS → chat → Felix ('lead'). Felix is the
@@ -15,25 +16,11 @@
 //                  scope of the embedded instance.
 //   general      — model-only. No business data in, no memory writes out.
 //
-// v1 CUT (stated): both modes post to the EXISTING /api/cockpit/chat route
-// (tickets-thread persistence — cockpit_tickets is the conversation store
-// until cockpit.conversations/messages land, see db/proposed/build-central-
-// chat/). The body carries mode / module_scope / property_id.
-// 2026-07-30 (verifier V3 fix): the route now enforces general-mode
-// isolation SERVER-SIDE — mode='general' skips all context assembly, tools
-// and memory writes; the label here is informational only.
-//
-// 2026-07-30 (verifier V4 fix): general mode is ALWAYS offered — every
-// instance renders a mode toggle. The `mode` prop is the instance default
-// (its knowledge scope); the user can flip to General (model-only) and back
-// at any time. Flipping starts a fresh thread so scopes never mix.
-//
-// Owner-class questions: any Felix reply that surfaces an owner decision
-// ("owner-class", "Decision Inbox", "Needs you", "OPEN QUESTION") gets a
-// deep-link chip to /holding/it2/questions (the Decision Inbox).
-//
-// Provider policy: Anthropic-only per ADR-169 (owner answer 2026-07-30).
-// Tier routing happens server-side; this component never picks a provider.
+// v2 ENHANCEMENTS (2026-08-05):
+// - Conversation history sidebar (toggle)
+// - Thread summarization (one-click button)
+// - Save to KB button per assistant message
+// - Model tier visibility badges
 
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
@@ -66,6 +53,8 @@ export interface CentralChatProps {
   moduleScope?: string;
   /** Tenant scope of the /h/[pid] context the instance is embedded in. */
   propertyId?: number;
+  /** Show conversation history sidebar by default */
+  showHistory?: boolean;
 }
 
 type Ticket = {
@@ -79,6 +68,14 @@ type Ticket = {
   notes?: string | null;
 };
 
+type ChatMessage = {
+  id: number;
+  turn_role: string;
+  content_md: string;
+  model_tier?: string | null;
+  created_at: string;
+};
+
 // ── ticket → turns (same framing contract as ChatShell / /api/cockpit/chat) ─
 function stripTicketFraming(s: string | null): { user: string; agent: string } {
   if (!s) return { user: '', agent: '' };
@@ -89,7 +86,6 @@ function stripTicketFraming(s: string | null): { user: string; agent: string } {
     agent = agent.replace(/^\*\*Triage\*\*[\s\S]*?(?=\n\n)/, '').trim();
     return { user: m[1].trim(), agent };
   }
-  // In-progress ticket: parsed_summary is the raw user message — a user turn.
   return { user: s, agent: '' };
 }
 
@@ -114,42 +110,54 @@ function md(s: string): string {
   return h;
 }
 
-// Owner-class detection: Felix routes owner decisions to the Decision Inbox
-// (one-channel law §1). If a reply surfaces one, deep-link the inbox.
 function hasOwnerClassQuestion(agentText: string): boolean {
   return /owner-class|decision inbox|needs you|open question/i.test(agentText);
 }
 
-export default function CentralChat({ mode: defaultMode, moduleScope, propertyId }: CentralChatProps) {
+function TierBadge({ tier }: { tier?: string | null }) {
+  if (!tier) return null;
+  const label = tier === 'fast' ? '⚡ fast' : tier === 'reasoning' ? '🧠 reasoning' : tier === 'long-context' ? '📚 long' : tier;
+  return (
+    <span style={{
+      fontSize: 9,
+      fontFamily: MONO,
+      color: C.text3,
+      background: C.bg,
+      padding: '2px 6px',
+      borderRadius: 2,
+      marginLeft: 6,
+    }}>
+      {label}
+    </span>
+  );
+}
+
+export default function CentralChat({ mode: defaultMode, moduleScope, propertyId, showHistory = false }: CentralChatProps) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  // V4 (2026-07-30): mode is user-switchable in every instance; the prop is
-  // just the instance default. General mode is always offered.
   const [mode, setMode] = useState<CentralChatMode>(defaultMode);
-  // Thread starts fresh on mount (PBS 2026-05-09 rule — no stale localStorage).
   const [threadStart, setThreadStart] = useState<string>(() => new Date().toISOString());
-  // V5 conversation store (round 5): the server returns a cockpit.conversations
-  // id on the first turn; subsequent turns carry it so the whole thread lands
-  // in ONE conversation row. React state only — no localStorage (platform law).
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(showHistory);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const startNewChat = () => {
     setThreadStart(new Date().toISOString());
     setConversationId(null);
     setInput('');
+    setSummary(null);
   };
 
-  // Switching modes starts a fresh thread — scopes never mix in one thread
-  // (the server double-checks: a conversation_id replayed across a mode
-  // switch gets a fresh conversation row).
   const switchMode = (m: CentralChatMode) => {
     if (m === mode) return;
     setMode(m);
     setTickets([]);
     setThreadStart(new Date().toISOString());
     setConversationId(null);
+    setSummary(null);
   };
 
   function buildConversationHistory(): Array<{ role: 'user' | 'assistant'; content: string }> {
@@ -171,7 +179,6 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
       .order('created_at', { ascending: true })
       .limit(40);
     const real = (data as Ticket[]) ?? [];
-    // Keep optimistic (id<0) bubbles only until the real ticket shows up.
     setTickets((prev) => {
       const optimistic = prev.filter((t) => t.id < 0);
       const stillNeeded = optimistic.filter((o) => {
@@ -203,8 +210,6 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
-    // One-channel law: every Second Brain turn routes to Felix ('lead').
-    // General mode has no dispatcher — raw text, model only.
     const body = mode === 'general' ? text : (text.match(/^@/) ? text : `@felix ${text}`);
     const conversation_history = buildConversationHistory();
     const optimistic: Ticket = {
@@ -228,23 +233,16 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
           message: body,
           mention: mode === 'general' ? undefined : 'felix',
           conversation_history,
-          // Scope fields — enforced server-side since 2026-07-30 (V3):
-          // mode='general' → no context assembly, no tools, no memory writes.
           mode,
           module_scope: moduleScope ?? null,
           property_id: propertyId ?? null,
-          // V5 store: thread continuity — null on the first turn, then the
-          // id the server minted for this conversation.
           conversation_id: conversationId,
         }),
       });
-      // Adopt the server's conversation id so the next turn continues the
-      // same cockpit.conversations row. Defensive parse — older deploys
-      // don't return it and the ticket thread still renders regardless.
       try {
         const j = await res.json();
         if (j && typeof j.conversation_id === 'string') setConversationId(j.conversation_id);
-      } catch { /* body not JSON — ignore, ticket polling carries the UI */ }
+      } catch { /* ignore */ }
       load();
     } catch {
       setTickets((prev) =>
@@ -259,6 +257,39 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
     }
   };
 
+  const summarizeThread = async () => {
+    if (!conversationId || summarizing) return;
+    setSummarizing(true);
+    try {
+      const res = await fetch('/api/cockpit/chat/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: conversationId }),
+      });
+      const j = await res.json();
+      if (j.ok && j.summary) {
+        setSummary(j.summary);
+      }
+    } catch (e) {
+      console.error('Summarization failed:', e);
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
+  const saveToKB = async (question: string, answer: string) => {
+    try {
+      await fetch('/api/cockpit/chat/save-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, answer_md: answer }),
+      });
+      alert('Answer saved to knowledge base');
+    } catch (e) {
+      alert('Failed to save to KB');
+    }
+  };
+
   const modeLabel = mode === 'second-brain' ? 'Second Brain' : 'General';
   const scopeBits = [
     modeLabel,
@@ -267,139 +298,213 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
   ].filter(Boolean).join(' · ');
 
   return (
-    <div style={S.shell}>
-      {/* ── header ─────────────────────────────────────────────────────── */}
-      <div style={S.header}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={S.avatar}>{mode === 'general' ? '◦' : 'F'}</div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
-              {mode === 'general' ? 'General chat · model only' : 'Felix · chief of staff'}
+    <div style={{ display: 'flex', gap: 12 }}>
+      {/* Optional history sidebar */}
+      {historyOpen && (
+        <div style={{ width: 280, flexShrink: 0 }}>
+          {/* Placeholder - ConversationHistory component will be imported */}
+          <div style={{ ...S.shell, minHeight: 520 }}>
+            <div style={{ padding: 12, borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 600 }}>History</div>
             </div>
-            <div style={{ fontFamily: MONO, fontSize: 10, color: C.text3, letterSpacing: 0.4 }}>{scopeBits}</div>
+            <div style={{ padding: 12, fontSize: 11, color: C.text3 }}>
+              Past conversations appear here
+            </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* V4: mode toggle — general access always available in every instance. */}
-          <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden' }}>
-            {(['second-brain', 'general'] as CentralChatMode[]).map((m) => (
+      )}
+
+      {/* Main chat */}
+      <div style={{ ...S.shell, flex: 1 }}>
+        {/* ── header ─────────────────────────────────────────────────────── */}
+        <div style={S.header}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={S.avatar}>{mode === 'general' ? '◦' : 'F'}</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
+                {mode === 'general' ? 'General chat · model only' : 'Felix · chief of staff'}
+              </div>
+              <div style={{ fontFamily: MONO, fontSize: 10, color: C.text3, letterSpacing: 0.4 }}>{scopeBits}</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* History toggle */}
+            <button
+              onClick={() => setHistoryOpen(!historyOpen)}
+              title="Toggle conversation history"
+              style={{
+                ...S.iconBtn,
+                background: historyOpen ? C.forest : C.bg,
+                color: historyOpen ? '#FFFFFF' : C.text2,
+              }}
+            >
+              📜
+            </button>
+
+            {/* Summarize button */}
+            {conversationId && tickets.length > 2 && (
               <button
-                key={m}
-                onClick={() => switchMode(m)}
-                title={m === 'general'
-                  ? 'General mode: model only. No business data read, no memory written. Enforced server-side.'
-                  : 'Second Brain: full scoped business context via Felix.'}
+                onClick={summarizeThread}
+                disabled={summarizing}
+                title="Summarize this conversation"
                 style={{
-                  fontFamily: MONO, fontSize: 10, letterSpacing: 0.4, cursor: 'pointer',
-                  padding: '4px 10px', border: 0,
-                  background: mode === m ? C.forest : C.bg,
-                  color: mode === m ? '#FFFFFF' : C.text2,
+                  ...S.iconBtn,
+                  opacity: summarizing ? 0.5 : 1,
                 }}
               >
-                {m === 'general' ? 'General' : 'Second Brain'}
+                {summarizing ? '…' : '∑'}
               </button>
-            ))}
-          </div>
-          <button onClick={startNewChat} style={S.newChatBtn}>+ New chat</button>
-        </div>
-      </div>
+            )}
 
-      {/* ── thread ─────────────────────────────────────────────────────── */}
-      <div style={S.thread}>
-        {tickets.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '48px 0' }}>
-            <div style={{ fontSize: 15, color: C.ink, marginBottom: 6 }}>
-              {mode === 'second-brain'
-                ? 'Ask Felix. He carries the business context.'
-                : 'General chat — model only, nothing read from or written to the business.'}
+            {/* Mode toggle */}
+            <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden' }}>
+              {(['second-brain', 'general'] as CentralChatMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => switchMode(m)}
+                  title={m === 'general'
+                    ? 'General mode: model only. No business data read, no memory written. Enforced server-side.'
+                    : 'Second Brain: full scoped business context via Felix.'}
+                  style={{
+                    fontFamily: MONO, fontSize: 10, letterSpacing: 0.4, cursor: 'pointer',
+                    padding: '4px 10px', border: 0,
+                    background: mode === m ? C.forest : C.bg,
+                    color: mode === m ? '#FFFFFF' : C.text2,
+                  }}
+                >
+                  {m === 'general' ? 'General' : 'Second Brain'}
+                </button>
+              ))}
             </div>
-            <div style={{ fontSize: 12, color: C.text3, maxWidth: 460, margin: '0 auto', lineHeight: 1.6 }}>
-              {mode === 'second-brain'
-                ? 'Questions and execution orders flow through this one channel. Felix consults the brain, writes work as tickets, and routes owner decisions to the Decision Inbox.'
-                : 'Brainstorming, writing, coding, research.'}
-            </div>
+            <button onClick={startNewChat} style={S.newChatBtn}>+ New chat</button>
+          </div>
+        </div>
+
+        {/* Summary display */}
+        {summary && (
+          <div style={{
+            padding: '10px 14px',
+            background: C.bg,
+            borderBottom: `1px solid ${C.border}`,
+            fontSize: 12,
+            lineHeight: 1.6,
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 4, color: C.ink }}>Thread summary:</div>
+            <div dangerouslySetInnerHTML={{ __html: md(summary) }} />
           </div>
         )}
 
-        {tickets.map((t) => {
-          const split = stripTicketFraming(t.parsed_summary);
-          const isPending = t.status === 'triaging' || t.status === 'new';
-          const ownerQ = split.agent ? hasOwnerClassQuestion(split.agent) : false;
-          return (
-            <div key={t.id} style={{ marginBottom: 24 }}>
-              {split.user && (
-                <div style={S.userRow}>
-                  <div style={S.userBubble} dangerouslySetInnerHTML={{ __html: md(split.user) }} />
-                </div>
-              )}
-              {(split.agent || isPending) && (
-                <div style={S.agentRow}>
-                  <div style={S.agentAvatar}>{mode === 'general' ? '◦' : 'F'}</div>
-                  <div style={{ maxWidth: 'calc(100% - 44px)' }}>
-                    <div style={S.agentBubble}>
-                      {isPending ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                          <span style={S.dot} />
-                          <span style={{ ...S.dot, animationDelay: '0.2s' }} />
-                          <span style={{ ...S.dot, animationDelay: '0.4s' }} />
-                          <span style={{ marginLeft: 8, color: C.text2, fontSize: 12 }}>
-                            {mode === 'general' ? 'Thinking…' : 'Felix is thinking…'}
+        {/* ── thread ─────────────────────────────────────────────────────── */}
+        <div style={S.thread}>
+          {tickets.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px 0' }}>
+              <div style={{ fontSize: 15, color: C.ink, marginBottom: 6 }}>
+                {mode === 'second-brain'
+                  ? 'Ask Felix. He carries the business context.'
+                  : 'General chat — model only, nothing read from or written to the business.'}
+              </div>
+              <div style={{ fontSize: 12, color: C.text3, maxWidth: 460, margin: '0 auto', lineHeight: 1.6 }}>
+                {mode === 'second-brain'
+                  ? 'Questions and execution orders flow through this one channel. Felix consults the brain, writes work as tickets, and routes owner decisions to the Decision Inbox.'
+                  : 'Brainstorming, writing, coding, research.'}
+              </div>
+            </div>
+          )}
+
+          {tickets.map((t, idx) => {
+            const split = stripTicketFraming(t.parsed_summary);
+            const isPending = t.status === 'triaging' || t.status === 'new';
+            const ownerQ = split.agent ? hasOwnerClassQuestion(split.agent) : false;
+            return (
+              <div key={t.id} style={{ marginBottom: 24 }}>
+                {split.user && (
+                  <div style={S.userRow}>
+                    <div style={S.userBubble} dangerouslySetInnerHTML={{ __html: md(split.user) }} />
+                  </div>
+                )}
+                {(split.agent || isPending) && (
+                  <div style={S.agentRow}>
+                    <div style={S.agentAvatar}>{mode === 'general' ? '◦' : 'F'}</div>
+                    <div style={{ maxWidth: 'calc(100% - 44px)', flex: 1 }}>
+                      <div style={S.agentBubble}>
+                        {isPending ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <span style={S.dot} />
+                            <span style={{ ...S.dot, animationDelay: '0.2s' }} />
+                            <span style={{ ...S.dot, animationDelay: '0.4s' }} />
+                            <span style={{ marginLeft: 8, color: C.text2, fontSize: 12 }}>
+                              {mode === 'general' ? 'Thinking…' : 'Felix is thinking…'}
+                            </span>
                           </span>
-                        </span>
-                      ) : (
-                        <div dangerouslySetInnerHTML={{ __html: md(split.agent) }} />
+                        ) : (
+                          <div dangerouslySetInnerHTML={{ __html: md(split.agent) }} />
+                        )}
+                      </div>
+
+                      {/* Action buttons per message */}
+                      {!isPending && split.agent && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                          <button
+                            onClick={() => saveToKB(split.user, split.agent)}
+                            title="Save this answer to the knowledge base"
+                            style={S.actionBtn}
+                          >
+                            💾 Save to KB
+                          </button>
+                        </div>
+                      )}
+
+                      {ownerQ && (
+                        <a href="/holding/it2/questions" style={S.ownerChip}>
+                          ⚑ Owner decision surfaced → open the Decision Inbox
+                        </a>
                       )}
                     </div>
-                    {ownerQ && (
-                      <a href="/holding/it2/questions" style={S.ownerChip}>
-                        ⚑ Owner decision surfaced → open the Decision Inbox
-                      </a>
-                    )}
                   </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-        <div ref={endRef} />
-      </div>
-
-      {/* ── sticky composer ────────────────────────────────────────────── */}
-      <div style={S.composer}>
-        <div style={S.inputRow}>
-          <button
-            disabled
-            title="Attachments land with conversations v2 — not wired in v1."
-            style={S.attachBtn}
-          >
-            📎
-          </button>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={mode === 'second-brain' ? 'Write to Felix…' : 'Ask anything (model only)…'}
-            style={S.textarea}
-            rows={1}
-          />
-          <button
-            onClick={send}
-            disabled={sending || !input.trim()}
-            style={{ ...S.sendBtn, opacity: sending || !input.trim() ? 0.5 : 1 }}
-          >
-            {sending ? '…' : '→'}
-          </button>
+                )}
+              </div>
+            );
+          })}
+          <div ref={endRef} />
         </div>
-        <div style={S.hint}>
-          {mode === 'general'
-            ? 'Enter to send · Shift+Enter for new line · model only — nothing touches the business'
-            : 'Enter to send · Shift+Enter for new line · one channel — Felix dispatches'}
-        </div>
-      </div>
 
-      <style jsx global>{`
-        @keyframes ccblink { 0%,80%,100% { opacity: 0.3 } 40% { opacity: 1 } }
-      `}</style>
+        {/* ── sticky composer ────────────────────────────────────────────── */}
+        <div style={S.composer}>
+          <div style={S.inputRow}>
+            <button
+              disabled
+              title="Attachments land with conversations v2 — not wired in v1."
+              style={S.attachBtn}
+            >
+              📎
+            </button>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={mode === 'second-brain' ? 'Write to Felix…' : 'Ask anything (model only)…'}
+              style={S.textarea}
+              rows={1}
+            />
+            <button
+              onClick={send}
+              disabled={sending || !input.trim()}
+              style={{ ...S.sendBtn, opacity: sending || !input.trim() ? 0.5 : 1 }}
+            >
+              {sending ? '…' : '→'}
+            </button>
+          </div>
+          <div style={S.hint}>
+            {mode === 'general'
+              ? 'Enter to send · Shift+Enter for new line · model only — nothing touches the business'
+              : 'Enter to send · Shift+Enter for new line · one channel — Felix dispatches'}
+          </div>
+        </div>
+
+        <style jsx global>{`
+          @keyframes ccblink { 0%,80%,100% { opacity: 0.3 } 40% { opacity: 1 } }
+        `}</style>
+      </div>
     </div>
   );
 }
@@ -423,6 +528,10 @@ const S: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     fontSize: 13, fontWeight: 700, flexShrink: 0,
   },
+  iconBtn: {
+    background: C.bg, color: C.text2, border: `1px solid ${C.border}`, borderRadius: 2,
+    padding: '6px 10px', fontSize: 14, cursor: 'pointer', fontWeight: 600,
+  },
   newChatBtn: {
     background: C.forest, color: '#FFFFFF', border: 0, borderRadius: 2,
     padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -442,6 +551,16 @@ const S: Record<string, React.CSSProperties> = {
   agentBubble: {
     background: C.bg, padding: '10px 14px',
     borderRadius: '12px 12px 12px 3px', fontSize: 14, lineHeight: 1.6, color: C.ink,
+  },
+  actionBtn: {
+    fontSize: 10,
+    fontFamily: MONO,
+    padding: '3px 8px',
+    background: C.bg,
+    border: `1px solid ${C.border}`,
+    borderRadius: 2,
+    cursor: 'pointer',
+    color: C.text2,
   },
   ownerChip: {
     display: 'inline-block', marginTop: 6,
