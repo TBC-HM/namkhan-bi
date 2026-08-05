@@ -396,6 +396,14 @@ const REVENUE_CFG: DeptCfg = {
     { label: 'Demand & Pace',   href: '/revenue/demand'   },
     { label: 'Performance',     href: '/revenue/rooms'    },
     { label: 'Market & Control',href: '/revenue/compset'  },
+    // PBS 2026-08-04 (brief revenue-module-v1, owner answer to open_question):
+    // Rate Desk = the rate-action cockpit (pace board · action queue · compset ·
+    // decision ledger) at app/h/[property_id]/revenue/cockpit. Stored Namkhan-
+    // anchored on purpose: rewriteSubPagesForProperty swaps /h/260955 → the
+    // active property (same pattern as Reports), and Namkhan renders it as-is.
+    // NOT '/revenue/cockpit' — that legacy unprefixed URL renders the engine
+    // DeptCockpit (a different, URL-only surface), not the Rate Desk.
+    { label: 'Rate Desk',       href: '/h/260955/revenue/cockpit' },
   ],
   quickChips: [
     { label: 'Pulse',    href: '/revenue/pulse'    },
