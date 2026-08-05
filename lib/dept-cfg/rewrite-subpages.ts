@@ -28,6 +28,7 @@ const PROPERTY_SCOPED_HREFS: ReadonlySet<string> = new Set([
   '/revenue/briefing',       // PBS 2026-07-15 — guardrail inbox · property-scoped mount below
   '/revenue/pickup',         // pickup matrix · property-aware
   '/revenue/rooms',          // rooms intelligence · registry-driven
+  '/revenue/forecast',       // PBS 2026-08-05 — forecasting module · property-scoped
   '/finance',
   '/sales',
   '/marketing',
