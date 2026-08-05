@@ -1,5 +1,5 @@
 // app/holding/settings/_components/tabs.ts
-// ADR-237 (finding #75) — ONE definition of the holding settings tab bar.
+// ADR-237 (finding #78) — ONE definition of the holding settings tab bar.
 //
 // WHY: this array was hand-copied into 6 page files (page, brain, documents, guardrails,
 // integrations, media). They had already DRIFTED: guardrails/, documents/ and media/ listed
