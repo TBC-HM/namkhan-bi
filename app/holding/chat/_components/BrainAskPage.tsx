@@ -31,7 +31,7 @@ function renderAnswer(md: string): JSX.Element[] {
 
 interface Props {
   initialQuestion: string;
-  propertyId: number | null;
+  propertyId: number;   // ADR-238: 0 = holding, never null-means-everything
   dept: string;
 }
 
@@ -85,7 +85,7 @@ export default function BrainAskPage({ initialQuestion, propertyId, dept }: Prop
         <span style={{ fontSize: 20 }}>🧠</span>
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>Company Brain {deptLabel}</div>
-          <div style={{ fontSize: 11, opacity: 0.75, fontFamily: MONO }}>Document search · contracts · SOPs · certifications · property_id={propertyId ?? 'holding'}</div>
+          <div style={{ fontSize: 11, opacity: 0.75, fontFamily: MONO }}>Document search · contracts · SOPs · certifications · scope={propertyId === 0 ? 'holding' : propertyId === -1 ? 'ALL properties' : `property ${propertyId}`}</div>
         </div>
         <a href="javascript:history.back()" style={{ marginLeft: 'auto', fontSize: 12, color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>← Back</a>
       </div>
@@ -139,7 +139,7 @@ export default function BrainAskPage({ initialQuestion, propertyId, dept }: Prop
             )}
             {!answer.startsWith('Error:') && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #E6DFCC' }}>
-                <AskFeedback question={question} answer={answer} sources={sources} />
+                <AskFeedback question={question} answer={answer} sources={sources} propertyId={propertyId} />
               </div>
             )}
           </div>
