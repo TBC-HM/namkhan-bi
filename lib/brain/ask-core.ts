@@ -78,18 +78,35 @@ export const SCOPE_CFG: Record<Exclude<BrainScope, 'all'>, { kinds: string[] | n
   },
 };
 
+// ADR-238 (finding #79) — BRAIN SCOPE IS DEFAULT-DENY.
+// The SQL functions treat p_property_id IS NULL as "no filter at all" — every hotel, every doc.
+// This file used to pass `propertyId ?? null` straight through, so an absent property_id silently
+// widened the query to all three brains, while three branches BELOW already read a missing
+// propertyId as "holding". The same null meant two opposite things in one request.
+// Now: a missing scope resolves to HOLDING (0), never to everything. Cross-property retrieval is
+// still possible but must be asked for by name, with BRAIN_ALL_PROPERTIES.
+export const BRAIN_ALL_PROPERTIES = -1;
+
+/** App scope -> SQL p_property_id. null/undefined => holding (0). -1 => every property. */
+function toSqlScope(propertyId?: number | null): number | null {
+  if (propertyId === BRAIN_ALL_PROPERTIES) return null; // explicit, deliberate cross-property read
+  if (propertyId == null) return 0;                     // default-deny: holding corpus only
+  return propertyId;
+}
+
 export async function brainRetrieve(question: string, tier: BrainTier, qVec?: number[] | null, scope: BrainScope = 'all', propertyId?: number | null): Promise<BrainHit[]> {
   const sb = getSupabaseAdmin();
+  const pid = toSqlScope(propertyId);   // ADR-238
   const kinds = scope === 'all' ? null : SCOPE_CFG[scope].kinds;
   const { data: ftsHits, error } = await sb.rpc('fn_brain_search', {
-    p_q: question, p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds, p_property_id: propertyId ?? null,
+    p_q: question, p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds, p_property_id: pid,
   });
   if (error) throw new Error('fn_brain_search: ' + error.message);
   const hits = (ftsHits ?? []) as BrainHit[];
   try {
     if (qVec) {
       const { data: vecHits } = await sb.rpc('fn_brain_search_vec', {
-        p_embedding: JSON.stringify(qVec), p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds, p_property_id: propertyId ?? null,
+        p_embedding: JSON.stringify(qVec), p_max_sensitivity: tier, p_limit: TOP_K, p_doc_kinds: kinds, p_property_id: pid,
       });
       const seen = new Set(hits.map(h => h.chunk_id));
       for (const h of (vecHits ?? []) as BrainHit[]) {
@@ -117,43 +134,44 @@ const AGENT_INTENT_RE = /\b(agents?|cron|schedul\w*|workflow|loop|felix|vector|l
 
 export async function brainAsk(question: string, tier: BrainTier, scope: BrainScope = 'all', propertyId?: number | null): Promise<AskResult> {
   const sb = getSupabaseAdmin();
+  const pid = toSqlScope(propertyId);   // ADR-238 — resolve ONCE, use everywhere below
 
   let qVec: number[] | null = null;
   try { const v = await embedTexts([question]); qVec = v?.[0] ?? null; } catch { /* fts-only */ }
 
   const [hits, verifiedRes, registryRes, hrRes, sopRes, opsRes, platformRes, agentsRes] = await Promise.all([
-    brainRetrieve(question, tier, qVec, scope, propertyId),
+    brainRetrieve(question, tier, qVec, scope, pid),
     sb.rpc('fn_brain_verified_search', {
       p_q: question, p_embedding: qVec ? JSON.stringify(qVec) : null,
       p_max_sensitivity: tier, p_limit: 3,
     }),
     scope === 'sops'
       ? Promise.resolve({ data: [] })
-      : sb.rpc('fn_brain_docfind', { p_q: question, p_max_sensitivity: tier, p_limit: 12, p_property_id: propertyId ?? null }),
+      : sb.rpc('fn_brain_docfind', { p_q: question, p_max_sensitivity: tier, p_limit: 12, p_property_id: pid }),
     // BRAIN v5: live structured HR source — SQL-gated to owner tiers, returns {} below.
     // Fetched fresh per question; NEVER chunked, embedded, or preserved.
-    sb.rpc('fn_brain_hr_context', { p_q: question, p_max_sensitivity: tier, p_property_id: propertyId ?? null }),
+    sb.rpc('fn_brain_hr_context', { p_q: question, p_max_sensitivity: tier, p_property_id: pid }),
     // BRAIN v6: live structured SOPs (knowledge.sop_content) — SOP scope only
     scope === 'sops'
       ? sb.rpc('fn_brain_sop_search', { p_q: question, p_limit: 5 })
       : Promise.resolve({ data: [] }),
     // BRAIN v7: ops live-data router v1 — KPIs (occ/ADR/RevPAR/revenue) from the
     // same canonical views the dashboards use, fetched live, never stored.
-    sb.rpc('fn_brain_ops_context', { p_q: question, p_max_sensitivity: tier, p_property_id: propertyId ?? null }),
+    sb.rpc('fn_brain_ops_context', { p_q: question, p_max_sensitivity: tier, p_property_id: pid }),
     // BRAIN v8: platform knowledge — docs/briefs/rules/ADRs. Owner tier only.
-    tier === 'owner_only' && (propertyId === 0 || propertyId == null)
+    tier === 'owner_only' && pid === 0
       ? sb.rpc('fn_brain_platform_search', { p_q: question, p_limit: 8 })
       : Promise.resolve({ data: [] }),
     // BRAIN v8b: live agent roster + cron schedules. Owner tier + agent-intent only.
-    tier === 'owner_only' && AGENT_INTENT_RE.test(question) && (propertyId === 0 || propertyId == null)
+    tier === 'owner_only' && AGENT_INTENT_RE.test(question) && pid === 0
       ? sb.rpc('fn_brain_agents_context')
       : Promise.resolve({ data: null }),
     // Tenant knowledge docs — property-scoped judgment MDs (approved only)
-    propertyId != null && propertyId > 0
-      ? sb.rpc('fn_brain_tenant_knowledge', { p_q: question, p_property_id: propertyId })
+    pid != null && pid > 0
+      ? sb.rpc('fn_brain_tenant_knowledge', { p_q: question, p_property_id: pid })
       : Promise.resolve({ data: null }),
     // Skills directory — holding brain only
-    propertyId === 0 || propertyId == null
+    pid === 0
       ? sb.rpc('fn_brain_skills_context', { p_q: question, p_limit: 12 })
       : Promise.resolve({ data: null }),
   ]);
