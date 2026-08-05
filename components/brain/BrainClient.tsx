@@ -246,7 +246,7 @@ export default function BrainClient({ propertyId }: { propertyId?: number | null
               </div>
             ) : null}
             {!answer.startsWith('Error:') && !usedHr ? (
-              <AskFeedback question={question} answer={answer} sources={sources} />
+              <AskFeedback question={question} answer={answer} sources={sources} propertyId={propertyId ?? 0} />
             ) : null}
             {usedHr ? (
               <div style={{ marginTop: 8, fontSize: 11.5, opacity: 0.6 }}>
