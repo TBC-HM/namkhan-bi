@@ -19,8 +19,12 @@ const box: React.CSSProperties = {
 };
 const btn: React.CSSProperties = { ...box, cursor: 'pointer', padding: '5px 11px' };
 
-export default function AskFeedback({ question, answer, sources }: {
-  question: string; answer: string; sources: Source[];
+// ADR-238 (finding #79): propertyId is REQUIRED, not optional. The document picker below queries
+// the registry, and an omitted scope used to mean "every hotel". Making it required means the
+// compiler — not a reviewer — catches a caller that forgets which brain it is standing in.
+// 0 = holding · 260955 = Namkhan · 1000001 = Donna · -1 = every property, deliberately.
+export default function AskFeedback({ question, answer, sources, propertyId }: {
+  question: string; answer: string; sources: Source[]; propertyId: number;
 }) {
   const [mode, setMode] = useState<'idle' | 'edit' | 'teach'>('idle');
   const [editText, setEditText] = useState(answer);
@@ -57,11 +61,14 @@ export default function AskFeedback({ question, answer, sources }: {
     setTeachQ(q);
     if (q.trim().length < 3) { setFound([]); return; }
     try {
-      const res = await fetch('/api/brain/docfind?q=' + encodeURIComponent(q), { cache: 'no-store' });
+      const res = await fetch(
+        '/api/brain/docfind?q=' + encodeURIComponent(q) + '&pid=' + propertyId,
+        { cache: 'no-store' },
+      );
       const j = await res.json();
       if (j.ok) setFound((j.docs ?? []) as FoundDoc[]);
     } catch { /* noop */ }
-  }, []);
+  }, [propertyId]);
 
   const teach = useCallback(async () => {
     const ids = Object.keys(picked);
