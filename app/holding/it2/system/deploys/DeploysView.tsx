@@ -31,12 +31,16 @@ interface RouteCheck {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// ADR-231 (finding #69): three of the five probes could never pass.
+// /hotel/dashboard and /hotel/revenue — there is no app/hotel directory and never was;
+// tenant routes are /h/[property_id]/*. /holding/it/cockpit is the tree retired by ADR-215.
+// Two permanent red 404s train the owner to ignore the whole panel.
 const SMOKE_ROUTES = [
   '/api/health',
   '/api/cockpit-v2/health',
-  '/holding/it/cockpit',
-  '/hotel/dashboard',
-  '/hotel/revenue',
+  '/holding/it2',
+  '/h/260955/revenue',
+  '/h/260955/settings/property',
 ];
 
 const POLL_MS = 60_000;
