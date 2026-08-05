@@ -153,7 +153,12 @@ async function main() {
   const claim = await rpc('fn_builder_claim', {
     p_slug: BRIEF_SLUG,
     p_worker_id: WORKER,
-    p_lease_seconds: 900,
+    // ADR-229: lease MUST exceed the workflow timeout (brief-builder.yml: 75 min).
+    // At 900s a run was stealable 15 min in while still executing, so every later
+    // dispatch re-claimed the SAME brief and burned another full paid session.
+    // Measured 2026-08-05: fb_menu_module-owner-findings-v1 claimed 7x by 7 workers
+    // in 5.5h; 55 builder sessions in 3h; ~EUR430 + a prior grant with $2.23 recorded.
+    p_lease_seconds: 5400,
   });
   if (!claim?.ok) {
     console.log('brief already claimed — exiting clean:', JSON.stringify(claim));
