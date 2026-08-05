@@ -2,12 +2,24 @@
 // Shared question-and-multiple-choice panel for needs_human / needs_input surfaces.
 // Used on: bugs board, briefs pages, specs page cards.
 // On click → POST to answerUrl → calls toast → parent refreshes row.
+//
+// ADR-223 (2026-08-05): options are now accepted as EITHER {label, consequence}
+// objects OR plain strings. A question written with string options used to render
+// buttons whose label was undefined, so the POST body lost `choice` and the API
+// answered 400 "bug_id and choice required" — the question looked answerable and
+// silently was not. A malformed question must degrade to a usable button, never to
+// a dead form. Empty/missing options now say so instead of rendering nothing.
 
 import { useState } from 'react';
 
+export type QuestionOption = { label: string; consequence?: string; recommended?: boolean };
+export type RawOption = QuestionOption | string;
+
 export interface OpenQuestion {
-  question: string;
-  options: Array<{ label: string; consequence: string; recommended?: boolean }>;
+  question?: string;
+  /** Older rows used `context` for the question text. */
+  context?: string;
+  options: RawOption[];
   asked_by?: string;
   asked_at?: string;
 }
@@ -21,16 +33,31 @@ interface Props {
   compact?: boolean;
 }
 
+/** Normalise string|object options into a single shape. Drops anything unusable. */
+export function normaliseOptions(raw: RawOption[] | undefined | null): QuestionOption[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((o): QuestionOption | null => {
+      if (typeof o === 'string') return o.trim() ? { label: o.trim() } : null;
+      if (o && typeof o === 'object' && typeof o.label === 'string' && o.label.trim()) {
+        return { label: o.label.trim(), consequence: o.consequence, recommended: o.recommended };
+      }
+      return null;
+    })
+    .filter((o): o is QuestionOption => o !== null);
+}
+
 export default function QuestionPanel({ question, answerUrl, answerBody, onAnswered, compact }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Recommended option first
-  const opts = [...question.options].sort((a, b) =>
-    (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0)
+  const text = question.question ?? question.context ?? 'A decision is needed (no question text was filed).';
+  const opts = normaliseOptions(question.options).sort(
+    (a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0)
   );
 
   async function choose(label: string) {
+    if (!label) { setErr('This option has no value — agent filed a malformed question.'); return; }
     setBusy(true);
     setErr(null);
     try {
@@ -63,40 +90,49 @@ export default function QuestionPanel({ question, answerUrl, answerBody, onAnswe
         <span style={{ fontSize: 14 }}>❓</span>
         <div>
           <div style={{ fontWeight: 600, fontSize: compact ? 12 : 13, color: '#1B1B1B', lineHeight: 1.4 }}>
-            {question.question}
+            {text}
           </div>
           {question.asked_by && (
             <div style={{ fontSize: 10, color: '#8A8A8A', marginTop: 2 }}>
               asked by {question.asked_by}
-              {question.asked_at ? ` · ${new Date(question.asked_at).toLocaleDateString()}` : ''}
+              {question.asked_at ? ` · ${new Date(question.asked_at).toLocaleDateString('en-GB', { timeZone: 'UTC' })}` : ''}
             </div>
           )}
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {opts.map((opt) => (
-          <button
-            key={opt.label}
-            disabled={busy}
-            onClick={() => choose(opt.label)}
-            style={{
-              textAlign: 'left', padding: '8px 12px', borderRadius: 6, cursor: busy ? 'wait' : 'pointer',
-              border: opt.recommended ? '1.5px solid #084838' : '1px solid #E6DFCC',
-              background: opt.recommended ? '#084838' : '#FFFFFF',
-              color: opt.recommended ? '#FFFFFF' : '#1B1B1B',
-              opacity: busy ? 0.7 : 1,
-              display: 'block', width: '100%',
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: 12 }}>
-              {opt.recommended && '★ '}{opt.label}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
-              {opt.consequence}
-            </div>
-          </button>
-        ))}
-      </div>
+
+      {opts.length === 0 ? (
+        <div style={{ fontSize: 11, color: '#B04A2F', fontWeight: 600 }}>
+          ⚠ this question has no usable options — agent contract gap (law 735). Nothing to click.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {opts.map((opt) => (
+            <button
+              key={opt.label}
+              disabled={busy}
+              onClick={() => choose(opt.label)}
+              style={{
+                textAlign: 'left', padding: '8px 12px', borderRadius: 6, cursor: busy ? 'wait' : 'pointer',
+                border: opt.recommended ? '1.5px solid #084838' : '1px solid #E6DFCC',
+                background: opt.recommended ? '#084838' : '#FFFFFF',
+                color: opt.recommended ? '#FFFFFF' : '#1B1B1B',
+                opacity: busy ? 0.7 : 1,
+                display: 'block', width: '100%',
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 12 }}>
+                {opt.recommended && '★ '}{opt.label}
+              </div>
+              {opt.consequence && (
+                <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
+                  {opt.consequence}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
       {err && <div style={{ fontSize: 11, color: '#B04A2F', marginTop: 8 }}>{err}</div>}
     </div>
   );
