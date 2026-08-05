@@ -123,7 +123,12 @@ export function ActivityView({
       >
         <h2 style={{ fontFamily: SERIF, fontSize: 22, margin: 0 }}>Activity</h2>
         <div style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>
-          {events.length} events · refreshed {fmtAge(new Date(refreshedAt).toISOString())}
+          {/* ADR-231 (finding #71): refreshedAt starts at 0 and only moves after the first
+              30s poll, so new Date(0) rendered "1970-01-01" — the page never told PBS when
+              it actually refreshed. Server-rendered rows ARE fresh at mount; say that. */}
+          {events.length} events · {refreshedAt === 0
+            ? 'server-rendered · first poll in 30s'
+            : `refreshed ${fmtAge(new Date(refreshedAt).toISOString())}`}
           {pending && <span style={{ marginLeft: 6, color: TOKENS.sand }}>· refreshing…</span>}
         </div>
       </div>
