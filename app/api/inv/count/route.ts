@@ -31,7 +31,6 @@ interface CountInput {
 
 /** Deterministic uuid from a free-text name (md5, formatted as uuid). */
 function nameToUuid(name: string): string {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { createHash } = require('crypto') as typeof import('crypto');
   const h = createHash('md5').update(name.trim().toLowerCase()).digest('hex');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
