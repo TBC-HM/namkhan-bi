@@ -3040,3 +3040,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-05 — bug-agent · fix #164
 - # Bug #164 — Digital sub-strip (Web · Funnels · YouTube) missing  ## Root cause  `app/marketing/digital/page.tsx` renders the Digital hub page. It builds its `t
 - touched `app/marketing/digital/page.tsx`
+
+### 2026-08-05 — bug-agent · fix #167
+- ## Bug #167 — Marketing Content sub-navigation missing  ### Root Cause  `app/marketing/content/page.tsx` builds its `tabs` array from `MARKETING_SUBPAGES`, whic
+- touched `app/marketing/content/page.tsx`
