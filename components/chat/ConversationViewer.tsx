@@ -3,6 +3,7 @@
 // components/chat/ConversationViewer.tsx
 // Brief: central-chat-missing-ui-features (2026-08-05)
 // View a single conversation with all messages + model tier badges
+// Enhanced with: Summarize thread + Save to KB buttons
 
 import { useEffect, useState } from 'react';
 
@@ -43,6 +44,7 @@ type Conversation = {
   mode: string;
   module_scope: string | null;
   title: string | null;
+  summary_md: string | null;
   started_at: string;
   last_turn_at: string;
 };
@@ -81,30 +83,81 @@ export default function ConversationViewer({ conversationId }: ConversationViewe
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [savingToKB, setSavingToKB] = useState<number | null>(null);
+
+  const loadConversation = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/cockpit/chat?conversation_id=${conversationId}`, { cache: 'no-store' });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error ?? 'Failed to load conversation');
+        return;
+      }
+
+      setConversation(data.conversation);
+      setMessages(data.messages ?? []);
+      setSummary(data.conversation?.summary_md || null);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`/api/cockpit/chat?conversation_id=${conversationId}`, { cache: 'no-store' });
-        const data = await res.json();
-
-        if (!res.ok) {
-          setError(data.error ?? 'Failed to load conversation');
-          return;
-        }
-
-        setConversation(data.conversation);
-        setMessages(data.messages ?? []);
-        setError(null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    loadConversation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
+
+  const handleSummarize = async () => {
+    setSummarizing(true);
+    try {
+      const res = await fetch('/api/cockpit/chat/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: conversationId }),
+      });
+      const data = await res.json();
+      if (data.ok && data.summary) {
+        setSummary(data.summary);
+      } else {
+        alert('Failed to summarize: ' + (data.error || 'unknown'));
+      }
+    } catch (e) {
+      alert('Failed to summarize: ' + (e instanceof Error ? e.message : 'unknown'));
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
+  const handleSaveToKB = async (msgId: number, question: string, answer: string) => {
+    setSavingToKB(msgId);
+    try {
+      const res = await fetch('/api/cockpit/chat/save-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          answer_md: answer,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert('✓ Saved to knowledge base');
+      } else {
+        alert('Failed to save: ' + (data.error || 'unknown'));
+      }
+    } catch (e) {
+      alert('Failed to save: ' + (e instanceof Error ? e.message : 'unknown'));
+    } finally {
+      setSavingToKB(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -127,18 +180,48 @@ export default function ConversationViewer({ conversationId }: ConversationViewe
   return (
     <div style={S.container}>
       <div style={S.header}>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>{conversation.title || '(untitled)'}</div>
           <div style={{ fontFamily: MONO, fontSize: 10, color: C.text3, marginTop: 2 }}>
             {conversation.mode} · {conversation.module_scope || 'global'}
           </div>
         </div>
+        <button
+          onClick={handleSummarize}
+          disabled={summarizing}
+          style={{
+            background: summarizing ? C.border : C.forest,
+            color: '#FFFFFF',
+            border: 0,
+            borderRadius: 2,
+            padding: '6px 12px',
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: summarizing ? 'default' : 'pointer',
+            opacity: summarizing ? 0.6 : 1,
+          }}
+        >
+          {summarizing ? 'Summarizing...' : '✨ Summarize Thread'}
+        </button>
       </div>
 
+      {summary && (
+        <div style={S.summary}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.forest, marginBottom: 6, letterSpacing: 0.5 }}>
+            THREAD SUMMARY
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.6, color: C.ink, whiteSpace: 'pre-wrap' }}>
+            {summary}
+          </div>
+        </div>
+      )}
+
       <div style={S.thread}>
-        {messages.map((msg) => {
+        {messages.map((msg, idx) => {
           const isUser = msg.turn_role === 'user';
           const tierBadge = getTierBadge(msg.model_tier);
+          const prevMsg = idx > 0 ? messages[idx - 1] : null;
+          const userQuestion = prevMsg && prevMsg.turn_role === 'user' ? prevMsg.content_md : '';
 
           return (
             <div key={msg.id} style={{ marginBottom: 24 }}>
@@ -151,30 +234,49 @@ export default function ConversationViewer({ conversationId }: ConversationViewe
                   <div style={S.agentAvatar}>F</div>
                   <div style={{ maxWidth: 'calc(100% - 44px)' }}>
                     <div style={S.agentBubble} dangerouslySetInnerHTML={{ __html: md(msg.content_md) }} />
-                    {tierBadge && (
-                      <div
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      {tierBadge && (
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontFamily: MONO,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '3px 8px',
+                            background: 'rgba(0,0,0,0.03)',
+                            border: `1px solid ${C.border}`,
+                            borderRadius: 2,
+                          }}
+                        >
+                          <span>{tierBadge.emoji}</span>
+                          <span style={{ color: tierBadge.color, fontWeight: 600 }}>{tierBadge.label}</span>
+                          {msg.latency_ms && (
+                            <span style={{ color: C.text3, marginLeft: 4 }}>
+                              · {(msg.latency_ms / 1000).toFixed(1)}s
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleSaveToKB(msg.id, userQuestion, msg.content_md)}
+                        disabled={savingToKB === msg.id}
                         style={{
-                          marginTop: 6,
                           fontSize: 10,
                           fontFamily: MONO,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '3px 8px',
-                          background: 'rgba(0,0,0,0.03)',
+                          background: savingToKB === msg.id ? C.border : C.paper,
+                          color: savingToKB === msg.id ? C.text3 : C.forest,
                           border: `1px solid ${C.border}`,
                           borderRadius: 2,
+                          padding: '3px 8px',
+                          cursor: savingToKB === msg.id ? 'default' : 'pointer',
+                          fontWeight: 600,
                         }}
+                        title="Save this answer to the knowledge base as a verified answer"
                       >
-                        <span>{tierBadge.emoji}</span>
-                        <span style={{ color: tierBadge.color, fontWeight: 600 }}>{tierBadge.label}</span>
-                        {msg.latency_ms && (
-                          <span style={{ color: C.text3, marginLeft: 4 }}>
-                            · {(msg.latency_ms / 1000).toFixed(1)}s
-                          </span>
-                        )}
-                      </div>
-                    )}
+                        {savingToKB === msg.id ? 'Saving...' : '💾 Save to KB'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -202,6 +304,15 @@ const S: Record<string, React.CSSProperties> = {
   },
   header: {
     padding: '12px 16px',
+    borderBottom: `1px solid ${C.border}`,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  summary: {
+    padding: '12px 16px',
+    background: C.bg,
     borderBottom: `1px solid ${C.border}`,
     flexShrink: 0,
   },
