@@ -1,5 +1,5 @@
 # Disaster Recovery - nightly off-site backup + proven-restore drill
-# Build round: testing §0.V2 fix (drill results-INSERT via stdin for psql interpolation)
+# Build round 5: testing psql stdin fix after verifier objection §0.V2
 #
 # Runs on GitHub Actions deliberately: an independent failure domain from both
 # Supabase and Vercel. A backup job hosted inside the system it protects dies with it.
