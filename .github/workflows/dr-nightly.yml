@@ -1,4 +1,5 @@
 # Disaster Recovery - nightly off-site backup + proven-restore drill
+# Build round: testing §0.V2 fix (drill results-INSERT via stdin for psql interpolation)
 #
 # Runs on GitHub Actions deliberately: an independent failure domain from both
 # Supabase and Vercel. A backup job hosted inside the system it protects dies with it.
@@ -142,8 +143,8 @@ jobs:
             --transfers 12 --checkers 24 --fast-list --stats-one-line
           N=$(rclone size "r2:${R2_BUCKET}/storage" --json | jq -r '.count')
           B=$(rclone size "r2:${R2_BUCKET}/storage" --json | jq -r '.bytes')
-          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, object_count, status) VALUES ($RID,'storage','storage/',${B},${N},'ok');"
-          echo "storage -> ${N} objects"
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, object_count, status) VALUES ($RID,'storage','storage/',$B,$N,'ok');"
+          echo "storage -> $N objects"
 
       - name: Report and view definitions
         id: ddl
@@ -158,7 +159,7 @@ jobs:
           KEY="ddl/${OUT}.gz"
           BYTES=$(stat -c%s "${OUT}.gz")
           rclone copyto "${OUT}.gz" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket
-          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id,data_class,object_key,bytes,status) VALUES ($RID,'ddl','${KEY}',${BYTES},'ok');"
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id,data_class,object_key,bytes,status) VALUES ($RID,'ddl','${KEY}',$BYTES,'ok');"
 
       - name: Settings, schedules and environment key names
         id: config
@@ -183,7 +184,7 @@ jobs:
           KEY="config/config-${DAY}.tar.gz"
           BYTES=$(stat -c%s "config-${DAY}.tar.gz")
           rclone copyto "config-${DAY}.tar.gz" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket
-          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id,data_class,object_key,bytes,status) VALUES ($RID,'config','${KEY}',${BYTES},'ok');"
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id,data_class,object_key,bytes,status) VALUES ($RID,'config','${KEY}',$BYTES,'ok');"
 
       - name: Credential inventory (names only)
         id: creds
@@ -200,7 +201,7 @@ jobs:
           KEY="credentials/${OUT}"
           BYTES=$(stat -c%s "$OUT")
           rclone copyto "$OUT" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket
-          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id,data_class,object_key,bytes,status) VALUES ($RID,'credentials','${KEY}',${BYTES},'ok');"
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id,data_class,object_key,bytes,status) VALUES ($RID,'credentials','${KEY}',$BYTES,'ok');"
 
       - name: Source code bundle
         id: code
@@ -218,7 +219,7 @@ jobs:
           KEY="code/repo-${DAY}.bundle"
           BYTES=$(stat -c%s "repo-${DAY}.bundle")
           rclone copyto "repo-${DAY}.bundle" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket
-          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id,data_class,object_key,bytes,status) VALUES ($RID,'code','${KEY}',${BYTES},'ok');"
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id,data_class,object_key,bytes,status) VALUES ($RID,'code','${KEY}',$BYTES,'ok');"
 
       - name: Build essentials archive
         continue-on-error: true
