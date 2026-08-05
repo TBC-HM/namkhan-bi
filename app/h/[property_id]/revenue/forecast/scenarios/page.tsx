@@ -45,7 +45,7 @@ async function getScenarios(pid: number): Promise<ScenarioDef[]> {
     .eq('active', true)
     .order('id');
   if (error) { console.error('[forecast] v_forecast_scenarios', error); return []; }
-  return (data ?? []) as ScenarioDef[];
+  return (data ?? []) as unknown as ScenarioDef[];
 }
 
 async function getLatestScenarioRuns(pid: number): Promise<Map<number, ScenarioRunRow>> {
