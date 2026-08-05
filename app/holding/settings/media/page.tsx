@@ -12,13 +12,7 @@ import Link from 'next/link';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const TABS = [
-  { key: 'back',       label: '← HoD',     href: '/holding'                     },
-  { key: 'platform',   label: 'Platform',   href: '/holding/settings'            },
-  { key: 'guardrails', label: 'Guardrails', href: '/holding/settings/guardrails' },
-  { key: 'documents',  label: 'Documents',  href: '/holding/settings/documents'  },
-  { key: 'media',      label: 'Media',      href: '/holding/settings/media', active: true },
-];
+import { settingsTabs } from '@/app/holding/settings/_components/tabs';
 
 async function fetchMediaStats() {
   const sb = getSupabaseAdmin();
@@ -38,7 +32,7 @@ export default async function HoldingMediaSettingsPage() {
     <DashboardPage
       title="Holding · Media"
       subtitle={`Global media QA rules · ${namingCount} naming conventions · ${rulesCount} active rules · upload for holding-wide assets`}
-      tabs={TABS}
+      tabs={settingsTabs('media')}
     >
       {/* Upload — holding-wide media assets */}
       <div style={{ gridColumn: '1 / -1' }}>
