@@ -9,13 +9,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const TABS = [
-  { key: 'back',       label: '← HoD',     href: '/holding'                     },
-  { key: 'platform',   label: 'Platform',   href: '/holding/settings'            },
-  { key: 'guardrails', label: 'Guardrails', href: '/holding/settings/guardrails', active: true },
-  { key: 'documents',  label: 'Documents',  href: '/holding/settings/documents'  },
-  { key: 'media',      label: 'Media',      href: '/holding/settings/media'      },
-];
+import { settingsTabs } from '@/app/holding/settings/_components/tabs';
 
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
 
@@ -48,7 +42,7 @@ export default async function HoldingGuardrailsPage() {
     <DashboardPage
       title="Holding · Guardrails"
       subtitle={`${rows.length} platform rules · ${holdingCount} holding-wide · ${propertyCount} property-specific · 9 domains`}
-      tabs={TABS}
+      tabs={settingsTabs('guardrails')}
     >
       {/* Summary */}
       <div style={{ gridColumn: '1 / -1' }}>
