@@ -24,10 +24,6 @@
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/api/cockpit/agent/run",
-      "schedule": "*/5 * * * *"
-    },
-    {
       "path": "/api/cron/briefing-evaluate",
       "schedule": "0 23 * * *"
     },
