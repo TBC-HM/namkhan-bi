@@ -1034,6 +1034,8 @@ const HOLDING_LEGAL_CFG: DeptCfg = {
   subPages: [
     { label: 'HoD',         href: '/holding/legal'           },
     { label: 'Contracts',   href: '/holding/legal/contracts' },
+    // ADR-241 (bug #173 / finding 101) — holding docs register hung as sub-stripe.
+    { label: 'Docs',        href: '/holding/legal/docs'      },
     { label: 'Legal · Lao', href: '/holding/legal/lao'       },
   ],
   quickChips: [],
