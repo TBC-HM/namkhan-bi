@@ -1,11 +1,12 @@
 /* eslint-disable @next/next/no-html-link-for-pages */
 'use client';
 // app/marketing/website/WebsiteManager.tsx
-// website-module-v1 P3+CMS-2 — client manager for the Website capability.
-// Pages table + page editor drawer (title/status/meta/note/BLOCKS/versions) + settings + publish.
+// website-module-v1 P3+CMS-2+CMS-3b — client manager for the Website capability.
+// Pages table + page editor drawer (title/status/meta/note/BLOCKS/versions) + settings + publish + translation.
 // All writes go through /api/website/*.
 import { useMemo, useState } from 'react';
 import BlockEditor from './_components/BlockEditor';
+import TranslationEditor from './_components/TranslationEditor';
 
 const HAIR = '#E6DFCC'; const INK = '#1B1B1B'; const INK_M = '#5A5A5A'; const INK_F = '#8A8A8A';
 const GREEN = '#2E7D32'; const AMBER = '#B8A878'; const RED = '#B8542A'; const BG = '#F4EFE2';
@@ -69,6 +70,8 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
   const [settings, setSettings] = useState<WebsiteSettingRow[]>(initial.settings);
   const [artifacts, setArtifacts] = useState<WebsiteArtifactRow[]>(initial.artifacts);
   const [selected, setSelected] = useState<WebsitePageRow | null>(null);
+  const [translating, setTranslating] = useState<WebsitePageRow | null>(null);
+  const [translatingSections, setTranslatingSections] = useState<WebsiteSectionRow[] | null>(null);
   const [sections, setSections] = useState<WebsiteSectionRow[] | null>(null);
   const [versions, setVersions] = useState<WebsitePageVersionRow[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -131,25 +134,44 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
     setMsg(null);
   }
 
+  async function openTranslator(p: WebsitePageRow) {
+    setTranslating(p);
+    setTranslatingSections(null);
+    try {
+      const r = await fetch(`/api/website/sections?page_id=${p.id}`);
+      if (!r.ok) throw new Error(`${r.status}`);
+      const j = await r.json();
+      setTranslatingSections(j.sections ?? []);
+    } catch (e) {
+      setMsg({ kind: 'err', text: `Load sections for translation failed: ${e}` });
+      setTranslatingSections([]);
+    }
+  }
+
+  function closeTranslator() {
+    setTranslating(null);
+    setTranslatingSections(null);
+  }
+
   async function savePage() {
     if (!selected) return;
     setBusy(true);
     setMsg(null);
+    const patch: Partial<WebsitePageRow> = { title: dTitle, status: dStatus as any, note: dNote };
+    if (dMetaTitle || dMetaDesc) {
+      patch.meta = { ...selected.meta, title: dMetaTitle, description: dMetaDesc };
+    }
     try {
-      const patch: Partial<WebsitePageRow> = {
-        title: dTitle || null,
-        status: dStatus as any,
-        note: dNote || '',
-        meta: { title: dMetaTitle || '', description: dMetaDesc || '' },
-      };
-      const r = await fetch('/api/website/pages', {
-        method: 'PATCH',
+      const r = await fetch('/api/website/pages/update', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ page_id: selected.id, patch }),
       });
       if (!r.ok) throw new Error(`${r.status}`);
-      const updated = await r.json();
+      const j = await r.json();
+      const updated = j.page;
       setPages((prev) => prev.map((p) => (p.id === selected.id ? { ...p, ...patch, updated_at: updated.updated_at } : p)));
+      setSelected((p) => (p ? { ...p, ...patch, updated_at: updated.updated_at } : null));
       setMsg({ kind: 'ok', text: 'Page saved' });
     } catch (e) {
       setMsg({ kind: 'err', text: `Save failed: ${e}` });
@@ -160,6 +182,7 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
 
   async function createVersion() {
     if (!selected) return;
+    if (!confirm('Create a new version snapshot of this page?')) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -169,28 +192,29 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
         body: JSON.stringify({ page_id: selected.id }),
       });
       if (!r.ok) throw new Error(`${r.status}`);
-      setMsg({ kind: 'ok', text: 'Version created' });
+      const j = await r.json();
+      setMsg({ kind: 'ok', text: `Version ${j.version.version} created` });
       await loadVersions(selected.id);
     } catch (e) {
-      setMsg({ kind: 'err', text: `Create version failed: ${e}` });
+      setMsg({ kind: 'err', text: `Version create failed: ${e}` });
     } finally {
       setBusy(false);
     }
   }
 
-  async function restoreVersion(versionId: number) {
+  async function restoreVersion(versionId: number, versionNum: number) {
     if (!selected) return;
-    if (!confirm('Restore this version? Current content will be replaced.')) return;
+    if (!confirm(`Restore page to version ${versionNum}? This will overwrite current page and sections.`)) return;
     setBusy(true);
     setMsg(null);
     try {
       const r = await fetch('/api/website/pages/versions/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version_id: versionId, restore_note: 'UI restore' }),
+        body: JSON.stringify({ version_id: versionId }),
       });
       if (!r.ok) throw new Error(`${r.status}`);
-      setMsg({ kind: 'ok', text: 'Version restored' });
+      setMsg({ kind: 'ok', text: `Restored to version ${versionNum}` });
       await loadSections(selected.id);
       await loadVersions(selected.id);
     } catch (e) {
@@ -290,6 +314,9 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
                 <button onClick={() => openEditor(p)} style={{ ...btnStyle, fontSize: 11.5, padding: '4px 10px' }}>
                   Edit
                 </button>
+                <button onClick={() => openTranslator(p)} style={{ ...btnStyle, fontSize: 11.5, padding: '4px 10px', marginLeft: 6 }}>
+                  Translate
+                </button>
               </td>
             </tr>
           ))}
@@ -343,8 +370,10 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
               .sort((a, b) => b.version - a.version)
               .map((a) => (
                 <tr key={a.id} style={{ background: '#FFFFFF' }}>
-                  <td style={cellStyle}>v{a.version}</td>
-                  <td style={cellStyle}>{a.kind}</td>
+                  <td style={cellStyle}>{a.version}</td>
+                  <td style={cellStyle}>
+                    <code style={{ fontSize: 11.5 }}>{a.kind}</code>
+                  </td>
                   <td style={cellStyle}>{fmtTs(a.created_at)}</td>
                   <td style={cellStyle}>{a.created_by ?? '—'}</td>
                 </tr>
@@ -354,123 +383,90 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
       </details>
 
       {selected && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            width: 800,
-            background: '#FFFFFF',
-            boxShadow: '-2px 0 20px rgba(0,0,0,0.15)',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${HAIR}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'fixed', top: 0, right: 0, width: '70%', maxWidth: 900, height: '100%', background: '#FFFFFF', boxShadow: '-2px 0 10px rgba(0,0,0,0.2)', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '12px 16px', borderBottom: `2px solid ${HAIR}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: BG }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: INK }}>Edit Page</div>
-              <div style={{ fontSize: 12, color: INK_M, marginTop: 2 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: INK }}>
                 <code>{selected.slug}</code>
-              </div>
+              </h3>
             </div>
             <button onClick={closeEditor} style={{ ...btnStyle, fontSize: 13, padding: '5px 12px' }}>
               Close
             </button>
           </div>
 
-          <div style={{ borderBottom: `1px solid ${HAIR}`, display: 'flex', gap: 2, padding: '0 20px' }}>
+          {msg && (
+            <div style={{ padding: 10, margin: 16, marginBottom: 0, fontSize: 13, borderRadius: 4, background: msg.kind === 'ok' ? '#E8F5E9' : '#FFEBEE', color: msg.kind === 'ok' ? GREEN : RED }}>
+              {msg.text}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${HAIR}`, padding: '0 16px' }}>
             {(['meta', 'blocks', 'versions'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 style={{
-                  padding: '10px 16px',
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: activeTab === tab ? `2px solid ${INK}` : '2px solid transparent',
-                  color: activeTab === tab ? INK : INK_M,
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.3,
+                  padding: '10px 16px', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  color: activeTab === tab ? GREEN : INK_M,
+                  borderBottom: activeTab === tab ? `2px solid ${GREEN}` : '2px solid transparent',
                 }}
               >
                 {tab}
-                {tab === 'blocks' && sections && ` (${sections.length})`}
-                {tab === 'versions' && versions && ` (${versions.length})`}
               </button>
             ))}
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
             {activeTab === 'meta' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>
-                    Title
-                  </label>
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>Title</label>
                   <input type="text" value={dTitle} onChange={(e) => setDTitle(e.target.value)} style={inputStyle} />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>
-                    Status
-                  </label>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>Status</label>
                   <select value={dStatus} onChange={(e) => setDStatus(e.target.value)} style={inputStyle}>
                     {PAGE_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
+                      <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>
-                    Meta Title
-                  </label>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>Note (internal)</label>
+                  <textarea value={dNote} onChange={(e) => setDNote(e.target.value)} style={taStyle} />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>Meta Title (SEO)</label>
                   <input type="text" value={dMetaTitle} onChange={(e) => setDMetaTitle(e.target.value)} style={inputStyle} />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>
-                    Meta Description
-                  </label>
-                  <textarea value={dMetaDesc} onChange={(e) => setDMetaDesc(e.target.value)} style={taStyle} rows={3} />
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>Meta Description (SEO)</label>
+                  <textarea value={dMetaDesc} onChange={(e) => setDMetaDesc(e.target.value)} style={taStyle} />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>
-                    Note
-                  </label>
-                  <textarea value={dNote} onChange={(e) => setDNote(e.target.value)} style={taStyle} rows={2} />
-                </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
-                  <button onClick={savePage} disabled={busy} style={{ ...btnStyle, background: GREEN, color: '#FFFFFF', borderColor: GREEN }}>
-                    {busy ? 'Saving…' : 'Save Page'}
-                  </button>
-                  <button onClick={closeEditor} style={btnStyle}>
-                    Cancel
-                  </button>
-                </div>
+                <button onClick={savePage} disabled={busy} style={{ ...btnStyle, background: GREEN, color: '#FFFFFF', borderColor: GREEN }}>
+                  {busy ? 'Saving…' : 'Save Page'}
+                </button>
               </div>
             )}
 
             {activeTab === 'blocks' && (
               <div>
                 {sections === null ? (
-                  <div style={{ fontSize: 13, color: INK_M }}>Loading blocks…</div>
+                  <div style={{ fontSize: 13, color: INK_M }}>Loading sections…</div>
+                ) : sections.length === 0 ? (
+                  <div style={{ fontSize: 13, color: INK_M }}>No sections yet.</div>
                 ) : (
                   <BlockEditor
                     pageId={selected.id}
-                    propertyId={initial.propertyId}
-                    blocks={sections}
-                    onBlocksChange={(updated) => {
+                    sections={sections}
+                    onUpdate={(updated) => {
                       setSections(updated);
                       setPages((prev) =>
                         prev.map((p) => (p.id === selected.id ? { ...p, updated_at: new Date().toISOString() } : p))
                       );
                     }}
-                    onMessage={(msg) => setMsg(msg)}
                   />
                 )}
               </div>
@@ -478,46 +474,47 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
 
             {activeTab === 'versions' && (
               <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: INK }}>
+                    Version History ({versions?.length ?? 0})
+                  </h4>
+                  <button onClick={createVersion} disabled={busy} style={btnStyle}>
+                    Create Snapshot
+                  </button>
+                </div>
                 {versions === null ? (
                   <div style={{ fontSize: 13, color: INK_M }}>Loading versions…</div>
+                ) : versions.length === 0 ? (
+                  <div style={{ fontSize: 13, color: INK_M }}>No versions yet.</div>
                 ) : (
-                  <div>
-                    <div style={{ marginBottom: 15 }}>
-                      <button onClick={createVersion} disabled={busy} style={{ ...btnStyle, background: AMBER, color: '#FFFFFF', borderColor: AMBER }}>
-                        {busy ? 'Creating…' : 'Create Version Snapshot'}
-                      </button>
-                    </div>
-                    {versions.length === 0 ? (
-                      <div style={{ fontSize: 13, color: INK_M }}>No versions yet. Create a snapshot to preserve the current state.</div>
-                    ) : (
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                        <thead>
-                          <tr>
-                            <th style={headStyle}>Version</th>
-                            <th style={headStyle}>Created</th>
-                            <th style={headStyle}>By</th>
-                            <th style={headStyle}>Note</th>
-                            <th style={headStyle}></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {versions.map((v) => (
-                            <tr key={v.id} style={{ background: '#FFFFFF' }}>
-                              <td style={cellStyle}>v{v.version}</td>
-                              <td style={cellStyle}>{fmtTs(v.created_at)}</td>
-                              <td style={cellStyle}>{v.created_by ?? '—'}</td>
-                              <td style={cellStyle}>{v.restore_note ?? '—'}</td>
-                              <td style={{ ...cellStyle, textAlign: 'right' }}>
-                                <button onClick={() => restoreVersion(v.id)} disabled={busy} style={{ ...btnStyle, fontSize: 11.5, padding: '4px 10px' }}>
-                                  Restore
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead>
+                      <tr>
+                        <th style={headStyle}>V</th>
+                        <th style={headStyle}>Created</th>
+                        <th style={headStyle}>By</th>
+                        <th style={headStyle}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {versions.map((v) => (
+                        <tr key={v.id} style={{ background: '#FFFFFF' }}>
+                          <td style={cellStyle}>{v.version}</td>
+                          <td style={cellStyle}>{fmtTs(v.created_at)}</td>
+                          <td style={cellStyle}>{v.created_by ?? '—'}</td>
+                          <td style={{ ...cellStyle, textAlign: 'right' }}>
+                            <button
+                              onClick={() => restoreVersion(v.id, v.version)}
+                              disabled={busy}
+                              style={{ ...btnStyle, fontSize: 11.5, padding: '3px 8px' }}
+                            >
+                              Restore
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
             )}
@@ -526,6 +523,19 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
       )}
 
       {selected && <div onClick={closeEditor} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.3)', zIndex: 999 }} />}
+
+      {translating && translatingSections && (
+        <TranslationEditor
+          propertyId={initial.propertyId}
+          page={translating}
+          sections={translatingSections}
+          locale="lo"
+          onClose={closeTranslator}
+          onSaved={() => {
+            setMsg({ kind: 'ok', text: 'Translation saved. Run Publish to update sitedata.json.' });
+          }}
+        />
+      )}
     </div>
   );
 }
