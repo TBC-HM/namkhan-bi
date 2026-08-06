@@ -149,7 +149,10 @@ export default function FindingsClient({ module: moduleName, findings, comments 
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    // colorScheme:'light' — finding #15: owner's browser dark mode gave form controls
+    // dark UA backgrounds while text color was forced to #1B1B1B (black-on-black).
+    // Every input/textarea/select below also sets an explicit background + color.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, colorScheme: 'light' }}>
       {toast && (
         <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 50, padding: '10px 16px', borderRadius: 6,
           background: toast.ok ? '#1F3A2E' : '#B71C1C', color: '#FFFFFF', fontSize: 12, fontWeight: 600,
@@ -165,10 +168,11 @@ export default function FindingsClient({ module: moduleName, findings, comments 
         <textarea value={text} onChange={e => setText(e.target.value)} required minLength={5} rows={3}
           placeholder="What is wrong, in plain language. This blocks completion until resolved."
           style={{ fontSize: 12, padding: 8, border: '1px solid #E6DFCC', borderRadius: 4, resize: 'vertical',
-            fontFamily: 'inherit', color: '#1B1B1B' }} />
+            fontFamily: 'inherit', color: '#1B1B1B', background: '#FFFFFF' }} />
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <select value={severity} onChange={e => setSeverity(e.target.value)}
-            style={{ fontSize: 12, padding: '6px 8px', border: '1px solid #E6DFCC', borderRadius: 4, color: '#1B1B1B' }}>
+            style={{ fontSize: 12, padding: '6px 8px', border: '1px solid #E6DFCC', borderRadius: 4, color: '#1B1B1B',
+              background: '#FFFFFF' }}>
             <option value="low">low</option>
             <option value="medium">medium</option>
             <option value="high">high</option>
@@ -285,7 +289,8 @@ export default function FindingsClient({ module: moduleName, findings, comments 
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <input value={commentText[f.id] ?? ''} onChange={e => setCommentText(prev => ({ ...prev, [f.id]: e.target.value }))}
                         placeholder="Reply on this finding — a correction, a counter-question, more detail…"
-                        style={{ flex: 1, fontSize: 11, padding: '6px 8px', border: '1px solid #E6DFCC', borderRadius: 4, color: '#1B1B1B' }} />
+                        style={{ flex: 1, fontSize: 11, padding: '6px 8px', border: '1px solid #E6DFCC', borderRadius: 4,
+                          color: '#1B1B1B', background: '#FFFFFF' }} />
                       <button onClick={() => postComment(f.id)} disabled={busy || (commentText[f.id] ?? '').trim().length < 5}
                         style={{ fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 4,
                           border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#1B1B1B', cursor: 'pointer' }}>
@@ -302,7 +307,8 @@ export default function FindingsClient({ module: moduleName, findings, comments 
                 resolving === f.id ? (
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <select value={resStatus} onChange={e => setResStatus(e.target.value)}
-                      style={{ fontSize: 11, padding: '5px 8px', border: '1px solid #E6DFCC', borderRadius: 4 }}>
+                      style={{ fontSize: 11, padding: '5px 8px', border: '1px solid #E6DFCC', borderRadius: 4,
+                        color: '#1B1B1B', background: '#FFFFFF' }}>
                       <option value="fixed">fixed</option>
                       <option value="refuted">refuted</option>
                       <option value="waived">waived</option>
@@ -310,8 +316,8 @@ export default function FindingsClient({ module: moduleName, findings, comments 
                     </select>
                     <input value={resNote} onChange={e => setResNote(e.target.value)}
                       placeholder="Resolution note — what changed, where, brief version (min 10 chars)"
-                      style={{ flex: 1, minWidth: 200, fontSize: 11,
-                        padding: '5px 8px', border: '1px solid #E6DFCC', borderRadius: 4 }} />
+                      style={{ flex: 1, minWidth: 200, fontSize: 11, padding: '5px 8px',
+                        border: '1px solid #E6DFCC', borderRadius: 4, color: '#1B1B1B', background: '#FFFFFF' }} />
                     <button onClick={() => resolve(f.id)} disabled={busy || resNote.trim().length < 10}
                       style={{ fontSize: 11, fontWeight: 700,
                         padding: '6px 12px', borderRadius: 4, border: 'none', cursor: 'pointer',
