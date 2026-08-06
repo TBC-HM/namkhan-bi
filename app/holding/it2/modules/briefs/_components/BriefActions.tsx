@@ -6,12 +6,22 @@ import { useState } from 'react';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 // PBS 2026-07-27 guardrails: humans NEVER 'Start' (ready = machine pulls it;
-// a manual in_progress just removes the brief from the queue with no worker)
-// and humans NEVER 'Ship' (shipped is the VERIFIER's verdict — law 542).
+// a manual in_progress just removes the brief from the queue with no worker).
+//
+// 2026-08-06 — the "humans NEVER Ship" half of that rule is RELAXED, on PBS's
+// instruction, because 'verifying' had no row in this table at all: eight
+// completed briefs sat in it with zero buttons and no verifier draining them
+// (finding #68). Law 542 assumed a working verifier; there is not one yet.
+//
+// This is now safe in a way it was not in July: ADR-245's tg_brief_ship_gate
+// refuses any move to 'shipped' without a PASSING governance.module_test_runs
+// row newer than the brief's last write. A human click can no longer ship
+// something unproven — the database says no and the error appears right here.
 const TRANSITIONS: Record<string, { label: string; next: string; primary?: boolean }[]> = {
   draft:       [{ label: 'Confirm → build', next: 'ready', primary: true }, { label: 'Archive', next: 'archived' }],
   ready:       [{ label: 'Back to draft', next: 'draft' }],
   in_progress: [{ label: 'Pause', next: 'ready' }],
+  verifying:   [{ label: 'Ship ✓', next: 'shipped', primary: true }, { label: 'Back to ready', next: 'ready' }],
   shipped:     [],
   archived:    [{ label: 'Restore', next: 'draft' }],
 };
