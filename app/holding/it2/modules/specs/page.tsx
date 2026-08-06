@@ -127,6 +127,10 @@ async function fetchData() {
   const docs = [...(moduleDocs ?? [])];
   const haveDoc = new Set(docs.map((d: any) => d.doc_type));
   for (const qr of (queue ?? [])) {
+    // Finding #55 (2026-08-06): only canonical '%_module' keys may spawn a
+    // synthetic "drafted module" card — a stray queue key (e.g. 'central_chat'
+    // alongside 'central_chat_module') rendered as a phantom duplicate spec card.
+    if (!String(qr.module_doc_type ?? '').endsWith('_module')) continue;
     if (!haveDoc.has(qr.module_doc_type)) {
       docs.push({
         id: qr.module_doc_type, doc_type: qr.module_doc_type,
@@ -167,7 +171,8 @@ function nextAction(q: any, briefStatus: string | null, signedOff: boolean, froz
     return { label: '🧊 Freeze', rpc: 'sign_off', tone: 'green' };
   }
   if (briefStatus && ['research', 'in_progress', 'verifying'].includes(briefStatus) && q?.brief_slug)
-    return { label: '👁 Watch', href: `/holding/it2/system/live?brief=${encodeURIComponent(q.brief_slug)}`, tone: 'gold' };
+    // Finding #31 (PBS 2026-08-04): eye icon ONLY — compact, links to live activity.
+    return { label: '👁', href: `/holding/it2/system/live?brief=${encodeURIComponent(q.brief_slug)}`, tone: 'gold' };
   const auditAgeDays = q?.updated_at ? (Date.now() - new Date(q.updated_at).getTime()) / 86400000 : Infinity;
   if (q?.completion_estimate == null || auditAgeDays > 3)
     return { label: '⟳ Re-audit', rpc: 'reaudit', tone: 'gold' };
