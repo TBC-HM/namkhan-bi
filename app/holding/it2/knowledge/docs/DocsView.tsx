@@ -91,6 +91,26 @@ export function docFreshness(d: { last_updated_at: string | null; review_interva
   return { key:'fresh', label, tone:'var(--primary,#084838)', days:ageDays };
 }
 
+// ADR-242 (PBS 2026-08-06, urgent) — every doc downloadable as .md.
+// Client-side Blob: no API route, no storage round-trip, works offline once loaded.
+function saveMd(filename: string, body: string) {
+  const blob = new Blob([body], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function downloadOne(d: Document) {
+  saveMd(`${d.doc_type}-v${d.version}.md`, d.content_md ?? '');
+}
+function downloadAll(list: Document[]) {
+  const bundle = list.map(d =>
+    `\n\n<!-- ===== ${d.doc_type} · v${d.version} · ${d.title} ===== -->\n\n${d.content_md ?? ''}`
+  ).join('\n');
+  saveMd(`tbc-docs-${list.length}-docs.md`, bundle);
+}
+
 export function DocsView({ docs }: { docs: Document[] }) {
   const [active, setActive] = useState(docs[0]?.doc_type ?? '');
   const [search, setSearch] = useState('');
@@ -118,11 +138,22 @@ export function DocsView({ docs }: { docs: Document[] }) {
     return docs.filter(d => d.title.toLowerCase().includes(q) || d.doc_type.toLowerCase().includes(q));
   }, [docs, search]);
 
+  // ADR-242 — DOC_GROUPS is a hand-maintained allow-list. Any doc_type missing
+  // from it used to vanish from this page entirely: on 2026-08-06 that hid 59 of
+  // 90 docs, including university_module, brain_module, felix_module and every
+  // backfilled module spec. Nothing may be invisible now — leftovers land in
+  // "Everything else" and the group list stays a display order, not a filter.
   const grouped = useMemo(() => {
-    return DOC_GROUPS.map(g => ({
+    const claimed = new Set(DOC_GROUPS.flatMap(g => g.doc_types));
+    const named = DOC_GROUPS.map(g => ({
       ...g,
       docs: filteredDocs.filter(d => g.doc_types.includes(d.doc_type)),
-    })).filter(g => g.docs.length > 0);
+    }));
+    const rest = filteredDocs.filter(d => !claimed.has(d.doc_type));
+    return [
+      ...named,
+      { key: 'unfiled', label: 'Everything else', emoji: '🗂', doc_types: [] as string[], docs: rest },
+    ].filter(g => g.docs.length > 0);
   }, [filteredDocs]);
 
   if (!docs.length) return <div style={{ padding:32, color:'var(--ink-soft)', textAlign:'center' as const }}>No published documents.</div>;
@@ -197,6 +228,12 @@ export function DocsView({ docs }: { docs: Document[] }) {
                 </div>
                 {/* CTAs */}
                 <div style={{ display:'flex', gap:6, flexShrink:0, flexWrap:'wrap' as const }}>
+                  {/* ADR-242 — download THIS doc as markdown */}
+                  <button onClick={() => downloadOne(current)} title={`Download ${current.doc_type} v${current.version} as .md`}
+                    style={{ fontSize:10.5, fontFamily:MONO, fontWeight:700, padding:'3px 10px', borderRadius:10, cursor:'pointer',
+                      border:'1px solid var(--primary,#084838)', background:'#FFF', color:'var(--primary,#084838)' }}>
+                    ⬇ .md
+                  </button>
                   <span style={{ fontSize:10, fontFamily:MONO, fontWeight:700, padding:'3px 9px', borderRadius:10,
                     background:'var(--primary,#084838)', color:'#FFF' }}>v{current.version}</span>
                   <span style={{ fontSize:10, fontFamily:MONO, fontWeight:600, padding:'3px 9px', borderRadius:10,
@@ -227,6 +264,12 @@ export function DocsView({ docs }: { docs: Document[] }) {
 
       {/* Knowledge surfaces — collapsed by default */}
       <div>
+        {/* ADR-242 — one file with every doc in it */}
+        <button onClick={()=>downloadAll(docs)}
+          style={{ fontSize:12, fontWeight:600, padding:'6px 14px', borderRadius:6, cursor:'pointer', marginRight:8,
+            border:'1px solid var(--primary,#084838)', background:'var(--primary,#084838)', color:'#FFF' }}>
+          ⬇ Download all {docs.length} docs (.md)
+        </button>
         <button onClick={()=>setExpandedSurfaces(s=>!s)}
           style={{ fontSize:12, fontWeight:600, padding:'6px 14px', borderRadius:6, cursor:'pointer', border:'1px solid var(--hairline,#E6DFCC)', background:'var(--paper,#FFF)', color:'var(--ink)' }}>
           {expandedSurfaces?'▲ Hide':'▼ Show'} all knowledge surfaces ({docs.length} docs + 5 other sources agents read from)
