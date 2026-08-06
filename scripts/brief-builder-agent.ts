@@ -30,7 +30,7 @@ const MODEL = process.env.BUILDER_MODEL ?? 'claude-sonnet-4-5-20250929';
 const RUN_ID = process.env.GITHUB_RUN_ID ?? 'local';
 const WORKER = `gha-brief-builder-${RUN_ID}`;
 
-// ADR-239: 60 turns with no cache is what produced the 80:1 input:output ratio — cost grows with
+// ADR-240: 60 turns with no cache is what produced the 80:1 input:output ratio — cost grows with
 // the SQUARE of turn count. 25 is enough for one coherent slice, which is all a builder may do.
 const MAX_TURNS = 25;
 const WALL_MS = 65 * 60 * 1000; // 65 min — workflow timeout is 75
@@ -121,7 +121,7 @@ const TOOLS = [
 ];
 
 /**
- * ADR-239 — put a cache breakpoint at the end of the conversation.
+ * ADR-240 — put a cache breakpoint at the end of the conversation.
  * Anthropic caches the prefix UP TO a breakpoint, so marking the newest message means the next
  * turn reads everything before it from cache instead of paying full input price again.
  * Blocks under ~1024 tokens are not cacheable; the API ignores the marker rather than erroring.
@@ -150,7 +150,7 @@ async function anthropic(messages: any[]): Promise<any> {
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 8192,
-      // ADR-239 (finding #92): prompt caching. Before this, every turn re-sent the ENTIRE
+      // ADR-240 (finding #92): prompt caching. Before this, every turn re-sent the ENTIRE
       // accumulated conversation at full input price. August 2026 ran 159.3M tokens IN against
       // 2.0M OUT — 80:1 — and ~94% of the money bought re-reads of context the model had already
       // seen. Cached input bills at 10% of base. Three breakpoints: the system prompt and the
