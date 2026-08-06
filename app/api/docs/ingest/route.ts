@@ -111,13 +111,22 @@ export async function POST(req: NextRequest) {
   // For mode B we'll need to clean up the staging file after the move
   let stagingBucket: string | null = null;
   let stagingPath: string | null = null;
+  // ADR-241 (bug #173 / finding 101) — the caller's property_id was IGNORED here:
+  // every document ingested through this route was hard-filed to 260955 (Namkhan)
+  // no matter which surface uploaded it. 0 means HOLDING scope, stored as NULL.
+  let targetPropertyId: number | null = 260955;
+  function setProperty(raw: unknown) {
+    const n = typeof raw === 'string' ? Number(raw) : typeof raw === 'number' ? raw : NaN;
+    if (!Number.isFinite(n)) return;         // absent / junk → keep the legacy default
+    targetPropertyId = n === 0 ? null : n;   // 0 → holding (property_id IS NULL)
+  }
 
   if (contentType.includes('application/json')) {
     // Mode B — file already in storage, fetch by ref
     // PBS 2026-07-20 pm · accept optional operator overrides that WIN over the
     // AI classifier: title, doc_type, doc_subtype. Used by the /finance/legal
     // multi-upload modal so the folder the operator picked actually sticks.
-    let body: { staging_bucket?: string; staging_path?: string; file_name?: string; mime?: string; title?: string; doc_type?: string; doc_subtype?: string };
+    let body: { staging_bucket?: string; staging_path?: string; file_name?: string; mime?: string; title?: string; doc_type?: string; doc_subtype?: string; property_id?: number | string };
     try { body = await req.json(); }
     catch { return NextResponse.json({ ok: false, error: 'invalid_json' }, { status: 400 }); }
 
@@ -131,6 +140,7 @@ export async function POST(req: NextRequest) {
     stagingBucket = body.staging_bucket;
     stagingPath = body.staging_path;
     fileName = body.file_name;
+    setProperty(body.property_id);
     // Stash overrides on the request object via closure — applied after classification
     (req as any)._overrides = {
       title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : null,
@@ -160,6 +170,7 @@ export async function POST(req: NextRequest) {
     const file = form.get('file') as File | null;
     fileName = (form.get('file_name') as string | null) || file?.name || 'untitled';
     if (!file) return NextResponse.json({ ok: false, error: 'no_file' }, { status: 400 });
+    setProperty(form.get('property_id'));
     // PBS 2026-07-20 pm · same override pass-through for Mode A
     (req as any)._overrides = {
       title: (form.get('title') as string | null)?.trim() || null,
@@ -290,7 +301,7 @@ export async function POST(req: NextRequest) {
   const storeBody = extractedText.length >= 200;
 
   const insertRow = {
-    property_id: 260955,
+    property_id: targetPropertyId,
     doc_type: cls.doc_type,
     doc_subtype: cls.doc_subtype,
     importance: cls.importance,
