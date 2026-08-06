@@ -197,6 +197,42 @@ function ScenarioSection({
             </div>
           );
         })()}
+        {(() => {
+          // G4 (brief revenue-module-v1): scenario → rate action handoff.
+          // Each finished non-base run with a projected ADR links to the Rate
+          // Desk with the propose form pre-filled; the action's rationale
+          // carries scenario_id + run date back (two-way tie).
+          const proposable = scenarios
+            .map((s) => {
+              if (s.scenario_kind === 'no_intervention') return null;
+              const run = latestRuns.get(s.id);
+              const o = (run?.outputs ?? null) as Record<string, unknown> | null;
+              const adr = o?.['adr_scenario'];
+              if (!run || typeof adr !== 'number' || !Number.isFinite(adr) || adr <= 0) return null;
+              return { id: s.id, title: s.title, adr: Math.round(adr), runDate: run.base_run_date.slice(0, 10) };
+            })
+            .filter(Boolean) as Array<{ id: number; title: string; adr: number; runDate: string }>;
+          if (proposable.length === 0) return null;
+          return (
+            <div>
+              <p style={{ margin: '0 0 4px', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>
+                Act on a scenario — opens the Rate Desk propose form pre-filled (guardrails still apply)
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7 }}>
+                {proposable.map((p) => (
+                  <li key={p.id}>
+                    <a
+                      href={`/h/${propertyId}/revenue/cockpit?propose_rate=${p.adr}&scenario_id=${p.id}&scenario_title=${encodeURIComponent(p.title)}&scenario_run=${p.runDate}`}
+                      style={{ color: 'var(--primary, #1F3A2E)' }}
+                    >
+                      Propose rate action from “{p.title}” (ADR ${p.adr}, run {p.runDate}) →
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
         <ScenarioRunButtons propertyId={propertyId} scenarios={scenarios} />
         <CustomScenarioForm propertyId={propertyId} />
         {anyRun ? (
