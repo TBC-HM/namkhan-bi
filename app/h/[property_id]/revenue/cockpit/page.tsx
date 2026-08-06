@@ -236,7 +236,7 @@ export default async function RevenueCockpitPage({
           }}
         >
           Data freshness: {dq.map((d) => `${d.label ?? d.source} is ${d.status}`).join(' · ')} —
-          numbers below may lag. (v_dq_posture)
+          numbers below may lag.
         </div>
       )}
 
