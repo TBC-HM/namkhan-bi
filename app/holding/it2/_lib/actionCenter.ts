@@ -30,6 +30,8 @@ export type ActionCenterPayload = {
   awaitingAgentCount: number;
   /** ADR-251 — confirmable findings older than 12h: parked for separate research, not lost. */
   olderFindingsCount: number;
+  /** ADR-253 — the actual older rows, so the UI can show them collapsed instead of hiding them. */
+  older: InboxRow[];
   needsYou: number;
   fetchedAt: string;
 };
@@ -109,6 +111,18 @@ export async function fetchActionCenter(): Promise<ActionCenterPayload> {
   const actionable = findings.filter((f: any) => f.has_restatement && !f.owner_confirmed);
   const red   = actionable.filter((f: any) => f.created_at && new Date(f.created_at).getTime() >= TWELVE_H);
   const olderCount = actionable.length - red.length;
+  // ADR-253 — the 12h window must not make the backlog unreachable. The older
+  // rows travel WITH the payload so the client can show them in one collapsed
+  // container instead of the owner having to type module URLs by hand.
+  const older: InboxRow[] = actionable
+    .filter((f: any) => !(f.created_at && new Date(f.created_at).getTime() >= TWELVE_H))
+    .map((f: any) => ({
+      kind: 'finding-red' as const,
+      title: `Finding #${f.id} · ${f.display_name ?? f.module_doc_type}`,
+      detail: String(f.finding ?? '').slice(0, 140),
+      cta: 'Confirm' as const,
+      href: `/holding/it2/modules/findings/${encodeURIComponent(f.module_doc_type)}#finding-${f.id}`,
+    }));
   const amber = findings.filter((f: any) => f.owner_confirmed);
   const awaitingAgent = findings.filter((f: any) => !f.has_restatement);
   for (const f of red) {
@@ -153,6 +167,7 @@ export async function fetchActionCenter(): Promise<ActionCenterPayload> {
     amberModules: Array.from(new Set(amber.map((f: any) => String(f.module_doc_type)))),
     awaitingAgentCount: awaitingAgent.length,
     olderFindingsCount: olderCount,
+    older,
     needsYou: inbox.length,
     fetchedAt: new Date().toISOString(),
   };
