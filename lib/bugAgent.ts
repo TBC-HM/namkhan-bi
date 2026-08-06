@@ -380,15 +380,35 @@ const PLANNER_SYSTEM = [
 // re-running the same needs_human bug every batch (observed: bug 49 ran twice
 // in 20 min). Planner-provided questions win; otherwise a generic fallback
 // carries the concrete reason so /holding/bugs shows why (brief A7).
+// 2026-08-06 (PBS: "make such a message understandable for a human — precise and not too long").
+// The owner-facing text used to read "planner produced no patches", which is internal jargon:
+// it says what the machine did, not what it means or what the owner should do. A message nobody
+// understands is the same as no message. Translate the handful of real reasons into ONE plain
+// sentence each, and never surface raw internals.
+function plainReason(reason: string): string {
+  const r = (reason || '').toLowerCase();
+  if (r.includes('no patches'))
+    return 'I read the code and found nothing to change — which usually means this is not broken, but a feature that does not exist yet. That needs building, not fixing.';
+  if (r.includes('ci') || r.includes('check failed') || r.includes('typecheck'))
+    return 'I wrote a fix, but the automated checks rejected it, so I did not ship it.';
+  if (r.includes('permission') || r.includes('scope') || r.includes('403') || r.includes('token'))
+    return 'I was blocked by a missing permission, not by the code.';
+  if (r.includes('credit') || r.includes('balance'))
+    return 'I ran out of API credit part-way through.';
+  if (r.includes('timeout') || r.includes('timed out'))
+    return 'I ran out of time before finishing.';
+  return reason.slice(0, 160);
+}
+
 async function storeNeedsHumanQuestion(bugId: number, reason: string, question?: string | null, options?: HumanOption[] | null): Promise<void> {
   const q = (question && options && options.length)
     ? { question, options, asked_by: 'bug-agent', asked_at: new Date().toISOString() }
     : {
-        question: `The bug agent could not fix this bug automatically (${reason.slice(0, 200)}). What should happen?`,
+        question: `I could not fix this one. ${plainReason(reason)}`,
         options: [
-          { label: 'Send it back to the agent for one more try', consequence: 'Costs roughly $0.30 more and may hit the same blocker again' },
-          { label: 'I will fix it manually', consequence: 'The bug leaves the agent queue and waits for a human fix', recommended: true },
-          { label: 'Drop this bug', consequence: 'The bug is archived and nothing changes on the site' },
+          { label: 'I will fix it manually', consequence: 'Leaves the agent queue and waits for you. Nothing is spent.', recommended: true },
+          { label: 'Send it back for one more try', consequence: 'Costs about $0.30. Worth it only if something changed since the last run — otherwise it stops in the same place.' },
+          { label: 'Drop this bug', consequence: 'Archived. Nothing on the site changes.' },
         ],
         asked_by: 'bug-agent',
         asked_at: new Date().toISOString(),
