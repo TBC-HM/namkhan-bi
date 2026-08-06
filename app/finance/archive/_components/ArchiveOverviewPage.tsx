@@ -4,14 +4,18 @@
 // language — headline KPI stripes + a chat window on top.
 //   Stripe 1 · registry health (v_doc_register counts, property-scoped)
 //   Stripe 2 · documents by family (doc_type tallies)
-//   Stripe 3 · company brain coverage (v_brain_pipeline_status, global) + cases
+//   Stripe 3 · company brain coverage (fn_brain_pipeline_status, property-scoped) + cases
 // The full editable register stays one click away (quiet link at the bottom) —
 // the two "Open Docs register" buttons on the Legal page were retired for this.
 // ArchiveAskClient retired 2026-08-03 — replaced by CentralChat (PR #375).
+// 2026-08-06 (PBS): CentralChat was Felix's general chat, not the document brain.
+//   Swapped to BrainAskPage embedded (/api/brain/ask). Brain tiles were global
+//   totals on a property-scoped page — now fn_brain_pipeline_status(property_id).
+//   Added the "Metadata only" tile: rows with no file bytes anywhere cannot preview.
 
 import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import CentralChat from '@/components/chat/CentralChat';
+import BrainAskPage from '@/app/holding/chat/_components/BrainAskPage';
 
 interface Props {
   propertyId: number;
@@ -70,14 +74,15 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
   const today = new Date().toISOString().slice(0, 10);
   const in90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
 
-  const [totalRes, reviewRes, archivedRes, signedRes, expiringRes, casesRes, brainRes, docTypes, resurfaceRes] = await Promise.all([
+  const [totalRes, reviewRes, archivedRes, signedRes, expiringRes, noFileRes, casesRes, brainRes, docTypes, resurfaceRes] = await Promise.all([
     sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId),
     sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('needs_review', true),
     sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('is_archived', true),
     sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('signed', true),
     sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId).gte('expiry_date', today).lte('expiry_date', in90),
+    sb.from('v_doc_register').select('doc_id', { count: 'exact', head: true }).eq('property_id', propertyId).eq('has_file', false),
     sb.from('v_doc_cases').select('case_ref, status, n_docs').eq('property_id', propertyId).order('case_ref'),
-    sb.from('v_brain_pipeline_status').select('*').single(),
+    sb.rpc('fn_brain_pipeline_status', { p_property_id: propertyId }),
     fetchAllDocTypes(sb, propertyId),
     sb.rpc('fn_brain_resurface', { p_property_id: propertyId }),
   ]);
@@ -90,17 +95,19 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
   const cases = ((casesRes.data ?? []) as Partial<CaseRow>[])
     .map((c) => ({ case_ref: c.case_ref ?? '', status: c.status ?? null, n_docs: typeof c.n_docs === 'number' ? c.n_docs : 0 }))
     .filter((c) => c.case_ref);
-  const brain = (brainRes.data ?? null) as BrainStatus | null;
+  const brainRows = (brainRes.data ?? []) as BrainStatus[];
+  const brain = (Array.isArray(brainRows) ? brainRows[0] : (brainRows as unknown as BrainStatus)) ?? null;
+  const noFile = noFileRes.count ?? 0;
 
   const docsHref = `/h/${propertyId}/finance/legal/docs`;
   const tile = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 } as React.CSSProperties;
 
   return (
     <DashboardPage title={title} subtitle={subtitle} tabs={tabs.length ? tabs : undefined}>
-      {/* Chat window — the primary way in */}
+      {/* Ask window — the document brain, NOT Felix (PBS 2026-08-06) */}
       <div style={fullRow}>
-        <Container title="Ask the archive" subtitle="Cited answers from the company archive · live KPIs · plain language" density="compact">
-          <CentralChat mode="second-brain" moduleScope="finance" propertyId={propertyId} />
+        <Container title="Ask the archive" subtitle="Cited answers from the company document brain · contracts · SOPs · certifications" density="compact">
+          <BrainAskPage initialQuestion="" propertyId={propertyId} dept={propertyLabel ?? ''} embedded />
         </Container>
       </div>
 
@@ -110,10 +117,16 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
           <div style={tile}>
             <KpiTile label="Documents" value={totalRes.count ?? 0} size="sm" footnote="total on file" />
             <KpiTile label="Needs review" value={reviewRes.count ?? 0} size="sm" footnote="subtype / expiry gaps" />
+            <KpiTile label="Metadata only" value={noFile} size="sm" footnote="no file bytes — cannot preview" />
             <KpiTile label="Expiring ≤ 90d" value={expiringRes.count ?? 0} size="sm" footnote="licenses · insurance · permits" />
             <KpiTile label="Signed" value={signedRes.count ?? 0} size="sm" footnote="signed on file" />
             <KpiTile label="Archived" value={archivedRes.count ?? 0} size="sm" footnote="status = archived" />
           </div>
+          {noFile > 0 ? (
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--ink-mute, #5A5A5A)' }}>
+              {noFile} record{noFile === 1 ? '' : 's'} carry metadata only — filename, type and size were ingested but the file itself was never stored, so preview and OCR are unavailable for them.
+            </div>
+          ) : null}
         </Container>
       </div>
 
@@ -130,7 +143,7 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
 
       {/* Stripe 3 · brain coverage + running cases */}
       <div style={fullRow}>
-        <Container title="Company brain" subtitle="How much of the archive is readable by the ask window" density="compact">
+        <Container title="Company brain" subtitle={`How much of this property's archive is readable by the ask window`} density="compact">
           <div style={tile}>
             <KpiTile label="Classified" value={(brain?.classified ?? 0) + (brain?.human_confirmed ?? 0)} size="sm" footnote={`${brain?.human_confirmed ?? 0} human-confirmed`} />
             <KpiTile label="Needs human" value={brain?.needs_human ?? 0} size="sm" footnote="review on Brain console" />
