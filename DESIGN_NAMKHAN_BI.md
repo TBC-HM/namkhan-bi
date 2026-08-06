@@ -3040,3 +3040,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-05 — bug-agent · fix #164
 - # Bug #164 — Digital sub-strip (Web · Funnels · YouTube) missing  ## Root cause  `app/marketing/digital/page.tsx` renders the Digital hub page. It builds its `t
 - touched `app/marketing/digital/page.tsx`
+
+### 2026-08-06 — bug-agent · fix #174
+- ## Bug #174 — DQ banner renders for informational staleness even when the user can't dismiss or act on it  ### Root cause The `getDqIssues` query in `page.tsx` 
+- touched `app/h/[property_id]/revenue/cockpit/page.tsx`
