@@ -24,6 +24,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import ConversationHistory from './ConversationHistory';
 
 const supabase = createClient(
   (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://build-placeholder.supabase.co'),
@@ -75,6 +76,12 @@ type ChatMessage = {
   model_tier?: string | null;
   created_at: string;
 };
+
+// Normalized key for matching a ticket-thread assistant bubble to its
+// conversation-store row (v_chat_messages) so we can surface model_tier.
+function tierKey(s: string): string {
+  return s.replace(/\s+/g, ' ').trim().slice(0, 80);
+}
 
 // ── ticket → turns (same framing contract as ChatShell / /api/cockpit/chat) ─
 function stripTicketFraming(s: string | null): { user: string; agent: string } {
@@ -142,6 +149,10 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
   const [historyOpen, setHistoryOpen] = useState(showHistory);
   const [summarizing, setSummarizing] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  // Resumed conversation-store messages (rendered above the live ticket thread).
+  const [resumed, setResumed] = useState<ChatMessage[]>([]);
+  // model_tier per assistant message, keyed by tierKey(content_md).
+  const [msgTiers, setMsgTiers] = useState<Record<string, string>>({});
   const endRef = useRef<HTMLDivElement>(null);
 
   const startNewChat = () => {
@@ -149,6 +160,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
     setConversationId(null);
     setInput('');
     setSummary(null);
+    setResumed([]);
   };
 
   const switchMode = (m: CentralChatMode) => {
@@ -158,6 +170,56 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
     setThreadStart(new Date().toISOString());
     setConversationId(null);
     setSummary(null);
+    setResumed([]);
+  };
+
+  // Pull v_chat_messages for the conversation and map assistant model_tier
+  // onto thread bubbles (A5: tier visibility in the live thread).
+  const refreshTiers = async (convId: string): Promise<ChatMessage[]> => {
+    try {
+      const res = await fetch(`/api/cockpit/chat?conversation_id=${encodeURIComponent(convId)}`);
+      if (!res.ok) return [];
+      const j = await res.json();
+      const msgs: ChatMessage[] = Array.isArray(j.messages) ? j.messages : [];
+      setMsgTiers((prev) => {
+        const next = { ...prev };
+        for (const m of msgs) {
+          if (m.turn_role === 'assistant' && m.model_tier && m.content_md) {
+            next[tierKey(m.content_md)] = m.model_tier;
+          }
+        }
+        return next;
+      });
+      return msgs;
+    } catch {
+      return [];
+    }
+  };
+
+  // Resume a past conversation from the history sidebar (A1).
+  const handleResume = async (id: string) => {
+    try {
+      const res = await fetch(`/api/cockpit/chat?conversation_id=${encodeURIComponent(id)}`);
+      if (!res.ok) return;
+      const j = await res.json();
+      const msgs: ChatMessage[] = Array.isArray(j.messages) ? j.messages : [];
+      setResumed(msgs);
+      setTickets([]);
+      setThreadStart(new Date().toISOString());
+      setConversationId(id);
+      setSummary((j.conversation?.summary_md as string | undefined) ?? null);
+      const convMode = j.conversation?.mode as string | undefined;
+      if (convMode === 'general' || convMode === 'second-brain') setMode(convMode);
+      setMsgTiers((prev) => {
+        const next = { ...prev };
+        for (const m of msgs) {
+          if (m.turn_role === 'assistant' && m.model_tier && m.content_md) {
+            next[tierKey(m.content_md)] = m.model_tier;
+          }
+        }
+        return next;
+      });
+    } catch { /* keep current thread on failure */ }
   };
 
   function buildConversationHistory(): Array<{ role: 'user' | 'assistant'; content: string }> {
@@ -205,7 +267,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadStart, mode, moduleScope]);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [tickets.length]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [tickets.length, resumed.length]);
 
   const send = async () => {
     const text = input.trim();
@@ -241,7 +303,12 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
       });
       try {
         const j = await res.json();
-        if (j && typeof j.conversation_id === 'string') setConversationId(j.conversation_id);
+        if (j && typeof j.conversation_id === 'string') {
+          setConversationId(j.conversation_id);
+          // POST is synchronous (returns after triage) — the assistant row is
+          // already in the conversation store; fetch its model_tier for A5.
+          refreshTiers(j.conversation_id);
+        }
       } catch { /* ignore */ }
       load();
     } catch {
@@ -299,18 +366,16 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
 
   return (
     <div style={{ display: 'flex', gap: 12 }}>
-      {/* Optional history sidebar */}
+      {/* History sidebar — real component, click a row to resume (A1) */}
       {historyOpen && (
-        <div style={{ width: 280, flexShrink: 0 }}>
-          {/* Placeholder - ConversationHistory component will be imported */}
-          <div style={{ ...S.shell, minHeight: 520 }}>
-            <div style={{ padding: 12, borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>History</div>
-            </div>
-            <div style={{ padding: 12, fontSize: 11, color: C.text3 }}>
-              Past conversations appear here
-            </div>
-          </div>
+        <div style={{ width: 280, flexShrink: 0, minHeight: 520, maxHeight: '78vh', display: 'flex' }}>
+          <ConversationHistory
+            onSelectConversation={handleResume}
+            currentConversationId={conversationId}
+            mode={mode}
+            moduleScope={moduleScope}
+            propertyId={propertyId}
+          />
         </div>
       )}
 
@@ -342,7 +407,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
             </button>
 
             {/* Summarize button */}
-            {conversationId && tickets.length > 2 && (
+            {conversationId && (tickets.length > 2 || resumed.length > 2) && (
               <button
                 onClick={summarizeThread}
                 disabled={summarizing}
@@ -396,7 +461,45 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
 
         {/* ── thread ─────────────────────────────────────────────────────── */}
         <div style={S.thread}>
-          {tickets.length === 0 && (
+          {/* Resumed conversation-store messages (A1) */}
+          {resumed.map((m, i) => {
+            if (m.turn_role === 'user') {
+              return (
+                <div key={`r${m.id}`} style={{ ...S.userRow, marginBottom: 24 }}>
+                  <div style={S.userBubble} dangerouslySetInnerHTML={{ __html: md(m.content_md) }} />
+                </div>
+              );
+            }
+            if (m.turn_role !== 'assistant') return null;
+            const prevUser = [...resumed.slice(0, i)].reverse().find((p) => p.turn_role === 'user');
+            return (
+              <div key={`r${m.id}`} style={{ ...S.agentRow, marginBottom: 24 }}>
+                <div style={S.agentAvatar}>{mode === 'general' ? '◦' : 'F'}</div>
+                <div style={{ maxWidth: 'calc(100% - 44px)', flex: 1 }}>
+                  <div style={S.agentBubble}>
+                    <div dangerouslySetInnerHTML={{ __html: md(m.content_md) }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                    <button
+                      onClick={() => saveToKB(prevUser?.content_md ?? '', m.content_md)}
+                      title="Save this answer to the knowledge base"
+                      style={S.actionBtn}
+                    >
+                      💾 Save to KB
+                    </button>
+                    <TierBadge tier={m.model_tier} />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {resumed.length > 0 && tickets.length === 0 && (
+            <div style={{ textAlign: 'center', fontFamily: MONO, fontSize: 10, color: C.text3, margin: '4px 0 16px' }}>
+              — resumed conversation · new messages continue this thread —
+            </div>
+          )}
+
+          {tickets.length === 0 && resumed.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 0' }}>
               <div style={{ fontSize: 15, color: C.ink, marginBottom: 6 }}>
                 {mode === 'second-brain'
@@ -441,9 +544,9 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
                         )}
                       </div>
 
-                      {/* Action buttons per message */}
+                      {/* Action buttons + model tier per message (A5) */}
                       {!isPending && split.agent && (
-                        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
                           <button
                             onClick={() => saveToKB(split.user, split.agent)}
                             title="Save this answer to the knowledge base"
@@ -451,6 +554,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
                           >
                             💾 Save to KB
                           </button>
+                          <TierBadge tier={msgTiers[tierKey(split.agent)]} />
                         </div>
                       )}
 
