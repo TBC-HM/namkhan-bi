@@ -10,6 +10,13 @@ interface OpenQuestion { question: string; options: Option[]; asked_by?: string;
 
 export function BriefQuestionInline({ slug, question }: { slug: string; question: OpenQuestion | null }) {
   const [answered, setAnswered] = useState(false);
+  // ADR-252 (PBS 2026-08-06 22:05): "before i could coment the question there was a
+  // whole path now it is gone". This panel never had a free-text box — the option
+  // "None of these — I will describe it" posted that LABEL as the answer, so the
+  // owner had no way to describe anything. /api/cockpit/briefs/answer passes
+  // `choice` straight through to fn_answer_brief_question, so free text has always
+  // been accepted by the backend. Only the input was missing.
+  const [free, setFree] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -66,6 +73,30 @@ export function BriefQuestionInline({ slug, question }: { slug: string; question
             <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>{opt.consequence}</div>
           </button>
         ))}
+      </div>
+      <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${TOKENS.border}` }}>
+        <div style={{ fontSize: 10.5, fontWeight: 600, color: TOKENS.text2, marginBottom: 4 }}>
+          Or answer in your own words
+        </div>
+        <textarea
+          value={free}
+          onChange={(e) => setFree(e.target.value)}
+          placeholder="Type your answer, a correction, or a question back to the agent…"
+          rows={3}
+          style={{ width: '100%', fontSize: 12, padding: '7px 9px', borderRadius: 5,
+            border: `1px solid ${TOKENS.border}`, background: '#FFFFFF', color: TOKENS.ink,
+            fontFamily: 'inherit', resize: 'vertical' }}
+        />
+        <button
+          disabled={busy || free.trim().length < 3}
+          onClick={() => choose(free.trim())}
+          style={{ marginTop: 6, fontSize: 11, fontWeight: 700, padding: '6px 14px', borderRadius: 5,
+            cursor: busy || free.trim().length < 3 ? 'not-allowed' : 'pointer',
+            border: `1px solid ${TOKENS.forest}`,
+            background: free.trim().length < 3 ? TOKENS.bgRaised : TOKENS.forest,
+            color: free.trim().length < 3 ? TOKENS.text2 : '#fff', opacity: busy ? 0.6 : 1 }}>
+          Send my answer →
+        </button>
       </div>
       {err && <div style={{ fontSize: 11, color: 'var(--status-red)', marginTop: 6 }}>{err}</div>}
     </div>
