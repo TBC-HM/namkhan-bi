@@ -45,9 +45,19 @@ export default async function BriefsPage({
   const counts: Record<string, number> = {};
   for (const r of all) counts[r.status] = (counts[r.status] ?? 0) + 1;
 
-  const filtered = statusFilter
-    ? all.filter((b) => b.status === statusFilter)
-    : [...all].sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
+  // module-surface-consolidation-v1 scope 2 (PBS: "81 shipped rows drowning
+  // 5 live"): default view = LIVE states only; shipped/archived behind their
+  // pills; 'all' shows everything.
+  const DONE_STATES = new Set(['shipped', 'archived']);
+  const filtered =
+    statusFilter === 'all'
+      ? [...all].sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9))
+      : statusFilter
+      ? all.filter((b) => b.status === statusFilter)
+      : all
+          .filter((b) => !DONE_STATES.has(b.status))
+          .sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9));
+  const liveCount = all.filter((b) => !DONE_STATES.has(b.status)).length;
 
   const inFlight = (counts['in_progress'] ?? 0) + (counts['ready'] ?? 0);
 
@@ -75,7 +85,7 @@ export default async function BriefsPage({
 
       {/* Status filter pills */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-        {(['', 'draft', 'ready', 'in_progress', 'shipped', 'archived'] as const).map((s) => (
+        {(['', 'draft', 'ready', 'in_progress', 'needs_input', 'shipped', 'archived', 'all'] as const).map((s) => (
           <Link
             key={s}
             href={s ? `/holding/it2/modules/briefs?status=${s}` : '/holding/it2/modules/briefs'}
@@ -86,7 +96,7 @@ export default async function BriefsPage({
               border: `1px solid ${TOKENS.border}`,
             }}
           >
-            {s || 'All'} ({s ? (counts[s] ?? 0) : all.length})
+            {s === '' ? `Live (${liveCount})` : s === 'all' ? `All (${all.length})` : `${s} (${counts[s] ?? 0})`}
           </Link>
         ))}
       </div>
