@@ -30,7 +30,9 @@ const MODEL = process.env.BUILDER_MODEL ?? 'claude-sonnet-4-5-20250929';
 const RUN_ID = process.env.GITHUB_RUN_ID ?? 'local';
 const WORKER = `gha-brief-builder-${RUN_ID}`;
 
-const MAX_TURNS = 60;
+// ADR-239: 60 turns with no cache is what produced the 80:1 input:output ratio — cost grows with
+// the SQUARE of turn count. 25 is enough for one coherent slice, which is all a builder may do.
+const MAX_TURNS = 25;
 const WALL_MS = 65 * 60 * 1000; // 65 min — workflow timeout is 75
 const STARTED = Date.now();
 
@@ -118,6 +120,25 @@ const TOOLS = [
   },
 ];
 
+/**
+ * ADR-239 — put a cache breakpoint at the end of the conversation.
+ * Anthropic caches the prefix UP TO a breakpoint, so marking the newest message means the next
+ * turn reads everything before it from cache instead of paying full input price again.
+ * Blocks under ~1024 tokens are not cacheable; the API ignores the marker rather than erroring.
+ */
+function withCache(messages: any[]): any[] {
+  if (messages.length === 0) return messages;
+  const out = messages.map((m) => ({ ...m }));
+  const last: any = out[out.length - 1];
+  if (Array.isArray(last.content) && last.content.length > 0) {
+    last.content = last.content.map((b: any, i: number) =>
+      i === last.content.length - 1 ? { ...b, cache_control: { type: 'ephemeral' } } : b);
+  } else if (typeof last.content === 'string') {
+    last.content = [{ type: 'text', text: last.content, cache_control: { type: 'ephemeral' } }];
+  }
+  return out;
+}
+
 async function anthropic(messages: any[]): Promise<any> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -129,9 +150,16 @@ async function anthropic(messages: any[]): Promise<any> {
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 8192,
-      system: SYSTEM,
-      tools: TOOLS,
-      messages,
+      // ADR-239 (finding #92): prompt caching. Before this, every turn re-sent the ENTIRE
+      // accumulated conversation at full input price. August 2026 ran 159.3M tokens IN against
+      // 2.0M OUT — 80:1 — and ~94% of the money bought re-reads of context the model had already
+      // seen. Cached input bills at 10% of base. Three breakpoints: the system prompt and the
+      // tools array are static across all 25 turns, and withCache() moves a third breakpoint to
+      // the end of the message list each turn so the whole prefix is a cache hit on the next one.
+      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+      tools: TOOLS.map((t: any, i: number) =>
+        i === TOOLS.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t),
+      messages: withCache(messages),
     }),
   });
   if (!res.ok) {
@@ -261,7 +289,7 @@ async function main() {
         try {
           if (tu.name === 'run_sql') {
             const r = await sql(String(tu.input.sql ?? ''));
-            out = truncate(JSON.stringify(r), 30000);
+            out = truncate(JSON.stringify(r), 8000);
           } else if (tu.name === 'run_shell') {
             try {
               out = execSync(String(tu.input.cmd ?? ''), {
@@ -273,7 +301,7 @@ async function main() {
             } catch (e: any) {
               out = `EXIT ${e.status ?? '?'}\n${e.stdout ?? ''}\n${e.stderr ?? ''}`;
             }
-            out = truncate(out, 20000);
+            out = truncate(out, 6000);
           } else if (tu.name === 'finish') {
             const status = String(tu.input.status);
             const summary = String(tu.input.summary ?? '');
