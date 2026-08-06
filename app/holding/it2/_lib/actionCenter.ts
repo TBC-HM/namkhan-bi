@@ -28,6 +28,8 @@ export type ActionCenterPayload = {
   amberModules: string[];
   /** ADR-244 — findings with no agent restatement yet. NOT actionable by PBS. */
   awaitingAgentCount: number;
+  /** ADR-251 — confirmable findings older than 12h: parked for separate research, not lost. */
+  olderFindingsCount: number;
   needsYou: number;
   fetchedAt: string;
 };
@@ -46,7 +48,7 @@ export async function fetchActionCenter(): Promise<ActionCenterPayload> {
       .not('open_question', 'is', null)
       .in('status', ['new', 'acked', 'processing']),
     (sb as any).from('v_module_findings')
-      .select('id, module_doc_type, display_name, finding, status, blocking, has_restatement, owner_confirmed')
+      .select('id, module_doc_type, display_name, finding, status, blocking, has_restatement, owner_confirmed, created_at')
       .in('status', ['open', 'acknowledged']),
     (sb as any).from('v_owner_responses')
       .select('id, signal_id, response_kind, ref, summary, created_at')
@@ -98,7 +100,15 @@ export async function fetchActionCenter(): Promise<ActionCenterPayload> {
   // NEITHER          = no restatement yet. That is the agent's move, not his,
   //                    so it must not appear in his inbox at all.
   const findings = findingsRes?.data ?? [];
-  const red   = findings.filter((f: any) => f.has_restatement && !f.owner_confirmed);
+  // ADR-251 (PBS 2026-08-06 22:20): "only allow findings of the last 12h, the rest we
+  // research separately". 63 findings were open at once — an inbox that large is not an
+  // inbox, it is an archive, and the owner stops reading it. RED is now a 12-hour window.
+  // Older confirmable findings are NOT deleted and NOT closed: they move to
+  // olderFindingsCount and are worked as research from the handover doc.
+  const TWELVE_H = Date.now() - 12 * 3600_000;
+  const actionable = findings.filter((f: any) => f.has_restatement && !f.owner_confirmed);
+  const red   = actionable.filter((f: any) => f.created_at && new Date(f.created_at).getTime() >= TWELVE_H);
+  const olderCount = actionable.length - red.length;
   const amber = findings.filter((f: any) => f.owner_confirmed);
   const awaitingAgent = findings.filter((f: any) => !f.has_restatement);
   for (const f of red) {
@@ -142,6 +152,7 @@ export async function fetchActionCenter(): Promise<ActionCenterPayload> {
     amberCount: amber.length,
     amberModules: Array.from(new Set(amber.map((f: any) => String(f.module_doc_type)))),
     awaitingAgentCount: awaitingAgent.length,
+    olderFindingsCount: olderCount,
     needsYou: inbox.length,
     fetchedAt: new Date().toISOString(),
   };
