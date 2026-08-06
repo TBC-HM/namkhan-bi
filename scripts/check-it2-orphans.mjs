@@ -45,6 +45,12 @@ const ALLOWLIST = new Set([
   // Alarms / Watchdog Cockpit — linked contextually from System → Health link
   // card (alarm-system-v1, 2026-08-04): same law-659 pattern as above.
   '/holding/it2/system/alarms',
+  // Build Briefs — DEMOTED from owner Build nav (module-surface-consolidation-v1
+  // scope 2, 2026-08-06): raw fleet work-log, not an owner surface. Linked
+  // contextually from System → Health link card (law-659 pattern) and from
+  // module cards / Action Center rows. [slug] detail pages resolve via this
+  // static ancestor.
+  '/holding/it2/modules/briefs',
 ]);
 
 function walkPages(dir, out = []) {
