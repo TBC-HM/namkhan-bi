@@ -92,6 +92,11 @@ export function ActionCenterClient({ initial }: { initial: ActionCenterPayload }
   }, [refetch]);
 
   const { inbox, strip, redCount, amberCount, amberModules } = data;
+  // ADR-253 (PBS 2026-08-06 22:15): the 12-hour window on findings (ADR-251) left the
+  // older ones with NO path in the UI at all — the owner had to type module URLs by
+  // hand. He chose option A: one collapsed container, not a second page.
+  const older = (data as any).older ?? [];
+  const [showOlder, setShowOlder] = useState(false);
 
   return (
     <div>
@@ -147,6 +152,34 @@ export function ActionCenterClient({ initial }: { initial: ActionCenterPayload }
           );
         })}
       </div>
+
+      {/* ---- Zone 1a · RESEARCH BACKLOG (ADR-253) — older than 12h, collapsed ---- */}
+      {older.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <button onClick={() => setShowOlder((s: boolean) => !s)} style={{
+            fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: TOKENS.text2,
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginBottom: 8,
+          }}>
+            {showOlder ? '▲' : '▼'} RESEARCH BACKLOG ({older.length}) — findings older than 12h
+          </button>
+          {showOlder && older.map((it: any, i: number) => (
+            <a key={`older-${i}`} href={it.href} style={{
+              display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none',
+              background: TOKENS.bg, border: `1px solid ${TOKENS.border}`, borderRadius: 8,
+              padding: '9px 14px', marginBottom: 5, color: TOKENS.text2, opacity: 0.9,
+            }}>
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600 }}>{it.title}</span>
+                <span style={{ display: 'block', fontSize: 11, color: TOKENS.text3, marginTop: 1 }}>{it.detail}</span>
+              </span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 10px', borderRadius: 6,
+                whiteSpace: 'nowrap', background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`, color: TOKENS.text2 }}>
+                Confirm →
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
 
       {/* ---- Zone 1b · SINCE YOU WERE HERE (response strip, scope 4) ---- */}
       <div style={{ marginBottom: 28 }}>
