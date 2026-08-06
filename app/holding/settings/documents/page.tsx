@@ -4,6 +4,9 @@
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DocRegistrySettingsPanel } from '@/app/h/[property_id]/finance/legal/docs/_components/SettingsDrawerButton';
+// ADR-241 (bug #173, finding 101) — same dropzone the property docs page uses.
+// propertyId={0} = HOLDING scope; /api/docs/ingest maps 0 → property_id NULL.
+import DocUploadDropzone from '@/app/h/[property_id]/finance/legal/docs/_components/DocUploadDropzone';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -53,10 +56,17 @@ export default async function HoldingDocumentsSettingsPage() {
       tabs={settingsTabs('documents')}
     >
       <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Upload documents" subtitle="PDF · DOCX · XLSX · TXT · CSV · ODS — filed at HOLDING level, not under a property">
+          <div style={{ padding: '8px 16px 16px' }}>
+            <DocUploadDropzone propertyId={0} />
+          </div>
+        </Container>
+      </div>
+      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
         <Container title="Holding document register" subtitle="Board resolutions, group contracts, holding compliance — no property assignment">
           <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div style={{ fontSize: 13, color: '#5A5A5A' }}>{d.totalDocs} holding-wide documents across {d.families.length} families.</div>
-            <Link href="/holding/legal" style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, whiteSpace: 'nowrap' as const }}>Open holding register →</Link>
+            <Link href="/holding/legal/docs" style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, whiteSpace: 'nowrap' as const }}>Open holding register →</Link>
           </div>
         </Container>
       </div>
