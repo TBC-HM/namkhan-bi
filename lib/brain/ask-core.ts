@@ -139,7 +139,7 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
   let qVec: number[] | null = null;
   try { const v = await embedTexts([question]); qVec = v?.[0] ?? null; } catch { /* fts-only */ }
 
-  const [hits, verifiedRes, registryRes, hrRes, sopRes, opsRes, platformRes, agentsRes] = await Promise.all([
+  const [hits, verifiedRes, registryRes, hrRes, sopRes, opsRes, platformRes, agentsRes, tenantKnowRes, skillsRes] = await Promise.all([
     brainRetrieve(question, tier, qVec, scope, pid),
     sb.rpc('fn_brain_verified_search', {
       p_q: question, p_embedding: qVec ? JSON.stringify(qVec) : null,
@@ -186,9 +186,19 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
   const platform = (platformRes.data ?? []) as PlatformHit[];
   const agentsContext = (agentsRes.data ?? null) as Record<string, unknown> | null;
   const usedAgents = agentsContext !== null && Object.keys(agentsContext).length > 0;
+  // finding #80: entries 9 and 10 of the Promise.all were executed and then thrown away —
+  // every question paid for fn_brain_tenant_knowledge and fn_brain_skills_context and was
+  // answered without them. Both are now derived and reach the prompt.
+  const tenantKnow = (tenantKnowRes.data ?? null) as unknown;
+  const usedTenantKnow = tenantKnow !== null
+    && (Array.isArray(tenantKnow) ? tenantKnow.length > 0 : Object.keys(tenantKnow as Record<string, unknown>).length > 0);
+  const skills = (skillsRes.data ?? null) as unknown;
+  const usedSkills = skills !== null
+    && (Array.isArray(skills) ? skills.length > 0 : Object.keys(skills as Record<string, unknown>).length > 0);
+
   const chunkIds = hits.map(h => h.chunk_id);
 
-  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr && sops.length === 0 && !usedOps && platform.length === 0 && !usedAgents) {
+  if (hits.length === 0 && verified.length === 0 && registry.length === 0 && !usedHr && sops.length === 0 && !usedOps && platform.length === 0 && !usedAgents && !usedTenantKnow && !usedSkills) {
     return { answered: false, answer: NOT_COVERED_REPLY, refusedReason: 'no_chunks_retrieved', sources: [], retrievedChunkIds: chunkIds, usedHr: false };
   }
 
@@ -257,6 +267,10 @@ export async function brainAsk(question: string, tier: BrainTier, scope: BrainSc
     platformBlock,
     '━━━ AGENT ROSTER & SCHEDULES (owner surface · live from cockpit_agent_prompts + pg_cron — cite as "(live platform data)") ━━━',
     usedAgents ? JSON.stringify(agentsContext, null, 1).slice(0, 7000) : '(none — not an agent/schedule question or below owner tier)',
+    '━━━ TENANT KNOWLEDGE (property-scoped approved judgment documents — cite as "(tenant knowledge)") ━━━',
+    usedTenantKnow ? JSON.stringify(tenantKnow, null, 1).slice(0, 6000) : '(none — holding scope, or no approved tenant knowledge matched)',
+    '━━━ SKILLS DIRECTORY (holding surface · live agent skill catalog) ━━━',
+    usedSkills ? JSON.stringify(skills, null, 1).slice(0, 5000) : '(none — tenant scope, or no skill matched)',
     '━━━ LIVE STRUCTURED HR DATA (owner/admin surface · fetched live, never stored in the brain) ━━━',
     usedHr ? JSON.stringify(hrContext, null, 1).slice(0, 6000) : '(none — either not an HR question or the asking tier has no HR access)',
     '━━━ OWNER-CONFIRMED VERIFIED ANSWERS (curated knowledge — prefer over raw excerpts when relevant) ━━━',
