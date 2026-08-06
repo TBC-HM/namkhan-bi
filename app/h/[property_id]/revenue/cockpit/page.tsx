@@ -135,11 +135,36 @@ const PRESSURE_COLOR: Record<CockpitRow['pressure'], string> = {
 
 export default async function RevenueCockpitPage({
   params,
+  searchParams,
 }: {
   params: { property_id: string };
+  // G4 (brief revenue-module-v1): forecast scenario → rate action handoff.
+  // The Scenarios page links here with ?propose_rate=&scenario_id=&scenario_title=
+  // &scenario_run= so the propose form opens pre-filled; the generated rationale
+  // embeds scenario_id + run date (the back-link of the two-way tie).
+  searchParams?: {
+    propose_rate?: string;
+    scenario_id?: string;
+    scenario_title?: string;
+    scenario_run?: string;
+  };
 }) {
   const pid = Number(params.property_id);
   if (!Number.isFinite(pid)) notFound();
+
+  const sp = searchParams ?? {};
+  const proposeRateNum = sp.propose_rate != null ? Number(sp.propose_rate) : NaN;
+  const scenarioPrefill =
+    Number.isFinite(proposeRateNum) && proposeRateNum > 0
+      ? {
+          proposed: String(Math.round(proposeRateNum)),
+          rationale: `Forecast scenario${sp.scenario_id ? ` #${sp.scenario_id}` : ''}${
+            sp.scenario_title ? ` "${sp.scenario_title}"` : ''
+          }${sp.scenario_run ? ` (run ${sp.scenario_run})` : ''}: what-if projects ADR $${Math.round(
+            proposeRateNum
+          )}. scenario_id=${sp.scenario_id ?? '?'}`,
+        }
+      : undefined;
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({
@@ -311,7 +336,7 @@ export default async function RevenueCockpitPage({
       <Container
         title="Action queue"
         subtitle="Proposed rate actions — your gate; nothing auto-executes"
-        action={<ProposeForm propertyId={pid} />}
+        action={<ProposeForm propertyId={pid} prefill={scenarioPrefill} />}
         status={proposed.length > 0 ? 'amber' : undefined}
       >
         <ActionQueue rows={[...proposed, ...approvedOpen]} />
