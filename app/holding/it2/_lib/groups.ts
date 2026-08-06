@@ -39,10 +39,13 @@ export const GROUPS: GroupSpec[] = [
     key: 'build', label: 'Build', href: '/holding/it2/modules/status',
     subs: [
       { href: '/holding/it2/modules/status', label: 'Status' },
-      { href: '/holding/it2/modules/briefs', label: 'Briefs' },
       { href: '/holding/it2/modules/specs',  label: 'Specs' },
       { href: '/holding/it2/modules/queue',  label: 'Queue' },
       { href: '/holding/it2/modules/intake', label: '+ Intake' },
+      // Briefs DEMOTED from owner nav (module-surface-consolidation-v1 scope 2,
+      // 2026-08-06): raw fleet work-log, not an owner surface. Reachable via
+      // System → Health link card (law-659 pattern) + orphan-check allowlist.
+      // Queue STAYS: PBS-ordered later (modules-queue-eta-v1, 2026-08-04).
     ],
   },
   {
