@@ -26,6 +26,8 @@ export type ActionCenterPayload = {
   redCount: number;
   amberCount: number;
   amberModules: string[];
+  /** ADR-244 — findings with no agent restatement yet. NOT actionable by PBS. */
+  awaitingAgentCount: number;
   needsYou: number;
   fetchedAt: string;
 };
@@ -44,7 +46,7 @@ export async function fetchActionCenter(): Promise<ActionCenterPayload> {
       .not('open_question', 'is', null)
       .in('status', ['new', 'acked', 'processing']),
     (sb as any).from('v_module_findings')
-      .select('id, module_doc_type, display_name, finding, status, blocking')
+      .select('id, module_doc_type, display_name, finding, status, blocking, has_restatement, owner_confirmed')
       .in('status', ['open', 'acknowledged']),
     (sb as any).from('v_owner_responses')
       .select('id, signal_id, response_kind, ref, summary, created_at')
@@ -83,17 +85,29 @@ export async function fetchActionCenter(): Promise<ActionCenterPayload> {
     });
   }
 
-  // ---- Finding split: red = open (needs YOU), amber = acknowledged (in build) ----
+  // ---- Finding split — ADR-244 (PBS 2026-08-06) --------------------------------
+  // WAS: red = status 'open', amber = status 'acknowledged'. Both were wrong.
+  // The gate that actually moves a finding into build is the owner's
+  // "Confirm understanding" tick, not the status column. On 2026-08-06 that gap
+  // meant 16 findings waiting for PBS were labelled "confirmed → in build" and
+  // vanished from his inbox, while 17 findings with NO restatement yet showed a
+  // Confirm button that had nothing to confirm — a dead click.
+  //
+  // RED (needs YOU)  = a restatement exists and PBS has not ticked it.
+  // AMBER (in build) = PBS ticked it.
+  // NEITHER          = no restatement yet. That is the agent's move, not his,
+  //                    so it must not appear in his inbox at all.
   const findings = findingsRes?.data ?? [];
-  const red = findings.filter((f: any) => f.status === 'open');
-  const amber = findings.filter((f: any) => f.status === 'acknowledged');
+  const red   = findings.filter((f: any) => f.has_restatement && !f.owner_confirmed);
+  const amber = findings.filter((f: any) => f.owner_confirmed);
+  const awaitingAgent = findings.filter((f: any) => !f.has_restatement);
   for (const f of red) {
     inbox.push({
       kind: 'finding-red',
       title: `Finding #${f.id} · ${f.display_name ?? f.module_doc_type}`,
       detail: String(f.finding ?? '').slice(0, 140),
       cta: 'Confirm',
-      href: `/holding/it2/modules/findings/${encodeURIComponent(f.module_doc_type)}`,
+      href: `/holding/it2/modules/findings/${encodeURIComponent(f.module_doc_type)}#finding-${f.id}`,
     });
   }
 
@@ -127,6 +141,7 @@ export async function fetchActionCenter(): Promise<ActionCenterPayload> {
     redCount: red.length,
     amberCount: amber.length,
     amberModules: Array.from(new Set(amber.map((f: any) => String(f.module_doc_type)))),
+    awaitingAgentCount: awaitingAgent.length,
     needsYou: inbox.length,
     fetchedAt: new Date().toISOString(),
   };
