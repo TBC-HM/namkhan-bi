@@ -554,7 +554,7 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                             <div style={{ fontSize: 11, fontWeight: 700, color: '#084838', background: '#EAF1EE', borderRadius: 6, padding: '8px 10px', alignSelf: 'start' }}>
                               🔋 Battery-owned calculation finding — repairs nightly (20:30Z), evidence-gated, closes itself. Nothing to click.
                             </div>
-                          ) : (r.open_question || r.agent_phase === 'needs_human') && (
+                          ) : (r.open_question || (r.agent_phase === 'needs_human' && !(r.body ?? '').includes('[OWNER ANSWER'))) && (
                             <div>
                               {r.open_question ? (
                                 <QuestionPanel
@@ -565,6 +565,14 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                                   compact
                                 />
                               ) : (
+                                /* PBS 2026-08-06: an ANSWERED bug was still showing
+                                   "no options provided — agent contract gap". agent_phase is derived
+                                   from the last agent RUN, not from the bug row, so it stays
+                                   'needs_human' forever — it outlives the question it refers to.
+                                   The 2026-07-27 patch special-cased battery-owned bugs only; every
+                                   other answered bug kept the false alarm. A bug whose body already
+                                   carries an [OWNER ANSWER] has no missing options: it has answered
+                                   ones. Only a genuinely unanswered needs_human run is a contract gap. */
                                 <MissingOptionsFallback notes={r.notes} />
                               )}
                             </div>
