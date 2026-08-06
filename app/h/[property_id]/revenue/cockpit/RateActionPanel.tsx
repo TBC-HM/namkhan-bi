@@ -178,14 +178,24 @@ export function ActionQueue({ rows }: { rows: RateActionRow[] }) {
 
 // ─── Propose form ─────────────────────────────────────────────────────────
 
-export function ProposeForm({ propertyId }: { propertyId: number }) {
+export function ProposeForm({
+  propertyId,
+  prefill,
+}: {
+  propertyId: number;
+  // G4 (brief revenue-module-v1): forecast scenario → rate action handoff.
+  // The cockpit page parses ?propose_rate/&scenario_id/... query params and
+  // passes them here so the form opens pre-filled; the rationale carries the
+  // scenario id + run date, which is the back-link of the two-way tie.
+  prefill?: { proposed?: string; rationale?: string };
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(prefill));
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [current, setCurrent] = useState('');
-  const [proposed, setProposed] = useState('');
-  const [why, setWhy] = useState('');
+  const [proposed, setProposed] = useState(prefill?.proposed ?? '');
+  const [why, setWhy] = useState(prefill?.rationale ?? '');
   const [state, setState] = useState<'idle' | 'busy' | 'error' | 'blocked'>('idle');
   const [msg, setMsg] = useState('');
 
