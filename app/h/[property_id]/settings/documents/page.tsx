@@ -14,8 +14,10 @@ export const revalidate = 0;
 
 async function fetchDocSettings(propertyId: number) {
   const sb = getSupabaseAdmin();
-  const [familyRows, vocab, cases, collections, projects, tagRows, authors] = await Promise.all([
+  const [familyRows, familyVocabRows, vocab, cases, collections, projects, tagRows, authors] = await Promise.all([
     sb.from('v_doc_register').select('doc_type').eq('property_id', propertyId),
+    // Governed family vocab (dms-doc-families-governance-v1, finding #98).
+    sb.from('v_doc_type_vocab').select('value, label, sort_order, active, doc_count').eq('property_id', propertyId).order('sort_order').order('value'),
     sb.from('v_doc_subtype_vocab').select('doc_type, subtype_slug, label, time_model, sort_order').order('doc_type').order('label'),
     sb.from('v_doc_cases').select('case_ref, title, matter_type, status').eq('property_id', propertyId).order('case_ref'),
     sb.from('v_doc_collections').select('name, description, is_smart').eq('property_id', propertyId).order('name'),
@@ -40,6 +42,7 @@ async function fetchDocSettings(propertyId: number) {
 
   return {
     families: familiesWithCounts,
+    familyVocab: (familyVocabRows.data ?? []) as any[],
     subtypeVocab: (vocab.data ?? []) as any[],
     cases: (cases.data ?? []) as any[],
     collections: (collections.data ?? []) as any[],
@@ -92,6 +95,7 @@ export default async function DocumentsSettingsPage({ params }: { params: { prop
             <DocRegistrySettingsPanel
               propertyId={propertyId}
               families={d.families}
+              familyVocab={d.familyVocab}
               subtypeVocab={d.subtypeVocab}
               projects={d.projects}
               cases={d.cases}
