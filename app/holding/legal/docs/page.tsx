@@ -158,13 +158,22 @@ export default async function HoldingLegalDocsPage({ searchParams }: Props) {
     key: s.href, label: s.label, href: s.href, active: s.href === '/holding/legal/docs',
   }));
 
+  // §3 (A4): expected families for the filtered-empty state. Governed vocabulary
+  // (v_doc_subtype_vocab doc_type) first — per owner-confirmed finding #98 the
+  // structure comes top-down, not from free text — falling back to families
+  // already in use at holding scope. No new taxonomy invented here.
+  const expectedFamilies = Array.from(new Set([
+    ...(((vocab ?? []) as { doc_type: string | null }[]).map((v) => String(v.doc_type ?? '').trim())),
+    ...families,
+  ].filter(Boolean))).sort();
+
   return (
     <DashboardPage
       title="Legal · Holding · Docs"
       subtitle={`Holding scope · ${total.toLocaleString('en-US')} document${total === 1 ? '' : 's'} · no property assignment`}
       tabs={tabs}
     >
-      <div style={{ gridColumn: '1 / -1' }}>
+      <div id="doc-upload" style={{ gridColumn: '1 / -1' }}>
         <Container title="Upload documents" subtitle="PDF · DOCX · XLSX · TXT · CSV · ODS — filed at HOLDING level, not under a property" density="compact">
           <DocUploadDropzone propertyId={0} />
         </Container>
@@ -190,6 +199,8 @@ export default async function HoldingLegalDocsPage({ searchParams }: Props) {
             totalRows={total}
             totalPages={totalPages}
             pageSize={PAGE_SIZE}
+            emptyStateVariant="holding"
+            expectedFamilies={expectedFamilies}
           />
         </Container>
       </div>
