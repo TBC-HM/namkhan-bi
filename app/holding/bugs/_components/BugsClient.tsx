@@ -372,24 +372,13 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
     setTimeout(() => setFlash(null), 2500);
   }
 
-  async function answerBugQuestion(id: number, choice: string) {
-    setBusy(id);
-    try {
-      const r = await fetch('/api/cockpit/bugs/answer', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ bug_id: id, choice }),
-      });
-      const j = await r.json();
-      if (r.ok) {
-        setRows((prev) => prev.map((x) => x.id === id ? { ...x, status: 'acked', open_question: null } : x));
-        setFlash(`Answered · #${id} → acked`);
-      } else {
-        setFlash(`Answer failed: ${j.error ?? r.status}`);
-      }
-    } finally {
-      setBusy(null);
-      setTimeout(() => setFlash(null), 3000);
-    }
+  // owner-answer-path-consolidation-v1: QuestionPanel POSTs the answer itself —
+  // this callback only records the result locally. The old version POSTed a
+  // SECOND time here, double-answering every bug question.
+  function markBugAnswered(id: number) {
+    setRows((prev) => prev.map((x) => x.id === id ? { ...x, status: 'acked', open_question: null } : x));
+    setFlash(`Answered · #${id} → acked`);
+    setTimeout(() => setFlash(null), 3000);
   }
 
   function toggle(id: number) {
@@ -560,8 +549,8 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                                 <QuestionPanel
                                   question={r.open_question}
                                   answerUrl="/api/cockpit/bugs/answer"
-                                  answerBody={(choice) => ({ bug_id: r.id, choice })}
-                                  onAnswered={(choice) => answerBugQuestion(r.id, choice)}
+                                  answerBody={(a) => ({ bug_id: r.id, ...a })}
+                                  onAnswered={() => markBugAnswered(r.id)}
                                   compact
                                 />
                               ) : (
@@ -573,7 +562,7 @@ export default function BugsClient({ initialRows }: { initialRows: BugRow[] }) {
                                    other answered bug kept the false alarm. A bug whose body already
                                    carries an [OWNER ANSWER] has no missing options: it has answered
                                    ones. Only a genuinely unanswered needs_human run is a contract gap. */
-                                <MissingOptionsFallback notes={r.notes} />
+                              <MissingOptionsFallback notes={r.notes} />
                               )}
                             </div>
                           )}
