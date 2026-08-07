@@ -1,20 +1,15 @@
 // app/holding/it2/system/cost/page.tsx
-// Cost tab — V2 port. Aggregates Anthropic spend from BOTH
-//   cockpit.cap_skill_calls.cost_usd_milli (skill invocations)
-//   public.cockpit_audit_log.cost_usd_milli (governance writes)
-// over 24h / 7d / 30d windows. Top tickets (24h) + top agents (7d) by
-// cumulative cost. Server-rendered with a 60s client poll.
-//
-// Author: IT-team agent · 2026-05-13 · #58.
-
-import { fetchCostBreakdown } from '@/lib/cockpit/data-port';
-import { CostView } from './CostView';
+// RETIRED (owner finding #70, 2026-08-05 · brief cost-governance-v2 · ADR-196/230).
+// This page read the LEGACY capture path (cockpit.cap_skill_calls.cost_usd_milli +
+// cockpit_audit_log.cost_usd_milli) — superseded by costs.* (immutable ledger).
+// Two cost surfaces disagreed by construction; one had to go. The canonical cost
+// surface is /holding/finance/costs (Cost Governance Engine v2). Live burn +
+// kill switch: /holding/it2/system/automation. No data lost — the legacy tables
+// remain in the DB; this route just no longer renders a dead path.
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const fetchCache = 'force-no-store';
 
-export default async function CockpitV2CostPage() {
-  const breakdown = await fetchCostBreakdown();
-  return <CostView initial={breakdown} />;
+export default function LegacyIt2CostRedirect() {
+  redirect('/holding/finance/costs');
 }
