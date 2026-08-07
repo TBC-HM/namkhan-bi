@@ -460,13 +460,15 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
                 ) : (
                   <BlockEditor
                     pageId={selected.id}
-                    sections={sections}
-                    onUpdate={(updated) => {
+                    propertyId={selected.property_id}
+                    blocks={sections}
+                    onBlocksChange={(updated) => {
                       setSections(updated);
                       setPages((prev) =>
                         prev.map((p) => (p.id === selected.id ? { ...p, updated_at: new Date().toISOString() } : p))
                       );
                     }}
+                    onMessage={setMsg}
                   />
                 )}
               </div>
