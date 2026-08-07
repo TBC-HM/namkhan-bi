@@ -29,6 +29,7 @@ const BRIEF_SLUG = process.env.BRIEF_SLUG!;
 const MODEL = process.env.BUILDER_MODEL ?? 'claude-sonnet-4-5-20250929';
 const RUN_ID = process.env.GITHUB_RUN_ID ?? 'local';
 const WORKER = `gha-brief-builder-${RUN_ID}`;
+let METER_TURN = 0; // finding #87: idempotent run_ref counter for per-call metering
 
 // ADR-240: 60 turns with no cache is what produced the 80:1 input:output ratio — cost grows with
 // the SQUARE of turn count. 25 is enough for one coherent slice, which is all a builder may do.
@@ -173,23 +174,31 @@ async function anthropic(messages: any[]): Promise<any> {
     throw new Error(`anthropic ${res.status}: ${errText.slice(0, 300)}`);
   }
   const json = await res.json();
-  // ADR-230 §3: builders were invisible — 475 duplicate sessions over 7 days cost
-  // thousands while costs.ai_usage_events recorded $2.23 and cost_burn_alarm watched a
-  // number that could not move. Every model call now meters itself into the EXISTING
-  // costs table (map-don't-duplicate; cost-governance-v2 owns task_runs and budgets).
+  // ADR-230 §3 / finding #87: builders were invisible — 475 duplicate sessions over 7
+  // days cost thousands while costs.ai_usage_events recorded $2.23 and cost_burn_alarm
+  // watched a number that could not move. The 08-06 fix (raw INSERT into
+  // costs.ai_usage_events) NEVER inserted a row: it omitted NOT NULL no-default columns
+  // (provider_id, calculated_cost, idempotency_key) and the silent catch hid every
+  // failure. Now: report via public.fn_ai_usage_report → public.ai_token_meter, and the
+  // existing hourly ingest (costs.fn_ingest_ai_usage + ledger) flows it into
+  // costs.ai_usage_events AND costs.cost_events consistently (parity preserved,
+  // map-don't-duplicate). run_ref is idempotent per run+turn. Failures LOG — a broken
+  // meter must be visible in the GHA log, never silent again — but never break a build.
   try {
     const u = json?.usage ?? {};
-    await sql(
-      `INSERT INTO costs.ai_usage_events
-         (agent_handle, model_key, request_type, input_units, cached_input_units,
-          output_units, succeeded, source_table, source_id, occurred_at)
-       VALUES ('gha-brief-builder', ${sqlLit(String(MODEL))}, 'messages',
-               ${Number(u.input_tokens ?? 0)}, ${Number(u.cache_read_input_tokens ?? 0)},
-               ${Number(u.output_tokens ?? 0)}, true,
-               'governance.builder_heartbeats', ${sqlLit(String(BRIEF_SLUG))}, now())`
-    );
-  } catch {
-    /* metering must never break a build */
+    METER_TURN++;
+    const r = await rpc('fn_ai_usage_report', {
+      p_agent_handle: WORKER,
+      p_model: String(MODEL),
+      p_tokens_in: Number(u.input_tokens ?? 0),
+      p_tokens_cached: Number(u.cache_read_input_tokens ?? 0),
+      p_tokens_out: Number(u.output_tokens ?? 0),
+      p_run_ref: `gha:${RUN_ID}:t${METER_TURN}`,
+      p_source: 'gha-brief-builder',
+    });
+    if (!r?.ok) console.error('METERING FAILED (non-fatal):', JSON.stringify(r));
+  } catch (e: any) {
+    console.error('METERING FAILED (non-fatal):', e?.message ?? e);
   }
   return json;
 }
