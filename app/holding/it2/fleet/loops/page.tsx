@@ -1,17 +1,24 @@
 // app/holding/it2/fleet/loops/page.tsx
-// Loops & Chains — loops-audit-v1 (2026-08-07, handover v55).
+// Loops & Chains — loops-audit-v1 slice 2 (2026-08-07, handover v55).
 //
-// Read-only review surface. It exists so a missing exit test is visible in five
-// seconds without reading SQL. It is NOT an editing surface: the spec is the
-// source of truth, the picture is generated from it (decision D2).
+// PBS 2026-08-07: "in the UI a Loop is a cronjob? group them by department,
+// click a row and I see the diagram and the detail - I cant scroll 140 loops."
 //
-// Reads: public.v_cron_register (bridge view — cron.* is unreachable from the
-// standard client, claude_md 0.5). Same source as the Cron register, grouped
-// by structural class instead of by priority.
+// A cron job is a TRIGGER, not a loop. One pipeline is several cron jobs:
+// enqueue -> send -> quality-sweep IS the newsletter loop. So this page lists
+// the 19 real pipelines, filtered by department (same taxonomy as Build ->
+// Specs), each row collapsed to one line and expanding to its diagram +
+// exit condition + member jobs. Nobody scrolls 140 rows here — that is what
+// the register at /fleet/cron is for.
+//
+// Read-only by design: the spec is the source of truth (decision D2).
+// Reads public.v_cron_register (bridge view, claude_md 0.5).
 
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
+import { ChainDiagram, LoopDiagram, HybridDiagram } from '../_lib/Diagrams';
+import { PIPELINES, SHAPE_LABEL, DEPTS, deptOf, type Pipeline, type Dept } from '../_lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,19 +36,9 @@ type Row = {
   handled: boolean;
 };
 
-const CLASSES: Array<{ key: string; title: string; shape: string; risk: string }> = [
-  { key: 'batch-loop', title: 'Cron-paced batch loop', shape: 'LOOP — iteration is the cron tick, cap is the batch size, no exit condition by design', risk: 'Silent backlog. "Caught up" and "starved" look identical — nothing measures drain rate.' },
-  { key: 'refresh', title: 'Refresh / recompute', shape: 'CHAIN — single step', risk: 'Statement timeout, stale materialised view, two consumers of one object.' },
-  { key: 'webhook-chain', title: 'Webhook to route chain', shape: 'CHAIN — net.http_post out to a Vercel route', risk: 'An HTML error page parsed as JSON. Fails partially, looks alive.' },
-  { key: 'watcher', title: 'Alarm / watcher', shape: 'LOOP over conditions', risk: 'Watches something already dead and still reports success.' },
-  { key: 'chain', title: 'Plain chain', shape: 'CHAIN — runs once per tick', risk: 'Undefined handoff contract; silent null passed downstream.' },
-  { key: 'cleanup', title: 'Cleanup / prune', shape: 'CHAIN — deletes', risk: 'Deletes the evidence an incident review would need.' },
-  { key: 'stub', title: 'Stub', shape: 'Logs and returns', risk: 'A module advertised in the UI that does not exist.' },
-];
-
 const FAILURES = [
   { n: 1, where: 'Chain', title: 'Handoff contract undefined', detail: 'Step A returns prose, step B expects JSON. Symptom: B appears to invent fields. Fix: enforce a schema on every step output.' },
-  { n: 2, where: 'Chain', title: 'Silent null pass-through', detail: 'A found 0 rows, B mapped nothing, C wrote empty. Symptom: the page shows $0 and no error exists anywhere. Fix: assert non-empty between steps.' },
+  { n: 2, where: 'Chain', title: 'Silent null pass-through', detail: 'A found 0 rows, B mapped nothing, C wrote empty. Symptom: the page shows zero and no error exists anywhere. Fix: assert non-empty between steps.' },
   { n: 3, where: 'Chain', title: 'No transaction boundary', detail: 'C fails, B writes remain. Fix: stage then commit, or make every step idempotent.' },
   { n: 4, where: 'Loop', title: 'Unverifiable success test', detail: '"Report is good" cannot be evaluated, so the loop runs to its cap every time. Fix: exit on a SQL count, a diff, a status code.' },
   { n: 5, where: 'Loop', title: 'Dedupe against the wrong set', detail: 'Comparing against confirmed instead of seen makes rejected items reappear every round. State also grows each pass until cost blows up.' },
@@ -50,11 +47,11 @@ const FAILURES = [
 ];
 
 const XTASKS = [
-  { id: 'X1', task: 'Wrap every cron command in a logger writing exit_reason + OUTCOME status (not job status) + rows affected', covers: '135 jobs', note: 'The whole game. Every dead job below was invisible for a week for this one reason.' },
+  { id: 'X1', task: 'Wrap every cron command in a logger writing exit_reason + OUTCOME status (not job status)', covers: '135 jobs', note: 'The whole game. Every dead pipeline was invisible for a week for this one reason.' },
   { id: 'X2', task: 'Add max_attempts + dead-letter status to the 8 queue tables', covers: 'all retry loops', note: 'None has a max today — a permanently failing row retries forever.' },
-  { id: 'X3', task: 'Add a drain-rate assertion to the batch loops', covers: 'the silent-backlog class', note: 'For a cron-paced loop the health test is not "did it finish" but "is the queue shrinking".' },
+  { id: 'X3', task: 'Add a drain-rate assertion to the batch loops', covers: 'the silent-backlog class', note: 'Health for a cron-paced loop is "is the queue shrinking", not "did it finish".' },
   { id: 'X4', task: 'Alarm on OUTCOME staleness, not job success', covers: 'whole platform', note: 'Three watchers ran green through six dead jobs.' },
-  { id: 'X5', task: 'Move 2 plaintext webhook secrets out of cron command text into vault', covers: '2 jobs', note: 'Rotate at the Vercel end in the same pass.' },
+  { id: 'X5', task: 'Move 2 plaintext webhook secrets into vault', covers: '2 jobs', note: 'Rotate at the Vercel end in the same pass.' },
   { id: 'X6', task: 'Drop the 2 stale guest.campaigns_bak_* tables', covers: 'housekeeping', note: 'Trivial.' },
 ];
 
@@ -88,13 +85,54 @@ async function getRows(): Promise<Row[]> {
   return (data ?? []) as Row[];
 }
 
-export default async function LoopsAndChainsPage() {
+type Health = { state: 'dead' | 'degraded' | 'partial' | 'ok'; colour: string; label: string };
+
+function healthOf(mine: Row[]): Health {
+  const nDead = mine.filter((r) => r.priority === 'P1').length;
+  const nDeg = mine.filter((r) => r.priority === 'P2').length;
+  const nOff = mine.filter((r) => !r.active).length;
+  if (nDead > 0) return { state: 'dead', colour: TOKENS.terracotta, label: nDead + ' dead' };
+  if (nDeg > 0) return { state: 'degraded', colour: '#B8860B', label: nDeg + ' degraded' };
+  if (nOff > 0) return { state: 'partial', colour: '#7A5EA6', label: nOff + ' off' };
+  return { state: 'ok', colour: '#1F7A4D', label: 'healthy' };
+}
+
+function Diagram({ shape }: { shape: Pipeline['shape'] }) {
+  if (shape === 'chain') return <ChainDiagram />;
+  if (shape === 'loop') return <LoopDiagram />;
+  return <HybridDiagram />;
+}
+
+export default async function LoopsAndChainsPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   const rows = await getRows();
-  const active = rows.filter((r) => r.active);
-  const dead = rows.filter((r) => r.priority === 'P1');
-  const degraded = rows.filter((r) => r.priority === 'P2');
-  const abandoned = rows.filter((r) => r.priority === 'P3');
-  const batch = active.filter((r) => r.job_class === 'batch-loop');
+  const dept = (typeof searchParams?.dept === 'string' ? searchParams.dept : '') as Dept | '';
+  const openKey = typeof searchParams?.open === 'string' ? searchParams.open : '';
+
+  const withRows = PIPELINES.map((p) => {
+    const mine = rows.filter((r) => p.members.includes(r.jobname));
+    return { p, mine, health: healthOf(mine), dept: deptOf(p.key) };
+  });
+
+  const deptCounts = DEPTS.map((d) => ({
+    ...d,
+    n: withRows.filter((w) => w.dept === d.key).length,
+    bad: withRows.filter((w) => w.dept === d.key && (w.health.state === 'dead' || w.health.state === 'degraded')).length,
+  })).filter((d) => d.n > 0);
+
+  const shown = dept ? withRows.filter((w) => w.dept === dept) : withRows;
+  const rank = { dead: 0, degraded: 1, partial: 2, ok: 3 } as const;
+  const ordered = [...shown].sort(
+    (a, b) => rank[a.health.state] - rank[b.health.state] || a.p.name.localeCompare(b.p.name),
+  );
+
+  const mappedJobs = new Set(PIPELINES.flatMap((p) => p.members));
+  const unmapped = rows.filter((r) => !mappedJobs.has(r.jobname)).length;
+  const deadPipes = withRows.filter((w) => w.health.state === 'dead').length;
+  const activeJobs = rows.filter((r) => r.active).length;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -102,195 +140,225 @@ export default async function LoopsAndChainsPage() {
         <h1 style={{ fontSize: 19, fontWeight: 700, color: TOKENS.ink, margin: '0 0 4px' }}>
           Loops &amp; Chains
         </h1>
-        <p style={{ fontSize: 12.5, color: TOKENS.text2, margin: 0, maxWidth: 800, lineHeight: 1.5 }}>
-          A <strong>chain</strong> runs once and ends. A <strong>loop</strong> repeats until an exit
-          condition fires. Most of this platform is a <strong>hybrid</strong> — a chain with one
-          looping stage. Read-only by design: the spec is the source of truth, this is the review
-          surface.
-        </p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
-        {[
-          { k: 'Active loops & chains', v: active.length, c: TOKENS.ink, href: '/holding/it2/fleet/cron' },
-          { k: 'Dead (P1)', v: dead.length, c: TOKENS.terracotta, href: '/holding/it2/fleet/cron?p=P1' },
-          { k: 'Degraded (P2)', v: degraded.length, c: '#B8860B', href: '/holding/it2/fleet/cron?p=P2' },
-          { k: 'Logging exit_reason', v: 0, c: TOKENS.terracotta, href: '/holding/it2/fleet/cron' },
-        ].map((t) => (
-          <Link key={t.k} href={t.href} style={{ ...card, textDecoration: 'none', display: 'block' }}>
-            <div style={lbl}>{t.k}</div>
-            <div style={{ fontSize: 26, fontWeight: 700, fontFamily: MONO, color: t.c, margin: '2px 0' }}>{t.v}</div>
-            <div style={{ fontSize: 10.5, color: TOKENS.forest, fontWeight: 600 }}>Open in register</div>
+        <p style={{ fontSize: 12.5, color: TOKENS.text2, margin: 0, maxWidth: 820, lineHeight: 1.5 }}>
+          <strong style={{ color: TOKENS.ink }}>A cron job is a trigger, not a loop.</strong> One
+          pipeline is several cron jobs — enqueue, send, quality-sweep <em>is</em> the newsletter
+          loop. Pick a department, expand a row for its diagram and detail. The full job-by-job list
+          lives in{' '}
+          <Link href="/holding/it2/fleet/cron" style={{ color: TOKENS.forest, fontWeight: 600 }}>
+            the register
           </Link>
-        ))}
+          .
+        </p>
       </div>
 
-      <div style={{ ...card, borderLeft: `3px solid ${TOKENS.brass}` }}>
-        <div style={lbl}>The structural finding</div>
-        <p style={{ fontSize: 13, color: TOKENS.ink, margin: '6px 0 8px', lineHeight: 1.55, maxWidth: 820 }}>
-          <strong>{batch.length} of {active.length}</strong> active jobs are{' '}
-          <strong>cron-paced batch loops</strong> — the iteration is the cron tick, the cap is the
-          batch size, and there is <strong>no exit condition at all</strong>. That is legitimate for
-          steady-state ingestion, but it means <em>caught up</em> and <em>starved</em> look
-          identical from outside. The failure mode is not runaway cost; it is{' '}
-          <strong>silent, permanent backlog</strong> — if work arrives faster than{' '}
-          <code>batch_size x frequency</code>, the queue grows forever and every run still reports
-          success.
-        </p>
-        <pre
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Link
+          href="/holding/it2/fleet/loops"
           style={{
-            margin: 0, padding: 10, background: '#FBF8F2', border: `1px solid ${TOKENS.border}`,
-            borderRadius: 4, fontFamily: MONO, fontSize: 11, color: TOKENS.ink, overflowX: 'auto',
+            padding: '5px 13px', borderRadius: 5, fontSize: 12, fontWeight: dept ? 400 : 700,
+            textDecoration: 'none', border: '1px solid ' + (dept ? TOKENS.border : TOKENS.forest),
+            background: dept ? 'transparent' : TOKENS.forest, color: dept ? TOKENS.text2 : '#FFF',
           }}
-        >{`-- every minute, forever, no exit test
-SELECT CASE WHEN public.fn_automation_enabled()
-       THEN public.fn_polish_next_batch(2) END;`}</pre>
-        <p style={{ fontSize: 12, color: TOKENS.text2, margin: '8px 0 0' }}>
-          Health test for this class is not &ldquo;did it finish&rdquo; but{' '}
-          <strong style={{ color: TOKENS.ink }}>&ldquo;is the queue shrinking, or at least flat&rdquo;</strong> — task X3 below.
-        </p>
+        >
+          All <span style={{ fontFamily: MONO, opacity: 0.8 }}>{withRows.length}</span>
+        </Link>
+        {deptCounts.map((d) => {
+          const on = dept === d.key;
+          return (
+            <Link
+              key={d.key}
+              href={'/holding/it2/fleet/loops?dept=' + d.key}
+              style={{
+                padding: '5px 13px', borderRadius: 5, fontSize: 12, fontWeight: on ? 700 : 400,
+                textDecoration: 'none', border: '1px solid ' + (on ? TOKENS.forest : TOKENS.border),
+                background: on ? TOKENS.forest : 'transparent', color: on ? '#FFF' : TOKENS.ink,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              {d.bad > 0 && <span style={{ width: 6, height: 6, borderRadius: 3, background: TOKENS.terracotta, display: 'inline-block' }} />}
+              {d.label}
+              <span style={{ fontFamily: MONO, fontSize: 11, opacity: 0.75 }}>{d.n}</span>
+            </Link>
+          );
+        })}
       </div>
 
-      {(dead.length > 0 || abandoned.length > 0) && (
-        <div style={{ ...card, background: '#FDF6F4', borderColor: '#E8CFC7' }}>
-          <div style={lbl}>Needs you</div>
-          <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12.5, color: TOKENS.ink, lineHeight: 1.7 }}>
-            {dead.length > 0 && (
-              <li>
-                <strong>{dead.length} loops are 100% dead.</strong>{' '}
-                <Link href="/holding/it2/fleet/cron?p=P1" style={{ color: TOKENS.forest, fontWeight: 600 }}>
-                  Fix list with causes
-                </Link>
-              </li>
-            )}
-            {abandoned.length > 0 && (
-              <li>
-                <strong>{abandoned.length} disabled jobs</strong> each need a keep-off / revive /
-                delete decision.{' '}
-                <Link href="/holding/it2/fleet/cron?p=P3" style={{ color: TOKENS.forest, fontWeight: 600 }}>
-                  Decide
-                </Link>
-              </li>
-            )}
-            <li>
-              <strong>Nothing logs an outcome.</strong> X1 below instruments all {rows.length} jobs with one wrapper.
-            </li>
-          </ul>
+      {deadPipes > 0 && (
+        <div style={{ ...card, borderLeft: '3px solid ' + TOKENS.terracotta, padding: '10px 14px' }}>
+          <span style={{ fontSize: 12.5, color: TOKENS.ink }}>
+            <strong>{deadPipes} of {withRows.length} pipelines have a dead job inside them</strong>,
+            and <strong style={{ color: TOKENS.terracotta }}>none of the {activeJobs} active jobs</strong>{' '}
+            log an outcome. One wrapper fixes the second problem (X1, in the reference section below).
+          </span>
         </div>
       )}
 
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '9px 14px', background: '#FAF7EF', borderBottom: `1px solid ${TOKENS.border}` }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: TOKENS.ink }}>What exists, by shape</span>
+        {ordered.map((w, i) => (
+          <details key={w.p.key} open={openKey === w.p.key} style={{ borderTop: i === 0 ? 'none' : '1px solid ' + TOKENS.border }}>
+            <summary
+              style={{
+                cursor: 'pointer', listStyle: 'none', padding: '11px 14px',
+                display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+              }}
+            >
+              <span style={{ width: 4, height: 26, borderRadius: 2, background: w.health.colour, flexShrink: 0 }} />
+              <span style={{ fontSize: 13.5, fontWeight: 600, color: TOKENS.ink }}>{w.p.name}</span>
+              <span style={{ fontSize: 8.5, fontWeight: 700, fontFamily: MONO, color: TOKENS.text2, border: '1px solid ' + TOKENS.border, borderRadius: 3, padding: '1px 5px' }}>
+                {SHAPE_LABEL[w.p.shape]}
+              </span>
+              <span style={{ fontSize: 11, color: TOKENS.text3 }}>
+                {DEPTS.find((d) => d.key === w.dept)?.label}
+              </span>
+              <span style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+                <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text2 }}>
+                  {w.mine.length} job{w.mine.length === 1 ? '' : 's'}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: w.health.colour, minWidth: 68, textAlign: 'right' }}>
+                  {w.health.label}
+                </span>
+              </span>
+            </summary>
+
+            <div style={{ padding: '0 14px 16px 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ fontSize: 12.5, color: TOKENS.text2, margin: 0, lineHeight: 1.5, maxWidth: 760 }}>
+                {w.p.purpose}
+              </p>
+
+              <div style={{ background: '#FBF8F2', border: '1px solid ' + TOKENS.border, borderRadius: 6, padding: '10px 12px' }}>
+                <Diagram shape={w.p.shape} />
+              </div>
+
+              <div style={{ fontSize: 12, color: TOKENS.text2 }}>
+                <span style={{ fontWeight: 700, color: TOKENS.ink }}>Should exit when:</span>{' '}
+                {w.p.exitCondition ? (
+                  <code style={{ fontFamily: MONO, fontSize: 11.5 }}>{w.p.exitCondition}</code>
+                ) : (
+                  <em style={{ color: TOKENS.terracotta }}>no exit condition defined</em>
+                )}
+              </div>
+
+              {w.p.warning && (
+                <div style={{ fontSize: 12, color: TOKENS.ink, background: '#FDF6F4', border: '1px solid #E8CFC7', borderRadius: 5, padding: '8px 10px', lineHeight: 1.5 }}>
+                  {w.p.warning}
+                </div>
+              )}
+
+              <div>
+                <div style={{ ...lbl, marginBottom: 5 }}>Jobs in this pipeline</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={th}>Job</th>
+                        <th style={th}>Cadence</th>
+                        <th style={{ ...th, textAlign: 'right' }}>ok / fail 7d</th>
+                        <th style={th}>State</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {w.p.members.map((m) => {
+                        const r = w.mine.find((x) => x.jobname === m);
+                        const c = !r ? TOKENS.text3 : !r.active ? '#7A5EA6' : r.priority === 'P1' ? TOKENS.terracotta : r.priority === 'P2' ? '#B8860B' : TOKENS.text2;
+                        return (
+                          <tr key={m}>
+                            <td style={{ ...td, fontFamily: MONO, fontSize: 11, color: c, textDecoration: r && !r.active ? 'line-through' : 'none' }}>
+                              {m}
+                            </td>
+                            <td style={{ ...td, fontFamily: MONO, fontSize: 10.5, color: TOKENS.text2 }}>
+                              {r ? r.schedule : '—'}
+                            </td>
+                            <td style={{ ...td, fontFamily: MONO, fontSize: 11, textAlign: 'right' }}>
+                              {r ? (
+                                <>
+                                  <span style={{ color: TOKENS.text2 }}>{r.ok_7d}</span>
+                                  <span style={{ color: TOKENS.text3 }}> / </span>
+                                  <span style={{ color: r.fail_7d > 0 ? TOKENS.terracotta : TOKENS.text3, fontWeight: r.fail_7d > 0 ? 700 : 400 }}>{r.fail_7d}</span>
+                                </>
+                              ) : '—'}
+                            </td>
+                            <td style={{ ...td, fontSize: 11, color: c, fontWeight: 600 }}>
+                              {!r ? 'not in cron.job' : !r.active ? 'disabled' : r.priority === 'P1' ? 'dead' : r.priority === 'P2' ? 'degraded' : r.priority === 'P4' ? 'no run 7d' : 'ok'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <Link href={'/holding/it2/fleet/cron?pipe=' + w.p.key} style={{ fontSize: 12, color: TOKENS.forest, fontWeight: 600 }}>
+                Open these {w.mine.length} jobs in the register, with fixes
+              </Link>
+            </div>
+          </details>
+        ))}
+      </div>
+
+      {unmapped > 0 && (
+        <div style={{ ...card, padding: '10px 14px' }}>
+          <span style={{ fontSize: 12, color: TOKENS.text2 }}>
+            <strong style={{ color: TOKENS.ink }}>{unmapped} jobs</strong> belong to no pipeline yet
+            — mostly cleanup and one-off refreshes.{' '}
+            <Link href="/holding/it2/fleet/cron" style={{ color: TOKENS.forest, fontWeight: 600 }}>
+              See them in the register
+            </Link>{' '}
+            and add them to <code>fleet/_lib/pipelines.ts</code> as they earn a name.
+          </span>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={th}>Class</th>
-                <th style={{ ...th, textAlign: 'right' }}>Active</th>
-                <th style={{ ...th, textAlign: 'right' }}>Failing</th>
-                <th style={th}>Shape</th>
-                <th style={th}>Typical failure</th>
-                <th style={th} />
-              </tr>
-            </thead>
-            <tbody>
-              {CLASSES.map((c) => {
-                const inClass = active.filter((r) => r.job_class === c.key);
-                const bad = inClass.filter((r) => r.fail_7d > 0).length;
-                if (inClass.length === 0) return null;
-                return (
-                  <tr key={c.key}>
-                    <td style={{ ...td, fontWeight: 600, whiteSpace: 'nowrap' }}>{c.title}</td>
-                    <td style={{ ...td, fontFamily: MONO, textAlign: 'right' }}>{inClass.length}</td>
-                    <td style={{ ...td, fontFamily: MONO, textAlign: 'right', color: bad ? TOKENS.terracotta : TOKENS.text3, fontWeight: bad ? 700 : 400 }}>
-                      {bad}
+      )}
+
+      <details style={{ ...card, padding: 0, overflow: 'hidden' }}>
+        <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '11px 14px', fontSize: 12.5, fontWeight: 700, color: TOKENS.ink, background: '#FAF7EF' }}>
+          Reference · the 7 failure points, and the cross-cutting fixes
+        </summary>
+        <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <div style={lbl}>Where they break — always on the arrows, not in the boxes</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4 }}>
+              <tbody>
+                {FAILURES.map((f) => (
+                  <tr key={f.n}>
+                    <td style={{ ...td, width: 34, textAlign: 'center' }}>
+                      <span style={{ display: 'inline-block', width: 20, height: 20, lineHeight: '20px', borderRadius: '50%', background: TOKENS.terracotta, color: '#FFF', fontSize: 11, fontWeight: 700, fontFamily: MONO }}>
+                        {f.n}
+                      </span>
                     </td>
-                    <td style={{ ...td, fontSize: 11.5, color: TOKENS.text2, maxWidth: 260 }}>{c.shape}</td>
-                    <td style={{ ...td, fontSize: 11.5, color: TOKENS.text2, maxWidth: 300 }}>{c.risk}</td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                      <Link href={`/holding/it2/fleet/cron?q=${c.key}`} style={{ fontSize: 11.5, color: TOKENS.forest, fontWeight: 600 }}>
-                        View {inClass.length}
-                      </Link>
-                    </td>
+                    <td style={{ ...td, width: 64, fontSize: 11, color: TOKENS.text2 }}>{f.where}</td>
+                    <td style={{ ...td, width: 210, fontWeight: 600 }}>{f.title}</td>
+                    <td style={{ ...td, fontSize: 12, color: TOKENS.text2, lineHeight: 1.45 }}>{f.detail}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '9px 14px', background: '#FAF7EF', borderBottom: `1px solid ${TOKENS.border}` }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: TOKENS.ink }}>
-            Where they break — the failures are in the arrows, not the boxes
-          </span>
+          <div>
+            <div style={lbl}>Cross-cutting fixes — one change, many jobs</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 4 }}>
+              <tbody>
+                {XTASKS.map((x) => (
+                  <tr key={x.id} style={x.id === 'X1' ? { background: '#FBF8F2' } : undefined}>
+                    <td style={{ ...td, width: 40, fontFamily: MONO, fontWeight: 700, color: x.id === 'X1' ? TOKENS.terracotta : TOKENS.text2 }}>{x.id}</td>
+                    <td style={{ ...td, fontWeight: x.id === 'X1' ? 600 : 400 }}>{x.task}</td>
+                    <td style={{ ...td, fontFamily: MONO, fontSize: 11, color: TOKENS.text2, whiteSpace: 'nowrap' }}>{x.covers}</td>
+                    <td style={{ ...td, fontSize: 11.5, color: TOKENS.text2 }}>{x.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <tbody>
-              {FAILURES.map((f) => (
-                <tr key={f.n}>
-                  <td style={{ ...td, width: 34, textAlign: 'center' }}>
-                    <span
-                      style={{
-                        display: 'inline-block', width: 20, height: 20, lineHeight: '20px',
-                        borderRadius: '50%', background: TOKENS.terracotta, color: '#FFF',
-                        fontSize: 11, fontWeight: 700, fontFamily: MONO,
-                      }}
-                    >
-                      {f.n}
-                    </span>
-                  </td>
-                  <td style={{ ...td, width: 70, fontSize: 11, color: TOKENS.text2, whiteSpace: 'nowrap' }}>{f.where}</td>
-                  <td style={{ ...td, width: 220, fontWeight: 600, whiteSpace: 'nowrap' }}>{f.title}</td>
-                  <td style={{ ...td, fontSize: 12, color: TOKENS.text2, lineHeight: 1.45 }}>{f.detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '9px 14px', background: '#FAF7EF', borderBottom: `1px solid ${TOKENS.border}` }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: TOKENS.ink }}>
-            Cross-cutting fixes — one change, many jobs
-          </span>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ ...th, width: 44 }}>#</th>
-                <th style={th}>Task</th>
-                <th style={th}>Covers</th>
-                <th style={th}>Why</th>
-              </tr>
-            </thead>
-            <tbody>
-              {XTASKS.map((x) => (
-                <tr key={x.id} style={x.id === 'X1' ? { background: '#FBF8F2' } : undefined}>
-                  <td style={{ ...td, fontFamily: MONO, fontWeight: 700, color: x.id === 'X1' ? TOKENS.terracotta : TOKENS.text2 }}>
-                    {x.id}
-                  </td>
-                  <td style={{ ...td, fontWeight: x.id === 'X1' ? 600 : 400 }}>{x.task}</td>
-                  <td style={{ ...td, fontFamily: MONO, fontSize: 11.5, whiteSpace: 'nowrap', color: TOKENS.text2 }}>{x.covers}</td>
-                  <td style={{ ...td, fontSize: 11.5, color: TOKENS.text2 }}>{x.note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </details>
 
       <p style={{ fontSize: 11, color: TOKENS.text3, lineHeight: 1.5, margin: '2px 0 0' }}>
-        Source: <code>public.v_cron_register</code>. <strong>Not covered here and still blind:</strong>{' '}
-        Make scenarios (no inspection path — they run outside the repo and outside{' '}
-        <code>cockpit_audit_log</code>), Vercel API route internals, agent mention handoff chains,
-        and Mews/TDP_BI_HUB jobs in the sibling project. Treat every count as a floor, not a ceiling.
+        Source: <code>public.v_cron_register</code>; pipeline membership is explicit in{' '}
+        <code>fleet/_lib/pipelines.ts</code>, shared with the register so the two can never disagree.{' '}
+        <strong>Not covered and still blind:</strong> Make scenarios (no inspection path), Vercel API
+        route internals, agent mention handoff chains, and Mews/TDP_BI_HUB jobs in the sibling
+        project. Treat every count as a floor, not a ceiling.
       </p>
     </div>
   );
