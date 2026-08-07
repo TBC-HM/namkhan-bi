@@ -11,6 +11,11 @@
 //  4. Approve is disabled until BOTH tracks are complete.
 //  5. Dismiss requires a reason and deletes nothing.
 //  6. All four states render: empty, loading, error, no-permission.
+//
+// 2026-08-07 FIX: /api/specs/upload-md takes MULTIPART FORM DATA (file + goal_id),
+// not JSON. The first version posted JSON, so req.formData() threw and every Start
+// returned 500. Never set Content-Type on a FormData fetch — the browser must set
+// the multipart boundary itself.
 
 import { useState } from 'react';
 
@@ -54,6 +59,10 @@ function Track({ label, done }: { label: string; done: number }) {
   );
 }
 
+function slugify(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'module-request';
+}
+
 export default function ModuleIntakeClient({ goals, intakes, kpis, staleDays }: {
   goals: GoalOption[]; intakes: IntakeRow[]; kpis: Kpis; staleDays: number;
 }) {
@@ -69,24 +78,33 @@ export default function ModuleIntakeClient({ goals, intakes, kpis, staleDays }: 
     if (!description.trim() || !goalId) return;
     setBusy(true); setError(null);
     try {
-      // Reuses the EXISTING md-intake evaluator (md-intake-v1, shipped 2026-08-04).
-      // Do NOT add a second upload path or a second evaluator.
-      const res = await fetch('/api/specs/upload-md', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: 'level2-describe', goal_id: goalId, content: description }),
-      });
-      if (!res.ok) throw new Error(`We could not start this (${res.status}). Nothing was saved.`);
+      // The route reads multipart form data: a real file + goal_id. Wrap the plain
+      // description as an .md file so it lands in dms as verbatim canon, exactly
+      // like an uploaded owner MD. Reuses the md-intake-v1 evaluator — no second path.
+      const title = description.trim().split('\n')[0].slice(0, 80);
+      const body = `# ${title}\n\n_Level-2 tenant intake · described in the owner's own words._\n\n${description.trim()}\n`;
+      const file = new File([body], `level2-${slugify(title)}.md`, { type: 'text/markdown' });
+
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('goal_id', String(goalId));
+      // No Content-Type header — the browser sets the multipart boundary.
+      const res = await fetch('/api/specs/upload-md', { method: 'POST', body: fd });
+
+      if (!res.ok) {
+        let detail = '';
+        try { const j = await res.json(); detail = j?.error ?? ''; } catch { /* non-JSON body */ }
+        throw new Error(detail || `We could not start this (${res.status}). Nothing was saved.`);
+      }
       window.location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Nothing was saved.');
     } finally { setBusy(false); }
   }
 
-  // Dismiss is deliberately NOT wired to a network call yet: /api/specs/dismiss does
-  // not exist. Showing a button that 404s would be a false control — the exact
-  // pattern this pipeline exists to stop. The reason is captured and surfaced so the
-  // owner can act, until the route lands.
+  // Dismiss is deliberately NOT wired to a network call: /api/specs/dismiss does not
+  // exist. A button that 404s is a false control — the exact pattern this pipeline
+  // exists to stop. The reason is captured and surfaced until the route lands.
   function requestDismiss(slug: string) {
     if (!reason.trim()) return;
     setNote(`Noted for "${slug}": ${reason} — tell PBS; dropping is not automatic yet.`);
@@ -158,7 +176,7 @@ export default function ModuleIntakeClient({ goals, intakes, kpis, staleDays }: 
         <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={start} disabled={busy || !description.trim() || !goalId}
                   style={btn(PRIMARY, '#F4EFE2', !busy && !!description.trim() && !!goalId)}>
-            {busy ? 'Working…' : 'Start'}
+            {busy ? 'Reading it…' : 'Start'}
           </button>
           <span style={{ fontSize: 11.5, color: SOFT }}>Nothing is built until you approve it.</span>
         </div>
