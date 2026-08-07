@@ -6,19 +6,19 @@
 // the surface that makes that visible, and every row carries the actual next
 // action — not a status badge you can do nothing with.
 //
-// Reads : public.v_cron_register (bridge view, claude_md 0.5 — cron.* is not
-//         reachable from the standard client). It joins cron.job + 7d run stats
-//         + cockpit.cron_job_actions. Action text is DATA, never hardcoded here.
-// Writes: cockpit.cron_job_actions.handled via the Mark-handled server action.
+// This is the JOB-level view. The pipeline-level view (19 named loops and
+// chains, by department) is /fleet/loops. ?pipe=<key> filters this register to
+// one pipeline, using the shared membership map so the two cannot disagree.
 //
-// Reuses the pre-existing but unrendered views rather than duplicating them:
-// v_cockpit_cron_jobs / v_cockpit_cron_recent / v_schedule_matrix all existed
-// with zero consumers before this page.
+// Reads : public.v_cron_register (bridge view, claude_md 0.5 — cron.* is not
+//         reachable from the standard client).
+// Writes: cockpit.cron_job_actions.handled via the Mark-handled server action.
 
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
+import { PIPELINES } from '../_lib/pipelines';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -89,14 +89,14 @@ async function getRows(): Promise<Row[]> {
 function ago(ts: string | null): string {
   if (!ts) return 'never';
   const mins = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
-  return `${Math.floor(mins / 1440)}d ago`;
+  if (mins < 60) return mins + 'm ago';
+  if (mins < 1440) return Math.floor(mins / 60) + 'h ago';
+  return Math.floor(mins / 1440) + 'd ago';
 }
 
 const card: React.CSSProperties = {
   background: TOKENS.bgRaised,
-  border: `1px solid ${TOKENS.border}`,
+  border: '1px solid ' + TOKENS.border,
   borderRadius: 8,
   padding: '12px 14px',
 };
@@ -107,11 +107,11 @@ const lbl: React.CSSProperties = {
 const th: React.CSSProperties = {
   textAlign: 'left', padding: '7px 10px', fontSize: 10, fontWeight: 700,
   letterSpacing: '0.06em', textTransform: 'uppercase', color: TOKENS.text2,
-  borderBottom: `1px solid ${TOKENS.border}`, whiteSpace: 'nowrap',
+  borderBottom: '1px solid ' + TOKENS.border, whiteSpace: 'nowrap',
 };
 const td: React.CSSProperties = {
   padding: '9px 10px', fontSize: 12.5, color: TOKENS.ink,
-  borderBottom: `1px solid ${TOKENS.border}`, verticalAlign: 'top',
+  borderBottom: '1px solid ' + TOKENS.border, verticalAlign: 'top',
 };
 
 export default async function CronRegisterPage({
@@ -122,6 +122,8 @@ export default async function CronRegisterPage({
   const rows = await getRows();
   const filter = typeof searchParams?.p === 'string' ? searchParams.p : '';
   const q = typeof searchParams?.q === 'string' ? searchParams.q.toLowerCase() : '';
+  const pipeKey = typeof searchParams?.pipe === 'string' ? searchParams.pipe : '';
+  const pipe = pipeKey ? PIPELINES.find((p) => p.key === pipeKey) ?? null : null;
 
   const counts = ORDER.reduce<Record<string, number>>((acc, p) => {
     acc[p] = rows.filter((r) => r.priority === p).length;
@@ -135,12 +137,20 @@ export default async function CronRegisterPage({
   const shown = rows.filter(
     (r) =>
       (!filter || r.priority === filter) &&
+      (!pipe || pipe.members.includes(r.jobname)) &&
       (!q || r.jobname.toLowerCase().includes(q) || r.job_class.includes(q)),
   );
 
   const grouped = ORDER.map((p) => ({ p, list: shown.filter((r) => r.priority === p) })).filter(
     (g) => g.list.length > 0,
   );
+
+  const keep = (extra: string) => {
+    const parts: string[] = [];
+    if (pipeKey) parts.push('pipe=' + pipeKey);
+    if (extra) parts.push(extra);
+    return parts.length ? '/holding/it2/fleet/cron?' + parts.join('&') : '/holding/it2/fleet/cron';
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -149,16 +159,35 @@ export default async function CronRegisterPage({
           Cron jobs · register
         </h1>
         <p style={{ fontSize: 12.5, color: TOKENS.text2, margin: 0, maxWidth: 780, lineHeight: 1.5 }}>
-          Every scheduled job on the platform, ranked by what needs doing. Job status is logged;{' '}
+          Every scheduled job, ranked by what needs doing. Job status is logged;{' '}
           <strong style={{ color: TOKENS.ink }}>outcome status is not</strong> — which is why six
-          jobs sat 100% dead for a week without an alarm. Each row carries its actual fix.
+          jobs sat 100% dead for a week without an alarm. For the pipeline view by department, see{' '}
+          <Link href="/holding/it2/fleet/loops" style={{ color: TOKENS.forest, fontWeight: 600 }}>
+            Loops &amp; Chains
+          </Link>
+          .
         </p>
       </div>
+
+      {pipe && (
+        <div style={{ ...card, borderLeft: '3px solid ' + TOKENS.forest, display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12.5, color: TOKENS.ink }}>
+            Filtered to the <strong>{pipe.name}</strong> pipeline — {shown.length} job
+            {shown.length === 1 ? '' : 's'}.
+          </span>
+          <span style={{ fontSize: 11.5, color: TOKENS.text2 }}>
+            Should exit when: <code style={{ fontFamily: MONO, fontSize: 11 }}>{pipe.exitCondition || 'undefined'}</code>
+          </span>
+          <Link href="/holding/it2/fleet/cron" style={{ fontSize: 12, color: TOKENS.forest, fontWeight: 600, marginLeft: 'auto' }}>
+            Show all {rows.length}
+          </Link>
+        </div>
+      )}
 
       <div
         style={{
           ...card,
-          borderLeft: `3px solid ${TOKENS.terracotta}`,
+          borderLeft: '3px solid ' + TOKENS.terracotta,
           display: 'flex',
           gap: 14,
           alignItems: 'baseline',
@@ -181,7 +210,7 @@ export default async function CronRegisterPage({
           return (
             <Link
               key={p}
-              href={on ? '/holding/it2/fleet/cron' : `/holding/it2/fleet/cron?p=${p}`}
+              href={on ? keep('') : keep('p=' + p)}
               style={{
                 ...card,
                 textDecoration: 'none',
@@ -204,7 +233,7 @@ export default async function CronRegisterPage({
         })}
       </div>
 
-      {unhandledCritical > 0 && (
+      {unhandledCritical > 0 && !pipe && (
         <div style={{ ...card, background: '#FDF6F4', borderColor: '#E8CFC7' }}>
           <span style={{ fontSize: 12.5, color: TOKENS.ink }}>
             <strong>{unhandledCritical}</strong> dead or degraded job
@@ -219,26 +248,27 @@ export default async function CronRegisterPage({
 
       <form method="get" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         {filter && <input type="hidden" name="p" value={filter} />}
+        {pipeKey && <input type="hidden" name="pipe" value={pipeKey} />}
         <input
           name="q"
           defaultValue={q}
           placeholder="Filter by job name or class..."
           style={{
             padding: '6px 10px', fontSize: 12.5, fontFamily: 'inherit', minWidth: 260,
-            border: `1px solid ${TOKENS.border}`, borderRadius: 4, background: '#FFF', color: TOKENS.ink,
+            border: '1px solid ' + TOKENS.border, borderRadius: 4, background: '#FFF', color: TOKENS.ink,
           }}
         />
         <button
           type="submit"
           style={{
             padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            border: `1px solid ${TOKENS.forest}`, borderRadius: 4,
+            border: '1px solid ' + TOKENS.forest, borderRadius: 4,
             background: TOKENS.forest, color: '#FFF', fontFamily: 'inherit',
           }}
         >
           Filter
         </button>
-        {(q || filter) && (
+        {(q || filter || pipeKey) && (
           <Link href="/holding/it2/fleet/cron" style={{ fontSize: 12, color: TOKENS.text2 }}>
             Clear
           </Link>
@@ -260,7 +290,7 @@ export default async function CronRegisterPage({
             style={{
               padding: '9px 14px',
               background: '#FAF7EF',
-              borderBottom: `1px solid ${TOKENS.border}`,
+              borderBottom: '1px solid ' + TOKENS.border,
               display: 'flex',
               alignItems: 'baseline',
               gap: 10,
@@ -322,7 +352,7 @@ export default async function CronRegisterPage({
                           <pre
                             style={{
                               margin: '6px 0 0', padding: 8, background: '#FBF8F2',
-                              border: `1px solid ${TOKENS.border}`, borderRadius: 4,
+                              border: '1px solid ' + TOKENS.border, borderRadius: 4,
                               fontFamily: MONO, fontSize: 10.5, whiteSpace: 'pre-wrap',
                               color: TOKENS.ink, maxHeight: 160, overflow: 'auto',
                             }}
@@ -334,7 +364,7 @@ export default async function CronRegisterPage({
                       {r.handled && r.handled_at && (
                         <div style={{ marginTop: 5, fontSize: 10.5, color: '#1F7A4D', fontWeight: 600 }}>
                           Handled {ago(r.handled_at)}
-                          {r.handled_by ? ` by ${r.handled_by}` : ''}
+                          {r.handled_by ? ' by ' + r.handled_by : ''}
                         </div>
                       )}
                     </td>
@@ -347,7 +377,7 @@ export default async function CronRegisterPage({
                           style={{
                             padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer',
                             borderRadius: 4, fontFamily: 'inherit',
-                            border: `1px solid ${r.handled ? TOKENS.border : TOKENS.forest}`,
+                            border: '1px solid ' + (r.handled ? TOKENS.border : TOKENS.forest),
                             background: r.handled ? 'transparent' : TOKENS.forest,
                             color: r.handled ? TOKENS.text2 : '#FFF',
                           }}
@@ -367,8 +397,8 @@ export default async function CronRegisterPage({
       <p style={{ fontSize: 11, color: TOKENS.text3, lineHeight: 1.5, margin: '2px 0 0' }}>
         Source: <code>public.v_cron_register</code> — <code>cron.job</code> + 7-day run stats +{' '}
         <code>cockpit.cron_job_actions</code>. Action text is editable data, not code. Low ok-counts
-        against a frequent cadence usually mean the job is <em>new</em> (jobids over 190 were created in
-        the last days), not that runs were skipped — check the jobid before concluding anything
+        against a frequent cadence usually mean the job is <em>new</em> (jobids over 190 were created
+        in the last days), not that runs were skipped — check the jobid before concluding anything
         failed. Make scenarios are not visible here and remain unswept.
       </p>
     </div>
