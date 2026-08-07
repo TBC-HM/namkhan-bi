@@ -73,7 +73,7 @@ export interface MdIntakeResult {
   notes: string[];
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function slugifyFile(name: string): string {
   return name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
@@ -355,13 +355,28 @@ export async function runMdIntake(opts: {
         tags: ['spec', 'md-intake', moduleDocType],
         goal_id: opts.goalId,
         priority: nextPriority,
-        open_question: evaluation.owner_questions.length ? evaluation.owner_questions : null,
         target_repo: 'TBC-HM/namkhan-bi',
         target_branch: 'main',
         last_updated_by: 'md-intake-v1',
       });
       if (bErr) throw new Error(`brief insert failed: ${bErr.message}`);
       briefAction = 'created';
+      // owner-answer-path-consolidation-v1: this used to write an ARRAY of
+      // bespoke question objects straight into open_question — the exact shape
+      // drift that blanked questions (finding 97 class). Questions now file
+      // through fn_set_brief_open_question → the ONE contract
+      // (fn_owner_question_ask: validated options, one open question per ref,
+      // mirror kept in sync). One at a time per contract — the first files
+      // now; the rest stay readable in the brief's OPEN OWNER QUESTIONS
+      // section and file as predecessors are answered.
+      if (evaluation.owner_questions.length) {
+        const q0 = evaluation.owner_questions[0];
+        const { error: qSetErr } = await (sb as any).rpc('fn_set_brief_open_question', {
+          p_slug: briefSlug,
+          p_question: { question: q0.question, options: q0.options, asked_by: 'md-intake-v1' },
+        });
+        if (qSetErr) notes.push(`open_question NOT filed for ${briefSlug}: ${qSetErr.message}`);
+      }
     }
 
     if (existingQueueRow) {
