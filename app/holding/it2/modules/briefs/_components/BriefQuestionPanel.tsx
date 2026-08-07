@@ -38,19 +38,29 @@ export function BriefQuestionInline({ slug, question }: { slug: string; question
 
   const opts = [...question.options].sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0));
 
-  async function choose(label: string) {
+  // owner-answer-path-consolidation-v1: answers go through THE single owner
+  // route (/api/owner/answer → fn_owner_question_answer). Falls back to the
+  // legacy brief endpoint if this brief has no contract row yet (404).
+  async function submit(answer: { choice?: string; free_text?: string }) {
     setBusy(true); setErr(null);
     try {
-      const r = await fetch('/api/cockpit/briefs/answer', {
+      let r = await fetch('/api/owner/answer', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, choice: label }),
+        body: JSON.stringify({ asker_kind: 'brief', ref_id: slug, ...answer }),
       });
+      if (r.status === 404) {
+        r = await fetch('/api/cockpit/briefs/answer', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, ...answer }),
+        });
+      }
       const j = await r.json();
       if (!r.ok) { setErr(j.error ?? 'Failed'); return; }
       setAnswered(true);
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   }
+  const choose = (label: string) => submit({ choice: label });
 
   return (
     <div style={{ padding: '10px 12px', background: 'rgba(180,138,58,0.1)', borderRadius: 6, borderLeft: '3px solid var(--status-amber)' }}>
@@ -89,7 +99,7 @@ export function BriefQuestionInline({ slug, question }: { slug: string; question
         />
         <button
           disabled={busy || free.trim().length < 3}
-          onClick={() => choose(free.trim())}
+          onClick={() => submit({ free_text: free.trim() })}
           style={{ marginTop: 6, fontSize: 11, fontWeight: 700, padding: '6px 14px', borderRadius: 5,
             cursor: busy || free.trim().length < 3 ? 'not-allowed' : 'pointer',
             border: `1px solid ${TOKENS.forest}`,
