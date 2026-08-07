@@ -51,6 +51,12 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it2/modules/specs',  label: 'Specs' },
       { href: '/holding/it2/modules/queue',  label: 'Queue' },
       { href: '/holding/it2/modules/intake', label: '+ Intake' },
+      // + Module (intake-l2-s4, 2026-08-07 · spec intake-v2-single-surface, ADR-260):
+      // LEVEL 2 intake — a TENANT starts a module for their own property, versus
+      // "+ Intake" which is LEVEL 1, building the platform itself (PBS/TBC operator).
+      // Sibling by PBS decision: level 1 stays untouched until level 2 is proven,
+      // then "+ Intake" is retired. 5 subs — law 659 cap is 5, now at the cap.
+      { href: '/holding/it2/modules/module', label: '+ Module' },
       // Briefs DEMOTED from owner nav (module-surface-consolidation-v1 scope 2,
       // 2026-08-06): raw fleet work-log, not an owner surface. Reachable via
       // System → Health link card (law-659 pattern) + orphan-check allowlist.
