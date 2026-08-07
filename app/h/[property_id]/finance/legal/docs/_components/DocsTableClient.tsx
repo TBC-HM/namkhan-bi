@@ -56,6 +56,12 @@ interface Props {
   totalRows: number;
   totalPages: number;
   pageSize: number;
+  // holding-documents-surface-v1 §3 (A4): empty states must never be dead boxes.
+  // 'holding' variant renders "No holding documents yet — upload the first one"
+  // + upload CTA at zero rows, and lists expectedFamilies with per-family upload
+  // CTAs when a filter yields zero rows. Default keeps the 260955 behavior.
+  emptyStateVariant?: 'default' | 'holding';
+  expectedFamilies?: string[];
 }
 
 const INK         = '#1B1B1B';
@@ -104,6 +110,7 @@ export default function DocsTableClient({
   propertyId, rows, vocab, families, matters, statuses,
   caseRefs, collectionNames, tagList, authorList,
   query, totalRows, totalPages, pageSize,
+  emptyStateVariant = 'default', expectedFamilies = [],
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -681,11 +688,54 @@ export default function DocsTableClient({
             </tr>
           </thead>
           <tbody>
-            {rows.length === 0 && (
-              <tr><td colSpan={COLUMNS.length + 1} style={{ padding: '24px 12px', color: INK_SOFT, textAlign: 'center', fontStyle: 'italic' }}>
-                No documents match this filter.
-              </td></tr>
-            )}
+            {rows.length === 0 && (() => {
+              // holding-documents-surface-v1 §3 (A4): never a dead box on holding pages.
+              const filterActive = !!(query.q || query.family || query.subtype || query.matter
+                || query.status || query.caseF || query.collF || query.tagF || query.nr || query.exp);
+              const uploadCta = (label: string) => (
+                <a href="#doc-upload" style={{
+                  fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none',
+                  border: '1px solid #084838', padding: '5px 12px', borderRadius: 5, whiteSpace: 'nowrap',
+                }}>{label}</a>
+              );
+              if (emptyStateVariant === 'holding' && !filterActive) {
+                return (
+                  <tr><td colSpan={COLUMNS.length + 1} style={{ padding: '32px 12px', textAlign: 'center' }}>
+                    <div style={{ color: INK, fontWeight: 600, fontSize: 14, marginBottom: 12 }}>
+                      No holding documents yet — upload the first one
+                    </div>
+                    {uploadCta('Upload a document →')}
+                  </td></tr>
+                );
+              }
+              if (emptyStateVariant === 'holding' && filterActive) {
+                return (
+                  <tr><td colSpan={COLUMNS.length + 1} style={{ padding: '24px 12px', textAlign: 'center' }}>
+                    <div style={{ color: INK_SOFT, fontStyle: 'italic', marginBottom: expectedFamilies.length ? 14 : 0 }}>
+                      No holding documents match this filter.
+                    </div>
+                    {expectedFamilies.length > 0 && (
+                      <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK, textAlign: 'left' }}>
+                          Expected document families
+                        </div>
+                        {expectedFamilies.map((f) => (
+                          <div key={f} style={{ display: 'flex', gap: 16, alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 12, color: INK }}>{f}</span>
+                            {uploadCta(`Upload →`)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td></tr>
+                );
+              }
+              return (
+                <tr><td colSpan={COLUMNS.length + 1} style={{ padding: '24px 12px', color: INK_SOFT, textAlign: 'center', fontStyle: 'italic' }}>
+                  No documents match this filter.
+                </td></tr>
+              );
+            })()}
             {rows.map((r) => {
               const isEditing = editingId === r.doc_id;
               const tint = r.needs_review ? REVIEW_TINT : PAPER;
