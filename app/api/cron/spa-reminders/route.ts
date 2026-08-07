@@ -76,16 +76,18 @@ export async function POST(req: NextRequest) {
         continue;
       }
       const due = (rows ?? []) as Array<{ booking_id: string; guest_email: string | null }>;
-      let emailed = 0, waOnly = 0;
+      let emailed = 0, waOnly = 0, noChannel = 0;
       if (!dryRun) {
         for (const r of due) {
           const booking = await getBookingDetail(sb, r.booking_id);
           if (!booking) continue;
           const result = await sendBookingNotify(sb, booking, 'reminder', 'spa-reminder-cron');
-          if (result.mode === 'email') emailed += 1; else waOnly += 1;
+          if (result.mode === 'email') emailed += 1;
+          else if (result.mode === 'wa_only') waOnly += 1;
+          else noChannel += 1; // email present but send failed, or no channel — unstamped, retried next day
         }
       }
-      perProperty.push({ propertyId, day: tomorrow, due: due.length, emailed, wa_only: waOnly });
+      perProperty.push({ propertyId, day: tomorrow, due: due.length, emailed, wa_only: waOnly, no_channel: noChannel });
     }
 
     return NextResponse.json({ ok: true, dry_run: dryRun, passes_expired: passesExpired, properties: perProperty });
