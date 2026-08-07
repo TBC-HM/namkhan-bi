@@ -9,7 +9,7 @@
 // Wired into the `/h/[property_id]/settings/property` DashboardPage tab strip.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { DashboardPage } from '@/app/(cockpit)/_design';
 import AudienceSettingsClient, {
   type BlocklistRow, type GroupRow, type GroupRuleRow,
   type EmailSettingsRow, type RoutingRuleRow,
@@ -48,11 +48,9 @@ export default async function PropertyAudienceSettingsPage({
         ]}
       >
         <div style={{ gridColumn: '1 / -1' }}>
-          <Container title="Newsletter" subtitle="service-role key missing">
-            <div style={{ color: '#B03826', fontSize: 12, padding: 12 }}>
-              {e?.message ?? 'getSupabaseAdmin() failed'}
-            </div>
-          </Container>
+          <div style={{ color: 'var(--color-status-error-fg)', fontSize: 12, padding: 12 }}>
+            {e?.message ?? 'getSupabaseAdmin() failed'}
+          </div>
         </div>
       </DashboardPage>
     );
@@ -98,30 +96,27 @@ export default async function PropertyAudienceSettingsPage({
       ]}
     >
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container
-          title="Newsletter"
-          subtitle="sender identity · blocklist · groups · routing · chrome · editorial goals"
-        >
-          {dbErr && (
-            <div style={{
-              color: '#B03826', fontSize: 12, padding: '6px 10px',
-              border: '1px solid #E6DFCC', borderRadius: 3, marginBottom: 12,
-              background: '#FBEDE7',
-            }}>
-              db error: {dbErr.message}
-            </div>
-          )}
-          <AudienceSettingsClient
-            propertyId={propertyId}
-            initialBlocklist={blocklist}
-            initialGroups={groups}
-            initialGroupRules={groupRules}
-            initialEmailSettings={emailSettings}
-            initialRoutingRules={routingRules}
-            initialEmailChrome={chrome}
-            initialEditorialGoals={editorialGoals}
-          />
-        </Container>
+        {dbErr && (
+          <div style={{
+            fontSize: 12, padding: '6px 10px',
+            border: '1px solid var(--color-status-error-border)',
+            borderRadius: 3, marginBottom: 12,
+            background: 'var(--color-status-error-bg)',
+            color: 'var(--color-status-error-fg)',
+          }}>
+            db error: {dbErr.message}
+          </div>
+        )}
+        <AudienceSettingsClient
+          propertyId={propertyId}
+          initialBlocklist={blocklist}
+          initialGroups={groups}
+          initialGroupRules={groupRules}
+          initialEmailSettings={emailSettings}
+          initialRoutingRules={routingRules}
+          initialEmailChrome={chrome}
+          initialEditorialGoals={editorialGoals}
+        />
       </div>
     </DashboardPage>
   );
