@@ -55,7 +55,7 @@ export default async function HoldingDocumentsSettingsPage() {
       subtitle={`${d.totalDocs} holding-wide docs · ${d.families.length} families · separate from tenant documents`}
       tabs={settingsTabs('documents')}
     >
-      <div style={{ gridColumn: '1 / -1' }}>
+      <div id="doc-upload" style={{ gridColumn: '1 / -1' }}>
         <Container title="Upload documents" subtitle="PDF · DOCX · XLSX · TXT · CSV · ODS — filed at HOLDING level, not under a property">
           <div style={{ padding: '8px 16px 16px' }}>
             <DocUploadDropzone propertyId={0} />
@@ -64,10 +64,18 @@ export default async function HoldingDocumentsSettingsPage() {
       </div>
       <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
         <Container title="Holding document register" subtitle="Board resolutions, group contracts, holding compliance — no property assignment">
-          <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-            <div style={{ fontSize: 13, color: '#5A5A5A' }}>{d.totalDocs} holding-wide documents across {d.families.length} families.</div>
-            <Link href="/holding/legal/docs" style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, whiteSpace: 'nowrap' as const }}>Open holding register →</Link>
-          </div>
+          {d.totalDocs === 0 ? (
+            /* §3 (A4, holding-documents-surface-v1): zero-docs state is never a dead box. */
+            <div style={{ padding: '28px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#1B1B1B', marginBottom: 12 }}>No holding documents yet — upload the first one</div>
+              <a href="#doc-upload" style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, whiteSpace: 'nowrap' as const }}>Upload a document →</a>
+            </div>
+          ) : (
+            <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ fontSize: 13, color: '#5A5A5A' }}>{d.totalDocs} holding-wide documents across {d.families.length} families.</div>
+              <Link href="/holding/legal/docs" style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, whiteSpace: 'nowrap' as const }}>Open holding register →</Link>
+            </div>
+          )}
         </Container>
       </div>
       <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
