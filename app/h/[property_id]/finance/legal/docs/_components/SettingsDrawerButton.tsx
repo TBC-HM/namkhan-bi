@@ -4,9 +4,9 @@
 // expand-to-fullscreen toggle). Opens a right-side drawer with 6 tabs to
 // manage the master vocabulary of the document register:
 //
-//   Families     — distinct doc_type values currently in use + bulk rename.
-//                  Adding a new family without a doc to assign isn't
-//                  meaningful; surface as a hint.
+//   Families     — GOVERNED vocab (dms.doc_type_vocab, finding #98): full CRUD
+//                  add / rename label / deactivate via /api/settings/doc-families
+//                  (holding owner/admin gated — top-down, never from doc Edit).
 //   Subtypes     — full CRUD against dms.doc_subtype_vocab (per-family slug
 //                  + label + time_model + active flag).
 //   Matters      — distinct project values; rename via fn_doc_project_rename.
@@ -16,7 +16,7 @@
 //   Tags         — distinct tags across documents; rename (merges across docs)
 //                  + delete (removes from every doc). RPCs live globally.
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { Fragment, useEffect, useMemo, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -25,6 +25,8 @@ interface VocabRow   { doc_type: string; subtype_slug: string; label: string | n
 interface CaseRow    { case_ref: string; title: string | null; matter_type: string | null; status: string | null }
 interface CollRow    { name: string; description: string | null; is_smart?: boolean }
 interface FamilyRow  { doc_type: string; n: number }
+// dms-doc-families-governance-v1: governed family vocab row (public.v_doc_type_vocab)
+interface DocFamilyRow { value: string; label: string | null; sort_order: number | null; active: boolean; doc_count: number }
 interface ProjectRow { project: string; n: number }
 interface TagRow     { tag: string; n: number }
 interface AuthorRow  { author: string; n: number }
@@ -32,6 +34,8 @@ interface AuthorRow  { author: string; n: number }
 interface Props {
   propertyId: number;
   families:    FamilyRow[];
+  // Optional only for push-order compatibility (law 759) — pages always pass it.
+  familyVocab?: DocFamilyRow[];
   subtypeVocab: VocabRow[];
   projects:    ProjectRow[];
   cases:       CaseRow[];
@@ -74,7 +78,7 @@ export default function SettingsDrawerButton(props: Props) {
   );
 }
 
-function Drawer({ propertyId, families, subtypeVocab, projects, cases, collections, tags, authors, onClose }:
+function Drawer({ propertyId, families, familyVocab = [], subtypeVocab, projects, cases, collections, tags, authors, onClose }:
   Props & { onClose: () => void }) {
   const [tab, setTab]     = useState<Tab>('Families');
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +96,22 @@ function Drawer({ propertyId, families, subtypeVocab, projects, cases, collectio
     setError(null);
     const { error: e } = await supabase.rpc(name, args);
     if (e) { setError(`${name}: ${e.message}`); return false; }
+    startTransition(() => router.refresh());
+    return true;
+  }
+
+  // Families go through the gated API route (fn EXECUTE revoked from
+  // authenticated — server-side service_role only, finding #98).
+  async function api(body: Record<string, unknown>): Promise<boolean> {
+    setError(null);
+    const res = await fetch('/api/settings/doc-families', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => null);
+      setError(`doc-families: ${j?.error ?? res.statusText}`);
+      return false;
+    }
     startTransition(() => router.refresh());
     return true;
   }
@@ -118,8 +138,8 @@ function Drawer({ propertyId, families, subtypeVocab, projects, cases, collectio
         )}
 
         <section style={panelBody}>
-          {tab === 'Families'    && <FamiliesTab    propertyId={propertyId} families={families} rpc={rpc} />}
-          {tab === 'Subtypes'    && <SubtypesTab    propertyId={propertyId} families={families} vocab={subtypeVocab} rpc={rpc} />}
+          {tab === 'Families'    && <FamiliesTab    propertyId={propertyId} familyVocab={familyVocab} api={api} />}
+          {tab === 'Subtypes'    && <SubtypesTab    propertyId={propertyId} families={families} familyVocab={familyVocab} vocab={subtypeVocab} rpc={rpc} />}
           {tab === 'Matters'     && <MattersTab     propertyId={propertyId} projects={projects} rpc={rpc} />}
           {tab === 'Cases'       && <CasesTab       propertyId={propertyId} cases={cases} rpc={rpc} />}
           {tab === 'Collections' && <CollectionsTab propertyId={propertyId} collections={collections} rpc={rpc} />}
@@ -132,33 +152,110 @@ function Drawer({ propertyId, families, subtypeVocab, projects, cases, collectio
   );
 }
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────
+// ─── Tabs ──────────────────────────────────────────────────────────────────
 
-function FamiliesTab({ propertyId, families, rpc }:
-  { propertyId: number; families: FamilyRow[]; rpc: (n: string, a: Record<string, unknown>) => Promise<boolean> }) {
+function FamiliesTab({ propertyId, familyVocab, api }:
+  { propertyId: number; familyVocab: DocFamilyRow[]; api: (b: Record<string, unknown>) => Promise<boolean> }) {
+  // dms-doc-families-governance-v1: families are a governed vocabulary
+  // (dms.doc_type_vocab) — structure comes top-down from settings, finding #98.
+  const [refileFor, setRefileFor] = useState<string | null>(null);
+  const [refileTarget, setRefileTarget] = useState('');
+  const activeOthers = (v: string) => familyVocab.filter((f) => f.active && f.value !== v);
   return (
     <>
       <Hint>
-        Families are free-text on every doc (no master enum). Adding a family without a doc to
-        assign is a no-op — to introduce a new family, set it on any row via Edit. Rename here
-        bulk-updates every doc in the family at once.
+        Families are governed top-down (master list, not free text). Docs can only be filed
+        into an <strong>active</strong> family listed here — editors pick from this list and
+        cannot invent new ones. Deactivating a family that still has docs asks for a re-file
+        target, or leaves its docs flagged amber in the register until re-filed.
       </Hint>
-      <Table cols={['Family', 'Docs', 'Rename to', '']}>
-        {families.length === 0 && <EmptyRow cols={4} />}
-        {families.map((f) => (
-          <RenameRow
-            key={f.doc_type} value={f.doc_type} count={f.n} colsCount={4}
-            onRename={(next) => rpc('fn_doc_family_rename', { p_property_id: propertyId, p_old: f.doc_type, p_new: next })}
-          />
+      <AddFamilyForm onAdd={(value, label) =>
+        api({ action: 'upsert', property_id: propertyId, value, label: label || value, active: true })} />
+      <Table cols={['Family', 'Label', 'Docs', 'Active', '']}>
+        {familyVocab.length === 0 && <EmptyRow cols={5} />}
+        {familyVocab.map((f) => (
+          <Fragment key={f.value}>
+            <tr style={trStyle}>
+              <td style={{ ...tdStyle, color: f.active ? INK : INK_SOFT }}>
+                <code>{f.value}</code>{!f.active && <span style={{ color: '#B26A00', marginLeft: 6, fontSize: 10 }}>retired</span>}
+              </td>
+              <td style={tdStyle}>
+                <InlineEdit value={f.label ?? ''} placeholder="label"
+                  onCommit={(next) => api({ action: 'upsert', property_id: propertyId, value: f.value, label: next })} />
+              </td>
+              <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: f.doc_count === 0 ? INK_SOFT : INK }}>
+                {f.doc_count}
+              </td>
+              <td style={tdStyle}>
+                <input type="checkbox" checked={f.active}
+                  onChange={(e) => {
+                    if (e.target.checked) { api({ action: 'upsert', property_id: propertyId, value: f.value, active: true }); return; }
+                    if (f.doc_count > 0) { setRefileFor(f.value); setRefileTarget(''); return; }
+                    api({ action: 'deactivate', property_id: propertyId, value: f.value });
+                  }} />
+              </td>
+              <td style={tdStyle}>{refileFor === f.value ? '' : '—'}</td>
+            </tr>
+            {refileFor === f.value && (
+              <tr style={trStyle}>
+                <td colSpan={5} style={{ ...tdStyle, background: '#FFF8E1' }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, color: '#B26A00' }}>
+                      “{f.value}” still has {f.doc_count} doc{f.doc_count === 1 ? '' : 's'} — re-file them into:
+                    </span>
+                    <select value={refileTarget} onChange={(e) => setRefileTarget(e.target.value)} style={selStyle}>
+                      <option value="">— pick target family —</option>
+                      {activeOthers(f.value).map((o) => <option key={o.value} value={o.value}>{o.label || o.value}</option>)}
+                    </select>
+                    <button style={addBtn} disabled={!refileTarget}
+                      onClick={async () => {
+                        const ok = await api({ action: 'deactivate', property_id: propertyId, value: f.value, refile_to: refileTarget });
+                        if (ok) setRefileFor(null);
+                      }}>Re-file &amp; retire</button>
+                    <button style={delBtn}
+                      onClick={async () => {
+                        const ok = await api({ action: 'deactivate', property_id: propertyId, value: f.value });
+                        if (ok) setRefileFor(null);
+                      }}>Leave flagged &amp; retire</button>
+                    <button style={{ ...delBtn, borderColor: HAIRLINE, color: INK_SOFT }}
+                      onClick={() => setRefileFor(null)}>Cancel</button>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </Fragment>
         ))}
       </Table>
     </>
   );
 }
 
-function SubtypesTab({ propertyId, families, vocab, rpc }:
-  { propertyId: number; families: FamilyRow[]; vocab: VocabRow[]; rpc: (n: string, a: Record<string, unknown>) => Promise<boolean> }) {
-  const familyOpts = useMemo(() => Array.from(new Set([...families.map((f) => f.doc_type), ...vocab.map((v) => v.doc_type)])).sort(), [families, vocab]);
+function AddFamilyForm({ onAdd }: { onAdd: (value: string, label: string) => Promise<boolean> }) {
+  const [value, setValue] = useState('');
+  const [label, setLabel] = useState('');
+  return (
+    <form onSubmit={async (e) => {
+      e.preventDefault();
+      if (!value.trim()) return;
+      const ok = await onAdd(value.trim(), label.trim());
+      if (ok) { setValue(''); setLabel(''); }
+    }} style={addFormRow}>
+      <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="family value (e.g. contracts)" style={{ ...inputStyle, width: 200 }} />
+      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (optional)" style={{ ...inputStyle, flex: 1 }} />
+      <button type="submit" style={addBtn}>+ Add family</button>
+    </form>
+  );
+}
+
+function SubtypesTab({ propertyId, families, familyVocab, vocab, rpc }:
+  { propertyId: number; families: FamilyRow[]; familyVocab: DocFamilyRow[]; vocab: VocabRow[]; rpc: (n: string, a: Record<string, unknown>) => Promise<boolean> }) {
+  // Family options come from the governed vocab (active first), plus any
+  // family that still has subtype rows (so retired families stay filterable).
+  const familyOpts = useMemo(() => Array.from(new Set([
+    ...familyVocab.filter((f) => f.active).map((f) => f.value),
+    ...vocab.map((v) => v.doc_type),
+  ])).sort(), [familyVocab, vocab]);
+  void families; // kept in Props for the other tabs' callers
   const [filter, setFilter] = useState<string>(familyOpts[0] ?? '');
   const filtered = useMemo(() => vocab.filter((v) => !filter || v.doc_type === filter), [vocab, filter]);
   return (
@@ -412,21 +509,6 @@ function EmptyRow({ cols }: { cols: number }) {
   return <tr><td colSpan={cols} style={{ ...tdStyle, color: INK_SOFT, fontStyle: 'italic', textAlign: 'center' }}>No rows yet.</td></tr>;
 }
 
-function RenameRow({ value, count, onRename }:
-  { value: string; count: number; colsCount: number; onRename: (next: string) => Promise<boolean> }) {
-  return (
-    <tr style={trStyle}>
-      <td style={tdStyle}>{value}</td>
-      <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{count}</td>
-      <td style={tdStyle}>
-        <InlineEdit value="" placeholder={`rename "${value}"`} commitOnEnter
-          onCommit={(next) => onRename(next)} />
-      </td>
-      <td style={tdStyle}>—</td>
-    </tr>
-  );
-}
-
 function InlineEdit({ value, placeholder, onCommit, commitOnEnter = false }:
   { value: string; placeholder?: string; onCommit: (next: string) => Promise<boolean>; commitOnEnter?: boolean }) {
   const [v, setV] = useState(value);
@@ -611,6 +693,21 @@ export function DocRegistrySettingsPanel(props: Props) {
     return true;
   }
 
+  // Families go through the gated API route (service_role only, finding #98).
+  async function api(body: Record<string, unknown>): Promise<boolean> {
+    setError(null);
+    const res = await fetch('/api/settings/doc-families', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => null);
+      setError(`doc-families: ${j?.error ?? res.statusText}`);
+      return false;
+    }
+    startTransition(() => router.refresh());
+    return true;
+  }
+
   return (
     <div style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
       <nav style={{ ...tabBar, padding: '8px 0 0 0', borderBottom: `1px solid ${HAIRLINE}`, marginBottom: 16 }}>
@@ -625,8 +722,8 @@ export function DocRegistrySettingsPanel(props: Props) {
         </div>
       )}
       <div>
-        {tab === 'Families'    && <FamiliesTab    propertyId={props.propertyId} families={props.families} rpc={rpc} />}
-        {tab === 'Subtypes'    && <SubtypesTab    propertyId={props.propertyId} families={props.families} vocab={props.subtypeVocab} rpc={rpc} />}
+        {tab === 'Families'    && <FamiliesTab    propertyId={props.propertyId} familyVocab={props.familyVocab ?? []} api={api} />}
+        {tab === 'Subtypes'    && <SubtypesTab    propertyId={props.propertyId} families={props.families} familyVocab={props.familyVocab ?? []} vocab={props.subtypeVocab} rpc={rpc} />}
         {tab === 'Matters'     && <MattersTab     propertyId={props.propertyId} projects={props.projects} rpc={rpc} />}
         {tab === 'Cases'       && <CasesTab       propertyId={props.propertyId} cases={props.cases} rpc={rpc} />}
         {tab === 'Collections' && <CollectionsTab propertyId={props.propertyId} collections={props.collections} rpc={rpc} />}
