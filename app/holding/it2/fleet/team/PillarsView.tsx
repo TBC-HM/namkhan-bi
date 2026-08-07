@@ -16,12 +16,15 @@
 //    most health strips read 0. Shown with a caveat, not hidden.
 //  - KPI agents_total (111) excludes 1 disabled agent; the pillars list
 //    holds all 112. The list defaults to active-only so both agree.
-// CTAs render but are disabled pending the fn_* SECURITY DEFINER write
-// wrappers (slice 3) — no direct table writes from the browser, ever.
+// CTAs are LIVE as of 2026-08-07 (ADR-268): every write goes through an audited
+// public.fn_* SECURITY DEFINER function via /api/cockpit/agent-write. No direct
+// table writes from the browser, ever. See ./AgentActions.tsx.
+// Quality column + default sort: ADR-267.
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { Container, MetricRow } from '@/app/(cockpit)/_design';
+import { IdentityActions, SkillActions, MemoryActions, BudgetActions } from './AgentActions';
 
 export type PillarRow = {
   agent_id: string;
@@ -52,6 +55,10 @@ export type PillarRow = {
   spend_7d_usd: number | null;
   spend_mtd_usd: number | null;
   over_budget: boolean | null;
+  // ADR-267 · appended to public.v_agent_pillars, so the existing select('*') carries them
+  quality_pct: number | null;
+  quality_band: string | null;
+  why_not_100: string | null;
 };
 
 export type FleetKpis = {
@@ -125,7 +132,13 @@ export function PillarsView({ rows, kpis }: Props) {
         if (!hay.includes(needle)) return false;
       }
       return true;
-    });
+    })
+      // ADR-267: default sort is wiring completeness, worst last. An alphabetical
+      // list of 114 agents is an inventory; this is a worklist.
+      .sort((a, b) => {
+        const d = (b.quality_pct ?? 0) - (a.quality_pct ?? 0);
+        return d !== 0 ? d : (a.display_name ?? a.role).localeCompare(b.display_name ?? b.role);
+      });
   }, [rows, scope, dept, q, showDisabled]);
 
   const tiles = kpis
@@ -194,7 +207,7 @@ export function PillarsView({ rows, kpis }: Props) {
           <table style={st.table}>
             <thead>
               <tr>
-                {['Agent', 'Dept', 'Scope', 'P1 Prompt', 'P2 Skills', 'P3 Memory', 'P4 Triggers·Budget', 'Last run', 'Runs 7d', 'Spend 7d'].map((h) => (
+                {['Agent', 'Dept', 'Scope', 'P1 Prompt', 'P2 Skills', 'P3 Memory', 'P4 Triggers·Budget', 'Quality', 'Last run', 'Runs 7d', 'Spend 7d'].map((h) => (
                   <th key={h} style={st.th}>{h}</th>
                 ))}
               </tr>
@@ -237,13 +250,16 @@ function RowBlock({ r, open, onToggle }: { r: PillarRow; open: boolean; onToggle
         <td style={st.td}>
           {r.triggers_total === 0 ? <Muted>0 · no budget</Muted> : `${r.triggers_active}/${r.triggers_total} · ${fmtUsd(r.daily_cap_usd)}/d`}
         </td>
+        <td style={st.td} title={r.why_not_100 ?? 'fully wired'}>
+          <Quality pct={r.quality_pct} band={r.quality_band} />
+        </td>
         <td style={st.td}>{fmtAgo(r.last_run_at)}</td>
         <td style={st.td}>{r.runs_7d}{r.failures_7d > 0 ? <Bad> · {r.failures_7d} fail</Bad> : ''}</td>
         <td style={st.td}>{fmtUsd(r.spend_7d_usd)}</td>
       </tr>
       {open && (
         <tr>
-          <td colSpan={10} style={{ padding: 0, borderBottom: '1px solid #E6DFCC' }}>
+          <td colSpan={11} style={{ padding: 0, borderBottom: '1px solid #E6DFCC' }}>
             <PillarPanels r={r} />
           </td>
         </tr>
@@ -262,9 +278,7 @@ function PillarPanels({ r }: { r: PillarRow }) {
         <Fact k="Reports to" v={r.reports_to ?? '—'} />
         <Fact k="Prompt" v={r.has_current_prompt ? `current v${r.current_prompt_version} · ${r.prompt_versions} versions` : 'NO CURRENT PROMPT'} />
         <div style={st.ctaRow}>
-          <Cta label="Edit prompt" />
-          <Cta label="Set trust" />
-          <Cta label={r.status === 'disabled' ? 'Enable' : 'Disable'} />
+          <IdentityActions role={r.role} status={r.status} />
         </div>
       </div>
       <div style={st.panel}>
@@ -276,10 +290,7 @@ function PillarPanels({ r }: { r: PillarRow }) {
           </Link>
         </div>
         <div style={st.ctaRow}>
-          <Cta label="Add skill" />
-          <Cta label="Revoke" />
-          <Cta label="Propose new" />
-          <Cta label="Test-run" />
+          <SkillActions role={r.role} />
         </div>
       </div>
       <div style={st.panel}>
@@ -287,9 +298,7 @@ function PillarPanels({ r }: { r: PillarRow }) {
         <Fact k="Active memories" v={String(r.memories_active)} />
         <Fact k="Hard rules (imp ≥ 8)" v={String(r.memories_hard_rules)} />
         <div style={st.ctaRow}>
-          <Cta label="Add memory" />
-          <Cta label="Edit" />
-          <Cta label="Archive" />
+          <MemoryActions role={r.role} />
         </div>
       </div>
       <div style={st.panel}>
@@ -299,10 +308,18 @@ function PillarPanels({ r }: { r: PillarRow }) {
         <Fact k="Monthly cap" v={fmtUsd(r.monthly_cap_usd)} />
         <Fact k="Spend MTD" v={fmtUsd(r.spend_mtd_usd)} />
         {r.over_budget ? <div style={{ color: '#B4231F', fontSize: 12, fontWeight: 600 }}>OVER BUDGET</div> : null}
-        <div style={st.blockNote}>
-          Trigger/budget registry is keyed to a diverged agent registry (0/10 triggers match).
-          Re-key decision is filed with PBS — CTAs unlock once answered.
-        </div>
+        <BudgetActions
+          role={r.role}
+          daily={r.daily_cap_usd}
+          monthly={r.monthly_cap_usd}
+          enforced={r.budget_enforced}
+        />
+        {r.triggers_total === 0 ? (
+          <div style={st.blockNote}>
+            No trigger registered. A trigger is what makes an agent reachable — without one
+            this agent can only be invoked by hand. Register it in governance.agent_triggers.
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -317,15 +334,18 @@ function Fact({ k, v }: { k: string; v: string }) {
   );
 }
 
-function Cta({ label }: { label: string }) {
+// ADR-267 · wiring completeness, 5 pillars x 20, computed in public.v_agent_pillars.
+// Measures how completely an agent is wired — NOT how good its output is.
+function Quality({ pct, band }: { pct: number | null; band: string | null }) {
+  if (pct == null) return <Muted>—</Muted>;
+  const c = band === 'green' ? { fg: '#1E7A4A', bg: '#E8F5EE' }
+          : band === 'amber' ? { fg: '#8A5A00', bg: '#FDF3E0' }
+          :                    { fg: '#B4231F', bg: '#FDECEB' };
   return (
-    <button
-      disabled
-      title="Write wrapper ships in slice 3 — all writes go through audited public.fn_* only"
-      style={st.cta}
-    >
-      {label}
-    </button>
+    <span style={{
+      display: 'inline-block', padding: '1px 8px', borderRadius: 20,
+      fontSize: 11, fontWeight: 700, color: c.fg, background: c.bg,
+    }}>{pct}%</span>
   );
 }
 
