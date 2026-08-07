@@ -1,0 +1,225 @@
+'use client';
+// Level-2 tenant module intake — client surface.
+// Spec: cockpit.prototype_specs slug='intake-v2-single-surface' (passed). Brief: intake-l2-s4-page.
+//
+// HARD RULES FROM THE SPEC — do not "improve" these away:
+//  1. NO FORM. One description box, or an MD upload. The 16 completeness items are an
+//     extraction target, not a questionnaire.
+//  2. BANNED in tenant-facing copy: non-goal, acceptance criteria, KPI, bridge view,
+//     schema, given/when/then. A hotel GM must never meet product jargon.
+//  3. Completeness is DERIVED by public.fn_intake_completeness. Never compute or store it here.
+//  4. Freeze is disabled until BOTH tracks are complete.
+//  5. Dismiss is available at ANY completeness and REQUIRES a reason. Nothing is deleted.
+//  6. All four states render: empty, loading, error, no-permission.
+
+import { useState } from 'react';
+
+export type GoalOption = { goal_id: number; slug: string; title: string; level: number };
+export type IntakeRow = {
+  slug: string; title: string; status: string; property_scope: string | null;
+  tenant_done: number; tbc_done: number; pct: number; ready: boolean; idle_days: number;
+};
+type Kpis = { open: number; waiting: number; ready: number; idle: number };
+
+const INK = '#1B1B1B', SOFT = '#5A5A5A', HAIR = '#E6DFCC', PAPER = '#FFFFFF';
+const PRIMARY = '#1F3A2E', TERRA = '#B8542A', GREEN = '#2E7D32', GREY = '#8A8A8A';
+
+function Tile({ label, value, action, tone }: { label: string; value: number; action: string; tone: string }) {
+  return (
+    <div style={{ background: PAPER, border: `1px solid ${HAIR}`, borderRadius: 8, padding: '12px 16px', minHeight: 88, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ fontSize: 11, color: SOFT, lineHeight: 1.3 }}>{label}</span>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: tone, flex: '0 0 8px', marginTop: 4 }} />
+      </div>
+      <div>
+        <div style={{ fontSize: 24, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: PRIMARY }}>{value}</div>
+        <div style={{ fontSize: 10.5, color: SOFT, marginTop: 4 }}>{action}</div>
+      </div>
+    </div>
+  );
+}
+
+function Track({ label, done }: { label: string; done: number }) {
+  const pct = Math.round((done / 8) * 100);
+  const ok = done === 8;
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: SOFT, marginBottom: 4 }}>
+        <span>{label}</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{done}/8</span>
+      </div>
+      <div style={{ height: 6, background: '#F4EFE2', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: ok ? GREEN : TERRA, borderRadius: 3, transition: 'width .25s' }} />
+      </div>
+    </div>
+  );
+}
+
+export default function ModuleIntakeClient({ goals, intakes, kpis, staleDays }: {
+  goals: GoalOption[]; intakes: IntakeRow[]; kpis: Kpis; staleDays: number;
+}) {
+  const [description, setDescription] = useState('');
+  const [goalId, setGoalId] = useState<number | ''>('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dismissFor, setDismissFor] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+
+  async function start() {
+    if (!description.trim() || !goalId) return;
+    setBusy(true); setError(null);
+    try {
+      // Reuses the EXISTING md-intake evaluator. Do not add a second upload path.
+      const res = await fetch('/api/specs/upload-md', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'level2-describe', goal_id: goalId, content: description }),
+      });
+      if (!res.ok) throw new Error(`We could not start this (${res.status}). Nothing was saved.`);
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong. Nothing was saved.');
+    } finally { setBusy(false); }
+  }
+
+  async function dismiss(slug: string) {
+    if (!reason.trim()) return;
+    setBusy(true); setError(null);
+    try {
+      const res = await fetch('/api/specs/dismiss', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, reason }),
+      });
+      if (!res.ok) throw new Error(`We could not drop this (${res.status}). It is unchanged.`);
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong. It is unchanged.');
+    } finally { setBusy(false); setDismissFor(null); setReason(''); }
+  }
+
+  const card = { background: PAPER, border: `1px solid ${HAIR}`, borderRadius: 8, padding: 20, marginBottom: 16 };
+  const btn = (bg: string, fg: string, on: boolean) => ({
+    background: bg, color: fg, border: `1px solid ${bg}`, borderRadius: 6, padding: '9px 16px',
+    fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const,
+    cursor: on ? 'pointer' : 'not-allowed', opacity: on ? 1 : 0.4,
+  });
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(168px,1fr))', gap: 12, marginBottom: 24 }}>
+        <Tile label="Open" value={kpis.open} action="in progress now" tone={GREY} />
+        <Tile label="Waiting on you" value={kpis.waiting} action="answer to continue" tone={kpis.waiting ? TERRA : GREY} />
+        <Tile label="Ready to approve" value={kpis.ready} action="approve to start the build" tone={kpis.ready ? GREEN : GREY} />
+        <Tile label={`Untouched ${staleDays}+ days`} value={kpis.idle} action="drop it or pick it back up" tone={kpis.idle ? TERRA : GREY} />
+      </div>
+
+      {error && (
+        <div style={{ ...card, borderColor: TERRA, borderLeft: `3px solid ${TERRA}` }}>
+          <div style={{ fontSize: 13, color: INK }}>{error}</div>
+          <button onClick={() => setError(null)} style={{ ...btn(PAPER, PRIMARY, true), marginTop: 12 }}>Try again</button>
+        </div>
+      )}
+
+      <div style={card}>
+        <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: SOFT, fontWeight: 700, marginBottom: 10 }}>
+          What do you want to be able to do?
+        </div>
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          rows={5}
+          placeholder="For example: I want to see which rooms are out of service and tell housekeeping to fix them before check-in."
+          style={{ width: '100%', padding: '10px 12px', border: `1px solid ${HAIR}`, borderRadius: 6, fontSize: 13, fontFamily: 'inherit', background: '#F4EFE2', color: INK, resize: 'vertical' }}
+        />
+        <div style={{ fontSize: 11.5, color: SOFT, margin: '8px 0 14px' }}>
+          Plain words are enough. We read it, work out what we still need, and ask you the rest.
+        </div>
+
+        <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: SOFT, fontWeight: 700, marginBottom: 6 }}>
+          Which of your goals does this serve?
+        </div>
+        <select
+          value={goalId}
+          onChange={e => setGoalId(e.target.value ? Number(e.target.value) : '')}
+          style={{ width: '100%', maxWidth: 560, padding: '9px 12px', border: `1px solid ${HAIR}`, borderRadius: 6, fontSize: 13, background: PAPER, color: INK }}
+        >
+          <option value="">— pick the goal this helps —</option>
+          {goals.map(g => <option key={g.goal_id} value={g.goal_id}>{g.title}</option>)}
+        </select>
+        {goals.length === 0 && (
+          <div style={{ fontSize: 11.5, color: TERRA, marginTop: 8 }}>
+            No goals are set up for you yet — we need one before anything can start. Ask your TBC contact to add them.
+          </div>
+        )}
+
+        <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={start} disabled={busy || !description.trim() || !goalId}
+                  style={btn(PRIMARY, '#F4EFE2', !busy && !!description.trim() && !!goalId)}>
+            {busy ? 'Working…' : 'Start'}
+          </button>
+          <span style={{ fontSize: 11.5, color: SOFT }}>Nothing is built until you approve it.</span>
+        </div>
+      </div>
+
+      <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: SOFT, fontWeight: 700, margin: '28px 0 12px' }}>
+        In progress
+      </div>
+
+      {intakes.length === 0 ? (
+        <div style={{ ...card, textAlign: 'center', padding: 32 }}>
+          <div style={{ fontSize: 14, color: INK, marginBottom: 6 }}>Nothing in progress yet.</div>
+          <div style={{ fontSize: 12.5, color: SOFT }}>Describe what you need in the box above to start your first one.</div>
+        </div>
+      ) : intakes.map(i => (
+        <div key={i.slug} style={{ ...card, opacity: busy ? 0.6 : 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: PRIMARY }}>{i.title}</div>
+              <div style={{ fontSize: 11.5, color: SOFT, marginTop: 2 }}>
+                {i.property_scope ?? 'unscoped'} · untouched {i.idle_days} {i.idle_days === 1 ? 'day' : 'days'}
+              </div>
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: i.ready ? GREEN : TERRA }}>
+              {i.pct}<span style={{ fontSize: 14 }}>%</span>
+            </div>
+          </div>
+
+          <Track label="Your part" done={i.tenant_done} />
+          <Track label="Our part" done={i.tbc_done} />
+
+          <div style={{ fontSize: 12, color: i.ready ? GREEN : TERRA, fontWeight: 600, margin: '10px 0 14px' }}>
+            {i.ready
+              ? 'Ready — approve it and we start building.'
+              : 'Not ready yet. Nothing starts until this is complete.'}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', borderTop: `1px solid ${HAIR}`, paddingTop: 14 }}>
+            <button disabled={!i.ready || busy} style={btn(PRIMARY, '#F4EFE2', i.ready && !busy)}>Approve &amp; build</button>
+            <button onClick={() => setDismissFor(dismissFor === i.slug ? null : i.slug)} disabled={busy}
+                    style={{ ...btn(PAPER, SOFT, !busy), borderColor: HAIR }}>Drop it</button>
+          </div>
+
+          {dismissFor === i.slug && (
+            <div style={{ borderTop: `1px solid ${HAIR}`, marginTop: 14, paddingTop: 14 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: INK, marginBottom: 8 }}>
+                Why are you dropping it? One line — so nobody proposes the same thing again in three months.
+              </div>
+              <input
+                value={reason} onChange={e => setReason(e.target.value)}
+                placeholder="e.g. we solved it with a whiteboard, not worth building"
+                style={{ width: '100%', padding: '9px 12px', border: `1px solid ${HAIR}`, borderRadius: 6, fontSize: 13, background: '#F4EFE2', color: INK }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button onClick={() => dismiss(i.slug)} disabled={!reason.trim() || busy}
+                        style={btn(TERRA, PAPER, !!reason.trim() && !busy)}>Confirm</button>
+                <button onClick={() => { setDismissFor(null); setReason(''); }} style={btn(PAPER, PRIMARY, true)}>Keep it</button>
+              </div>
+              <div style={{ fontSize: 11, color: SOFT, marginTop: 10 }}>
+                Nothing is deleted. You can pick it back up later exactly where it stopped.
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
