@@ -9,13 +9,16 @@ import { useState } from 'react';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 export interface OpenQ {
-  kind: 'brief' | 'bug' | 'law';
-  ref: string;              // brief slug, bug id, or law-proposal id
+  kind: 'brief' | 'bug' | 'law' | 'finding' | 'comment';
+  ref: string;              // brief slug, bug id, finding id, or law-proposal id
   title: string;            // human title
   question: string;
-  options: { label: string; consequence: string; recommended?: boolean }[];
+  options: { label: string; consequence?: string; recommended?: boolean }[];
   asked_by?: string;
-  link: string;             // deep link to the full brief/bug
+  link: string;             // deep link to the full brief/bug/finding
+  /** governance.owner_questions id — present for all non-law kinds
+   *  (owner-answer-path-consolidation-v1: ONE contract, ONE route). */
+  qid?: number;
 }
 
 export default function QuestionWalkthrough({ questions }: { questions: OpenQ[] }) {
@@ -25,25 +28,40 @@ export default function QuestionWalkthrough({ questions }: { questions: OpenQ[] 
   const [done, setDone] = useState<Record<string, string>>({}); // ref -> chosen label
   // Bug #107: track the just-answered choice so we can show the promise-gap panel
   const [answeredChoice, setAnsweredChoice] = useState<{ label: string; consequence: string } | null>(null);
+  // law 735: free text is always an escape hatch
+  const [free, setFree] = useState('');
 
   const remaining = questions.filter((q) => !done[q.kind + q.ref]);
   const current = remaining[Math.min(idx, Math.max(remaining.length - 1, 0))];
 
-  async function answer(q: OpenQ, opt: { label: string; consequence: string }) {
+  // owner-answer-path-consolidation-v1: every non-law kind answers through THE
+  // single owner route (/api/owner/answer → fn_owner_question_answer), option
+  // click OR free text (law 735). Laws keep their own decision contract.
+  async function answer(q: OpenQ, ans: { choice?: string; free_text?: string; consequence?: string }) {
     setBusy(true); setErr(null);
+    const display = ans.choice ?? ans.free_text ?? '';
     try {
-      const url = q.kind === 'brief' ? '/api/cockpit/briefs/answer'
-        : q.kind === 'law' ? '/api/cockpit/laws/answer'
-        : '/api/cockpit/bugs/answer';
-      const body = q.kind === 'brief' ? { slug: q.ref, choice: opt.label }
-        : q.kind === 'law' ? { proposal_id: Number(q.ref), choice: opt.label }
-        : { bug_id: Number(q.ref), choice: opt.label };
+      let url: string;
+      let body: Record<string, unknown>;
+      if (q.kind === 'law') {
+        url = '/api/cockpit/laws/answer';
+        body = { proposal_id: Number(q.ref), choice: display };
+      } else {
+        url = '/api/owner/answer';
+        body = q.qid
+          ? { question_id: q.qid, choice: ans.choice, free_text: ans.free_text }
+          : { asker_kind: q.kind, ref_id: q.ref, choice: ans.choice, free_text: ans.free_text };
+      }
       const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErr(j.error ?? `failed (${r.status})`); return; }
-      setDone((d) => ({ ...d, [q.kind + q.ref]: opt.label }));
+      setDone((d) => ({ ...d, [q.kind + q.ref]: display }));
+      setFree('');
       // Bug #107: show answered panel instead of silently advancing
-      setAnsweredChoice({ label: opt.label, consequence: opt.consequence });
+      setAnsweredChoice({
+        label: display,
+        consequence: ans.consequence ?? 'The asking agent receives your answer verbatim and continues with it.',
+      });
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   }
@@ -157,7 +175,9 @@ export default function QuestionWalkthrough({ questions }: { questions: OpenQ[] 
       {/* Card */}
       <div style={{ background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`, borderRadius: 10, padding: '20px 22px' }}>
         <div style={{ fontSize: 10, fontFamily: MONO, color: TOKENS.text2, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-          {q.kind === 'brief' ? 'build brief' : q.kind === 'law' ? 'operating law' : `bug #${q.ref}`} · {q.title}
+          {q.kind === 'brief' ? 'build brief' : q.kind === 'law' ? 'operating law'
+            : q.kind === 'finding' ? `finding #${q.ref}` : q.kind === 'comment' ? 'comment thread'
+            : `bug #${q.ref}`} · {q.title}
           {q.asked_by ? ` · asked by ${q.asked_by}` : ''}
         </div>
         <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.5, color: TOKENS.ink, marginBottom: 14 }}>
@@ -166,7 +186,8 @@ export default function QuestionWalkthrough({ questions }: { questions: OpenQ[] 
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {opts.map((opt) => (
-            <button key={opt.label} disabled={busy} onClick={() => answer(q, opt)} style={{
+            <button key={opt.label} disabled={busy}
+              onClick={() => answer(q, { choice: opt.label, consequence: opt.consequence })} style={{
               textAlign: 'left', padding: '11px 14px', borderRadius: 8, cursor: busy ? 'wait' : 'pointer',
               border: opt.recommended ? `2px solid ${TOKENS.forest}` : `1px solid ${TOKENS.border}`,
               background: opt.recommended ? TOKENS.forest : TOKENS.bg,
@@ -177,6 +198,32 @@ export default function QuestionWalkthrough({ questions }: { questions: OpenQ[] 
               <div style={{ fontSize: 11, opacity: 0.85, marginTop: 3, lineHeight: 1.45 }}>{opt.consequence}</div>
             </button>
           ))}
+        </div>
+
+        {/* law 735: free-text answer, always available (laws too — recorded as the decision) */}
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${TOKENS.border}` }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: TOKENS.text2, marginBottom: 4 }}>
+            Or answer in your own words
+          </div>
+          <textarea
+            value={free}
+            onChange={(e) => setFree(e.target.value)}
+            placeholder="Type your answer, a correction, or a question back to the agent…"
+            rows={2}
+            style={{ width: '100%', fontSize: 12.5, padding: '8px 10px', borderRadius: 6,
+              border: `1px solid ${TOKENS.border}`, background: TOKENS.bg, color: TOKENS.ink,
+              fontFamily: 'inherit', resize: 'vertical' }}
+          />
+          <button
+            disabled={busy || free.trim().length < 3}
+            onClick={() => answer(q, { free_text: free.trim() })}
+            style={{ marginTop: 6, fontSize: 11.5, fontWeight: 700, padding: '7px 16px', borderRadius: 6,
+              cursor: busy || free.trim().length < 3 ? 'not-allowed' : 'pointer',
+              border: `1px solid ${TOKENS.forest}`,
+              background: free.trim().length < 3 ? TOKENS.bg : TOKENS.forest,
+              color: free.trim().length < 3 ? TOKENS.text2 : '#fff', opacity: busy ? 0.6 : 1 }}>
+            Send my answer →
+          </button>
         </div>
 
         {err && <div style={{ fontSize: 12, color: 'var(--status-red)', marginTop: 10 }}>⚠ {err}</div>}
