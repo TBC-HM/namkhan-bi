@@ -55,7 +55,9 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it2/system/checks',    label: 'Checks' },
       { href: '/holding/it2/system/health',    label: 'Health' },
       { href: '/holding/it2/system/activity',  label: 'Activity' },
-      { href: '/holding/it2/system/cost',      label: 'Cost' },
+      // Finding #70 (2026-08-05): legacy it2 cost page retired — cost_usd_milli
+      // path superseded by costs.* (ADR-196). ONE cost surface: finance costs v2.
+      { href: '/holding/finance/costs',        label: 'Cost' },
       { href: '/holding/it2/system/recovery',  label: 'Recovery' },
       // ADR-230: the global stop. Was SQL-only until 2026-08-05.
       { href: '/holding/it2/system/automation', label: '⏻ Automation' },
