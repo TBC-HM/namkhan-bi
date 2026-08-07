@@ -3032,3 +3032,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-02 — bug-agent · fix #153
 - # Bug #153 – Remove `<Container>` wrapper from Property Settings page  ## Problem The report says: *"take out the container"* on the Property Settings page (`/h
 - touched `app/h/[property_id]/settings/property/page.tsx`
+
+### 2026-08-07 — bug-agent · fix #153
+- ## Bug #153 – Remove `<Container>` wrapper from Property Settings page  ### Problem The audience/newsletter settings page at `/h/[property_id]/settings/property
+- touched `app/h/[property_id]/settings/property/audience/page.tsx`
