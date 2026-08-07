@@ -4,9 +4,14 @@
 // manual notify route AND the day-before reminder cron
 // (app/api/cron/spa-reminders) send the identical message through one path.
 //
-// Contract unchanged: never fabricates success — the result carries mode
-// ('email' | 'wa_only') and fn_spa_record_notify stamps the booking only when
-// a channel actually fired.
+// Contract: never fabricates success — the result carries mode
+// ('email' | 'wa_only' | 'none') and fn_spa_record_notify stamps the booking
+// only when a channel actually fired. Channel logic (slice-reminders round):
+//   email   → guest_email present AND Resend send succeeded (stamps the booking)
+//   wa_only → ONLY when a phone is present AND email is absent — the operator
+//             genuinely has WhatsApp as the sole channel
+//   none    → email present but the send failed (retried next cron day, booking
+//             stays unstamped and visible), or neither channel exists
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { BookingDetail } from '@/lib/spa/completion';
@@ -53,7 +58,7 @@ export function buildMessage(b: BookingDetail, kind: NotifyKind): { subject: str
 }
 
 export interface NotifyResult {
-  mode: 'email' | 'wa_only';
+  mode: 'email' | 'wa_only' | 'none';
   email_note: string;
   wa_link: string;
   message: string;
@@ -106,14 +111,21 @@ export async function sendBookingNotify(
   if (emailSent) {
     await sb.rpc('fn_spa_record_notify', { p_booking_id: booking.booking_id, p_kind: kind });
   }
+
+  // wa_only is a real channel decision, not a fallback bucket: phone present
+  // AND email absent. Email-present-but-send-failed is 'none' (retry next day);
+  // neither channel is 'none' too (operator surfaces it manually).
+  const mode: NotifyResult['mode'] =
+    emailSent ? 'email' : (phoneDigits && !booking.guest_email) ? 'wa_only' : 'none';
+
   await sb.from('cockpit_audit_log').insert({
     agent,
-    action: `spa_${kind}_${emailSent ? 'emailed' : 'wa_prepared'}`,
+    action: `spa_${kind}_${mode === 'email' ? 'emailed' : mode === 'wa_only' ? 'wa_prepared' : 'no_channel'}`,
     target: `spa.booking:${booking.booking_id}`,
-    success: true,
-    metadata: { kind, email: emailSent, email_note: emailNote, has_phone: !!phoneDigits },
-    reasoning: `Spa ${kind} for "${booking.treatment_name}" (${booking.guest_name ?? 'guest'}): email ${emailNote}; WhatsApp link prepared.`,
+    success: mode !== 'none',
+    metadata: { kind, mode, email: emailSent, email_note: emailNote, has_phone: !!phoneDigits },
+    reasoning: `Spa ${kind} for "${booking.treatment_name}" (${booking.guest_name ?? 'guest'}): email ${emailNote}; mode=${mode}.`,
   });
 
-  return { mode: emailSent ? 'email' : 'wa_only', email_note: emailNote, wa_link: waLink, message: text };
+  return { mode, email_note: emailNote, wa_link: waLink, message: text };
 }
