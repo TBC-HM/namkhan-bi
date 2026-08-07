@@ -30,18 +30,18 @@ async function signOffAction(formData: FormData) {
 
 export default async function QuestionsPage() {
   const sb = getSupabaseAdmin();
-  const [{ data: briefs }, { data: bugs }, { data: queue }, { data: statuses }, { data: agentRuns }, { data: lawProps }] = await Promise.all([
-    // it-area-reorg-v1 gap 1 (2026-07-30): include 'verifying' — verifiers park
-    // owner questions on briefs without flipping them to needs_input. The inbox
-    // must show every open_question regardless of which loop stage parked it.
-    (sb as any).from('v_build_briefs_index')
-      .select('slug, title, status, open_question')
-      .in('status', ['needs_input', 'verifying'])
-      .not('open_question', 'is', null),
-    (sb as any).from('cockpit_bugs')
-      .select('id, body, status, open_question')
-      .not('open_question', 'is', null)
-      .in('status', ['new', 'acked', 'processing']),
+  const [{ data: ownerQs }, { data: answeredQs }, { data: queue }, { data: statuses }, { data: agentRuns }, { data: lawProps }] = await Promise.all([
+    // owner-answer-path-consolidation-v1: the inbox reads THE one contract
+    // (governance.owner_questions via its L5 bridge) instead of scraping
+    // brief/bug mirrors. Every asker kind — brief, bug, finding, comment —
+    // lands here in one shape, answered through one route.
+    (sb as any).from('v_owner_questions_open')
+      .select('id, asker_kind, ref_id, question, options, deep_link, asked_by, asked_at')
+      .order('asked_at', { ascending: true }),
+    (sb as any).from('v_owner_questions_answered')
+      .select('id, asker_kind, ref_id, question, answer, answered_at, deep_link')
+      .order('answered_at', { ascending: false })
+      .limit(10),
     (sb as any).from('v_module_completion_queue')
       .select('module_doc_type, display_name, status, completion_estimate, brief_slug, gap_list'),
     (sb as any).from('v_module_status')
@@ -59,24 +59,23 @@ export default async function QuestionsPage() {
       .eq('status', 'open'),
   ]);
 
-  // ---- Section 1: open questions (walkthrough) ----
+  // ---- Section 1: open questions (walkthrough) — ONE contract, all kinds ----
+  const KIND_LINK: Record<string, (ref: string) => string> = {
+    brief: (ref) => `/holding/it2/modules/briefs/${ref}`,
+    bug: () => `/holding/bugs`,
+    finding: () => `/holding/it2/modules/status`,
+    comment: () => `/holding/it2/modules/status`,
+  };
   const questions: OpenQ[] = [];
-  for (const b of (briefs ?? [])) {
-    const q = b.open_question as RawQ;
-    if (!q?.question || !q?.options?.length) continue;
+  for (const oq of (ownerQs ?? [])) {
+    if (!oq?.question) continue;
+    const kind = oq.asker_kind as OpenQ['kind'];
+    const opts = Array.isArray(oq.options) ? oq.options : [];
     questions.push({
-      kind: 'brief', ref: b.slug, title: b.title ?? b.slug,
-      question: q.question, options: q.options, asked_by: q.asked_by,
-      link: `/holding/it2/modules/briefs/${b.slug}`,
-    });
-  }
-  for (const bug of (bugs ?? [])) {
-    const q = bug.open_question as RawQ;
-    if (!q?.question || !q?.options?.length) continue;
-    questions.push({
-      kind: 'bug', ref: String(bug.id), title: (bug.body ?? '').split('\n')[0].slice(0, 80),
-      question: q.question, options: q.options, asked_by: q.asked_by,
-      link: `/holding/bugs`,
+      kind, ref: String(oq.ref_id), qid: oq.id,
+      title: kind === 'brief' ? String(oq.ref_id) : `${kind} ${oq.ref_id}`,
+      question: oq.question, options: opts, asked_by: oq.asked_by,
+      link: oq.deep_link ?? KIND_LINK[kind]?.(String(oq.ref_id)) ?? '/holding/it2/questions',
     });
   }
   for (const p of (lawProps ?? [])) {
@@ -224,6 +223,40 @@ export default async function QuestionsPage() {
             }}>Merge on GitHub ↗</a>
           </div>
         ))}
+      </div>
+
+      {/* 4 · Answered history — owner-answer-path-consolidation-v1: what you
+          already answered and where the agent took it (one contract, one list) */}
+      <div style={{ maxWidth: 680, margin: '26px auto 0' }}>
+        <h2 style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: TOKENS.text2, margin: '0 0 8px' }}>
+          4 · ANSWERED — LAST 10
+        </h2>
+        {(answeredQs ?? []).length === 0 ? (
+          <div style={{ fontSize: 12, color: TOKENS.text3, padding: '10px 0' }}>Nothing answered yet.</div>
+        ) : (answeredQs ?? []).map((a: any) => {
+          const ans = a.answer ?? {};
+          const answerText = ans.free_text ?? ans.choice ?? ans.label ?? '—';
+          return (
+            <div key={a.id} style={{
+              background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`, borderRadius: 8,
+              padding: '10px 16px', marginBottom: 6,
+            }}>
+              <div style={{ fontSize: 10, fontFamily: MONO, color: TOKENS.text2, marginBottom: 2 }}>
+                {a.asker_kind} {a.ref_id}
+                {a.answered_at ? ` · ${new Date(a.answered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}` : ''}
+              </div>
+              <div style={{ fontSize: 12, color: TOKENS.ink, marginBottom: 2 }}>{a.question}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--status-green)' }}>
+                ✓ {String(answerText).slice(0, 140)}
+                {a.deep_link && (
+                  <a href={a.deep_link} style={{ marginLeft: 8, fontSize: 11, fontWeight: 400, color: TOKENS.text2 }}>
+                    what the agent did →
+                  </a>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
