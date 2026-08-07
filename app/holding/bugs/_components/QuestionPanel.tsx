@@ -27,7 +27,8 @@ export interface OpenQuestion {
 interface Props {
   question: OpenQuestion;
   answerUrl: string;
-  answerBody: (choice: string) => Record<string, unknown>;
+  /** Builds the POST body. `answer` carries choice OR free_text (law 735). */
+  answerBody: (answer: { choice?: string; free_text?: string }) => Record<string, unknown>;
   onAnswered: (choice: string) => void;
   /** If true, render compact (no border box, smaller text) for table rows */
   compact?: boolean;
@@ -50,31 +51,36 @@ export function normaliseOptions(raw: RawOption[] | undefined | null): QuestionO
 export default function QuestionPanel({ question, answerUrl, answerBody, onAnswered, compact }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // owner-answer-path-consolidation-v1 (bug 169): this panel had no free-text
+  // input, so when no option fit, the owner was stuck (law 735 violation).
+  const [free, setFree] = useState('');
 
   const text = question.question ?? question.context ?? 'A decision is needed (no question text was filed).';
   const opts = normaliseOptions(question.options).sort(
     (a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0)
   );
 
-  async function choose(label: string) {
-    if (!label) { setErr('This option has no value — agent filed a malformed question.'); return; }
+  async function submit(answer: { choice?: string; free_text?: string }) {
+    const display = answer.choice ?? answer.free_text ?? '';
+    if (!display) { setErr('This option has no value — agent filed a malformed question.'); return; }
     setBusy(true);
     setErr(null);
     try {
       const r = await fetch(answerUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(answerBody(label)),
+        body: JSON.stringify(answerBody(answer)),
       });
       const j = await r.json();
       if (!r.ok) { setErr(j.error ?? 'Failed'); return; }
-      onAnswered(label);
+      onAnswered(display);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
+  const choose = (label: string) => submit({ choice: label });
 
   const wrap: React.CSSProperties = compact ? {
     padding: '10px 12px', background: '#FBF3D9', borderRadius: 6,
@@ -133,6 +139,32 @@ export default function QuestionPanel({ question, answerUrl, answerBody, onAnswe
           ))}
         </div>
       )}
+
+      {/* law 735: free text is ALWAYS available, even when options render fine */}
+      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #E6DFCC' }}>
+        <div style={{ fontSize: 10.5, fontWeight: 600, color: '#8A8A8A', marginBottom: 4 }}>
+          Or answer in your own words
+        </div>
+        <textarea
+          value={free}
+          onChange={(e) => setFree(e.target.value)}
+          placeholder="Type your answer, a correction, or a question back to the agent…"
+          rows={2}
+          style={{ width: '100%', fontSize: 12, padding: '7px 9px', borderRadius: 5,
+            border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#1B1B1B',
+            fontFamily: 'inherit', resize: 'vertical' }}
+        />
+        <button
+          disabled={busy || free.trim().length < 3}
+          onClick={() => submit({ free_text: free.trim() })}
+          style={{ marginTop: 6, fontSize: 11, fontWeight: 700, padding: '6px 14px', borderRadius: 5,
+            cursor: busy || free.trim().length < 3 ? 'not-allowed' : 'pointer',
+            border: '1px solid #084838',
+            background: free.trim().length < 3 ? '#FFFFFF' : '#084838',
+            color: free.trim().length < 3 ? '#8A8A8A' : '#FFFFFF', opacity: busy ? 0.6 : 1 }}>
+          Send my answer →
+        </button>
+      </div>
       {err && <div style={{ fontSize: 11, color: '#B04A2F', marginTop: 8 }}>{err}</div>}
     </div>
   );
