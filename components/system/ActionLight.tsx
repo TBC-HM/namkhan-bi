@@ -1,21 +1,23 @@
 'use client';
 // components/system/ActionLight.tsx
-// action-light-surface-v1 — Single coloured light for PBS decision/blocker status
-// Reads public.v_action_light (one row) + public.v_decision_sweep (many rows)
-// Green = nothing needs you. Red = something is broken. Click to expand details.
-// Polls every 60s. Collapsed when green, expanded when red/amber.
+// action-light-surface-v1 — single light: green/amber/red. Renders v_action_light
+// and v_decision_sweep. Zero writes. Owner glances → knows if blocked.
 
 import { useEffect, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/client';
+import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
 
+// ── colours (per spec) ─────────────────────────────────────────────────────
 const RED = '#f85149';
 const AMBER = '#d29922';
 const GREEN = '#3fb950';
 
-interface ActionLightData {
+// ── data shapes (match public.v_action_light, public.v_decision_sweep) ────
+interface LightRow {
   light: 'red' | 'amber' | 'green';
   headline: string;
   decisions: number;
+  top_reason: string | null;
   red_blockers: number;
   amber_blockers: number;
   oldest_decision_hours: number | null;
@@ -23,50 +25,41 @@ interface ActionLightData {
 
 interface DecisionRow {
   ref: string;
-  kind: string;
-  detail: string;
-  source: string;
-  options: string[];
+  kind: 'blocker' | 'decision';
   headline: string;
-  severity: 'red' | 'amber' | 'green';
+  source: string;
+  severity: 'red' | 'amber' | 'yellow';
   age_hours: number | null;
   deep_link: string;
+  detail: string | null;
+  options: string[];
 }
 
+// ── component ──────────────────────────────────────────────────────────────
 export function ActionLight() {
-  const [lightData, setLightData] = useState<ActionLightData | null>(null);
-  const [decisions, setDecisions] = useState<DecisionRow[]>([]);
+  const [light, setLight] = useState<LightRow | null>(null);
+  const [rows, setRows] = useState<DecisionRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   async function load() {
     try {
-      const [lightRes, decisionsRes] = await Promise.all([
-        supabase.from('v_action_light').select('*').single(),
-        supabase.from('v_decision_sweep').select('*').order('severity', { ascending: true }).order('age_hours', { ascending: false, nullsFirst: false }),
+      const sb = createClient();
+      const [lightRes, sweepRes] = await Promise.all([
+        sb.from('v_action_light').select('*').single(),
+        sb.from('v_decision_sweep').select('*').order('severity', { ascending: false }),
       ]);
-
       if (lightRes.error) throw lightRes.error;
-      if (decisionsRes.error) throw decisionsRes.error;
-
-      const light = lightRes.data as ActionLightData;
-      const rows = (decisionsRes.data ?? []) as DecisionRow[];
-
-      setLightData(light);
-      setDecisions(rows);
+      if (sweepRes.error) throw sweepRes.error;
+      const lightData = lightRes.data as LightRow;
+      const sweepData = (sweepRes.data ?? []) as DecisionRow[];
+      setLight(lightData);
+      setRows(sweepData);
+      // expand if red or amber, collapse if green
+      setExpanded(lightData.light === 'red' || lightData.light === 'amber');
       setError(null);
-
-      // Auto-expand if red or amber
-      if (light.light === 'red' || light.light === 'amber') {
-        setExpanded(true);
-      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Load failed');
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -78,131 +71,134 @@ export function ActionLight() {
 
   if (error) {
     return (
-      <div style={{
-        background: '#FFF9F5', border: '1px solid #D4D4D0',
-        borderRadius: 2, padding: '14px 16px', marginBottom: 20,
-      }}>
-        <p style={{ margin: 0, fontSize: 13, color: '#52433D' }}>Action light load error: {error}</p>
-      </div>
+      <section style={{ ...card, marginBottom: 20 }}>
+        <p style={{ fontSize: 12.5, color: RED, margin: 0 }}>
+          Action light failed to load: {error}
+        </p>
+      </section>
     );
   }
 
-  if (!lightData) {
+  if (!light) {
     return (
-      <div style={{
-        background: '#FFF9F5', border: '1px solid #D4D4D0',
-        borderRadius: 2, padding: '14px 16px', marginBottom: 20,
-      }}>
-        <p style={{ margin: 0, fontSize: 13, color: '#8C8781' }}>Loading action status…</p>
-      </div>
+      <section style={{ ...card, marginBottom: 20 }}>
+        <p style={{ fontSize: 12.5, color: TOKENS.inkSoft, margin: 0 }}>Loading…</p>
+      </section>
     );
   }
 
-  const lightColor = lightData.light === 'red' ? RED : lightData.light === 'amber' ? AMBER : GREEN;
-  const totalBlockers = lightData.red_blockers + lightData.amber_blockers;
-  const oldestStr = lightData.oldest_decision_hours !== null
-    ? `${Math.round(lightData.oldest_decision_hours)}h`
-    : decisions.length > 0 && decisions.some(d => d.age_hours !== null)
-      ? `${Math.round(Math.max(...decisions.filter(d => d.age_hours !== null).map(d => d.age_hours!)))}h`
-      : 'now';
+  const chipColor = light.light === 'red' ? RED : light.light === 'amber' ? AMBER : GREEN;
+  const totalBlockers = light.red_blockers + light.amber_blockers;
+  const oldestStr = light.oldest_decision_hours !== null
+    ? `${Math.round(light.oldest_decision_hours)}h`
+    : rows.length > 0 && rows[0].age_hours !== null
+    ? `${Math.round(rows[0].age_hours)}h`
+    : 'now';
 
   return (
-    <section style={{
-      background: '#FFF9F5', border: '1px solid #D4D4D0',
-      borderRadius: 2, padding: '14px 16px', marginBottom: 20,
-    }}>
-      {/* Header with light chip */}
-      <div
-        onClick={() => setExpanded(!expanded)}
+    <section style={{ ...card, marginBottom: 20 }}>
+      {/* header chip + headline + counts */}
+      <header
         style={{
           display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+          marginBottom: expanded ? 14 : 0,
         }}
+        onClick={() => setExpanded((v) => !v)}
       >
-        <div style={{
-          width: 12, height: 12, borderRadius: '50%', background: lightColor,
-          boxShadow: `0 0 8px ${lightColor}`,
-        }} />
-        <div style={{ flex: 1 }}>
-          <h2 style={{
-            margin: 0, fontSize: 15, fontWeight: 600, color: '#52433D',
-            fontFamily: 'ui-serif, Georgia, serif',
-          }}>
-            {lightData.headline}
-          </h2>
-          <p style={{
-            margin: '4px 0 0 0', fontSize: 11.5, color: '#8C8781',
-          }}>
-            {lightData.decisions} decision{lightData.decisions !== 1 ? 's' : ''} · {totalBlockers} broken · oldest {oldestStr}
-          </p>
-        </div>
-        <button
-          type="button"
+        <div
           style={{
-            fontSize: 11, padding: '4px 8px', borderRadius: 6, cursor: 'pointer',
-            border: '1px solid #D4D4D0', background: '#FEFDFB', color: '#52433D',
+            width: 16, height: 16, borderRadius: '50%', background: chipColor,
+            boxShadow: `0 0 8px ${chipColor}`,
+          }}
+        />
+        <h2
+          style={{
+            fontFamily: SERIF, fontSize: 17, fontWeight: 500, margin: 0, color: TOKENS.ink,
           }}
         >
-          {expanded ? 'Collapse' : 'Expand'}
-        </button>
-      </div>
+          {light.headline}
+        </h2>
+        <span style={{ fontSize: 11.5, color: TOKENS.inkSoft, fontFamily: MONO }}>
+          {light.decisions} decision{light.decisions === 1 ? '' : 's'} ·{' '}
+          {totalBlockers} broken ·{' '}
+          oldest {oldestStr}
+        </span>
+        <span style={{ marginLeft: 'auto', fontSize: 18, color: TOKENS.inkSoft }}>
+          {expanded ? '−' : '+'}
+        </span>
+      </header>
 
-      {/* Details table */}
-      {expanded && decisions.length > 0 && (
-        <div style={{ marginTop: 14 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th style={{
-                  textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid #D4D4D0',
-                  fontSize: 11, fontWeight: 600, color: '#8C8781', background: '#FAFAF7',
-                }}>Status</th>
-                <th style={{
-                  textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid #D4D4D0',
-                  fontSize: 11, fontWeight: 600, color: '#8C8781', background: '#FAFAF7',
-                }}>What</th>
-                <th style={{
-                  textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid #D4D4D0',
-                  fontSize: 11, fontWeight: 600, color: '#8C8781', background: '#FAFAF7',
-                }}>Source</th>
-                <th style={{
-                  textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid #D4D4D0',
-                  fontSize: 11, fontWeight: 600, color: '#8C8781', background: '#FAFAF7',
-                }}>Age</th>
-              </tr>
-            </thead>
-            <tbody>
-              {decisions.map((row, i) => {
-                const rowColor = row.severity === 'red' ? RED : row.severity === 'amber' ? AMBER : '#8C8781';
-                const ageStr = row.age_hours !== null ? `${Math.round(row.age_hours)}h` : 'now';
-                return (
-                  <tr key={row.ref + i} style={{ cursor: 'pointer' }} onClick={() => window.location.href = row.deep_link}>
-                    <td style={{ padding: '6px 10px', borderBottom: '1px solid #D4D4D0' }}>
-                      <div style={{
-                        width: 8, height: 8, borderRadius: '50%', background: rowColor,
-                      }} />
-                    </td>
-                    <td style={{ padding: '6px 10px', borderBottom: '1px solid #D4D4D0', color: '#52433D' }}>
-                      {row.headline}
-                    </td>
-                    <td style={{ padding: '6px 10px', borderBottom: '1px solid #D4D4D0', color: '#8C8781', fontSize: 11 }}>
-                      {row.source}
-                    </td>
-                    <td style={{ padding: '6px 10px', borderBottom: '1px solid #D4D4D0', color: '#8C8781', fontSize: 11 }}>
-                      {ageStr}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {/* table of rows when expanded */}
+      {expanded && rows.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead>
+            <tr>
+              <th style={hdr} />
+              <th style={hdr}>Item</th>
+              <th style={hdr}>Source</th>
+              <th style={hdr}>Age</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const dotColor = r.severity === 'red' ? RED : r.severity === 'amber' ? AMBER : TOKENS.inkSoft;
+              const ageStr = r.age_hours !== null ? `${Math.round(r.age_hours)}h` : 'now';
+              return (
+                <tr key={r.ref} style={{ cursor: 'pointer' }} onClick={() => window.location.href = r.deep_link}>
+                  <td style={{ ...cellStyle, width: 20, textAlign: 'center' }}>
+                    <div
+                      style={{
+                        width: 8, height: 8, borderRadius: '50%', background: dotColor,
+                        display: 'inline-block',
+                      }}
+                    />
+                  </td>
+                  <td style={cellStyle}>
+                    <span style={{ fontWeight: 500 }}>{r.headline}</span>
+                    {r.detail && (
+                      <div style={{ fontSize: 11, color: TOKENS.inkSoft, marginTop: 2, maxWidth: 600 }}>
+                        {r.detail.length > 200 ? r.detail.slice(0, 200) + '…' : r.detail}
+                      </div>
+                    )}
+                  </td>
+                  <td style={cellStyle}>
+                    <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.inkSoft }}>
+                      {r.source}
+                    </span>
+                  </td>
+                  <td style={{ ...cellStyle, textAlign: 'right', fontFamily: MONO, fontSize: 11 }}>
+                    {ageStr}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
 
-      {expanded && decisions.length === 0 && (
-        <p style={{ marginTop: 14, fontSize: 12, color: '#8C8781' }}>
-          All systems reporting. Nothing needs you right now.
+      {/* empty state when no rows */}
+      {expanded && rows.length === 0 && (
+        <p style={{ fontSize: 12.5, color: TOKENS.inkSoft, margin: 0 }}>
+          No blockers or decisions open.
         </p>
       )}
     </section>
   );
 }
+
+// ── styles ─────────────────────────────────────────────────────────────────
+const card: React.CSSProperties = {
+  background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`,
+  borderRadius: 2, padding: '14px 16px',
+};
+
+const hdr: React.CSSProperties = {
+  padding: '6px 10px', fontSize: 11, fontWeight: 600, color: TOKENS.inkSoft,
+  background: '#FAFAF7', textAlign: 'left', whiteSpace: 'nowrap',
+  borderBottom: `1px solid ${TOKENS.border}`,
+};
+
+const cellStyle: React.CSSProperties = {
+  padding: '8px 10px', borderBottom: `1px solid ${TOKENS.border}`, fontSize: 12.5,
+  verticalAlign: 'top',
+};
