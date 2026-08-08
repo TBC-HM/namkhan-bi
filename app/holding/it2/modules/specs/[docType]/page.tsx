@@ -1,9 +1,11 @@
 // app/holding/it2/modules/specs/[docType]/page.tsx
 // Moved it2-native from /holding/it/module/[docType] (it-area-reorg-v1 final slice).
-// PBS 2026-07-23: module doc preview. Renders the canonical Marketing module
-// spec (media_module · newsletter_module · socials_module · gbp_module) from
+// PBS 2026-07-23: module doc preview. Renders the canonical module spec from
 // public.v_documents_latest. Version replacement is handled at the DB layer by
 // UNIQUE(doc_type) — this route always shows the latest.
+// 2026-08-06 (seo_pr_cockpit-owner-findings-v1): removed ALLOWED whitelist —
+// the DB query naturally 404s if doc doesn't exist; hardcoded list was stale
+// and blocked valid modules like seo_pr_cockpit (finding #53).
 
 import { notFound } from 'next/navigation';
 import TenantLink from '@/components/nav/TenantLink';
@@ -13,17 +15,12 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const ALLOWED = new Set([
-  'bug_agent_module', 'compiler_module', 'gbp_module', 'inventory_module',
-  'media_module', 'newsletter_module', 'proposals_module', 'sales_module',
-  'socials_module', 'spec_builder_module', 'university_module', 'youtube_module',
-]);
-
 const TYPE_LABEL: Record<string, string> = {
   gbp_module:        'Google Business Profile',
   media_module:      'Media',
   newsletter_module: 'Newsletter',
   socials_module:    'Socials',
+  seo_pr_cockpit:    'SEO & PR Cockpit',
 };
 
 interface PageProps {
@@ -32,8 +29,6 @@ interface PageProps {
 
 export default async function ModulePreviewPage({ params }: PageProps) {
   const { docType } = await params;
-
-  if (!ALLOWED.has(docType)) notFound();
 
   const { data, error } = await supabase
     .from('v_documents_latest')
