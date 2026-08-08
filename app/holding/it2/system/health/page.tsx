@@ -153,6 +153,20 @@ export default async function CockpitV2HealthPage() {
             Raw fleet work-log — every brief the agent fleet runs on, live states first, shipped behind a toggle. Owner answers live on module cards; this is the ops view.
           </div>
         </a>
+
+        {/* Releases link card (module-surface-slice-status-page-merge 2026-08-08 —
+            relocated from /modules/status; same law-659 pattern) */}
+        <a href="/holding/it2/system/releases" style={{
+          display: 'block', marginTop: 10, padding: '12px 16px', border: '1px solid #E6DFCC',
+          borderRadius: 8, textDecoration: 'none', background: '#FFFFFF',
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: '#5A5A5A' }}>
+            📦 Releases →
+          </div>
+          <div style={{ fontSize: 12, color: '#5A5A5A', marginTop: 4 }}>
+            Platform release ledger + cut-release form (rule 597) — sha256-signed doc snapshots, auto-generated changelogs, append-only semver history.
+          </div>
+        </a>
       </div>
 
       <HealthView initial={data} />
