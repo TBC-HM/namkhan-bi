@@ -44,7 +44,7 @@ const inp: React.CSSProperties = {
   background: 'var(--paper, #FFFFFF)',
 };
 
-async function post(body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string; result?: { ok?: boolean; message?: string; blocked_by?: string } }> {
+async function post(body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string; result?: { ok?: boolean; message?: string; blocked_by?: string; guardrail_check_result?: unknown } }> {
   try {
     const res = await fetch('/api/revenue/rate-action', {
       method: 'POST',
@@ -57,6 +57,19 @@ async function post(body: Record<string, unknown>): Promise<{ ok?: boolean; erro
   }
 }
 
+interface GuardrailCheckResult {
+  blocks?: Array<{ rule_key: string; threshold_kind: string; threshold_val: number; observed: number | null; message: string }>;
+  warnings?: Array<{ rule_key: string; threshold_kind: string; threshold_val: number; observed: number | null; message: string }>;
+  unknown?: string[];
+}
+
+// Legacy format (rate_change_gt_50_needs_pbs)
+interface LegacyCheck {
+  rule?: string;
+  result?: string;
+  delta?: number;
+}
+
 export interface RateActionRow {
   id: number;
   property_id: number;
@@ -65,10 +78,36 @@ export interface RateActionRow {
   current_rate: number | null;
   proposed_rate: number;
   rationale: string | null;
-  guardrail_check_result: Array<{ rule?: string; result?: string; delta?: number }> | null;
+  guardrail_check_result: GuardrailCheckResult | LegacyCheck[] | null;
   status: 'proposed' | 'approved' | 'rejected' | 'executed';
   proposed_by: string;
   created_at: string;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+function parseGuardrailResult(raw: GuardrailCheckResult | LegacyCheck[] | null): {
+  warnings: Array<{ rule_key: string; message: string }>;
+  requiresPbs: boolean;
+} {
+  if (raw == null) return { warnings: [], requiresPbs: false };
+
+  // New structure: {blocks, warnings, unknown}
+  if (typeof raw === 'object' && !Array.isArray(raw) && 'warnings' in raw) {
+    const gcr = raw as GuardrailCheckResult;
+    return {
+      warnings: (gcr.warnings ?? []).map((w) => ({ rule_key: w.rule_key, message: w.message })),
+      requiresPbs: false, // Legacy PBS check is separate now
+    };
+  }
+
+  // Legacy array structure
+  if (Array.isArray(raw)) {
+    const requiresPbs = raw.some((c) => c.result === 'requires_pbs');
+    return { warnings: [], requiresPbs };
+  }
+
+  return { warnings: [], requiresPbs: false };
 }
 
 // ─── Action queue (Approve / Reject / Mark executed) ──────────────────────
@@ -79,6 +118,7 @@ export function ActionQueue({ rows }: { rows: RateActionRow[] }) {
   const [noteFor, setNoteFor] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  const [showWarningsFor, setShowWarningsFor] = useState<number | null>(null);
 
   if (rows.length === 0) {
     return (
@@ -100,6 +140,7 @@ export function ActionQueue({ rows }: { rows: RateActionRow[] }) {
       else {
         setNoteFor(null);
         setNote('');
+        setShowWarningsFor(null);
         router.refresh();
       }
     });
@@ -111,7 +152,10 @@ export function ActionQueue({ rows }: { rows: RateActionRow[] }) {
         <p style={{ margin: 0, fontSize: 12, color: 'var(--terracotta, #B8542A)' }}>{err}</p>
       )}
       {rows.map((r) => {
-        const requiresPbs = (r.guardrail_check_result ?? []).some((c) => c.result === 'requires_pbs');
+        const { warnings, requiresPbs } = parseGuardrailResult(r.guardrail_check_result);
+        const hasWarnings = warnings.length > 0;
+        const showWarnings = showWarningsFor === r.id;
+
         return (
           <div
             key={r.id}
@@ -132,11 +176,37 @@ export function ActionQueue({ rows }: { rows: RateActionRow[] }) {
               <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
                 by {r.proposed_by}
                 {requiresPbs ? ' · Δ>$50 — needs PBS' : ''}
+                {hasWarnings && r.status === 'proposed' ? ` · ⚠ ${warnings.length} warning${warnings.length > 1 ? 's' : ''}` : ''}
               </span>
             </div>
             {r.rationale && (
               <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-soft)' }}>{r.rationale}</p>
             )}
+            
+            {/* Warning display for proposed actions */}
+            {hasWarnings && r.status === 'proposed' && (
+              <div style={{ marginTop: 4 }}>
+                <button
+                  style={{ ...btn, fontSize: 11, padding: '2px 8px' }}
+                  onClick={() => setShowWarningsFor(showWarnings ? null : r.id)}
+                >
+                  {showWarnings ? 'Hide warnings' : 'Show warnings'}
+                </button>
+                {showWarnings && (
+                  <div style={{ marginTop: 6, padding: 8, background: 'rgba(184, 84, 42, 0.05)', borderRadius: 6 }}>
+                    {warnings.map((w, idx) => (
+                      <div key={idx} style={{ fontSize: 12, color: 'var(--terracotta, #B8542A)', marginBottom: idx < warnings.length - 1 ? 4 : 0 }}>
+                        <strong>{w.rule_key}:</strong> {w.message}
+                      </div>
+                    ))}
+                    <p style={{ margin: '6px 0 0', fontSize: 11.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
+                      Warnings do not block approval — guardrail beats goal, but proceed with awareness.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {r.status === 'proposed' && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 {noteFor === r.id && (
@@ -157,17 +227,26 @@ export function ActionQueue({ rows }: { rows: RateActionRow[] }) {
                 <button style={btnDanger} disabled={busyId === r.id} onClick={() => act(r.id, 'reject')}>
                   Reject
                 </button>
+                {noteFor === r.id && (
+                  <button style={btn} onClick={() => { setNoteFor(null); setNote(''); }}>
+                    Cancel
+                  </button>
+                )}
               </div>
             )}
             {r.status === 'approved' && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 12, color: 'var(--status-green, #2E7D32)', fontWeight: 600 }}>
-                  Approved — set the rate in Cloudbeds, then log it:
-                </span>
+                <span style={{ fontSize: 12, color: 'var(--status-green, #2E7D32)', fontWeight: 600 }}>✓ Approved</span>
                 <button style={btn} disabled={busyId === r.id} onClick={() => act(r.id, 'execute')}>
                   Mark executed
                 </button>
               </div>
+            )}
+            {r.status === 'rejected' && (
+              <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>⊗ Rejected</span>
+            )}
+            {r.status === 'executed' && (
+              <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 600 }}>→ Executed (manual in PMS)</span>
             )}
           </div>
         );
@@ -178,165 +257,184 @@ export function ActionQueue({ rows }: { rows: RateActionRow[] }) {
 
 // ─── Propose form ─────────────────────────────────────────────────────────
 
-export function ProposeForm({
-  propertyId,
-  prefill,
-}: {
-  propertyId: number;
-  // G4 (brief revenue-module-v1): forecast scenario → rate action handoff.
-  // The cockpit page parses ?propose_rate/&scenario_id/... query params and
-  // passes them here so the form opens pre-filled; the rationale carries the
-  // scenario id + run date, which is the back-link of the two-way tie.
-  prefill?: { proposed?: string; rationale?: string };
-}) {
+export function ProposeForm({ propertyId, prefill }: { propertyId: number; prefill?: { proposed: string; rationale: string } }) {
   const router = useRouter();
-  const [open, setOpen] = useState(Boolean(prefill));
+  const [state, setState] = useState<'idle' | 'busy'>('idle');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [current, setCurrent] = useState('');
   const [proposed, setProposed] = useState(prefill?.proposed ?? '');
-  const [why, setWhy] = useState(prefill?.rationale ?? '');
-  const [state, setState] = useState<'idle' | 'busy' | 'error' | 'blocked'>('idle');
-  const [msg, setMsg] = useState('');
+  const [rationale, setRationale] = useState(prefill?.rationale ?? '');
+  const [msg, setMsg] = useState<string | null>(null);
 
-  if (!open) {
-    return (
-      <button style={btn} onClick={() => setOpen(true)}>
-        Propose rate action
-      </button>
-    );
-  }
-
-  const submit = () => {
-    if (!start || !end || !proposed) return;
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cur = current.trim() === '' ? null : Number(current);
+    const prop = Number(proposed);
+    if (!start || !end || !Number.isFinite(prop) || prop <= 0) {
+      setMsg('All fields required (current rate is optional)');
+      return;
+    }
     setState('busy');
+    setMsg(null);
     void post({
       op: 'propose',
       property_id: propertyId,
       stay_start: start,
       stay_end: end,
-      current_rate: current ? Number(current) : undefined,
-      proposed_rate: Number(proposed),
-      rationale: why.trim() || undefined,
-      actor: 'pbs',
+      current_rate: cur,
+      proposed_rate: prop,
+      rationale: rationale.trim() || 'Manual propose from Rate Desk',
+      proposed_by: 'pbs',
     }).then((res) => {
+      setState('idle');
       if (res.error) {
-        setState('error');
         setMsg(res.error);
       } else if (res.result && res.result.ok === false) {
-        setState('blocked');
+        // Blocked by guardrail
         setMsg(res.result.message ?? `blocked by guardrail ${res.result.blocked_by ?? ''}`);
       } else {
-        setState('idle');
-        setMsg('');
-        setOpen(false);
-        setWhy('');
+        // Success — check for warnings
+        const gcr = res.result?.guardrail_check_result as GuardrailCheckResult | undefined;
+        const warnings = gcr?.warnings ?? [];
+        if (warnings.length > 0) {
+          setMsg(`✓ Proposed (with ${warnings.length} warning${warnings.length > 1 ? 's' : ''} — see action queue below)`);
+        } else {
+          setMsg('✓ Proposed successfully');
+        }
+        setStart('');
+        setEnd('');
+        setCurrent('');
         setProposed('');
+        setRationale('');
         router.refresh();
       }
     });
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input style={inp} type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-        <input style={inp} type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
         <input
-          style={{ ...inp, width: 110 }}
+          style={inp}
+          type="date"
+          placeholder="Stay start"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          required
+        />
+        <input
+          style={inp}
+          type="date"
+          placeholder="Stay end"
+          value={end}
+          onChange={(e) => setEnd(e.target.value)}
+          required
+        />
+        <input
+          style={inp}
           type="number"
-          placeholder="current $"
+          placeholder="Current rate (optional)"
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
         />
         <input
-          style={{ ...inp, width: 110 }}
+          style={inp}
           type="number"
-          placeholder="proposed $"
+          placeholder="Proposed rate *"
           value={proposed}
           onChange={(e) => setProposed(e.target.value)}
+          required
         />
       </div>
-      <input
-        style={inp}
-        placeholder="rationale — what pressure/opportunity is this responding to?"
-        value={why}
-        onChange={(e) => setWhy(e.target.value)}
+      <textarea
+        style={{ ...inp, minHeight: 60, fontFamily: 'inherit', resize: 'vertical' }}
+        placeholder="Rationale (why this rate for these dates?)"
+        value={rationale}
+        onChange={(e) => setRationale(e.target.value)}
       />
-      {(state === 'error' || state === 'blocked') && (
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--terracotta, #B8542A)' }}>{msg}</p>
-      )}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button style={btnPrimary} disabled={state === 'busy'} onClick={submit}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button type="submit" style={btnPrimary} disabled={state === 'busy'}>
           {state === 'busy' ? 'Checking guardrails…' : 'Propose'}
         </button>
-        <button style={btn} onClick={() => setOpen(false)}>
-          Cancel
-        </button>
+        {msg && (
+          <span style={{ fontSize: 12, color: msg.startsWith('✓') ? 'var(--status-green, #2E7D32)' : 'var(--terracotta, #B8542A)' }}>
+            {msg}
+          </span>
+        )}
       </div>
-    </div>
+    </form>
   );
 }
 
-// ─── Findings button (rule 729) ───────────────────────────────────────────
+// ─── Finding button ───────────────────────────────────────────────────────
 
-export function FindingButton() {
+export function FindingButton({ propertyId }: { propertyId: number }) {
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState('');
-  const [severity, setSeverity] = useState<'low' | 'medium' | 'high'>('medium');
-  const [state, setState] = useState<'idle' | 'busy' | 'sent' | 'error'>('idle');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
 
-  const submit = () => {
-    if (text.trim().length < 5) return;
-    setState('busy');
-    void post({ op: 'finding', finding: text.trim(), severity }).then((res) => {
-      if (res.error) setState('error');
-      else {
-        setState('sent');
-        setText('');
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (note.trim().length < 10) {
+      setMsg('Finding must be at least 10 characters');
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    void post({
+      op: 'finding',
+      property_id: propertyId,
+      finding: note.trim(),
+      category: 'rate_desk',
+    }).then((res) => {
+      setBusy(false);
+      if (res.error || (res.result && res.result.ok === false)) {
+        setMsg(res.error ?? res.result?.message ?? 'Failed to submit finding');
+      } else {
+        setMsg('✓ Finding submitted');
+        setNote('');
+        setTimeout(() => {
+          setOpen(false);
+          setMsg(null);
+          router.refresh();
+        }, 1500);
       }
     });
   };
 
   if (!open) {
     return (
-      <button style={btn} onClick={() => { setOpen(true); setState('idle'); }}>
-        Report finding
+      <button style={btn} onClick={() => setOpen(true)}>
+        + Report a revenue finding
       </button>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 260 }}>
+    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <textarea
-        style={{ ...inp, minHeight: 60, resize: 'vertical' }}
-        placeholder="What is wrong or missing on this page?"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
+        style={{ ...inp, minHeight: 80, fontFamily: 'inherit', resize: 'vertical' }}
+        placeholder="Describe the revenue finding (gap, anomaly, opportunity…)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        autoFocus
       />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <select
-          style={inp}
-          value={severity}
-          onChange={(e) => setSeverity(e.target.value as 'low' | 'medium' | 'high')}
-        >
-          <option value="low">low</option>
-          <option value="medium">medium</option>
-          <option value="high">high</option>
-        </select>
-        <button style={btnPrimary} disabled={state === 'busy'} onClick={submit}>
-          {state === 'busy' ? 'Sending…' : 'File finding'}
+        <button type="submit" style={btnPrimary} disabled={busy}>
+          {busy ? 'Submitting…' : 'Submit finding'}
         </button>
-        <button style={btn} onClick={() => setOpen(false)}>
-          Close
+        <button type="button" style={btn} onClick={() => { setOpen(false); setNote(''); setMsg(null); }}>
+          Cancel
         </button>
-        {state === 'sent' && (
-          <span style={{ fontSize: 12, color: 'var(--status-green, #2E7D32)' }}>Filed ✓</span>
-        )}
-        {state === 'error' && (
-          <span style={{ fontSize: 12, color: 'var(--terracotta, #B8542A)' }}>Failed — retry</span>
+        {msg && (
+          <span style={{ fontSize: 12, color: msg.startsWith('✓') ? 'var(--status-green, #2E7D32)' : 'var(--terracotta, #B8542A)' }}>
+            {msg}
+          </span>
         )}
       </div>
-    </div>
+    </form>
   );
 }
