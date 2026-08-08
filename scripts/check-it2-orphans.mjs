@@ -52,6 +52,10 @@ const ALLOWLIST = new Set([
   // module cards / Action Center rows. [slug] detail pages resolve via this
   // static ancestor.
   '/holding/it2/modules/briefs',
+  // Releases — linked contextually from System → Health link card
+  // (module-surface-slice-status-page-merge, 2026-08-08): release ledger and
+  // cut-release form relocated from /modules/status (now a redirect to specs).
+  '/holding/it2/system/releases',
 ]);
 
 function walkPages(dir, out = []) {
