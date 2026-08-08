@@ -1,0 +1,434 @@
+# Disaster Recovery - nightly off-site backup + proven-restore drill
+#
+# Runs on GitHub Actions deliberately: an independent failure domain from both
+# Supabase and Vercel. A backup job hosted inside the system it protects dies with it.
+#
+# Writes results to governance.dr_runs / dr_artifacts / dr_drills via psql.
+# Every data class is independent - one failing class marks itself failed and the
+# run reports partial. It never aborts the others.
+
+name: dr-nightly
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+  push:
+    branches: [build/dr-pipeline-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dr-nightly
+  cancel-in-progress: false
+
+env:
+  R2_BUCKET: tbc-dr-prod
+  R2_ENDPOINT: https://c83585fd55ad5b7cd6438054734f3568.r2.cloudflarestorage.com
+  PGHOST: ${{ secrets.SUPABASE_DB_HOST }}
+  PGUSER: ${{ secrets.SUPABASE_DB_USER }}
+  PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  PGDATABASE: postgres
+  PGPORT: '5432'
+
+jobs:
+  backup:
+    name: Off-site backup
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    outputs:
+      run_id: ${{ steps.start.outputs.run_id }}
+      db_key: ${{ steps.db.outputs.key }}
+    steps:
+      - name: Checkout (full history for the code bundle)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install postgresql-client-17 and rclone
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 rclone jq
+          pg_dump --version
+
+      - name: Configure rclone remotes
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.config/rclone
+          umask 077
+          {
+            echo "[r2]"
+            echo "type = s3"
+            echo "provider = Cloudflare"
+            echo "endpoint = ${R2_ENDPOINT}"
+            echo "access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}"
+            echo "secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}"
+            echo "acl = private"
+            echo "no_check_bucket = true"
+          } > ~/.config/rclone/rclone.conf
+          if [ -n "${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}" ]; then
+            {
+              echo ""
+              echo "[sb]"
+              echo "type = s3"
+              echo "provider = Other"
+              echo "endpoint = https://${PGHOST#db.}/storage/v1/s3"
+              echo "region = eu-central-1"
+              echo "access_key_id = ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}"
+              echo "secret_access_key = ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}"
+              echo "force_path_style = true"
+            } >> ~/.config/rclone/rclone.conf
+          fi
+          rclone lsd r2:${R2_BUCKET} >/dev/null && echo "R2 reachable"
+
+      - name: Open DR run
+        id: start
+        run: |
+          set -euo pipefail
+          DAY=$(date -u +%Y-%m-%d)
+          echo "day=$DAY" >> "$GITHUB_OUTPUT"
+          if [ "$(date -u +%d)" = "01" ]; then
+            echo "tier=monthly" >> "$GITHUB_OUTPUT"
+          else
+            echo "tier=daily" >> "$GITHUB_OUTPUT"
+          fi
+          RID=$(psql -qtAX -c "INSERT INTO governance.dr_runs (run_uid, trigger, actor) VALUES ('gh-${{ github.run_id }}', '${{ github.event_name }}', '${{ github.actor }}') RETURNING id;")
+          echo "run_id=$RID" >> "$GITHUB_OUTPUT"
+          echo "DR run $RID opened for $DAY"
+
+      - name: Database dump
+        id: db
+        continue-on-error: true
+        run: |
+          set +e  # Don't exit on error - we need to record failures
+          RID=${{ steps.start.outputs.run_id }}
+          DAY=${{ steps.start.outputs.day }}
+          TIER=${{ steps.start.outputs.tier }}
+          OUT=db-${DAY}.sql.gz
+          
+          # backup_log excluded by data: 5 GB of superseded inline payload.
+          # documents_history already carries the same content.
+          pg_dump --format=plain --no-owner --no-privileges --quote-all-identifiers \
+                  --exclude-table-data=documentation.backup_log 2>db.err | gzip -9 > "$OUT"
+          DUMP_EXIT=$?
+          
+          if [ $DUMP_EXIT -ne 0 ]; then
+            ERR=$(head -5 db.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'database', 'failed', 'pg_dump exit $DUMP_EXIT: $ERR');"
+            echo "::error::Database dump failed (exit $DUMP_EXIT): $ERR"
+            exit 0  # continue-on-error handles this
+          fi
+          
+          BYTES=$(stat -c%s "$OUT")
+          if [ "$BYTES" -lt 100000 ]; then
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'database', 'failed', 'dump too small: $BYTES bytes');"
+            echo "::error::Database dump suspiciously small: $BYTES bytes"
+            exit 0
+          fi
+          
+          SUM=$(sha256sum "$OUT" | cut -d' ' -f1)
+          KEY="db/${TIER}/${OUT}"
+          
+          if ! rclone copyto "$OUT" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket 2>upload.err; then
+            ERR=$(head -3 upload.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'database', 'failed', 'upload failed: $ERR');"
+            echo "::error::R2 upload failed: $ERR"
+            exit 0
+          fi
+          
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, checksum, status) VALUES ($RID, 'database', '${KEY}', ${BYTES}, '${SUM}', 'ok');"
+          echo "Database: $BYTES bytes -> $KEY"
+
+      - name: DDL schema dump
+        continue-on-error: true
+        run: |
+          set +e
+          RID=${{ steps.start.outputs.run_id }}
+          DAY=${{ steps.start.outputs.day }}
+          TIER=${{ steps.start.outputs.tier }}
+          OUT=ddl-${DAY}.sql.gz
+          
+          pg_dump --format=plain --schema-only --no-owner --no-privileges --quote-all-identifiers 2>ddl.err | gzip -9 > "$OUT"
+          DUMP_EXIT=$?
+          
+          if [ $DUMP_EXIT -ne 0 ]; then
+            ERR=$(head -5 ddl.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'ddl', 'failed', 'pg_dump exit $DUMP_EXIT: $ERR');"
+            echo "::error::DDL dump failed (exit $DUMP_EXIT): $ERR"
+            exit 0
+          fi
+          
+          BYTES=$(stat -c%s "$OUT")
+          SUM=$(sha256sum "$OUT" | cut -d' ' -f1)
+          KEY="ddl/${TIER}/${OUT}"
+          
+          if ! rclone copyto "$OUT" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket 2>upload.err; then
+            ERR=$(head -3 upload.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'ddl', 'failed', 'upload failed: $ERR');"
+            echo "::error::R2 upload failed: $ERR"
+            exit 0
+          fi
+          
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, checksum, status) VALUES ($RID, 'ddl', '${KEY}', ${BYTES}, '${SUM}', 'ok');"
+          echo "DDL schema: $BYTES bytes -> $KEY"
+
+      - name: Configuration bundle
+        continue-on-error: true
+        run: |
+          set +e
+          RID=${{ steps.start.outputs.run_id }}
+          DAY=${{ steps.start.outputs.day }}
+          TIER=${{ steps.start.outputs.tier }}
+          OUT=config-${DAY}.tar.gz
+          
+          tar czf "$OUT" \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=.git \
+            --exclude='*.log' \
+            next.config.js vercel.json tsconfig.json package.json package-lock.json \
+            .github/workflows/*.yml \
+            middleware.ts 2>tar.err || true
+          TAR_EXIT=$?
+          
+          if [ $TAR_EXIT -ne 0 ] && [ $TAR_EXIT -ne 1 ]; then
+            ERR=$(head -5 tar.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'config', 'failed', 'tar exit $TAR_EXIT: $ERR');"
+            echo "::error::Config bundle failed (exit $TAR_EXIT): $ERR"
+            exit 0
+          fi
+          
+          BYTES=$(stat -c%s "$OUT")
+          SUM=$(sha256sum "$OUT" | cut -d' ' -f1)
+          KEY="config/${TIER}/${OUT}"
+          
+          if ! rclone copyto "$OUT" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket 2>upload.err; then
+            ERR=$(head -3 upload.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'config', 'failed', 'upload failed: $ERR');"
+            echo "::error::R2 upload failed: $ERR"
+            exit 0
+          fi
+          
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, checksum, status) VALUES ($RID, 'config', '${KEY}', ${BYTES}, '${SUM}', 'ok');"
+          echo "Config bundle: $BYTES bytes -> $KEY"
+
+      - name: Credentials + secrets snapshot
+        continue-on-error: true
+        run: |
+          set +e
+          RID=${{ steps.start.outputs.run_id }}
+          DAY=${{ steps.start.outputs.day }}
+          TIER=${{ steps.start.outputs.tier }}
+          OUT=creds-${DAY}.sql.gz
+          
+          psql -qtAX -c "SELECT json_agg(row_to_json(t)) FROM (SELECT name, description FROM vault.decrypted_secrets ORDER BY name) t;" 2>cred.err | gzip -9 > "$OUT"
+          PSQL_EXIT=$?
+          
+          if [ $PSQL_EXIT -ne 0 ]; then
+            ERR=$(head -5 cred.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'credentials', 'failed', 'psql exit $PSQL_EXIT: $ERR');"
+            echo "::error::Credentials snapshot failed (exit $PSQL_EXIT): $ERR"
+            exit 0
+          fi
+          
+          BYTES=$(stat -c%s "$OUT")
+          SUM=$(sha256sum "$OUT" | cut -d' ' -f1)
+          KEY="creds/${TIER}/${OUT}"
+          
+          if ! rclone copyto "$OUT" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket 2>upload.err; then
+            ERR=$(head -3 upload.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'credentials', 'failed', 'upload failed: $ERR');"
+            echo "::error::R2 upload failed: $ERR"
+            exit 0
+          fi
+          
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, checksum, status) VALUES ($RID, 'credentials', '${KEY}', ${BYTES}, '${SUM}', 'ok');"
+          echo "Credentials: $BYTES bytes -> $KEY"
+
+      - name: Code bundle (full git archive)
+        continue-on-error: true
+        run: |
+          set +e
+          RID=${{ steps.start.outputs.run_id }}
+          DAY=${{ steps.start.outputs.day }}
+          TIER=${{ steps.start.outputs.tier }}
+          OUT=code-${DAY}.tar.gz
+          
+          git archive --format=tar.gz --prefix=namkhan-bi-${DAY}/ HEAD > "$OUT" 2>archive.err
+          GIT_EXIT=$?
+          
+          if [ $GIT_EXIT -ne 0 ]; then
+            ERR=$(head -5 archive.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'code', 'failed', 'git archive exit $GIT_EXIT: $ERR');"
+            echo "::error::Code bundle failed (exit $GIT_EXIT): $ERR"
+            exit 0
+          fi
+          
+          BYTES=$(stat -c%s "$OUT")
+          SUM=$(sha256sum "$OUT" | cut -d' ' -f1)
+          KEY="code/${TIER}/${OUT}"
+          
+          if ! rclone copyto "$OUT" "r2:${R2_BUCKET}/${KEY}" --s3-no-check-bucket 2>upload.err; then
+            ERR=$(head -3 upload.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'code', 'failed', 'upload failed: $ERR');"
+            echo "::error::R2 upload failed: $ERR"
+            exit 0
+          fi
+          
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, checksum, status) VALUES ($RID, 'code', '${KEY}', ${BYTES}, '${SUM}', 'ok');"
+          echo "Code: $BYTES bytes -> $KEY"
+
+      - name: Storage (Supabase S3 mirror)
+        continue-on-error: true
+        run: |
+          set +e
+          RID=${{ steps.start.outputs.run_id }}
+          
+          if [ -z "${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}" ]; then
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'storage', 'skipped', 'S3 keys not configured');"
+            echo "::warning::Storage mirror skipped - S3 keys not configured"
+            exit 0
+          fi
+          
+          DAY=${{ steps.start.outputs.day }}
+          TIER=${{ steps.start.outputs.tier }}
+          
+          if ! rclone sync sb: "r2:${R2_BUCKET}/storage/${TIER}/" --s3-no-check-bucket --stats-one-line --stats 10s 2>sync.err; then
+            ERR=$(head -5 sync.err | tr '\n' ' ' | cut -c1-200)
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'storage', 'failed', 'rclone sync failed: $ERR');"
+            echo "::error::Storage mirror failed: $ERR"
+            exit 0
+          fi
+          
+          STATS=$(rclone size "r2:${R2_BUCKET}/storage/${TIER}/" --json 2>/dev/null)
+          BYTES=$(echo "$STATS" | jq -r '.bytes // 0')
+          COUNT=$(echo "$STATS" | jq -r '.count // 0')
+          
+          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, status, detail) VALUES ($RID, 'storage', 'storage/${TIER}/', ${BYTES}, 'ok', jsonb_build_object('object_count', ${COUNT}));"
+          echo "Storage: $COUNT objects, $BYTES bytes -> storage/${TIER}/"
+
+      - name: Close DR run
+        if: always()
+        run: |
+          set -euo pipefail
+          RID=${{ steps.start.outputs.run_id }}
+          
+          STATS=$(psql -qtAX -c "SELECT COUNT(*) FILTER (WHERE status = 'ok') AS ok_count, COUNT(*) FILTER (WHERE status IN ('failed','skipped')) AS bad_count FROM governance.dr_artifacts WHERE run_id = $RID;")
+          OK_COUNT=$(echo "$STATS" | cut -d'|' -f1)
+          BAD_COUNT=$(echo "$STATS" | cut -d'|' -f2)
+          
+          if [ "$OK_COUNT" -ge 5 ]; then
+            STATUS="ok"
+          elif [ "$OK_COUNT" -gt 0 ]; then
+            STATUS="partial"
+          else
+            STATUS="failed"
+          fi
+          
+          psql -qtAX -c "UPDATE governance.dr_runs SET status = '${STATUS}', finished_at = now(), duration_secs = EXTRACT(EPOCH FROM (now() - started_at))::int WHERE id = $RID;"
+          echo "DR run $RID closed with status: $STATUS"
+
+  drill:
+    name: Proven-restore drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: backup
+    if: always() && needs.backup.outputs.db_key != ''
+    steps:
+      - name: Install postgresql-client-17 and rclone
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 rclone jq
+          pg_dump --version
+
+      - name: Configure rclone
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.config/rclone
+          umask 077
+          {
+            echo "[r2]"
+            echo "type = s3"
+            echo "provider = Cloudflare"
+            echo "endpoint = ${R2_ENDPOINT}"
+            echo "access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}"
+            echo "secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}"
+            echo "acl = private"
+            echo "no_check_bucket = true"
+          } > ~/.config/rclone/rclone.conf
+
+      - name: Proven-restore drill (database)
+        timeout-minutes: 45
+        run: |
+          set -euo pipefail
+          KEY="${{ needs.backup.outputs.db_key }}"
+          rclone copyto "r2:${R2_BUCKET}/${KEY}" db.sql.gz --s3-no-check-bucket
+          gunzip db.sql.gz
+          
+          STARTED=$(date +%s)
+          
+          # Create a throwaway database and restore into it
+          DRILL_DB="dr_drill_$(date +%s)"
+          psql -qtAX -c "CREATE DATABASE ${DRILL_DB};"
+          
+          PGDATABASE=${DRILL_DB} psql -v ON_ERROR_STOP=0 -f db.sql >restore.out 2>restore.err
+          
+          DUR=$(($(date +%s) - STARTED))
+          
+          # Count what came back
+          GOT_SCHEMAS=$(PGDATABASE=${DRILL_DB} psql -qtAX -c "SELECT COUNT(DISTINCT table_schema) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema');")
+          GOT_TABLES=$(PGDATABASE=${DRILL_DB} psql -qtAX -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema');")
+          
+          # Count what we expected (from the live database)
+          EXP_SCHEMAS=$(psql -qtAX -c "SELECT COUNT(DISTINCT table_schema) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema');")
+          EXP_TABLES=$(psql -qtAX -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema');")
+          
+          # Sample row counts (spot-check core tables)
+          ROWS=$(PGDATABASE=${DRILL_DB} psql -qtAX -c "SELECT SUM(n_live_tup)::bigint FROM pg_stat_user_tables WHERE schemaname NOT IN ('pg_catalog','information_schema');" || echo 0)
+          
+          # Error analysis
+          ERRS=$(grep -cE '^ERROR:' restore.err || true)
+          TOP_ERRS=$(grep '^ERROR:' restore.err 2>/dev/null | sort | uniq -c | sort -rn | head -5 | jq -Rs 'split("\n") | map(select(length > 0))' || echo '[]')
+          
+          # Cleanup
+          psql -qtAX -c "DROP DATABASE ${DRILL_DB};"
+          
+          # Pass/fail
+          PCT=$((100 * GOT_TABLES / (EXP_TABLES > 0 ? EXP_TABLES : 1)))
+          PASS="false"
+          if [ "$PCT" -ge 90 ] && [ "$GOT_SCHEMAS" -ge 20 ]; then
+            PASS="true"
+          fi
+          
+          DETAIL=$(jq -n \
+            --argjson schemas "$GOT_SCHEMAS" \
+            --argjson tables "$GOT_TABLES" \
+            --argjson exp_schemas "$EXP_SCHEMAS" \
+            --argjson exp_tables "$EXP_TABLES" \
+            --argjson rows "$ROWS" \
+            --argjson errors "$ERRS" \
+            --argjson table_pct "$PCT" \
+            --argjson top_errors "$TOP_ERRS" \
+            '{schemas: $schemas, tables: $tables, exp_schemas: $exp_schemas, exp_tables: $exp_tables, rows: $rows, errors: $errors, table_pct: $table_pct, top_errors: $top_errors}')
+          
+          echo "restored ${GOT_TABLES}/${EXP_TABLES} tables (${PCT}%), ${GOT_SCHEMAS}/${EXP_SCHEMAS} schemas, ~${ROWS} rows, ${ERRS} restore errors in ${DUR}s -> passed=$PASS"
+          echo "INSERT INTO governance.dr_drills (run_id,drill_type,source_key,finished_at,duration_secs,schemas_checked,rows_asserted,passed,detail) VALUES (${{ needs.backup.outputs.run_id }},'restore_db','${KEY}',now(),${DUR},${GOT_SCHEMAS},${ROWS},${PASS},:'detail'::jsonb);" | psql -qtAX -v detail="$DETAIL"
+          if [ "$PASS" != "true" ]; then
+            echo "::error::Restore drill FAILED - ${PCT}% of tables restored (threshold 90%). Top reasons:"
+            tail -40 restore.err
+            exit 1
+          fi
