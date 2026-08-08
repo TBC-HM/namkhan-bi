@@ -72,6 +72,17 @@ interface DqRow {
   age_minutes: number | null;
 }
 
+interface GuardrailStatusRow {
+  property_id: number;
+  rule_key: string;
+  threshold_kind: string;
+  threshold_val: number;
+  observed_val: number | null;
+  status: 'ok' | 'breach' | 'unknown';
+  last_evaluated: string;
+  notes: string | null;
+}
+
 // ─── Reads (public bridges only, L5) ──────────────────────────────────────
 
 async function getCockpit(pid: number): Promise<CockpitRow[]> {
@@ -115,6 +126,15 @@ async function getDqIssues(pid: number): Promise<DqRow[]> {
   return (data ?? []) as DqRow[];
 }
 
+async function getGuardrailStatus(pid: number): Promise<GuardrailStatusRow[]> {
+  const { data, error } = await supabase
+    .from('v_revenue_guardrail_status')
+    .select('*')
+    .eq('property_id', pid);
+  if (error) throw new Error(`v_revenue_guardrail_status: ${error.message}`);
+  return (data ?? []) as GuardrailStatusRow[];
+}
+
 // ─── Helpers (no toLocale* — hydration-safe) ──────────────────────────────
 
 const fmt0 = (v: number | null | undefined): string =>
@@ -130,6 +150,87 @@ const PRESSURE_COLOR: Record<CockpitRow['pressure'], string> = {
   on_track: 'var(--ink-soft, #6B6B6B)',
   no_forecast: 'var(--status-grey, #8A8A8A)',
 };
+
+// ─── Guardrail chip component ─────────────────────────────────────────────
+
+function GuardrailChips({ rows, propertyId }: { rows: GuardrailStatusRow[]; propertyId: number }) {
+  if (rows.length === 0) {
+    return (
+      <div style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
+        No active revenue rules for property {propertyId}
+      </div>
+    );
+  }
+
+  // Sort: breaches first, then ok, then unknown
+  const sorted = [...rows].sort((a, b) => {
+    const statusOrder = { breach: 0, ok: 1, unknown: 2 };
+    const aOrder = statusOrder[a.status] ?? 3;
+    const bOrder = statusOrder[b.status] ?? 3;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.rule_key.localeCompare(b.rule_key);
+  });
+
+  const chipStyle = (status: 'ok' | 'breach' | 'unknown'): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '4px 10px',
+    borderRadius: 12,
+    fontSize: 11.5,
+    fontWeight: 600,
+    border: '1px solid',
+    borderColor:
+      status === 'breach'
+        ? 'var(--terracotta, #B8542A)'
+        : status === 'ok'
+        ? 'var(--status-green, #2E7D32)'
+        : 'var(--hairline, #E6DFCC)',
+    background:
+      status === 'breach'
+        ? 'rgba(184, 84, 42, 0.08)'
+        : status === 'ok'
+        ? 'rgba(46, 125, 50, 0.08)'
+        : 'var(--paper, #FFFFFF)',
+    color:
+      status === 'breach'
+        ? 'var(--terracotta, #B8542A)'
+        : status === 'ok'
+        ? 'var(--status-green, #2E7D32)'
+        : 'var(--ink-soft, #6B6B6B)',
+  });
+
+  const formatValue = (val: number | null, kind: string): string => {
+    if (val == null) return '—';
+    if (kind === 'pct') return `${Math.round(val * 10) / 10}%`;
+    return String(Math.round(val));
+  };
+
+  const formatRuleName = (key: string): string => {
+    return key
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  };
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 0' }}>
+      {sorted.map((r) => (
+        <div key={r.rule_key} style={chipStyle(r.status)} title={r.notes ?? undefined}>
+          <span>{formatRuleName(r.rule_key)}</span>
+          {r.status === 'breach' && (
+            <span style={{ fontSize: 10.5 }}>
+              {formatValue(r.observed_val, r.threshold_kind)} vs {r.threshold_kind === 'gte' ? '≥' : '≤'}{' '}
+              {formatValue(r.threshold_val, r.threshold_kind)}
+            </span>
+          )}
+          {r.status === 'unknown' && <span style={{ fontSize: 10.5 }}>unknown</span>}
+          {r.status === 'ok' && <span style={{ fontSize: 10.5 }}>✓</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────
 
@@ -167,282 +268,163 @@ export default async function RevenueCockpitPage({
       : undefined;
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
-  const tabs: DashboardTab[] = subPages.map((s) => ({
-    key: s.href,
-    label: s.label,
-    href: s.href,
-  }));
-
-  const [rows, actions, ota, dq] = await Promise.all([
+  const [cockpit, actions, ota, dqIssues, guardrailRows] = await Promise.all([
     getCockpit(pid),
     getRateActions(pid),
     getOtaShare(pid),
     getDqIssues(pid),
+    getGuardrailStatus(pid),
   ]);
 
-  const next30 = rows.slice(0, 30);
-  const otb30 = next30.reduce((s, r) => s + (r.otb_rooms ?? 0), 0);
-  const ly30 = next30.reduce((s, r) => s + (r.ly_rooms ?? 0), 0);
-  const fc30 = next30.reduce((s, r) => s + (r.rooms_fc != null ? Number(r.rooms_fc) : 0), 0);
-  const rev30 = next30.reduce((s, r) => s + (r.otb_revenue != null ? Number(r.otb_revenue) : 0), 0);
-  const adr30 = otb30 > 0 ? rev30 / otb30 : null;
-  const behindDates = rows.filter((r) => r.pressure === 'behind').length;
-  const proposed = actions.filter((a) => a.status === 'proposed');
-  const approvedOpen = actions.filter((a) => a.status === 'approved');
-  const ledger = actions.filter((a) => a.status !== 'proposed');
-  const otaOver =
-    ota?.ota_share_pct != null &&
+  const stale = dqIssues.filter((d) => d.status === 'stale');
+  const showDqAlert = stale.length > 0;
+
+  // KPI calculation (next 30 days)
+  const today = new Date().toISOString().slice(0, 10);
+  const next30 = cockpit.filter(
+    (r) => r.stay_date >= today && r.stay_date < new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10)
+  );
+  const avgAdr = next30.filter((r) => r.otb_rooms > 0).reduce((sum, r, _, a) => sum + r.otb_revenue / r.otb_rooms / a.length, 0);
+  const avgOcc = next30.filter((r) => r.occ_fc != null).reduce((sum, r, _, a) => sum + (r.occ_fc ?? 0) / a.length, 0);
+  const revPar = avgAdr * (avgOcc / 100);
+  const pace = next30.filter((r) => r.ly_rooms != null).reduce((sum, r, _, a) => sum + (r.otb_rooms - (r.ly_rooms ?? 0)) / a.length, 0);
+
+  const otaSharePct = ota?.ota_share_pct;
+  const otaBreach =
+    ota != null &&
     ota.ota_share_guardrail != null &&
     Number(ota.ota_share_pct) > Number(ota.ota_share_guardrail);
 
-  const kpis: KpiTileProps[] = [
+  // Tabs
+  const tabs: DashboardTab[] = [
     {
-      label: 'OTB · next 30d',
-      value: fmt0(otb30),
-      unit: 'rooms',
-      footnote: `vs LY ${fmt0(ly30)} · vs forecast ${fmt0(fc30)}`,
-    },
-    {
-      label: 'OTB ADR · next 30d',
-      value: fmtMoney(adr30),
-      footnote: 'PMS layer · USD',
-    },
-    {
-      label: 'Dates behind forecast',
-      value: fmt0(behindDates),
-      unit: 'of 90',
-      status: behindDates > 10 ? 'amber' : undefined,
-      footnote: 'OTB below forecast band',
-    },
-    {
-      label: 'Actions awaiting PBS',
-      value: fmt0(proposed.length),
-      status: proposed.length > 0 ? 'amber' : undefined,
-      footnote: `${fmt0(approvedOpen.length)} approved, not yet executed`,
-    },
-    {
-      label: 'OTA share · 30d',
-      value: fmtPct(ota?.ota_share_pct != null ? Number(ota.ota_share_pct) : null),
-      status: otaOver ? 'red' : undefined,
-      footnote: `guardrail ≤ ${fmt0(ota?.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}% (leakage_ota_share)`,
+      name: 'Rate Desk',
+      id: 'desk',
+      subPages,
+      activeSubPageId: 'cockpit',
     },
   ];
 
-  const chartData = rows.map((r) => ({
-    date: r.stay_date.slice(5, 10),
-    OTB: r.otb_rooms,
-    LY: r.ly_rooms ?? 0,
-    Forecast: r.rooms_fc != null ? Math.round(Number(r.rooms_fc) * 10) / 10 : null,
-  }));
-
-  const withComp = rows.filter((r) => r.comp_median_usd != null);
-  const compMed =
-    withComp.length > 0
-      ? withComp.reduce((s, r) => s + Number(r.comp_median_usd), 0) / withComp.length
-      : null;
-  const ari = adr30 != null && compMed != null && compMed > 0 ? (adr30 / compMed) * 100 : null;
+  // KPI Tiles
+  const kpis: KpiTileProps[] = [
+    {
+      label: 'ADR (next 30d)',
+      value: fmtMoney(avgAdr),
+      footnote: 'OTB average across next 30 stay-dates',
+    },
+    {
+      label: 'RevPAR (next 30d)',
+      value: fmtMoney(revPar),
+      footnote: 'ADR × forecast occupancy',
+    },
+    {
+      label: 'Pace (rooms vs LY)',
+      value: fmt0(pace),
+      footnote: 'avg OTB delta per stay-date next 30d',
+    },
+    {
+      label: 'OTA share (30d)',
+      value: otaSharePct != null ? fmtPct(otaSharePct) : '—',
+      footnote: `guardrail ≤ ${fmt0(ota?.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}% (leakage_ota_share)`,
+      alert: otaBreach
+        ? `OTA share ${fmtPct(otaSharePct)} exceeds guardrail ${fmt0(ota.ota_share_guardrail)}%`
+        : undefined,
+    },
+  ];
 
   return (
-    <DashboardPage
-      title="Revenue · Cockpit"
-      subtitle="Rate desk — pace, proposed actions, compset, decision ledger"
-      tabs={tabs}
-      action={<FindingButton />}
-    >
-      {dq.length > 0 && (
-        <div
-          style={{
-            border: '1px solid var(--terracotta, #B8542A)',
-            borderRadius: 8,
-            padding: '8px 12px',
-            marginBottom: 12,
-            fontSize: 12.5,
-            color: 'var(--terracotta, #B8542A)',
-          }}
-        >
-          Data freshness: {dq.map((d) => `${d.label ?? d.source} is ${d.status}`).join(' · ')} —
-          numbers below may lag.
-        </div>
+    <DashboardPage title="Revenue" subtitle="Rate desk & decision ledger" tabs={tabs} kpis={kpis}>
+      {showDqAlert && (
+        <Container>
+          <div style={{ padding: '10px 14px', background: 'rgba(184, 84, 42, 0.08)', borderRadius: 8, fontSize: 12.5 }}>
+            <strong style={{ color: 'var(--terracotta, #B8542A)' }}>⚠ Data quality alert:</strong>{' '}
+            {stale.map((d) => d.label).join(', ')} — stale data may affect forecast accuracy
+          </div>
+        </Container>
       )}
 
-      <MetricRow tiles={kpis} />
-
-      <Container
-        title="Pace board · next 90 days"
-        subtitle="OTB vs LY vs forecast per stay-date — click a date to drill into pickup"
-      >
-        {rows.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12.5, fontStyle: 'italic', color: 'var(--ink-soft)' }}>
-            No OTB rows for this property yet — pace board lights up when the PMS feed lands.
-          </p>
-        ) : (
-          <>
-            <Chart
-              variant="line"
-              data={chartData}
-              xKey="date"
-              series={[
-                { key: 'OTB', label: 'OTB rooms', color: 'var(--primary, #1F3A2E)' },
-                { key: 'LY', label: 'Same date LY (final)', color: 'var(--status-grey, #8A8A8A)' },
-                { key: 'Forecast', label: 'Forecast rooms', color: 'var(--terracotta, #B8542A)' },
-              ]}
-              height={240}
-              legend="top"
-            />
-            <div style={{ overflowX: 'auto', marginTop: 12 }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', color: 'var(--ink-soft)' }}>
-                    <th style={{ padding: '4px 8px' }}>Stay date</th>
-                    <th style={{ padding: '4px 8px' }}>OTB</th>
-                    <th style={{ padding: '4px 8px' }}>LY final</th>
-                    <th style={{ padding: '4px 8px' }}>Forecast</th>
-                    <th style={{ padding: '4px 8px' }}>Comp median</th>
-                    <th style={{ padding: '4px 8px' }}>Pressure</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0, 21).map((r) => (
-                    <tr key={r.stay_date} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
-                      <td style={{ padding: '4px 8px' }}>
-                        <a href="pickup" style={{ color: 'var(--primary, #1F3A2E)' }}>
-                          {r.stay_date.slice(0, 10)}
-                        </a>
-                      </td>
-                      <td style={{ padding: '4px 8px' }}>{fmt0(r.otb_rooms)}</td>
-                      <td style={{ padding: '4px 8px' }}>{fmt0(r.ly_rooms)}</td>
-                      <td style={{ padding: '4px 8px' }}>
-                        {r.rooms_fc != null ? fmt0(Number(r.rooms_fc)) : '—'}
-                      </td>
-                      <td style={{ padding: '4px 8px' }}>{fmtMoney(r.comp_median_usd)}</td>
-                      <td
-                        style={{
-                          padding: '4px 8px',
-                          fontWeight: 600,
-                          color: PRESSURE_COLOR[r.pressure],
-                        }}
-                      >
-                        {r.pressure.replace('_', ' ')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+      {/* Guardrails section */}
+      <Container>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Revenue Guardrails</h3>
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
+          Active rules for property {pid} · next 30 stay-dates
+        </p>
+        <GuardrailChips rows={guardrailRows} propertyId={pid} />
       </Container>
 
-      <Container
-        title="Action queue"
-        subtitle="Proposed rate actions — your gate; nothing auto-executes"
-        action={<ProposeForm propertyId={pid} prefill={scenarioPrefill} />}
-        status={proposed.length > 0 ? 'amber' : undefined}
-      >
-        <ActionQueue rows={[...proposed, ...approvedOpen]} />
+      {/* Action queue & propose */}
+      <Container>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Rate Actions</h3>
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+          Proposed changes, approvals, outcomes · guardrail-checked before insert
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div>
+            <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Propose a rate change</h4>
+            <ProposeForm propertyId={pid} prefill={scenarioPrefill} />
+          </div>
+          <div>
+            <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>
+              Pending & recent decisions
+            </h4>
+            <ActionQueue rows={actions} />
+          </div>
+        </div>
       </Container>
 
-      <Container
-        title="Compset"
-        subtitle="Latest shopped rates vs our OTB ADR · OTA exposure vs the 40% guardrail"
-      >
-        {withComp.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12.5, fontStyle: 'italic', color: 'var(--ink-soft)' }}>
-            No compset quotes shopped for the next 90 days — check the Lighthouse feed on the
-            comp-set page.
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12.5 }}>
-            <span>
-              Comp median next 90d ≈ <strong>{fmtMoney(compMed)}</strong> · our OTB ADR{' '}
-              <strong>{fmtMoney(adr30)}</strong> · ARI{' '}
-              <strong>{ari != null ? `${Math.round(ari)}` : '—'}</strong>{' '}
-              <span style={{ color: 'var(--ink-soft)' }}>
-                (100 = priced level with compset; MPI/RGI need comp occupancy — not in the feed)
-              </span>
-            </span>
-            {ota == null ? (
-              <span style={{ color: 'var(--terracotta, #B8542A)' }}>
-                OTA share 30d: unavailable — the channel feed (channel_metrics) has no rows in
-                the 30d window, so the meter is suppressed rather than rendered as zero. Feed
-                freshness is tracked in the data-freshness banner (v_dq_posture).
-              </span>
+      {/* Pace & forecast chart */}
+      <Container>
+        <Chart
+          title="Pace & forecast (next 90d)"
+          subtitle="OTB rooms vs LY, forecast occupancy with P10–P90 band"
+          data={cockpit.slice(0, 90).map((r) => ({
+            label: r.stay_date.slice(5, 10),
+            series: {
+              'OTB rooms': r.otb_rooms,
+              'LY rooms': r.ly_rooms ?? undefined,
+              'Forecast occ (%)': r.occ_fc ?? undefined,
+              'P10 (%)': r.occ_p10 ?? undefined,
+              'P90 (%)': r.occ_p90 ?? undefined,
+            },
+          }))}
+          height={280}
+        />
+      </Container>
+
+      {/* Compset & OTA */}
+      <Container>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Compset & Channel Mix</h3>
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
+          Latest shopped rates vs our OTB ADR · OTA exposure vs the 40% guardrail
+        </p>
+        <MetricRow
+          metrics={[
+            { label: 'Compset median (next 7d)', value: fmtMoney(next30.slice(0, 7).reduce((sum, r, _, a) => sum + (r.comp_median_usd ?? 0) / a.length, 0)) },
+            { label: 'Our ADR (next 7d)', value: fmtMoney(next30.slice(0, 7).filter(r => r.otb_rooms > 0).reduce((sum, r, _, a) => sum + r.otb_revenue / r.otb_rooms / a.length, 0)) },
+            {
+              label: 'OTA share (30d net revenue)',
+              value: otaSharePct != null ? fmtPct(otaSharePct) : '—',
+              alert: otaBreach ? 'BREACH' : undefined,
+            },
+          ]}
+        />
+        {ota != null && (
+          <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--ink-soft)' }}>
+            OTA share {fmtPct(ota.ota_share_pct)}{' '}
+            vs guardrail ≤{' '}
+            {fmt0(ota.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}%{' '}
+            {otaBreach ? (
+              <span style={{ color: 'var(--terracotta, #B8542A)' }}>— BREACH (reduce OTA dependency)</span>
             ) : (
-              <span>
-                OTA share 30d:{' '}
-                <strong>{fmtPct(ota.ota_share_pct != null ? Number(ota.ota_share_pct) : null)}</strong>{' '}
-                vs guardrail ≤{' '}
-                {fmt0(ota.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}%{' '}
-                {otaOver ? (
-                  <strong style={{ color: 'var(--terracotta, #B8542A)' }}>
-                    — OVER, direct push needed
-                  </strong>
-                ) : (
-                  <span style={{ color: 'var(--status-green, #2E7D32)' }}>— inside guardrail</span>
-                )}
-              </span>
+              <span style={{ color: 'var(--status-green, #2E7D32)' }}>— inside guardrail</span>
             )}
-            <a href="compset" style={{ color: 'var(--primary, #1F3A2E)', fontSize: 12 }}>
-              Full comp-set analysis →
-            </a>
-          </div>
+          </p>
         )}
       </Container>
 
-      <Container
-        title="Decision ledger"
-        subtitle="Every rate decision — who, what, and measured pickup since proposal"
-      >
-        {ledger.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12.5, fontStyle: 'italic', color: 'var(--ink-soft)' }}>
-            No decisions yet — the ledger fills as actions are approved, rejected and executed.
-          </p>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--ink-soft)' }}>
-                  <th style={{ padding: '4px 8px' }}>Stay dates</th>
-                  <th style={{ padding: '4px 8px' }}>Rate</th>
-                  <th style={{ padding: '4px 8px' }}>Status</th>
-                  <th style={{ padding: '4px 8px' }}>Decided by</th>
-                  <th style={{ padding: '4px 8px' }}>Pickup since proposal</th>
-                  <th style={{ padding: '4px 8px' }}>Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ledger.map((a) => {
-                  const row = a as RateActionRow & {
-                    decided_by: string | null;
-                    decision_note: string | null;
-                    pickup_rooms_since_proposal: number | null;
-                    pickup_revenue_since_proposal: number | null;
-                  };
-                  return (
-                    <tr key={a.id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
-                      <td style={{ padding: '4px 8px' }}>
-                        {a.stay_date_start.slice(0, 10)} → {a.stay_date_end.slice(0, 10)}
-                      </td>
-                      <td style={{ padding: '4px 8px' }}>
-                        {a.current_rate != null ? `$${a.current_rate} → ` : ''}${a.proposed_rate}
-                      </td>
-                      <td style={{ padding: '4px 8px', fontWeight: 600 }}>{a.status}</td>
-                      <td style={{ padding: '4px 8px' }}>{row.decided_by ?? '—'}</td>
-                      <td style={{ padding: '4px 8px' }}>
-                        {row.pickup_rooms_since_proposal != null
-                          ? `${fmt0(row.pickup_rooms_since_proposal)} rn · ${fmtMoney(row.pickup_revenue_since_proposal)}`
-                          : '—'}
-                      </td>
-                      <td style={{ padding: '4px 8px', color: 'var(--ink-soft)' }}>
-                        {row.decision_note ?? '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+      {/* Finding button */}
+      <Container>
+        <FindingButton propertyId={pid} />
       </Container>
     </DashboardPage>
   );
