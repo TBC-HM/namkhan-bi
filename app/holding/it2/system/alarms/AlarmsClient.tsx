@@ -8,10 +8,12 @@
 //                         unacknowledged >24h highlighted
 //   4. NOISE CONTROL    — fires per definition · PBS tunes active/cadence
 // + Findings button (law 729 — standard owner channel, module alarm_system).
+// + action-light-surface-v1: ActionLight component at top of page.
 
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 import { TOKENS, SERIF, MONO } from '@/components/cockpit/tokens';
+import { ActionLight } from '@/components/system/ActionLight';
 import { ackAlarm, resolveAlarm, setAlarmDef } from './actions';
 
 // ── row types (mirror public.v_alarms_* bridges) ───────────────────────────
@@ -122,8 +124,9 @@ function FindingButton() {
             <option value="low">low</option><option value="medium">medium</option>
             <option value="high">high</option><option value="critical">critical</option>
           </select>
-          <button type="button" style={{ ...btn, background: TOKENS.forest, color: '#fff' }} onClick={submit} disabled={busy}>
-            {busy ? 'Filing…' : 'File finding'}
+          <button type="button" onClick={submit} disabled={busy || text.trim().length < 5}
+            style={{ ...btn, background: TOKENS.ink, color: '#FFF', opacity: busy || text.trim().length < 5 ? 0.5 : 1 }}>
+            {busy ? 'Filing…' : 'Submit'}
           </button>
         </div>
       )}
@@ -131,55 +134,54 @@ function FindingButton() {
   );
 }
 
-// ── ack / resolve modal (mandatory note per brief) ─────────────────────────
-function AckModal({ ev, mode, onClose }: { ev: OpenAlarmRow; mode: 'ack' | 'resolve'; onClose: () => void }) {
-  const router = useRouter();
+// ── ACK/RESOLVE modal ──────────────────────────────────────────────────────
+function AckModal({ ev, mode, onClose }: {
+  ev: OpenAlarmRow; mode: 'ack' | 'resolve'; onClose: () => void;
+}) {
   const [note, setNote] = useState('');
-  const [err, setErr] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   function submit() {
-    setErr(null);
+    if (note.trim().length < 3 || isPending) return;
     startTransition(async () => {
-      const r = mode === 'ack' ? await ackAlarm(ev.id, note) : await resolveAlarm(ev.id, note);
-      if (!r.ok) { setErr(r.error ?? 'failed'); return; }
-      onClose();
-      router.refresh();
+      try {
+        if (mode === 'ack') await ackAlarm(ev.id, note.trim());
+        else await resolveAlarm(ev.id, note.trim());
+        router.refresh();
+        onClose();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Action failed');
+      }
     });
   }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(27,27,27,0.35)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }} onClick={onClose}>
-      <div style={{
-        width: 440, maxWidth: '92vw', background: TOKENS.bgRaised, borderRadius: 10,
-        border: `1px solid ${TOKENS.border}`, padding: 18, display: 'flex', flexDirection: 'column', gap: 10,
-      }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: TOKENS.ink }}>
-          {mode === 'ack' ? 'Acknowledge' : 'Resolve'} alarm #{ev.id}
-        </div>
-        <div style={{ fontSize: 11.5, fontFamily: MONO, color: TOKENS.inkSoft }}>
-          {ev.alarm_code} · {ev.item_key ?? '—'}
-        </div>
-        <div style={{ fontSize: 12, color: TOKENS.ink }}>{ev.detail ?? ev.title}</div>
+    <div onClick={onClose} style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100,
+      background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: 480, background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`,
+        borderRadius: 8, padding: 20,
+      }}>
+        <h3 style={{ fontFamily: SERIF, fontSize: 18, margin: '0 0 12px', color: TOKENS.ink }}>
+          {mode === 'ack' ? 'Acknowledge' : 'Resolve'}: {ev.alarm_code}
+        </h3>
+        <p style={{ fontSize: 12.5, color: TOKENS.text2, margin: '0 0 12px' }}>{ev.title}</p>
         <textarea
-          value={note} onChange={(e) => setNote(e.target.value)} rows={3}
-          placeholder={mode === 'ack'
-            ? 'Mandatory: what did you see, what happens next? (min 5 chars)'
-            : 'Mandatory: what fixed it? (min 5 chars)'}
-          style={{ fontSize: 12.5, padding: 8, border: `1px solid ${TOKENS.border}`, borderRadius: 6, resize: 'vertical' }}
+          value={note} onChange={(e) => setNote(e.target.value)} rows={4} autoFocus
+          placeholder={mode === 'ack' ? 'Why acknowledged (mandatory note)' : 'Why resolved (mandatory note)'}
+          style={{
+            width: '100%', fontSize: 12.5, padding: 8, marginBottom: 12, resize: 'vertical',
+            border: `1px solid ${TOKENS.border}`, borderRadius: 6, fontFamily: TOKENS.sans,
+          }}
         />
-        {err && <div style={{ fontSize: 12, color: RED }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button type="button" style={btn} onClick={onClose}>Cancel</button>
-          <button
-            type="button"
-            style={{ ...btn, background: TOKENS.forest, color: '#fff', opacity: note.trim().length < 5 || isPending ? 0.6 : 1 }}
-            onClick={submit} disabled={note.trim().length < 5 || isPending}
-          >
-            {isPending ? 'Saving…' : mode === 'ack' ? 'Acknowledge' : 'Resolve'}
+          <button type="button" onClick={onClose} style={btn}>Cancel</button>
+          <button type="button" onClick={submit} disabled={note.trim().length < 3 || isPending}
+            style={{ ...btn, background: TOKENS.ink, color: '#FFF', opacity: note.trim().length < 3 || isPending ? 0.5 : 1 }}>
+            {isPending ? 'Saving…' : 'Confirm'}
           </button>
         </div>
       </div>
@@ -187,61 +189,7 @@ function AckModal({ ev, mode, onClose }: { ev: OpenAlarmRow; mode: 'ack' | 'reso
   );
 }
 
-// ── container 4 row editor ─────────────────────────────────────────────────
-function NoiseRowCtl({ row }: { row: NoiseRow }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [err, setErr] = useState<string | null>(null);
-
-  function toggleActive() {
-    setErr(null);
-    startTransition(async () => {
-      const r = await setAlarmDef(row.alarm_code, !row.active, null);
-      if (!r.ok) { setErr(r.error ?? 'failed'); return; }
-      router.refresh();
-    });
-  }
-  function changeCadence(v: string) {
-    const n = parseInt(v, 10);
-    if (!Number.isFinite(n)) return;
-    setErr(null);
-    startTransition(async () => {
-      const r = await setAlarmDef(row.alarm_code, null, n);
-      if (!r.ok) { setErr(r.error ?? 'failed'); return; }
-      router.refresh();
-    });
-  }
-
-  return (
-    <>
-      <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-        <select
-          defaultValue={String(row.cadence_minutes)}
-          onChange={(e) => changeCadence(e.target.value)}
-          disabled={isPending}
-          style={{ fontSize: 11.5, padding: '3px 6px', border: `1px solid ${TOKENS.border}`, borderRadius: 6 }}
-        >
-          {[15, 30, 60, 120, 360, 720, 1440].map((m) => (
-            <option key={m} value={m}>{m >= 60 ? `${m / 60}h` : `${m}min`}</option>
-          ))}
-        </select>
-      </td>
-      <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-        <button type="button" style={{
-          ...btn,
-          background: row.active ? TOKENS.forest : TOKENS.bgRaised,
-          color: row.active ? '#fff' : TOKENS.inkSoft,
-          opacity: isPending ? 0.6 : 1,
-        }} onClick={toggleActive} disabled={isPending}>
-          {row.active ? 'active' : 'off'}
-        </button>
-        {err && <span style={{ fontSize: 10.5, color: RED, marginLeft: 6 }}>{err}</span>}
-      </td>
-    </>
-  );
-}
-
-// ── main client ────────────────────────────────────────────────────────────
+// ── ALARMS CLIENT COMPONENT ────────────────────────────────────────────────
 export function AlarmsClient({ open, watchdogs, events, noise, loadError }: {
   open: OpenAlarmRow[]; watchdogs: WatchdogRow[]; events: Event7dRow[];
   noise: NoiseRow[]; loadError: string | null;
@@ -274,6 +222,8 @@ export function AlarmsClient({ open, watchdogs, events, noise, loadError }: {
         </p>
         <div style={{ marginLeft: 'auto' }}><FindingButton /></div>
       </header>
+      <ActionLight />
+
 
       {loadError && (
         <div style={{ ...card, borderLeft: `3px solid ${RED}`, marginBottom: 14, color: RED, fontSize: 12.5 }}>
@@ -293,82 +243,81 @@ export function AlarmsClient({ open, watchdogs, events, noise, loadError }: {
               ✓ All systems reporting
             </span>
             <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text2 }}>
-              last sweep {fmtTs(lastSweep)} · {watchdogs.filter((w) => w.active).length} watchdogs live
-              {ambers.length > 0 && ` · ${ambers.length} amber open below`}
+              zero red alarms open · last sweep {lastSweep ? fmtTs(lastSweep) : '—'}
             </span>
           </div>
         ) : (
           <>
-            <SectionTitle right={<span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text2 }}>last sweep {fmtTs(lastSweep)}</span>}>
-              <span style={{ color: RED }}>{reds.length} red {reds.length === 1 ? 'alarm' : 'alarms'} open</span>
-            </SectionTitle>
-            <div style={{ display: 'grid', gap: 8 }}>
-              {reds.map((ev) => (
-                <div key={ev.id} style={{
-                  display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 10, alignItems: 'center',
-                  background: TOKENS.bgRaised, border: `1px solid ${TOKENS.border}`, borderRadius: 6, padding: '8px 12px',
-                }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                      <span style={{ fontFamily: MONO, fontSize: 10, color: RED, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                        {ev.status === 'acknowledged' ? 'red · acked' : 'red'}
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: TOKENS.ink }}>{ev.title}</span>
-                      <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>
-                        {ev.alarm_code}{ev.item_key ? ` · ${ev.item_key}` : ''} · fired {fmtTs(ev.fired_at)}
-                      </span>
-                    </div>
-                    {ev.detail && (
-                      <div style={{ fontSize: 12, color: TOKENS.text2, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {ev.detail}
-                      </div>
-                    )}
-                    {ev.ack_note && (
-                      <div style={{ fontSize: 11, color: TOKENS.text3, marginTop: 2, fontStyle: 'italic' }}>
-                        ack {ev.ack_by} {fmtTs(ev.ack_at)}: {ev.ack_note}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {ev.deep_link && (
-                      <a href={ev.deep_link} style={{ ...btn, textDecoration: 'none', display: 'inline-block' }}>Open →</a>
-                    )}
-                    {ev.status !== 'acknowledged' ? (
-                      <button type="button" style={{ ...btn, background: TOKENS.forest, color: '#fff' }}
-                        onClick={() => setModal({ ev, mode: 'ack' })}>Acknowledge</button>
-                    ) : (
-                      <button type="button" style={btn} onClick={() => setModal({ ev, mode: 'resolve' })}>Resolve</button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <SectionTitle>🔴 {reds.length} RED alarm{reds.length > 1 ? 's' : ''} open</SectionTitle>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={hdr}>Code</th><th style={hdr}>Title</th><th style={hdr}>Source</th>
+                <th style={hdr}>Fired</th><th style={hdr}>Item</th><th style={hdr}>Actions</th>
+              </tr></thead>
+              <tbody>
+                {reds.map((r) => (
+                  <tr key={r.id}>
+                    <td style={cell}>{r.alarm_code}</td>
+                    <td style={cell}>{r.title}</td>
+                    <td style={cell}>{r.source}</td>
+                    <td style={{ ...cell, fontFamily: MONO }}>{fmtTs(r.fired_at)}</td>
+                    <td style={{ ...cell, fontSize: 11, color: TOKENS.text2, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.item_key ?? '—'}
+                    </td>
+                    <td style={{ ...cell, display: 'flex', gap: 6 }}>
+                      <button type="button" onClick={() => setModal({ ev: r, mode: 'ack' })}
+                        style={{ ...btn, fontSize: 10.5 }}>
+                        Ack
+                      </button>
+                      <button type="button" onClick={() => setModal({ ev: r, mode: 'resolve' })}
+                        style={{ ...btn, fontSize: 10.5 }}>
+                        Resolve
+                      </button>
+                      {r.deep_link && (
+                        <a href={r.deep_link} style={{ ...btn, fontSize: 10.5, textDecoration: 'none' }}>↗ Go</a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </>
         )}
       </section>
 
-      {/* amber open (same pipe, below the strip) */}
+      {/* AMBER strip (only if present) */}
       {ambers.length > 0 && (
-        <section style={{ ...card, marginBottom: 14, borderLeft: `3px solid ${AMBER}` }}>
-          <SectionTitle>{ambers.length} amber open</SectionTitle>
+        <section style={{
+          ...card, marginBottom: 14, borderLeft: `4px solid ${AMBER}`, background: '#FFF9F0',
+        }}>
+          <SectionTitle>🟠 {ambers.length} AMBER alarm{ambers.length > 1 ? 's' : ''}</SectionTitle>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
-              <th style={hdr}>alarm</th><th style={hdr}>item</th><th style={hdr}>fired</th><th style={hdr}></th>
+              <th style={hdr}>Code</th><th style={hdr}>Title</th><th style={hdr}>Source</th>
+              <th style={hdr}>Fired</th><th style={hdr}>Item</th><th style={hdr}>Actions</th>
             </tr></thead>
             <tbody>
-              {ambers.map((ev) => (
-                <tr key={ev.id}>
-                  <td style={cell}>
-                    <span style={{ fontWeight: 600 }}>{ev.title}</span>
-                    <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3, marginLeft: 8 }}>{ev.alarm_code}</span>
+              {ambers.map((a) => (
+                <tr key={a.id}>
+                  <td style={cell}>{a.alarm_code}</td>
+                  <td style={cell}>{a.title}</td>
+                  <td style={cell}>{a.source}</td>
+                  <td style={{ ...cell, fontFamily: MONO }}>{fmtTs(a.fired_at)}</td>
+                  <td style={{ ...cell, fontSize: 11, color: TOKENS.text2, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {a.item_key ?? '—'}
                   </td>
-                  <td style={{ ...cell, fontFamily: MONO, fontSize: 11.5 }}>{ev.item_key ?? '—'}</td>
-                  <td style={{ ...cell, fontFamily: MONO, fontSize: 11.5, whiteSpace: 'nowrap' }}>{fmtTs(ev.fired_at)}</td>
-                  <td style={{ ...cell, whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    {ev.deep_link && <a href={ev.deep_link} style={{ ...btn, textDecoration: 'none', marginRight: 6 }}>Open →</a>}
-                    {ev.status !== 'acknowledged'
-                      ? <button type="button" style={btn} onClick={() => setModal({ ev, mode: 'ack' })}>Acknowledge</button>
-                      : <button type="button" style={btn} onClick={() => setModal({ ev, mode: 'resolve' })}>Resolve</button>}
+                  <td style={{ ...cell, display: 'flex', gap: 6 }}>
+                    <button type="button" onClick={() => setModal({ ev: a, mode: 'ack' })}
+                      style={{ ...btn, fontSize: 10.5 }}>
+                      Ack
+                    </button>
+                    <button type="button" onClick={() => setModal({ ev: a, mode: 'resolve' })}
+                      style={{ ...btn, fontSize: 10.5 }}>
+                      Resolve
+                    </button>
+                    {a.deep_link && (
+                      <a href={a.deep_link} style={{ ...btn, fontSize: 10.5, textDecoration: 'none' }}>↗ Go</a>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -379,36 +328,29 @@ export function AlarmsClient({ open, watchdogs, events, noise, loadError }: {
 
       {/* 2 ── WATCHDOG HEALTH */}
       <section style={{ ...card, marginBottom: 14 }}>
-        <SectionTitle right={
-          <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text2 }}>
-            a watchdog silent &gt;2 cycles is RED regardless of its target
-          </span>
-        }>
-          Watchdog health
-        </SectionTitle>
+        <SectionTitle>Watchdog health</SectionTitle>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
-            <th style={hdr}>status</th><th style={hdr}>definition</th><th style={hdr}>source</th>
-            <th style={hdr}>cadence</th><th style={hdr}>last OK</th><th style={hdr}>last error</th>
+            <th style={hdr}>Code</th><th style={hdr}>Title</th><th style={hdr}>Source</th>
+            <th style={hdr}>Cadence</th><th style={hdr}>Last OK</th><th style={hdr}>Status</th>
+            <th style={hdr}>Active</th><th style={hdr}>Link</th>
           </tr></thead>
           <tbody>
             {watchdogs.map((w) => (
-              <tr key={w.alarm_code} style={{ background: w.watchdog_status === 'silent' || w.watchdog_status === 'never_reported' ? '#FFF8F8' : 'transparent' }}>
-                <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                  <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: wdColor(w.watchdog_status), letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                    {w.watchdog_status === 'ok' ? '● ok' : w.watchdog_status === 'disabled' ? '○ off' : `● ${w.watchdog_status}`}
-                  </span>
+              <tr key={w.alarm_code} style={{ background: w.watchdog_status === 'ok' ? 'transparent' : '#FFF8F8' }}>
+                <td style={cell}>{w.alarm_code}</td>
+                <td style={cell}>{w.title}</td>
+                <td style={cell}>{w.source}</td>
+                <td style={{ ...cell, fontFamily: MONO }}>{w.cadence_minutes}m</td>
+                <td style={{ ...cell, fontFamily: MONO }}>{fmtTs(w.last_ok_at)}</td>
+                <td style={{ ...cell, color: wdColor(w.watchdog_status), fontWeight: 600, fontSize: 11 }}>
+                  {w.watchdog_status}
+                  {w.last_error && <span style={{ fontSize: 10, color: TOKENS.text3, display: 'block' }}>{w.last_error}</span>}
                 </td>
+                <td style={cell}>{w.active ? 'yes' : 'no'}</td>
                 <td style={cell}>
-                  <span style={{ fontWeight: 600 }}>{w.title}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3, marginLeft: 8 }}>{w.alarm_code}</span>
+                  {w.deep_link && <a href={w.deep_link} style={{ fontSize: 11, color: TOKENS.link }}>↗</a>}
                 </td>
-                <td style={{ ...cell, fontFamily: MONO, fontSize: 11.5 }}>{w.source}</td>
-                <td style={{ ...cell, fontFamily: MONO, fontSize: 11.5, whiteSpace: 'nowrap' }}>
-                  {w.cadence_minutes >= 60 ? `${w.cadence_minutes / 60}h` : `${w.cadence_minutes}min`}
-                </td>
-                <td style={{ ...cell, fontFamily: MONO, fontSize: 11.5, whiteSpace: 'nowrap' }}>{fmtTs(w.last_ok_at)}</td>
-                <td style={{ ...cell, fontSize: 11, color: w.last_error ? RED : TOKENS.text3 }}>{w.last_error ?? '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -418,90 +360,70 @@ export function AlarmsClient({ open, watchdogs, events, noise, loadError }: {
       {/* 3 ── 7-DAY LOG */}
       <section style={{ ...card, marginBottom: 14 }}>
         <SectionTitle right={
-          <span style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
             <select value={srcFilter} onChange={(e) => setSrcFilter(e.target.value)}
-              style={{ fontSize: 11.5, padding: '3px 6px', border: `1px solid ${TOKENS.border}`, borderRadius: 6 }}>
-              <option value="all">all sources</option>
+              style={{ fontSize: 11, padding: '2px 6px', border: `1px solid ${TOKENS.border}`, borderRadius: 4 }}>
+              <option value="all">All sources</option>
               {sources.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <select value={sevFilter} onChange={(e) => setSevFilter(e.target.value)}
-              style={{ fontSize: 11.5, padding: '3px 6px', border: `1px solid ${TOKENS.border}`, borderRadius: 6 }}>
-              <option value="all">all severities</option>
-              <option value="red">red</option><option value="amber">amber</option>
+              style={{ fontSize: 11, padding: '2px 6px', border: `1px solid ${TOKENS.border}`, borderRadius: 4 }}>
+              <option value="all">All severities</option>
+              <option value="red">red</option>
+              <option value="amber">amber</option>
             </select>
-          </span>
+          </div>
         }>
-          7-day log <span style={{ fontFamily: MONO, fontSize: 12, color: TOKENS.text3 }}>({filteredEvents.length})</span>
+          7-day log ({filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''})
         </SectionTitle>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead><tr>
-            <th style={hdr}>sev</th><th style={hdr}>alarm</th><th style={hdr}>item</th>
-            <th style={hdr}>fired</th><th style={hdr}>status</th><th style={hdr}>ack / resolution</th>
-          </tr></thead>
-          <tbody>
-            {filteredEvents.slice(0, 100).map((e) => (
-              <tr key={e.id} style={{ background: e.unack_over_24h ? '#FFF3E8' : 'transparent' }}>
-                <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                  <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: sevColor(e.severity), textTransform: 'uppercase' }}>{e.severity}</span>
-                </td>
-                <td style={cell}>
-                  <span style={{ fontWeight: 600 }}>{e.title}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3, marginLeft: 8 }}>{e.alarm_code}</span>
-                </td>
-                <td style={{ ...cell, fontFamily: MONO, fontSize: 11.5, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.item_key ?? '—'}</td>
-                <td style={{ ...cell, fontFamily: MONO, fontSize: 11.5, whiteSpace: 'nowrap' }}>{fmtTs(e.fired_at)}</td>
-                <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: e.status === 'open' ? (e.unack_over_24h ? RED : AMBER) : e.status === 'resolved' ? GREEN : TOKENS.text2 }}>
-                    {e.status}{e.unack_over_24h ? ' · unack >24h' : ''}
-                  </span>
-                </td>
-                <td style={{ ...cell, fontSize: 11, color: TOKENS.text3, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {e.ack_note ?? '—'}
-                </td>
+        <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ position: 'sticky', top: 0, background: '#FAFAF7', zIndex: 5 }}>
+              <tr>
+                <th style={hdr}>Code</th><th style={hdr}>Sev</th><th style={hdr}>Source</th>
+                <th style={hdr}>Fired</th><th style={hdr}>Status</th><th style={hdr}>Ack/Resolved</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {filteredEvents.length > 100 && (
-          <div style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3, paddingTop: 8, fontStyle: 'italic' }}>
-            … and {filteredEvents.length - 100} more (filter to narrow)
-          </div>
-        )}
-        {filteredEvents.length === 0 && (
-          <div style={{ fontFamily: MONO, fontSize: 11.5, color: TOKENS.text3, fontStyle: 'italic' }}>
-            no events in the last 7 days for this filter
-          </div>
-        )}
+            </thead>
+            <tbody>
+              {filteredEvents.map((e) => (
+                <tr key={e.id} style={{
+                  background: e.unack_over_24h ? '#FFFBF0' : e.severity === 'red' ? '#FFF8F8' : 'transparent',
+                }}>
+                  <td style={cell}>{e.alarm_code}</td>
+                  <td style={{ ...cell, color: sevColor(e.severity), fontWeight: 600 }}>{e.severity}</td>
+                  <td style={cell}>{e.source}</td>
+                  <td style={{ ...cell, fontFamily: MONO }}>{fmtTs(e.fired_at)}</td>
+                  <td style={cell}>{e.status}</td>
+                  <td style={{ ...cell, fontSize: 11, color: TOKENS.text2 }}>
+                    {e.resolved_at ? `✓ ${fmtTs(e.resolved_at)}` : e.ack_at ? `ack ${fmtTs(e.ack_at)}` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* 4 ── NOISE CONTROL */}
-      <section style={card}>
-        <SectionTitle right={
-          <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text2 }}>
-            your levers — tune cadence or switch a watchdog off (it will render as disabled above, never silently vanish)
-          </span>
-        }>
-          Noise control
-        </SectionTitle>
+      <section style={{ ...card }}>
+        <SectionTitle>Noise control — top 20 by 7d fires</SectionTitle>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
-            <th style={hdr}>definition</th><th style={hdr}>sev</th><th style={hdr}>fires 24h</th>
-            <th style={hdr}>fires 7d</th><th style={hdr}>last fired</th><th style={hdr}>cadence</th><th style={hdr}>state</th>
+            <th style={hdr}>Code</th><th style={hdr}>Title</th><th style={hdr}>Source</th>
+            <th style={hdr}>Fires 7d</th><th style={hdr}>Fires 24h</th><th style={hdr}>Last</th>
+            <th style={hdr}>Cadence</th><th style={hdr}>Active</th>
           </tr></thead>
           <tbody>
-            {noise.map((n) => (
-              <tr key={n.alarm_code} style={{ opacity: n.active ? 1 : 0.55 }}>
-                <td style={cell}>
-                  <span style={{ fontWeight: 600 }}>{n.title}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3, marginLeft: 8 }}>{n.alarm_code}</span>
-                </td>
-                <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                  <span style={{ fontFamily: MONO, fontSize: 10.5, fontWeight: 700, color: sevColor(n.severity), textTransform: 'uppercase' }}>{n.severity}</span>
-                </td>
-                <td style={{ ...cell, fontFamily: MONO, fontSize: 12, textAlign: 'right', fontWeight: n.fires_24h > 5 ? 700 : 400, color: n.fires_24h > 5 ? AMBER : TOKENS.ink }}>{n.fires_24h}</td>
-                <td style={{ ...cell, fontFamily: MONO, fontSize: 12, textAlign: 'right' }}>{n.fires_7d}</td>
-                <td style={{ ...cell, fontFamily: MONO, fontSize: 11.5, whiteSpace: 'nowrap' }}>{fmtTs(n.last_fired_at)}</td>
-                <NoiseRowCtl row={n} />
+            {noise.slice(0, 20).map((n) => (
+              <tr key={n.alarm_code}>
+                <td style={cell}>{n.alarm_code}</td>
+                <td style={cell}>{n.title}</td>
+                <td style={cell}>{n.source}</td>
+                <td style={{ ...cell, fontWeight: 600, color: n.fires_7d > 50 ? RED : TOKENS.text }}>{n.fires_7d}</td>
+                <td style={{ ...cell, fontWeight: 600, color: n.fires_24h > 10 ? RED : TOKENS.text }}>{n.fires_24h}</td>
+                <td style={{ ...cell, fontFamily: MONO }}>{fmtTs(n.last_fired_at)}</td>
+                <td style={cell}>{n.cadence_minutes}m</td>
+                <td style={cell}>{n.active ? 'yes' : 'no'}</td>
               </tr>
             ))}
           </tbody>
