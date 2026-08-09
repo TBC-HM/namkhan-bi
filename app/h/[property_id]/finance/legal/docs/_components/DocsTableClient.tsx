@@ -46,6 +46,7 @@ interface Props {
   rows: DocRow[];
   vocab: VocabRow[];
   families: string[];
+  familyLabels?: Record<string, string>;
   matters: string[];
   statuses: string[];
   caseRefs: string[];        // existing case_refs for the autocomplete picker
@@ -111,6 +112,7 @@ export default function DocsTableClient({
   caseRefs, collectionNames, tagList, authorList,
   query, totalRows, totalPages, pageSize,
   emptyStateVariant = 'default', expectedFamilies = [],
+  familyLabels = {},
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -476,7 +478,7 @@ export default function DocsTableClient({
             {bulkField === 'family' && (
               <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
                 <option value="">— value —</option>
-                {families.map((f) => <option key={f} value={f}>{f}</option>)}
+                {families.map((f) => <option key={f} value={f}>{familyLabels[f] ?? f}</option>)}
               </select>
             )}
             {bulkField === 'subtype' && (
@@ -573,7 +575,7 @@ export default function DocsTableClient({
           onChange={(e) => pushParams({ family: e.target.value, subtype: '' })}
           style={selectStyle}>
           <option value="">All families</option>
-          {families.map((f) => <option key={f} value={f}>{f}</option>)}
+          {families.map((f) => <option key={f} value={f}>{familyLabels[f] ?? f}</option>)}
         </select>
         {/* Subtype dropdown — narrows to the selected family's vocab when one is set.
             When family = all, shows the platform-wide vocab. */}
@@ -844,7 +846,7 @@ export default function DocsTableClient({
                       <select defaultValue={r.doc_type ?? ''}
                         onChange={(e) => onRemap(r.doc_id, { doc_type: e.target.value })}
                         style={inlineSelect}>
-                        {families.map((f) => <option key={f} value={f}>{f}</option>)}
+                        {families.map((f) => <option key={f} value={f}>{familyLabels[f] ?? f}</option>)}
                       </select>
                     ) : (r.doc_type ?? '—')}
                   </td>
