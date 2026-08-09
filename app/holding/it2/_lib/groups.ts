@@ -37,11 +37,12 @@ export const GROUPS: GroupSpec[] = [
     // Loops & Chains and Cron jobs are different DATASETS, not further views of
     // the 112-agent fleet, so they get URLs rather than living behind the
     // Agents-&-pillars / Org-chart toggle (that toggle stays in-page, unchanged).
-    // 3 subs — law 659 cap is 5.
+    // 4 subs — law 659 cap is 5.
     subs: [
-      { href: '/holding/it2/fleet/team',  label: 'Team' },
-      { href: '/holding/it2/fleet/loops', label: 'Loops & Chains' },
-      { href: '/holding/it2/fleet/cron',  label: 'Cron jobs' },
+      { href: '/holding/it2/fleet/team',   label: 'Team' },
+      { href: '/holding/it2/fleet/loops',  label: 'Loops & Chains' },
+      { href: '/holding/it2/fleet/cron',   label: 'Cron jobs' },
+      { href: '/holding/it2/fleet/grants', label: 'Grants' },
     ],
   },
   {
