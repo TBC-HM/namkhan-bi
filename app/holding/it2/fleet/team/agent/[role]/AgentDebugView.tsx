@@ -17,8 +17,26 @@ interface Bundle {
   skills: any[];
   memories: any[];
   audit: any[];
+  costs: {
+    agent_handle: string;
+    cost_7d: number | string | null;
+    cost_30d: number | string | null;
+    cost_mtd: number | string | null;
+    calls_30d: number | null;
+    failed_30d: number | null;
+    top_model_key: string | null;
+    last_event_at: string | null;
+    currency: string | null;
+  } | null;
   deliveries: any[];
   docRefs: string[];
+}
+
+function money(v: number | string | null | undefined, currency?: string | null) {
+  if (v == null) return '—';
+  const n = typeof v === 'string' ? parseFloat(v) : v;
+  if (Number.isNaN(n)) return '—';
+  return `${n.toFixed(2)} ${(currency ?? 'USD').trim()}`;
 }
 
 export function AgentDebugView({ bundle }: { bundle: Bundle }) {
@@ -83,6 +101,48 @@ export function AgentDebugView({ bundle }: { bundle: Bundle }) {
           {a.tagline}
         </p>
       )}
+
+      {/* Ledger spend — real money from costs.ai_usage_events via v_agent_cost_rollup.
+          Never sourced from cockpit_audit_log estimates (ADR-230). */}
+      <div style={{
+        marginBottom: 14, padding: '10px 14px',
+        border: `1px solid ${TOKENS.border}`, background: TOKENS.bgRaised, borderRadius: 2,
+        display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'baseline',
+      }}>
+        <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: TOKENS.brass }}>
+          spend · ledger (ADR-230)
+        </span>
+        {bundle.costs ? (
+          <>
+            <span style={{ fontFamily: MONO, fontSize: 12, color: TOKENS.text }}>
+              7d <strong>{money(bundle.costs.cost_7d, bundle.costs.currency)}</strong>
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: 12, color: TOKENS.text }}>
+              30d <strong>{money(bundle.costs.cost_30d, bundle.costs.currency)}</strong>
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: 12, color: TOKENS.text }}>
+              MTD <strong>{money(bundle.costs.cost_mtd, bundle.costs.currency)}</strong>
+            </span>
+            <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>
+              {bundle.costs.calls_30d ?? 0} calls / {bundle.costs.failed_30d ?? 0} failed (30d)
+            </span>
+            {bundle.costs.top_model_key && (
+              <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>
+                top model {bundle.costs.top_model_key}
+              </span>
+            )}
+            {bundle.costs.last_event_at && (
+              <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>
+                last event {new Date(bundle.costs.last_event_at).toLocaleString()}
+              </span>
+            )}
+          </>
+        ) : (
+          <span style={{ fontFamily: MONO, fontSize: 12, color: TOKENS.text3 }}>
+            no ledger spend
+          </span>
+        )}
+      </div>
 
       {/* Quick links */}
       <div style={{ marginBottom: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -190,13 +250,13 @@ export function AgentDebugView({ bundle }: { bundle: Bundle }) {
           {bundle.skills.length === 0 ? (
             <Empty msg="No skills granted. Agent cannot invoke any tool." tone="warn" />
           ) : (
-            <Tbl headers={['name','category','authority','approval?','cost/call','active']}
+            <Tbl headers={['name','category','authority','approval?','est/call (estimate only, not spend)','active']}
                  rows={bundle.skills.map((s) => [
                    s.name,
                    s.category ?? '—',
                    s.authority_level ?? '—',
                    s.requires_pbs_approval ? 'yes' : 'no',
-                   s.estimated_cost_usd_milli != null ? `${s.estimated_cost_usd_milli}m$` : '—',
+                   s.estimated_cost_usd_milli != null ? `~${s.estimated_cost_usd_milli}m$ est.` : '—',
                    s.enabled === false ? 'disabled' : (s.active === false ? 'archived' : 'on'),
                  ])} />
           )}
@@ -239,13 +299,12 @@ export function AgentDebugView({ bundle }: { bundle: Bundle }) {
           {bundle.audit.length === 0 ? (
             <Empty msg="Zero invocations recorded. Either dead agent, or audit_log.agent ≠ this role string." tone="warn" />
           ) : (
-            <Tbl headers={['when','action','target','ok','tokens in/out','cost','dur ms']}
+            <Tbl headers={['when','action','target','ok','tokens in/out','dur ms']}
                  rows={bundle.audit.map((a: any) => [
                    new Date(a.created_at).toLocaleString(),
                    a.action ?? '—', a.target ?? '—',
                    a.success ? '✓' : '✗',
                    `${a.input_tokens ?? 0}/${a.output_tokens ?? 0}`,
-                   a.cost_usd_milli != null ? `${a.cost_usd_milli}m$` : '—',
                    a.duration_ms ?? '—',
                  ])} />
           )}
