@@ -79,7 +79,7 @@ jobs:
               echo "[sb]"
               echo "type = s3"
               echo "provider = Other"
-              echo "endpoint = https://${PGHOST#db.}/storage/v1/s3"
+              echo "endpoint = https://kpenyneooigsyuuomgct.storage.supabase.co/storage/v1/s3"
               echo "region = eu-central-1"
               echo "access_key_id = ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}"
               echo "secret_access_key = ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}"
@@ -111,10 +111,13 @@ jobs:
           RID=${{ steps.start.outputs.run_id }}
           DAY=${{ steps.start.outputs.day }}
           TIER=${{ steps.start.outputs.tier }}
-          OUT=db-${DAY}.sql.gz
+          OUT=db-$(date -u +%Y-%m-%dT%H%M).sql.gz
           
           # backup_log excluded by data: 5 GB of superseded inline payload.
           # documents_history already carries the same content.
+          # idle_in_transaction_session_timeout prevents the open transaction
+          # from blocking DDL + autovacuum for 40-70 min (fix for 2026-08-09 incident).
+          PGOPTIONS='-c idle_in_transaction_session_timeout=5min' \
           pg_dump --format=plain --no-owner --no-privileges --quote-all-identifiers \
                   --exclude-table-data=documentation.backup_log 2>db.err | gzip -9 > "$OUT"
           DUMP_EXIT=$?
@@ -300,20 +303,36 @@ jobs:
           
           DAY=${{ steps.start.outputs.day }}
           TIER=${{ steps.start.outputs.tier }}
-          
-          if ! rclone sync sb: "r2:${R2_BUCKET}/storage/${TIER}/" --s3-no-check-bucket --stats-one-line --stats 10s 2>sync.err; then
-            ERR=$(head -5 sync.err | tr '\n' ' ' | cut -c1-200)
-            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, status, error_text) VALUES ($RID, 'storage', 'failed', 'rclone sync failed: $ERR');"
-            echo "::error::Storage mirror failed: $ERR"
-            exit 0
+
+          # Per-bucket loop: rclone sync sb: (no bucket) issues ListBuckets against
+          # the Supabase S3 gateway → 404 NotFound. Must sync each bucket explicitly.
+          BUCKETS="media-renders media-raw dms-docs documents-internal documents-confidential website-assets branding media-thumbnails documents-public media-ai contracts cockpit-uploads documents-restricted module-findings dataroom"
+          FAILED_BUCKETS=""
+          TOTAL_COUNT=0
+          TOTAL_BYTES=0
+
+          for BUCKET in $BUCKETS; do
+            echo "Syncing bucket: $BUCKET"
+            if ! rclone sync "sb:${BUCKET}" "r2:${R2_BUCKET}/storage/${TIER}/${BUCKET}/" \
+                --s3-no-check-bucket --stats-one-line 2>"sync_${BUCKET}.err"; then
+              ERR=$(head -3 "sync_${BUCKET}.err" | tr '\n' ' ' | cut -c1-150)
+              echo "::warning::Bucket ${BUCKET} failed: $ERR"
+              FAILED_BUCKETS="${FAILED_BUCKETS} ${BUCKET}"
+            else
+              BSTATS=$(rclone size "r2:${R2_BUCKET}/storage/${TIER}/${BUCKET}/" --json 2>/dev/null || echo '{"bytes":0,"count":0}')
+              TOTAL_COUNT=$((TOTAL_COUNT + $(echo "$BSTATS" | jq -r '.count // 0')))
+              TOTAL_BYTES=$((TOTAL_BYTES + $(echo "$BSTATS" | jq -r '.bytes // 0')))
+            fi
+          done
+
+          if [ -n "$FAILED_BUCKETS" ]; then
+            FAIL_LIST=$(echo "$FAILED_BUCKETS" | xargs | tr ' ' ',')
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, status, error_text, detail) VALUES ($RID, 'storage', 'storage/${TIER}/', ${TOTAL_BYTES}, 'partial', 'failed buckets: ${FAIL_LIST}', jsonb_build_object('object_count', ${TOTAL_COUNT}, 'failed_buckets', '${FAIL_LIST}'));"
+            echo "::error::Storage partial — failed: ${FAIL_LIST} · synced: ${TOTAL_COUNT} objects, ${TOTAL_BYTES} bytes"
+          else
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, status, detail) VALUES ($RID, 'storage', 'storage/${TIER}/', ${TOTAL_BYTES}, 'ok', jsonb_build_object('object_count', ${TOTAL_COUNT}));"
+            echo "Storage: ${TOTAL_COUNT} objects, ${TOTAL_BYTES} bytes -> storage/${TIER}/"
           fi
-          
-          STATS=$(rclone size "r2:${R2_BUCKET}/storage/${TIER}/" --json 2>/dev/null)
-          BYTES=$(echo "$STATS" | jq -r '.bytes // 0')
-          COUNT=$(echo "$STATS" | jq -r '.count // 0')
-          
-          psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, status, detail) VALUES ($RID, 'storage', 'storage/${TIER}/', ${BYTES}, 'ok', jsonb_build_object('object_count', ${COUNT}));"
-          echo "Storage: $COUNT objects, $BYTES bytes -> storage/${TIER}/"
 
       - name: Close DR run
         if: always()
