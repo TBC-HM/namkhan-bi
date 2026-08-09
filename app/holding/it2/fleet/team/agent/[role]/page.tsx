@@ -59,13 +59,23 @@ async function fetchAgentBundle(role: string) {
     .order('created_at', { ascending: false })
     .limit(40);
 
-  // 4) recent invocations / audit-log entries for this agent
+  // 4) recent invocations / audit-log entries for this agent.
+  // Run history ONLY — money never comes from cockpit_audit_log (ADR-230:
+  // cost_usd_milli there is a superseded estimate that excludes GHA builder spend).
   const { data: audit } = await sb
     .from('cockpit_audit_log')
-    .select('id, created_at, action, target, success, cost_usd_milli, input_tokens, output_tokens, duration_ms, notes')
+    .select('id, created_at, action, target, success, input_tokens, output_tokens, duration_ms, notes')
     .eq('agent', role)
     .order('created_at', { ascending: false })
     .limit(30);
+
+  // 4b) real ledger spend for this agent — public bridge over costs.ai_usage_events
+  // (v_agent_cost_rollup, ADR-230 ledger truth). Null row = no ledger spend.
+  const { data: costRollup } = await sb
+    .from('v_agent_cost_rollup')
+    .select('agent_handle, cost_7d, cost_30d, cost_mtd, calls_30d, failed_30d, top_model_key, last_event_at, currency')
+    .eq('agent_handle', role)
+    .maybeSingle();
 
   // 5) recent deliveries (cockpit_tickets where the agent's role is mentioned)
   const { data: deliveries } = await sb
@@ -92,6 +102,7 @@ async function fetchAgentBundle(role: string) {
     })),
     memories: memories ?? [],
     audit: audit ?? [],
+    costs: costRollup ?? null,
     deliveries: deliveries ?? [],
     docRefs,
   };
