@@ -106,15 +106,25 @@ export default async function HoldingLegalDocsPage({ searchParams }: Props) {
     .select('doc_type, subtype_slug, label, time_model, sort_order')
     .order('doc_type').order('label');
 
-  const { data: familyRows } = await supabase
-    .from('v_doc_register').select('doc_type').is('property_id', null);
+  const [{ data: familyRows }, { data: vocabFamilyRows }] = await Promise.all([
+    supabase.from('v_doc_register').select('doc_type').is('property_id', null),
+    supabase.from('v_doc_type_vocab').select('value, label').is('property_id', null).eq('active', true),
+  ]);
   const familyCounts = new Map<string, number>();
   for (const r of (familyRows ?? []) as { doc_type: string | null }[]) {
     const k = String(r.doc_type ?? '');
     if (!k) continue;
     familyCounts.set(k, (familyCounts.get(k) ?? 0) + 1);
   }
-  const families = Array.from(familyCounts.keys()).sort();
+  // All governed active families — includes zero-doc families added in Settings
+  const familyLabels: Record<string, string> = {};
+  for (const r of (vocabFamilyRows ?? []) as { value: string; label: string | null }[]) {
+    if (r.value) familyLabels[r.value] = r.label ?? r.value;
+  }
+  const families = Array.from(new Set([
+    ...Object.keys(familyLabels),
+    ...Array.from(familyCounts.keys()),
+  ])).sort();
 
   const [
     { data: matterProjectRows },
@@ -189,6 +199,7 @@ export default async function HoldingLegalDocsPage({ searchParams }: Props) {
             rows={rows as any[]}
             vocab={(vocab ?? []) as any[]}
             families={families}
+            familyLabels={familyLabels}
             matters={matters}
             statuses={statuses}
             caseRefs={caseRefs}
