@@ -48,6 +48,7 @@ async function uploadOne(file: File, propertyId: number): Promise<void> {
 
 export default function DocUploadDropzone({ propertyId, onComplete }: { propertyId: number; onComplete?: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
   const [dragging, setDragging] = useState(false);
   const [files, setFiles] = useState<FileState[]>([]);
   const [busy, setBusy] = useState(false);
@@ -76,7 +77,9 @@ export default function DocUploadDropzone({ propertyId, onComplete }: { property
   }
 
   function onDrop(e: React.DragEvent) {
-    e.preventDefault(); setDragging(false);
+    e.preventDefault();
+    dragCounter.current = 0;
+    setDragging(false);
     processFiles(Array.from(e.dataTransfer.files));
   }
 
@@ -86,8 +89,9 @@ export default function DocUploadDropzone({ propertyId, onComplete }: { property
   return (
     <div>
       <div
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
+        onDragEnter={e => { e.preventDefault(); dragCounter.current++; setDragging(true); }}
+        onDragOver={e => e.preventDefault()}
+        onDragLeave={() => { dragCounter.current--; if (dragCounter.current === 0) setDragging(false); }}
         onDrop={onDrop}
         onClick={() => inputRef.current?.click()}
         style={{
