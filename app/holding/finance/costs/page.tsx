@@ -21,7 +21,8 @@
 //   WHERE matrix            → public.v_costs_where_matrix
 //   summary + trend         → public.v_costs_summary_monthly
 //   allocation              → public.v_costs_allocation_status / v_costs_allocated_facts
-//   budgets + alerts        → public.v_costs_budget_variance / v_costs_budget_monthly / v_costs_alerts
+//   budgets + alerts        → public.v_costs_budget_variance_v2 / v_costs_budget_sources / v_costs_budget_monthly / v_costs_alerts
+//   WHERE-matrix drill      → row click → ?tenant=&module=&work_class=&month= → v_costs_events_recent filtered (slice C)
 //   task costing + parity   → public.v_costs_task_costing / v_costs_task_run_parity
 //   client requests         → public.v_costs_client_requests (chargeback data-only, ADR-197)
 //   period closes + drift   → public.v_costs_period_closes
@@ -61,8 +62,15 @@ interface AllocFactRow {
 }
 interface BudgetRow {
   budget_id: number; scope_type: string; property_id: number | null; module_key: string | null;
-  project_key: string | null; period_start: string; budget_usd: number;
-  actual_usd: number; pct_used: number | null;
+  project_key: string | null; period_start: string; budget_usd: number; version: number | null;
+  approved_by: string | null; note: string | null; actual_usd: number; forecast_usd: number | null;
+  pct_used: number | null; pct_forecast: number | null; threshold_band: string | null;
+}
+interface BudgetSourceRow {
+  source: string; scope_type: string; property_id: number | null; module_key: string | null;
+  project_key: string | null; period_kind: string; period_start: string | null;
+  amount_usd: number; version: number | null; approved_by: string | null;
+  active: boolean; agent_note: string | null;
 }
 interface BudgetMonthlyRow {
   month: string; scope_type: string | null; module_key: string | null;
@@ -170,13 +178,23 @@ async function setLimitsAction(formData: FormData) {
   revalidatePath('/holding/finance/costs');
 }
 
-export default async function HoldingCostsPage({ searchParams }: { searchParams?: { tab?: string; month?: string } }) {
+export default async function HoldingCostsPage({ searchParams }: {
+  searchParams?: { tab?: string; month?: string; tenant?: string; module?: string; work_class?: string };
+}) {
   const sb = getSupabaseAdmin();
   const tab: TabKey = (TABS.some((t) => t.key === searchParams?.tab) ? searchParams?.tab : 'overview') as TabKey;
 
+  // ── Drill filter (slice C): WHERE-matrix cell → ledger filtered by tenant+module+work_class+month.
+  // URL params keep the filtered view shareable/bookmarkable.
+  const drillTenant = searchParams?.tenant ?? null;       // 'Namkhan' | 'Donna' | 'Platform'
+  const drillModule = searchParams?.module ?? null;       // raw module_key
+  const drillClass = searchParams?.work_class ?? null;    // raw work_class
+  const drillActive = Boolean(drillTenant || drillModule || drillClass);
+  const TENANT_TO_PID: Record<string, number | null> = { Namkhan: 260955, Donna: 1000001, Platform: null };
+
   const [sumRes, whereRes, dailyRes, spendTodayRes, autoStateRes, allocRes, factRes, budRes,
     budMonRes, alertRes, taskRes, parityRes, reqRes, closeRes, evRes, buildRes, unallocRes,
-    appYtdRes, aiUseRes] = await Promise.all([
+    appYtdRes, aiUseRes, budSrcRes] = await Promise.all([
     sb.from('v_costs_summary_monthly').select('*').order('month', { ascending: true }),
     sb.from('v_costs_where_matrix').select('*'),
     sb.from('v_costs_daily').select('*').order('day', { ascending: true }),
@@ -184,18 +202,35 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
     (sb as any).from('v_automation_state').select('*').limit(1),
     sb.from('v_costs_allocation_status').select('*').order('period', { ascending: false }).limit(12),
     sb.from('v_costs_allocated_facts').select('*').order('period', { ascending: false }).limit(24),
-    sb.from('v_costs_budget_variance').select('*').order('period_start', { ascending: false }).limit(24),
+    sb.from('v_costs_budget_variance_v2').select('*').order('period_start', { ascending: false }).limit(24),
     sb.from('v_costs_budget_monthly').select('*').order('month', { ascending: false }).limit(48),
     sb.from('v_costs_alerts').select('*').eq('status', 'open').order('triggered_at', { ascending: false }).limit(12),
     sb.from('v_costs_task_costing').select('*'),
     sb.from('v_costs_task_run_parity').select('*').order('month', { ascending: false }).limit(6),
     sb.from('v_costs_client_requests').select('*').order('created_at', { ascending: false }).limit(12),
     sb.from('v_costs_period_closes').select('*').order('period', { ascending: false }).limit(12),
-    sb.from('v_costs_events_recent').select('*').limit(60),
+    (() => {
+      // Drill-filtered ledger: exactly the events behind the clicked WHERE-matrix cell.
+      let q: any = sb.from('v_costs_events_recent').select('*');
+      if (drillTenant && drillTenant in TENANT_TO_PID) {
+        const pid = TENANT_TO_PID[drillTenant];
+        q = pid == null ? q.is('property_id', null) : q.eq('property_id', pid);
+      }
+      if (drillModule) q = q.eq('module_key', drillModule);
+      if (drillClass) q = q.eq('work_class', drillClass);
+      if (drillActive && searchParams?.month && /^\d{4}-\d{2}$/.test(searchParams.month)) {
+        const start = `${searchParams.month}-01`;
+        const [y, m] = searchParams.month.split('-').map(Number);
+        const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+        q = q.gte('event_at', start).lt('event_at', next);
+      }
+      return q.limit(drillActive ? 200 : 60);
+    })(),
     sb.from('v_costs_build_portfolio').select('*').order('month', { ascending: false }),
     sb.from('v_costs_unallocated').select('*').order('month', { ascending: false }),
     sb.from('v_costs_app_ytd').select('*').order('ytd_usd', { ascending: false }),
     sb.from('v_costs_ai_usage_monthly').select('*').order('month', { ascending: false }).limit(36),
+    sb.from('v_costs_budget_sources').select('*').order('source', { ascending: true }),
   ]);
   if (sumRes.error) throw new Error(`v_costs_summary_monthly: ${sumRes.error.message}`);
 
@@ -218,6 +253,7 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
   const unalloc = (unallocRes.data ?? []) as UnallocRow[];
   const appYtd = (appYtdRes.data ?? []) as AppYtdRow[];
   const aiUsage = (aiUseRes.data ?? []) as AiUsageMonthlyRow[];
+  const budgetSources = (budSrcRes.data ?? []) as BudgetSourceRow[];
 
   // ── Month picker (?tab=…&month=YYYY-MM) ──
   const months = Array.from(new Set(summary.map((r) => r.month))).sort();
@@ -269,7 +305,8 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
       footnote: `${curCalKey} · v_costs_summary_monthly` },
     { label: 'vs budget', value: vsBudget == null ? '—' : `${vsBudget}%`, size: 'sm',
       status: vsBudget == null ? 'grey' : vsBudget > 100 ? 'red' : vsBudget > 80 ? 'amber' : 'green',
-      footnote: vsBudget == null ? 'no budgets seeded yet (owner G2)' : 'actual / budget · this month' },
+      footnote: vsBudget == null ? 'no budgets seeded yet (owner G2)'
+        : `actual / budget · this month${budgets.some((b) => b.approved_by == null && b.period_start.slice(0, 7) === curCalKey) ? ' · DRAFT baseline' : ''}` },
     { label: 'Builder sessions today', value: String(builderSessions), size: 'sm',
       status: 'grey', footnote: 'v_spend_today · >60s only' },
     { label: 'Unallocated %', value: `${unallocPct}%`, size: 'sm',
@@ -313,11 +350,12 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
     tenant: w.tenant, module: w.module_key.replace(/_/g, ' '), work_class: w.work_class.replace(/_/g, ' '),
     events: String(w.events), amount: usd(Number(w.amount_usd), 4),
     share: whereTotal > 0 ? `${((100 * Number(w.amount_usd)) / whereTotal).toFixed(1)}%` : '—',
+    // raw keys for the drill link (slice C: every cell clicks through to the filtered ledger)
+    _tenant: w.tenant, _module: w.module_key, _class: w.work_class,
+    _href: `/holding/finance/costs?tab=spend${selKey ? `&month=${selKey}` : ''}` +
+      `&tenant=${encodeURIComponent(w.tenant)}&module=${encodeURIComponent(w.module_key)}` +
+      `&work_class=${encodeURIComponent(w.work_class)}`,
   }));
-  const whereCols: ChartSeries[] = [
-    { key: 'module', label: 'Module' }, { key: 'work_class', label: 'Work class' },
-    { key: 'events', label: 'Events' }, { key: 'amount', label: 'USD' }, { key: 'share', label: 'Share' },
-  ];
 
   const anthroYtd = Number(appYtd.find((a) => a.app === 'anthropic')?.ytd_usd ?? 0);
   const claudeGap = anthroYtd < 10000; // A-OWNER-1
@@ -362,12 +400,33 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
     scope: b.scope_type === 'tenant' ? `tenant · ${tenantLabel(b.property_id)}`
       : b.scope_type === 'module' ? `module · ${b.module_key ?? '?'}`
       : b.scope_type === 'project' ? `project · ${b.project_key ?? '?'}` : 'platform',
-    period: b.period_start.slice(0, 7), budget: usd(Number(b.budget_usd)), actual: usd(Number(b.actual_usd), 4),
-    used: b.pct_used == null ? '—' : `${b.pct_used}%`,
+    period: b.period_start.slice(0, 7),
+    budget: `${usd(Number(b.budget_usd))}${b.approved_by == null ? ' (DRAFT)' : ''}`,
+    actual: usd(Number(b.actual_usd), 4),
+    forecast: usd(b.forecast_usd == null ? null : Number(b.forecast_usd)),
+    used: b.pct_used == null ? '—' : `${b.pct_used}%${b.threshold_band ? ` · ${b.threshold_band}` : ''}`,
+    on_track: b.pct_forecast == null ? '—' : `${b.pct_forecast}%`,
   }));
   const budgetCols: ChartSeries[] = [
     { key: 'period', label: 'Period' }, { key: 'budget', label: 'Budget USD' },
-    { key: 'actual', label: 'Actual USD' }, { key: 'used', label: '% used' },
+    { key: 'actual', label: 'Actual MTD' }, { key: 'forecast', label: 'Forecast (run-rate)' },
+    { key: 'used', label: '% used' }, { key: 'on_track', label: 'Forecast % of budget' },
+  ];
+  const hasDraftBudgets = budgets.some((b) => b.approved_by == null);
+
+  const budSrcRows = budgetSources.map((s) => ({
+    source: s.source,
+    scope: s.scope_type === 'tenant' ? `tenant · ${tenantLabel(s.property_id)}`
+      : s.scope_type === 'module' ? `module · ${s.module_key ?? '?'}`
+      : s.scope_type === 'agent' ? `agent · ${(s.agent_note ?? '').split('.')[0] || 'agent'}`
+      : s.scope_type,
+    period: s.period_kind === 'month' ? (s.period_start?.slice(0, 7) ?? 'monthly') : s.period_kind,
+    amount: usd(Number(s.amount_usd)),
+    status: s.approved_by != null ? `approved · ${s.approved_by}` : s.source === 'costs.budgets' ? 'DRAFT — not owner-approved' : 'enforced cap',
+  }));
+  const budSrcCols: ChartSeries[] = [
+    { key: 'scope', label: 'Scope' }, { key: 'period', label: 'Period' },
+    { key: 'amount', label: 'USD' }, { key: 'status', label: 'Status' },
   ];
   const budMonRows = budgetMonthly.slice(0, 18).map((m) => ({
     month: m.month.slice(0, 7),
@@ -555,15 +614,52 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
             ) : <EmptyLine what="AI inference detail fills when costs.fn_ingest_ai_usage meters calls (hourly cron)." />}
             {whereRows.length > 0 ? (
               <Container title={`Where did costs occur · ${selKey ?? '—'}`}
-                subtitle="tenant × module × work class · public.v_costs_where_matrix" action={monthPicker}>
-                <Chart variant="table" data={whereRows} xKey="tenant" series={whereCols} />
+                subtitle="tenant × module × work class · public.v_costs_where_matrix · click a row to drill into its ledger events"
+                action={monthPicker}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
+                        {['Tenant', 'Module', 'Work class', 'Events', 'USD', 'Share'].map((h, i) => (
+                          <th key={h} style={{ padding: '6px 8px', textAlign: i >= 3 ? 'right' : 'left', fontSize: 10.5, letterSpacing: '.05em', textTransform: 'uppercase', color: INK_M }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {whereRows.map((w, i) => {
+                        const active = drillActive && drillTenant === w._tenant && drillModule === w._module && drillClass === w._class;
+                        return (
+                          <tr key={i} style={{ borderBottom: `1px dashed ${HAIR}`, background: active ? '#F0EDE2' : 'transparent' }}>
+                            <td style={{ padding: '6px 8px' }}><Link href={w._href} style={{ color: FOREST, fontWeight: 600, textDecoration: 'none' }}>{w.tenant}</Link></td>
+                            <td style={{ padding: '6px 8px' }}><Link href={w._href} style={{ color: 'inherit', textDecoration: 'none' }}>{w.module}</Link></td>
+                            <td style={{ padding: '6px 8px' }}><Link href={w._href} style={{ color: 'inherit', textDecoration: 'none' }}>{w.work_class}</Link></td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{w.events}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{w.amount}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{w.share}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </Container>
             ) : <EmptyLine what={`WHERE matrix has no cost events for ${selKey ?? 'this month'} — ingest runs hourly.`} />}
+            {drillActive && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12 }}>
+                <span style={{ padding: '4px 10px', borderRadius: 999, border: `1px solid ${FOREST}`, color: FOREST, fontWeight: 600 }}>
+                  filtered by: {[drillTenant, drillModule?.replace(/_/g, ' '), drillClass?.replace(/_/g, ' '), selKey].filter(Boolean).join(' · ')}
+                </span>
+                <Link href={`/holding/finance/costs?tab=spend${selKey ? `&month=${selKey}` : ''}`}
+                  style={{ color: INK_M, textDecoration: 'underline' }}>clear filter</Link>
+              </div>
+            )}
             {eventRows.length > 0 ? (
-              <Container title="Recent cost events (drill-to-source)"
+              <Container title={drillActive ? 'Ledger — filtered to selected cell' : 'Recent cost events (drill-to-source)'}
                 subtitle="public.v_costs_events_recent · every amount names its source row (MD §19)">
                 <Chart variant="table" data={eventRows} xKey="at" series={eventCols} />
               </Container>
+            ) : drillActive ? (
+              <EmptyLine what={`No events for ${[drillTenant, drillModule, drillClass].filter(Boolean).join(' / ')} in ${selKey ?? 'this month'}.`} />
             ) : <EmptyLine what="Ledger drill fills with costs.cost_events rows." />}
           </>
         )}
@@ -604,11 +700,30 @@ export default async function HoldingCostsPage({ searchParams }: { searchParams?
                 Est. ${Number(autoState.est_usd_per_session ?? 2)}/builder session until real task_runs metering lands.
               </p>
             </Container>
+            {hasDraftBudgets && (
+              <div style={{
+                padding: '8px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+                border: '1px solid var(--status-amber, #B57F0F)', background: 'var(--status-amber-bg, #FBF3E0)',
+                color: 'var(--ink, #1B1B1B)',
+              }}>
+                <strong>Draft baseline — not owner-approved.</strong> Budget rows marked DRAFT were seeded
+                automatically from trailing-3-month actuals (version 0, no approver) so variance and alerts are
+                live instead of blank. Overwrite them here when real budget numbers exist; nothing downstream
+                treats a draft as approved.
+              </div>
+            )}
             {budgetRows.length > 0 ? (
-              <Container title="Budgets vs actual" subtitle="public.v_costs_budget_variance · alerts at 80/100/120% (MD §12)">
+              <Container title="Budgets vs actual vs forecast"
+                subtitle="public.v_costs_budget_variance_v2 · straight-line month-to-date run rate · alerts at 80/100/120% (MD §12)">
                 <Chart variant="table" data={budgetRows} xKey="scope" series={budgetCols} />
               </Container>
             ) : <EmptyLine what="Budgets vs actual fills when costs.budgets is seeded (owner decision pending — options filed on brief cost-governance-v2)." />}
+            {budSrcRows.length > 0 ? (
+              <Container title="All budget sources — one surface"
+                subtitle="public.v_costs_budget_sources · costs.budgets + governance.agent_budgets (read-mapped, not duplicated)">
+                <Chart variant="table" data={budSrcRows} xKey="source" series={budSrcCols} />
+              </Container>
+            ) : <EmptyLine what="Budget sources fill from costs.budgets and governance.agent_budgets." />}
             {budMonRows.length > 0 ? (
               <Container title="Monthly budget overview" subtitle="budget vs actual vs forecast · public.v_costs_budget_monthly · MD §6.6">
                 <Chart variant="table" data={budMonRows} xKey="month" series={budMonCols} />
