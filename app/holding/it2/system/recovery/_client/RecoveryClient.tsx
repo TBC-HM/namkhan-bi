@@ -122,6 +122,7 @@ export default function RecoveryClient({
   const [preflight, setPreflight] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [preflightMsg, setPreflightMsg] = useState<string | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [rollbackBusy, setRollbackBusy] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const noRun = posture.every(p => p.freshness === 'never');
@@ -180,6 +181,29 @@ export default function RecoveryClient({
         void recordPreflight();
       }
     }, 1000);
+  }
+
+  // Safe tier — one click, no confirm (guard ladder). Promotes the previous
+  // READY production build via /api/cockpit/deploy/rollback (v2, session path).
+  // Reversible in seconds: clicking again rolls forward the same way.
+  async function triggerRollback() {
+    if (rollbackBusy) return;
+    setRollbackBusy(true);
+    try {
+      const res = await fetch('/api/cockpit/deploy/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Manual rollback from the Recovery page' }),
+      });
+      const j = await res.json().catch(() => ({}));
+      showToast(res.ok
+        ? 'Previous good build is back on the production URL — takes effect within seconds'
+        : `Rollback did not run: ${j?.error ?? res.status}`);
+    } catch {
+      showToast('Could not reach the rollback endpoint — nothing changed');
+    } finally {
+      setRollbackBusy(false);
+    }
   }
 
   async function triggerBackup() {
@@ -263,8 +287,8 @@ export default function RecoveryClient({
           </div>
 
           {([
-            { tier: 'green' as const, sym: 'The site is down, or a page went blank after a push', fix: 'Puts the last known-good build back on the production URL. The rollback is whole-site and atomic — every page moves back together, there is no per-page rollback. No data is touched, nothing is lost, and you can undo it just as fast.', meta: [['Happens', 'weekly'], ['Last', '2 Aug 23:27 — production build errored'], ['Takes', '~30 seconds']], tag: { label: 'Safe · reversible', tone: 'green' as const }, cta: 'Roll back to last good build', ctaDisabled: true, ctaNote: 'Rollback backend not wired yet — promote the previous build from the Vercel dashboard' },
-            { tier: 'green' as const, sym: 'Build passed but one page crashes with a "Digest" error', fix: 'Same answer — roll back first, diagnose after. The rollback is whole-site and atomic: the entire site returns to the earlier build, not just the broken page. These are code faults, never data faults, so the database is fine and needs nothing.', meta: [['Happens', 'weekly'], ['Last', '2 Aug — 3 hydration crashes'], ['Takes', '~30 seconds']], tag: { label: 'Safe · reversible', tone: 'green' as const }, cta: 'Roll back to last good build', ctaDisabled: true, ctaNote: 'Rollback backend not wired yet — promote the previous build from the Vercel dashboard' },
+            { tier: 'green' as const, sym: 'The site is down, or a page went blank after a push', fix: 'Puts the last known-good build back on the production URL. The rollback is whole-site and atomic — every page moves back together, there is no per-page rollback. No data is touched, nothing is lost, and you can undo it just as fast.', meta: [['Happens', 'weekly'], ['Last', '2 Aug 23:27 — production build errored'], ['Takes', '~30 seconds']], tag: { label: 'Safe · reversible', tone: 'green' as const }, cta: rollbackBusy ? 'Rolling back…' : 'Roll back to last good build', ctaDisabled: rollbackCount === 0 || rollbackBusy, ctaNote: rollbackCount === 0 ? 'No previous good build is available to roll back to' : undefined, ctaAction: () => { void triggerRollback(); } },
+            { tier: 'green' as const, sym: 'Build passed but one page crashes with a "Digest" error', fix: 'Same answer — roll back first, diagnose after. The rollback is whole-site and atomic: the entire site returns to the earlier build, not just the broken page. These are code faults, never data faults, so the database is fine and needs nothing.', meta: [['Happens', 'weekly'], ['Last', '2 Aug — 3 hydration crashes'], ['Takes', '~30 seconds']], tag: { label: 'Safe · reversible', tone: 'green' as const }, cta: rollbackBusy ? 'Rolling back…' : 'Roll back to last good build', ctaDisabled: rollbackCount === 0 || rollbackBusy, ctaNote: rollbackCount === 0 ? 'No previous good build is available to roll back to' : undefined, ctaAction: () => { void triggerRollback(); } },
             { tier: 'amber' as const, sym: 'A dashboard shows €0, blanks, or numbers you know are wrong', fix: 'Usually a view definition an agent changed or dropped. Restores just that one view from the nightly snapshot — no downtime, nothing else affected.', meta: [['Happens', 'monthly'], ['Scope', 'one view'], ['Takes', 'under a minute']], tag: { label: 'Needs a reason', tone: 'amber' as const }, cta: 'Restore a view definition', ctaDisabled: true, ctaNote: 'Restore backend not wired yet — snapshots exist, the restore path is still manual' },
             { tier: 'amber' as const, sym: 'Wrong data got written — bad import, agent mistake, junk rows', fix: 'Pulls last night\'s copy into a scratch database, you pick the rows, they get copied back. Live data is never overwritten wholesale.', meta: [['Happens', 'a few times a year'], ['Last', '26 May — €3.0M phantom reservation from a spreadsheet footer']], tag: { label: 'Needs a reason', tone: 'amber' as const }, cta: 'Repair rows from last night', ctaDisabled: true, ctaNote: 'Repair backend not wired yet — snapshots exist, the repair path is still manual' },
             { tier: 'amber' as const, sym: 'A scheduled job quietly stopped and nobody noticed', fix: 'Shows every scheduled job with its last successful run, so a silent death surfaces the next morning instead of three months later.', meta: [['Happens', 'has happened'], ['Last', 'docs backup died 11 May and ran broken for 84 nights']], tag: { label: 'Safe', tone: 'green' as const }, cta: 'Check scheduled jobs', ctaDisabled: false, ctaAction: () => { window.location.assign('/holding/it2/system/automation'); } },
