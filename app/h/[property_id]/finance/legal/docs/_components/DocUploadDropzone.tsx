@@ -40,13 +40,13 @@ async function uploadOne(file: File, propertyId: number): Promise<void> {
   const ingestRes = await fetch('/api/docs/ingest', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ staging_bucket: sign.staging_bucket, staging_path: sign.staging_path, file_name: file.name, property_id: propertyId }),
+    body: JSON.stringify({ staging_bucket: sign.staging_bucket, staging_path: sign.staging_path, file_name: file.name, property_id: propertyId, ...(defaultDocType ? { doc_type: defaultDocType } : {}) }),
   });
   const ingest = await ingestRes.json();
   if (!ingestRes.ok || !ingest.ok) throw new Error(ingest.error ?? 'ingest failed');
 }
 
-export default function DocUploadDropzone({ propertyId, onComplete }: { propertyId: number; onComplete?: () => void }) {
+export default function DocUploadDropzone({ propertyId, onComplete, defaultDocType }: { propertyId: number; onComplete?: () => void; defaultDocType?: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
   const [dragging, setDragging] = useState(false);
