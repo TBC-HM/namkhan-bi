@@ -24,10 +24,9 @@ import {
   MetricRow,
   type DashboardTab,
   type KpiTileProps,
+  type StatusTone,
 } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
-import { REVENUE_SUBPAGES } from '@/app/revenue/_subpages';
-import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { ActionQueue, ProposeForm, FindingButton, type RateActionRow } from './RateActionPanel';
 
 export const dynamic = 'force-dynamic';
@@ -267,7 +266,6 @@ export default async function RevenueCockpitPage({
         }
       : undefined;
 
-  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const [cockpit, actions, ota, dqIssues, guardrailRows] = await Promise.all([
     getCockpit(pid),
     getRateActions(pid),
@@ -295,17 +293,16 @@ export default async function RevenueCockpitPage({
     ota.ota_share_guardrail != null &&
     Number(ota.ota_share_pct) > Number(ota.ota_share_guardrail);
 
-  // Tabs
+  // Tabs — DashboardPage auto-detects active via pathname; subPages via nav-subgroups
   const tabs: DashboardTab[] = [
     {
-      name: 'Rate Desk',
-      id: 'desk',
-      subPages,
-      activeSubPageId: 'cockpit',
+      key: 'desk',
+      label: 'Rate Desk',
+      href: `/h/${pid}/revenue/cockpit`,
     },
   ];
 
-  // KPI Tiles
+  // KPI Tiles (next 30d summary strip)
   const kpis: KpiTileProps[] = [
     {
       label: 'ADR (next 30d)',
@@ -326,16 +323,17 @@ export default async function RevenueCockpitPage({
       label: 'OTA share (30d)',
       value: otaSharePct != null ? fmtPct(otaSharePct) : '—',
       footnote: `guardrail ≤ ${fmt0(ota?.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}% (leakage_ota_share)`,
-      alert: otaBreach
-        ? `OTA share ${fmtPct(otaSharePct)} exceeds guardrail ${fmt0(ota.ota_share_guardrail)}%`
-        : undefined,
+      status: otaBreach ? ('red' as StatusTone) : undefined,
     },
   ];
 
   return (
-    <DashboardPage title="Revenue" subtitle="Rate desk & decision ledger" tabs={tabs} kpis={kpis}>
+    <DashboardPage title="Revenue" subtitle="Rate desk & decision ledger" tabs={tabs}>
+      {/* KPI summary strip */}
+      <MetricRow tiles={kpis} />
+
       {showDqAlert && (
-        <Container>
+        <Container title="Data quality alert">
           <div style={{ padding: '10px 14px', background: 'rgba(184, 84, 42, 0.08)', borderRadius: 8, fontSize: 12.5 }}>
             <strong style={{ color: 'var(--terracotta, #B8542A)' }}>⚠ Data quality alert:</strong>{' '}
             {stale.map((d) => d.label).join(', ')} — stale data may affect forecast accuracy
@@ -344,20 +342,12 @@ export default async function RevenueCockpitPage({
       )}
 
       {/* Guardrails section */}
-      <Container>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Revenue Guardrails</h3>
-        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 8 }}>
-          Active rules for property {pid} · next 30 stay-dates
-        </p>
+      <Container title="Revenue Guardrails" subtitle={`Active rules for property ${pid} · next 30 stay-dates`}>
         <GuardrailChips rows={guardrailRows} propertyId={pid} />
       </Container>
 
       {/* Action queue & propose */}
-      <Container>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Rate Actions</h3>
-        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-          Proposed changes, approvals, outcomes · guardrail-checked before insert
-        </p>
+      <Container title="Rate Actions" subtitle="Proposed changes, approvals, outcomes · guardrail-checked before insert">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <div>
             <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Propose a rate change</h4>
@@ -373,38 +363,32 @@ export default async function RevenueCockpitPage({
       </Container>
 
       {/* Pace & forecast chart */}
-      <Container>
+      <Container title="Pace & forecast (next 90d)" subtitle="OTB rooms vs LY, forecast occupancy with P10–P90 band">
         <Chart
-          title="Pace & forecast (next 90d)"
-          subtitle="OTB rooms vs LY, forecast occupancy with P10–P90 band"
+          variant="line"
+          xKey="label"
           data={cockpit.slice(0, 90).map((r) => ({
             label: r.stay_date.slice(5, 10),
-            series: {
-              'OTB rooms': r.otb_rooms,
-              'LY rooms': r.ly_rooms ?? undefined,
-              'Forecast occ (%)': r.occ_fc ?? undefined,
-              'P10 (%)': r.occ_p10 ?? undefined,
-              'P90 (%)': r.occ_p90 ?? undefined,
-            },
+            'OTB rooms': r.otb_rooms,
+            'LY rooms': r.ly_rooms ?? 0,
+            'Forecast occ (%)': r.occ_fc ?? 0,
+            'P10 (%)': r.occ_p10 ?? 0,
+            'P90 (%)': r.occ_p90 ?? 0,
           }))}
           height={280}
         />
       </Container>
 
       {/* Compset & OTA */}
-      <Container>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Compset & Channel Mix</h3>
-        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
-          Latest shopped rates vs our OTB ADR · OTA exposure vs the 40% guardrail
-        </p>
+      <Container title="Compset & Channel Mix" subtitle="Latest shopped rates vs our OTB ADR · OTA exposure vs the 40% guardrail">
         <MetricRow
-          metrics={[
+          tiles={[
             { label: 'Compset median (next 7d)', value: fmtMoney(next30.slice(0, 7).reduce((sum, r, _, a) => sum + (r.comp_median_usd ?? 0) / a.length, 0)) },
             { label: 'Our ADR (next 7d)', value: fmtMoney(next30.slice(0, 7).filter(r => r.otb_rooms > 0).reduce((sum, r, _, a) => sum + r.otb_revenue / r.otb_rooms / a.length, 0)) },
             {
               label: 'OTA share (30d net revenue)',
               value: otaSharePct != null ? fmtPct(otaSharePct) : '—',
-              alert: otaBreach ? 'BREACH' : undefined,
+              status: otaBreach ? ('red' as StatusTone) : undefined,
             },
           ]}
         />
@@ -423,7 +407,7 @@ export default async function RevenueCockpitPage({
       </Container>
 
       {/* Finding button */}
-      <Container>
+      <Container title="Finding">
         <FindingButton propertyId={pid} />
       </Container>
     </DashboardPage>
