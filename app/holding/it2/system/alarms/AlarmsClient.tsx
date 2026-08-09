@@ -236,10 +236,12 @@ export function AlarmsClient({
     });
   }
   async function doResolve(id: number) {
+    const note = prompt('Resolution note (required · min 5 chars):');
+    if (!note || note.trim().length < 5) return;
     if (!confirm('Mark resolved? (Soft-delete; 7d log retains it)')) return;
     startTransition(async () => {
       try {
-        await resolveAlarm(id);
+        await resolveAlarm(id, note.trim());
         setMsg(`Resolved #${id}`);
         router.refresh();
       } catch (e) {
