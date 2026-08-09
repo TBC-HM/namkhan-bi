@@ -180,6 +180,12 @@ export default async function SkillsPage({ searchParams }: PageProps) {
             border: `1px solid ${NAVY}`, fontWeight: 700 }}>
           📚 Research {research.length > 0 ? `(${research.length})` : ''}
         </Link>
+        {/* Grant posture — contextual link (nav law: /fleet/grants reachable from Skills; allowlisted in check-it2-orphans) */}
+        <Link href="/holding/it2/fleet/grants"
+          style={{ fontSize: 11, padding: '5px 14px', borderRadius: 20, textDecoration: 'none',
+            background: CREAM, color: FOREST, border: `1px solid ${FOREST}`, fontWeight: 700 }}>
+          🔐 Grants
+        </Link>
       </div>
 
       {/* RESEARCH VIEW */}
