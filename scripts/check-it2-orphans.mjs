@@ -56,6 +56,11 @@ const ALLOWLIST = new Set([
   // (module-surface-slice-status-page-merge, 2026-08-08): release ledger and
   // cut-release form relocated from /modules/status (now a redirect to specs).
   '/holding/it2/system/releases',
+  // Skill grant posture — linked contextually from Knowledge → Skills header pill
+  // (skills-registry-slice-grant-least-privilege; unstick-sweep repair 2026-08-09:
+  // page bd4b433 shipped orphaned and froze main at prebuild — law-659: Knowledge
+  // group already at 7 subs, so contextual link, not a nav tab).
+  '/holding/it2/fleet/grants',
 ]);
 
 function walkPages(dir, out = []) {
