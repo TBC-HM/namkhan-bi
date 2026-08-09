@@ -59,6 +59,17 @@ export default async function SystemRecoveryPage() {
     ? `${Math.round(drill.days_ago)}d ago · ${drill.rows_asserted.toLocaleString('en')} rows · ${drill.passed ? 'passed' : 'FAILED'}`
     : null;
 
+  // rule 712: locale formatting stays server-side — the client renders strings only
+  const fmtBytes = (b: number | null): string | null => {
+    if (b == null) return null;
+    if (b >= 1e9) return `${(b / 1e9).toFixed(1)} GB`;
+    if (b >= 1e6) return `${(b / 1e6).toFixed(0)} MB`;
+    return `${(b / 1e3).toFixed(0)} KB`;
+  };
+  const storageMetaLabel = storageRow?.last_object_count != null
+    ? `${storageRow.last_object_count.toLocaleString('en')} files · ${fmtBytes(storageRow.last_bytes) ?? '—'}`
+    : null;
+
   return (
     <RecoveryClient
       posture={posture}
@@ -68,8 +79,7 @@ export default async function SystemRecoveryPage() {
       rollbackCount={lastGoodBuilds.length}
       lastGoodDate={lastGoodDate}
       drillLabel={drillLabel}
-      storageObjectCount={storageRow?.last_object_count ?? null}
-      storageBytes={storageRow?.last_bytes ?? null}
+      storageMetaLabel={storageMetaLabel}
     />
   );
 }
