@@ -327,10 +327,10 @@ jobs:
 
           if [ -n "$FAILED_BUCKETS" ]; then
             FAIL_LIST=$(echo "$FAILED_BUCKETS" | xargs | tr ' ' ',')
-            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, status, error_text, detail) VALUES ($RID, 'storage', 'storage/${TIER}/', ${TOTAL_BYTES}, 'partial', 'failed buckets: ${FAIL_LIST}', jsonb_build_object('object_count', ${TOTAL_COUNT}, 'failed_buckets', '${FAIL_LIST}'));"
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, object_count, status, error_text) VALUES ($RID, 'storage', 'storage/${TIER}/', ${TOTAL_BYTES}, ${TOTAL_COUNT}, 'partial', 'failed buckets: ${FAIL_LIST}');"
             echo "::error::Storage partial — failed: ${FAIL_LIST} · synced: ${TOTAL_COUNT} objects, ${TOTAL_BYTES} bytes"
           else
-            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, status, detail) VALUES ($RID, 'storage', 'storage/${TIER}/', ${TOTAL_BYTES}, 'ok', jsonb_build_object('object_count', ${TOTAL_COUNT}));"
+            psql -qtAX -c "INSERT INTO governance.dr_artifacts (run_id, data_class, object_key, bytes, object_count, status) VALUES ($RID, 'storage', 'storage/${TIER}/', ${TOTAL_BYTES}, ${TOTAL_COUNT}, 'ok');"
             echo "Storage: ${TOTAL_COUNT} objects, ${TOTAL_BYTES} bytes -> storage/${TIER}/"
           fi
 
