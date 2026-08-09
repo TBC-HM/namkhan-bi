@@ -57,7 +57,15 @@ async function fetchHoldingDocSettings() {
     tags: Array.from(tagCounts.entries()).map(([tag, n]) => ({ tag, n })).sort((a, b) => b.n - a.n),
     authors: ((authors.data ?? []) as any[]).map((a: any) => ({ author: a.author_name, n: a.n_docs ?? 0 })),
     totalDocs,
-    familyNames: Array.from(familyCounts.keys()).sort(),
+    familyNames: Array.from(new Set([
+      ...((familyVocabRows.data ?? []) as { value: string; active: boolean }[]).filter(r => r.active).map(r => r.value),
+      ...Array.from(familyCounts.keys()),
+    ])).sort(),
+    familyLabels: Object.fromEntries(
+      ((familyVocabRows.data ?? []) as { value: string; label: string | null }[])
+        .filter(r => r.value)
+        .map(r => [r.value, r.label ?? r.value])
+    ),
     vocab: (vocab.data ?? []) as any[],
   };
 }
@@ -126,7 +134,7 @@ export default async function HoldingDocumentsSettingsPage({ searchParams }: Pro
       <div id="doc-upload" style={{ gridColumn: '1 / -1' }}>
         <Container title="Upload documents" subtitle="PDF · DOCX · XLSX · TXT · CSV · ODS — filed at HOLDING level, not under a property">
           <div style={{ padding: '8px 16px 16px' }}>
-            <DocUploadDropzone propertyId={0} />
+            <DocUploadDropzone propertyId={0} defaultDocType="research_plattform" />
           </div>
         </Container>
       </div>
@@ -151,6 +159,7 @@ export default async function HoldingDocumentsSettingsPage({ searchParams }: Pro
             rows={(triageRows ?? []) as any[]}
             vocab={d.vocab}
             families={d.familyNames}
+            familyLabels={d.familyLabels}
             matters={matters}
             statuses={statuses}
             caseRefs={caseRefs}
