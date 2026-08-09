@@ -1,12 +1,13 @@
 // app/holding/settings/documents/page.tsx
 // PBS 2026-08-02 — Holding-level document registry (property_id = NULL scope).
+// 2026-08-09 — added inline needs_review triage table so uploaded docs can be
+// classified without navigating to /holding/legal/docs.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DocRegistrySettingsPanel } from '@/app/h/[property_id]/finance/legal/docs/_components/SettingsDrawerButton';
-// ADR-241 (bug #173, finding 101) — same dropzone the property docs page uses.
-// propertyId={0} = HOLDING scope; /api/docs/ingest maps 0 → property_id NULL.
 import DocUploadDropzone from '@/app/h/[property_id]/finance/legal/docs/_components/DocUploadDropzone';
+import DocsTableClient from '@/app/h/[property_id]/finance/legal/docs/_components/DocsTableClient';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -14,11 +15,20 @@ export const revalidate = 0;
 
 import { settingsTabs } from '@/app/holding/settings/_components/tabs';
 
+const PAGE_SIZE = 25;
+
+interface Props {
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+function asStr(v: string | string[] | undefined): string {
+  return Array.isArray(v) ? (v[0] ?? '') : (v ?? '');
+}
+
 async function fetchHoldingDocSettings() {
   const sb = getSupabaseAdmin();
   const [familyRows, familyVocabRows, vocab, cases, collections, projects, tagRows, authors] = await Promise.all([
     sb.from('v_doc_register').select('doc_type').is('property_id', null),
-    // Governed family vocab (dms-doc-families-governance-v1, finding #98) — holding = NULL scope.
     sb.from('v_doc_type_vocab').select('value, label, sort_order, active, doc_count').is('property_id', null).order('sort_order').order('value'),
     sb.from('v_doc_subtype_vocab').select('doc_type, subtype_slug, label, time_model, sort_order').order('doc_type').order('label'),
     sb.from('v_doc_cases').select('case_ref, title, matter_type, status').is('property_id', null).order('case_ref'),
@@ -47,11 +57,66 @@ async function fetchHoldingDocSettings() {
     tags: Array.from(tagCounts.entries()).map(([tag, n]) => ({ tag, n })).sort((a, b) => b.n - a.n),
     authors: ((authors.data ?? []) as any[]).map((a: any) => ({ author: a.author_name, n: a.n_docs ?? 0 })),
     totalDocs,
+    familyNames: Array.from(familyCounts.keys()).sort(),
+    vocab: (vocab.data ?? []) as any[],
   };
 }
 
-export default async function HoldingDocumentsSettingsPage() {
+export default async function HoldingDocumentsSettingsPage({ searchParams }: Props) {
   const d = await fetchHoldingDocSettings();
+
+  // Triage table query params (nr defaults true = needs_review only)
+  const q       = asStr(searchParams.q).trim();
+  const family  = asStr(searchParams.family).trim();
+  const subtype = asStr(searchParams.subtype).trim();
+  const matter  = asStr(searchParams.matter).trim();
+  const status  = asStr(searchParams.status).trim();
+  const caseF   = asStr(searchParams.case).trim();
+  const collF   = asStr(searchParams.coll).trim();
+  const tagF    = asStr(searchParams.tag).trim();
+  const nrRaw   = asStr(searchParams.nr);
+  const nr      = nrRaw === '' ? true : nrRaw === '1';
+  const exp     = asStr(searchParams.exp) === '1';
+  const sort    = '';
+  const dir: 'asc' | 'desc' | '' = '';
+  const page    = Math.max(1, Number(asStr(searchParams.page) || '1') || 1);
+  const offset  = (page - 1) * PAGE_SIZE;
+
+  const sb = getSupabaseAdmin();
+  let qry = sb.from('v_doc_register').select('*', { count: 'exact' }).is('property_id', null);
+  if (nr)      qry = qry.eq('needs_review', true);
+  if (family)  qry = qry.eq('doc_type', family);
+  if (subtype) qry = qry.eq('doc_subtype', subtype);
+  if (matter)  qry = qry.eq('matter', matter);
+  if (status)  qry = qry.eq('status', status);
+  if (q) {
+    const safe = q.replace(/[,()]/g, ' ');
+    qry = qry.or(`title.ilike.%${safe}%,reference_number.ilike.%${safe}%`);
+  }
+  qry = qry.order('uploaded_at', { ascending: false, nullsFirst: false }).order('doc_id', { ascending: true });
+  qry = qry.range(offset, offset + PAGE_SIZE - 1);
+
+  const { data: triageRows, count } = await qry;
+  const total = typeof count === 'number' && count > 0 ? count : (triageRows ?? []).length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const [{ data: matterProjectRows }, { data: matterCaseRows }] = await Promise.all([
+    sb.from('v_doc_projects').select('project_name').is('property_id', null),
+    sb.from('v_doc_cases').select('case_ref').is('property_id', null),
+  ]);
+  const matters = Array.from(new Set([
+    ...((matterProjectRows ?? []) as { project_name: string | null }[]).map((r) => (r.project_name ?? '').trim()),
+    ...((matterCaseRows ?? []) as { case_ref: string | null }[]).map((r) => (r.case_ref ?? '').trim()),
+  ].filter(Boolean))).sort();
+
+  const { data: statusRows } = await sb.from('v_doc_register').select('status').is('property_id', null);
+  const statuses = Array.from(new Set((statusRows ?? []).map((r: any) => String(r.status ?? '')).filter(Boolean))).sort();
+
+  const caseRefs = d.cases.map((c: any) => c.case_ref as string);
+  const collectionNames = d.collections.map((c: any) => c.name as string);
+  const tagList = d.tags.map((t: any) => t.tag as string);
+  const authorList = d.authors.map((a: any) => a.author as string);
+
   return (
     <DashboardPage
       title="Holding · Documents"
@@ -65,22 +130,43 @@ export default async function HoldingDocumentsSettingsPage() {
           </div>
         </Container>
       </div>
-      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
-        <Container title="Holding document register" subtitle="Board resolutions, group contracts, holding compliance — no property assignment">
-          {d.totalDocs === 0 ? (
-            /* §3 (A4, holding-documents-surface-v1): zero-docs state is never a dead box. */
-            <div style={{ padding: '28px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#1B1B1B', marginBottom: 12 }}>No holding documents yet — upload the first one</div>
-              <a href="#doc-upload" style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, whiteSpace: 'nowrap' as const }}>Upload a document →</a>
-            </div>
-          ) : (
-            <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-              <div style={{ fontSize: 13, color: '#5A5A5A' }}>{d.totalDocs} holding-wide documents across {d.families.length} families.</div>
-              <Link href="/holding/legal/docs" style={{ fontSize: 12, fontWeight: 700, color: '#084838', textDecoration: 'none', border: '1px solid #084838', padding: '6px 14px', borderRadius: 5, whiteSpace: 'nowrap' as const }}>Open holding register →</Link>
-            </div>
-          )}
+
+      {/* Inline triage table — classify newly uploaded docs without leaving this page */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title="Holding document register"
+          subtitle="Classify family + subtype to activate brain indexing · inline remap clears needs_review"
+          action={
+            <Link
+              href="/holding/legal/docs"
+              style={{ fontSize: 11.5, fontWeight: 700, color: '#084838', textDecoration: 'none',
+                border: '1px solid #084838', padding: '4px 10px', borderRadius: 4, whiteSpace: 'nowrap' as const }}
+            >
+              Full register →
+            </Link>
+          }
+        >
+          <DocsTableClient
+            propertyId={0}
+            rows={(triageRows ?? []) as any[]}
+            vocab={d.vocab}
+            families={d.familyNames}
+            matters={matters}
+            statuses={statuses}
+            caseRefs={caseRefs}
+            collectionNames={collectionNames}
+            tagList={tagList}
+            authorList={authorList}
+            query={{ q, family, subtype, matter, status, caseF, collF, tagF, nr, exp, sort, dir, page }}
+            totalRows={total}
+            totalPages={totalPages}
+            pageSize={PAGE_SIZE}
+            emptyStateVariant="holding"
+            expectedFamilies={d.familyNames}
+          />
         </Container>
       </div>
+
       <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
         <Container title="Document vocabulary · holding" subtitle="Families · Subtypes · Matters · Cases · Collections · Tags · Authors — holding scope">
           <div style={{ padding: '8px 16px 16px' }}>
