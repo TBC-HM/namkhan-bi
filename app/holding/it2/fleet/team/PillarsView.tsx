@@ -12,10 +12,14 @@
 //    0/2 budgets match cockpit.id_agents. Decision filed with PBS via
 //    fn_owner_question_ask; until answered, per-agent trigger/budget reads
 //    0 and the panel says why.
-//  - Run attribution: aud_audit_log.agent matches ~1/112 role handles, so
-//    most health strips read 0. Shown with a caveat, not hidden.
-//  - KPI agents_total (111) excludes 1 disabled agent; the pillars list
-//    holds all 112. The list defaults to active-only so both agree.
+//  - Run attribution (brief agent-team-slice-health-attribution): events now
+//    join through governance.agent_actor_map. Infra actors (crons, webhooks,
+//    CI runners) are classified with role NULL and counted, not attributed.
+//    Residual unmapped volume is surfaced in the footnote below the filters.
+//  - Agents with status 'not_yet_live' (registered, never run, property not
+//    launched — e.g. Donna 1000001) show a chip instead of a zero-run warning.
+//  - KPI agents_total excludes the 1 disabled agent; the pillars list holds
+//    all rows. The list defaults to active-only so both agree.
 // CTAs render but are disabled pending the fn_* SECURITY DEFINER write
 // wrappers (slice 3) — no direct table writes from the browser, ever.
 
@@ -61,6 +65,14 @@ export type FleetKpis = {
   agents_no_trigger: number;
   agents_over_budget: number;
   runs_7d: number;
+  agents_live: number;
+  agents_not_yet_live: number;
+  agents_dormant: number;
+  agents_never_run: number;
+  agents_failing_7d: number;
+  infra_events_30d: number;
+  unmapped_actor_keys_30d: number;
+  unmapped_events_30d: number;
 };
 
 type Props = { rows: PillarRow[]; kpis: FleetKpis | null };
@@ -130,7 +142,18 @@ export function PillarsView({ rows, kpis }: Props) {
 
   const tiles = kpis
     ? [
-        { label: 'Agents', value: kpis.agents_total, footnote: 'active (1 disabled hidden)' },
+        {
+          label: 'Agents', value: kpis.agents_total,
+          footnote: `${kpis.agents_live} live · ${kpis.agents_not_yet_live} not yet live · ${kpis.agents_dormant} dormant`,
+        },
+        {
+          label: 'Never run', value: kpis.agents_never_run,
+          footnote: `incl. ${kpis.agents_not_yet_live} awaiting launch`,
+        },
+        {
+          label: 'Failing 7d', value: kpis.agents_failing_7d,
+          status: (kpis.agents_failing_7d > 0 ? 'red' : 'green') as 'red' | 'green',
+        },
         {
           label: 'Zero-skill agents', value: kpis.agents_zero_skills,
           status: (kpis.agents_zero_skills > 0 ? 'amber' : 'green') as 'amber' | 'green',
@@ -184,11 +207,15 @@ export function PillarsView({ rows, kpis }: Props) {
           </button>
         </div>
 
-        <div style={st.attributionNote}>
-          Health strip caveat: run attribution in the audit log matches only ~1 of 112 role
-          handles today, so most per-agent run/spend figures read 0 until log naming is
-          normalised (slice-1 finding #2). Fleet-wide runs 7d above is accurate.
-        </div>
+        {kpis && (
+          <div style={st.attributionNote}>
+            Attribution: runs/spend join through the actor map. Infrastructure volume
+            (crons, webhooks, CI runners) last 30d: {kpis.infra_events_30d.toLocaleString()} events
+            — classified, not attributed to agents. Unmapped remainder:{' '}
+            {kpis.unmapped_events_30d.toLocaleString()} events across {kpis.unmapped_actor_keys_30d} actor
+            keys, counted fleet-wide.
+          </div>
+        )}
 
         <div style={{ overflowX: 'auto' }}>
           <table style={st.table}>
@@ -237,7 +264,11 @@ function RowBlock({ r, open, onToggle }: { r: PillarRow; open: boolean; onToggle
         <td style={st.td}>
           {r.triggers_total === 0 ? <Muted>0 · no budget</Muted> : `${r.triggers_active}/${r.triggers_total} · ${fmtUsd(r.daily_cap_usd)}/d`}
         </td>
-        <td style={st.td}>{fmtAgo(r.last_run_at)}</td>
+        <td style={st.td}>
+          {r.status === 'not_yet_live' && !r.last_run_at
+            ? <span style={st.nylChip}>not yet live</span>
+            : fmtAgo(r.last_run_at)}
+        </td>
         <td style={st.td}>{r.runs_7d}{r.failures_7d > 0 ? <Bad> · {r.failures_7d} fail</Bad> : ''}</td>
         <td style={st.td}>{fmtUsd(r.spend_7d_usd)}</td>
       </tr>
@@ -351,6 +382,8 @@ const st: Record<string, CSSProperties> = {
     color: 'var(--ink-soft, #5A5A5A)', cursor: 'pointer' },
   attributionNote: { fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', background: '#F4EFE2',
     border: '1px solid #E6DFCC', borderRadius: 4, padding: '6px 10px', marginBottom: 10 },
+  nylChip: { fontSize: 10, fontFamily: MONO, color: '#6B5E3F', background: '#F0E9D6',
+    border: '1px solid #DDD2B4', borderRadius: 999, padding: '1px 8px', whiteSpace: 'nowrap' as const },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th: { textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #E6DFCC', fontSize: 10,
     fontFamily: MONO, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)',
