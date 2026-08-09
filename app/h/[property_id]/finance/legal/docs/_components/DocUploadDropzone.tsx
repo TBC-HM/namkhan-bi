@@ -22,7 +22,7 @@ const ACCEPT_EXT = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.ods';
 
 type FileState = { name: string; status: 'pending' | 'signing' | 'uploading' | 'ingesting' | 'done' | 'error'; progress: number; error?: string };
 
-async function uploadOne(file: File, propertyId: number): Promise<void> {
+async function uploadOne(file: File, propertyId: number, defaultDocType?: string): Promise<void> {
   // 1. Get signed URL
   const signRes = await fetch('/api/docs/upload-sign', {
     method: 'POST',
@@ -66,7 +66,7 @@ export default function DocUploadDropzone({ propertyId, onComplete, defaultDocTy
     for (const file of valid) {
       try {
         updateFile(file.name, { status: 'signing' });
-        await uploadOne(file, propertyId);
+        await uploadOne(file, propertyId, defaultDocType);
         updateFile(file.name, { status: 'done', progress: 100 });
       } catch (e) {
         updateFile(file.name, { status: 'error', error: e instanceof Error ? e.message : 'upload failed' });
