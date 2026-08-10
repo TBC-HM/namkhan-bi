@@ -6,8 +6,11 @@
 //   v_agent_prompt_current  — current versioned prompt text for the editor
 //   cockpit_agent_memory    — public table; active memories with ids for archive
 //
+//   v_agent_triggers        — per-trigger rows for pillar 4 (post ADR-283)
+//
 //   GET ?kind=skills&q=<search>   → { ok, skills: [...] }   (max 50 rows)
 //   GET ?kind=agent&role=<role>   → { ok, prompt, grants, memories }
+//   GET ?kind=triggers&role=<role>→ { ok, triggers: [...] }
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -91,5 +94,20 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: false, error: "kind must be 'skills' or 'agent'" }, { status: 400 });
+  if (kind === 'triggers') {
+    // Per-trigger rows for the pillar 4 panel — reads the row-level bridge
+    // public.v_agent_triggers (governance.agent_triggers ⋈ cockpit.id_agents,
+    // post ADR-283 re-key; FK guarantees every row resolves to a role).
+    const role = searchParams.get('role');
+    if (!role) return NextResponse.json({ ok: false, error: 'role required' }, { status: 400 });
+    const { data, error } = await admin
+      .from('v_agent_triggers')
+      .select('trigger_id, trigger_type, cron_expr, event_kind, webhook_path, is_active, last_fired_at, notes, created_at')
+      .eq('role', role)
+      .order('created_at', { ascending: true });
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, triggers: data ?? [] });
+  }
+
+  return NextResponse.json({ ok: false, error: "kind must be 'skills', 'agent' or 'triggers'" }, { status: 400 });
 }
