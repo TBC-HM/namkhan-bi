@@ -640,3 +640,10 @@ const ct: Record<string, CSSProperties> = {
   bulkToggle: { border: 'none', background: 'transparent', fontSize: 12, fontWeight: 600,
     color: 'var(--primary, #1F3A2E)', cursor: 'pointer', fontFamily: 'inherit', padding: 0 },
 };
+
+// TriggerBudgetCtas — budget cap management actions (stub, full impl pending)
+export function TriggerBudgetCtas({ role, dailyCap, monthlyCap, enforced }: {
+  role: string; dailyCap: number | null; monthlyCap: number | null; enforced: boolean | null;
+}) {
+  return null; // placeholder — budget CTA UI not yet built
+}
