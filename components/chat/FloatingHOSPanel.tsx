@@ -1,8 +1,6 @@
 'use client';
-// FloatingHOSPanel v4 — HOS (Felix, knows everything) is the DEFAULT tab.
-// HOS = Felix with full business context: live KPIs, documents, brain, tools, execution.
-// Docs = BrainAskPage for when you need specific document citations.
-// LLM = multi-model creative/research chat, no business data.
+// FloatingHOSPanel — 2 tabs: Brain (BrainAskPage, default) + LLM (multi-model).
+// HOS/Felix tab removed — Brain handles all business questions including live KPIs.
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -14,7 +12,7 @@ const FOREST = '#084838';
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
 
-type Tab = 'hos' | 'docs' | 'llm';
+type Tab = 'brain' | 'llm';
 
 function getPropertyId(path: string): number {
   const m = path.match(/^\/h\/(\d+)/);
@@ -38,13 +36,13 @@ function getPropertyLabel(pid: number) {
 
 export default function FloatingHOSPanel() {
   const [open, setOpen]   = useState(false);
-  const [tab, setTab]     = useState<Tab>('hos');
+  const [tab, setTab]     = useState<Tab>('brain');
   const pathname          = usePathname() ?? '';
   const propertyId        = getPropertyId(pathname);
   const moduleScope       = getModuleScope(pathname);
   const label             = getPropertyLabel(propertyId);
 
-  useEffect(() => { setOpen(false); setTab('hos'); }, [pathname]);
+  useEffect(() => { setOpen(false); setTab('brain'); }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -53,30 +51,13 @@ export default function FloatingHOSPanel() {
     return () => window.removeEventListener('keydown', h);
   }, [open]);
 
-  const TABS: { id: Tab; label: string; title: string }[] = [
-    {
-      id: 'hos',
-      label: '🏨 HOS',
-      title: 'Ask anything — live KPIs, OCC, ADR, bookings, documents, analysis, execution. Felix answers using live data + brain + tools.',
-    },
-    {
-      id: 'docs',
-      label: '📄 Docs',
-      title: 'Document Q&A — cited answers from contracts, SOPs, policies. Shows exactly which document answered.',
-    },
-    {
-      id: 'llm',
-      label: '💬 LLM',
-      title: 'Multi-model AI — DeepSeek V3, GPT-4o, Gemini Flash. No business data. For writing, coding, research.',
-    },
-  ];
-
   return (
     <>
+      {/* 🏨 trigger */}
       <button
         onClick={() => setOpen(v => !v)}
-        title={`HOS · ${label}${moduleScope ? ` · ${moduleScope}` : ''}`}
-        aria-label="Open HOS"
+        title={`Brain · ${label}${moduleScope ? ` · ${moduleScope}` : ''}`}
+        aria-label="Open Brain"
         style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
           width: 52, height: 52, borderRadius: '50%',
@@ -117,7 +98,6 @@ export default function FloatingHOSPanel() {
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <a href="/university" target="_blank" rel="noopener" onClick={() => setOpen(false)}
-                  title="Platform University"
                   style={{ color:'rgba(255,255,255,0.75)', fontSize:11, fontFamily:'ui-monospace,monospace', letterSpacing:'0.08em', textDecoration:'none', border:'1px solid rgba(255,255,255,0.3)', padding:'3px 9px', borderRadius:4 }}>
                   📚 University
                 </a>
@@ -125,12 +105,15 @@ export default function FloatingHOSPanel() {
               </div>
             </div>
 
-            {/* Tab strip */}
+            {/* 2-tab strip — Brain | LLM */}
             <div style={{ display:'flex', borderBottom:`1px solid ${HAIR}`, flexShrink:0, background:'#FAFAF7' }}>
-              {TABS.map(t => (
+              {([
+                { id:'brain', label:'🧠 Brain', title:'Document Q&A + live KPIs — cited answers from contracts, SOPs, policies, OCC/ADR/revenue. Works for all business questions.' },
+                { id:'llm',   label:'💬 LLM',   title:'Multi-model AI — DeepSeek V3, Claude Sonnet, GPT-4o, Gemini. No business data. For writing, coding, research.' },
+              ] as const).map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)} title={t.title}
                   style={{
-                    flex:1, padding:'9px 4px', border:'none', cursor:'pointer', fontSize:12, fontWeight:600,
+                    flex:1, padding:'9px 4px', border:'none', cursor:'pointer', fontSize:13, fontWeight:600,
                     background: tab===t.id ? WHITE : 'transparent',
                     color: tab===t.id ? FOREST : '#5A5A5A',
                     borderBottom: tab===t.id ? `2px solid ${FOREST}` : '2px solid transparent',
@@ -141,25 +124,14 @@ export default function FloatingHOSPanel() {
               ))}
             </div>
 
-            {/* Tab content */}
+            {/* Content */}
             <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
 
-              {/* HOS — Felix, knows everything: live data + brain + tools */}
-              {tab === 'hos' && (
-                <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
-                  <CentralChat
-                    mode="second-brain"
-                    moduleScope={moduleScope}
-                    propertyId={propertyId === 0 ? undefined : propertyId}
-                  />
-                </div>
-              )}
-
-              {/* Docs — BrainAskPage, cited document answers */}
-              {tab === 'docs' && (
-                <div style={{ flex:1, overflow:'auto', padding:'0 0 8px' }}>
-                  <div style={{ padding:'8px 16px', fontSize:11, color:'#5A5A5A', background:'#F9F6F0', borderBottom:`1px solid ${HAIR}` }}>
-                    Document Q&A — cited answers from contracts, SOPs, policies. Use HOS for live KPIs and operational data.
+              {/* Brain — BrainAskPage with live KPI + property data injection */}
+              {tab === 'brain' && (
+                <div style={{ flex:1, overflow:'auto' }}>
+                  <div style={{ padding:'6px 14px 0', fontSize:11, color:'#5A5A5A', background:'#F0F7F4', borderBottom:`1px solid ${HAIR}`, lineHeight:1.5 }}>
+                    Document Q&A — cited answers from contracts, SOPs, policies. Use <strong>LLM</strong> tab for creative tasks.
                   </div>
                   <BrainAskPage
                     initialQuestion=""
@@ -173,8 +145,8 @@ export default function FloatingHOSPanel() {
               {/* LLM — multi-model, no business data */}
               {tab === 'llm' && (
                 <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
-                  <div style={{ padding:'8px 16px', fontSize:11, color:'#5A5A5A', background:'#F9F6F0', borderBottom:`1px solid ${HAIR}` }}>
-                    Multi-model — DeepSeek V3, GPT-4o, Gemini Flash. No business data. Writing, coding, brainstorming.
+                  <div style={{ padding:'6px 14px', fontSize:11, color:'#5A5A5A', background:'#F9F6F0', borderBottom:`1px solid ${HAIR}` }}>
+                    Multi-model — DeepSeek V3 · Claude Sonnet 4.6 · GPT-4o · Gemini Flash. No business data. Writing, coding, research.
                   </div>
                   <CentralChat
                     mode="general"
