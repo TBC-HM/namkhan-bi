@@ -17,7 +17,6 @@ interface Run {
   reasoning: string | null;
   input_tokens: number | null;
   output_tokens: number | null;
-  cost_usd_milli: number | null;
   tool_trace: any;
   duration_ms: number | null;
   notes: string | null;
@@ -25,13 +24,23 @@ interface Run {
   ticket_id: number | null;
 }
 
+interface Rollup {
+  cost_7d: number | null;
+  cost_30d: number | null;
+  cost_mtd: number | null;
+  calls_30d: number | null;
+  failed_30d: number | null;
+  currency: string | null;
+}
+
 interface Props {
   role: string;
   agent: any;
   runs: Run[];
+  rollup: Rollup | null;
 }
 
-export function RunsView({ role, agent, runs }: Props) {
+export function RunsView({ role, agent, runs, rollup }: Props) {
   const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'failed' | 'success'>('all');
   const [expanded, setExpanded] = useState<Set<string | number>>(new Set());
@@ -49,8 +58,7 @@ export function RunsView({ role, agent, runs }: Props) {
     const succ   = runs.filter((r) => r.success !== false).length;
     const tokensIn  = runs.reduce((s, r) => s + (r.input_tokens  ?? 0), 0);
     const tokensOut = runs.reduce((s, r) => s + (r.output_tokens ?? 0), 0);
-    const cost      = runs.reduce((s, r) => s + (r.cost_usd_milli ?? 0), 0) / 1000;
-    return { total, failed, succ, tokensIn, tokensOut, cost };
+    return { total, failed, succ, tokensIn, tokensOut };
   }, [runs]);
 
   function toggle(id: string | number) {
@@ -103,7 +111,10 @@ export function RunsView({ role, agent, runs }: Props) {
         <Stat label="Failed"      value={stats.failed} color={stats.failed > 0 ? '#E07856' : TOKENS.text3} />
         <Stat label="Tokens (in)" value={stats.tokensIn.toLocaleString()} />
         <Stat label="Tokens (out)" value={stats.tokensOut.toLocaleString()} />
-        <Stat label="Cost (USD)"  value={`$${stats.cost.toFixed(3)}`} />
+        <Stat
+          label="Spend 30d · ledger (ADR-230)"
+          value={rollup != null && rollup.cost_30d != null ? `$${Number(rollup.cost_30d).toFixed(2)}` : 'no ledger spend'}
+        />
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
