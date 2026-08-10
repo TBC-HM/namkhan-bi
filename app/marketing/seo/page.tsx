@@ -5,6 +5,7 @@ import { DashboardPage, Container, type DashboardTab, type KpiTileProps } from '
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import SeoTriggerBtn from '@/components/seo/SeoTriggerBtn';
+import RankingsTable, { type RankRow as RankRowFull, type HistoryRow, type MarketRow } from '@/components/seo/RankingsTable';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -54,9 +55,11 @@ export default async function MarketingSeoPage({
   let rankQuery = sb.from('v_seo_rankings').select('*');
   if (locCode) rankQuery = rankQuery.eq('location_name', MARKETS.find(m=>m.loc===locCode)?.label ?? '');
 
-  const [rankRes, localRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*'),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+    tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
+    tab === 'rankings' ? sb.from('v_seo_market_comparison').select('*') : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -65,6 +68,8 @@ export default async function MarketingSeoPage({
     ? allRankings.filter(r => r.location_name?.includes(MARKETS.find(m=>m.loc===locCode)?.label?.replace(/^🇱🇦 /,'').replace(/^🇩🇪 /,'').replace(/^🇬🇧 /,'').replace(/^🇺🇸 /,'').replace(/^🇫🇷 /,'').replace(/^🇦🇺 /,'') ?? ''))
     : allRankings;
   const localPack = (localRes.data ?? []) as LocalRow[];
+  const history = (historyRes.data ?? []) as HistoryRow[];
+  const marketData = (marketRes.data ?? []) as MarketRow[];
 
   const hasData = rankings.some(r => r.snapshot_date !== null);
   const withPos = rankings.filter(r => r.position !== null);
@@ -155,7 +160,7 @@ export default async function MarketingSeoPage({
       {/* ─── RANKINGS ─────────────────────────────────────────────────────── */}
       {tab==='rankings' && (
         <div style={{ gridColumn:'1/-1' }}>
-          <Container title="Keyword rankings" subtitle="thenamkhan.com · Google · desktop · grouped by market"
+          <Container title="Keyword rankings" subtitle="Click row → competitors · 🏳️ flag → market compare · ⚡ quick wins filter"
             action={
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                 <SeoTriggerBtn mode="post" label="▶ Post tasks" variant="secondary" />
@@ -170,37 +175,11 @@ export default async function MarketingSeoPage({
                 <SeoTriggerBtn mode="post" label="▶ Post SERP tasks now" description="Submit to DataForSEO queue" />
               </div>
             ) : (
-              <div style={{ overflowX:'auto' }}>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-                  <thead><tr style={{ borderBottom:`2px solid ${HAIR}` }}>
-                    {['Pos','Δ','Keyword','Market','Volume/mo','Diff','Ranked URL','Checked'].map(h=>(
-                      <th key={h} style={{ padding:'6px 8px', textAlign:'left', fontSize:10, fontFamily:'ui-monospace,monospace', letterSpacing:'0.1em', textTransform:'uppercase' as const, color:INK_F, fontWeight:600, whiteSpace:'nowrap' as const }}>{h}</th>
-                    ))}
-                  </tr></thead>
-                  <tbody>
-                    {rankings.map(r=>{
-                      const pos=r.position; const pc=pos===null?INK_F:pos<=3?GREEN:pos<=10?AMBER:INK_M;
-                      const d=r.delta; const ds=d===null?'—':d>0?`↑${d}`:d<0?`↓${Math.abs(d)}`:'→';
-                      const dc=d===null?INK_F:d>0?GREEN:d<0?RED:INK_M;
-                      const kd=r.keyword_difficulty; const kdc=kd===null?INK_F:kd<=30?GREEN:kd<=60?AMBER:RED;
-                      return (
-                        <tr key={r.keyword_id} style={{ borderBottom:`1px solid ${HAIR}` }}>
-                          <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontWeight:700, color:pc, fontSize:15, whiteSpace:'nowrap' as const }}>{pos??'—'}</td>
-                          <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', color:dc, fontSize:11, whiteSpace:'nowrap' as const }}>{ds}</td>
-                          <td style={{ padding:'7px 8px', color:INK, fontStyle:'italic' }}>{r.keyword}</td>
-                          <td style={{ padding:'7px 8px', color:INK_F, fontSize:11, whiteSpace:'nowrap' as const }}>{r.location_name}</td>
-                          <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11 }}>{r.monthly_searches!=null?r.monthly_searches.toLocaleString():'—'}</td>
-                          <td style={{ padding:'7px 8px', color:kdc, fontFamily:'ui-monospace,monospace', fontSize:11 }}>{kd!=null?`${kd}%`:'—'}</td>
-                          <td style={{ padding:'7px 8px', maxWidth:200 }}>
-                            {r.url?<a href={r.url} target="_blank" rel="noopener noreferrer" title={r.title??undefined} style={{ color:GREEN, fontSize:10, textDecoration:'none', fontFamily:'ui-monospace,monospace' }}>{r.url.replace('https://','').slice(0,40)}{r.url.length>47?'…':''}</a>:<span style={{ color:INK_F, fontSize:11 }}>not in top 30</span>}
-                          </td>
-                          <td style={{ padding:'7px 8px', color:INK_F, fontSize:11, whiteSpace:'nowrap' as const }}>{r.last_checked?r.last_checked.slice(0,10):'—'}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <RankingsTable
+                rankings={rankings as any}
+                history={history}
+                marketData={marketData}
+              />
             )}
           </Container>
         </div>
