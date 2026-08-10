@@ -26,14 +26,23 @@ export default async function AgentRunsPage({ params }: PageProps) {
     .limit(1)
     .maybeSingle();
 
+  // Run history only — no money from cockpit_audit_log (ADR-230; cost_usd_milli is a
+  // superseded estimate). Spend comes from the ledger rollup below.
   const { data: runs, error } = await sb
     .from('cockpit_audit_log')
-    .select('id, created_at, agent, action, target, success, reasoning, input_tokens, output_tokens, cost_usd_milli, tool_trace, duration_ms, notes, metadata, ticket_id')
+    .select('id, created_at, agent, action, target, success, reasoning, input_tokens, output_tokens, tool_trace, duration_ms, notes, metadata, ticket_id')
     .eq('agent', params.role)
     .order('created_at', { ascending: false })
     .limit(100);
 
   if (error) console.error('[runs] fetch error', error);
+
+  // Ledger spend (ADR-230): public.v_agent_cost_rollup over costs.ai_usage_events.
+  const { data: rollup } = await sb
+    .from('v_agent_cost_rollup')
+    .select('cost_7d, cost_30d, cost_mtd, calls_30d, failed_30d, currency')
+    .eq('agent_handle', params.role)
+    .maybeSingle();
 
   if (!agent && (!runs || runs.length === 0)) {
     // Don't 404 — show empty state with hint
@@ -44,6 +53,7 @@ export default async function AgentRunsPage({ params }: PageProps) {
       role={params.role}
       agent={agent}
       runs={runs ?? []}
+      rollup={rollup ?? null}
     />
   );
 }
