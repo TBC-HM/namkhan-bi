@@ -337,7 +337,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
     const text = input.trim();
     if (!text || sending) return;
 
-    const body = mode === 'general' ? text : (text.match(/^@/) ? text : `@felix ${text}`);
+    const body = text; // mention field handles routing; never show @felix in the bubble
     const conversation_history = buildConversationHistory();
     const optimistic: Ticket = {
       id: -Date.now(),
