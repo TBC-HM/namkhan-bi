@@ -45,8 +45,17 @@ interface Props {
   propertyId: number;
   rows: DocRow[];
   vocab: VocabRow[];
+  // dms-doc-families-slice-register-vocab-ui: `families` is now EXCLUSIVELY the
+  // governed ACTIVE vocabulary (public.v_doc_type_vocab, active=true, ordered
+  // sort_order → label by the page). Never derived from families-in-use.
   families: string[];
   familyLabels?: Record<string, string>;
+  // Distinct doc_type values present in the register that have NO active vocab
+  // row (retired vocab rows + legacy free-text values). Diagnostic only: they
+  // appear in the FILTER (suffixed "· retired") so the owner can find docs to
+  // re-file, and NEVER as a save target. Optional with [] default so every
+  // intermediate commit compiles (push-order law 759).
+  retiredFamilies?: string[];
   matters: string[];
   statuses: string[];
   caseRefs: string[];        // existing case_refs for the autocomplete picker
@@ -112,7 +121,7 @@ export default function DocsTableClient({
   caseRefs, collectionNames, tagList, authorList,
   query, totalRows, totalPages, pageSize,
   emptyStateVariant = 'default', expectedFamilies = [],
-  familyLabels = {},
+  familyLabels = {}, retiredFamilies = [],
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -167,6 +176,14 @@ export default function DocsTableClient({
   const allOnPage = useMemo(() => rows.map((r) => r.doc_id), [rows]);
   const allSelected = allOnPage.length > 0 && allOnPage.every((id) => selected.has(id));
   const someSelected = allOnPage.some((id) => selected.has(id));
+
+  // Governed-vocab helpers (dms-doc-families-slice-register-vocab-ui):
+  // activeFamilySet decides whether a row's doc_type is retired (⚑ flag);
+  // settingsHref is the zero-families escape hatch to the documents settings.
+  const activeFamilySet = useMemo(() => new Set(families), [families]);
+  const settingsHref = propertyId === 0 ? '/holding/settings/documents' : `/h/${propertyId}/settings/documents`;
+  const noFamiliesDefined = families.length === 0;
+  const familyOptionLabel = (f: string) => familyLabels[f] ?? f;
 
   // Group vocab by doc_type so the row subtype dropdown is filtered cheaply.
   const vocabByType = useMemo(() => {
@@ -475,11 +492,20 @@ export default function DocsTableClient({
             </select>
 
             {/* Value editor — context-sensitive per chosen field. */}
+            {/* Bulk family = the owner's re-file path: filter to a retired
+                family, select all, set an active family. ACTIVE targets only,
+                no disabled entries. */}
             {bulkField === 'family' && (
-              <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
-                <option value="">— value —</option>
-                {families.map((f) => <option key={f} value={f}>{familyLabels[f] ?? f}</option>)}
-              </select>
+              noFamiliesDefined ? (
+                <a href={settingsHref} style={{ fontSize: 11, color: '#B26A00', textDecoration: 'underline' }}>
+                  no families defined — define in Settings
+                </a>
+              ) : (
+                <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
+                  <option value="">— value —</option>
+                  {families.map((f) => <option key={f} value={f}>{familyOptionLabel(f)}</option>)}
+                </select>
+              )
             )}
             {bulkField === 'subtype' && (
               <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
@@ -575,7 +601,16 @@ export default function DocsTableClient({
           onChange={(e) => pushParams({ family: e.target.value, subtype: '' })}
           style={selectStyle}>
           <option value="">All families</option>
-          {families.map((f) => <option key={f} value={f}>{familyLabels[f] ?? f}</option>)}
+          {families.map((f) => <option key={f} value={f}>{familyOptionLabel(f)}</option>)}
+          {/* Retired values stay filterable (diagnostic: find docs to re-file)
+              but live in a visually separate group and never as save targets. */}
+          {retiredFamilies.length > 0 && (
+            <optgroup label="── retired ──">
+              {retiredFamilies.map((f) => (
+                <option key={`retired-${f}`} value={f}>{familyOptionLabel(f)} · retired</option>
+              ))}
+            </optgroup>
+          )}
         </select>
         {/* Subtype dropdown — narrows to the selected family's vocab when one is set.
             When family = all, shows the platform-wide vocab. */}
@@ -840,15 +875,37 @@ export default function DocsTableClient({
                       </>
                     ) : (r.author ?? '—')}
                   </td>
-                  {/* FAMILY */}
+                  {/* FAMILY — governed vocab only (dms-doc-families-slice-register-vocab-ui).
+                      View: amber ⚑ when the row sits in a retired family.
+                      Edit: active families are the only save targets; a retired
+                      current value renders as a selected DISABLED option so the
+                      form is honest without offering it as a destination. The
+                      data layer (trg_enforce_doc_type_vocab, SQLSTATE 23514)
+                      backstops this regardless. */}
                   <td style={tdStyle}>
                     {isEditing ? (
-                      <select defaultValue={r.doc_type ?? ''}
-                        onChange={(e) => onRemap(r.doc_id, { doc_type: e.target.value })}
-                        style={inlineSelect}>
-                        {families.map((f) => <option key={f} value={f}>{familyLabels[f] ?? f}</option>)}
-                      </select>
-                    ) : (r.doc_type ?? '—')}
+                      noFamiliesDefined ? (
+                        <a href={settingsHref} style={{ fontSize: 10, color: '#B26A00', textDecoration: 'underline' }}>
+                          no families defined — define in Settings
+                        </a>
+                      ) : (
+                        <select defaultValue={r.doc_type ?? ''}
+                          onChange={(e) => onRemap(r.doc_id, { doc_type: e.target.value })}
+                          style={inlineSelect}>
+                          {r.doc_type != null && !activeFamilySet.has(r.doc_type) && (
+                            <option value={r.doc_type} disabled>{familyOptionLabel(r.doc_type)} · retired</option>
+                          )}
+                          {families.map((f) => <option key={f} value={f}>{familyOptionLabel(f)}</option>)}
+                        </select>
+                      )
+                    ) : r.doc_type == null ? '—' : activeFamilySet.has(r.doc_type) ? (
+                      r.doc_type
+                    ) : (
+                      <span title="retired family — re-file this document" style={{ cursor: 'help' }}>
+                        <span aria-hidden="true" style={{ color: '#B26A00', fontSize: 12, marginRight: 4 }}>⚑</span>
+                        <span style={{ color: '#B26A00' }}>{r.doc_type}</span>
+                      </span>
+                    )}
                   </td>
                   {/* SUBTYPE */}
                   <td style={tdStyle}>
