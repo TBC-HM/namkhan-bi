@@ -20,12 +20,16 @@
 //    launched — e.g. Donna 1000001) show a chip instead of a zero-run warning.
 //  - KPI agents_total excludes the 1 disabled agent; the pillars list holds
 //    all rows. The list defaults to active-only so both agree.
-// CTAs render but are disabled pending the fn_* SECURITY DEFINER write
-// wrappers (slice 3) — no direct table writes from the browser, ever.
+// Slice 3 (brief agent-team-slice-write-ctas, ADR-268): pillar 1-3 CTAs are
+// LIVE through /api/fleet/team/write → public.fn_* SECURITY DEFINER wrappers.
+// Still no direct table writes from the browser, ever. CTAs without a
+// wrapper stay visibly disabled with the reason shown (Set trust, Test-run,
+// memory Edit, all of pillar 4 pending the trigger-registry decision).
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { Container, MetricRow } from '@/app/(cockpit)/_design';
+import { IdentityCtas, SkillCtas, MemoryCtas, BulkGrantBar } from './AgentWriteCtas';
 
 export type PillarRow = {
   agent_id: string;
@@ -175,9 +179,16 @@ export function PillarsView({ rows, kpis }: Props) {
       ]
     : [];
 
+  const zeroSkillRoles = useMemo(
+    () => rows.filter((r) => r.skills_enabled === 0 && r.status !== 'disabled').map((r) => r.role),
+    [rows],
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {kpis && <MetricRow tiles={tiles} size="sm" />}
+
+      <BulkGrantBar zeroSkillRoles={zeroSkillRoles} />
 
       <Container title="Agent fleet" subtitle={`${filtered.length} of ${rows.length} agents`} density="compact">
         <div style={st.filterRow}>
@@ -283,7 +294,19 @@ function RowBlock({ r, open, onToggle }: { r: PillarRow; open: boolean; onToggle
   );
 }
 
+// Hot-content guard (brief item 8): no in-flight-run signal exists in
+// v_agent_pillars, so last_run_at within 5 minutes is the stated proxy.
+const HOT_WINDOW_MS = 5 * 60_000;
+
+function isHot(r: PillarRow): boolean {
+  if (!r.last_run_at) return false;
+  return Date.now() - new Date(r.last_run_at).getTime() < HOT_WINDOW_MS;
+}
+
 function PillarPanels({ r }: { r: PillarRow }) {
+  const hot = isHot(r);
+  const hotReason =
+    'Agent ran within the last 5 minutes (proxy for a run in flight — no live signal exists). Prompt and status changes are blocked until it cools.';
   return (
     <div style={st.panelGrid}>
       <div style={st.panel}>
@@ -292,11 +315,7 @@ function PillarPanels({ r }: { r: PillarRow }) {
         <Fact k="Hierarchy" v={r.hierarchy_level ?? '—'} />
         <Fact k="Reports to" v={r.reports_to ?? '—'} />
         <Fact k="Prompt" v={r.has_current_prompt ? `current v${r.current_prompt_version} · ${r.prompt_versions} versions` : 'NO CURRENT PROMPT'} />
-        <div style={st.ctaRow}>
-          <Cta label="Edit prompt" />
-          <Cta label="Set trust" />
-          <Cta label={r.status === 'disabled' ? 'Enable' : 'Disable'} />
-        </div>
+        <IdentityCtas role={r.role} status={r.status} hot={hot} hotReason={hotReason} />
       </div>
       <div style={st.panel}>
         <div style={st.panelTitle}>2 · Skills & tools</div>
@@ -306,22 +325,13 @@ function PillarPanels({ r }: { r: PillarRow }) {
             Full skill list & debug →
           </Link>
         </div>
-        <div style={st.ctaRow}>
-          <Cta label="Add skill" />
-          <Cta label="Revoke" />
-          <Cta label="Propose new" />
-          <Cta label="Test-run" />
-        </div>
+        <SkillCtas role={r.role} />
       </div>
       <div style={st.panel}>
         <div style={st.panelTitle}>3 · Memory</div>
         <Fact k="Active memories" v={String(r.memories_active)} />
         <Fact k="Hard rules (imp ≥ 8)" v={String(r.memories_hard_rules)} />
-        <div style={st.ctaRow}>
-          <Cta label="Add memory" />
-          <Cta label="Edit" />
-          <Cta label="Archive" />
-        </div>
+        <MemoryCtas role={r.role} />
       </div>
       <div style={st.panel}>
         <div style={st.panelTitle}>4 · Triggers & budget</div>
@@ -345,18 +355,6 @@ function Fact({ k, v }: { k: string; v: string }) {
       <span style={{ color: 'var(--ink-soft, #5A5A5A)' }}>{k}</span>
       <span style={{ fontFamily: MONO }}>{v}</span>
     </div>
-  );
-}
-
-function Cta({ label }: { label: string }) {
-  return (
-    <button
-      disabled
-      title="Write wrapper ships in slice 3 — all writes go through audited public.fn_* only"
-      style={st.cta}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -396,9 +394,6 @@ const st: Record<string, CSSProperties> = {
   panel: { background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6, padding: 12 },
   panelTitle: { fontSize: 11, fontFamily: MONO, letterSpacing: 0.5, textTransform: 'uppercase',
     color: 'var(--primary, #1F3A2E)', fontWeight: 700, marginBottom: 8 },
-  ctaRow: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 },
-  cta: { border: '1px solid #E6DFCC', background: '#F4EFE2', borderRadius: 4, padding: '3px 10px',
-    fontSize: 11, fontFamily: 'inherit', color: 'var(--ink-soft, #5A5A5A)', cursor: 'not-allowed' },
   blockNote: { fontSize: 11, color: '#8A6D1D', background: '#FBF4DD', border: '1px solid #EADFB8',
     borderRadius: 4, padding: '6px 8px', marginTop: 10 },
   link: { fontSize: 12, color: 'var(--primary, #1F3A2E)', textDecoration: 'underline' },
