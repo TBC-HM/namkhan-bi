@@ -45,10 +45,10 @@ const C = {
 };
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
 
-export type CentralChatMode = 'second-brain' | 'general';
+export type CentralChatMode = 'second-brain' | 'brain' | 'general';
 
 export interface CentralChatProps {
-  /** Context scope. 'second-brain' = business context via Felix; 'general' = model-only, no business data. */
+  /** Context scope. 'second-brain' = Felix orchestrator with business context; 'brain' = direct document Q&A scoped to property; 'general' = model-only. */
   mode: CentralChatMode;
   /** Module/capability the embedding surface belongs to (e.g. 'revenue', 'it'). Narrows knowledge scope. */
   moduleScope?: string;
@@ -144,6 +144,9 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<CentralChatMode>(defaultMode);
+  // Brain mode Q&A pairs (direct /api/brain/ask, not tickets)
+  type BrainQA = { id: number; question: string; answer: string; citations?: unknown[] };
+  const [brainMessages, setBrainMessages] = useState<BrainQA[]>([]);
   const [threadStart, setThreadStart] = useState<string>(() => new Date().toISOString());
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(showHistory);
@@ -272,6 +275,35 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
   const send = async () => {
     const text = input.trim();
     if (!text || sending) return;
+
+    // ── Brain mode: direct document Q&A, no Felix ───────────────────────
+    if (mode === 'brain') {
+      setSending(true);
+      setInput('');
+      const qid = Date.now();
+      setBrainMessages((prev) => [...prev, { id: qid, question: text, answer: '…' }]);
+      try {
+        const res = await fetch('/api/brain/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: text,
+            scope: moduleScope ?? 'all',
+            property_id: propertyId ?? null,
+          }),
+        });
+        const j = await res.json();
+        const answer = j.answer ?? j.response ?? 'No answer returned.';
+        const citations = j.citations ?? j.sources ?? [];
+        setBrainMessages((prev) => prev.map((m) => m.id === qid ? { ...m, answer, citations } : m));
+      } catch {
+        setBrainMessages((prev) => prev.map((m) => m.id === qid ? { ...m, answer: '_(network error — try again)_' } : m));
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     const body = mode === 'general' ? text : (text.match(/^@/) ? text : `@felix ${text}`);
     const conversation_history = buildConversationHistory();
     const optimistic: Ticket = {
@@ -357,11 +389,12 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
     }
   };
 
-  const modeLabel = mode === 'second-brain' ? 'Second Brain' : 'General';
+  const modeLabel = mode === 'second-brain' ? 'Felix' : mode === 'brain' ? '2nd Brain' : 'General';
+  const brainProperty = propertyId === 260955 ? 'Namkhan' : propertyId === 1000001 ? 'Donna' : 'Holding';
   const scopeBits = [
-    modeLabel,
-    moduleScope ? `scope: ${moduleScope}` : null,
-    propertyId ? `property ${propertyId}` : null,
+    mode === 'brain' ? `${brainProperty} brain` : modeLabel,
+    mode !== 'brain' && moduleScope ? `scope: ${moduleScope}` : null,
+    mode === 'brain' ? `property_id: ${propertyId ?? 'null (holding)'}` : null,
   ].filter(Boolean).join(' · ');
 
   return (
@@ -384,10 +417,12 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
         {/* ── header ─────────────────────────────────────────────────────── */}
         <div style={S.header}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={S.avatar}>{mode === 'general' ? '◦' : 'F'}</div>
+            <div style={{ ...S.avatar, ...(mode === 'brain' ? { background: '#F0F7F4', color: '#084838' } : {}) }}>
+              {mode === 'general' ? '◦' : mode === 'brain' ? 'B' : 'F'}
+            </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>
-                {mode === 'general' ? 'General chat · model only' : 'Felix · chief of staff'}
+                {mode === 'general' ? 'General chat · model only' : mode === 'brain' ? `${brainProperty} · Company Brain` : 'Felix · chief of staff'}
               </div>
               <div style={{ fontFamily: MONO, fontSize: 10, color: C.text3, letterSpacing: 0.4 }}>{scopeBits}</div>
             </div>
@@ -421,15 +456,17 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
               </button>
             )}
 
-            {/* Mode toggle */}
+            {/* Mode toggle — 3 modes: Felix (orchestrator) | 2nd Brain (doc Q&A) | General (raw LLM) */}
             <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden' }}>
-              {(['second-brain', 'general'] as CentralChatMode[]).map((m) => (
+              {(['second-brain', 'brain', 'general'] as CentralChatMode[]).map((m) => (
                 <button
                   key={m}
                   onClick={() => switchMode(m)}
-                  title={m === 'general'
-                    ? 'General mode: model only. No business data read, no memory written. Enforced server-side.'
-                    : 'Second Brain: full scoped business context via Felix.'}
+                  title={
+                    m === 'general' ? 'General: model only. No business data, no memory. Enforced server-side.' :
+                    m === 'brain'   ? `2nd Brain: direct document Q&A against the ${brainProperty} brain. Citations included. No Felix.` :
+                                     'Felix: business orchestrator with full scoped context, tools, and memory.'
+                  }
                   style={{
                     fontFamily: MONO, fontSize: 10, letterSpacing: 0.4, cursor: 'pointer',
                     padding: '4px 10px', border: 0,
@@ -437,7 +474,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
                     color: mode === m ? '#FFFFFF' : C.text2,
                   }}
                 >
-                  {m === 'general' ? 'General' : 'Second Brain'}
+                  {m === 'general' ? 'General' : m === 'brain' ? '2nd Brain' : 'Felix'}
                 </button>
               ))}
             </div>
@@ -499,7 +536,44 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
             </div>
           )}
 
-          {tickets.length === 0 && resumed.length === 0 && (
+          {/* ── Brain mode Q&A rendering ──────────────────────────────── */}
+          {mode === 'brain' && brainMessages.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px 0' }}>
+              <div style={{ fontSize: 15, color: C.ink, marginBottom: 6 }}>
+                {brainProperty} Brain · direct document Q&A
+              </div>
+              <div style={{ fontSize: 12, color: C.text3, maxWidth: 460, margin: '0 auto', lineHeight: 1.6 }}>
+                Ask questions answered from your {brainProperty.toLowerCase()} documents — contracts, SOPs, reports, policies. Citations included. No Felix, no tickets.
+              </div>
+            </div>
+          )}
+          {mode === 'brain' && brainMessages.map((m) => (
+            <div key={m.id} style={{ marginBottom: 16 }}>
+              {/* Question */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+                <div style={{ background: C.forest, color: '#fff', borderRadius: '12px 12px 2px 12px', padding: '8px 14px', fontSize: 13, maxWidth: '75%' }}>
+                  {m.question}
+                </div>
+              </div>
+              {/* Answer */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ ...S.avatar, background: '#F0F7F4', color: C.forest, flexShrink: 0 }}>B</div>
+                <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '2px 12px 12px 12px', padding: '10px 14px', fontSize: 13, lineHeight: 1.6, flex: 1 }}>
+                  <div dangerouslySetInnerHTML={{ __html: md(m.answer) }} />
+                  {Array.isArray(m.citations) && m.citations.length > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: C.text3, borderTop: `1px solid ${C.border}`, paddingTop: 6 }}>
+                      {(m.citations as Array<{title?: string; doc_type?: string; score?: number}>).slice(0, 3).map((c, i) => (
+                        <div key={i}>📄 {c.title ?? c.doc_type ?? `source ${i + 1}`}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* ── Felix / General empty state ───────────────────────────── */}
+          {mode !== 'brain' && tickets.length === 0 && resumed.length === 0 && (
             <div style={{ textAlign: 'center', padding: '48px 0' }}>
               <div style={{ fontSize: 15, color: C.ink, marginBottom: 6 }}>
                 {mode === 'second-brain'
@@ -586,7 +660,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={mode === 'second-brain' ? 'Write to Felix…' : 'Ask anything (model only)…'}
+              placeholder={mode === 'second-brain' ? 'Write to Felix…' : mode === 'brain' ? `Ask the ${brainProperty} brain…` : 'Ask anything (model only)…'}
               style={S.textarea}
               rows={1}
             />
@@ -601,6 +675,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
           <div style={S.hint}>
             {mode === 'general'
               ? 'Enter to send · Shift+Enter for new line · model only — nothing touches the business'
+              : mode === 'brain' ? `Enter to send · direct ${brainProperty} brain Q&A · citations included`
               : 'Enter to send · Shift+Enter for new line · one channel — Felix dispatches'}
           </div>
         </div>
