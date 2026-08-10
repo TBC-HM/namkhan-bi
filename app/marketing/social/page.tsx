@@ -19,6 +19,7 @@ import {
   getSocialAccountsForProperty, getSocialChannelRules, getSocialPrograms,
 } from '@/lib/marketing';
 import { getSocialCalendarSlots, getSocialPostsForProperty } from '@/lib/marketing-social';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import ChannelsManager from './_components/ChannelsManager';
 import SocialCalendar from './_components/SocialCalendar';
 import SocialFlow from './_components/SocialFlow';
@@ -102,10 +103,11 @@ const AGENTS: SocialAgent[] = [
 
 // ─── View params ──────────────────────────────────────────────────────────
 
-type View = 'calendar' | 'flow' | 'channels' | 'boost' | 'inbox';
-const VIEWS: View[] = ['calendar', 'flow', 'channels', 'boost', 'inbox'];
+type View = 'calendar' | 'flow' | 'channels' | 'boost' | 'inbox' | 'publish' | 'analytics' | 'queue' | 'comments';
+const VIEWS: View[] = ['calendar', 'flow', 'channels', 'boost', 'inbox', 'publish', 'analytics', 'queue', 'comments'];
 const VIEW_LABEL: Record<View, string> = {
   calendar: 'Calendar', flow: 'Content flow', channels: 'Channels', boost: 'Boost', inbox: 'Channel inbox',
+  publish: '🚀 Publish', analytics: '📊 Analytics', queue: '⏳ Queue', comments: '💬 Comments',
 };
 
 function parseView(v: string | string[] | undefined): View {
@@ -133,12 +135,15 @@ export default async function SocialPage({ searchParams }: Props) {
   const windowDays: Win = parseWindow(searchParams?.w);
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  const [accounts, rules, programs, slots, posts] = await Promise.all([
+  const sb = getSupabaseAdmin();
+  const [accounts, rules, programs, slots, posts, upProfiles, upAnalytics] = await Promise.all([
     getSocialAccountsForProperty(NAMKHAN_PID),
     getSocialChannelRules(NAMKHAN_PID),
     getSocialPrograms(NAMKHAN_PID),
     getSocialCalendarSlots(NAMKHAN_PID, todayIso, addDaysIso(todayIso, windowDays)),
     getSocialPostsForProperty(NAMKHAN_PID),
+    sb.from('v_up_profiles').select('*').eq('property_id', NAMKHAN_PID).then(r => r.data ?? []),
+    view === 'analytics' ? sb.from('v_up_analytics').select('*').limit(50).then(r => r.data ?? []) : Promise.resolve([]),
   ]);
 
   const activePlatforms = rules.filter((r) => r.active).map((r) => r.platform);
@@ -205,6 +210,179 @@ export default async function SocialPage({ searchParams }: Props) {
         )}
         {view === 'boost' && <BoostView />}
         {view === 'inbox' && <SocialInbox posts={posts} rules={rules} />}
+
+        {/* ── Upload Post: Publish ────────────────────────────────────── */}
+        {view === 'publish' && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            {/* Connected accounts */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: INK_M, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Connected via Upload Post</div>
+              {upProfiles.length === 0 ? (
+                <div style={{ padding: '12px 16px', background: '#FFF8E1', border: '1px solid #C28F2C', borderRadius: 6, fontSize: 12, color: INK_M }}>
+                  <strong style={{ color: '#7A5A00' }}>No accounts connected yet.</strong>{' '}
+                  Go to <a href="https://app.upload-post.com" target="_blank" rel="noopener noreferrer" style={{ color: FOREST }}>app.upload-post.com</a> → Users → connect your Instagram, TikTok, Facebook etc, then reload this page.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8 }}>
+                  {(upProfiles as any[]).map((p: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#F9F6F0', border: `1px solid ${HAIR}`, borderRadius: 20, fontSize: 12 }}>
+                      {p.avatar_url && <img src={p.avatar_url} alt="" style={{ width: 18, height: 18, borderRadius: '50%' }} />}
+                      <span style={{ fontWeight: 600, color: INK }}>{p.display_name ?? p.handle}</span>
+                      <span style={{ color: INK_M, fontSize: 10, fontFamily: 'ui-monospace,monospace', textTransform: 'uppercase' as const }}>{p.platform}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Posts ready to push */}
+            <div style={{ fontSize: 11, fontWeight: 700, color: INK_M, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Posts ready to push</div>
+            {posts.filter((p: any) => ['ready', 'scheduled'].includes(p.status)).length === 0 ? (
+              <div style={{ padding: '28px 16px', textAlign: 'center', color: INK_M, fontSize: 13 }}>
+                No posts in Ready or Scheduled status. Draft posts in the Inbox, approve them, then push here.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {posts.filter((p: any) => ['ready', 'scheduled'].includes(p.status)).map((p: any) => (
+                  <div key={p.post_id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontFamily: 'ui-monospace,monospace', color: INK_M, marginBottom: 4 }}>
+                        {p.platform?.toUpperCase()} · {p.status} · {p.scheduled_at ? new Date(p.scheduled_at).toISOString().slice(0, 16).replace('T', ' ') : 'no schedule'}
+                      </div>
+                      <div style={{ fontSize: 13, color: INK, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                        {p.caption ?? p.title ?? '(no caption)'}
+                      </div>
+                      {p.up_status && (
+                        <div style={{ fontSize: 10, color: p.up_status === 'published' ? '#0E7A4B' : p.up_status === 'failed' ? '#B03826' : '#C28F2C', marginTop: 4, fontFamily: 'ui-monospace,monospace' }}>
+                          Upload Post: {p.up_status}{p.up_request_id ? ` · ${p.up_request_id.slice(0,8)}` : ''}
+                        </div>
+                      )}
+                    </div>
+                    <form action="/api/marketing/social-push" method="POST" style={{ flexShrink: 0 }}>
+                      <input type="hidden" name="post_id" value={p.post_id} />
+                      <button type="submit" style={{ padding: '6px 14px', background: FOREST, color: WHITE, border: 'none', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+                        Push →
+                      </button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Previously published */}
+            {posts.filter((p: any) => p.up_request_id).length > 0 && (
+              <>
+                <div style={{ fontSize: 11, fontWeight: 700, color: INK_M, letterSpacing: '0.1em', textTransform: 'uppercase' as const, margin: '20px 0 8px' }}>Published via Upload Post</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {posts.filter((p: any) => p.up_request_id).slice(0, 10).map((p: any) => (
+                    <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', background: '#F9F6F0', border: `1px solid ${HAIR}`, borderRadius: 5, fontSize: 12 }}>
+                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: p.up_status === 'published' ? '#0E7A4B' : p.up_status === 'failed' ? '#B03826' : '#C28F2C', minWidth: 60 }}>{p.up_status ?? '—'}</span>
+                      <span style={{ flex: 1, color: INK, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.caption?.slice(0, 80) ?? p.title ?? '—'}</span>
+                      <span style={{ color: INK_M, fontSize: 10, fontFamily: 'ui-monospace,monospace' }}>{p.platform}</span>
+                      <span style={{ color: INK_M, fontSize: 10 }}>{p.pushed_at ? new Date(p.pushed_at).toISOString().slice(0, 10) : '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Upload Post: Analytics ──────────────────────────────────── */}
+        {view === 'analytics' && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            {(upAnalytics as any[]).length === 0 ? (
+              <div style={{ padding: '40px 16px', textAlign: 'center', color: INK_M }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>📊</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 6 }}>No analytics yet</div>
+                <div style={{ fontSize: 12, color: INK_M }}>Analytics sync daily at 08:00 UTC after posts are published via Upload Post.</div>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid ' + HAIR }}>
+                      {['Platform', 'Caption', 'Impressions', 'Likes', 'Comments', 'Shares', 'Reach', 'Date'].map(h => (
+                        <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 10, fontFamily: 'ui-monospace,monospace', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: INK_M, fontWeight: 600, whiteSpace: 'nowrap' as const }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(upAnalytics as any[]).map((a: any, i: number) => (
+                      <tr key={i} style={{ borderBottom: '1px solid ' + HAIR }}>
+                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', fontSize: 10, textTransform: 'uppercase' as const, color: INK_M }}>{a.platform}</td>
+                        <td style={{ padding: '7px 10px', color: INK, fontStyle: 'italic', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{a.caption?.slice(0, 60) ?? a.up_request_id?.slice(0, 12) ?? '—'}</td>
+                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.impressions?.toLocaleString() ?? '—'}</td>
+                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.likes?.toLocaleString() ?? '—'}</td>
+                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.comments?.toLocaleString() ?? '—'}</td>
+                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.shares?.toLocaleString() ?? '—'}</td>
+                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.reach?.toLocaleString() ?? '—'}</td>
+                        <td style={{ padding: '7px 10px', color: INK_M, fontSize: 11, whiteSpace: 'nowrap' as const }}>{a.snapshot_date}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Upload Post: Queue ──────────────────────────────────────── */}
+        {view === 'queue' && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>⏳</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 6 }}>Scheduled queue</div>
+              <div style={{ fontSize: 12, color: INK_M, marginBottom: 12 }}>
+                Shows posts scheduled inside Upload Post (not yet published). Live data from <code>listScheduled()</code>.
+              </div>
+              {posts.filter((p: any) => p.status === 'scheduled' && p.up_request_id).length === 0 ? (
+                <div style={{ fontSize: 12, color: INK_M }}>No posts in the Upload Post queue yet. Push a Ready post from the Publish tab.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' as const, maxWidth: 700, margin: '0 auto' }}>
+                  {posts.filter((p: any) => p.status === 'scheduled' && p.up_request_id).map((p: any) => (
+                    <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, fontSize: 12 }}>
+                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: '#C28F2C', minWidth: 50 }}>scheduled</span>
+                      <span style={{ flex: 1, color: INK, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.caption?.slice(0, 80) ?? '—'}</span>
+                      <span style={{ color: INK_M, fontSize: 10, fontFamily: 'ui-monospace,monospace' }}>{p.platform}</span>
+                      <span style={{ color: INK_M, fontSize: 10 }}>{p.scheduled_at ? new Date(p.scheduled_at).toISOString().slice(0, 16).replace('T', ' ') : '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Upload Post: Comments ───────────────────────────────────── */}
+        {view === 'comments' && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>💬</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 6 }}>Comment engagement</div>
+              <div style={{ fontSize: 12, color: INK_M, marginBottom: 12 }}>
+                Reply to comments on your posts across all connected platforms via Upload Post SDK <code>getPostComments()</code> + <code>replyToComment()</code>.
+              </div>
+              {posts.filter((p: any) => p.up_request_id && p.up_status === 'published').length === 0 ? (
+                <div style={{ fontSize: 12, color: INK_M }}>No published posts with Upload Post tracking yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left' as const, maxWidth: 700, margin: '0 auto' }}>
+                  {posts.filter((p: any) => p.up_request_id && p.up_status === 'published').slice(0, 8).map((p: any) => (
+                    <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, fontSize: 12 }}>
+                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: '#0E7A4B', minWidth: 50 }}>published</span>
+                      <span style={{ flex: 1, color: INK, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.caption?.slice(0, 70) ?? '—'}</span>
+                      <span style={{ color: INK_M, fontSize: 10, fontFamily: 'ui-monospace,monospace' }}>{p.platform}</span>
+                      <span style={{ color: INK_M, fontSize: 10 }}>{p.up_request_id?.slice(0, 8)}</span>
+                    </div>
+                  ))}
+                  <div style={{ padding: '8px 14px', fontSize: 11, color: INK_M, fontStyle: 'italic' }}>
+                    Comments API: call /api/marketing/social-push with mode=comments&request_id=... to fetch and reply inline.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Two-col: loop + ICP list + guardrails */}
         <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 340px)', gap: 12, alignItems: 'start' }}>
