@@ -46,8 +46,68 @@ const C = {
 const MONO = 'JetBrains Mono, ui-monospace, monospace';
 
 // 'second-brain' = HOS mode (Felix with full brain+tools context) — shown to user as "HOS"
-// 'general' = raw LLM only, no business data
+// 'general' = LLM mode — multi-model: DeepSeek V3/R1, GPT-4o/mini, Gemini Flash
 export type CentralChatMode = 'second-brain' | 'general';
+
+// ─── LLM model catalogue ──────────────────────────────────────────────────────
+export const LLM_MODELS = [
+  {
+    id: 'deepseek-chat',
+    label: 'DeepSeek V3',
+    provider: 'DeepSeek',
+    badge: '🏆',
+    cost: '$0.27/M',
+    speed: '⚡⚡',
+    bestFor: 'General writing, analysis, Q&A — best value overall',
+    special: null,
+    recommended: true,
+  },
+  {
+    id: 'deepseek-reasoner',
+    label: 'DeepSeek R1',
+    provider: 'DeepSeek',
+    badge: '🔍',
+    cost: '$0.55/M',
+    speed: '⚡',
+    bestFor: 'Complex reasoning, financial analysis, step-by-step problem solving',
+    special: 'Shows reasoning chain',
+    recommended: false,
+  },
+  {
+    id: 'gemini-2.0-flash',
+    label: 'Gemini Flash 2.0',
+    provider: 'Google',
+    badge: '⚡',
+    cost: '$0.10/M',
+    speed: '⚡⚡⚡',
+    bestFor: 'Very long documents (1M token context), fast Q&A, research',
+    special: 'Web search via Google · 1M token context',
+    recommended: false,
+  },
+  {
+    id: 'gpt-4o-mini',
+    label: 'GPT-4o mini',
+    provider: 'OpenAI',
+    badge: '🚀',
+    cost: '$0.15/M',
+    speed: '⚡⚡',
+    bestFor: 'Quick tasks, drafting, summarization — reliable OpenAI quality',
+    special: null,
+    recommended: false,
+  },
+  {
+    id: 'gpt-4o',
+    label: 'GPT-4o',
+    provider: 'OpenAI',
+    badge: '🌐',
+    cost: '$5.00/M',
+    speed: '⚡',
+    bestFor: 'Most complex tasks, nuanced writing, image understanding',
+    special: 'Web browse · image input',
+    recommended: false,
+  },
+] as const;
+export type LLMModelId = typeof LLM_MODELS[number]['id'];
 
 export interface CentralChatProps {
   /** 'second-brain' = HOS (Hospitality OS) — full business context, brain access, execution via Felix. Shown as "HOS". 'general' = model only. */
@@ -146,6 +206,8 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<CentralChatMode>(defaultMode);
+  const [llmModel, setLlmModel] = useState<LLMModelId>('deepseek-chat');
+  const [showModelHelp, setShowModelHelp] = useState(false);
   const [threadStart, setThreadStart] = useState<string>(() => new Date().toISOString());
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(showHistory);
@@ -299,6 +361,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
           mention: mode === 'general' ? undefined : 'felix',
           conversation_history,
           mode,
+          llm_model: mode === 'general' ? llmModel : undefined,
           module_scope: moduleScope ?? null,
           property_id: propertyId ?? null,
           conversation_id: conversationId,
@@ -448,6 +511,76 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
             <button onClick={startNewChat} style={S.newChatBtn}>+ New chat</button>
           </div>
         </div>
+
+        {/* ── LLM model picker (only in LLM/general mode) ──────────────── */}
+        {mode === 'general' && (
+          <div style={{ padding: '6px 16px 0', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const, borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ fontFamily: MONO, fontSize: 9, color: C.text3, letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>Model</span>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const, flex: 1 }}>
+              {LLM_MODELS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setLlmModel(m.id as LLMModelId)}
+                  title={`${m.label} · ${m.cost} · ${m.bestFor}`}
+                  style={{
+                    fontFamily: MONO, fontSize: 10, cursor: 'pointer', padding: '2px 8px',
+                    border: `1px solid ${llmModel === m.id ? C.forest : C.border}`,
+                    borderRadius: 3, background: llmModel === m.id ? C.forest : 'transparent',
+                    color: llmModel === m.id ? '#FFF' : C.text2, marginBottom: 6,
+                  }}
+                >
+                  {m.badge} {m.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowModelHelp(!showModelHelp)}
+              title="Model guide — costs, capabilities, recommendations"
+              style={{ fontFamily: MONO, fontSize: 10, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', color: C.text3, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 6 }}
+            >
+              ?
+            </button>
+          </div>
+        )}
+
+        {/* ── Model help popup ─────────────────────────────────────────────── */}
+        {mode === 'general' && showModelHelp && (
+          <div style={{ position: 'absolute' as const, top: 80, right: 12, zIndex: 100, width: 'min(480px, 95vw)', background: '#FFFFFF', border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: '0 8px 28px rgba(0,0,0,0.14)', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Model guide · LLM tab</div>
+              <button onClick={() => setShowModelHelp(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: C.text3 }}>✕</button>
+            </div>
+            <div style={{ fontSize: 11, color: C.text3, marginBottom: 12, lineHeight: 1.5 }}>
+              All models are raw LLM — no business data. Switch to <strong>HOS</strong> for hotel data, brain, and execution.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+              {LLM_MODELS.map((m) => (
+                <div key={m.id}
+                  onClick={() => { setLlmModel(m.id as LLMModelId); setShowModelHelp(false); }}
+                  style={{ display: 'flex', gap: 10, padding: '8px 10px', border: `1px solid ${llmModel === m.id ? C.forest : C.border}`, borderRadius: 6, cursor: 'pointer', background: llmModel === m.id ? '#F0F7F4' : '#FAFAFA' }}
+                >
+                  <div style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>{m.badge}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>{m.label}</span>
+                      <span style={{ fontFamily: MONO, fontSize: 9, color: C.text3, letterSpacing: '0.1em' }}>{m.provider}</span>
+                      {m.recommended && <span style={{ fontFamily: MONO, fontSize: 9, background: C.forest, color: '#FFF', padding: '1px 5px', borderRadius: 3 }}>recommended</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.text2, lineHeight: 1.4, marginBottom: 3 }}>{m.bestFor}</div>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <span style={{ fontFamily: MONO, fontSize: 10, color: '#0E7A4B' }}>{m.cost}</span>
+                      <span style={{ fontSize: 10, color: C.text3 }}>{m.speed} {m.speed.length === 6 ? 'fastest' : m.speed.length === 4 ? 'fast' : 'medium'}</span>
+                      {m.special && <span style={{ fontFamily: MONO, fontSize: 9, color: '#7A5A00', background: '#FFF8E1', padding: '1px 5px', borderRadius: 3 }}>{m.special}</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 12, padding: '8px 10px', background: '#F9F6F0', borderRadius: 5, fontSize: 11, color: C.text3, lineHeight: 1.5 }}>
+              💡 <strong>Tip:</strong> DeepSeek V3 is the default — best quality/cost. Use Gemini Flash for very long texts or when you need web search. Use GPT-4o only for the hardest tasks.
+            </div>
+          </div>
+        )}
 
         {/* Summary display */}
         {summary && (
@@ -623,7 +756,7 @@ const S: Record<string, React.CSSProperties> = {
     background: C.paper, border: `1px solid ${C.border}`, borderRadius: 2,
     minHeight: 520, maxHeight: '78vh', overflow: 'hidden',
     fontFamily: '-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif',
-    fontSize: 14, color: C.ink,
+    fontSize: 14, color: C.ink, position: 'relative' as const,
   },
   header: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
