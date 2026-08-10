@@ -1,218 +1,92 @@
--- ============================================================================
--- KPI Conformance Battery: Money Family
--- ============================================================================
--- Continuously verifies the four money-family KPIs for property 260955:
---   1. AR (aging buckets, outstanding detail, DSO bridge)
---   2. Cash flow (daily, monthly, payment methods)
---   3. Comps/discounts (category integrity, bridge concordance)
---   4. Voids/adjustments (monitor vs. source concordance)
+-- =====================================================================
+-- KPI CONFORMANCE BATTERY — MONEY FAMILY (property 260955, The Namkhan)
+-- harness_version: kpi-conformance-battery/money-v2
+-- Brief: kpi-conformance-slice-battery-money
 --
--- Harness: kpi-conformance-battery/money-v1
--- Safe to re-run anytime; produces a single jsonb result for logging.
--- ============================================================================
+-- v1 → v2 (2026-08-09): bridge check inverted per ADR-277 anon lockdown.
+--   v1 asserted the three public bridges were anon-SELECTable. ADR-277
+--   (security remediation SEC-001, human-approved) revoked ALL anon
+--   grants in public; claude_md L5 v112 mandates bridges GRANT to
+--   authenticated/service_role ONLY, never anon. v2 therefore asserts:
+--   authenticated=TRUE AND service_role=TRUE AND anon=FALSE.
+--
+-- Probe-only: reads 10 repaired views + silver pms.v_transactions.
+-- Zero DDL. One INSERT into governance.module_test_runs per execution.
+-- Idempotent and safe to re-run at any time (each run appends one row
+-- with genuinely measured values — never fabricate rows).
+-- =====================================================================
 
-WITH 
-
--- ============================================================================
--- AR FAMILY CHECKS (kpi.v_ar_aging_buckets, kpi.v_ar_outstanding_detail, public.v_dso_current)
--- ============================================================================
-
-ar_aging_total AS (
-  SELECT COALESCE(SUM(total_outstanding), 0) AS total
-  FROM kpi.v_ar_aging_buckets
-  WHERE property_id = 260955
-),
-
-ar_detail_total AS (
-  SELECT COALESCE(SUM(outstanding_balance), 0) AS total,
-         COUNT(*) AS row_count
-  FROM kpi.v_ar_outstanding_detail
-  WHERE property_id = 260955
-),
-
-ar_dso_bridge AS (
-  SELECT ar_outstanding
-  FROM public.v_dso_current
-  WHERE property_id = 260955
-),
-
-ar_concordance AS (
-  SELECT 
-    'ar_three_way_match' AS check_name,
-    'aging=' || aging.total || ', detail=' || detail.total || ', dso=' || dso.ar_outstanding AS expected,
-    CASE 
-      WHEN aging.total = detail.total AND detail.total = dso.ar_outstanding 
-      THEN 'all three match: ' || aging.total::text
-      ELSE 'MISMATCH'
-    END AS actual,
-    (aging.total = detail.total AND detail.total = dso.ar_outstanding) AS ok
-  FROM ar_aging_total aging, ar_detail_total detail, ar_dso_bridge dso
-),
-
--- ============================================================================
--- CASH FLOW FAMILY CHECKS (kpi.v_cash_flow_daily, kpi.v_cash_flow_monthly, kpi/public.v_payment_method_monthly)
--- ============================================================================
-
-cash_march_daily AS (
-  SELECT 
-    COUNT(*) AS row_count,
-    COALESCE(SUM(cash_in), 0) AS total
-  FROM kpi.v_cash_flow_daily
-  WHERE property_id = 260955
-    AND tx_date >= '2026-03-01'
-    AND tx_date < '2026-04-01'
-),
-
-cash_march_check AS (
-  SELECT
-    'cash_march_2026' AS check_name,
-    'rows > 0 and total = 95436.08' AS expected,
-    'rows=' || row_count || ', total=' || total AS actual,
-    (row_count > 0 AND ABS(total - 95436.08) < 0.01) AS ok
-  FROM cash_march_daily
-),
-
-cash_june_daily AS (
-  SELECT COALESCE(SUM(cash_in), 0) AS total
-  FROM kpi.v_cash_flow_daily
-  WHERE property_id = 260955
-    AND tx_date >= '2026-06-01'
-    AND tx_date < '2026-07-01'
-),
-
-cash_june_monthly AS (
-  SELECT cash_in AS total
-  FROM kpi.v_cash_flow_monthly
-  WHERE property_id = 260955
-    AND month_start = '2026-06-01'
-),
-
-cash_june_payment_kpi AS (
-  SELECT COALESCE(SUM(total_amount), 0) AS total
-  FROM kpi.v_payment_method_monthly
-  WHERE property_id = 260955
-    AND month = '2026-06-01'
-),
-
-cash_june_payment_pub AS (
-  SELECT COALESCE(SUM(total_amount), 0) AS total
-  FROM public.v_payment_method_monthly
-  WHERE property_id = 260955
-    AND month = '2026-06-01'
-),
-
-cash_june_concordance AS (
-  SELECT
-    'cash_june_concordance' AS check_name,
-    'daily=monthly=payment_kpi=payment_pub' AS expected,
-    'daily=' || d.total || ', monthly=' || m.total || ', payment_kpi=' || pk.total || ', payment_pub=' || pp.total AS actual,
-    (d.total = m.total AND m.total = pk.total AND pk.total = pp.total) AS ok
-  FROM cash_june_daily d, cash_june_monthly m, cash_june_payment_kpi pk, cash_june_payment_pub pp
-),
-
--- ============================================================================
--- COMPS/DISCOUNTS FAMILY CHECKS (kpi.v_tx_comp_discount, public.v_tx_comp_discount)
--- ============================================================================
-
-comp_kpi_total AS (
-  SELECT 
-    COALESCE(SUM(comp_discount_value), 0) AS total,
-    COUNT(*) AS row_count
-  FROM kpi.v_tx_comp_discount
-  WHERE property_id = 260955
-),
-
-comp_pub_total AS (
-  SELECT 
-    COALESCE(SUM(comp_discount_value), 0) AS total,
-    COUNT(*) AS row_count
-  FROM public.v_tx_comp_discount
-  WHERE property_id = 260955
-),
-
-comp_concordance AS (
-  SELECT
-    'comp_bridge_match' AS check_name,
-    'kpi=' || k.total || ' (' || k.row_count || ' rows), pub=' || p.total || ' (' || p.row_count || ' rows)' AS expected,
-    CASE 
-      WHEN k.total = p.total AND k.row_count = p.row_count 
-      THEN 'match: ' || k.total::text
-      ELSE 'MISMATCH'
-    END AS actual,
-    (k.total = p.total AND k.row_count = p.row_count) AS ok
-  FROM comp_kpi_total k, comp_pub_total p
-),
-
--- ============================================================================
--- VOIDS/ADJUSTMENTS FAMILY CHECKS (public.v_tx_adjustments_monitor vs pms.v_transactions)
--- ============================================================================
-
-voids_monitor AS (
-  SELECT 
-    COALESCE(SUM(adj_count), 0) AS void_count,
-    COALESCE(SUM(gross_abs_amount), 0) AS void_gross
-  FROM public.v_tx_adjustments_monitor
-  WHERE property_id = 260955
-    AND adjustment_type = 'void'
-),
-
-voids_source AS (
-  SELECT 
-    COUNT(*) AS void_count,
-    COALESCE(SUM(ABS(amount)), 0) AS void_gross
-  FROM pms.v_transactions
-  WHERE property_id = 260955
-    AND category = 'void'
-),
-
-voids_concordance AS (
-  SELECT
-    'voids_monitor_vs_source' AS check_name,
-    'monitor_count=' || m.void_count || ', monitor_gross=' || m.void_gross AS expected,
-    'source_count=' || s.void_count || ', source_gross=' || s.void_gross AS actual,
-    (m.void_count = s.void_count AND ABS(m.void_gross - s.void_gross) < 0.01) AS ok
-  FROM voids_monitor m, voids_source s
-),
-
--- ============================================================================
--- BRIDGE REACHABILITY CHECKS (anon role SELECT privilege)
--- ============================================================================
-
-bridge_privileges AS (
-  SELECT
-    'bridge_anon_readable' AS check_name,
-    'dso, payment_method, comp all anon-SELECTable' AS expected,
-    'dso=' || has_table_privilege('anon', 'public.v_dso_current', 'SELECT')::text ||
-    ', payment=' || has_table_privilege('anon', 'public.v_payment_method_monthly', 'SELECT')::text ||
-    ', comp=' || has_table_privilege('anon', 'public.v_tx_comp_discount', 'SELECT')::text AS actual,
-    (
-      has_table_privilege('anon', 'public.v_dso_current', 'SELECT') AND
-      has_table_privilege('anon', 'public.v_payment_method_monthly', 'SELECT') AND
-      has_table_privilege('anon', 'public.v_tx_comp_discount', 'SELECT')
-    ) AS ok
-),
-
--- ============================================================================
--- AGGREGATE ALL CHECKS
--- ============================================================================
-
-all_checks AS (
-  SELECT * FROM ar_concordance
-  UNION ALL SELECT * FROM cash_march_check
-  UNION ALL SELECT * FROM cash_june_concordance
-  UNION ALL SELECT * FROM comp_concordance
-  UNION ALL SELECT * FROM voids_concordance
-  UNION ALL SELECT * FROM bridge_privileges
-)
-
-SELECT 
-  jsonb_agg(
-    jsonb_build_object(
-      'check', check_name,
-      'expected', expected,
-      'actual', actual,
-      'ok', ok
-    ) ORDER BY check_name
-  ) AS checks,
-  bool_and(ok) AS all_ok
-FROM all_checks;
+INSERT INTO governance.module_test_runs (module_doc_type, ok, checks, harness_version, run_by)
+SELECT
+  'kpi_conformance',
+  (SELECT bool_and((c->>'ok')::boolean) FROM jsonb_array_elements(checks.arr) c),
+  checks.arr,
+  'kpi-conformance-battery/money-v2',
+  coalesce(current_setting('app.worker_id', true), 'battery-money-script')
+FROM (
+  WITH ar AS (
+    SELECT round((SELECT coalesce(sum(total_outstanding),0)   FROM kpi.v_ar_aging_buckets      WHERE property_id=260955),2) AS aging,
+           round((SELECT coalesce(sum(outstanding_balance),0) FROM kpi.v_ar_outstanding_detail WHERE property_id=260955),2) AS detail,
+           round((SELECT coalesce(ar_outstanding,0)           FROM public.v_dso_current        WHERE property_id=260955),2) AS dso
+  ), mar AS (
+    SELECT count(*) AS n, round(coalesce(sum(cash_in),0),2) AS total
+    FROM kpi.v_cash_flow_daily
+    WHERE property_id=260955 AND tx_date >= '2026-03-01' AND tx_date < '2026-04-01'
+  ), jun AS (
+    SELECT round((SELECT coalesce(sum(cash_in),0)      FROM kpi.v_cash_flow_daily            WHERE property_id=260955 AND tx_date >= '2026-06-01' AND tx_date < '2026-07-01'),2) AS daily,
+           round((SELECT coalesce(sum(cash_in),0)      FROM kpi.v_cash_flow_monthly          WHERE property_id=260955 AND month_start='2026-06-01'),2) AS monthly,
+           round((SELECT coalesce(sum(total_amount),0) FROM kpi.v_payment_method_monthly     WHERE property_id=260955 AND month='2026-06-01'),2) AS pay_kpi,
+           round((SELECT coalesce(sum(total_amount),0) FROM public.v_payment_method_monthly  WHERE property_id=260955 AND month='2026-06-01'),2) AS pay_pub
+  ), comp AS (
+    SELECT round((SELECT coalesce(sum(comp_discount_value),0) FROM kpi.v_tx_comp_discount    WHERE property_id=260955),2) AS kpi_total,
+           (SELECT count(*) FROM kpi.v_tx_comp_discount    WHERE property_id=260955) AS kpi_rows,
+           round((SELECT coalesce(sum(comp_discount_value),0) FROM public.v_tx_comp_discount WHERE property_id=260955),2) AS pub_total,
+           (SELECT count(*) FROM public.v_tx_comp_discount WHERE property_id=260955) AS pub_rows
+  ), voids AS (
+    SELECT (SELECT coalesce(sum(adj_count),0)              FROM public.v_tx_adjustments_monitor WHERE property_id=260955 AND adjustment_type='void') AS mon_count,
+           round((SELECT coalesce(sum(gross_abs_amount),0) FROM public.v_tx_adjustments_monitor WHERE property_id=260955 AND adjustment_type='void'),2) AS mon_gross,
+           (SELECT count(*)                                FROM pms.v_transactions              WHERE property_id=260955 AND category='void') AS src_count,
+           round((SELECT coalesce(sum(abs(amount)),0)      FROM pms.v_transactions              WHERE property_id=260955 AND category='void'),2) AS src_gross
+  ), bridges AS (
+    SELECT has_table_privilege('authenticated','public.v_dso_current','SELECT')
+       AND has_table_privilege('authenticated','public.v_payment_method_monthly','SELECT')
+       AND has_table_privilege('authenticated','public.v_tx_comp_discount','SELECT') AS b_auth,
+           has_table_privilege('service_role','public.v_dso_current','SELECT')
+       AND has_table_privilege('service_role','public.v_payment_method_monthly','SELECT')
+       AND has_table_privilege('service_role','public.v_tx_comp_discount','SELECT') AS b_svc,
+           has_table_privilege('anon','public.v_dso_current','SELECT')
+        OR has_table_privilege('anon','public.v_payment_method_monthly','SELECT')
+        OR has_table_privilege('anon','public.v_tx_comp_discount','SELECT') AS b_anon_leak
+  )
+  SELECT jsonb_build_array(
+    jsonb_build_object('check','ar_three_way_match',
+      'expected', format('aging=%s, detail=%s, dso=%s', ar.aging, ar.detail, ar.dso),
+      'actual',   CASE WHEN ar.aging=ar.detail AND ar.detail=ar.dso
+                       THEN format('all three match: %s', ar.dso)
+                       ELSE format('MISMATCH aging=%s detail=%s dso=%s', ar.aging, ar.detail, ar.dso) END,
+      'ok', ar.aging=ar.detail AND ar.detail=ar.dso),
+    jsonb_build_object('check','cash_march_2026',
+      'expected','rows > 0 and total = 95436.08',
+      'actual', format('rows=%s, total=%s', mar.n, mar.total),
+      'ok', mar.n>0 AND mar.total=95436.08),
+    jsonb_build_object('check','cash_june_concordance',
+      'expected','daily=monthly=payment_kpi=payment_pub',
+      'actual', format('daily=%s, monthly=%s, payment_kpi=%s, payment_pub=%s', jun.daily, jun.monthly, jun.pay_kpi, jun.pay_pub),
+      'ok', jun.daily=jun.monthly AND jun.monthly=jun.pay_kpi AND jun.pay_kpi=jun.pay_pub),
+    jsonb_build_object('check','comp_bridge_match',
+      'expected', format('kpi=%s (%s rows), pub=%s (%s rows)', comp.kpi_total, comp.kpi_rows, comp.pub_total, comp.pub_rows),
+      'actual',   CASE WHEN comp.kpi_total=comp.pub_total AND comp.kpi_rows=comp.pub_rows
+                       THEN format('match: %s', comp.kpi_total) ELSE 'MISMATCH' END,
+      'ok', comp.kpi_total=comp.pub_total AND comp.kpi_rows=comp.pub_rows),
+    jsonb_build_object('check','voids_monitor_vs_source',
+      'expected', format('monitor_count=%s, monitor_gross=%s', voids.mon_count, voids.mon_gross),
+      'actual',   format('source_count=%s, source_gross=%s', voids.src_count, voids.src_gross),
+      'ok', voids.mon_count=voids.src_count AND voids.mon_gross=voids.src_gross),
+    jsonb_build_object('check','bridge_grants_adr277',
+      'expected','authenticated=t, service_role=t, anon=f (ADR-277 lockdown)',
+      'actual', format('authenticated=%s, service_role=%s, anon_leak=%s', bridges.b_auth, bridges.b_svc, bridges.b_anon_leak),
+      'ok', bridges.b_auth AND bridges.b_svc AND NOT bridges.b_anon_leak)
+  ) AS arr
+  FROM ar, mar, jun, comp, voids, bridges
+) checks
+RETURNING id, run_at, ok, harness_version;
