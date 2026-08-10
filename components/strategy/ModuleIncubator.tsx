@@ -134,15 +134,35 @@ export default function ModuleIncubator({ propertyId }: { propertyId: number }) 
     setUpdating(true);
     setErr(null);
     try {
-      const { error } = await supabase.rpc('fn_module_candidate_update_status', {
-        p_candidate_id: candidateId,
-        p_status: newStatus,
-        p_decision_notes: decisionNotes.trim() || null,
-        p_decided_by: decisionBy.trim() || null,
-      });
-      
-      if (error) throw error;
-      
+      if (newStatus === 'approved') {
+        // Approval auto-generates the spec doc + law-737 draft brief (brief:
+        // strategy-module-slice-close-out G2). Two-phase: a brand-new doc_type
+        // enum value only becomes usable after the first call commits, so
+        // phase 'enum_added' means call once more to complete.
+        const { data, error } = await supabase.rpc('fn_module_candidate_activate', {
+          p_candidate_id: candidateId,
+          p_decided_by: decisionBy.trim() || null,
+          p_decision_notes: decisionNotes.trim() || null,
+        });
+        if (error) throw error;
+        if ((data as { phase?: string } | null)?.phase === 'enum_added') {
+          const { error: err2 } = await supabase.rpc('fn_module_candidate_activate', {
+            p_candidate_id: candidateId,
+            p_decided_by: decisionBy.trim() || null,
+            p_decision_notes: decisionNotes.trim() || null,
+          });
+          if (err2) throw err2;
+        }
+      } else {
+        const { error } = await supabase.rpc('fn_module_candidate_update_status', {
+          p_candidate_id: candidateId,
+          p_status: newStatus,
+          p_decision_notes: decisionNotes.trim() || null,
+          p_decided_by: decisionBy.trim() || null,
+        });
+        if (error) throw error;
+      }
+
       setDecisionNotes('');
       setDecisionBy('');
       await loadCandidates();
