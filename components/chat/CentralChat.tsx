@@ -611,7 +611,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
             const prevUser = [...resumed.slice(0, i)].reverse().find((p) => p.turn_role === 'user');
             return (
               <div key={`r${m.id}`} style={{ ...S.agentRow, marginBottom: 24 }}>
-                <div style={S.agentAvatar}>{mode === 'general' ? '◦' : 'F'}</div>
+                <div style={S.agentAvatar}>{mode === 'general' ? '◦' : '🏨'}</div>
                 <div style={{ maxWidth: 'calc(100% - 44px)', flex: 1 }}>
                   <div style={S.agentBubble}>
                     <div dangerouslySetInnerHTML={{ __html: md(m.content_md) }} />
@@ -664,7 +664,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
                 )}
                 {(split.agent || isPending) && (
                   <div style={S.agentRow}>
-                    <div style={S.agentAvatar}>{mode === 'general' ? '◦' : 'F'}</div>
+                    <div style={S.agentAvatar}>{mode === 'general' ? '◦' : '🏨'}</div>
                     <div style={{ maxWidth: 'calc(100% - 44px)', flex: 1 }}>
                       <div style={S.agentBubble}>
                         {isPending ? (
@@ -673,7 +673,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
                             <span style={{ ...S.dot, animationDelay: '0.2s' }} />
                             <span style={{ ...S.dot, animationDelay: '0.4s' }} />
                             <span style={{ marginLeft: 8, color: C.text2, fontSize: 12 }}>
-                              {mode === 'general' ? 'Thinking…' : 'Felix is thinking…'}
+                              {mode === 'general' ? 'Thinking…' : 'HOS is thinking…'}
                             </span>
                           </span>
                         ) : (
