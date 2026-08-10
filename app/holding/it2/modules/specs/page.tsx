@@ -87,6 +87,14 @@ async function fetchData() {
       .from('v_module_reaudit_last')
       .select('module_doc_type, created_at, payload'),
   ]);
+  // goal-editor-v1 A2c: pending goal_refined signals — card shows
+  // "rewrite queued" until the next builder consumes the signal and
+  // rewrites the brief against the refined goal (law 737).
+  const { data: goalSignals } = await (getSupabaseAdmin() as any)
+    .from('v_owner_signals_pending')
+    .select('brief_slug, kind')
+    .eq('kind', 'goal_refined');
+  const goalRefinedSlugs = new Set<string>((goalSignals ?? []).map((s: any) => String(s.brief_slug)).filter((s: string) => s && s !== 'null'));
   const statusMap: Record<string, any> = {};
   for (const s of (statuses ?? [])) statusMap[s.doc_type] = s;
   const queueMap: Record<string, any> = {};
@@ -140,7 +148,7 @@ async function fetchData() {
     }
   }
   docs.sort((a: any, b: any) => String(a.doc_type).localeCompare(String(b.doc_type)));
-  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap };
+  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap, goalRefinedSlugs };
 }
 
 // ADR-218 freeze gate — derived from v_module_truth, never from completion_estimate.
@@ -209,7 +217,7 @@ async function reauditAction(formData: FormData) {
 }
 
 export default async function SpecsPage({ searchParams }: { searchParams?: { toast?: string } }) {
-  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap } = await fetchData();
+  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap, goalRefinedSlugs } = await fetchData();
   const toast = searchParams?.toast ?? null;
 
   // Assemble one serializable row per module for the client explorer.
@@ -262,6 +270,9 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
       completionEstimate: q?.completion_estimate ?? null,
       briefSlug: q?.brief_slug ?? null,
       briefStatus,
+      // goal-editor-v1 A2c: "goal refined — brief rewrite queued" until the
+      // rewrite lands (signal consumed by the next builder).
+      goalRefined: q?.brief_slug ? goalRefinedSlugs.has(String(q.brief_slug)) : false,
       entryUrl: q?.entry_url ?? null,
       lastUpdated: doc.last_updated_at ? shortDate(doc.last_updated_at) : null,
       lastUpdatedIso: (q?.updated_at ?? doc.last_updated_at) ? String(q?.updated_at ?? doc.last_updated_at) : null,
