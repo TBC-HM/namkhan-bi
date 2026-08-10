@@ -950,6 +950,8 @@ export async function POST(req: Request) {
       mention?: string;
       conversation_history?: Array<{ role: "user" | "assistant"; content: string }>;
       mode?: "second-brain" | "general";
+      /** LLM mode model id: deepseek-chat | deepseek-reasoner | gpt-4o-mini | gpt-4o | gemini-2.0-flash */
+      llm_model?: string | null;
       module_scope?: string | null;
       property_id?: number | null;
       /** V5 store: continue an existing cockpit.conversations thread. */
@@ -970,7 +972,57 @@ export async function POST(req: Request) {
     // The client label is cosmetic; THIS branch is the enforcement.
     // ─────────────────────────────────────────────────────────────────────
     if (mode === "general") {
-      const apiKey = process.env.ANTHROPIC_API_KEY;
+      // ── Multi-model provider router ───────────────────────────────────────
+      // Determine provider from llm_model; default = DeepSeek V3 (best value).
+      const { llm_model } = body as { llm_model?: string | null };
+      const selectedModel = llm_model ?? "deepseek-chat";
+      const isDeepSeek = selectedModel.startsWith("deepseek");
+      const isGemini   = selectedModel.startsWith("gemini");
+      const isOpenAI   = selectedModel.startsWith("gpt") || selectedModel.startsWith("o1") || selectedModel.startsWith("o3");
+
+      // Provider config — keys from Supabase vault via RPC (not env vars)
+      type ProviderCfg = { url: string; headers: (k: string) => Record<string,string>; body: (msgs: unknown[], sys: string, cleanMsg: string) => object; parseReply: (j: unknown) => string; };
+      const PROVIDERS: Record<string, ProviderCfg> = {
+        deepseek: {
+          url: "https://api.deepseek.com/chat/completions",
+          headers: (k) => ({ "Authorization": `Bearer ${k}`, "Content-Type": "application/json" }),
+          body: (msgs, sys, msg) => ({ model: selectedModel, max_tokens: 2000, stream: false,
+            messages: [{ role: "system", content: sys }, ...msgs, { role: "user", content: msg }] }),
+          parseReply: (j: any) => j?.choices?.[0]?.message?.content?.trim() ?? "",
+        },
+        openai: {
+          url: "https://api.openai.com/v1/chat/completions",
+          headers: (k) => ({ "Authorization": `Bearer ${k}`, "Content-Type": "application/json" }),
+          body: (msgs, sys, msg) => ({ model: selectedModel, max_tokens: 2000,
+            messages: [{ role: "system", content: sys }, ...msgs, { role: "user", content: msg }] }),
+          parseReply: (j: any) => j?.choices?.[0]?.message?.content?.trim() ?? "",
+        },
+        gemini: {
+          url: `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`,
+          headers: (k) => ({ "Authorization": `Bearer ${k}`, "Content-Type": "application/json" }),
+          body: (msgs, sys, msg) => ({ model: selectedModel, max_tokens: 2000,
+            messages: [{ role: "system", content: sys }, ...msgs, { role: "user", content: msg }] }),
+          parseReply: (j: any) => j?.choices?.[0]?.message?.content?.trim() ?? "",
+        },
+        anthropic: {
+          url: "https://api.anthropic.com/v1/messages",
+          headers: (k) => ({ "x-api-key": k, "anthropic-version": "2023-06-01", "content-type": "application/json" }),
+          body: (msgs, sys, msg) => ({ model: MODEL_TIERS.fast.model, max_tokens: 2000, system: sys,
+            messages: [...msgs, { role: "user", content: msg }] }),
+          parseReply: (j: any) => (j?.content ?? []).find((b: any) => b.type === "text")?.text?.trim() ?? "",
+        },
+      };
+      const providerKey  = isDeepSeek ? "deepseek" : isGemini ? "gemini" : isOpenAI ? "openai" : "anthropic";
+      const providerName = isDeepSeek ? "Deepseek" : isGemini ? "Gemini_API_Key" : isOpenAI ? "TBC_API_CALL_OPENAI" : "";
+      const provider = PROVIDERS[providerKey];
+
+      // Fetch key from vault via RPC (service-role only)
+      let providerApiKey: string | null = process.env.ANTHROPIC_API_KEY ?? null;
+      if (providerKey !== "anthropic") {
+        const { data: vaultKey } = await supabase.rpc("fn_llm_credentials", { p_provider: providerKey });
+        providerApiKey = vaultKey ?? null;
+      }
+
       // Strip any @mention — general mode has no personas, no dispatcher.
       const cleanMessage = message.replace(/^@[a-z][a-z0-9_]*\s*/i, "").trim() || message;
 
@@ -1023,38 +1075,32 @@ export async function POST(req: Request) {
       });
       await recordUserMessage(convId, cleanMessage);
 
-      const tier = pickTier({ message: cleanMessage, historyChars, systemChars: GENERAL_SYSTEM.length, toolCount: 0, mode: "general" });
-      const tierDef = MODEL_TIERS[tier];
-      let replyText = "_(model unavailable — ANTHROPIC_API_KEY not configured)_";
+      let replyText = `_(model unavailable — ${providerKey} key not configured)_`;
       let gIn = 0, gOut = 0, gCost = 0, gDur = 0;
 
-      if (apiKey) {
+      if (providerApiKey) {
         try {
           const t0 = Date.now();
-          const r = await fetch("https://api.anthropic.com/v1/messages", {
+          const r = await fetch(provider.url, {
             method: "POST",
-            headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-            body: JSON.stringify({
-              model: tierDef.model,
-              max_tokens: 2000,
-              system: GENERAL_SYSTEM,
-              messages: [...collapsed, { role: "user", content: cleanMessage }],
-            }),
+            headers: provider.headers(providerApiKey),
+            body: JSON.stringify(provider.body(collapsed, GENERAL_SYSTEM, cleanMessage)),
           });
           gDur = Date.now() - t0;
           if (r.ok) {
             const j = await r.json();
-            const blocks = (j?.content ?? []) as Array<{ type: string; text?: string }>;
-            const t = blocks.find((b) => b.type === "text")?.text;
-            if (typeof t === "string" && t.trim()) replyText = t.trim();
-            gIn = (j?.usage?.input_tokens as number | undefined) ?? 0;
-            gOut = (j?.usage?.output_tokens as number | undefined) ?? 0;
-            gCost = tierCostMilli(tier, gIn, gOut);
+            const t = provider.parseReply(j);
+            if (t) replyText = t;
+            // Token usage — OpenAI-compatible format used by all providers
+            gIn  = (j?.usage?.prompt_tokens ?? j?.usage?.input_tokens ?? 0) as number;
+            gOut = (j?.usage?.completion_tokens ?? j?.usage?.output_tokens ?? 0) as number;
+            // Rough cost (milli-USD) — approximate for non-Anthropic providers
+            gCost = Math.round((gIn * 0.001 + gOut * 0.002));
           } else {
             replyText = `_(model error ${r.status} — try again)_`;
           }
         } catch (e) {
-          console.error("[chat:general] anthropic call failed:", e);
+          console.error(`[chat:llm:${providerKey}] call failed:`, e);
           replyText = "_(model call failed — try again)_";
         }
       }
@@ -1070,8 +1116,8 @@ export async function POST(req: Request) {
         cost_usd_milli: gCost,
         input_tokens: gIn,
         output_tokens: gOut,
-        metadata: { provider: tierDef.provider, model: tierDef.model, tier, chat_mode: true, mode: "general", isolation: "no business data in, no memory out" },
-        reasoning: `General-mode call (${tier}/${tierDef.model}); ${gIn}in/${gOut}out tokens`,
+        metadata: { provider: providerKey, model: selectedModel, chat_mode: true, mode: "general", isolation: "no business data in, no memory out" },
+        reasoning: `LLM-mode call (${providerKey}/${selectedModel}); ${gIn}in/${gOut}out tokens`,
       }).then(({ error }) => { if (error) console.warn("[chat:general] audit insert failed:", error.message); });
 
       if (pendingTicket?.id) {
