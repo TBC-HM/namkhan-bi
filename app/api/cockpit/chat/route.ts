@@ -11,6 +11,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, CHAT_MODE_TOOLS } from "@/lib/cockpit-tools";
 import { loadAgentSkills, toAnthropicTools, findSkill, type LoadedSkill } from "@/lib/cockpit-skills/loader";
+import { withConstitution, constitutionVersion } from "@/lib/constitution";
 import { executeSkill } from "@/lib/cockpit-skills/dispatcher";
 // central-chat-v1 round 5 (§0.G2): V5 conversation store write path.
 // cockpit.conversations/messages (PBS-applied 2026-07-30) now receive every
@@ -324,7 +325,10 @@ async function loadPrompt(role: string): Promise<string> {
     .eq("role", role)
     .eq("active", true)
     .single();
-  return data?.prompt ?? IT_MANAGER_FALLBACK_PROMPT;
+  // ADR-279 (agent-prompt-conformance-v1): ground every agent session in the
+  // v5 constitution, injected server-side at prompt load (fleet is toolless,
+  // so agents cannot fetch it themselves).
+  return withConstitution(supabase, data?.prompt ?? IT_MANAGER_FALLBACK_PROMPT);
 }
 
 // ─── Dynamic persona loader (2026-05-13, #82) ────────────────────────────
@@ -459,7 +463,7 @@ async function approveWorkTicket(): Promise<{ ticket: Record<string, unknown>; s
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 2000,
-          system: specPrompt.prompt,
+          system: await withConstitution(supabase, specPrompt.prompt),
           messages: [{ role: "user", content: userMsg }],
         }),
       });
@@ -1440,6 +1444,8 @@ export async function POST(req: Request) {
                 stop_reason: stopReason ?? null,
                 iter,
                 tools_offered: chatTools.length,
+                constitution_injected: constitutionVersion() !== null,
+                constitution_version: constitutionVersion(),
                 chat_mode: true,
                 mode: "second-brain",
                 module_scope: scopeKeyFull || null,
