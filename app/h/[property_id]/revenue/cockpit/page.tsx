@@ -71,6 +71,42 @@ interface DqRow {
   age_minutes: number | null;
 }
 
+// Decision ledger row (bridge public.v_rate_action_outcomes — outcome vs the
+// at-proposal baseline, verdicts computed in SQL, measures_on for pending).
+interface RateActionOutcomeRow {
+  id: number;
+  property_id: number;
+  stay_date_start: string;
+  stay_date_end: string;
+  current_rate: number | null;
+  proposed_rate: number;
+  currency: string | null;
+  rationale: string | null;
+  rationale_ref: { scenario_id?: string | number } | null;
+  status: string;
+  proposed_by: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  executed_at: string | null;
+  executed_by: string | null;
+  otb_rooms_at_proposal: number | null;
+  otb_revenue_at_proposal: number | null;
+  outcome_measured_at: string | null;
+  d14_pickup_rooms: number | null;
+  d14_pickup_revenue: number | null;
+  d30_pickup_rooms: number | null;
+  d30_pickup_revenue: number | null;
+  d14_verdict: string | null;
+  d30_verdict: string | null;
+  d14_measures_on: string | null;
+  d30_measures_on: string | null;
+}
+
+interface JournalRefRow {
+  id: number;
+  reason: string | null;
+}
+
 interface GuardrailStatusRow {
   property_id: number;
   rule_key: string;
@@ -103,6 +139,38 @@ async function getRateActions(pid: number): Promise<RateActionRow[]> {
     .limit(100);
   if (error) throw new Error(`v_rate_actions: ${error.message}`);
   return (data ?? []) as RateActionRow[];
+}
+
+// Decision ledger: decided actions with measured outcome vs at-proposal
+// baseline (learning loop — brief revenue-module-v1-slice-outcome-learning-loop).
+async function getActionOutcomes(pid: number): Promise<RateActionOutcomeRow[]> {
+  const { data, error } = await supabase
+    .from('v_rate_action_outcomes')
+    .select('*')
+    .eq('property_id', pid)
+    .neq('status', 'proposed')
+    .order('id', { ascending: false })
+    .limit(100);
+  if (error) throw new Error(`v_rate_action_outcomes: ${error.message}`);
+  return (data ?? []) as RateActionOutcomeRow[];
+}
+
+// Journal back-links: which rate actions already have a learning-journal entry
+// (fn_rate_action_journal_outcomes encodes "rate_action_id=<id>" in reason).
+async function getJournaledActionIds(pid: number): Promise<Set<number>> {
+  const { data, error } = await supabase
+    .from('v_forecast_learning_journal')
+    .select('id, reason')
+    .eq('property_id', pid)
+    .eq('engine_method', 'rate_action')
+    .limit(500);
+  if (error) return new Set();
+  const ids = new Set<number>();
+  ((data ?? []) as JournalRefRow[]).forEach((j) => {
+    const m = /rate_action_id=(\d+)/.exec(j.reason ?? '');
+    if (m) ids.add(Number(m[1]));
+  });
+  return ids;
 }
 
 async function getOtaShare(pid: number): Promise<OtaShareRow | null> {
@@ -231,6 +299,185 @@ function GuardrailChips({ rows, propertyId }: { rows: GuardrailStatusRow[]; prop
   );
 }
 
+// ─── Decision ledger (learning loop) ──────────────────────────────────────
+
+const VERDICT_STYLE: Record<string, { color: string; bg: string; label: string }> = {
+  worked: { color: 'var(--status-green, #2E7D32)', bg: 'rgba(46, 125, 50, 0.08)', label: 'worked' },
+  no_effect: { color: 'var(--ink-soft, #6B6B6B)', bg: 'rgba(107, 107, 107, 0.08)', label: 'no effect' },
+  backfired: { color: 'var(--terracotta, #B8542A)', bg: 'rgba(184, 84, 42, 0.08)', label: 'backfired' },
+};
+
+function VerdictChip({ verdict }: { verdict: string | null }) {
+  if (verdict == null) return null;
+  const s = VERDICT_STYLE[verdict] ?? VERDICT_STYLE.no_effect;
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '2px 8px',
+        borderRadius: 10,
+        fontSize: 11,
+        fontWeight: 700,
+        color: s.color,
+        background: s.bg,
+        border: `1px solid ${s.color}`,
+      }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+// One measurement cell: measured → pickup vs baseline + verdict; pending →
+// "measures on <date>" (never blank, never a fabricated zero).
+function OutcomeCell({
+  pickupRooms,
+  pickupRevenue,
+  verdict,
+  measuresOn,
+  baselineRooms,
+}: {
+  pickupRooms: number | null;
+  pickupRevenue: number | null;
+  verdict: string | null;
+  measuresOn: string | null;
+  baselineRooms: number | null;
+}) {
+  if (pickupRooms != null || pickupRevenue != null) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+        <span>
+          +{fmt0(pickupRooms)} rooms{baselineRooms != null ? ` (base ${fmt0(baselineRooms)})` : ''} ·{' '}
+          {fmtMoney(pickupRevenue)}
+        </span>
+        <VerdictChip verdict={verdict} />
+      </div>
+    );
+  }
+  if (measuresOn != null) {
+    return (
+      <span style={{ color: 'var(--ink-soft, #6B6B6B)', fontStyle: 'italic' }}>
+        measures on {measuresOn.slice(0, 10)}
+      </span>
+    );
+  }
+  return <span style={{ color: 'var(--ink-soft, #6B6B6B)' }}>—</span>;
+}
+
+function DecisionLedger({
+  rows,
+  journaledIds,
+  pid,
+}: {
+  rows: RateActionOutcomeRow[];
+  journaledIds: Set<number>;
+  pid: number;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
+        no executed rate decisions yet
+      </div>
+    );
+  }
+  const th: React.CSSProperties = {
+    textAlign: 'left',
+    padding: '6px 10px',
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    color: 'var(--ink-soft, #6B6B6B)',
+    borderBottom: '1px solid var(--hairline, #E6DFCC)',
+    whiteSpace: 'nowrap',
+  };
+  const td: React.CSSProperties = {
+    padding: '8px 10px',
+    fontSize: 12.5,
+    borderBottom: '1px solid var(--hairline, #E6DFCC)',
+    verticalAlign: 'top',
+  };
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th}>Stay dates</th>
+            <th style={th}>Rate</th>
+            <th style={th}>Status</th>
+            <th style={th}>Approved by</th>
+            <th style={th}>Executed</th>
+            <th style={th}>Outcome d14</th>
+            <th style={th}>Outcome d30</th>
+            <th style={th}>Links</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const scenarioId = r.rationale_ref?.scenario_id;
+            const journaled = journaledIds.has(r.id);
+            return (
+              <tr key={r.id}>
+                <td style={td}>
+                  {r.stay_date_start.slice(5, 10)} → {r.stay_date_end.slice(5, 10)}
+                </td>
+                <td style={td}>
+                  {r.current_rate != null ? `${fmtMoney(Number(r.current_rate))} → ` : ''}
+                  <strong>{fmtMoney(Number(r.proposed_rate))}</strong>
+                </td>
+                <td style={td}>{r.status}</td>
+                <td style={td}>{r.decided_by ?? '—'}</td>
+                <td style={td}>{r.executed_at != null ? r.executed_at.slice(0, 10) : '—'}</td>
+                <td style={td}>
+                  <OutcomeCell
+                    pickupRooms={r.d14_pickup_rooms}
+                    pickupRevenue={r.d14_pickup_revenue}
+                    verdict={r.d14_verdict}
+                    measuresOn={r.d14_measures_on}
+                    baselineRooms={r.otb_rooms_at_proposal}
+                  />
+                </td>
+                <td style={td}>
+                  <OutcomeCell
+                    pickupRooms={r.d30_pickup_rooms}
+                    pickupRevenue={r.d30_pickup_revenue}
+                    verdict={r.d30_verdict}
+                    measuresOn={r.d30_measures_on}
+                    baselineRooms={r.otb_rooms_at_proposal}
+                  />
+                </td>
+                <td style={td}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {scenarioId != null && (
+                      <a
+                        href={`/h/${pid}/revenue/forecast/scenarios`}
+                        style={{ fontSize: 11.5, color: 'var(--primary, #1F3A2E)' }}
+                      >
+                        scenario #{String(scenarioId)}
+                      </a>
+                    )}
+                    {journaled && (
+                      <a
+                        href={`/h/${pid}/revenue/forecast`}
+                        style={{ fontSize: 11.5, color: 'var(--primary, #1F3A2E)' }}
+                      >
+                        learning journal
+                      </a>
+                    )}
+                    {scenarioId == null && !journaled && (
+                      <span style={{ color: 'var(--ink-soft, #6B6B6B)' }}>—</span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────
 
 export default async function RevenueCockpitPage({
@@ -266,12 +513,14 @@ export default async function RevenueCockpitPage({
         }
       : undefined;
 
-  const [cockpit, actions, ota, dqIssues, guardrailRows] = await Promise.all([
+  const [cockpit, actions, ota, dqIssues, guardrailRows, outcomes, journaledIds] = await Promise.all([
     getCockpit(pid),
     getRateActions(pid),
     getOtaShare(pid),
     getDqIssues(pid),
     getGuardrailStatus(pid),
+    getActionOutcomes(pid),
+    getJournaledActionIds(pid),
   ]);
 
   const stale = dqIssues.filter((d) => d.status === 'stale');
@@ -360,6 +609,14 @@ export default async function RevenueCockpitPage({
             <ActionQueue rows={actions} />
           </div>
         </div>
+      </Container>
+
+      {/* Decision ledger — outcome vs at-proposal baseline (learning loop) */}
+      <Container
+        title="Decision Ledger"
+        subtitle="Every decided rate action · d14/d30 pickup vs the baseline captured at proposal · verdicts feed the forecast learning journal"
+      >
+        <DecisionLedger rows={outcomes} journaledIds={journaledIds} pid={pid} />
       </Container>
 
       {/* Pace & forecast chart */}
