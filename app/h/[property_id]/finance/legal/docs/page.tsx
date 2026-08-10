@@ -117,25 +117,31 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
     .order('doc_type').order('label');
 
   // --- Filter dropdown sources (cheap distinct queries) ------------------
+  // dms-doc-families-slice-register-vocab-ui: family options come EXCLUSIVELY
+  // from the governed vocabulary (public.v_doc_type_vocab, active=true, ordered
+  // sort_order → label, matching the settings tab). Families-in-use are read
+  // only to detect RETIRED values: distinct doc_type present in the register
+  // with no active vocab row (covers deactivated vocab rows and any legacy
+  // free-text value). Derived per page load, never stored — self-empties as
+  // docs are re-filed.
   const [{ data: familyRows }, { data: vocabFamilyRows }] = await Promise.all([
     supabase.from('v_doc_register').select('doc_type').eq('property_id', propertyId),
-    supabase.from('v_doc_type_vocab').select('value, label').eq('property_id', propertyId).eq('active', true),
+    supabase.from('v_doc_type_vocab').select('value, label, sort_order').eq('property_id', propertyId).eq('active', true)
+      .order('sort_order', { ascending: true, nullsFirst: false }).order('label', { ascending: true }),
   ]);
-  const familyCounts = new Map<string, number>();
-  for (const r of (familyRows ?? []) as { doc_type: string | null }[]) {
-    const k = String(r.doc_type ?? '');
-    if (!k) continue;
-    familyCounts.set(k, (familyCounts.get(k) ?? 0) + 1);
-  }
   const familyLabels: Record<string, string> = {};
+  const families: string[] = [];
   for (const r of (vocabFamilyRows ?? []) as { value: string; label: string | null }[]) {
-    if (r.value) familyLabels[r.value] = r.label ?? r.value;
+    if (!r.value) continue;
+    familyLabels[r.value] = r.label ?? r.value;
+    families.push(r.value);
   }
-  const families = Array.from(new Set([
-    ...Object.keys(familyLabels),
-    ...Array.from(familyCounts.keys()),
-  ])).sort();
-  const familiesWithCounts = Array.from(familyCounts.entries()).map(([doc_type, n]) => ({ doc_type, n })).sort((a, b) => b.n - a.n);
+  const activeFamilySet = new Set(families);
+  const retiredFamilies = Array.from(new Set(
+    ((familyRows ?? []) as { doc_type: string | null }[])
+      .map((r) => String(r.doc_type ?? '').trim())
+      .filter((k) => k && !activeFamilySet.has(k)),
+  )).sort();
 
   // Matters = union of every case_ref AND every project (in-use + vocab-only).
   // Reading from v_doc_register.matter (distinct) misses vocab-only matters
@@ -229,6 +235,7 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
             vocab={(vocab ?? []) as any[]}
             families={families}
             familyLabels={familyLabels}
+            retiredFamilies={retiredFamilies}
             matters={matters}
             statuses={statuses}
             caseRefs={caseRefs}
