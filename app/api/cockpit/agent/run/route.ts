@@ -22,6 +22,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { automationGuard } from "@/lib/cron/guard";
 import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, type AgentToolDef } from "@/lib/cockpit-tools";
+import { withConstitution } from "@/lib/constitution";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;  // Vercel Pro max — long-task survival per it_only_window_v2 4.4
@@ -176,7 +177,9 @@ async function loadRolePrompt(role: AgentRole): Promise<string> {
     .eq("role", role)
     .eq("active", true)
     .single();
-  return data?.prompt ?? ROLE_PROMPTS[role];
+  // ADR-279 (agent-prompt-conformance-v1): ground every agent run in the
+  // v5 constitution, injected server-side at prompt load.
+  return withConstitution(supabase, data?.prompt ?? ROLE_PROMPTS[role]);
 }
 
 // Sonnet pricing as of 2026-05: $3/M input, $15/M output. Cost in milli-USD = ((in*3 + out*15) / 1000).
