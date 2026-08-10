@@ -36,6 +36,14 @@ interface BaselineRow {
   skills_ever_used: number;
 }
 
+interface BlockedCall {
+  role: string;
+  skill_name: string;
+  status: string;
+  error_text: string;
+  created_at: string;
+}
+
 async function fetchGrantPosture(statusFilter?: string): Promise<GrantPosture[]> {
   const admin = getSupabaseAdmin();
   let q = admin.from('v_cap_grant_posture').select('*').order('grants_enabled', { ascending: false });
@@ -46,29 +54,23 @@ async function fetchGrantPosture(statusFilter?: string): Promise<GrantPosture[]>
 }
 
 async function fetchRevocations(): Promise<RevocationRow[]> {
+  // cockpit schema is PostgREST-exposed (memory 829); read the audit trail directly.
   const admin = getSupabaseAdmin();
-  const { data, error } = await admin
-    .from('cockpit_agent_skills')
-    .select('role, revoked_reason, revoked_at')
+  const { data: skillData, error } = await admin.schema('cockpit')
+    .from('cap_agent_skills')
+    .select('role, skill_id, revoked_at, revoked_reason')
     .not('revoked_at', 'is', null)
     .order('revoked_at', { ascending: false })
     .limit(500);
   if (error) { console.error('[grants] revocations fetch error', error); return []; }
-  
-  // Join with skills to get skill names
-  const roles = Array.from(new Set((data ?? []).map(r => r.role)));
-  const { data: skillData } = await admin.schema('cockpit')
-    .from('cap_agent_skills')
-    .select('role, skill_id, revoked_at, revoked_reason')
-    .in('role', roles)
-    .not('revoked_at', 'is', null);
-  
-  const { data: skills } = await admin.schema('cockpit')
+
+  const { data: skills, error: skillsError } = await admin.schema('cockpit')
     .from('cap_skills')
     .select('id, name');
-  
+  if (skillsError) { console.error('[grants] cap_skills fetch error', skillsError); }
+
   const skillMap = new Map((skills ?? []).map(s => [s.id, s.name]));
-  
+
   return (skillData ?? []).map(r => ({
     role: r.role,
     skill_name: skillMap.get(r.skill_id) ?? 'unknown',
@@ -87,6 +89,29 @@ async function fetchBaseline(): Promise<BaselineRow[]> {
   return (data ?? []) as BaselineRow[];
 }
 
+async function fetchBlockedCalls(): Promise<BlockedCall[]> {
+  // Owner question 5: is any agent blocked because a grant was revoked?
+  const admin = getSupabaseAdmin();
+  const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  const { data, error } = await admin
+    .from('cockpit_skill_calls')
+    .select('role, skill_name, status, error, created_at')
+    .neq('status', 'succeeded')
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) { console.error('[grants] blocked calls fetch error', error); return []; }
+  return (data ?? []).map(r => ({
+    role: r.role ?? 'unknown',
+    skill_name: r.skill_name ?? 'unknown',
+    status: r.status ?? 'failed',
+    error_text: typeof r.error === 'object' && r.error !== null
+      ? String((r.error as Record<string, unknown>).message ?? JSON.stringify(r.error)).slice(0, 160)
+      : String(r.error ?? '').slice(0, 160),
+    created_at: r.created_at ?? '',
+  }));
+}
+
 type PageProps = { searchParams?: Record<string, string | string[] | undefined> };
 
 export default async function GrantsPage({ searchParams }: PageProps) {
@@ -94,10 +119,11 @@ export default async function GrantsPage({ searchParams }: PageProps) {
   const statusFilter = typeof sp['status'] === 'string' ? sp['status'] : 'active';
   const view = typeof sp['view'] === 'string' ? sp['view'] : 'posture';
 
-  const [posture, revocations, baseline] = await Promise.all([
+  const [posture, revocations, baseline, blockedCalls] = await Promise.all([
     fetchGrantPosture(statusFilter),
     view === 'revocations' ? fetchRevocations() : Promise.resolve([]),
     view === 'baseline' ? fetchBaseline() : Promise.resolve([]),
+    fetchBlockedCalls(),
   ]);
 
   const totalEnabled = posture.reduce((acc, p) => acc + p.grants_enabled, 0);
@@ -115,7 +141,7 @@ export default async function GrantsPage({ searchParams }: PageProps) {
             Skills Grant Posture
           </h1>
           <p style={{ fontSize: '15px', color: INK_M, margin: 0 }}>
-            Least-privilege enforcement: {totalEnabled.toLocaleString()} grants enabled, {totalRevoked.toLocaleString()} revoked. 
+            Least-privilege enforcement: {totalEnabled.toLocaleString()} grants enabled, {totalRevoked.toLocaleString()} revoked.
             Each grant is prompt surface area on every agent call.
           </p>
         </div>
@@ -128,6 +154,9 @@ export default async function GrantsPage({ searchParams }: PageProps) {
           <KpiCard label="Over-granted" value={overGranted.toString()} color={overGranted > 0 ? AMBER : OK} hint={`Agents with >15 grants and unused skills`} />
           <KpiCard label="High authority" value={highAuthAgents.length.toString()} color={FOREST} hint="Agents with write/admin/system grants" />
         </div>
+
+        {/* Blocked calls strip — owner question 5 */}
+        <BlockedCallsStrip rows={blockedCalls} />
 
         {/* View tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: `1px solid ${HAIR}` }}>
@@ -171,13 +200,48 @@ function KpiCard({ label, value, color, hint }: { label: string; value: string; 
   );
 }
 
+function BlockedCallsStrip({ rows }: { rows: BlockedCall[] }) {
+  return (
+    <div style={{ background: WHITE, border: `1px solid ${rows.length > 0 ? RED : HAIR}`, borderRadius: '8px', padding: '16px 20px', marginBottom: '32px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', marginBottom: rows.length > 0 ? '12px' : 0 }}>
+        <span style={{ fontSize: '14px', fontWeight: 600, color: rows.length > 0 ? RED : OK }}>
+          {rows.length > 0 ? `${rows.length} failed skill call${rows.length === 1 ? '' : 's'} in the last 7 days` : 'No failed or blocked skill calls in the last 7 days'}
+        </span>
+        <span style={{ fontSize: '12px', color: INK_M }}>
+          Restore a wrongly revoked grant = one row: UPDATE cockpit.cap_agent_skills SET enabled = true — the audit trail (revoked_at, revoked_reason) is preserved. Effective on the agent&apos;s next call.
+        </span>
+      </div>
+      {rows.slice(0, 8).map((r, i) => (
+        <div key={i} style={{ fontSize: '13px', color: INK, padding: '3px 0', borderTop: i === 0 ? 'none' : `1px solid ${HAIR}` }}>
+          <Link href={`/holding/it2/fleet/team/agent/${r.role}`} style={{ color: FOREST, textDecoration: 'none', fontWeight: 500 }}>
+            {r.role}
+          </Link>
+          {' → '}
+          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{r.skill_name}</span>
+          {' '}
+          <span style={{ color: RED, fontSize: '12px' }}>{r.status}</span>
+          {' '}
+          <span style={{ color: INK_M, fontSize: '12px' }}>
+            {r.error_text}{r.created_at ? ` (${new Date(r.created_at).toLocaleDateString()})` : ''}
+          </span>
+        </div>
+      ))}
+      {rows.length > 8 && (
+        <div style={{ color: INK_M, fontSize: '12px', marginTop: '6px' }}>
+          ... and {rows.length - 8} more in public.cockpit_skill_calls
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TabLink({ href, label, active }: { href: string; label: string; active: boolean }) {
   return (
-    <Link 
+    <Link
       href={href}
-      style={{ 
-        padding: '12px 16px', 
-        fontSize: '14px', 
+      style={{
+        padding: '12px 16px',
+        fontSize: '14px',
         fontWeight: active ? 600 : 400,
         color: active ? INK : INK_M,
         borderBottom: active ? `2px solid ${FOREST}` : 'none',
@@ -238,12 +302,12 @@ function PostureTable({ rows }: { rows: GrantPosture[] }) {
                 </Td>
                 <Td>{r.dept}</Td>
                 <Td>
-                  <span style={{ 
-                    padding: '2px 6px', 
-                    fontSize: '12px', 
-                    background: r.status === 'active' ? OK : INK_M, 
-                    color: WHITE, 
-                    borderRadius: '3px' 
+                  <span style={{
+                    padding: '2px 6px',
+                    fontSize: '12px',
+                    background: r.status === 'active' ? OK : INK_M,
+                    color: WHITE,
+                    borderRadius: '3px'
                   }}>
                     {r.status}
                   </span>
@@ -287,8 +351,11 @@ function RevocationsTable({ rows }: { rows: RevocationRow[] }) {
   return (
     <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: '8px', padding: '24px' }}>
       <h3 style={{ fontSize: '18px', fontWeight: 600, color: INK, marginTop: 0 }}>
-        Recent revocations ({rows.length} total)
+        Recent revocations ({rows.length} shown, newest first)
       </h3>
+      <p style={{ fontSize: '13px', color: INK_M, marginTop: '-8px' }}>
+        Full audit trail: cockpit.cap_agent_skills (revoked_at, revoked_reason). Restore = one-row enabled = true.
+      </p>
       {Object.entries(grouped).map(([reason, items]) => (
         <div key={reason} style={{ marginBottom: '24px' }}>
           <h4 style={{ fontSize: '14px', fontWeight: 600, color: INK_M, marginBottom: '8px', textTransform: 'uppercase' }}>
