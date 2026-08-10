@@ -106,25 +106,29 @@ export default async function HoldingLegalDocsPage({ searchParams }: Props) {
     .select('doc_type, subtype_slug, label, time_model, sort_order')
     .order('doc_type').order('label');
 
+  // dms-doc-families-slice-register-vocab-ui: family options come EXCLUSIVELY
+  // from the governed vocabulary (holding scope = property_id IS NULL, active
+  // rows, ordered sort_order → label, matching the settings tab). Register
+  // rows are read only to detect RETIRED values (doc_type with no active vocab
+  // row — deactivated or legacy free-text). Derived per page load, not stored.
   const [{ data: familyRows }, { data: vocabFamilyRows }] = await Promise.all([
     supabase.from('v_doc_register').select('doc_type').is('property_id', null),
-    supabase.from('v_doc_type_vocab').select('value, label').is('property_id', null).eq('active', true),
+    supabase.from('v_doc_type_vocab').select('value, label, sort_order').is('property_id', null).eq('active', true)
+      .order('sort_order', { ascending: true, nullsFirst: false }).order('label', { ascending: true }),
   ]);
-  const familyCounts = new Map<string, number>();
-  for (const r of (familyRows ?? []) as { doc_type: string | null }[]) {
-    const k = String(r.doc_type ?? '');
-    if (!k) continue;
-    familyCounts.set(k, (familyCounts.get(k) ?? 0) + 1);
-  }
-  // All governed active families — includes zero-doc families added in Settings
   const familyLabels: Record<string, string> = {};
+  const families: string[] = [];
   for (const r of (vocabFamilyRows ?? []) as { value: string; label: string | null }[]) {
-    if (r.value) familyLabels[r.value] = r.label ?? r.value;
+    if (!r.value) continue;
+    familyLabels[r.value] = r.label ?? r.value;
+    families.push(r.value);
   }
-  const families = Array.from(new Set([
-    ...Object.keys(familyLabels),
-    ...Array.from(familyCounts.keys()),
-  ])).sort();
+  const activeFamilySet = new Set(families);
+  const retiredFamilies = Array.from(new Set(
+    ((familyRows ?? []) as { doc_type: string | null }[])
+      .map((r) => String(r.doc_type ?? '').trim())
+      .filter((k) => k && !activeFamilySet.has(k)),
+  )).sort();
 
   const [
     { data: matterProjectRows },
@@ -168,14 +172,11 @@ export default async function HoldingLegalDocsPage({ searchParams }: Props) {
     key: s.href, label: s.label, href: s.href, active: s.href === '/holding/legal/docs',
   }));
 
-  // §3 (A4): expected families for the filtered-empty state. Governed vocabulary
-  // (v_doc_subtype_vocab doc_type) first — per owner-confirmed finding #98 the
-  // structure comes top-down, not from free text — falling back to families
-  // already in use at holding scope. No new taxonomy invented here.
-  const expectedFamilies = Array.from(new Set([
-    ...(((vocab ?? []) as { doc_type: string | null }[]).map((v) => String(v.doc_type ?? '').trim())),
-    ...families,
-  ].filter(Boolean))).sort();
+  // §3 (A4): expected families for the filtered-empty state. Now sourced from
+  // the governed ACTIVE family vocabulary only (finding #98: structure comes
+  // top-down, not from free text) — retired or in-use-only values are never
+  // suggested as upload targets.
+  const expectedFamilies = families;
 
   return (
     <DashboardPage
@@ -200,6 +201,7 @@ export default async function HoldingLegalDocsPage({ searchParams }: Props) {
             vocab={(vocab ?? []) as any[]}
             families={families}
             familyLabels={familyLabels}
+            retiredFamilies={retiredFamilies}
             matters={matters}
             statuses={statuses}
             caseRefs={caseRefs}
