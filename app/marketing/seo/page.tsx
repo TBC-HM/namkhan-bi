@@ -167,19 +167,25 @@ export default async function MarketingSeoPage({
                 <SeoTriggerBtn mode="fetch" label="⬇ Fetch" variant="secondary" />
               </div>
             }>
-            {!hasData ? (
+            {rankings.length === 0 ? (
               <div style={{ padding:'40px 16px', textAlign:'center' }}>
                 <div style={{ fontSize:32, marginBottom:10 }}>📡</div>
-                <div style={{ fontSize:14, fontWeight:600, color:INK, marginBottom:6 }}>First fetch pending</div>
-                <div style={{ fontSize:12, color:INK_M, marginBottom:16 }}>Cron runs daily at 05:00 UTC (post tasks) + 07:00 UTC (fetch results)</div>
-                <SeoTriggerBtn mode="post" label="▶ Post SERP tasks now" description="Submit to DataForSEO queue" />
+                <div style={{ fontSize:14, fontWeight:600, color:INK, marginBottom:6 }}>No keywords for this market yet</div>
+                <div style={{ fontSize:12, color:INK_M, marginBottom:16 }}>Switch to All to see all tracked keywords</div>
               </div>
             ) : (
-              <RankingsTable
-                rankings={rankings as any}
-                history={history}
-                marketData={marketData}
-              />
+              <>
+                {!hasData && (
+                  <div style={{ padding:'10px 14px', background:'#FFF8E1', border:'1px solid #C28F2C', borderRadius:5, marginBottom:10, fontSize:11, color:'#5A5A5A' }}>
+                    No SERP data yet for this market — click <strong>▶ Post tasks</strong> above to fetch rankings from DataForSEO
+                  </div>
+                )}
+                <RankingsTable
+                  rankings={rankings as any}
+                  history={history}
+                  marketData={marketData}
+                />
+              </>
             )}
           </Container>
         </div>
@@ -311,7 +317,11 @@ export default async function MarketingSeoPage({
       {tab==='technical' && (
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Technical SEO · On-page audit" subtitle="thenamkhan.com · meta, titles, Core Web Vitals, page scores"
-            action={<SeoTriggerBtn mode="onpage" label="🔧 Run on-page crawl" description="DataForSEO On-Page API · crawls thenamkhan.com · up to 50 pages" />}>
+            action={
+              <div style={{ fontSize:11, color:'#C28F2C', fontFamily:'ui-monospace,monospace', padding:'4px 10px', background:'#FFF8E1', border:'1px solid #C28F2C', borderRadius:4 }}>
+                🔧 On-Page API — wire to DB first
+              </div>
+            }>
             <div style={{ padding:'24px 16px' }}>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12, marginBottom:24 }}>
                 {[
@@ -332,7 +342,7 @@ export default async function MarketingSeoPage({
                 ))}
               </div>
               <div style={{ padding:'16px', background:'#FFF8E1', border:`1px solid ${AMBER}`, borderRadius:6 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:'#7A5A00', marginBottom:4 }}>First crawl not yet run — click the button above</div>
+                <div style={{ fontSize:12, fontWeight:600, color:'#7A5A00', marginBottom:4 }}>On-Page crawl not yet wired to DB — backend complete, UI display pending</div>
                 <div style={{ fontSize:11, color:INK_M, lineHeight:1.6 }}>
                   The crawl runs via DataForSEO On-Page API · checks up to 50 pages · results stored in <code style={{ fontFamily:'ui-monospace,monospace' }}>marketing.seo_onpage_audit</code> · run once now, then weekly automatically.
                 </div>
