@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const EDGE_URL = 'https://kpenyneooigsyuuomgct.supabase.co/functions/v1/fetch-serp-rankings';
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-const ALLOWED_MODES = new Set(['post', 'fetch', 'volume', 'suggestions', 'local', 'analytics']);
+const ALLOWED_MODES = new Set(['post', 'fetch', 'volume', 'suggestions', 'local', 'analytics', 'onpage']);
 
 export async function POST(req: NextRequest) {
   let body: { mode?: string } = {};
