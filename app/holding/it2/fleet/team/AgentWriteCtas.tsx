@@ -477,6 +477,193 @@ export function MemoryCtas({ role }: { role: string }) {
   );
 }
 
+// ── Pillar 4 · Triggers & budget ────────────────────────────────────────────
+// Brief agent-team-slice-trigger-budget-repair (ADR-283): registry re-keyed
+// to cockpit.id_agents with FK enforcement, so these CTAs are now live.
+// Reads: /api/fleet/team/read?kind=triggers (public.v_agent_triggers).
+// Writes: fn_agent_add_trigger / fn_agent_set_trigger_active /
+// fn_agent_set_budget via the audited write route. Adding a trigger row
+// declares intent only — execution stays queue/cron-side.
+
+type TriggerRow = {
+  trigger_id: string; trigger_type: string; cron_expr: string | null;
+  event_kind: string | null; webhook_path: string | null; is_active: boolean;
+  last_fired_at: string | null; notes: string | null; created_at: string;
+};
+
+const TRIGGER_TYPES = ['cron', 'event', 'webhook', 'manual'] as const;
+type TriggerType = (typeof TRIGGER_TYPES)[number];
+
+function triggerSpec(t: TriggerRow): string {
+  if (t.trigger_type === 'cron') return t.cron_expr ?? '—';
+  if (t.trigger_type === 'event') return t.event_kind ?? '—';
+  if (t.trigger_type === 'webhook') return t.webhook_path ?? '—';
+  return 'on mention / manual';
+}
+
+export function TriggerBudgetCtas({ role, dailyCap, monthlyCap, enforced }: {
+  role: string; dailyCap: number | null; monthlyCap: number | null; enforced: boolean | null;
+}) {
+  const router = useRouter();
+  const [mode, setMode] = useState<'none' | 'triggers' | 'add' | 'budget'>('none');
+  const [triggers, setTriggers] = useState<TriggerRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  const [tType, setTType] = useState<TriggerType>('cron');
+  const [tSpec, setTSpec] = useState('');
+  const [tNotes, setTNotes] = useState('');
+  const [daily, setDaily] = useState(dailyCap !== null ? String(dailyCap) : '');
+  const [monthly, setMonthly] = useState(monthlyCap !== null ? String(monthlyCap) : '');
+  const [enf, setEnf] = useState(enforced !== false);
+  const [busy, setBusy] = useState(false);
+
+  const loadTriggers = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/fleet/team/read?kind=triggers&role=${encodeURIComponent(role)}`);
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error ?? 'trigger read failed');
+      setTriggers(json.triggers as TriggerRow[]);
+    } catch (e: any) {
+      setErr(e?.message ?? 'trigger read failed');
+    } finally {
+      setLoading(false);
+    }
+  }, [role]);
+
+  useEffect(() => {
+    if ((mode === 'triggers' || mode === 'add') && triggers === null && !loading) void loadTriggers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  async function toggleActive(t: TriggerRow) {
+    setBusyId(t.trigger_id); setErr(null); setOk(null);
+    const res = await callWrite({ action: 'set_trigger_active', trigger_id: t.trigger_id, active: !t.is_active });
+    setBusyId(null);
+    if (!res.ok) { setErr(res.error ?? 'toggle failed'); return; }
+    setOk(`trigger ${t.is_active ? 'paused' : 'resumed'}`);
+    await loadTriggers();
+    router.refresh();
+  }
+
+  async function addTrigger() {
+    if (tType !== 'manual' && !tSpec.trim()) {
+      setErr(tType === 'cron' ? 'cron expression required' : tType === 'event' ? 'event kind required' : 'webhook path required');
+      return;
+    }
+    setBusy(true); setErr(null); setOk(null);
+    const res = await callWrite({
+      action: 'add_trigger', role, trigger_type: tType,
+      cron_expr: tType === 'cron' ? tSpec : null,
+      event_kind: tType === 'event' ? tSpec : null,
+      webhook_path: tType === 'webhook' ? tSpec : null,
+      notes: tNotes || null,
+    });
+    setBusy(false);
+    if (!res.ok) { setErr(res.error ?? 'add trigger failed'); return; }
+    setOk('trigger declared — execution stays queue/cron-side');
+    setTSpec(''); setTNotes('');
+    await loadTriggers();
+    router.refresh();
+  }
+
+  async function saveBudget() {
+    const d = Number(daily); const m = Number(monthly);
+    if (!Number.isFinite(d) || !Number.isFinite(m) || d < 0 || m < 0) {
+      setErr('daily and monthly caps must be non-negative numbers'); return;
+    }
+    setBusy(true); setErr(null); setOk(null);
+    const res = await callWrite({ action: 'set_budget', role, daily_cap_usd: d, monthly_cap_usd: m, enforced: enf });
+    setBusy(false);
+    if (!res.ok) { setErr(res.error ?? 'set budget failed'); return; }
+    setOk(`budget set: $${d.toFixed(2)}/d · $${m.toFixed(2)}/mo${enf ? ' · enforced' : ''}`);
+    router.refresh();
+  }
+
+  return (
+    <div>
+      <div style={ct.row}>
+        <LiveCta label="Triggers" active={mode === 'triggers'} onClick={() => setMode(mode === 'triggers' ? 'none' : 'triggers')} />
+        <LiveCta label="Add trigger" active={mode === 'add'} onClick={() => setMode(mode === 'add' ? 'none' : 'add')} />
+        <LiveCta label="Set budget" active={mode === 'budget'} onClick={() => setMode(mode === 'budget' ? 'none' : 'budget')} />
+      </div>
+
+      {mode === 'triggers' && (
+        <div style={ct.form}>
+          {loading && <div style={ct.muted}>loading triggers…</div>}
+          {(triggers ?? []).map((t) => (
+            <div key={t.trigger_id} style={ct.listRow}>
+              <span>
+                <span style={{ fontFamily: MONO, fontWeight: 600 }}>{t.trigger_type}</span>
+                <span style={ct.muted}> · {triggerSpec(t)} · last fired {t.last_fired_at ? new Date(t.last_fired_at).toLocaleString() : 'never'}</span>
+                {!t.is_active && <span style={{ color: '#8A6D1D', fontSize: 10 }}> · PAUSED</span>}
+              </span>
+              <button onClick={() => void toggleActive(t)} disabled={busyId === t.trigger_id}
+                style={t.is_active ? ct.smallBtnDanger : ct.smallBtn}>
+                {busyId === t.trigger_id ? '…' : t.is_active ? 'Pause' : 'Resume'}
+              </button>
+            </div>
+          ))}
+          {triggers !== null && triggers.length === 0 && (
+            <div style={ct.muted}>no declared triggers — this agent only runs when @mentioned or invoked</div>
+          )}
+        </div>
+      )}
+
+      {mode === 'add' && (
+        <div style={ct.form}>
+          <div style={ct.row}>
+            <select value={tType} onChange={(e) => { setTType(e.target.value as TriggerType); setTSpec(''); }}
+              style={{ ...ct.input, flex: 'none', minWidth: 100 }}>
+              {TRIGGER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            {tType !== 'manual' && (
+              <input value={tSpec} onChange={(e) => setTSpec(e.target.value)}
+                placeholder={tType === 'cron' ? 'cron expr e.g. 0 6 * * *' : tType === 'event' ? 'event kind…' : 'webhook path…'}
+                style={ct.input} />
+            )}
+          </div>
+          <input value={tNotes} onChange={(e) => setTNotes(e.target.value)} placeholder="Notes (why)…" style={ct.input} />
+          <div style={ct.muted}>Declares the wake condition only — no scheduler is created or changed from here.</div>
+          <div style={ct.row}>
+            <button onClick={() => void addTrigger()} disabled={busy} style={ct.primary}>{busy ? 'Adding…' : 'Add trigger'}</button>
+            <button onClick={() => setMode('none')} style={ct.ghost}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'budget' && (
+        <div style={ct.form}>
+          <div style={ct.row}>
+            <label style={ct.muted}>daily $
+              <input type="number" min={0} step="0.01" value={daily} onChange={(e) => setDaily(e.target.value)}
+                style={{ ...ct.input, width: 90, marginLeft: 6 }} />
+            </label>
+            <label style={ct.muted}>monthly $
+              <input type="number" min={0} step="0.01" value={monthly} onChange={(e) => setMonthly(e.target.value)}
+                style={{ ...ct.input, width: 90, marginLeft: 6 }} />
+            </label>
+            <label style={{ ...ct.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={enf} onChange={(e) => setEnf(e.target.checked)} /> enforced
+            </label>
+          </div>
+          <div style={ct.row}>
+            <button onClick={() => void saveBudget()} disabled={busy} style={ct.primary}>{busy ? 'Saving…' : 'Save caps'}</button>
+            <button onClick={() => setMode('none')} style={ct.ghost}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <ErrorLine msg={err} />
+      <OkLine msg={ok} />
+    </div>
+  );
+}
+
 // ── Bulk grant bar (zero-skill repair) ──────────────────────────────────────
 
 export function BulkGrantBar({ zeroSkillRoles }: { zeroSkillRoles: string[] }) {
@@ -640,10 +827,3 @@ const ct: Record<string, CSSProperties> = {
   bulkToggle: { border: 'none', background: 'transparent', fontSize: 12, fontWeight: 600,
     color: 'var(--primary, #1F3A2E)', cursor: 'pointer', fontFamily: 'inherit', padding: 0 },
 };
-
-// TriggerBudgetCtas — budget cap management actions (stub, full impl pending)
-export function TriggerBudgetCtas({ role, dailyCap, monthlyCap, enforced }: {
-  role: string; dailyCap: number | null; monthlyCap: number | null; enforced: boolean | null;
-}) {
-  return null; // placeholder — budget CTA UI not yet built
-}
