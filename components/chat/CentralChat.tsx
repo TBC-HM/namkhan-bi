@@ -424,14 +424,14 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
               </button>
             )}
 
-            {/* Mode toggle — HOS (full business OS) | General (raw LLM) */}
+            {/* Mode toggle — HOS (full business OS) | LLM (multi-model) */}
             <div style={{ display: 'flex', border: `1px solid ${C.border}`, borderRadius: 2, overflow: 'hidden' }}>
               {(['second-brain', 'general'] as CentralChatMode[]).map((m) => (
                 <button
                   key={m}
                   onClick={() => switchMode(m)}
                   title={
-                    m === 'general' ? 'General: raw LLM, no business data. For brainstorming, writing, coding.' :
+                    m === 'general' ? 'LLM: multi-model chat — OpenAI, DeepSeek, Gemini. No business data.. For brainstorming, writing, coding.' :
                                      'HOS: Hospitality OS. Full business context — asks the brain, executes via Felix, routes decisions to inbox.'
                   }
                   style={{
@@ -441,7 +441,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
                     color: mode === m ? '#FFFFFF' : C.text2,
                   }}
                 >
-                  {m === 'general' ? 'General' : 'HOS'}
+                  {m === 'general' ? 'LLM' : 'HOS'}
                 </button>
               ))}
             </div>
@@ -508,7 +508,7 @@ export default function CentralChat({ mode: defaultMode, moduleScope, propertyId
               <div style={{ fontSize: 15, color: C.ink, marginBottom: 6 }}>
                 {mode === 'second-brain'
                   ? `HOS · ${propertyLabel} · Ask anything.`
-                  : 'General · model only · no business data.'}
+                  : 'LLM · multi-model · no business data.'}
               </div>
               <div style={{ fontSize: 12, color: C.text3, maxWidth: 460, margin: '0 auto', lineHeight: 1.6 }}>
                 {mode === 'second-brain'
