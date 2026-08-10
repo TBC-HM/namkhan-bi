@@ -65,7 +65,7 @@ export default async function MarketingSeoPage({
   const allRankings = (rankRes.data ?? []) as RankRow[];
   // Apply location filter client-side on the data
   const rankings = locCode
-    ? allRankings.filter(r => r.location_name?.includes(MARKETS.find(m=>m.loc===locCode)?.label?.replace(/^🇱🇦 /,'').replace(/^🇩🇪 /,'').replace(/^🇬🇧 /,'').replace(/^🇺🇸 /,'').replace(/^🇫🇷 /,'').replace(/^🇦🇺 /,'') ?? ''))
+    ? allRankings.filter(r => (r as any).location_code === locCode)
     : allRankings;
   const localPack = (localRes.data ?? []) as LocalRow[];
   const history = (historyRes.data ?? []) as HistoryRow[];
@@ -311,7 +311,7 @@ export default async function MarketingSeoPage({
       {tab==='technical' && (
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Technical SEO · On-page audit" subtitle="thenamkhan.com · meta, titles, Core Web Vitals, page scores"
-            action={<SeoTriggerBtn mode="post" label="🔧 Run on-page crawl" description="DataForSEO On-Page API · crawls up to 50 pages" />}>
+            action={<SeoTriggerBtn mode="onpage" label="🔧 Run on-page crawl" description="DataForSEO On-Page API · crawls thenamkhan.com · up to 50 pages" />}>
             <div style={{ padding:'24px 16px' }}>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12, marginBottom:24 }}>
                 {[
@@ -332,10 +332,9 @@ export default async function MarketingSeoPage({
                 ))}
               </div>
               <div style={{ padding:'16px', background:'#FFF8E1', border:`1px solid ${AMBER}`, borderRadius:6 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:'#7A5A00', marginBottom:4 }}>On-Page API not yet wired to DB</div>
+                <div style={{ fontSize:12, fontWeight:600, color:'#7A5A00', marginBottom:4 }}>First crawl not yet run — click the button above</div>
                 <div style={{ fontSize:11, color:INK_M, lineHeight:1.6 }}>
-                  Click "Run on-page crawl" above to trigger a crawl via DataForSEO On-Page API.<br/>
-                  Endpoint: <code style={{ fontFamily:'ui-monospace,monospace' }}>/on_page/task_post</code> · Results stored in <code style={{ fontFamily:'ui-monospace,monospace' }}>marketing.seo_onpage_audit</code> · Runs weekly via cron once wired.
+                  The crawl runs via DataForSEO On-Page API · checks up to 50 pages · results stored in <code style={{ fontFamily:'ui-monospace,monospace' }}>marketing.seo_onpage_audit</code> · run once now, then weekly automatically.
                 </div>
               </div>
             </div>
