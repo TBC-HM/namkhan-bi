@@ -39,6 +39,7 @@ export type ModuleRow = {
   completionEstimate: number | null;
   briefSlug: string | null;
   briefStatus: string | null;
+  goalRefined?: boolean; // goal-editor-v1 A2c: pending goal_refined signal → "rewrite queued" badge
   entryUrl: string | null;
   lastUpdated: string | null;     // preformatted, server
   lastUpdatedIso: string | null;  // for new-since-visit dot
@@ -257,6 +258,16 @@ function ModuleCard({ m, signOffAction, reauditAction, queued, onReaudit }: {
                 border: '1px solid #E6DFCC', color: '#1B1B1B', textDecoration: 'none', whiteSpace: 'nowrap' }}>
               ✎ Goal
             </Link>
+          )}
+          {/* goal-editor-v1 A2c: owner refined the goal — whole-brief rewrite
+              (law 737) is queued; badge clears when the builder consumes the
+              goal_refined signal. */}
+          {m.goalRefined && (
+            <span title="Goal refined by PBS — the next builder rewrites the whole brief against it"
+              style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 99,
+                background: '#FFF3E0', color: '#B26A00', whiteSpace: 'nowrap', alignSelf: 'center' }}>
+              goal refined — rewrite queued
+            </span>
           )}
           <Link href={`/holding/it2/modules/specs/${encodeURIComponent(m.docType)}`} title="Read the spec document"
             style={{ fontSize: 10, fontWeight: 700, padding: '4px 8px', borderRadius: 3,
