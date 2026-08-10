@@ -1,13 +1,12 @@
 'use client';
-// FloatingHOSPanel v3 — Brain Q&A (citations + thumbs) as default, Execute + LLM secondary.
-// Brain = /api/brain/ask scoped to property → citations, sources, AskFeedback thumbs.
-// Execute = CentralChat second-brain (Felix, execution orders, tickets).
-// LLM = CentralChat general, multi-model.
+// FloatingHOSPanel v4 — HOS (Felix, knows everything) is the DEFAULT tab.
+// HOS = Felix with full business context: live KPIs, documents, brain, tools, execution.
+// Docs = BrainAskPage for when you need specific document citations.
+// LLM = multi-model creative/research chat, no business data.
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 
-// Lazy-load heavy components so they don't bloat the initial bundle
 const BrainAskPage = dynamic(() => import('@/app/holding/chat/_components/BrainAskPage'), { ssr: false });
 const CentralChat   = dynamic(() => import('./CentralChat'), { ssr: false });
 
@@ -15,11 +14,11 @@ const FOREST = '#084838';
 const WHITE  = '#FFFFFF';
 const HAIR   = '#E6DFCC';
 
-type Tab = 'brain' | 'execute' | 'llm';
+type Tab = 'hos' | 'docs' | 'llm';
 
 function getPropertyId(path: string): number {
   const m = path.match(/^\/h\/(\d+)/);
-  return m ? Number(m[1]) : 0;   // 0 = holding (ADR-238: never null)
+  return m ? Number(m[1]) : 0;
 }
 
 function getModuleScope(path: string): string | undefined {
@@ -39,16 +38,14 @@ function getPropertyLabel(pid: number) {
 
 export default function FloatingHOSPanel() {
   const [open, setOpen]   = useState(false);
-  const [tab, setTab]     = useState<Tab>('brain');
+  const [tab, setTab]     = useState<Tab>('hos');
   const pathname          = usePathname() ?? '';
   const propertyId        = getPropertyId(pathname);
   const moduleScope       = getModuleScope(pathname);
   const label             = getPropertyLabel(propertyId);
 
-  // Close on route change, reset to Brain tab
-  useEffect(() => { setOpen(false); setTab('brain'); }, [pathname]);
+  useEffect(() => { setOpen(false); setTab('hos'); }, [pathname]);
 
-  // ESC to close
   useEffect(() => {
     if (!open) return;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -57,17 +54,28 @@ export default function FloatingHOSPanel() {
   }, [open]);
 
   const TABS: { id: Tab; label: string; title: string }[] = [
-    { id: 'brain',   label: '🧠 Brain',   title: 'Document Q&A — cited answers from your business documents, SOPs, contracts' },
-    { id: 'execute', label: '⚡ Execute',  title: 'Give execution orders — Felix routes them, writes tickets, routes decisions' },
-    { id: 'llm',     label: '💬 LLM',     title: 'Multi-model creative chat — DeepSeek, GPT, Gemini — no business data' },
+    {
+      id: 'hos',
+      label: '🏨 HOS',
+      title: 'Ask anything — live KPIs, OCC, ADR, bookings, documents, analysis, execution. Felix answers using live data + brain + tools.',
+    },
+    {
+      id: 'docs',
+      label: '📄 Docs',
+      title: 'Document Q&A — cited answers from contracts, SOPs, policies. Shows exactly which document answered.',
+    },
+    {
+      id: 'llm',
+      label: '💬 LLM',
+      title: 'Multi-model AI — DeepSeek V3, GPT-4o, Gemini Flash. No business data. For writing, coding, research.',
+    },
   ];
 
   return (
     <>
-      {/* 🏨 trigger */}
       <button
         onClick={() => setOpen(v => !v)}
-        title={`HOS · ${label}${moduleScope ? ` · ${moduleScope}` : ''} — Brain Q&A, Execute, LLM`}
+        title={`HOS · ${label}${moduleScope ? ` · ${moduleScope}` : ''}`}
         aria-label="Open HOS"
         style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
@@ -83,7 +91,6 @@ export default function FloatingHOSPanel() {
         🏨
       </button>
 
-      {/* Panel */}
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.18)' }} />
@@ -110,7 +117,7 @@ export default function FloatingHOSPanel() {
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <a href="/university" target="_blank" rel="noopener" onClick={() => setOpen(false)}
-                  title="Platform University — guides and help"
+                  title="Platform University"
                   style={{ color:'rgba(255,255,255,0.75)', fontSize:11, fontFamily:'ui-monospace,monospace', letterSpacing:'0.08em', textDecoration:'none', border:'1px solid rgba(255,255,255,0.3)', padding:'3px 9px', borderRadius:4 }}>
                   📚 University
                 </a>
@@ -137,9 +144,23 @@ export default function FloatingHOSPanel() {
             {/* Tab content */}
             <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
 
-              {/* Brain — citation Q&A with thumbs, sources */}
-              {tab === 'brain' && (
+              {/* HOS — Felix, knows everything: live data + brain + tools */}
+              {tab === 'hos' && (
+                <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
+                  <CentralChat
+                    mode="second-brain"
+                    moduleScope={moduleScope}
+                    propertyId={propertyId === 0 ? undefined : propertyId}
+                  />
+                </div>
+              )}
+
+              {/* Docs — BrainAskPage, cited document answers */}
+              {tab === 'docs' && (
                 <div style={{ flex:1, overflow:'auto', padding:'0 0 8px' }}>
+                  <div style={{ padding:'8px 16px', fontSize:11, color:'#5A5A5A', background:'#F9F6F0', borderBottom:`1px solid ${HAIR}` }}>
+                    Document Q&A — cited answers from contracts, SOPs, policies. Use HOS for live KPIs and operational data.
+                  </div>
                   <BrainAskPage
                     initialQuestion=""
                     propertyId={propertyId}
@@ -149,23 +170,17 @@ export default function FloatingHOSPanel() {
                 </div>
               )}
 
-              {/* Execute — Felix for action orders */}
-              {tab === 'execute' && (
-                <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
-                  <div style={{ padding:'8px 16px', fontSize:11, color:'#5A5A5A', background:'#F9F6F0', borderBottom:`1px solid ${HAIR}`, flexShrink:0 }}>
-                    Give execution orders. Felix routes them to the right agent, writes work as tickets, and routes decisions to your inbox.
-                  </div>
-                  <CentralChat mode="second-brain" moduleScope={moduleScope} propertyId={propertyId === 0 ? undefined : propertyId} />
-                </div>
-              )}
-
               {/* LLM — multi-model, no business data */}
               {tab === 'llm' && (
                 <div style={{ flex:1, overflow:'hidden', display:'flex', flexDirection:'column' }}>
-                  <div style={{ padding:'8px 16px', fontSize:11, color:'#5A5A5A', background:'#F9F6F0', borderBottom:`1px solid ${HAIR}`, flexShrink:0 }}>
-                    Creative chat — DeepSeek V3, GPT-4o, Gemini Flash. No business data. For writing, coding, brainstorming.
+                  <div style={{ padding:'8px 16px', fontSize:11, color:'#5A5A5A', background:'#F9F6F0', borderBottom:`1px solid ${HAIR}` }}>
+                    Multi-model — DeepSeek V3, GPT-4o, Gemini Flash. No business data. Writing, coding, brainstorming.
                   </div>
-                  <CentralChat mode="general" moduleScope={moduleScope} propertyId={propertyId === 0 ? undefined : propertyId} />
+                  <CentralChat
+                    mode="general"
+                    moduleScope={moduleScope}
+                    propertyId={propertyId === 0 ? undefined : propertyId}
+                  />
                 </div>
               )}
 
