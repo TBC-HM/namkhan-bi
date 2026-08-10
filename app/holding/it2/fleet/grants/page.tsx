@@ -47,7 +47,8 @@ interface BlockedCall {
 async function fetchGrantPosture(statusFilter?: string): Promise<GrantPosture[]> {
   const admin = getSupabaseAdmin();
   let q = admin.from('v_cap_grant_posture').select('*').order('grants_enabled', { ascending: false });
-  if (statusFilter) q = q.eq('status', statusFilter);
+  // 'all' (and absent) means no status filter — header totals must equal raw SQL counts (brief DONE WHEN).
+  if (statusFilter && statusFilter !== 'all') q = q.eq('status', statusFilter);
   const { data, error } = await q;
   if (error) { console.error('[grants] posture fetch error', error); return []; }
   return (data ?? []) as GrantPosture[];
@@ -116,7 +117,9 @@ type PageProps = { searchParams?: Record<string, string | string[] | undefined> 
 
 export default async function GrantsPage({ searchParams }: PageProps) {
   const sp = searchParams ?? {};
-  const statusFilter = typeof sp['status'] === 'string' ? sp['status'] : 'active';
+  // Default 'all' so a hard refresh shows the raw SQL totals (352 enabled / 3,922 revoked class of numbers),
+  // per DONE WHEN "totals equal the raw SQL counts" and §0.V2 objection 4.
+  const statusFilter = typeof sp['status'] === 'string' ? sp['status'] : 'all';
   const view = typeof sp['view'] === 'string' ? sp['view'] : 'posture';
 
   const [posture, revocations, baseline, blockedCalls] = await Promise.all([
@@ -168,10 +171,11 @@ export default async function GrantsPage({ searchParams }: PageProps) {
         {/* Status filter */}
         <div style={{ marginBottom: '24px', display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span style={{ fontSize: '14px', color: INK_M }}>Filter:</span>
+          <FilterLink href={`/holding/it2/fleet/grants?view=${view}&status=all`} label="All" active={statusFilter === 'all'} />
           <FilterLink href={`/holding/it2/fleet/grants?view=${view}&status=active`} label="Active" active={statusFilter === 'active'} />
+          <FilterLink href={`/holding/it2/fleet/grants?view=${view}&status=not_yet_live`} label="Not yet live" active={statusFilter === 'not_yet_live'} />
           <FilterLink href={`/holding/it2/fleet/grants?view=${view}&status=disabled`} label="Disabled" active={statusFilter === 'disabled'} />
           <FilterLink href={`/holding/it2/fleet/grants?view=${view}&status=dormant`} label="Dormant" active={statusFilter === 'dormant'} />
-          <FilterLink href={`/holding/it2/fleet/grants?view=${view}`} label="All" active={!statusFilter} />
         </div>
 
         {/* Main view */}
