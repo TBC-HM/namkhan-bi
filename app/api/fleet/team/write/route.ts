@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
   }
   // Wrappers return jsonb like {ok:false,error:'unknown_role'} on domain errors.
   if (data && typeof data === 'object' && (data as any).ok === false) {
-    return NextResponse.json(data, { status : 422 });
+    return NextResponse.json(data, { status: 422 });
   }
   return NextResponse.json(data ?? { ok: true });
 }
