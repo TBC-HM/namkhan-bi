@@ -24,6 +24,7 @@ import CapacityResetOnPillarChange from '@/components/nav/CapacityResetOnPillarC
 import AgentEditModal from '@/components/agents/AgentEditModal';
 import BugWidget from '@/components/cockpit/BugWidget';
 import HelpButton from '@/components/university/HelpButton';
+import FloatingHOSPanel from '@/components/chat/FloatingHOSPanel';
 // PBS brief autospec-university_module-20260725 (design item 1): global Cmd+K
 // University search palette — articles, KPI reference, learning paths, Ask-AI.
 import CommandPalette from '@/components/university/CommandPalette';
@@ -99,6 +100,7 @@ document.documentElement.setAttribute('data-property',v);}catch(e){}})();
         <AgentEditModal />
         <BugWidget />
         <HelpButton />
+        <FloatingHOSPanel />
         <CommandPalette />
         <SpeedInsights />
       </body>
