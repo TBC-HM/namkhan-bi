@@ -255,6 +255,9 @@ function SubtypesTab({ propertyId, families, familyVocab, vocab, rpc }:
     ...familyVocab.filter((f) => f.active).map((f) => f.value),
     ...vocab.map((v) => v.doc_type),
   ])).sort(), [familyVocab, vocab]);
+  const familyLabelMap = useMemo(() =>
+    Object.fromEntries(familyVocab.map((f) => [f.value, f.label ?? f.value])),
+  [familyVocab]);
   void families; // kept in Props for the other tabs' callers
   const [filter, setFilter] = useState<string>(familyOpts[0] ?? '');
   const filtered = useMemo(() => vocab.filter((v) => !filter || v.doc_type === filter), [vocab, filter]);
@@ -264,10 +267,10 @@ function SubtypesTab({ propertyId, families, familyVocab, vocab, rpc }:
         <label style={lblStyle}>Filter by family</label>
         <select value={filter} onChange={(e) => setFilter(e.target.value)} style={selStyle}>
           <option value="">— all —</option>
-          {familyOpts.map((f) => <option key={f} value={f}>{f}</option>)}
+          {familyOpts.map((f) => <option key={f} value={f}>{familyLabelMap[f] ?? f}</option>)}
         </select>
       </div>
-      <AddSubtypeForm familyOpts={familyOpts} defaultFamily={filter}
+      <AddSubtypeForm familyOpts={familyOpts} familyLabelMap={familyLabelMap} defaultFamily={filter}
         onAdd={(args) => rpc('fn_doc_vocab_upsert', args)} />
       <Table cols={['Family', 'Slug', 'Label', 'Time', 'Active', '']}>
         {filtered.length === 0 && <EmptyRow cols={6} />}
@@ -543,8 +546,8 @@ function AddRowForm({ placeholder, onAdd }: { placeholder: string; onAdd: (v: st
   );
 }
 
-function AddSubtypeForm({ familyOpts, defaultFamily, onAdd }:
-  { familyOpts: string[]; defaultFamily: string; onAdd: (args: { p_doc_type: string; p_subtype_slug: string; p_label: string; p_time_model: string; p_sort_order: number }) => Promise<boolean> }) {
+function AddSubtypeForm({ familyOpts, familyLabelMap = {}, defaultFamily, onAdd }:
+  { familyOpts: string[]; familyLabelMap?: Record<string, string>; defaultFamily: string; onAdd: (args: { p_doc_type: string; p_subtype_slug: string; p_label: string; p_time_model: string; p_sort_order: number }) => Promise<boolean> }) {
   const [family, setFamily] = useState(defaultFamily);
   const [slug, setSlug] = useState('');
   const [label, setLabel] = useState('');
@@ -560,7 +563,7 @@ function AddSubtypeForm({ familyOpts, defaultFamily, onAdd }:
     }} style={addFormRow}>
       <select value={family} onChange={(e) => setFamily(e.target.value)} style={selStyle}>
         <option value="">(family)</option>
-        {familyOpts.map((f) => <option key={f} value={f}>{f}</option>)}
+        {familyOpts.map((f) => <option key={f} value={f}>{familyLabelMap[f] ?? f}</option>)}
       </select>
       <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="slug" style={{ ...inputStyle, width: 120 }} />
       <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label" style={{ ...inputStyle, flex: 1 }} />
