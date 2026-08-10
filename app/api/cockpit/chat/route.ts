@@ -978,6 +978,7 @@ export async function POST(req: Request) {
       const selectedModel = llm_model ?? "deepseek-chat";
       const isDeepSeek = selectedModel.startsWith("deepseek");
       const isGemini   = selectedModel.startsWith("gemini");
+      const isClaude   = selectedModel.startsWith("claude");
       const isOpenAI   = selectedModel.startsWith("gpt") || selectedModel.startsWith("o1") || selectedModel.startsWith("o3");
 
       // Provider config — keys from Supabase vault via RPC (not env vars)
@@ -1007,12 +1008,12 @@ export async function POST(req: Request) {
         anthropic: {
           url: "https://api.anthropic.com/v1/messages",
           headers: (k) => ({ "x-api-key": k, "anthropic-version": "2023-06-01", "content-type": "application/json" }),
-          body: (msgs, sys, msg) => ({ model: MODEL_TIERS.fast.model, max_tokens: 2000, system: sys,
+          body: (msgs, sys, msg) => ({ model: selectedModel, max_tokens: 2000, system: sys,
             messages: [...msgs, { role: "user", content: msg }] }),
           parseReply: (j: any) => (j?.content ?? []).find((b: any) => b.type === "text")?.text?.trim() ?? "",
         },
       };
-      const providerKey  = isDeepSeek ? "deepseek" : isGemini ? "gemini" : isOpenAI ? "openai" : "anthropic";
+      const providerKey  = isDeepSeek ? "deepseek" : isGemini ? "gemini" : isClaude ? "anthropic" : isOpenAI ? "openai" : "anthropic";
       const providerName = isDeepSeek ? "Deepseek" : isGemini ? "Gemini_API_Key" : isOpenAI ? "TBC_API_CALL_OPENAI" : "";
       const provider = PROVIDERS[providerKey];
 
