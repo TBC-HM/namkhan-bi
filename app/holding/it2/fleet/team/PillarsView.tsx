@@ -8,10 +8,11 @@
 // (claude_md §0.5 — no direct cockpit.*/governance.* reads).
 //
 // Known truths surfaced honestly (slice-1 findings, re-confirmed):
-//  - Pillar-4 (triggers/budget) registry is mis-keyed: 0/10 triggers and
-//    0/2 budgets match cockpit.id_agents. Decision filed with PBS via
-//    fn_owner_question_ask; until answered, per-agent trigger/budget reads
-//    0 and the panel says why.
+//  - Pillar-4 registry REPAIRED (brief agent-team-slice-trigger-budget-repair,
+//    ADR-283): triggers/budgets/prompts re-keyed to cockpit.id_agents with FK
+//    enforcement; unresolvable rows quarantined in agent_key_quarantine.
+//    Pillar 4 CTAs (add trigger, pause/resume, set budget) are live through
+//    the audited write route. Per-trigger rows read v_agent_triggers.
 //  - Run attribution (brief agent-team-slice-health-attribution): events now
 //    join through governance.agent_actor_map. Infra actors (crons, webhooks,
 //    CI runners) are classified with role NULL and counted, not attributed.
@@ -24,12 +25,12 @@
 // LIVE through /api/fleet/team/write → public.fn_* SECURITY DEFINER wrappers.
 // Still no direct table writes from the browser, ever. CTAs without a
 // wrapper stay visibly disabled with the reason shown (Set trust, Test-run,
-// memory Edit, all of pillar 4 pending the trigger-registry decision).
+// memory Edit).
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { Container, MetricRow } from '@/app/(cockpit)/_design';
-import { IdentityCtas, SkillCtas, MemoryCtas, BulkGrantBar } from './AgentWriteCtas';
+import { IdentityCtas, SkillCtas, MemoryCtas, BulkGrantBar, TriggerBudgetCtas } from './AgentWriteCtas';
 
 export type PillarRow = {
   agent_id: string;
@@ -168,8 +169,9 @@ export function PillarsView({ rows, kpis }: Props) {
           footnote: 'granted to no agent',
         },
         {
-          label: 'No trigger', value: kpis.agents_no_trigger, status: 'red' as const,
-          footnote: 'trigger registry mis-keyed — decision with PBS',
+          label: 'No trigger', value: kpis.agents_no_trigger,
+          status: (kpis.agents_no_trigger > 0 ? 'amber' : 'green') as 'amber' | 'green',
+          footnote: 'no declared wake condition (registry re-keyed, ADR-283)',
         },
         {
           label: 'Over budget', value: kpis.agents_over_budget,
@@ -336,14 +338,46 @@ function PillarPanels({ r }: { r: PillarRow }) {
       <div style={st.panel}>
         <div style={st.panelTitle}>4 · Triggers & budget</div>
         <Fact k="Triggers" v={`${r.triggers_active} active / ${r.triggers_total}`} />
+        <Fact k="Last fired" v={r.last_trigger_fired_at ? fmtAgo(r.last_trigger_fired_at) : 'never'} />
         <Fact k="Daily cap" v={fmtUsd(r.daily_cap_usd)} />
-        <Fact k="Monthly cap" v={fmtUsd(r.monthly_cap_usd)} />
-        <Fact k="Spend MTD" v={fmtUsd(r.spend_mtd_usd)} />
+        <Fact k="Monthly cap" v={`${fmtUsd(r.monthly_cap_usd)}${r.budget_enforced ? ' · enforced' : r.monthly_cap_usd !== null ? ' · advisory' : ''}`} />
+        <Fact
+          k="Spend MTD"
+          v={
+            (r.spend_mtd_usd ?? 0) === 0
+              ? '$0.00 (unattributed)'
+              : fmtUsd(r.spend_mtd_usd)
+          }
+        />
+        <SpendBar spend={r.spend_mtd_usd} cap={r.monthly_cap_usd} over={r.over_budget} />
         {r.over_budget ? <div style={{ color: '#B4231F', fontSize: 12, fontWeight: 600 }}>OVER BUDGET</div> : null}
-        <div style={st.blockNote}>
-          Trigger/budget registry is keyed to a diverged agent registry (0/10 triggers match).
-          Re-key decision is filed with PBS — CTAs unlock once answered.
-        </div>
+        <TriggerBudgetCtas
+          role={r.role}
+          dailyCap={r.daily_cap_usd}
+          monthlyCap={r.monthly_cap_usd}
+          enforced={r.budget_enforced}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Spend vs cap bar (pillar 4). Zero spend is labelled unattributed above —
+// run attribution can hide agent spend, so the bar never claims "0% used"
+// as a certainty, it just draws what the ledger currently attributes.
+function SpendBar({ spend, cap, over }: { spend: number | null; cap: number | null; over: boolean | null }) {
+  if (cap === null || cap <= 0) {
+    return <div style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', marginTop: 4 }}>no monthly cap set — spend is uncapped</div>;
+  }
+  const pct = Math.min(100, Math.round(((spend ?? 0) / cap) * 100));
+  const color = over ? '#B4231F' : pct >= 80 ? '#8A6D1D' : '#1F3A2E';
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ height: 6, background: '#F0EADC', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color }} />
+      </div>
+      <div style={{ fontSize: 10, fontFamily: MONO, color: 'var(--ink-soft, #5A5A5A)', marginTop: 2 }}>
+        {pct}% of monthly cap (attributed)
       </div>
     </div>
   );
