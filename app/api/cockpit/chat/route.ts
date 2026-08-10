@@ -226,9 +226,9 @@ const supabase = createClient(
 // provider/model land in the audit metadata per message (V5 metering).
 type ModelTier = "fast" | "reasoning" | "long_context";
 const MODEL_TIERS: Record<ModelTier, { provider: string; model: string; inPerM: number; outPerM: number }> = {
-  fast:         { provider: "anthropic", model: "claude-haiku-4-5",          inPerM: 1,  outPerM: 5 },
-  reasoning:    { provider: "anthropic", model: "claude-sonnet-4-5-20250929", inPerM: 3,  outPerM: 15 },
-  long_context: { provider: "anthropic", model: "claude-sonnet-4-6",          inPerM: 3,  outPerM: 15 },
+  fast:         { provider: "anthropic", model: "claude-haiku-4-5-20251001", inPerM: 1,  outPerM: 5 },
+  reasoning:    { provider: "anthropic", model: "claude-sonnet-4-6",         inPerM: 3,  outPerM: 15 },
+  long_context: { provider: "anthropic", model: "claude-sonnet-4-6",         inPerM: 3,  outPerM: 15 },
 };
 const LONG_CONTEXT_CHARS = 60_000; // history + message + system beyond this → long_context
 
