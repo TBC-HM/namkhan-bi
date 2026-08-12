@@ -4,8 +4,8 @@
 // Excel-friendly UTF-8 BOM + metadata rows on top.
 
 import { NextResponse } from 'next/server';
-import { PROPERTY_ID } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,11 @@ const round0 = (n: number | null | undefined) => (n == null || !Number.isFinite(
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const pid = Number(url.searchParams.get('property_id') ?? PROPERTY_ID);
+  const rawPropertyId = url.searchParams.get('property_id');
+  
+  // ADR-281 L22: enforce property access
+  const pid = await requirePropertyAccess(req, rawPropertyId);
+  
   const propLabel = pid === 1000001 ? 'Donna Portals' : 'The Namkhan';
   const cur = pid === 1000001 ? 'EUR' : 'USD';
   const todayIso = new Date().toISOString().slice(0, 10);
