@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -30,11 +31,14 @@ export interface PosReceiptLine {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const date = url.searchParams.get('date');
-  const propertyId = Number(url.searchParams.get('property_id') ?? 260955);
+  const rawPropertyId = url.searchParams.get('property_id');
 
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json({ error: 'date=YYYY-MM-DD required' }, { status: 400 });
   }
+
+  // ADR-281 L22: enforce property access
+  const propertyId = await requirePropertyAccess(req, rawPropertyId);
 
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
