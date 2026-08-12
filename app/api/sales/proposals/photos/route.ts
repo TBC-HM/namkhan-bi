@@ -16,6 +16,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -24,10 +25,13 @@ const TIER_OK = ['tier_ota_profile', 'tier_website_hero'];
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const propertyId = Number(url.searchParams.get('property_id') ?? '260955');
+  const rawPropertyId = url.searchParams.get('property_id');
   const blockType  = (url.searchParams.get('block_type') ?? '').toLowerCase();
   const refId      = url.searchParams.get('ref_id');
   const scope      = (url.searchParams.get('scope') ?? 'context').toLowerCase();
+
+  // ADR-281 L22: enforce property access
+  const propertyId = await requirePropertyAccess(req, rawPropertyId);
 
   const sb = getSupabaseAdmin();
 
