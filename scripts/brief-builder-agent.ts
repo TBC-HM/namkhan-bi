@@ -9,7 +9,9 @@
  * the standing-builder laws. All DB access goes through the service-role-only
  * bridge public.fn_builder_sql (one statement per call, audited); shell access
  * is the CI checkout only (tsc gate, esbuild parse). GitHub pushes happen via
- * SELECT public.fn_gh_push_file(...) inside run_sql — never git push.
+ * SELECT public.fn_gh_deploy_file(...) inside run_sql — never git push. That is the
+ * mandated deploy route (L18); it wraps fn_gh_push_file, which holds the hot-file CAS,
+ * protected-path gate, md5 verification, shrink guard and push_ledger write.
  *
  * Deliberately NOT runner-v3: that is a single-shot ticket-diff generator.
  * This is a multi-turn loop because brief work is DB-first (migrations,
@@ -77,8 +79,8 @@ const SYSTEM = `You are the GHA brief-builder for The Beyond Circle platform (Su
 HARD LAWS (violations burn the platform — obey exactly):
 - ONE brief, one slice. Batch as many of the brief's open gaps as fit your budget, but never half-push an inconsistent state.
 - SQL: one statement per run_sql call. SELECT-shaped calls return rows; DDL/DML return ok. Discover before create (query information_schema / existing objects first). Never DROP outside the brief's scope.
-- GitHub: pushes ONLY via SELECT public.fn_gh_push_file('TBC-HM','namkhan-bi','main', path, content, message) inside run_sql (dollar-quote the content; NEVER sql-escape JSX with replace()). After every push, verify: SELECT status_code, left(content,120) FROM net._http_response WHERE id = <request_id> (the fn returns request_id; response lands in a LATER call — pg_net two-phase). HOT files (governance.push_hot_files: groups.ts, globals.css, hod_subpages_catalog.ts, nav-subgroups.ts) need SELECT public.fn_gh_declare_read(path) first. NEVER run git push / gh in run_shell.
-- tsc gate: before any code push, run_shell "npx tsc --noEmit" in the checkout (it contains current main) — must be green. Edit files in the checkout with run_shell (heredoc/sed carefully) to test, but the PUSH still goes through fn_gh_push_file with the full file content.
+- GitHub: pushes ONLY via SELECT public.fn_gh_deploy_file('TBC-HM','namkhan-bi','main', path, content, message, <prior_request_id_or_NULL>) inside run_sql (dollar-quote the content; NEVER sql-escape JSX with replace()). Pass NULL as the last argument for your FIRST push; for every push after that, pass the request_id returned by your PREVIOUS push — fn_gh_deploy_file verifies that earlier push as part of this call. This is the mandated deploy route (it wraps fn_gh_push_file, which carries the hot-file CAS, protected-path gate, md5 verification, shrink guard and push_ledger write). DO NOT spend a turn on "SELECT status_code FROM net._http_response WHERE id = ..." — pg_net is two-phase, the response is not there yet, and polling for it is what exhausts the turn budget (agent memory 852: a run landed lib/tenancy.ts and was then killed at turn 40 polling for its own verification). Any push you cannot verify inline is reconciled asynchronously into governance.push_ledger.verified; trust that. HOT files (governance.push_hot_files: groups.ts, globals.css, hod_subpages_catalog.ts, nav-subgroups.ts) still need SELECT public.fn_gh_declare_read(path) first. NEVER run git push / gh in run_shell.
+- tsc gate: before any code push, run_shell "npx tsc --noEmit" in the checkout (it contains current main) — must be green. Edit files in the checkout with run_shell (heredoc/sed carefully) to test, but the PUSH still goes through fn_gh_deploy_file with the full file content.
 - DB changes: only what the brief scopes. New objects need service_role grants + public.v_*/fn_* bridges (PostgREST exposes only public).
 - No product decisions: if the brief needs an owner choice, set the brief status='needs_input' with the exact question (plain hotel-owner language, 2-4 options, one recommended) via run_sql, then finish(status='needs_input').
 - Never self-grade: do NOT write completion_estimate or gap_list — the verifier does. Never claim tested without executed evidence.
@@ -357,15 +359,76 @@ async function main() {
     if (!finished) {
       const reason = turns >= MAX_TURNS ? 'turn budget exhausted' : 'wall clock exhausted';
       console.error('run ended without finish:', reason);
+
+      // PARTIAL-BUILD ACCOUNTING (2026-08-12, agent memory 852).
+      //
+      // A run that pushed working code and then died in the pg_net push-verification
+      // tail was still recorded as "> BUILDER-FAILED". Three such records auto-tag the
+      // brief needs_slice (ADR-271), fn_owner_signal_sweep then excludes it from the
+      // candidate query, and the brief leaves the dispatch queue permanently. That is
+      // how 32 briefs sealed themselves and the loop idled for two days while logging
+      // success=true.
+      //
+      // Proof this is real: run gha-brief-builder-31610419243 landed lib/tenancy.ts on
+      // main (commit cb46c0b, governance.push_ledger id 1350, ok=true, http=200) at
+      // 15:12:06 and was killed at turn 40 at 15:12:17 — eleven seconds later — while
+      // running the push-verification SELECT the system prompt mandates.
+      //
+      // So: if an ok push landed during THIS run for THIS brief, annotate the outcome as
+      // PARTIAL instead of FAILED. governance.fn_count_consecutive_builder_failures()
+      // only counts lines beginning "> BUILDER-FAILED" and breaks its streak on any
+      // non-empty line that does not start with ">", so a plain-text PARTIAL line
+      // records the outcome honestly WITHOUT feeding the 3-strike sealer.
+      //
+      // Deliberately conservative:
+      //   - only ok=true pushes, only since this run started, only matching this slug;
+      //   - any error, empty result or unexpected shape falls through to the original
+      //     "> BUILDER-FAILED" behaviour, so this can never mask a genuine failure;
+      //   - fn_builder_done still reports 'failed' (the run DID fail to finish, and
+      //     builder_heartbeats.status only permits running/done/failed/reclaimed).
+      let landed: Array<{ id: number; path: string }> = [];
+      try {
+        const rows = await sql(
+          `SELECT id, path FROM governance.push_ledger
+            WHERE ok IS TRUE
+              AND pushed_at >= ${sqlLit(new Date(STARTED).toISOString())}::timestamptz
+              AND message LIKE ${sqlLit('%' + BRIEF_SLUG + '%')}
+            ORDER BY id`
+        );
+        if (Array.isArray(rows)) landed = rows as Array<{ id: number; path: string }>;
+      } catch (e: any) {
+        console.error('partial-build check failed, defaulting to FAILED:', e?.message);
+      }
+
+      const outcomeNote = landed.length
+        ? `\n\nBUILDER-PARTIAL (${WORKER}): ${reason} after ${turns} turns, but ${
+            landed.length
+          } push(es) LANDED on main during this run — ${landed
+            .map((p) => `${p.path} (push_ledger ${p.id})`)
+            .join(
+              ', '
+            )}. Recorded as PARTIAL, not failed: this run produced real work. DO NOT re-create those files on retry — continue from them. Brief reset to ready. See agent memory 852.\n`
+        : `\n\n> BUILDER-FAILED (${WORKER}): ${reason} after ${turns} turns — brief reset to ready for retry.\n`;
+
+      console.error(
+        landed.length
+          ? `recorded PARTIAL — ${landed.length} push(es) landed: ${landed.map((p) => p.path).join(', ')}`
+          : 'recorded FAILED — no pushes landed this run'
+      );
+
       // ZOMBIE-LEAK FIX (owner-signal-responder-v1 §0.E): reset brief to ready so it can be re-fired
       await sql(
         `UPDATE documentation.build_briefs SET status = 'ready', content_md = content_md || ${sqlLit(
-          `\n\n> BUILDER-FAILED (${WORKER}): ${reason} after ${turns} turns — brief reset to ready for retry.\n`
+          outcomeNote
         )}, version = version + 1, last_updated_at = now(), last_updated_by = ${sqlLit(WORKER)} WHERE slug = ${sqlLit(
           BRIEF_SLUG
         )}`
       );
-      await rpc('fn_builder_done', { p_heartbeat_id: hb, p_status: 'failed', p_note: reason });
+      await rpc('fn_builder_done', {
+        p_heartbeat_id: hb,
+        p_status: 'failed',
+        p_note: landed.length ? `${reason} (PARTIAL — ${landed.length} push(es) landed)` : reason,
+      });
       process.exitCode = 1;
     }
   } catch (e: any) {
