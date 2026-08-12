@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callClaude } from '@/lib/brain/llm';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -58,10 +59,10 @@ async function rerender(sb: ReturnType<typeof getSupabaseAdmin>, propertyId: num
 export async function POST(req: Request) {
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'bad json' }, { status: 400 }); }
-  const propertyId = Number(body.property_id);
-  if (!Number.isInteger(propertyId) || propertyId <= 0) {
-    return NextResponse.json({ error: 'property_id required' }, { status: 400 });
-  }
+
+  // ADR-281 L22: enforce property access
+  const propertyId = await requirePropertyAccess(req, body.property_id);
+
   const sb = getSupabaseAdmin();
 
   if (body.action === 'goal_upsert') {
