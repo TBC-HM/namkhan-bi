@@ -1,5 +1,6 @@
 // app/marketing/website/preview/[...slug]/page.tsx
-// v5 (CMS-1): sections are typed blocks (block catalog, website-module-v1
+// v6 (CMS-4): adds JSON-LD structured data per page (Hotel for homepage,
+// WebPage for others); sections are typed blocks (block catalog, website-module-v1
 // CMS v1) rendered via _site/blocks.tsx; nav/footer blocks are skipped as
 // chrome. Legacy single 'copy' sections render exactly as v4 (renderMd
 // fallback). Photos stay wired from media library (mkt_media_assets);
@@ -11,6 +12,7 @@ import { PROPERTY_ID } from '@/lib/supabase';
 import { SiteNav, PreviewBanner, BOOK_URL } from '../_site/Nav';
 import { SiteFooter } from '../_site/Footer';
 import { renderBlocks, type BlockRow } from '../_site/blocks';
+import { generatePageJsonLd } from '../_site/jsonld';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -78,10 +80,10 @@ function areaForSlug(slug: string): string | null {
 }
 
 // Blank placeholder slot — shown when no media available for a slot
-function Photo({ aspect = '4/3', h, label }: { aspect?: string; h?: number; label?: string }) {
+function Photo({ label, aspect = '4/3', h }: { label?: string; aspect?: string; h?: number }) {
   return (
-    <div style={{ width: '100%', background: '#C9C0AF', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 5, ...(h ? { height: h } : { aspectRatio: aspect }) }}>
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(100,90,75,0.45)" strokeWidth="1.5">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', justifyContent: 'center', background: CREAM, ...(h ? { height: h } : { aspectRatio: aspect }), borderRadius: 3 }}>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(90,80,65,0.25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
       </svg>
       {label && <span style={{ fontSize: 9, color: 'rgba(80,70,55,0.5)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</span>}
@@ -123,8 +125,6 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
   ]);
   const sections = (sd ?? []) as SectionRow[];
   const crawlImgs = (imgd ?? []) as ImgMeta[];
-  // Joined markdown of all blocks = the original crawled blob (used only for
-  // label/lead extraction); rendering goes block-by-block via renderBlocks.
   const rawBody   = sections.map(s => s.body_md ?? '').join('\n');
   const body      = stripTitle(rawBody);
   const hasHero   = crawlImgs.some(i => i.role === 'hero' || i.role === 'og');
@@ -137,7 +137,6 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
   let photos: string[] = [];
 
   if (page.room_type_id) {
-    // Room: query by room_type_id FK
     const { data } = await sb.from('mkt_media_assets')
       .select('master_path')
       .eq('property_id', PROPERTY_ID)
@@ -149,7 +148,6 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
       .limit(14);
     photos = ((data ?? []) as MediaRow[]).map(r => mediaUrl(r.master_path)).filter(Boolean) as string[];
   } else if (area) {
-    // Other pages: query by property_area
     const { data } = await sb.from('mkt_media_assets')
       .select('master_path')
       .eq('property_id', PROPERTY_ID)
@@ -161,7 +159,6 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
     photos = ((data ?? []) as MediaRow[]).map(r => mediaUrl(r.master_path)).filter(Boolean) as string[];
   }
 
-  // Blog index
   let blogPosts: PageRow[] = [];
   let blogHasImg: Record<number, boolean> = {};
   if (page.page_kind === 'blog_index') {
@@ -180,9 +177,16 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
     }
   }
 
+  const jsonLd = generatePageJsonLd(page, { base_url: 'https://www.thenamkhan.com' });
   const kind = page.page_kind;
   return (
     <div style={{ minHeight: '100vh', background: BG, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
       <PreviewBanner slug={slug} />
       <SiteNav slug={slug} />
       {kind === 'blog_index'  ? <BlogIndex page={page} posts={blogPosts} hasImg={blogHasImg} photos={photos} /> :
@@ -206,7 +210,6 @@ function Room({ page, photos, galCount, sections, body, metaDesc }: {
 
   return (
     <main>
-      {/* Hero */}
       <div style={{ position: 'relative', width: '100%', height: 640, overflow: 'hidden', background: '#2F2C27' }}>
         {heroUrl && <img src={heroUrl} alt={page.title ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.82 }} />}
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.30) 55%, rgba(0,0,0,0.05) 100%)' }} />
@@ -217,7 +220,6 @@ function Room({ page, photos, galCount, sections, body, metaDesc }: {
         </div>
       </div>
 
-      {/* Booking widget */}
       <div style={{ background: '#FFF', borderBottom: '1px solid ' + HAIR, padding: '18px 5%' }}>
         <div style={{ maxWidth: 960, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 1, background: HAIR, border: '1px solid ' + HAIR, borderRadius: 2 }}>
           {['Arrival', 'Departure', 'Guests'].map(l => (
@@ -232,7 +234,6 @@ function Room({ page, photos, galCount, sections, body, metaDesc }: {
         </div>
       </div>
 
-      {/* Body + gallery */}
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '52px 24px 80px' }}>
         <div style={{ marginBottom: 40 }}>{renderBlocks(sections, { stripFirstH1: true })}</div>
         {galCount > 0 && (
@@ -278,24 +279,32 @@ function Core({ page, hasHero, photos, galCount, sections, body, metaDesc }: {
   );
 }
 
-// ── Blog post ──────────────────────────────────────────────────────────────
-function BlogPost({ page, hasHero, sections, body, heroUrl }: { page: PageRow; hasHero: boolean; sections: SectionRow[]; body: string; heroUrl: string | null }) {
-  const date = (page.meta as Record<string, string>)?.date ?? null;
+// ── BlogPost ───────────────────────────────────────────────────────────────
+function BlogPost({ page, hasHero, sections, body, heroUrl }: {
+  page: PageRow; hasHero: boolean; sections: SectionRow[]; body: string; heroUrl: string | null;
+}) {
+  const meta = (page.meta ?? {}) as Record<string, string>;
+  const date = meta.date ?? null;
   return (
     <main>
-      {hasHero && <Img url={heroUrl} h={460} style={{ borderRadius: 0 }} />}
-      <div style={{ maxWidth: 740, margin: '0 auto', padding: '48px 24px 80px' }}>
-        <Link href="/marketing/website/preview/blog" style={{ fontSize: 12, color: GREEN, textDecoration: 'none', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: 24 }}>← The Namkhan Journal</Link>
-        {date && <div style={{ fontSize: 13, color: '#8B7355', marginBottom: 8 }}>{date}</div>}
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '1.5rem', lineHeight: 1.3, letterSpacing: '-0.02em' }}>{page.title}</h1>
-        <div>{renderBlocks(sections, { stripFirstH1: true })}</div>
-      </div>
+      {hasHero && heroUrl && (
+        <div style={{ width: '100%', height: 480, overflow: 'hidden', background: '#2F2C27' }}>
+          <img src={heroUrl} alt={page.title ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.88 }} />
+        </div>
+      )}
+      <article style={{ maxWidth: 720, margin: '0 auto', padding: '52px 24px 80px' }}>
+        {date && <div style={{ fontSize: 13, color: '#8B7355', marginBottom: 12 }}>{date}</div>}
+        <h1 style={{ fontSize: '2.4rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '1.8rem', lineHeight: 1.15 }}>{page.title}</h1>
+        <div style={{ fontSize: '1.02rem', lineHeight: 1.85, color: INK2 }}>{renderBlocks(sections, { stripFirstH1: true })}</div>
+      </article>
     </main>
   );
 }
 
-// ── Blog index ─────────────────────────────────────────────────────────────
-function BlogIndex({ page, posts, hasImg, photos }: { page: PageRow; posts: PageRow[]; hasImg: Record<number, boolean>; photos: string[] }) {
+// ── BlogIndex ──────────────────────────────────────────────────────────────
+function BlogIndex({ page, posts, hasImg, photos }: {
+  page: PageRow; posts: PageRow[]; hasImg: Record<number, boolean>; photos: string[];
+}) {
   return (
     <main style={{ maxWidth: 980, margin: '0 auto', padding: '52px 24px 80px' }}>
       <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: INK, fontFamily: SERIF, marginBottom: '0.5rem' }}>{page.title}</h1>
