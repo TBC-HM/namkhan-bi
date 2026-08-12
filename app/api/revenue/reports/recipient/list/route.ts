@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -7,8 +8,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const propertyId = Number(url.searchParams.get('property_id'));
-    if (!Number.isFinite(propertyId)) return NextResponse.json({ error: 'invalid property_id' }, { status: 400 });
+    const rawPropertyId = url.searchParams.get('property_id');
+
+    // ADR-281 L22: enforce property access
+    const propertyId = await requirePropertyAccess(req, rawPropertyId);
 
     const admin = getSupabaseAdmin();
     const { data, error } = await admin
@@ -20,6 +23,8 @@ export async function GET(req: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ recipients: data ?? [] });
   } catch (e) {
+    // requirePropertyAccess throws Response on 403/400
+    if (e instanceof Response) throw e;
     return NextResponse.json({ error: String((e as Error).message ?? e) }, { status: 500 });
   }
 }
