@@ -1,10 +1,10 @@
 // app/marketing/website/preview/_site/jsonld.ts
-// CMS-4 JSON-LD generator for website pages
+// CMS-4 JSON-LD generator for website pages (enhanced for SEO layer v2)
 export function generatePageJsonLd(page: {
   slug: string;
   title: string | null;
   page_kind: string | null;
-  meta?: { description?: string; title?: string };
+  meta?: { description?: string; title?: string; og_image?: string };
 }, siteData: {
   base_url: string;
   site?: { domain?: string };
@@ -20,10 +20,19 @@ export function generatePageJsonLd(page: {
       name: page.title || 'The Namkhan',
       url,
       description: page.meta?.description || page.meta?.title || '',
+      image: page.meta?.og_image ? `${baseUrl}${page.meta.og_image}` : undefined,
       address: {
         '@type': 'PostalAddress',
         addressCountry: 'LA',
-        addressLocality: 'Luang Prabang'
+        addressLocality: 'Luang Prabang',
+        addressRegion: 'Luang Prabang Province',
+        streetAddress: 'Nam Khan Riverside'
+      },
+      telephone: '+856 71 253 888',
+      priceRange: '$$$',
+      starRating: {
+        '@type': 'Rating',
+        ratingValue: '5'
       }
     };
   }
@@ -34,6 +43,7 @@ export function generatePageJsonLd(page: {
     '@id': url,
     name: page.meta?.title || page.title || '',
     description: page.meta?.description || '',
-    url
+    url,
+    image: page.meta?.og_image ? `${baseUrl}${page.meta.og_image}` : undefined
   };
 }
