@@ -10,6 +10,7 @@ import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import WebsiteManager, { type WebsiteInitialData } from './WebsiteManager';
+import NavEditor from './_components/NavEditor';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -57,6 +58,7 @@ export default async function MarketingWebsitePage() {
         tabs={tabs}
       >
         <WebsiteManager initial={initial} />
+        <NavEditor />
       </DashboardPage>
     </div>
   );
