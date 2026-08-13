@@ -11,8 +11,12 @@ export function generatePageJsonLd(page: {
 }): object | null {
   const baseUrl = siteData.base_url || `https://${siteData.site?.domain}` || 'https://www.thenamkhan.com';
   const url = `${baseUrl}${page.slug === '/' ? '' : page.slug}`;
-  
-  if (page.slug === '/' || page.page_kind === 'core' && page.slug === '/') {
+
+  // Schema type is driven off the page row: the homepage is the page_kind='core'
+  // row at slug '/' (verified against website.pages) → Hotel; everything else → WebPage.
+  const isHomepage = page.page_kind === 'core' && page.slug === '/';
+
+  if (isHomepage) {
     return {
       '@context': 'https://schema.org',
       '@type': 'Hotel',
@@ -36,7 +40,7 @@ export function generatePageJsonLd(page: {
       }
     };
   }
-  
+
   return {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
