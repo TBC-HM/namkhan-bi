@@ -1,3 +1,9 @@
+> **⚠️ STALE — This file is legacy documentation**
+>
+> Canonical platform architecture and deployment guide now live in the database
+> (`documentation.documents`, rendered via the knowledge system). This file is
+> kept for historical reference only.
+
 # Deploy Log — Namkhan BI Portal
 
 Append-only ledger. One row per deployment of an approved sub-tab proposal.
