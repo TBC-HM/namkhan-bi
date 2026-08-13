@@ -53,6 +53,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/sales/prospects/import') || // sales brief A7 2026-07-30: server-to-server import — secret gate lives inside the route
     pathname.startsWith('/api/p/') || // PBS 2026-07-16: guest-side /p/[token] view + block tracking
     pathname.startsWith('/api/room/') || // dataroom-module-v1: guest item view/download (token-gated in route)
+    pathname === '/api/website/sitemap.xml' || // website-module-v1-slice-cms4-seo: public crawler access (protected_path_decisions id=7)
+    pathname === '/api/website/robots.txt' || // website-module-v1-slice-cms4-seo: public crawler access (protected_path_decisions id=7)
     PUBLIC_PATHS.some(p => pathname.startsWith(p))
   ) return NextResponse.next()
 
@@ -84,7 +86,7 @@ export async function middleware(req: NextRequest) {
   const claims = session?.access_token ? decodeJwtPayload(session.access_token) : {}
   const holdingRole: string = String(claims.holding_role ?? '')
   const propertyIds: number[] = Array.isArray(claims.property_ids)
-    ? (claims.property_ids as unknown[]).map((x) => Number(x)).filter((n) => Number.isFinite(n))
+    ? (claims.property_ids as unknown[]).map((x) => Number(x)).filter((n) => Number.isfinite(n))
     : []
 
   const m = pathname.match(/^\/h\/(\d+)(\/|$)/)
@@ -104,35 +106,28 @@ export async function middleware(req: NextRequest) {
   // path itself (would loop), never on /settings/gmail (user needs to see the
   // error-state toast if consent was declined).
   const email = (user.email ?? '').toLowerCase()
-  if (email.endsWith('@thenamkhan.com')) {
-    const skip =
-      pathname.startsWith('/api/') ||
-      pathname.startsWith('/auth/') ||
-      pathname.startsWith('/settings/gmail') ||
-      pathname.includes('/gmail-connect')
-    if (!skip) {
-      // Bridge view public.v_user_gmail_connections is RLS-open, no tokens exposed.
-      // ilike keeps casing tolerant (auth.users.email may be mixed-case).
-      const { data: conn } = await supabase
-        .from('v_user_gmail_connections')
-        .select('gmail_address, active, expires_at')
-        .ilike('gmail_address', email)
-        .maybeSingle()
-      const needsConnect = !conn || conn.active !== true
-      if (needsConnect) {
-        // Guard against redirect loop: only auto-trigger once per navigation.
-        // We rely on /api/user/gmail/connect to build the Google authorize URL
-        // and Google to bounce back to /api/user/gmail/callback which persists
-        // the row. On the next page load the check above passes and we skip.
-        const dest = req.nextUrl.clone()
-        dest.pathname = '/api/user/gmail/connect'
-        dest.search = ''
-        return NextResponse.redirect(dest)
-      }
+  const isNamkhanStaff = email.endsWith('@thenamkhan.com')
+  const isApiRoute = pathname.startsWith('/api/')
+  const isGmailPath = pathname.startsWith('/api/user/gmail') || pathname.startsWith('/settings/gmail')
+  if (isNamkhanStaff && !isApiRoute && !isGmailPath) {
+    const { data: connections, error: connErr } = await supabase
+      .from('v_user_gmail_connections')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .maybeSingle()
+    if (!connErr && !connections) {
+      const url = req.nextUrl.clone()
+      url.pathname = '/api/user/gmail/connect'
+      return NextResponse.redirect(url)
     }
   }
 
   return res
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'] }
+export const config = {
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}
