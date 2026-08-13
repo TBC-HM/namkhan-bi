@@ -41,7 +41,16 @@ let METER_TURN = 0; // finding #87: idempotent run_ref counter for per-call mete
 // caching live (ADR-240) an extra turn re-reads cached context at ~10% of the old
 // price, so turns are now the cheap axis and brief SIZE is the expensive one.
 // The three 55-69k-char briefs still need slicing — this raise does not fix them.
-const MAX_TURNS = 40;
+// 2026-08-13 · 40 -> 60. "turn budget exhausted" is STILL the #1 failure mode (22 of
+// the last 24h's finish_notes) despite two prior prompt-only fixes (turn batching
+// 2026-08-12 20:29, reply-size cap 2026-08-13 12:36) that targeted this exact symptom
+// without raising the cap. A burst of 8 concurrent workers just failed within 10 min
+// of each other, all "turn budget exhausted", zero ships. Caching (below) already
+// answers the cost objection that drove the 60->25 cut in the first place — turns are
+// cheap now. Raising back toward the original 60 to test whether headroom, not
+// prompting, was the missing piece. PBS informed same session (2026-08-13 ~21:35 UTC).
+// Revert to 40 if burn spikes disproportionately.
+const MAX_TURNS = 60;
 const WALL_MS = 65 * 60 * 1000; // 65 min — workflow timeout is 75
 const STARTED = Date.now();
 
