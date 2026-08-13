@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "deny": [
+      {
+        "type": "Bash",
+        "pattern": "vercel *"
+      },
+      {
+        "type": "Bash",
+        "pattern": "npx vercel *"
+      },
+      {
+        "type": "Edit",
+        "pattern": "supabase/migrations/**"
+      },
+      {
+        "type": "Read",
+        "pattern": "./.env*"
+      },
+      {
+        "type": "Edit",
+        "pattern": "./.env*"
+      },
+      {
+        "type": "Edit",
+        "pattern": "app/cockpit/**"
+      },
+      {
+        "type": "Edit",
+        "pattern": "app/cockpit-v2/**"
+      },
+      {
+        "type": "Edit",
+        "pattern": "app/chat/**"
+      }
+    ]
+  },
+  "hooks": {
+    "SessionStart": "node scripts/claude-session-context.mjs"
+  }
+}
