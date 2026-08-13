@@ -14,6 +14,9 @@
 // it as "manual post needed" (amber Folio-posted KPI + em-dash folio cell).
 // Every attempt is recorded on the booking (raw.folio_post) and in
 // cockpit_audit_log, so the first live completion yields full API evidence.
+//
+// Walk-ins (no reservation_id) record an explicit skip to raw.folio_post with
+// audit action spa_folio_skipped_walkin (brief spa-module-v1-slice-folio-posting).
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -89,6 +92,17 @@ export async function runCompletionHooks(
   // ── 2. Cloudbeds folio post (in-house Namkhan guests only) ──────────────
   if (!booking.reservation_id) {
     result.folio.note = 'walk-in / day guest — front-desk settle, no folio';
+    // Walk-in explicit skip recording (brief spa-module-v1-slice-folio-posting)
+    try {
+      await sb.rpc('fn_spa_record_folio_post', {
+        p_booking_id: booking.booking_id,
+        p_posted: false,
+        p_charge_id: null,
+        p_evidence: { posted: false, skipped: 'walk_in', note: result.folio.note },
+      });
+    } catch {
+      // best-effort
+    }
   } else if (!CLOUDBEDS_PROPERTY_IDS.has(booking.property_id)) {
     result.folio.note = 'non-Cloudbeds property — delivery recorded, no folio post';
   } else if (booking.posted_to_folio) {
@@ -120,7 +134,13 @@ export async function runCompletionHooks(
     }
     await sb.from('cockpit_audit_log').insert({
       agent: 'spa-completion-hook',
-      action: result.folio.posted ? 'spa_folio_posted' : (result.folio.attempted ? 'spa_folio_post_failed' : 'spa_completed'),
+      action: result.folio.posted
+        ? 'spa_folio_posted'
+        : result.folio.attempted
+          ? 'spa_folio_post_failed'
+          : !booking.reservation_id
+            ? 'spa_folio_skipped_walkin'
+            : 'spa_completed',
       target: `spa.booking:${booking.booking_id}`,
       success: !result.folio.attempted || result.folio.posted,
       metadata: { ...result, treatment: booking.treatment_name, reservation_id: booking.reservation_id },
