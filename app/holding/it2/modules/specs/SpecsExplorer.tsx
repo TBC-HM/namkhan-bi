@@ -15,6 +15,26 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
+// module-surface-slice-work-orders-strip: one row per brief attached to the
+// module (via completion_queue.brief_slug or the 'module:<doc_type>' tag).
+// Chip colours + the single state-matched CTA are resolved server-side from
+// the same BRIEF_STATUS map the briefs list uses — no ad-hoc styling here.
+export type WorkOrder = {
+  slug: string;
+  title: string;
+  status: string;
+  statusLabel: string;
+  statusBg: string;
+  statusColor: string;
+  version: number;
+  needsAnswer: boolean;
+  live: boolean;            // draft/ready/in_progress/needs_input/verifying
+  lastUpdated: string | null; // preformatted, server (rule 712 ISO slice)
+  shippedAt: string | null;
+  ctaLabel: string;
+  ctaHref: string;
+};
+
 export type ModuleRow = {
   docType: string;
   title: string;
@@ -50,6 +70,7 @@ export type ModuleRow = {
   ctaHref?: string;
   ctaRpc?: 'sign_off' | 'reaudit';
   ctaTone: 'red' | 'green' | 'gold' | 'grey';
+  workOrders?: WorkOrder[]; // optional: push-order 759, intermediate commit stays green
   needsYou: boolean;
   unregistered: boolean;
 };
@@ -131,6 +152,67 @@ function TruthChip({ frozen, compact }: { frozen: boolean; compact?: boolean }) 
   );
 }
 
+// Work-orders strip (module-surface-slice-work-orders-strip): the build work
+// attached to this module, inline on the expanded card. Live briefs always
+// visible newest-first (server pre-sorts by last_updated_at desc); shipped +
+// archived collapse behind an "N shipped" count chip. Every row links through
+// to the brief read view and carries exactly ONE state-matched CTA — a row is
+// never dead text. Zero state names the shipped count, never an empty box.
+function WorkOrdersStrip({ orders }: { orders: WorkOrder[] }) {
+  const [showShipped, setShowShipped] = useState(false);
+  const live = orders.filter(w => w.live);
+  const done = orders.filter(w => !w.live);
+  const row = (w: WorkOrder, muted: boolean) => (
+    <div key={w.slug} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', opacity: muted ? 0.65 : 1 }}>
+      <Link href={`/holding/it2/modules/briefs/${encodeURIComponent(w.slug)}`}
+        title={w.title}
+        style={{ fontSize: 10.5, fontWeight: 600, color: '#1B1B1B', textDecoration: 'none', flex: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {w.slug}
+      </Link>
+      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 99, flexShrink: 0,
+        background: w.statusBg, color: w.statusColor, whiteSpace: 'nowrap' }}>
+        {w.statusLabel}
+      </span>
+      <span style={{ fontSize: 9.5, color: '#8A8A8A', flexShrink: 0 }}>v{w.version}</span>
+      <span style={{ fontSize: 9.5, color: '#8A8A8A', width: 70, textAlign: 'right', flexShrink: 0 }}>
+        {muted ? (w.shippedAt ?? w.lastUpdated ?? '—') : (w.lastUpdated ?? '—')}
+      </span>
+      <Link href={w.ctaHref}
+        style={{ fontSize: 9.5, fontWeight: 700, padding: '2px 9px', borderRadius: 3, flexShrink: 0,
+          background: w.needsAnswer || w.status === 'needs_input' ? '#B71C1C' : muted ? '#FFFFFF' : '#1F3A2E',
+          color: w.needsAnswer || w.status === 'needs_input' ? '#FFFFFF' : muted ? '#1B1B1B' : '#FFFFFF',
+          border: muted ? '1px solid #E6DFCC' : 'none', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+        {w.ctaLabel}
+      </Link>
+    </div>
+  );
+  return (
+    <div style={{ background: '#FAFAF7', border: '1px solid #F0EBE0', borderRadius: 4, padding: '6px 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: '#8A8A8A', letterSpacing: '0.05em' }}>
+          WORK ORDERS{live.length > 0 ? ` (${live.length} open)` : ''}
+        </span>
+        {done.length > 0 && (
+          <button type="button" onClick={() => setShowShipped(s => !s)}
+            title={showShipped ? 'Hide shipped briefs' : 'Show shipped briefs'}
+            style={{ fontSize: 9, fontWeight: 700, padding: '1px 8px', borderRadius: 99, cursor: 'pointer',
+              background: '#E8F5E9', color: '#2E7D32', border: '1px solid #C8E6C9' }}>
+            {done.length} shipped {showShipped ? '▾' : '▸'}
+          </button>
+        )}
+      </div>
+      {live.length === 0 && (
+        <div style={{ fontSize: 10, color: '#8A8A8A', padding: '4px 0' }}>
+          No open work orders{done.length > 0 ? ` · ${done.length} shipped` : ' · nothing has been built on this module yet'}
+        </div>
+      )}
+      {live.map(w => row(w, false))}
+      {showShipped && done.map(w => row(w, true))}
+    </div>
+  );
+}
+
 function ModuleCard({ m, signOffAction, reauditAction, queued, onReaudit }: {
   m: ModuleRow;
   signOffAction: (fd: FormData) => Promise<void>;
@@ -199,6 +281,8 @@ function ModuleCard({ m, signOffAction, reauditAction, queued, onReaudit }: {
         <div style={{ fontSize: 9, color: '#B8A878', marginTop: -2 }}>no gap data · ⟳ re-audit to populate</div>
       ) : null}
       <PipelineStrip m={{ ...m, stageActive }} />
+      {/* Work orders attached to this module — never opens the fleet log */}
+      <WorkOrdersStrip orders={m.workOrders ?? []} />
       <div style={{ fontSize: 12, fontWeight: 600, color: '#1B1B1B', lineHeight: 1.4 }}>{m.title}</div>
       <div style={{ fontSize: 11, color: '#8A8A8A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <span>v{m.version} · {m.signedOff ? 'signed off' : m.docStatus}{m.lastUpdated ? ` · ${m.lastUpdated}` : ''}</span>
