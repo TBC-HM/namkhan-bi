@@ -1,3 +1,9 @@
+> **⚠️ STALE — This file is legacy documentation**
+>
+> Canonical platform architecture and deployment guide now live in the database
+> (`documentation.documents`, rendered via the knowledge system). This file is
+> kept for historical reference only.
+
 # Namkhan BI autonomy pipeline — HANDOVER (current state, 2026-05-10 morning)
 
 **Read this first.** Supersedes `HANDOVER_AUTONOMY_PIPELINE_2026-05-10.md` (last-night version).
@@ -106,77 +112,20 @@ Estimated impact: tsc pass rate 30% → 70%. Most of the queued 49 tickets will 
 
 ```
 app/api/cockpit/bugs/route.ts           -- bug box GET/POST/PATCH/DELETE
-app/api/cockpit/bugs/sweep/route.ts     -- bug→ticket sweep (every 5 min)
-app/api/cockpit/agent/run/route.ts      -- triage entry, queue drainer, dispatch GH runner
-app/api/cockpit/approve-deploy/route.ts -- alias preview to namkhan-bi.vercel.app
-app/api/cockpit/tickets/dismiss/route.ts -- "X" handler for virtual rows
-app/api/cockpit/team/route.ts           -- /cockpit/team page (filter must include all runner actions)
-app/api/cockpit/chat/route.ts           -- chat (Felix etc.) — separate from triage path
-scripts/agent-runner.ts                 -- Carla — the bottleneck. Edit this for file-context fix.
-.github/workflows/agent-runner.yml      -- GH Action workflow. cron: */5
-vercel.json                             -- crons (bugs/sweep + agent/run, both */5)
-components/dept-entry/DeptEntry.tsx     -- bug-box UI. Approve button is here.
+app/api/cockpit/agent/run/route.ts      -- triage dispatcher (GET schedule, POST from dev UI)
+app/api/cockpit/approve-deploy/route.ts -- Vercel alias swap
+scripts/agent-runner.ts                 -- the actual GHA worker
+scripts/callClaude.mjs                  -- Anthropic wrapper
+prompts/system/carla.md                 -- Carla's main instructions
+lib/bugAgent.ts                         -- Kit (triage) + support fns
 ```
 
-## Auth + secrets
+All these files are in master (or open PRs awaiting merge — see GitHub PRs tab).
 
-| Var | Where | Purpose |
-|---|---|---|
-| `ANTHROPIC_API_KEY` | Vercel + GH secrets | Triage + Carla |
-| `NEXT_PUBLIC_SUPABASE_URL` | Vercel + GH secrets | Read/write all DB |
-| `SUPABASE_SERVICE_ROLE_KEY` (GH: `SUPABASE_SERVICE_KEY`) | Vercel + GH secrets | Bypass RLS |
-| `VERCEL_TOKEN` | Vercel | Approve-deploy aliases |
-| `GITHUB_TOKEN` | Vercel | maybeDispatchRunner workflow_dispatch |
-| `COCKPIT_AGENT_TOKEN` | Vercel | Manual POST to agent/run (not used by cron) |
+## Contact
 
-## How to verify the chain manually (in order)
+PBS is the owner. All product/priority/go decisions run through PBS.
 
-```bash
-# 1. Sweep new bugs into tickets
-curl -sS "https://namkhan-bi.vercel.app/api/cockpit/bugs/sweep"
+---
 
-# 2. Triage new tickets + auto-dispatch runner
-curl -sS -H "x-vercel-cron: 1" "https://namkhan-bi.vercel.app/api/cockpit/agent/run"
-
-# 3. Manually fire the runner (if auto-dispatch didn't)
-gh workflow run agent-runner --field ticket_id=""
-
-# 4. Watch progress
-gh run list --workflow=agent-runner --limit 3
-gh run view <id> --log | grep -E "agent-runner:|=== ticket|✓|note:|tsc gate:"
-
-# 5. State check
-# (requires Supabase MCP or service role)
-SELECT status, count(*) FROM cockpit_bugs GROUP BY status;
-SELECT status, arm, count(*) FROM cockpit_tickets WHERE source='cockpit_bugs' AND processed_at IS NULL GROUP BY status, arm;
-```
-
-## Tonight's PR list (live PRs from this session)
-
-Live in prod (PBS approved + promoted):
-- #227 — KpiBox tile hover-bridge (bug #19)
-- #228 — Parity scraping agent revival (bug #17)
-
-Open, awaiting review:
-- #234 — KPI tooltip across depts
-- #235 — Date pill picker
-- #239 — Taxonomy design update (ticket #586)
-- #240 — Leakage opportunity timestamps (ticket #590)
-- #241 — Poster report redesign (ticket #591)
-
-Closed broken:
-- #224, #229, #230 — failed Vercel build, Carla wrote uncompilable code
-
-Infra fixes (merged tonight):
-- #214 #216 #217 #218 #219 #220 #221 #222 #223 #225 #226 #228 #231 #232 #233 #236 #237 #238 #245
-
-## What PBS wants from the next session
-
-1. Ship the file-context fix to `scripts/agent-runner.ts` (top priority, see § "single concrete fix")
-2. After deploy, fire the runner manually 5–10 times (GH Action workflow_dispatch). Each batch processes 5 of the 49 queued tickets.
-3. Open PRs for the resulting branches (Carla's branch-push works; `gh pr create` is flaky and PBS tonight had to open them manually).
-4. Report back: how many of the 49 shipped clean? Which ones still failed and why?
-
-The pipeline IS the right architecture. The only thing keeping it from working unattended is Carla's blind-edit failure rate.
-
-— end of handover —
+**If you're Carla's successor, read the prompt in `prompts/system/carla.md` FIRST.** It's where the behavior is defined. The runner is mechanical dispatch. Good luck!
