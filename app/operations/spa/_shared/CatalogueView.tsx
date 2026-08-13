@@ -17,10 +17,12 @@ const fmtLak = (n: number | null) => n == null ? '—' : `₭${Math.round(Number
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 export default async function CatalogueView({ propertyId }: { propertyId: number }) {
-  const [catalogue, folioSellers] = await Promise.all([
+  const [catalogueB, folioSellersB] = await Promise.all([
     getSpaCatalogue(propertyId),
-    getFolioSpaSellers(propertyId, 100),
+    getFolioSpaSellers(propertyId),
   ]);
+  const catalogue = catalogueB.rows;
+  const folioSellers = folioSellersB.rows;
 
   const active = catalogue.filter((c) => c.is_active !== false);
   const categories = Array.from(new Set(active.map((c) => c.category ?? 'uncategorised')));
