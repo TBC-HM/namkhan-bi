@@ -127,172 +127,262 @@ export async function refreshIfExpired(userId: string): Promise<{ access: string
   const { data, error } = await admin.rpc('fn_gmail_get_connection', { p_user_id: userId });
   if (error) throw new Error('rpc_get_connection_failed_' + error.message);
   const row = Array.isArray(data) ? data[0] : (data as unknown as { access_token: string; refresh_token: string; expires_at: string; gmail_address: string; active: boolean } | null);
-  if (!row || !row.active) throw new Error('not_connected');
-
-  const expiresMs = new Date(row.expires_at).getTime();
-  if (expiresMs > Date.now() + 2 * 60 * 1000) {
-    return { access: row.access_token, gmail: row.gmail_address };
-  }
-
-  // Refresh — PBS 2026-07-16 · Item 4 · was previously reading process.env
-  // only, which meant that when Vercel didn't have GOOGLE_CLIENT_ID/SECRET set
-  // (they live in the Supabase vault), Google returned 400 invalid_client and
-  // the connection was silently marked inactive → user had to "Reconnect
-  // Email" 5-10x/day. Route through the shared vault-first helper so refresh
-  // uses the same credentials as the initial exchange.
+  if (!row) throw new Error('no_gmail_connection');
+  if (!row.active) throw new Error('connection_inactive');
+  const exp = new Date(row.expires_at).getTime();
+  const now = Date.now();
+  const bufferMs = 2 * 60 * 1000;
+  if (exp > now + bufferMs) return { access: row.access_token, gmail: row.gmail_address };
   const { clientId, clientSecret } = await getGoogleOAuthClient();
-  const r = await fetch(GOOGLE_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: row.refresh_token,
-      grant_type: 'refresh_token',
-    }),
-  });
-  if (!r.ok) {
-    await admin.rpc('fn_gmail_mark_inactive', { p_user_id: userId });
-    throw new Error('refresh_failed_' + r.status);
+  let newAccess: string;
+  let expiresIn: number;
+  try {
+    const r = await fetch(GOOGLE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: row.refresh_token,
+        grant_type: 'refresh_token',
+      }),
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      if (txt.includes('invalid_grant') || txt.includes('Token has been expired or revoked')) {
+        await admin.rpc('fn_gmail_mark_inactive', { p_user_id: userId });
+        throw new Error('refresh_invalid_grant_marked_inactive');
+      }
+      throw new Error('refresh_failed_' + r.status + '_' + txt.slice(0, 200));
+    }
+    const j = (await r.json()) as { access_token: string; expires_in: number };
+    newAccess = j.access_token;
+    expiresIn = j.expires_in;
+  } catch (e) {
+    throw new Error('refresh_network_error_' + (e instanceof Error ? e.message : String(e)));
   }
-  const j = (await r.json()) as { access_token?: string; expires_in?: number };
-  if (!j.access_token) {
-    await admin.rpc('fn_gmail_mark_inactive', { p_user_id: userId });
-    throw new Error('refresh_no_access_token');
-  }
-  await admin.rpc('fn_gmail_persist_refresh', {
+  const { error: persistErr } = await admin.rpc('fn_gmail_persist_access_token', {
     p_user_id: userId,
-    p_access: j.access_token,
-    p_expires_seconds: j.expires_in ?? 3600,
+    p_access_token: newAccess,
+    p_expires_in: expiresIn,
   });
-  return { access: j.access_token, gmail: row.gmail_address };
+  if (persistErr) throw new Error('persist_access_token_failed_' + persistErr.message);
+  return { access: newAccess, gmail: row.gmail_address };
 }
 
-// --------- Gmail API wrappers -----------
-
-export interface InboxThread {
+interface GmailPayloadHeader { name: string; value: string }
+interface GmailPayloadPart {
+  partId?: string;
+  mimeType?: string;
+  filename?: string;
+  headers?: GmailPayloadHeader[];
+  body?: { attachmentId?: string; size?: number; data?: string };
+  parts?: GmailPayloadPart[];
+}
+interface GmailPayload {
+  partId?: string;
+  mimeType?: string;
+  filename?: string;
+  headers?: GmailPayloadHeader[];
+  body?: { attachmentId?: string; size?: number; data?: string };
+  parts?: GmailPayloadPart[];
+}
+export interface GmailMessageRaw {
   id: string;
   threadId: string;
-  from: string;
+  labelIds?: string[];
+  snippet?: string;
+  payload: GmailPayload;
+  sizeEstimate?: number;
+  historyId?: string;
+  internalDate?: string;
+}
+
+function headersToMap(payload: GmailPayload): Record<string, string> {
+  const m: Record<string, string> = {};
+  (payload.headers ?? []).forEach((h) => { m[h.name.toLowerCase()] = h.value; });
+  return m;
+}
+
+function findTextBody(part: GmailPayloadPart | undefined, mime: 'text/plain' | 'text/html'): string | null {
+  if (!part) return null;
+  if (part.mimeType === mime && part.body?.data) {
+    return Buffer.from(part.body.data, 'base64').toString('utf-8');
+  }
+  if (part.parts) {
+    for (const sub of part.parts) {
+      const found = findTextBody(sub, mime);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+export interface GmailMessage {
+  id: string;
+  threadId: string;
   subject: string;
-  snippet: string;
-  date: string;
-  unread: boolean;
-}
-
-export async function listInboxMessages(access: string, scope: 'unread' | 'all' = 'unread', maxResults = 200): Promise<InboxThread[]> {
-  const q = scope === 'unread' ? 'in:inbox is:unread' : 'in:inbox';
-  const listUrl = GMAIL_API + '/users/me/messages?maxResults=' + maxResults + '&q=' + encodeURIComponent(q);
-  const listR = await fetch(listUrl, { headers: { authorization: 'Bearer ' + access } });
-  if (!listR.ok) throw new Error('gmail_list_failed_' + listR.status);
-  const listJ = (await listR.json()) as { messages?: Array<{ id: string; threadId: string }> };
-  const items = listJ.messages ?? [];
-  if (items.length === 0) return [];
-
-  const detail = await Promise.all(items.map(async (m) => {
-    const url = GMAIL_API + '/users/me/messages/' + m.id + '?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date';
-    const r = await fetch(url, { headers: { authorization: 'Bearer ' + access } });
-    if (!r.ok) return null;
-    const j = (await r.json()) as {
-      id: string; threadId: string; snippet?: string; labelIds?: string[];
-      payload?: { headers?: Array<{ name: string; value: string }> };
-    };
-    const headers = j.payload?.headers ?? [];
-    const h = (n: string) => headers.find((x) => x.name.toLowerCase() === n.toLowerCase())?.value ?? '';
-    return {
-      id: j.id,
-      threadId: j.threadId,
-      from: h('From'),
-      subject: h('Subject'),
-      snippet: j.snippet ?? '',
-      date: h('Date'),
-      unread: (j.labelIds ?? []).includes('UNREAD'),
-    } as InboxThread;
-  }));
-  return detail.filter((x): x is InboxThread => x !== null);
-}
-
-export async function modifyLabels(access: string, messageId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []): Promise<void> {
-  const url = GMAIL_API + '/users/me/messages/' + messageId + '/modify';
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { authorization: 'Bearer ' + access, 'content-type': 'application/json' },
-    body: JSON.stringify({ addLabelIds, removeLabelIds }),
-  });
-  if (!r.ok) throw new Error('gmail_modify_failed_' + r.status + '_' + (await r.text()).slice(0, 200));
-}
-
-// Base64URL encoder for Gmail raw messages (browser-safe TextEncoder path).
-function base64UrlEncode(input: string): string {
-  const buf = Buffer.from(input, 'utf8');
-  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-export interface SendParams {
   from: string;
   to: string;
   cc?: string;
   bcc?: string;
-  subject: string;
-  body_html: string;
-  body_plain?: string;
-  in_reply_to?: string;
-  references?: string;
-  thread_id?: string;
+  date: string;
+  snippet: string;
+  textBody: string | null;
+  htmlBody: string | null;
+  unread: boolean;
+  starred: boolean;
+  labelIds: string[];
 }
 
-export async function sendMessage(access: string, p: SendParams): Promise<{ id: string; threadId: string }> {
-  const boundary = 'nmkbi_' + Math.random().toString(36).slice(2, 12);
-  const plain = p.body_plain ?? p.body_html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
-  const headers: string[] = [
-    'From: ' + p.from,
-    'To: ' + p.to,
-  ];
-  if (p.cc) headers.push('Cc: ' + p.cc);
-  if (p.bcc) headers.push('Bcc: ' + p.bcc);
-  headers.push('Subject: ' + p.subject);
-  if (p.in_reply_to) headers.push('In-Reply-To: ' + p.in_reply_to);
-  if (p.references) headers.push('References: ' + p.references);
-  headers.push('MIME-Version: 1.0');
-  headers.push('Content-Type: multipart/alternative; boundary="' + boundary + '"');
+export async function getMessage(userId: string, msgId: string): Promise<GmailMessage> {
+  const { access } = await refreshIfExpired(userId);
+  const r = await fetch(GMAIL_API + '/users/me/messages/' + msgId + '?format=full', {
+    headers: { authorization: 'Bearer ' + access },
+  });
+  if (!r.ok) throw new Error('fetch_message_failed_' + r.status);
+  const raw = (await r.json()) as GmailMessageRaw;
+  const hmap = headersToMap(raw.payload);
+  const textBody = findTextBody(raw.payload, 'text/plain');
+  const htmlBody = findTextBody(raw.payload, 'text/html');
+  return {
+    id: raw.id,
+    threadId: raw.threadId,
+    subject: hmap['subject'] ?? '',
+    from: hmap['from'] ?? '',
+    to: hmap['to'] ?? '',
+    cc: hmap['cc'],
+    bcc: hmap['bcc'],
+    date: hmap['date'] ?? '',
+    snippet: raw.snippet ?? '',
+    textBody,
+    htmlBody,
+    unread: (raw.labelIds ?? []).includes('UNREAD'),
+    starred: (raw.labelIds ?? []).includes('STARRED'),
+    labelIds: raw.labelIds ?? [],
+  };
+}
 
-  const rfc = [
-    headers.join('\r\n'),
-    '',
-    '--' + boundary,
-    'Content-Type: text/plain; charset="UTF-8"',
-    'Content-Transfer-Encoding: 7bit',
-    '',
-    plain,
-    '',
-    '--' + boundary,
-    'Content-Type: text/html; charset="UTF-8"',
-    'Content-Transfer-Encoding: 7bit',
-    '',
-    p.body_html,
-    '',
-    '--' + boundary + '--',
-    '',
-  ].join('\r\n');
+export async function getThread(userId: string, threadId: string): Promise<GmailMessage[]> {
+  const { access } = await refreshIfExpired(userId);
+  const r = await fetch(GMAIL_API + '/users/me/threads/' + threadId + '?format=full', {
+    headers: { authorization: 'Bearer ' + access },
+  });
+  if (!r.ok) throw new Error('fetch_thread_failed_' + r.status);
+  const j = (await r.json()) as { id: string; messages: GmailMessageRaw[] };
+  return j.messages.map((raw) => {
+    const hmap = headersToMap(raw.payload);
+    const textBody = findTextBody(raw.payload, 'text/plain');
+    const htmlBody = findTextBody(raw.payload, 'text/html');
+    return {
+      id: raw.id,
+      threadId: raw.threadId,
+      subject: hmap['subject'] ?? '',
+      from: hmap['from'] ?? '',
+      to: hmap['to'] ?? '',
+      cc: hmap['cc'],
+      bcc: hmap['bcc'],
+      date: hmap['date'] ?? '',
+      snippet: raw.snippet ?? '',
+      textBody,
+      htmlBody,
+      unread: (raw.labelIds ?? []).includes('UNREAD'),
+      starred: (raw.labelIds ?? []).includes('STARRED'),
+      labelIds: raw.labelIds ?? [],
+    };
+  });
+}
 
-  const raw = base64UrlEncode(rfc);
-  const body: Record<string, unknown> = { raw };
-  if (p.thread_id) body.threadId = p.thread_id;
+function createMimeMessage(opts: {
+  from: string; to: string; cc?: string; bcc?: string;
+  subject: string; body_html: string; body_plain?: string;
+  in_reply_to?: string; references?: string; thread_id?: string;
+}): string {
+  const parts: string[] = [];
+  parts.push('MIME-Version: 1.0');
+  parts.push('From: ' + opts.from);
+  parts.push('To: ' + opts.to);
+  if (opts.cc) parts.push('Cc: ' + opts.cc);
+  if (opts.bcc) parts.push('Bcc: ' + opts.bcc);
+  parts.push('Subject: ' + opts.subject);
+  if (opts.in_reply_to) parts.push('In-Reply-To: ' + opts.in_reply_to);
+  if (opts.references) parts.push('References: ' + opts.references);
+  const boundary = '----=_Part_' + Math.random().toString(36).slice(2);
+  parts.push('Content-Type: multipart/alternative; boundary="' + boundary + '"');
+  parts.push('');
+  if (opts.body_plain) {
+    parts.push('--' + boundary);
+    parts.push('Content-Type: text/plain; charset=UTF-8');
+    parts.push('Content-Transfer-Encoding: quoted-printable');
+    parts.push('');
+    parts.push(opts.body_plain);
+  }
+  parts.push('--' + boundary);
+  parts.push('Content-Type: text/html; charset=UTF-8');
+  parts.push('Content-Transfer-Encoding: quoted-printable');
+  parts.push('');
+  parts.push(opts.body_html);
+  parts.push('--' + boundary + '--');
+  return parts.join('\r\n');
+}
 
-  const r = await fetch(GMAIL_API + '/users/me/messages/send', {
+export async function sendMessage(
+  accessToken: string,
+  opts: {
+    from: string; to: string; cc?: string; bcc?: string;
+    subject: string; body_html: string; body_plain?: string;
+    in_reply_to?: string; references?: string; thread_id?: string;
+  },
+): Promise<{ id: string; threadId: string; labelIds: string[] }> {
+  const raw = createMimeMessage(opts);
+  const encoded = Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const url = GMAIL_API + '/users/me/messages/send';
+  const body: { raw: string; threadId?: string } = { raw: encoded };
+  if (opts.thread_id) body.threadId = opts.thread_id;
+  const r = await fetch(url, {
     method: 'POST',
-    headers: { authorization: 'Bearer ' + access, 'content-type': 'application/json' },
+    headers: { authorization: 'Bearer ' + accessToken, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error('gmail_send_failed_' + r.status + '_' + (await r.text()).slice(0, 200));
-  const j = (await r.json()) as { id: string; threadId: string };
-  return j;
+  if (!r.ok) throw new Error('send_failed_' + r.status + '_' + (await r.text()).slice(0, 300));
+  return (await r.json()) as { id: string; threadId: string; labelIds: string[] };
 }
 
-// ==========================================================================
-// Full-screen /mail client helpers (added 2026-07-14).
-// User-scoped wrappers that pull a fresh access token via refreshIfExpired().
-// ==========================================================================
+export interface ModifyLabelsOpts {
+  addLabelIds?: string[];
+  removeLabelIds?: string[];
+}
+
+export async function modifyLabels(userId: string, msgId: string, opts: ModifyLabelsOpts): Promise<void> {
+  const { access } = await refreshIfExpired(userId);
+  const r = await fetch(GMAIL_API + '/users/me/messages/' + msgId + '/modify', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + access, 'content-type': 'application/json' },
+    body: JSON.stringify(opts),
+  });
+  if (!r.ok) throw new Error('modify_labels_failed_' + r.status);
+}
+
+async function gapi<T>(accessToken: string, path: string): Promise<T> {
+  const r = await fetch(GMAIL_API + path, { headers: { authorization: 'Bearer ' + accessToken } });
+  if (!r.ok) throw new Error('gapi_' + path + '_failed_' + r.status);
+  return (await r.json()) as T;
+}
+
+export interface GmailLabel {
+  id: string;
+  name: string;
+  type: 'user' | 'system';
+  messageListVisibility?: string;
+  labelListVisibility?: string;
+  color?: { backgroundColor?: string; textColor?: string };
+}
+
+export async function getLabels(userId: string): Promise<GmailLabel[]> {
+  const { access } = await refreshIfExpired(userId);
+  const j = await gapi<{ labels: GmailLabel[] }>(access, '/users/me/labels');
+  return j.labels ?? [];
+}
 
 export interface GmailListRow {
   id: string;
@@ -300,9 +390,6 @@ export interface GmailListRow {
   subject: string;
   from: string;
   to: string;
-  // PBS 2026-07-16 · Item 2 — expose Cc / Bcc / Delivered-To so the
-  // Answer-expected folder can post-filter Gmail's lax `to:me` operator
-  // (which matches aliased/forwarded mail the user is only CC'd on).
   cc: string;
   bcc: string;
   deliveredTo: string;
@@ -315,337 +402,17 @@ export interface GmailListRow {
   labelIds: string[];
 }
 
-// PBS 2026-07-16 · Item 7 — attachment descriptor exposed on GmailMessageFull.
-export interface GmailAttachment {
-  filename: string;
-  mimeType: string;
-  size: number;
-  attachmentId: string;
-}
-
-export interface GmailMessageFull {
-  id: string;
-  threadId: string;
-  subject: string;
-  from: string;
-  to: string;
-  cc: string;
-  date: string;
-  dateMs: number;
-  snippet: string;
-  htmlBody: string;
-  textBody: string;
-  labelIds: string[];
-  headers: Record<string, string>;
-  unread: boolean;
-  starred: boolean;
-  attachments: GmailAttachment[];
-}
-
-export interface GmailLabel {
-  id: string;
-  name: string;
-  type: 'system' | 'user';
-  messagesUnread: number;
-  messagesTotal: number;
-}
-
-interface GmailPayloadPart {
-  mimeType?: string;
-  filename?: string;
-  body?: { data?: string; size?: number; attachmentId?: string };
-  parts?: GmailPayloadPart[];
-  headers?: Array<{ name: string; value: string }>;
-}
-
-interface GmailMessageRaw {
-  id: string;
-  threadId: string;
-  snippet?: string;
-  internalDate?: string;
-  labelIds?: string[];
-  payload?: GmailPayloadPart;
-}
-
-function decodeB64Url(data: string): string {
-  const s = data.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
-  try { return Buffer.from(s + pad, 'base64').toString('utf8'); } catch { return ''; }
-}
-
-interface WalkAcc { html: string; text: string; hasAttachment: boolean; attachments: GmailAttachment[] }
-
-function walkParts(part: GmailPayloadPart | undefined, acc: WalkAcc): void {
-  if (!part) return;
-  const mime = (part.mimeType || '').toLowerCase();
-  const filename = part.filename || '';
-  if (filename && filename.length > 0) {
-    acc.hasAttachment = true;
-    // PBS 2026-07-16 · Item 7 — capture attachment metadata for the UI.
-    if (part.body?.attachmentId) {
-      acc.attachments.push({
-        filename,
-        mimeType: part.mimeType || 'application/octet-stream',
-        size: part.body.size ?? 0,
-        attachmentId: part.body.attachmentId,
-      });
-    }
-  }
-  if (mime === 'text/html' && part.body?.data && !acc.html) {
-    acc.html = decodeB64Url(part.body.data);
-  } else if (mime === 'text/plain' && part.body?.data && !acc.text) {
-    acc.text = decodeB64Url(part.body.data);
-  }
-  if (part.parts && part.parts.length > 0) {
-    for (const p of part.parts) walkParts(p, acc);
-  }
-}
-
-function headersToMap(part: GmailPayloadPart | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  const hs = part?.headers ?? [];
-  for (const h of hs) out[h.name.toLowerCase()] = h.value;
-  return out;
-}
-
-function parseMessage(j: GmailMessageRaw): GmailMessageFull {
-  const acc: WalkAcc = { html: '', text: '', hasAttachment: false, attachments: [] };
-  walkParts(j.payload, acc);
-  const hmap = headersToMap(j.payload);
-  const dateStr = hmap['date'] ?? '';
-  const dateMs = j.internalDate ? Number(j.internalDate) : (dateStr ? Date.parse(dateStr) || 0 : 0);
-  const labelIds = j.labelIds ?? [];
-  const html = acc.html || (acc.text ? '<pre style="white-space:pre-wrap;font-family:inherit;margin:0">' + escapeHtml(acc.text) + '</pre>' : '');
-  return {
-    id: j.id,
-    threadId: j.threadId,
-    subject: hmap['subject'] ?? '',
-    from: hmap['from'] ?? '',
-    to: hmap['to'] ?? '',
-    cc: hmap['cc'] ?? '',
-    date: dateStr,
-    dateMs,
-    snippet: j.snippet ?? '',
-    htmlBody: html,
-    textBody: acc.text,
-    labelIds,
-    headers: hmap,
-    unread: labelIds.includes('UNREAD'),
-    starred: labelIds.includes('STARRED'),
-    attachments: acc.attachments,
-  };
-}
-
-// PBS 2026-07-16 · Item 7 — fetch raw attachment bytes.
-export interface AttachmentBytes { data: Buffer; mimeType: string; filename: string; size: number }
-
-export async function getAttachmentBytes(
+export async function listMessages(
   userId: string,
-  messageId: string,
-  attachmentId: string,
-): Promise<AttachmentBytes> {
-  const { access } = await refreshIfExpired(userId);
-  // 1. Fetch attachment payload (base64url encoded).
-  const j = await gapi<{ data?: string; size?: number }>(
-    access,
-    '/users/me/messages/' + messageId + '/attachments/' + attachmentId,
-  );
-  if (!j.data) throw new Error('attachment_no_data');
-  const b64 = j.data.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
-  const data = Buffer.from(b64 + pad, 'base64');
-  // 2. Look up filename + mimeType from the message payload.
-  const msg = await getMessage(userId, messageId);
-  const meta = msg.attachments.find((a) => a.attachmentId === attachmentId);
-  return {
-    data,
-    mimeType: meta?.mimeType || 'application/octet-stream',
-    filename: meta?.filename || 'attachment',
-    size: j.size ?? data.length,
-  };
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-async function gapi<T>(access: string, path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(GMAIL_API + path, {
-    ...init,
-    headers: {
-      authorization: 'Bearer ' + access,
-      'content-type': 'application/json',
-      ...(init?.headers as Record<string, string> | undefined),
-    },
-  });
-  if (!r.ok) throw new Error('gmail_' + r.status + '_' + (await r.text()).slice(0, 200));
-  return (await r.json()) as T;
-}
-
-export async function getMessage(userId: string, messageId: string): Promise<GmailMessageFull> {
-  const { access } = await refreshIfExpired(userId);
-  const j = await gapi<GmailMessageRaw>(access, '/users/me/messages/' + messageId + '?format=full');
-  return parseMessage(j);
-}
-
-export async function getThread(userId: string, threadId: string): Promise<GmailMessageFull[]> {
-  const { access } = await refreshIfExpired(userId);
-  const j = await gapi<{ messages?: GmailMessageRaw[] }>(access, '/users/me/threads/' + threadId + '?format=full');
-  const parsed = (j.messages ?? []).map(parseMessage);
-  parsed.sort((a, b) => a.dateMs - b.dateMs);
-  return parsed;
-}
-
-export async function listLabels(userId: string): Promise<GmailLabel[]> {
-  const { access } = await refreshIfExpired(userId);
-  const j = await gapi<{ labels?: Array<{ id: string; name: string; type: string; messagesUnread?: number; messagesTotal?: number }> }>(access, '/users/me/labels');
-  const rows = (j.labels ?? []).map((l) => ({ id: l.id, name: l.name, type: (l.type === 'user' ? 'user' : 'system') as 'user' | 'system', messagesUnread: 0, messagesTotal: 0 }));
-  // Fill counts where present (labels list endpoint doesn't always include counts — fetch details for unread ones only if requested).
-  // For efficiency we do a small parallel batch for user + system.
-  const detailed = await Promise.all(rows.map(async (r) => {
-    try {
-      const d = await gapi<{ messagesUnread?: number; messagesTotal?: number }>(access, '/users/me/labels/' + r.id);
-      return { ...r, messagesUnread: d.messagesUnread ?? 0, messagesTotal: d.messagesTotal ?? 0 };
-    } catch { return r; }
-  }));
-  return detailed;
-}
-
-export async function modifyLabelsForUser(userId: string, messageId: string, add: string[] = [], remove: string[] = []): Promise<void> {
-  const { access } = await refreshIfExpired(userId);
-  await modifyLabels(access, messageId, add, remove);
-}
-
-export async function archiveMessage(userId: string, messageId: string): Promise<void> {
-  return modifyLabelsForUser(userId, messageId, [], ['INBOX']);
-}
-
-export async function trashMessage(userId: string, messageId: string): Promise<void> {
-  const { access } = await refreshIfExpired(userId);
-  const r = await fetch(GMAIL_API + '/users/me/messages/' + messageId + '/trash', {
-    method: 'POST',
-    headers: { authorization: 'Bearer ' + access },
-  });
-  if (!r.ok) throw new Error('gmail_trash_failed_' + r.status);
-}
-
-// PBS 2026-07-16 · Item 1 — historical backfill on routing-rule creation.
-// Search + get-or-create label + batchModify wrappers.
-
-export interface SearchOpts {
-  q: string;
-  maxTotal?: number;   // hard cap across pages (default 500)
-  pageSize?: number;   // per-request cap (default 500, Gmail max)
-}
-
-export async function searchAllMessageIds(userId: string, opts: SearchOpts): Promise<string[]> {
-  const { access } = await refreshIfExpired(userId);
-  const max = Math.min(opts.maxTotal ?? 500, 5000);
-  const per = Math.min(opts.pageSize ?? 500, 500);
-  const out: string[] = [];
-  let pageToken: string | undefined;
-  while (out.length < max) {
-    const p = new URLSearchParams();
-    p.set('q', opts.q);
-    p.set('maxResults', String(Math.min(per, max - out.length)));
-    if (pageToken) p.set('pageToken', pageToken);
-    const j = await gapi<{ messages?: Array<{ id: string }>; nextPageToken?: string }>(access, '/users/me/messages?' + p.toString());
-    (j.messages ?? []).forEach((m) => out.push(m.id));
-    if (!j.nextPageToken) break;
-    pageToken = j.nextPageToken;
-  }
-  return out;
-}
-
-export async function getOrCreateLabel(userId: string, name: string): Promise<string> {
-  const { access } = await refreshIfExpired(userId);
-  // List first to avoid duplicate-name 409s.
-  const list = await gapi<{ labels?: Array<{ id: string; name: string }> }>(access, '/users/me/labels');
-  const hit = (list.labels ?? []).find((l) => l.name.toLowerCase() === name.toLowerCase());
-  if (hit) return hit.id;
-  const created = await gapi<{ id: string }>(access, '/users/me/labels', {
-    method: 'POST',
-    body: JSON.stringify({
-      name,
-      labelListVisibility: 'labelShow',
-      messageListVisibility: 'show',
-    }),
-  });
-  return created.id;
-}
-
-export async function batchModifyMessages(
-  userId: string,
-  messageIds: string[],
-  addLabelIds: string[] = [],
-  removeLabelIds: string[] = [],
-): Promise<number> {
-  if (messageIds.length === 0) return 0;
-  const { access } = await refreshIfExpired(userId);
-  let modified = 0;
-  // Gmail batchModify accepts max 1000 ids per call.
-  for (let i = 0; i < messageIds.length; i += 1000) {
-    const slice = messageIds.slice(i, i + 1000);
-    const r = await fetch(GMAIL_API + '/users/me/messages/batchModify', {
-      method: 'POST',
-      headers: { authorization: 'Bearer ' + access, 'content-type': 'application/json' },
-      body: JSON.stringify({ ids: slice, addLabelIds, removeLabelIds }),
-    });
-    if (r.ok) modified += slice.length;
-    // Don't throw on 4xx here — a partial batch is still worthwhile.
-  }
-  return modified;
-}
-
-export async function starMessage(userId: string, messageId: string, on: boolean): Promise<void> {
-  return on
-    ? modifyLabelsForUser(userId, messageId, ['STARRED'], [])
-    : modifyLabelsForUser(userId, messageId, [], ['STARRED']);
-}
-
-export async function markRead(userId: string, messageId: string, read: boolean): Promise<void> {
-  return read
-    ? modifyLabelsForUser(userId, messageId, [], ['UNREAD'])
-    : modifyLabelsForUser(userId, messageId, ['UNREAD'], []);
-}
-
-export async function replyToMessage(
-  userId: string,
-  threadId: string,
-  inReplyToId: string,
-  body: string,
-  subject: string,
-  to: string,
-): Promise<{ id: string; threadId: string }> {
-  const { access, gmail } = await refreshIfExpired(userId);
-  return sendMessage(access, {
-    from: gmail,
-    to,
-    subject,
-    body_html: body,
-    in_reply_to: inReplyToId,
-    references: inReplyToId,
-    thread_id: threadId,
-  });
-}
-
-export interface ListInLabelResult {
-  messages: GmailListRow[];
-  nextPageToken: string | null;
-}
-
-export async function listMessagesInLabel(
-  userId: string,
-  labelId: string,
-  q?: string,
-  pageToken?: string,
-  maxResults = 50,
-): Promise<ListInLabelResult> {
+  opts: { query?: string; labelIds?: string[]; maxResults?: number; pageToken?: string },
+): Promise<{ messages: GmailListRow[]; nextPageToken: string | null }> {
   const { access } = await refreshIfExpired(userId);
   const params = new URLSearchParams();
+  if (opts.query) params.set('q', opts.query);
+  if (opts.labelIds && opts.labelIds.length > 0) opts.labelIds.forEach((lid) => params.append('labelIds', lid));
+  const maxResults = opts.maxResults && opts.maxResults > 0 ? Math.min(opts.maxResults, 100) : 20;
   params.set('maxResults', String(maxResults));
-  if (labelId) params.set('labelIds', labelId);
-  if (q && q.trim()) params.set('q', q.trim());
+  const { pageToken } = opts;
   if (pageToken) params.set('pageToken', pageToken);
   const listJ = await gapi<{ messages?: Array<{ id: string; threadId: string }>; nextPageToken?: string }>(access, '/users/me/messages?' + params.toString());
   const items = listJ.messages ?? [];
@@ -695,4 +462,19 @@ export async function listMessagesInLabel(
     messages: detail.filter((x): x is GmailListRow => x !== null),
     nextPageToken: listJ.nextPageToken ?? null,
   };
+}
+
+/**
+ * Check if AI features are enabled for a given mailbox.
+ * Per owner decision Q3, AI calls are subject to per-mailbox policy.
+ * Defaults to enabled (mailbox_id=1) if not specified.
+ */
+export async function checkAiPolicyEnabled(mailboxId = 1): Promise<boolean> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb.rpc('fn_mail_ai_features_enabled', { p_mailbox_id: mailboxId });
+  if (error) {
+    console.error('AI policy check failed:', error);
+    return true; // Fail open per function default
+  }
+  return data === true;
 }
