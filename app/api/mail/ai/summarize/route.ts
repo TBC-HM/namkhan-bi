@@ -1,8 +1,9 @@
 // app/api/mail/ai/summarize/route.ts
 // POST { thread_id, refine_mode? } → { ok: true, summary: string }
 // PBS 2026-07-17 · adds refine_mode ("shorten" | "actionable" | "focus_rate" | "focus_dates").
+// BUILD email_inbox_module-owner-findings-v1: AI policy check per Q3 owner decision
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentAuthUser, getThread } from '@/lib/userGmail';
+import { getCurrentAuthUser, getThread, checkAiPolicyEnabled } from '@/lib/userGmail';
 import { callAnthropic, VECTOR_SYSTEM } from '@/lib/mail/anthropic';
 
 export const runtime = 'nodejs';
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 
 type RefineMode = 'shorten' | 'actionable' | 'focus_rate' | 'focus_dates';
 
-interface Body { thread_id?: string; refine_mode?: string }
+interface Body { thread_id?: string; refine_mode?: string; mailbox_id?: number }
 
 function refineHint(mode: RefineMode | null): string {
   switch (mode) {
@@ -27,6 +28,13 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ ok: false, error: 'not_signed_in' }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as Body;
   if (!b.thread_id) return NextResponse.json({ ok: false, error: 'missing_thread_id' }, { status: 400 });
+  
+  // Q3 owner decision: per-mailbox AI policy check
+  const aiEnabled = await checkAiPolicyEnabled(b.mailbox_id ?? 1);
+  if (!aiEnabled) {
+    return NextResponse.json({ ok: false, error: 'ai_features_disabled' }, { status: 403 });
+  }
+  
   const validModes: RefineMode[] = ['shorten', 'actionable', 'focus_rate', 'focus_dates'];
   const refine: RefineMode | null = (validModes as string[]).includes(b.refine_mode || '') ? (b.refine_mode as RefineMode) : null;
 
