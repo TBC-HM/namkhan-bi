@@ -1,11 +1,12 @@
 'use client';
 // app/operations/spa/_shared/PassActions.tsx
-// Spa module v1 — pass sale + redemption client actions (brief spa-module-v1,
-// gap 6). SellPassForm POSTs /api/spa/passes; RedeemActions PATCHes
-// { action: 'redeem' } (optionally tied to one of today's bookings) or
+// Spa module v1 — pass sale + redemption client actions (brief
+// spa-module-v1-slice-day-pass-tiers). SellPassForm POSTs /api/spa/passes with
+// tier_id; tier-based pricing prefills credits/price/validity. RedeemActions
+// PATCHes { action: 'redeem' } (optionally tied to one of today's bookings) or
 // cancels an active pass. SPA_PASS_* errors surface as friendly text.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
@@ -33,16 +34,30 @@ function friendly(msg: string): string {
   if (/SPA_PASS_NOT_STARTED/.test(msg)) return 'This pass is not valid yet.';
   if (/SPA_PASS_BOOKING_MISMATCH/.test(msg)) return 'That booking does not belong to this property.';
   if (/SPA_PASS_BAD_DATES/.test(msg)) return 'Valid-until must be after valid-from.';
+  if (/SPA_PASS_TIER_NOT_FOUND/.test(msg)) return 'Tier not found.';
+  if (/SPA_PASS_TIER_INACTIVE/.test(msg)) return 'Tier is no longer active.';
   return msg || 'Something went wrong.';
 }
 
 export interface PassBookingOption { id: string; label: string; }
+export interface PassTier {
+  tier_id: number;
+  code: string;
+  name: string;
+  pass_type: string;
+  credits_total: number;
+  price: number;
+  currency: string;
+  valid_days: number;
+}
 
 export function SellPassForm({ propertyId, todayIso }: { propertyId: number; todayIso: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [tiers, setTiers] = useState<PassTier[]>([]);
+  const [tierId, setTierId] = useState<number | null>(null);
   const [passType, setPassType] = useState<'day_pass' | 'package'>('day_pass');
   const [name, setName] = useState('');
   const [guest, setGuest] = useState('');
@@ -52,7 +67,35 @@ export function SellPassForm({ propertyId, todayIso }: { propertyId: number; tod
   const [validFrom, setValidFrom] = useState(todayIso);
   const [validUntil, setValidUntil] = useState('');
   const [price, setPrice] = useState('');
+  const [currency, setCurrency] = useState('USD');
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    if (open && tiers.length === 0) {
+      fetch(`/api/spa/tiers?property_id=${propertyId}`)
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.ok && j.tiers) setTiers(j.tiers);
+        })
+        .catch(() => {});
+    }
+  }, [open, propertyId, tiers.length]);
+
+  useEffect(() => {
+    if (tierId) {
+      const tier = tiers.find((t) => t.tier_id === tierId);
+      if (tier) {
+        setName(tier.name);
+        setPassType(tier.pass_type as 'day_pass' | 'package');
+        setCredits(String(tier.credits_total));
+        setPrice(String(tier.price));
+        setCurrency(tier.currency);
+        const vf = new Date(validFrom);
+        const vu = new Date(vf.getTime() + tier.valid_days * 86400000);
+        setValidUntil(vu.toISOString().slice(0, 10));
+      }
+    }
+  }, [tierId, tiers, validFrom]);
 
   const submit = async () => {
     setErr(null);
@@ -64,6 +107,7 @@ export function SellPassForm({ propertyId, todayIso }: { propertyId: number; tod
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           property_id: propertyId,
+          tier_id: tierId,
           pass_type: passType,
           name: name.trim(),
           guest_name: guest.trim(),
@@ -73,13 +117,14 @@ export function SellPassForm({ propertyId, todayIso }: { propertyId: number; tod
           valid_from: validFrom || null,
           valid_until: validUntil || null,
           price: price || null,
-          currency: 'USD',
+          currency: currency,
           notes: notes.trim() || null,
         }),
       });
       const j = await res.json();
       if (!res.ok) { setErr(friendly(j.error ?? '')); return; }
       setOpen(false);
+      setTierId(null);
       setName(''); setGuest(''); setGuestEmail(''); setGuestPhone(''); setCredits('1'); setPrice(''); setNotes(''); setValidUntil('');
       router.refresh();
     } catch {
@@ -92,16 +137,32 @@ export function SellPassForm({ propertyId, todayIso }: { propertyId: number; tod
   if (!open) {
     return <button style={btn} onClick={() => setOpen(true)}>+ Sell pass</button>;
   }
+
+  const filteredTiers = tiers.filter((t) => t.pass_type === passType);
+
   return (
     <div style={{ border: `1px solid ${TOKENS.border}`, borderRadius: 6, padding: 14, background: TOKENS.bgRaised, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
         <div>
           <label style={lbl}>Type</label>
-          <select style={inp} value={passType} onChange={(e) => setPassType(e.target.value === 'package' ? 'package' : 'day_pass')}>
+          <select style={inp} value={passType} onChange={(e) => { setPassType(e.target.value === 'package' ? 'package' : 'day_pass'); setTierId(null); }}>
             <option value="day_pass">Day pass</option>
             <option value="package">Package</option>
           </select>
         </div>
+        {filteredTiers.length > 0 && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={lbl}>Tier (optional)</label>
+            <select style={inp} value={tierId ?? ''} onChange={(e) => setTierId(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">— Custom (enter manually) —</option>
+              {filteredTiers.map((t) => (
+                <option key={t.tier_id} value={t.tier_id}>
+                  {t.name} · {t.credits_total} credits · {t.currency === 'EUR' ? '€' : t.currency === 'LAK' ? '₭' : '$'}{t.price}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label style={lbl}>Pass name *</label>
           <input style={inp} value={name} onChange={(e) => setName(e.target.value)} placeholder={passType === 'day_pass' ? 'Spa Day Pass' : '3-Treatment Package'} />
@@ -115,7 +176,7 @@ export function SellPassForm({ propertyId, todayIso }: { propertyId: number; tod
           <input style={inp} type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} />
         </div>
         <div>
-          <label style={lbl}>Price (USD)</label>
+          <label style={lbl}>Price ({currency})</label>
           <input style={inp} type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="entered at sale" />
         </div>
         <div>
@@ -132,77 +193,141 @@ export function SellPassForm({ propertyId, todayIso }: { propertyId: number; tod
         </div>
         <div>
           <label style={lbl}>Guest phone</label>
-          <input style={inp} value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="+856 20 ..." />
+          <input style={inp} type="tel" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} />
         </div>
-        <div>
+        <div style={{ gridColumn: '1 / -1' }}>
           <label style={lbl}>Notes</label>
-          <input style={inp} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <textarea style={{ ...inp, minHeight: 60, fontFamily: 'inherit' }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes (price overrides recorded automatically)" />
         </div>
       </div>
-      {err && <div style={{ color: TOKENS.terracotta, fontSize: 12 }}>{err}</div>}
+      {err && <div style={{ fontSize: 12, color: TOKENS.terracotta, fontFamily: MONO }}>{err}</div>}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button style={btn} disabled={busy} onClick={submit}>{busy ? 'Saving…' : 'Sell pass'}</button>
-        <button style={btnGhost} disabled={busy} onClick={() => setOpen(false)}>Close</button>
+        <button style={btn} onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Sell pass'}</button>
+        <button style={btnGhost} onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
       </div>
     </div>
   );
 }
 
-export function RedeemActions({ passId, status, creditsRemaining, bookings }: {
-  passId: string;
-  status: string;
-  creditsRemaining: number;
-  bookings: PassBookingOption[];
+export function RedeemActions({
+  pass,
+  bookingOptions,
+}: {
+  pass: { pass_id: string; name: string; credits_remaining: number; status: string };
+  bookingOptions: PassBookingOption[];
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [bookingId, setBookingId] = useState('');
+  const [show, setShow] = useState(false);
+  const [credits, setCredits] = useState('1');
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [note, setNote] = useState('');
 
-  if (status !== 'active') return null;
-
-  const fire = async (payload: Record<string, unknown>) => {
-    setBusy(true); setErr(null);
+  const redeem = async () => {
+    setErr(null);
+    setBusy(true);
     try {
       const res = await fetch('/api/spa/passes', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          action: 'redeem',
+          pass_id: pass.pass_id,
+          credits: credits || 1,
+          booking_id: bookingId,
+          note: note.trim() || null,
+        }),
       });
       const j = await res.json();
       if (!res.ok) { setErr(friendly(j.error ?? '')); return; }
-      setOpen(false); setBookingId('');
+      setShow(false);
+      setCredits('1');
+      setBookingId(null);
+      setNote('');
       router.refresh();
     } catch {
-      setErr('Network error.');
+      setErr('Network error');
     } finally {
       setBusy(false);
     }
   };
 
-  const small: React.CSSProperties = { ...btnGhost, padding: '4px 9px', fontSize: 10 };
-  if (!open) {
+  const cancel = async () => {
+    if (!confirm(`Cancel pass "${pass.name}"? This cannot be undone.`)) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const res = await fetch('/api/spa/passes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel', pass_id: pass.pass_id }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setErr(friendly(j.error ?? '')); return; }
+      router.refresh();
+    } catch {
+      setErr('Network error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (pass.status !== 'active') {
     return (
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button style={{ ...small, borderColor: TOKENS.forest, color: TOKENS.forest }} disabled={busy || creditsRemaining < 1} onClick={() => setOpen(true)}>Redeem</button>
-        <button style={{ ...small, color: TOKENS.terracotta, borderColor: TOKENS.terracotta }} disabled={busy} onClick={() => fire({ action: 'cancel', pass_id: passId })}>Cancel</button>
+      <div style={{ fontSize: 11, fontFamily: MONO, color: TOKENS.inkSoft }}>—</div>
+    );
+  }
+
+  if (!show) {
+    return (
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+        <button
+          style={{ ...btn, padding: '5px 10px', fontSize: 10 }}
+          onClick={() => setShow(true)}
+        >
+          Redeem
+        </button>
+        <button
+          style={{ ...btnGhost, padding: '5px 10px', fontSize: 10 }}
+          onClick={cancel}
+          disabled={busy}
+        >
+          Cancel
+        </button>
       </div>
     );
   }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
-      <select style={{ ...inp, padding: '5px 7px', fontSize: 12 }} value={bookingId} onChange={(e) => setBookingId(e.target.value)}>
-        <option value="">No linked booking</option>
-        {bookings.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-      </select>
-      {err && <div style={{ color: TOKENS.terracotta, fontSize: 11 }}>{err}</div>}
+    <div style={{ border: `1px solid ${TOKENS.border}`, borderRadius: 4, padding: 8, background: TOKENS.bgRaised, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 280 }}>
+      <div>
+        <label style={lbl}>Credits to redeem</label>
+        <input style={inp} type="number" min={1} max={pass.credits_remaining} value={credits} onChange={(e) => setCredits(e.target.value)} />
+      </div>
+      {bookingOptions.length > 0 && (
+        <div>
+          <label style={lbl}>Link to booking (optional)</label>
+          <select style={inp} value={bookingId ?? ''} onChange={(e) => setBookingId(e.target.value || null)}>
+            <option value="">— standalone redemption —</option>
+            {bookingOptions.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div>
+        <label style={lbl}>Note</label>
+        <input style={inp} value={note} onChange={(e) => setNote(e.target.value)} placeholder="optional" />
+      </div>
+      {err && <div style={{ fontSize: 11, color: TOKENS.terracotta, fontFamily: MONO }}>{err}</div>}
       <div style={{ display: 'flex', gap: 6 }}>
-        <button style={{ ...small, borderColor: TOKENS.forest, color: TOKENS.forest }} disabled={busy}
-          onClick={() => fire({ action: 'redeem', pass_id: passId, booking_id: bookingId || null, credits: 1 })}>
-          {busy ? '…' : 'Redeem 1 credit'}
+        <button style={{ ...btn, padding: '5px 10px', fontSize: 10 }} onClick={redeem} disabled={busy}>
+          {busy ? 'Saving…' : 'Confirm'}
         </button>
-        <button style={small} disabled={busy} onClick={() => setOpen(false)}>Close</button>
+        <button style={{ ...btnGhost, padding: '5px 10px', fontSize: 10 }} onClick={() => setShow(false)} disabled={busy}>
+          Cancel
+        </button>
       </div>
     </div>
   );
