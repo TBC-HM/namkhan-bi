@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { brief_slug, goal_text } = await req.json();
+    const { brief_slug, goal_text, done_metric } = await req.json();
     if (!brief_slug || !goal_text) {
       return NextResponse.json(
         { error: 'brief_slug and goal_text required' },
@@ -46,6 +46,7 @@ export async function POST(req: Request) {
       p_brief_slug: brief_slug,
       p_goal_text: goal_text,
       p_by: 'PBS',
+      p_done_metric: typeof done_metric === 'string' ? done_metric.trim() : '',
     });
 
     if (error) {
