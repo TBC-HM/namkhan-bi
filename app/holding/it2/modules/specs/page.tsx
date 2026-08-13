@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import SpecsExplorer, { type ModuleRow } from './SpecsExplorer';
+import SpecsExplorer, { type ModuleRow, type WorkOrder } from './SpecsExplorer';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -87,6 +87,13 @@ async function fetchData() {
       .from('v_module_reaudit_last')
       .select('module_doc_type, created_at, payload'),
   ]);
+  // module-surface-slice-work-orders-strip: ONE query for all modules'
+  // attached briefs (v_module_work_orders joins completion_queue.brief_slug
+  // plus the 'module:<doc_type>' tag form) — grouped in memory, no N+1.
+  const { data: workOrderRows } = await (getSupabaseAdmin() as any)
+    .from('v_module_work_orders')
+    .select('module_doc_type, slug, title, status, version, needs_answer, shipped_at, last_updated_at')
+    .order('last_updated_at', { ascending: false });
   // goal-editor-v1 A2c: pending goal_refined signals — card shows
   // "rewrite queued" until the next builder consumes the signal and
   // rewrites the brief against the refined goal (law 737).
@@ -131,6 +138,35 @@ async function fetchData() {
   }
   const briefStatusBySlug: Record<string, string> = {};
   for (const b of (briefs ?? [])) briefStatusBySlug[b.slug] = b.status;
+  // Work-orders strip: resolve chip colours (BRIEF_STATUS — same map as the
+  // briefs list below) and the ONE state-matched CTA on the server so the
+  // client stays a dumb renderer. CTAs navigate only — no mutation from here.
+  const workOrdersMap: Record<string, WorkOrder[]> = {};
+  for (const w of (workOrderRows ?? [])) {
+    const chip = BRIEF_STATUS[w.status] ?? { label: w.status ?? 'draft', bg: '#F4EFE2', color: '#5A5A5A' };
+    const briefHref = `/holding/it2/modules/briefs/${encodeURIComponent(w.slug)}`;
+    const cta: { label: string; href: string } =
+      w.status === 'needs_input' ? { label: 'Answer', href: `${briefHref}#question` } :
+      w.status === 'ready'       ? { label: 'Fire',   href: briefHref } :
+      w.status === 'in_progress' ? { label: 'Watch',  href: `/holding/it2/system/live?brief=${encodeURIComponent(w.slug)}` } :
+      w.status === 'verifying'   ? { label: 'Verify', href: briefHref } :
+                                   { label: 'Read',   href: briefHref };
+    (workOrdersMap[w.module_doc_type] ??= []).push({
+      slug: w.slug,
+      title: w.title ?? w.slug,
+      status: w.status ?? 'draft',
+      statusLabel: chip.label,
+      statusBg: chip.bg,
+      statusColor: chip.color,
+      version: w.version ?? 0,
+      needsAnswer: !!w.needs_answer,
+      live: !['shipped', 'archived'].includes(w.status),
+      lastUpdated: w.last_updated_at ? shortDate(w.last_updated_at) : null,
+      shippedAt: w.shipped_at ? shortDate(w.shipped_at) : null,
+      ctaLabel: cta.label,
+      ctaHref: cta.href,
+    });
+  }
   // PBS 2026-07-27: new modules get a box the moment they are drafted.
   const docs = [...(moduleDocs ?? [])];
   const haveDoc = new Set(docs.map((d: any) => d.doc_type));
@@ -148,7 +184,7 @@ async function fetchData() {
     }
   }
   docs.sort((a: any, b: any) => String(a.doc_type).localeCompare(String(b.doc_type)));
-  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap, goalRefinedSlugs };
+  return { moduleDocs: docs, briefs: briefs ?? [], statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap, goalRefinedSlugs, workOrdersMap };
 }
 
 // ADR-218 freeze gate — derived from v_module_truth, never from completion_estimate.
@@ -217,7 +253,7 @@ async function reauditAction(formData: FormData) {
 }
 
 export default async function SpecsPage({ searchParams }: { searchParams?: { toast?: string } }) {
-  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap, goalRefinedSlugs } = await fetchData();
+  const { moduleDocs, briefs, statusMap, queueMap, briefStatusBySlug, truthMap, redFindings, blueFindings, amberFindings, signalMap, goalRefinedSlugs, workOrdersMap } = await fetchData();
   const toast = searchParams?.toast ?? null;
 
   // Assemble one serializable row per module for the client explorer.
@@ -283,6 +319,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
       ctaHref: cta.href,
       ctaRpc: cta.rpc,
       ctaTone: cta.tone,
+      workOrders: workOrdersMap[doc.doc_type] ?? [],
       // "needs you" = whose move is it: unconfirmed findings, a parked
       // question, or an unproven completed claim.
       needsYou: nRed > 0 || briefStatus === 'needs_input' || (stage.alert && !frozen),
