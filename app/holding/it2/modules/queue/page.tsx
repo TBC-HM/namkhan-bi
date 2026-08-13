@@ -2,7 +2,8 @@
 // PBS 2026-08-04 (modules-queue-eta-v1) — THE work queue: every pending brief +
 // bug in real pick order, with ETAs computed from OBSERVED 24h throughput
 // (public.v_queue_eta_model) — never a hardcoded rate — plus an expected-delivery
-// column with an honest confidence range and a per-row "build now" dispatch CTA.
+// column with an honest confidence range and a per-row "build next" dispatch CTA.
+// No manual priority reordering here (ADR-287) — the observed order is the queue.
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -38,30 +39,19 @@ type EtaModel = {
   build_p90_min_large: number | null;
 };
 
-async function setPriority(formData: FormData) {
-  'use server';
-  const kind = String(formData.get('kind') ?? '');
-  const ref = String(formData.get('ref') ?? '');
-  const dir = String(formData.get('dir') ?? '');
-  const current = Number(formData.get('current') ?? 100);
-  if (!kind || !ref) return;
-  // bump: top = 1 (front of queue), up = -10, down = +10
-  const next = dir === 'top' ? 1 : dir === 'up' ? Math.max(1, current - 10) : current + 10;
-  const sb = getSupabaseAdmin();
-  const { data, error } = await (sb as any).rpc('fn_set_work_priority', { p_kind: kind, p_ref: ref, p_priority: next });
-  if (error) {
-    redirect(`/holding/it2/modules/queue?err=${encodeURIComponent(error.message ?? 'Priority change failed')}`);
-  }
-  revalidatePath('/holding/it2/modules/queue');
-}
-
-async function dispatchNow(formData: FormData) {
+// ADR-287 (2026-08-13): removed the ⏫/⬆/⬇ manual-priority arrows — PBS:
+// "the que is the que ... unneeded and bug intensive". fn_set_work_priority
+// stays (no destruction) but this page no longer calls it. The only owner
+// action left is "build next", now backed by a monotonic sentinel priority
+// (fn_queue_dispatch_now) so each click strictly outranks every prior one —
+// a flat priority=1 let a stale earlier click win the created_at tiebreak.
+async function buildNext(formData: FormData) {
   'use server';
   const kind = String(formData.get('kind') ?? '');
   const ref = String(formData.get('ref') ?? '');
   if (!kind || !ref) return;
   const sb = getSupabaseAdmin();
-  // writes governance.owner_action_signals (kind=dispatch_requested) + priority=1
+  // writes governance.owner_action_signals (kind=dispatch_requested) + sentinel priority
   const { data, error } = await (sb as any).rpc('fn_queue_dispatch_now', { p_kind: kind, p_ref: ref, p_actor: 'pbs' });
   if (error) {
     redirect(`/holding/it2/modules/queue?err=${encodeURIComponent(error.message ?? 'Dispatch failed')}`);
@@ -199,10 +189,11 @@ export default async function QueuePage({ searchParams }: { searchParams: { err?
       <div style={{ marginBottom: 6 }}>
         <div style={{ fontSize: 18, fontWeight: 700 }}>Work Queue ({rows.length})</div>
         <p style={{ fontSize: 12, color: TOKENS.text2, margin: '4px 0 0' }}>
-          Every pending brief and bug, in real pick order. Work runs in PARALLEL, not one-per-hour:
-          unstick-sweep hourly :56 (1 build + 1 verify per pass) · signal-responder on owner actions ·
-          CCR single-task fires · orchestrator fleets. ⬆ moves an item sooner (lower number first);
-          ▶ dispatches it to the front of the very next cycle.
+          Every pending brief and bug, in real pick order — that order IS the queue, no manual reordering.
+          Work runs in PARALLEL, not one-per-hour: unstick-sweep hourly :56 (1 build + 1 verify per pass) ·
+          signal-responder on owner actions · CCR single-task fires · orchestrator fleets.
+          ▶ build next makes this the first candidate in the next dispatch sweep (still subject to the
+          size/failure guards — it cannot force through a sealed or capped item).
         </p>
         <p style={{ fontSize: 11, color: TOKENS.text3, margin: '4px 0 0', fontFamily: MONO }}>
           ETA model — observed, not assumed: {picks} picks + {advances} briefs advanced in the last 24h ·
@@ -240,27 +231,15 @@ export default async function QueuePage({ searchParams }: { searchParams: { err?
                   <td style={{ padding: '8px 10px', fontSize: 11, color: TOKENS.text2 }}>{r.eta.start}</td>
                   <td style={{ padding: '8px 10px', fontSize: 11, fontFamily: MONO, color: TOKENS.text2 }}>{r.eta.delivery}</td>
                   <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontFamily: MONO, marginRight: 6 }}>{r.priority}</span>
-                    {(['top', 'up', 'down'] as const).map((dir) => (
-                      <form key={dir} action={setPriority} style={{ display: 'inline', margin: 0 }}>
-                        <input type="hidden" name="kind" value={r.kind} />
-                        <input type="hidden" name="ref" value={r.ref} />
-                        <input type="hidden" name="dir" value={dir} />
-                        <input type="hidden" name="current" value={r.priority} />
-                        <button type="submit" title={dir === 'top' ? 'Front of queue' : dir === 'up' ? 'Sooner' : 'Later'} style={{
-                          border: `1px solid ${TOKENS.border}`, background: TOKENS.bg, borderRadius: 4,
-                          padding: '2px 7px', fontSize: 10, cursor: 'pointer', marginRight: 3, color: TOKENS.ink,
-                        }}>{dir === 'top' ? '⏫' : dir === 'up' ? '⬆' : '⬇'}</button>
-                      </form>
-                    ))}
+                    <span style={{ fontFamily: MONO, marginRight: 6, color: TOKENS.text2 }}>{r.priority}</span>
                     {dispatchable && (
-                      <form action={dispatchNow} style={{ display: 'inline', margin: 0 }}>
+                      <form action={buildNext} style={{ display: 'inline', margin: 0 }}>
                         <input type="hidden" name="kind" value={r.kind} />
                         <input type="hidden" name="ref" value={r.ref} />
-                        <button type="submit" title="Build now — signals the next cycle to pick this first" style={{
-                          border: `1px solid ${TOKENS.forest}`, background: TOKENS.forest, borderRadius: 4,
-                          padding: '2px 8px', fontSize: 10, cursor: 'pointer', color: '#fff', fontWeight: 700,
-                        }}>▶ build now</button>
+                        <button type="submit" title="Build next — first candidate in the next dispatch sweep" style={{
+                          border: `1px solid ${TOKENS.forest}`, background: 'transparent', borderRadius: 3,
+                          padding: '1px 6px', fontSize: 9, cursor: 'pointer', color: TOKENS.forest, fontWeight: 600,
+                        }}>build next</button>
                       </form>
                     )}
                   </td>
