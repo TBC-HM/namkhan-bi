@@ -135,6 +135,7 @@ export default function GoalEditorModal({ briefSlug, onClose, onSaved }: Props) 
           body: JSON.stringify({
             brief_slug: briefSlug,
             goal_text: goalStatement.trim(),
+            done_metric: doneMetric.trim(),
           }),
         });
         const body = await r.json();
