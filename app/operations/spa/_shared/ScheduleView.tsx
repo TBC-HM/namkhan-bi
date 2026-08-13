@@ -12,6 +12,7 @@ import BridgeNotice from './BridgeNotice';
 import BookingForm from './BookingForm';
 import StatusActions from './StatusActions';
 import NotifyActions from './NotifyActions';
+import FolioActions from './FolioActions';
 import {
   getSpaBookingsForDay, getSpaTherapists, getSpaRooms, getSpaCatalogue,
   getSpaBookableGuests, localTimeStr, localHour, todayIsoAtProperty,
@@ -140,65 +141,53 @@ export default async function ScheduleView({
               duration_min: t.duration_min, price_usd: t.price_usd == null ? null : Number(t.price_usd),
             }))}
             therapists={therapistsB.rows.map((t) => ({ id: t.therapist_id, label: t.display_name }))}
-            rooms={roomsB.rows.map((r) => ({ id: String(r.room_id), label: r.name + (r.couples_capable ? ' · couples' : '') }))}
-            guests={bookableGuests.map((g) => ({
-              reservation_id: g.reservation_id, guest_name: g.guest_name,
-              guest_email: g.guest_email, room_type_name: g.room_type_name,
-              check_in_date: g.check_in_date, check_out_date: g.check_out_date,
-              is_in_house: g.is_in_house,
-            }))}
+            rooms={roomsB.rows.map((r) => ({ id: String(r.room_id), label: r.name }))}
+            bookableGuests={bookableGuests}
           />
         )}
 
-        <Container title="Daily spa analytics" subtitle={`bookings · revenue · capacity · ${dayIso}`} density="compact" action={dayNav}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
-            {kpis.map((t, i) => <KpiTile key={i} {...t} />)}
+        <Container title="Daily analytics" subtitle={dayNav} density="compact">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {kpis.map((k, i) => <KpiTile key={i} {...k} />)}
           </div>
         </Container>
 
-        <Container title="Slot grid" subtitle={`therapist columns × hour rows · ${DAY_START}:00–${DAY_END}:00 local`} density="compact">
-          {activeBookings.length === 0 && !bridgeMissing ? (
-            <div style={{ padding: 20, fontSize: 13, color: TOKENS.inkSoft }}>
-              No bookings for {dayIso}. Use <strong>+ New booking</strong> above — creation is conflict-safe (rejects therapist/room overlap incl. cleanup buffer).
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', width: '100%', background: TOKENS.bgRaised, minWidth: 200 + columns.length * 160 }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...th, width: 60 }}>Time</th>
-                    {columns.map((c) => <th key={c.id} style={th}>{c.name}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Array.from({ length: SHIFT_HOURS }, (_, i) => DAY_START + i).map((hour) => (
-                    <tr key={hour}>
-                      <td style={{ ...td, fontFamily: MONO, fontSize: 11, color: TOKENS.inkSoft }}>{String(hour).padStart(2, '0')}:00</td>
-                      {columns.map((c) => {
-                        const cell = cellFor(c.id, hour);
-                        return (
-                          <td key={c.id} style={td}>
-                            {cell.map((b) => (
-                              <div key={b.booking_id} style={{
-                                borderLeft: `3px solid ${STATUS_COLOR[b.status] ?? TOKENS.sand}`,
-                                background: `${STATUS_COLOR[b.status] ?? TOKENS.sand}18`,
-                                borderRadius: 4, padding: '4px 6px', marginBottom: 4,
-                              }}>
-                                <div style={{ fontWeight: 600, fontSize: 12 }}>{localTimeStr(b.scheduled_at, propertyId)} · {b.treatment_name}</div>
-                                <div style={{ fontSize: 11, color: TOKENS.inkSoft }}>
-                                  {b.guest_name ?? '—'} · {b.duration_min}min{b.room_name ? ` · ${b.room_name}` : ''} · {b.status}
-                                </div>
-                              </div>
-                            ))}
-                          </td>
-                        );
-                      })}
-                    </tr>
+        <Container title="Therapist schedule" subtitle="hour × therapist slot grid" density="compact">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${TOKENS.ink}` }}>
+                  <th style={{ textAlign: 'left', padding: '6px 8px', fontFamily: MONO, fontSize: 10, textTransform: 'uppercase', color: TOKENS.inkSoft }}>Hour</th>
+                  {columns.map((c) => (
+                    <th key={c.id} style={{ textAlign: 'left', padding: '6px 8px', fontFamily: MONO, fontSize: 10, textTransform: 'uppercase', color: TOKENS.inkSoft }}>{c.name}</th>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: SHIFT_HOURS }, (_, i) => DAY_START + i).map((hour) => (
+                  <tr key={hour} style={{ borderBottom: `1px solid ${TOKENS.border}` }}>
+                    <td style={{ padding: '8px', fontFamily: MONO, fontSize: 11, color: TOKENS.inkSoft, verticalAlign: 'top' }}>
+                      {String(hour).padStart(2, '0')}:00
+                    </td>
+                    {columns.map((col) => {
+                      const cells = cellFor(col.id, hour);
+                      return (
+                        <td key={col.id} style={{ padding: '4px', verticalAlign: 'top', background: cells.length > 0 ? TOKENS.sand : 'transparent' }}>
+                          {cells.map((b) => (
+                            <div key={b.booking_id} style={{ fontSize: 10, padding: '2px 4px', marginBottom: 2, borderRadius: 3, border: `1px solid ${TOKENS.border}`, background: TOKENS.bgRaised }}>
+                              <div style={{ fontWeight: 500 }}>{b.guest_name ?? 'Guest'}</div>
+                              <div style={{ color: TOKENS.inkSoft }}>{b.treatment_name} · {b.duration_min}min</div>
+                              {b.room_name && <div style={{ color: TOKENS.inkSoft, fontSize: 9 }}>{b.room_name}</div>}
+                            </div>
+                          ))}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Container>
 
         <Container title="Booking list" subtitle={`all statuses · ${dayIso}`} density="compact">
@@ -224,11 +213,22 @@ export default async function ScheduleView({
                       <td style={td}>{b.room_name ?? '—'}</td>
                       <td style={{ ...td, color: STATUS_COLOR[b.status] ?? TOKENS.ink, fontFamily: MONO, fontSize: 11, textTransform: 'uppercase' }}>{b.status}</td>
                       <td style={{ ...td, textAlign: 'right', fontFamily: MONO }}>{fmtMoney(b.price, b.currency)}</td>
-                      <td style={{ ...td, fontFamily: MONO, fontSize: 11 }}>{b.posted_to_folio ? (b.cloudbeds_charge_id ?? 'posted') : '—'}</td>
+                      <td style={{ ...td, fontSize: 11 }}>
+                        {!b.reservation_id ? (
+                          <span style={{ color: TOKENS.inkSoft, fontFamily: MONO, fontSize: 10 }}>walk-in</span>
+                        ) : b.posted_to_folio ? (
+                          <span style={{ color: TOKENS.forest, fontFamily: MONO }}>✓ {b.cloudbeds_charge_id || 'posted'}</span>
+                        ) : b.status === 'completed' ? (
+                          <span style={{ color: TOKENS.terracotta, fontFamily: MONO, fontSize: 10 }}>not posted</span>
+                        ) : (
+                          <span style={{ color: TOKENS.inkSoft, fontFamily: MONO, fontSize: 10 }}>—</span>
+                        )}
+                      </td>
                       <td style={td}>
                         <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
                           <StatusActions bookingId={b.booking_id} status={b.status} />
                           <NotifyActions bookingId={b.booking_id} status={b.status} confirmationSentAt={b.confirmation_sent_at} />
+                          <FolioActions bookingId={b.booking_id} status={b.status} reservationId={b.reservation_id} postedToFolio={b.posted_to_folio} chargeId={b.cloudbeds_charge_id} />
                         </span>
                       </td>
                     </tr>
