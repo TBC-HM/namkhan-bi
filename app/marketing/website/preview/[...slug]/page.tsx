@@ -9,7 +9,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
-import { SiteNav, PreviewBanner, BOOK_URL } from '../_site/Nav';
+import { SiteNav, PreviewBanner, BOOK_URL, type NavLink } from '../_site/Nav';
 import { SiteFooter } from '../_site/Footer';
 import { renderBlocks, type BlockRow } from '../_site/blocks';
 import { generatePageJsonLd } from '../_site/jsonld';
@@ -117,12 +117,15 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
   if (!pd) return notFound();
   const page = pd as PageRow;
 
-  const [{ data: sd }, { data: imgd }] = await Promise.all([
+  const [{ data: sd }, { data: imgd }, { data: navd }] = await Promise.all([
     sb.from('v_website_sections').select('id,kind,heading,body_md,sort_order,data')
       .eq('property_id', PROPERTY_ID).eq('page_id', page.id).order('sort_order', { ascending: true }),
     sb.from('v_website_media').select('id,alt,role')
       .eq('property_id', PROPERTY_ID).eq('page_id', page.id),
+    sb.from('v_website_nav_menus').select('items')
+      .eq('property_id', PROPERTY_ID).eq('menu_key', 'header_main').maybeSingle(),
   ]);
+  const navLinks = ((navd as { items?: NavLink[] } | null)?.items ?? null);
   const sections = (sd ?? []) as SectionRow[];
   const crawlImgs = (imgd ?? []) as ImgMeta[];
   const rawBody   = sections.map(s => s.body_md ?? '').join('\n');
@@ -188,7 +191,7 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
         />
       )}
       <PreviewBanner slug={slug} />
-      <SiteNav slug={slug} />
+      <SiteNav slug={slug} links={navLinks} />
       {kind === 'blog_index'  ? <BlogIndex page={page} posts={blogPosts} hasImg={blogHasImg} photos={photos} /> :
        kind === 'blog_post'   ? <BlogPost  page={page} hasHero={hasHero} sections={sections} body={body} heroUrl={photos[0] ?? null} /> :
        kind === 'legal'       ? <Legal     page={page} sections={sections} /> :
