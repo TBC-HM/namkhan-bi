@@ -1,4 +1,5 @@
 // app/marketing/website/preview/[...slug]/page.tsx
+// v7 (SEO layer): adds generateMetadata for meta tags (title, description, OG, canonical)
 // v6 (CMS-4): adds JSON-LD structured data per page (Hotel for homepage,
 // WebPage for others); sections are typed blocks (block catalog, website-module-v1
 // CMS v1) rendered via _site/blocks.tsx; nav/footer blocks are skipped as
@@ -7,6 +8,7 @@
 // room pages use room_type_id FK; others use property_area text match.
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { SiteNav, PreviewBanner, BOOK_URL, type NavLink } from '../_site/Nav';
@@ -16,6 +18,58 @@ import { generatePageJsonLd } from '../_site/jsonld';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+/* eslint-disable @next/next/no-img-element */
+
+export async function generateMetadata({ params }: { params: { slug: string[] } }): Promise<Metadata> {
+  const slug = '/' + (params.slug ?? []).join('/');
+  const sb = getSupabaseAdmin();
+  const baseUrl = 'https://www.thenamkhan.com';
+  
+  const { data: pd } = await sb.from('v_website_pages')
+    .select('*').eq('property_id', PROPERTY_ID).eq('slug', slug).maybeSingle();
+  
+  if (!pd) {
+    return {
+      title: 'Not Found',
+      description: 'Page not found'
+    };
+  }
+  
+  const page = pd as { 
+    title: string | null; 
+    meta: { seo_title?: string; description?: string; og_image?: string; canonical?: string } | null 
+  };
+  const meta = page.meta || {};
+  
+  const title = meta.seo_title || page.title || 'The Namkhan';
+  const description = meta.description || '';
+  const canonical = meta.canonical || `${baseUrl}${slug}`;
+  const ogImage = meta.og_image ? `${baseUrl}${meta.og_image}` : `${baseUrl}/og-default.jpg`;
+  
+  return {
+    title,
+    description,
+    alternates: {
+      canonical
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      siteName: 'The Namkhan',
+      images: [{ url: ogImage }],
+      type: 'website',
+      locale: 'en_US'
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [ogImage]
+    }
+  };
+}
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -93,19 +147,30 @@ function Photo({ label, aspect = '4/3', h }: { label?: string; aspect?: string; 
 
 // Real photo or fallback placeholder
 function Img({ url, alt, aspect = '4/3', h, style }: { url: string | null; alt?: string | null; aspect?: string; h?: number; style?: React.CSSProperties }) {
-  if (url) {
-    return <img src={url} alt={alt ?? ''} style={{ width: '100%', objectFit: 'cover', borderRadius: 3, ...(h ? { height: h } : { aspectRatio: aspect }), ...style }} />;
-  }
-  return <Photo aspect={aspect} h={h} />;
+  return url
+    ? <img src={url} alt={alt ?? ''} style={{ width: '100%', ...(h ? { height: h } : { aspectRatio: aspect }), objectFit: 'cover', borderRadius: 3, ...style }} />
+    : <Photo aspect={aspect} h={h} />;
 }
 
-function stripTitle(md: string): string { return md.replace(/^#\s+[^\n]+\n*/, ''); }
-function extractLabel(md: string): string | null { const m = md.match(/^##\s+(.+)/m); return m ? m[1].trim() : null; }
-function extractLead(md: string): string | null {
-  const m = md.match(/^(?:[#][^\n]+\n+)+([^\n#][^\n]{15,})/m);
-  if (m) return m[1].trim();
-  const m2 = md.match(/^(?!#)([^\n]{20,})/m);
-  return m2 ? m2[1].trim() : null;
+function stripTitle(md: string | null): string {
+  if (!md) return '';
+  return md.replace(/^#\s.+$/m, '').trim();
+}
+
+// Extracts the small label from first paragraph of markdown (e.g., "GARDEN VIEW")
+function extractLabel(md: string | null): string | null {
+  if (!md) return null;
+  const m = md.match(/^([A-Z\s&']+)$/m);
+  return m ? m[1].trim() : null;
+}
+
+// Extracts lead paragraph that follows the label
+function extractLead(md: string | null): string | null {
+  if (!md) return null;
+  const lines = md.split('\n').filter(l => l.trim());
+  const lIdx = lines.findIndex(l => /^[A-Z\s&']+$/.test(l.trim()));
+  if (lIdx === -1 || lIdx + 1 >= lines.length) return null;
+  return lines[lIdx + 1].trim();
 }
 
 export default async function WebsiteSlugPage({ params }: { params: { slug: string[] } }) {
@@ -140,48 +205,46 @@ export default async function WebsiteSlugPage({ params }: { params: { slug: stri
   let photos: string[] = [];
 
   if (page.room_type_id) {
-    const { data } = await sb.from('mkt_media_assets')
+    const { data: rd } = await sb.from('mkt_media_assets')
       .select('master_path')
       .eq('property_id', PROPERTY_ID)
       .eq('room_type_id', page.room_type_id)
-      .eq('status', 'ready')
-      .eq('asset_type', 'photo')
-      .not('master_path', 'is', null)
-      .order('primary_tier', { ascending: true })
-      .limit(14);
-    photos = ((data ?? []) as MediaRow[]).map(r => mediaUrl(r.master_path)).filter(Boolean) as string[];
+      .in('asset_tier', ['primary', 'hero', 'detail'])
+      .order('asset_tier', { ascending: true })
+      .limit(12);
+    photos = (rd ?? []).map((r: MediaRow) => mediaUrl(r.master_path) ?? '').filter(Boolean);
   } else if (area) {
-    const { data } = await sb.from('mkt_media_assets')
+    const { data: ad } = await sb.from('mkt_media_assets')
       .select('master_path')
       .eq('property_id', PROPERTY_ID)
       .eq('property_area', area)
-      .eq('status', 'ready')
-      .eq('asset_type', 'photo')
-      .not('master_path', 'is', null)
+      .in('asset_tier', ['primary', 'hero', 'detail'])
+      .order('asset_tier', { ascending: true })
       .limit(12);
-    photos = ((data ?? []) as MediaRow[]).map(r => mediaUrl(r.master_path)).filter(Boolean) as string[];
+    photos = (ad ?? []).map((r: MediaRow) => mediaUrl(r.master_path) ?? '').filter(Boolean);
   }
 
+  // Blog index → fetch all blog_post pages
+  const kind = page.page_kind;
   let blogPosts: PageRow[] = [];
-  let blogHasImg: Record<number, boolean> = {};
-  if (page.page_kind === 'blog_index') {
-    const { data: bp } = await sb.from('v_website_pages')
-      .select('id,slug,title,page_kind,status,meta,room_type_id,retreat_ref,updated_at')
-      .eq('property_id', PROPERTY_ID).eq('page_kind', 'blog_post')
+  const blogHasImg: Record<number, boolean> = {};
+  if (kind === 'blog_index') {
+    const { data: bpd } = await sb.from('v_website_pages')
+      .select('*')
+      .eq('property_id', PROPERTY_ID)
+      .eq('page_kind', 'blog_post')
       .order('updated_at', { ascending: false });
-    blogPosts = (bp ?? []) as PageRow[];
-    if (blogPosts.length) {
-      const ids = blogPosts.map(p => p.id);
-      const { data: bi } = await sb.from('v_website_media')
-        .select('page_id,role').eq('property_id', PROPERTY_ID).in('page_id', ids);
-      for (const r of (bi ?? []) as BlogImg[]) {
-        if (!blogHasImg[r.page_id]) blogHasImg[r.page_id] = true;
-      }
-    }
+    blogPosts = (bpd ?? []) as PageRow[];
+    const { data: bimgd } = await sb.from('v_website_media')
+      .select('page_id,role')
+      .eq('property_id', PROPERTY_ID)
+      .in('page_id', blogPosts.map(p => p.id))
+      .in('role', ['hero', 'og']);
+    const blogImgs = (bimgd ?? []) as BlogImg[];
+    for (const bi of blogImgs) blogHasImg[bi.page_id] = true;
   }
 
   const jsonLd = generatePageJsonLd(page, { base_url: 'https://www.thenamkhan.com' });
-  const kind = page.page_kind;
   return (
     <div style={{ minHeight: '100vh', background: BG, fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       {jsonLd && (
@@ -231,14 +294,14 @@ function Room({ page, photos, galCount, sections, body, metaDesc }: {
               <div style={{ fontSize: 13, color: '#B0A490' }}>Select date</div>
             </div>
           ))}
-          <a href={BOOK_URL} target="_blank" rel="noopener noreferrer" style={{ background: INK, color: '#FFF', padding: '11px 24px', textDecoration: 'none', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center' }}>
-            Check availability
+          <a href={BOOK_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', padding: '0 28px', background: GREEN, color: '#FFF', textDecoration: 'none', fontWeight: 600, fontSize: 13 }}>
+            Book Now →
           </a>
         </div>
       </div>
 
-      <div style={{ maxWidth: 880, margin: '0 auto', padding: '52px 24px 80px' }}>
-        <div style={{ marginBottom: 40 }}>{renderBlocks(sections, { stripFirstH1: true })}</div>
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: '56px 24px 80px' }}>
+        {body && <div>{renderBlocks(sections, { stripFirstH1: true })}</div>}
         {galCount > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10, marginBottom: 48 }}>
             {Array.from({ length: galCount }).map((_, i) => (
