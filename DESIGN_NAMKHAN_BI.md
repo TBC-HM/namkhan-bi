@@ -3044,3 +3044,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-06 — bug-agent · fix #174
 - ## Bug #174 — DQ banner renders for informational staleness even when the user can't dismiss or act on it  ### Root cause The `getDqIssues` query in `page.tsx` 
 - touched `app/h/[property_id]/revenue/cockpit/page.tsx`
+
+### 2026-08-13 — bug-agent · fix #179
+- # Bug #179 — RecommendationList.act() silently ignores res.error  ## Root Cause In `RecommendationList`, the `act()` function calls `post()` but never reads the
+- touched `app/h/[property_id]/revenue/forecast/ForecastActions.tsx`
