@@ -1,0 +1,30 @@
+# STAGED — REQUIRES OWNER APPROVAL (protected path .github/workflows/)
+# Brief: cost-gov-findings-slice-kill-switch-coverage, WORK step (e), 2026-08-13.
+# Closes finding #551 (github_actions/agent-runner is the last ungated
+# token-spending scheduled entry point) once merged.
+#
+# What it does: inserts ONE line as the first act of agent-runner.yml's
+# token-spending "Run agent" step. ci/check-kill-switch.mjs (already on main)
+# reads public.fn_automation_enabled via PostgREST using the step's existing
+# env (NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY):
+#   - automation ON  → exit 0, runner proceeds unchanged.
+#   - automation OFF → logs a row to governance.scheduled_run_skipped and
+#     exits nonzero; the `|| { ...; exit 0; }` wrapper ends the job QUIETLY
+#     (no provider call, no red run, no error loop).
+#   - switch UNREACHABLE → fails CLOSED (stops), also logged.
+# No new secrets required. The script has zero npm dependencies (global fetch,
+# Node 22), so it is safe as the first line of the step regardless of install
+# order.
+#
+# Apply with: git apply ci/pending/agent-runner-killswitch.patch
+# (or hand-edit the single + line into .github/workflows/agent-runner.yml)
+--- a/.github/workflows/agent-runner.yml
++++ b/.github/workflows/agent-runner.yml
+@@ -87,6 +87,7 @@ jobs:
+           # contents:write + pull-requests:write perms set above.
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+         run: |
++          node ci/check-kill-switch.mjs || { echo "kill-switch: stop — skipping agent run"; exit 0; }
+           # PBS 2026-05-10 night: runner-v3 — clean-slate single-shot rewrite.
+           # v2 had 10+ patches and never worked end-to-end. v3 principles:
+           # heartbeat first, fail loud, stateless, bounded (8min per ticket),
