@@ -1,10 +1,7 @@
 // app/api/spa/passes/route.ts
-// Spa module v1 — day-pass + package sale & redemption (brief spa-module-v1,
-// gap 6).
-// POST  → sell a pass via public.fn_spa_sell_pass (price entered at sale —
-//         audit 2026-07-31 found NO priced day-pass tiers anywhere; the
-//         content.activities_catalog "Day Pass Packages" row is inactive with
-//         a NULL price, so v1 never invents tier pricing).
+// Spa module v1 — day-pass + package sale & redemption (brief
+// spa-module-v1-slice-day-pass-tiers). Tier-based pricing now supported.
+// POST  → sell a pass via public.fn_spa_sell_pass (with optional tier_id).
 // PATCH → { action: 'redeem', pass_id, booking_id?, credits?, note? }
 //           via fn_spa_redeem_pass — locks the pass row, validates window +
 //           remaining credits, ties the redemption to a booking when given.
@@ -54,6 +51,7 @@ export async function POST(req: Request) {
       p_guest_phone: body.guest_phone || null,
       p_reservation_id: body.reservation_id || null,
       p_notes: body.notes || null,
+      p_tier_id: body.tier_id != null && body.tier_id !== '' ? Number(body.tier_id) : null,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: errStatus(error.message) });
     return NextResponse.json({ ok: true, pass_id: data });
