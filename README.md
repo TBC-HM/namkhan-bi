@@ -1,3 +1,9 @@
+> **⚠️ STALE — This file is legacy documentation**
+>
+> Canonical platform architecture and deployment guide now live in the database
+> (`documentation.documents`, rendered via the knowledge system). This file is
+> kept for historical reference only.
+
 # Namkhan BI
 
 Read-only operator dashboard for The Namkhan (Luang Prabang).
@@ -116,113 +122,73 @@ Read these files in order if you're new:
 | 07 | `07_SOP_LIBRARY.md` | …SOP index for staff training (Phase 2) |
 | 08 | `08_BI_DASHBOARDS_SPEC.md` | …each tab's KPIs, source view, and live/grey status |
 | 09 | `09_VERTEX_ARCHITECTURE.md` | …Phase 4 ML architecture |
-| 10 | `10_RECOMMENDATIONS_ENGINE.md` | …Phase 4 recommendation logic |
-| 11 | `11_BRAND_AND_UI_STANDARDS.md` | …visual identity rules |
-| 12 | `12_BACKLOG_AND_ROADMAP.md` | …what's next, with current status |
-| 13 | `13_PHASE1_SYNC_AUDIT.md` | …what got synced from Cloudbeds |
-| 14 | `14_MOCKUP_VS_DATA_AUDIT.md` | …mockup-feasibility scorecard |
-| 15 | `15_SUPABASE_ARCHITECTURE.md` | …full schema, agents, mandates, RLS |
-| 16 | `16_SESSION_HANDOFF.md` | …backlog F1–F11, E1–E8, D1–D5 (stub awaiting import) |
-| 17 | `17_DEPLOYMENT_GUIDE.md` | …ops reference (deploy, refresh, rotate, recover) |
-| — | `CONTRIBUTING.md` | …branching, PRs, migration workflow |
-| — | `CHANGELOG.md` | …version history |
+| 10 | `10_HANDOFF_TO_PBS.md` | …how to operate the BI portal after Claude leaves |
+| 11 | `11_BRAND_AND_UI_STANDARDS.md` | …typography, colour tokens, layout grid, component variants |
+| 12 | `12_TENANT_COMPARISON_SPEC.md` | …multi-property normalization + FX + TZ |
 
-> **Important:** the same docs are also mirrored in the Claude Project Knowledge.
-> When you edit a doc here, re-upload it to the project (drag-drop) so chat context stays current.
+After that, the folders:
 
-## Tab status (snapshot)
+- **`handoffs/`** (active cowork items) · **`done/`** (completed cowork handoffs with timestamps)
+- **`deploy/`** (literal step-by-step for Vercel + Supabase)
+- **`decisions/`** (ADR-style rationale for every non-obvious choice)
 
-| Tab | Status | Notes |
+## Scripts
+
+| Command | Does what |
+|---|---|
+| `npm run dev` | Dev server on :3000 |
+| `npm run build` | Next build (= Vercel's deploy command) |
+| `npm run start` | Serve production build |
+| `npm run typecheck` | TypeScript errors without emitting |
+
+## Maintenance rituals
+
+| Interval | Action | Where |
 |---|---|---|
-| Overview | LIVE | Headline KPIs, 90d revenue chart, channel teaser |
-| Today's Snapshot | LIVE | Arrivals/departures/in-house live; F&B/Spa/Activities-today greyed |
-| Action Plans | GREY | Vertex recommendations engine pending (Phase 4) |
-| Revenue · Pulse / Demand / Channels / Rates / Rate Plans / Inventory | LIVE | |
-| Revenue · Comp Set / Promotions | GREY | Phase 2 |
-| Departments · Roots / Spa & Activities | LIVE | Therapist util / packages greyed |
-| Finance · P&L | LIVE (revenue) | Expense side GREY (cost upload pending) |
-| Finance · Budget | GREY | Awaiting upload schema |
-| Finance · Ledger | LIVE | In-house balance, aged AR, city ledger |
+| Every commit | Build must succeed | `npm run build` |
+| Every PR | Vercel preview must load all pages | Click nav tree |
+| Daily | Sync Cloudbeds → materialized views | Cron (already scheduled) |
+| Weekly | Review DQ anomalies | `/data-quality` tab |
+| Monthly | Update `11_BRAND_AND_UI_STANDARDS.md` if new component added | File PR |
 
-## Environment variables
+## Future modules
 
-| Var | Meaning | Where to find |
-|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://kpenyneooigsyuuomgct.supabase.co` | hardcoded |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon (public) key | Supabase → Project Settings → API → `anon public` |
-| `DASHBOARD_PASSWORD` | Single password for the login gate | pick anything strong; share with team out-of-band |
-| `NEXT_PUBLIC_FX_LAK_USD` | LAK per USD (default 21800) | adjust as FX shifts |
-| `NEXT_PUBLIC_PROPERTY_ID` | Cloudbeds property ID | `260955` |
+| Module | Status | Path | Launch |
+|---|---|---|---|
+| M1 (BI dashboards) | ✅ live | `/dashboard` | 2026-04-29 |
+| M2 (Action Center) | 🚧 partial | `/action-center` | 2026-05-03 target |
+| M3 (Agent fleet) | ⏸ paused | `/agents` | 2026-Q2 |
+| M4 (Predictive) | 📋 planning | `/forecast` | 2026-Q3 |
 
-## Refresh schedule
+## One-click fixes (common issues)
 
-In Supabase SQL editor (one-off after deploy):
+### Dashboard shows $0 everywhere
 
-```sql
-SELECT cron.schedule(
-  'refresh_bi_views',
-  '*/15 * * * *',
-  'SELECT public.refresh_bi_views();'
-);
-```
+1. Check Supabase → SQL Editor → run `SELECT count(*) FROM mv_revenue_summary;`
+2. If zero: trigger refresh via SQL Editor → `REFRESH MATERIALIZED VIEW CONCURRENTLY mv_revenue_summary;`
+3. Wait ~30s, reload dashboard
 
-If `pg_cron` is not enabled: Database → Extensions → enable `pg_cron`.
+### Build fails on Vercel
 
-## Database changes — read this before touching Supabase
+1. Check the error log (click deployment → Build Logs)
+2. If "module not found": likely a case-sensitivity error in the import path (macOS allows it, Vercel Linux doesn't)
+3. If TypeScript errors: run `npm run typecheck` locally and fix before pushing
 
-The Supabase schema is now version-controlled in [`/supabase/migrations/`](./supabase/).
+### Can't log in
 
-- **DO NOT** make schema changes via the Supabase dashboard UI.
-- **DO** create a migration: `npx supabase migration new <name>` → edit SQL → commit → PR.
-- **DO** test against a local stack (`supabase start` + `supabase db reset`) before merging.
-- **CI** posts `supabase db diff --linked` on every PR that touches `supabase/migrations/**` (read-only).
-- **Apply to cloud** = `npx supabase db push` from `main` after the PR merges. Manual in v1.
-- **Rollback** = revert the merge commit + write a new reversal migration + push.
+- Password gate uses `DASHBOARD_PASSWORD` env var on Vercel
+- If you changed it: redeploy (Vercel needs a new build to pick up env changes)
 
-See [`docs/CONTRIBUTING.md`](./docs/CONTRIBUTING.md) for the full migration workflow.
+---
 
-## Repo layout
+## Handover status
 
-```
-namkhan-bi/
-├── README.md                   # this file
-├── DEPLOY.md                   # click-by-click first deploy
-├── docs/                       # canonical knowledge base
-│   ├── 00_README.md            # project status and index
-│   ├── 01..17_*.md             # spec docs
-│   ├── 15_SUPABASE_ARCHITECTURE.md
-│   ├── 16_SESSION_HANDOFF.md
-│   ├── 17_DEPLOYMENT_GUIDE.md
-│   ├── CONTRIBUTING.md
-│   └── CHANGELOG.md
-├── supabase/                   # database-as-code (single source of truth)
-│   ├── config.toml             # CLI config
-│   ├── migrations/             # timestamped .sql, applied in order
-│   ├── functions/              # edge functions (placeholder)
-│   ├── seed.sql                # local-dev seed (NOT applied to prod)
-│   └── README.md               # workflows: pull/push/diff/reset
-├── .github/workflows/          # ci.yml (lint+typecheck+build) · supabase-diff.yml (PR diff)
-├── app/                        # Next.js routes
-│   ├── layout.tsx              # Root layout w/ brand + nav
-│   ├── login/page.tsx          # Password gate UI
-│   ├── api/login/route.ts      # Sets auth cookie
-│   ├── overview/               # Owner overview
-│   ├── today/                  # Today's snapshot
-│   ├── actions/                # Recommendations (grey)
-│   ├── revenue/                # Pulse / Demand / Channels / Rates / Rate Plans / Inventory / Comp Set / Promotions
-│   ├── departments/            # Roots / Spa & Activities
-│   └── finance/                # P&L / Budget / Ledger
-├── components/
-│   ├── nav/                    # Brand, TopNav, SubNav
-│   ├── kpi/Kpi.tsx             # KPI card with USD/LAK toggle
-│   ├── charts/                 # Daily revenue, monthly USALI
-│   ├── sections/Section.tsx    # Section wrapper, grey-out helper
-│   └── ui/CurrencyToggle.tsx   # USD ↔ LAK
-├── lib/
-│   ├── supabase.ts             # Client, PROPERTY_ID
-│   ├── data.ts                 # Server fetchers + aggregators
-│   └── format.ts               # Money/pct/number/date helpers
-├── middleware.ts               # Password gate enforcement
-├── styles/globals.css          # Soho-house casual luxury palette
-└── (config files)              # next.config.js, tailwind.config.js, tsconfig.json, etc.
-```
+**Claude Code session handover — 2026-05-01 morning**
+
+All files you need are in `/docs/handoffs/`. Start at `00_README.md` → read in sequence → then apply the open handoff.
+
+**Current open handoff:** _none_ (last completed: capacity-mode toggle, 2026-05-01)
+
+The entire codebase structure is documented. Every non-obvious decision has a file in `/docs/decisions/`. If you see something that doesn't make sense, read its rationale file first before changing.
+
+Welcome aboard! 🚀
