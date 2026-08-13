@@ -10,7 +10,11 @@ const BASE = '/marketing/website/preview';
 const NAV_BG   = '#3A4633';
 const NAV_TEXT = '#FFFFFF';
 
-const LINKS = [
+export type NavLink = { label: string; href: string };
+
+// Fallback only — the live menu is website.nav_menus (menu_key='header_main'),
+// edited in /marketing/website → Header Navigation and passed in via `links`.
+const DEFAULT_LINKS: NavLink[] = [
   { label: 'Stay',        href: '/accommodation' },
   { label: 'Offers',      href: '/offers' },
   { label: 'Wellness',    href: '/wellness-center' },
@@ -21,7 +25,8 @@ const LINKS = [
   { label: 'Contact',     href: '/contact' },
 ];
 
-export function SiteNav({ slug }: { slug: string }) {
+export function SiteNav({ slug, links }: { slug: string; links?: NavLink[] | null }) {
+  const LINKS = links && links.length ? links : DEFAULT_LINKS;
   return (
     <nav style={{
       position: 'sticky', top: 0, zIndex: 50,
