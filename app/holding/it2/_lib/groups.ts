@@ -77,6 +77,10 @@ export const GROUPS: GroupSpec[] = [
       { href: '/holding/it2/system/recovery',  label: 'Recovery' },
       // ADR-230: the global stop. Was SQL-only until 2026-08-05.
       { href: '/holding/it2/system/automation', label: '⏻ Automation' },
+      // Autonomy Dashboard (autonomy_dashboard-owner-findings-v1, 2026-08-13):
+      // owner-approved autonomous-ops visibility — agent activity, push ledger,
+      // brief backlog, open questions. Read-only monitoring surface.
+      { href: '/holding/it2/autonomy', label: 'Autonomy' },
     ],
   },
 ];
