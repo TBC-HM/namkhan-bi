@@ -1,8 +1,8 @@
 /* eslint-disable @next/next/no-html-link-for-pages */
 'use client';
 // app/marketing/website/WebsiteManager.tsx
-// website-module-v1 P3+CMS-2+CMS-3b — client manager for the Website capability.
-// Pages table + page editor drawer (title/status/meta/note/BLOCKS/versions) + settings + publish + translation.
+// website-module-v1 P3+CMS-2+CMS-3b+CMS-4 — client manager for the Website capability.
+// Pages table + page editor drawer (title/status/meta/note/BLOCKS/versions) + settings + publish + translation + footer menu.
 // All writes go through /api/website/*.
 import { useMemo, useState } from 'react';
 import BlockEditor from './_components/BlockEditor';
@@ -34,6 +34,10 @@ export interface WebsitePageVersionRow {
   id: number; page_id: number; property_id: number; version: number;
   snapshot: Record<string, unknown>; sections_snapshot: unknown[];
   created_at: string; created_by: string | null; restore_note: string | null;
+}
+export interface WebsiteFooterLinkRow {
+  id: number; property_id: number; label: string; path: string;
+  column_group: string | null; sort_order: number | null;
 }
 export interface WebsiteInitialData {
   propertyId: number;
@@ -84,6 +88,11 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
   const [dMetaTitle, setDMetaTitle] = useState('');
   const [dMetaDesc, setDMetaDesc] = useState('');
 
+  const [footerLinks, setFooterLinks] = useState<WebsiteFooterLinkRow[] | null>(null);
+  const [flLabel, setFlLabel] = useState('');
+  const [flPath, setFlPath] = useState('');
+  const [flGroup, setFlGroup] = useState('Stay');
+
   const lastPublish = useMemo(
     () => artifacts.find((a) => a.kind === 'sitedata') ?? null,
     [artifacts],
@@ -110,6 +119,88 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
     } catch (e) {
       setMsg({ kind: 'err', text: `Load versions failed: ${e}` });
       setVersions([]);
+    }
+  }
+
+  async function loadFooterLinks() {
+    try {
+      const r = await fetch('/api/website/footer-links');
+      if (!r.ok) throw new Error(`${r.status}`);
+      const j = await r.json();
+      setFooterLinks(j.links ?? []);
+    } catch (e) {
+      setMsg({ kind: 'err', text: `Load footer links failed: ${e}` });
+      setFooterLinks([]);
+    }
+  }
+
+  async function upsertFooterLink(body: { id?: number; label: string; path: string; column_group: string | null; sort_order: number | null }) {
+    const r = await fetch('/api/website/footer-links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`${r.status}`);
+  }
+
+  async function addFooterLink() {
+    if (!flLabel.trim() || !flPath.trim()) {
+      setMsg({ kind: 'err', text: 'Footer link needs a label and a path' });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      const group = flGroup.trim() || 'Links';
+      const inGroup = (footerLinks ?? []).filter((l) => (l.column_group ?? '') === group);
+      const nextSort = inGroup.reduce((m, l) => Math.max(m, l.sort_order ?? 0), 0) + 1;
+      await upsertFooterLink({ label: flLabel.trim(), path: flPath.trim(), column_group: group, sort_order: nextSort });
+      setFlLabel('');
+      setFlPath('');
+      await loadFooterLinks();
+      setMsg({ kind: 'ok', text: 'Footer link added' });
+    } catch (e) {
+      setMsg({ kind: 'err', text: `Add footer link failed: ${e}` });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeFooterLink(id: number) {
+    if (!confirm('Remove this footer link?')) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch(`/api/website/footer-links?id=${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error(`${r.status}`);
+      await loadFooterLinks();
+      setMsg({ kind: 'ok', text: 'Footer link removed' });
+    } catch (e) {
+      setMsg({ kind: 'err', text: `Remove footer link failed: ${e}` });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function moveFooterLink(link: WebsiteFooterLinkRow, dir: -1 | 1) {
+    const group = (footerLinks ?? [])
+      .filter((l) => (l.column_group ?? '') === (link.column_group ?? ''))
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const idx = group.findIndex((l) => l.id === link.id);
+    const swapWith = group[idx + dir];
+    if (!swapWith) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const aSort = link.sort_order ?? idx + 1;
+      const bSort = swapWith.sort_order ?? idx + dir + 1;
+      await upsertFooterLink({ id: link.id, label: link.label, path: link.path, column_group: link.column_group, sort_order: bSort === aSort ? aSort + dir : bSort });
+      await upsertFooterLink({ id: swapWith.id, label: swapWith.label, path: swapWith.path, column_group: swapWith.column_group, sort_order: aSort });
+      await loadFooterLinks();
+    } catch (e) {
+      setMsg({ kind: 'err', text: `Reorder failed: ${e}` });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -251,6 +342,15 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
     return c;
   }, [pages, initial.sectionsByPage]);
 
+  const sortedFooterLinks = useMemo(() => {
+    if (!footerLinks) return [];
+    return [...footerLinks].sort((a, b) => {
+      const g = (a.column_group ?? '').localeCompare(b.column_group ?? '');
+      if (g !== 0) return g;
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    });
+  }, [footerLinks]);
+
   return (
     <div style={{ padding: 20, color: INK, fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -349,6 +449,81 @@ export default function WebsiteManager({ initial }: { initial: WebsiteInitialDat
             ))}
           </tbody>
         </table>
+      </details>
+
+      <details
+        style={{ marginBottom: 30 }}
+        onToggle={(e) => {
+          if ((e.target as HTMLDetailsElement).open && footerLinks === null) void loadFooterLinks();
+        }}
+      >
+        <summary style={{ fontSize: 14, fontWeight: 600, color: INK_M, cursor: 'pointer', marginBottom: 10 }}>
+          Footer Menu {footerLinks !== null ? `(${footerLinks.length})` : ''}
+        </summary>
+        {footerLinks === null ? (
+          <div style={{ fontSize: 13, color: INK_M }}>Loading footer links…</div>
+        ) : (
+          <div>
+            {footerLinks.length === 0 && (
+              <div style={{ fontSize: 13, color: INK_M, marginBottom: 12 }}>
+                No footer links yet — the live footer falls back to the built-in defaults. Add links to take over the footer columns.
+              </div>
+            )}
+            {footerLinks.length > 0 && (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 16 }}>
+                <thead>
+                  <tr>
+                    <th style={headStyle}>Column</th>
+                    <th style={headStyle}>Label</th>
+                    <th style={headStyle}>Path</th>
+                    <th style={headStyle}>Order</th>
+                    <th style={headStyle}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedFooterLinks.map((l) => (
+                    <tr key={l.id} style={{ background: '#FFFFFF' }}>
+                      <td style={cellStyle}>{l.column_group ?? '—'}</td>
+                      <td style={cellStyle}>{l.label}</td>
+                      <td style={cellStyle}>
+                        <code style={{ fontSize: 11.5 }}>{l.path}</code>
+                      </td>
+                      <td style={cellStyle}>{l.sort_order ?? '—'}</td>
+                      <td style={{ ...cellStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button onClick={() => moveFooterLink(l, -1)} disabled={busy} title="Move up" style={{ ...btnStyle, fontSize: 11.5, padding: '3px 8px' }}>
+                          ↑
+                        </button>
+                        <button onClick={() => moveFooterLink(l, 1)} disabled={busy} title="Move down" style={{ ...btnStyle, fontSize: 11.5, padding: '3px 8px', marginLeft: 4 }}>
+                          ↓
+                        </button>
+                        <button onClick={() => removeFooterLink(l.id)} disabled={busy} style={{ ...btnStyle, fontSize: 11.5, padding: '3px 8px', marginLeft: 4, color: RED }}>
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', maxWidth: 760 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>Column</label>
+                <input type="text" value={flGroup} onChange={(e) => setFlGroup(e.target.value)} placeholder="Stay / Wellness / Discover / Info" style={inputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>Label</label>
+                <input type="text" value={flLabel} onChange={(e) => setFlLabel(e.target.value)} placeholder="Accommodation" style={inputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: INK_M, marginBottom: 4 }}>Path</label>
+                <input type="text" value={flPath} onChange={(e) => setFlPath(e.target.value)} placeholder="/accommodation" style={inputStyle} />
+              </div>
+              <button onClick={addFooterLink} disabled={busy} style={{ ...btnStyle, background: GREEN, color: '#FFFFFF', borderColor: GREEN, whiteSpace: 'nowrap' }}>
+                Add Link
+              </button>
+            </div>
+          </div>
+        )}
       </details>
 
       <details>
