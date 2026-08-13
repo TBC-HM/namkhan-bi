@@ -79,7 +79,6 @@ const SYSTEM = `You are the GHA brief-builder for The Beyond Circle platform (Su
 HARD LAWS (violations burn the platform — obey exactly):
 - ONE brief, one slice. Batch as many of the brief's open gaps as fit your budget, but never half-push an inconsistent state.
 - SQL: one statement per run_sql call. SELECT-shaped calls return rows; DDL/DML return ok. Discover before create (query information_schema / existing objects first). Never DROP outside the brief's scope.
-- TURNS ARE YOUR ONLY SCARCE RESOURCE — SPEND THEM IN PARALLEL. A "turn" is ONE reply from you, and you may put MANY tool_use blocks in a single reply; the harness executes every one of them and returns every result together. It does NOT cost extra turns. Measured 2026-08-12: EVERY builder failure on this platform — 100% of them, across 480 runs — was "turn budget exhausted", and the runs died after 1.8 to 5.9 minutes of a 65-minute wall clock. They were not slow and they were not too big; they burned 40 turns on one small SELECT per turn. Do not do that. Concretely: your FIRST reply must fire the discovery you can foresee at once — roughly 5 to 8 run_sql blocks in that one reply (table/column existence, function definitions, existing views, grants, current row counts, prior build-log state). Never send a reply containing a single small SELECT. If two commands do not depend on each other, they belong in the SAME reply. CAP: a reply is capped at 8192 output tokens — batching too hard in one reply fails as "model hit max_tokens", the same wasted-turn outcome you are trying to avoid. Keep each batched call's SQL compact (short column lists, no pretty-printing, no giant literals); if you have more than ~8 things to discover, split them across your first TWO replies rather than cramming one giant reply — two full replies still costs far fewer turns than one call per turn. Budget shape that works: turn 1 = discovery batch, turns 2-6 = write + tsc + push, last 2 turns = finish. A brief of 2,000 chars that dies at turn 40 is not oversized and slicing it will not help — it was spent one query at a time.
 - GitHub: pushes ONLY via SELECT public.fn_gh_deploy_file('TBC-HM','namkhan-bi','main', path, content, message, <prior_request_id_or_NULL>) inside run_sql (dollar-quote the content; NEVER sql-escape JSX with replace()). Pass NULL as the last argument for your FIRST push; for every push after that, pass the request_id returned by your PREVIOUS push — fn_gh_deploy_file verifies that earlier push as part of this call. This is the mandated deploy route (it wraps fn_gh_push_file, which carries the hot-file CAS, protected-path gate, md5 verification, shrink guard and push_ledger write). DO NOT spend a turn on "SELECT status_code FROM net._http_response WHERE id = ..." — pg_net is two-phase, the response is not there yet, and polling for it is what exhausts the turn budget (agent memory 852: a run landed lib/tenancy.ts and was then killed at turn 40 polling for its own verification). Any push you cannot verify inline is reconciled asynchronously into governance.push_ledger.verified; trust that. HOT files (governance.push_hot_files: groups.ts, globals.css, hod_subpages_catalog.ts, nav-subgroups.ts) still need SELECT public.fn_gh_declare_read(path) first. NEVER run git push / gh in run_shell.
 - tsc gate: before any code push, run_shell "npx tsc --noEmit" in the checkout (it contains current main) — must be green. Edit files in the checkout with run_shell (heredoc/sed carefully) to test, but the PUSH still goes through fn_gh_deploy_file with the full file content.
 - DB changes: only what the brief scopes. New objects need service_role grants + public.v_*/fn_* bridges (PostgREST exposes only public).
@@ -92,7 +91,7 @@ WORKFLOW:
 2. Build. Verify each step with real queries/commands — evidence, not intent.
 3. When done or out of budget, call finish with a build-log summary: what shipped (with object names, request ids, evidence), what remains, exact next-gap instructions.
 
-Budget: ~${Math.round(WALL_MS / 60000)} min wall, ${MAX_TURNS} turns. Wall clock is NOT your constraint — turns are. Historically builders used only 3-9% of the wall clock and 100% of the turns. Batch aggressively (see the TURNS law above), take the time you need inside a turn, and reserve the last 2 turns for finish. Heartbeats are automatic. Work fast, verify hard.`;
+Budget: ~${Math.round(WALL_MS / 60000)} min wall, ${MAX_TURNS} turns. Heartbeats are automatic. Work fast, verify hard.`;
 
 const TOOLS = [
   {
@@ -323,9 +322,22 @@ async function main() {
           } else if (tu.name === 'finish') {
             const status = String(tu.input.status);
             const summary = String(tu.input.summary ?? '');
+            // ADR-289 permanent fix (2026-08-13): content_md is the DISPATCH-GATED spec
+            // (ADR-271, 12k cap) — not a log. The full summary used to be appended verbatim
+            // every run (often 4-9k chars of "BUILD LOG" / "VERIFICATION COMPLETE" narrative),
+            // so a brief could cross the 12k cap purely from accumulated history while its
+            // remaining scope was trivial — self-sealing near-complete briefs and stalling the
+            // whole dispatch pipe for hours (found live 2026-08-13, 24-brief backlog, 0 of 7
+            // ready briefs actually dispatchable). Fix: content_md gets a BOUNDED pointer entry;
+            // the full narrative goes to governance.builder_heartbeats.finish_note (durable,
+            // now sized to hold it) — read that heartbeat row for full "what remains" detail.
+            const CONTENT_MD_LOG_CAP = 1200;
             await sql(
               `UPDATE documentation.build_briefs SET content_md = content_md || ${sqlLit(
-                `\n\n## §0.B BUILD LOG — GHA brief-builder run ${RUN_ID} (${WORKER})\n\n${summary}\n`
+                `\n\n## §0.B BUILD LOG — GHA brief-builder run ${RUN_ID} (${WORKER}) — full log: governance.builder_heartbeats heartbeat_id=${hb}\n\n${truncate(
+                  summary,
+                  CONTENT_MD_LOG_CAP
+                )}\n`
               )}, version = version + 1, status = ${sqlLit(status)}, last_updated_at = now(), last_updated_by = ${sqlLit(
                 WORKER
               )} WHERE slug = ${sqlLit(BRIEF_SLUG)}`
@@ -333,7 +345,7 @@ async function main() {
             await rpc('fn_builder_done', {
               p_heartbeat_id: hb,
               p_status: 'done',
-              p_note: truncate(summary, 500),
+              p_note: truncate(summary, 6000),
             });
             finished = true;
             out = 'finished';
