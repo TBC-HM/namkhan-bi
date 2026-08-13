@@ -15,7 +15,7 @@ export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
 export default async function ActionsPage() {
-  const dq = await getDqIssues().catch(() => []);
+  const dq = await getDqIssues();
 
   const critical = dq.filter((d: any) => d.severity === 'critical' || d.severity === 'high');
   const medium = dq.filter((d: any) => d.severity === 'medium');
