@@ -17,13 +17,13 @@ const fmtMoney = (n: number | null, ccy: string | null) =>
   n == null ? '—' : `${ccy === 'EUR' ? '€' : ccy === 'LAK' ? '₭' : '$'}${Math.round(Number(n)).toLocaleString('en-US')}`;
 
 export default async function DeliveryView({ propertyId }: { propertyId: number }) {
-  const since = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - 30); return d.toISOString().slice(0, 10); })();
-  const [recordsB, folioTxns] = await Promise.all([
-    getSpaDeliveryRecords(propertyId, since),
+  const [recordsB, folioTxnsB] = await Promise.all([
+    getSpaDeliveryRecords(propertyId),
     getFolioSpaTransactions(propertyId, 300),
   ]);
 
   const records = recordsB.rows;
+  const folioTxns = folioTxnsB.rows;
   const delivered = records.filter((r) => r.status === 'completed');
   const posted = delivered.filter((r) => r.posted_to_folio).length;
   const noShows = records.filter((r) => r.status === 'no_show').length;
