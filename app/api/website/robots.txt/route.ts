@@ -11,7 +11,7 @@ export async function GET() {
   const sb = getSupabaseAdmin();
   
   // Get site config
-  const { data: siteDataRaw } = await sb.rpc('fn_generate_sitedata', {
+  const { data: siteDataRaw } = await sb.rpc('fn_website_sitedata', {
     p_property_id: PROPERTY_ID
   });
   
