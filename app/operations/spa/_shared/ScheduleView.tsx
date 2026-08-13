@@ -49,7 +49,7 @@ export default async function ScheduleView({
   const dRaw = typeof searchParams.d === 'string' ? searchParams.d : todayIso;
   const dayIso = /^\d{4}-\d{2}-\d{2}$/.test(dRaw) ? dRaw : todayIso;
 
-  const [bookingsB, therapistsB, roomsB, catalogue, bookableGuests] = await Promise.all([
+  const [bookingsB, therapistsB, roomsB, catalogueB, bookableGuestsB] = await Promise.all([
     getSpaBookingsForDay(propertyId, dayIso),
     getSpaTherapists(propertyId),
     getSpaRooms(propertyId),
@@ -59,6 +59,7 @@ export default async function ScheduleView({
 
   const bridgeMissing = bookingsB.bridgeMissing;
   const bookings = bookingsB.rows;
+  const catalogue = catalogueB.rows;
   const activeBookings = bookings.filter((b) => !['cancelled', 'no_show'].includes(b.status));
 
   // ── daily spa analytics container ────────────────────────────────────
@@ -142,12 +143,13 @@ export default async function ScheduleView({
             }))}
             therapists={therapistsB.rows.map((t) => ({ id: t.therapist_id, label: t.display_name }))}
             rooms={roomsB.rows.map((r) => ({ id: String(r.room_id), label: r.name }))}
-            bookableGuests={bookableGuests}
+            guests={bookableGuestsB.rows}
           />
         )}
 
-        <Container title="Daily analytics" subtitle={dayNav} density="compact">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <Container title="Daily analytics" subtitle={dayIso} density="compact">
+          {dayNav}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
             {kpis.map((k, i) => <KpiTile key={i} {...k} />)}
           </div>
         </Container>
