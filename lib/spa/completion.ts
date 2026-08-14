@@ -169,16 +169,22 @@ async function postCustomItemToFolio(
       return { posted: false, charge_id: null, note: `vault key unavailable (${kErr?.message ?? 'null'}) — post manually in Cloudbeds` };
     }
 
-    // Cloudbeds v1.2 postCustomItem requires items as bracket-notation form parameters.
-    // Each item field is sent as items[0][fieldName]=value (PHP-style array encoding).
+    // Cloudbeds v1.2 postCustomItem expects an 'items' parameter with JSON array of line items.
+    // Each item must have: itemName, itemPrice, itemQuantity, optional: itemCategoryName, itemNotes.
+    const items = [
+      {
+        itemName: `Spa · ${booking.treatment_name}`.slice(0, 100),
+        itemPrice: Number(booking.price),
+        itemQuantity: 1,
+        itemCategoryName: 'Spa',
+        itemNotes: `Spa booking ${booking.booking_id.slice(0, 8)} · ${booking.therapist_name ?? 'therapist n/a'}`.slice(0, 200),
+      },
+    ];
+
     const form = new URLSearchParams();
     form.append('propertyID', String(booking.property_id));
     form.append('reservationID', booking.reservation_id!);
-    form.append('items[0][itemName]', `Spa · ${booking.treatment_name}`.slice(0, 100));
-    form.append('items[0][itemPrice]', String(booking.price));
-    form.append('items[0][itemQuantity]', '1');
-    form.append('items[0][itemCategoryName]', 'Spa');
-    form.append('items[0][itemNotes]', `Spa booking ${booking.booking_id.slice(0, 8)} · ${booking.therapist_name ?? 'therapist n/a'}`.slice(0, 200));
+    form.append('items', JSON.stringify(items));
 
     const r = await fetch(`${CB_BASE}/postCustomItem`, {
       method: 'POST',
