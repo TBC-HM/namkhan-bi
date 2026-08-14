@@ -57,10 +57,10 @@ function parseAddressList(raw: string | null): string[] {
 }
 function detectLanguage(text: string): string {
   const t = (text || '').slice(0, 500).toLowerCase();
-  if (/\b(bonjour|merci|nous sommes|j'aimerais|éservation)\b/.test(t)) return 'FR';
+  if (/\b(bonjour|merci|nous sommes|j'aimerais|réservation)\b/.test(t)) return 'FR';
   if (/\b(guten tag|wir sind|grüße|hallo|reservierung)\b/.test(t)) return 'DE';
   if (/\b(hola|nosotros|gracias|reserva|saludos)\b/.test(t)) return 'ES';
-  if (/[一-鯿]/.test(t)) return 'ZH';
+  if (/[一-鿿]/.test(t)) return 'ZH';
   if (/[぀-ヿ]/.test(t)) return 'JA';
   if (/[฀-๿]/.test(t)) return 'TH';
   return 'EN';
@@ -117,5 +117,104 @@ async function ingestOne(msg: GmailMessageFull, fallbackMailbox: string): Promis
   const toList = parseAddressList(toHdr);
   const ccList = parseAddressList(ccHdr);
   const intendedMailbox = detectIntendedMailbox(toList, ccList, text, fallbackMailbox);
-  const directio
+  const direction = 'inbound'; // always inbound from Gmail API
+  const lang = detectLanguage(text);
+  const { kind, conf } = triage(subject, text);
+  const source = sourceFromMailbox(intendedMailbox);
+  const threadKey = inReplyTo ?? messageIdHdr;
 
+  const row = {
+    property_id: PROPERTY_ID,
+    message_id: messageIdHdr,
+    thread_key: threadKey,
+    received_at: receivedAt,
+    direction,
+    mailbox: intendedMailbox,
+    sender_email: sender.email,
+    sender_name: sender.name,
+    subject,
+    body_text: text,
+    body_html: html,
+    language: lang,
+    inquiry_kind: kind,
+    inquiry_kind_conf: conf,
+    source,
+  };
+
+  const { error } = await sb.schema('sales').from('email_messages').insert(row);
+  if (error) return { kind: 'error', error: error.message };
+  return { kind: 'inserted' };
+}
+
+// ---- route handler ----
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const key = searchParams.get('key');
+  const authHeader = req.headers.get('Authorization');
+  const CRON_SECRET = process.env.CRON_SECRET || '';
+
+  if (key !== CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const forceEmail = searchParams.get('force_email');
+  const since = searchParams.get('since') || '2026-01-01';
+
+  const sb = getSupabaseAdmin();
+  let q = sb.schema('marketing').from('user_gmail_connections').select('*');
+  if (forceEmail) q = q.eq('email', forceEmail);
+
+  const { data: conns, error: connErr } = await q;
+  if (connErr || !conns) {
+    return NextResponse.json({ error: connErr?.message || 'No connections' }, { status: 500 });
+  }
+
+  const results: Array<{ email: string; status: string; count?: number; error?: string }> = [];
+
+  for (const conn of conns) {
+    let accessToken = conn.access_token;
+    // If access_token is null, refresh it first (encrypted storage migration).
+    if (!accessToken && conn.refresh_token) {
+      // plaintext user_gmail_connections.refresh_token column is nulled; fall back to
+      // vault. (For legacy contexts where only refresh_token was populated, we'd need
+      // to call refreshAccessToken here. If both are null, skip this connection.)
+      try {
+        const ref = await refreshAccessToken(conn.refresh_token);
+        accessToken = ref.access_token;
+        // Optionally persist the new access_token + expiry if you store them in the DB
+      } catch (e: any) {
+        results.push({ email: conn.email, status: 'refresh_failed', error: e.message });
+        continue;
+      }
+    }
+    if (!accessToken) {
+      results.push({ email: conn.email, status: 'no_token' });
+      continue;
+    }
+
+    const lastSynced = conn.last_synced_at ?? since;
+    const afterDate = lastSynced.split('T')[0].replace(/-/g, '/'); // "YYYY/MM/DD"
+    const query = `after:${afterDate}`;
+
+    try {
+      const messageList = await listGmailMessages(accessToken, query);
+      let ingested = 0;
+      for (const m of messageList.slice(0, 100)) { // cap to 100 messages per run
+        const full = await getGmailMessage(accessToken, m.id);
+        const res = await ingestOne(full, conn.email);
+        if (res.kind === 'inserted') ingested++;
+      }
+      // Update last_synced_at
+      await sb.schema('marketing').from('user_gmail_connections').update({
+        last_synced_at: new Date().toISOString(),
+      }).eq('email', conn.email);
+
+      results.push({ email: conn.email, status: 'ok', count: ingested });
+    } catch (e: any) {
+      results.push({ email: conn.email, status: 'error', error: e.message });
+    }
+  }
+
+  return NextResponse.json({ results });
+}
