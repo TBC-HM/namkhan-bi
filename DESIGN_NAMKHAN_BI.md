@@ -3044,3 +3044,7 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-06 — bug-agent · fix #174
 - ## Bug #174 — DQ banner renders for informational staleness even when the user can't dismiss or act on it  ### Root cause The `getDqIssues` query in `page.tsx` 
 - touched `app/h/[property_id]/revenue/cockpit/page.tsx`
+
+### 2026-08-13 — bug-agent · fix #178
+- ## Bug #178 – Preview page lands in Namkhan menu (cockpit layout wraps it)  ### Root cause The preview page lives at `app/legal/docs/preview/[doc_id]/page.tsx`.
+- touched `app/legal/docs/preview/layout.tsx`
