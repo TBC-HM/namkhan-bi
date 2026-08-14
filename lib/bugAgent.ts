@@ -38,6 +38,14 @@
 //     (getModuleCatalog(), %_module doc_types via v_documentation_documents)
 //     so the planner cannot recommend external tools for capabilities the
 //     platform already has (TBC University vs Notion, bug #171).
+// 2026-08-14 (unstick-sweep, brief bug_agent-adr291-direct-ship-v1, ADR-291):
+//   - Builders and agents do NOT open PRs. shipPatches now ships every
+//     approved patch DIRECT TO MAIN through the guarded DB push path
+//     public.fn_gh_push_file (ADR-222 G2 protected paths, ADR-221 G1 shrink
+//     guard, ADR-166 hot-file CAS, governance.push_ledger logging — rule 661).
+//     ghOpenPR / tryAutoMerge / ghCreateBranch / ghPutFile removed with the
+//     PR flow. pr_number/pr_url stay in the run schema as historical columns
+//     and are always null for new runs.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropicTool } from '@/lib/mail/anthropic';
@@ -127,44 +135,26 @@ async function ghGetBranchSha(branch: string): Promise<string> {
   const j = await r.json() as { object: { sha: string } };
   return j.object.sha;
 }
-async function ghCreateBranch(newBranch: string, fromSha: string): Promise<void> {
-  const r = await ghFetch(`/repos/${GH_REPO}/git/refs`, {
-    method: 'POST',
-    body: JSON.stringify({ ref: `refs/heads/${newBranch}`, sha: fromSha }),
+// 2026-08-14 (ADR-291): the ONLY write path to the repo. Direct to main via
+// the guarded DB RPC public.fn_gh_push_file — shrink guard (G1), protected
+// paths (G2), hot-file CAS (ADR-166), push_ledger logging (rule 661) all
+// enforced server-side in Postgres. Raw GH contents-PUT / branch-create /
+// PR helpers were removed with the PR flow.
+async function pushFileGuarded(path: string, content: string, message: string): Promise<{ ok: boolean; sha: string | null; error: string | null }> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb.rpc('fn_gh_push_file', {
+    p_owner: 'TBC-HM',
+    p_repo: 'namkhan-bi',
+    p_branch: GH_BASE_BRANCH,
+    p_path: path,
+    p_content: content,
+    p_message: message,
   });
-  if (!r.ok && r.status !== 422 /* already exists */) {
-    const t = await r.text();
-    throw new Error(`gh_create_branch ${r.status}: ${t}`);
-  }
-}
-async function ghPutFile(path: string, content: string, branch: string, message: string, sha?: string): Promise<string> {
-  const body: Record<string, unknown> = {
-    message,
-    content: Buffer.from(content, 'utf-8').toString('base64'),
-    branch,
-  };
-  if (sha) body.sha = sha;
-  const r = await ghFetch(`/repos/${GH_REPO}/contents/${encodeURIComponent(path)}`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`gh_put_file ${r.status}: ${path} · ${t.slice(0, 200)}`);
-  }
-  const j = await r.json() as { commit: { sha: string } };
-  return j.commit.sha;
-}
-async function ghOpenPR(branch: string, title: string, body: string): Promise<{ number: number; html_url: string }> {
-  const r = await ghFetch(`/repos/${GH_REPO}/pulls`, {
-    method: 'POST',
-    body: JSON.stringify({ title, head: branch, base: GH_BASE_BRANCH, body }),
-  });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`gh_open_pr ${r.status}: ${t.slice(0, 300)}`);
-  }
-  return await r.json() as { number: number; html_url: string };
+  if (error) return { ok: false, sha: null, error: `push_rpc: ${error.message}` };
+  const j = (data ?? {}) as { ok?: boolean | null; state?: string; error?: string; body?: { commit?: { sha?: string } } | null };
+  if (j.ok === false) return { ok: false, sha: null, error: (j.error ?? `push_${j.state ?? 'blocked'}`).slice(0, 400) };
+  // ok=true → landed; ok=null → dispatched (push_ledger verify closes the loop, ADR-221 G2)
+  return { ok: true, sha: j.body?.commit?.sha ?? null, error: null };
 }
 // 2026-07-28 (G1, verifier objection on brief autospec-bug_agent_module-20260725):
 // the GATE is the typecheck check-run(s) ONLY — `tsc --noEmit` from
@@ -215,33 +205,11 @@ async function ghGetTreePaths(): Promise<string[]> {
 }
 
 
-// ---------- ADR-175 auto-merge (PBS 2026-07-27: "if I merge every time I am the bottleneck") ----------
-const PROTECTED_PATHS = [/^middleware/, /auth/i, /^package(-lock)?\.json$/, /^next\.config/, /^vercel\.json$/, /^supabase\/migrations\//, /^\.github\//, /\.env/];
-const AUTO_MERGE_MAX_FILES = 15;
-async function autoMergeEnabled(): Promise<boolean> {
-  try {
-    const sb = getSupabaseAdmin();
-    const { data } = await sb.rpc('fn_automation_enabled');
-    return data !== false;
-  } catch { return false; }
-}
-async function tryAutoMerge(prNumber: number, patches: FilePatch[], runId: number): Promise<boolean> {
-  if (!(await autoMergeEnabled())) { await updateRun(runId, {}, 'MERGE · skipped — automation kill switch OFF'); return false; }
-  if (patches.length > AUTO_MERGE_MAX_FILES) { await updateRun(runId, {}, `MERGE · skipped — ${patches.length} files > ${AUTO_MERGE_MAX_FILES} (PBS merges)`); return false; }
-  const touched = patches.filter((p) => PROTECTED_PATHS.some((re) => re.test(p.path)));
-  if (touched.length > 0) { await updateRun(runId, {}, `MERGE · skipped — protected path(s): ${touched.map((t) => t.path).join(', ')} (PBS merges)`); return false; }
-  const r = await ghFetch(`/repos/${GH_REPO}/pulls/${prNumber}/merge`, {
-    method: 'PUT',
-    body: JSON.stringify({ merge_method: 'squash' }),
-  });
-  if (!r.ok) {
-    const t = await r.text();
-    await updateRun(runId, {}, `MERGE · failed ${r.status}: ${t.slice(0, 150)} (PBS merges)`);
-    return false;
-  }
-  await updateRun(runId, {}, `MERGE · auto-merged PR #${prNumber} (ADR-175: reviewer+verify green, unprotected, ≤${AUTO_MERGE_MAX_FILES} files)`);
-  return true;
-}
+// 2026-08-14 (ADR-291): the ADR-175 auto-merge block (autoMergeEnabled /
+// tryAutoMerge / local PROTECTED_PATHS) is gone — there is no PR to merge.
+// The kill switch and protected-path enforcement live server-side in
+// fn_gh_push_file (ADR-222 G2 + governance.path_approvals), which is stricter
+// than the local regex list ever was.
 
 // ---------- Planning ----------
 // PBS 2026-07-17 — convert URL path segments to Next.js bracket-notation
@@ -584,15 +552,19 @@ async function reviewPlan(bug: { id: number; body: string | null }, plan: Planne
 
 
 
+// 2026-08-14 (ADR-291, brief bug_agent-adr291-direct-ship-v1): no branch, no
+// PR. Every reviewer-approved patch ships direct to main through
+// pushFileGuarded (fn_gh_push_file — G1/G2/CAS/push_ledger enforced in the
+// DB). A guard block (shrink/protected/hot-file) throws, which lands the run
+// in the catch-all failed path with the guard's own remediation message.
 async function shipPatches(bug: { id: number; body: string | null }, plan: PlannerResult): Promise<{ branch: string; commit_sha: string; pr_number: number | null; pr_url: string | null; pr_error: string | null }> {
-  const branch = `bots/bug-${bug.id}`;
-  const mainSha = await ghGetBranchSha(GH_BASE_BRANCH);
-  await ghCreateBranch(branch, mainSha);
+  const branch = GH_BASE_BRANCH;
   let lastCommit = '';
   for (const patch of plan.patches) {
-    const existing = await ghGetFile(patch.path, branch);
     const msg = `bug-agent: ${plan.plan_md.slice(0, 60)} · #${bug.id}`;
-    lastCommit = await ghPutFile(patch.path, patch.new_content, branch, msg, existing?.sha);
+    const r = await pushFileGuarded(patch.path, patch.new_content, msg);
+    if (!r.ok) throw new Error(`guarded_push_blocked: ${patch.path} · ${r.error}`);
+    if (r.sha) lastCommit = r.sha;
   }
   // PBS 2026-07-27 — DESIGN RITUAL COMPLIANCE (locked 2026-05-03): every UI
   // change must append a dated entry to DESIGN_NAMKHAN_BI.md's Update history.
@@ -603,7 +575,7 @@ async function shipPatches(bug: { id: number; body: string | null }, plan: Plann
   const DESIGN_SURFACE = /^(app\/|components\/|styles\/|lib\/format\.ts$)/;
   if (plan.patches.some((p) => DESIGN_SURFACE.test(p.path)) && !plan.patches.some((p) => p.path === 'DESIGN_NAMKHAN_BI.md')) {
     try {
-      const doc = await ghGetFile('DESIGN_NAMKHAN_BI.md', branch);
+      const doc = await ghGetFile('DESIGN_NAMKHAN_BI.md');
       if (doc) {
         const today = new Date().toISOString().slice(0, 10);
         const touched = plan.patches.filter((p) => DESIGN_SURFACE.test(p.path)).map((p) => p.path);
@@ -614,38 +586,20 @@ async function shipPatches(bug: { id: number; body: string | null }, plan: Plann
           ...touched.map((p) => `- touched \`${p}\``),
           '',
         ].join('\n');
-        lastCommit = await ghPutFile('DESIGN_NAMKHAN_BI.md', doc.content.trimEnd() + '\n' + entry, branch, `bug-agent: design-doc update-history entry · #${bug.id}`, doc.sha);
+        const r = await pushFileGuarded('DESIGN_NAMKHAN_BI.md', doc.content.trimEnd() + '\n' + entry, `bug-agent: design-doc update-history entry · #${bug.id}`);
+        if (r.ok && r.sha) lastCommit = r.sha;
       }
     } catch {
       // Doc append is best-effort — never fail a ship over it. The check
       // will warn, PBS is not required to act.
     }
   }
-  const prTitle = `bug-agent · fix #${bug.id}: ${(bug.body ?? '').slice(0, 60)}`;
-  const prBody = [
-    `Autonomous fix by bug-agent for bug #${bug.id}.`,
-    '',
-    `**Plan:** ${plan.plan_md}`,
-    '',
-    `**Files patched (${plan.patches.length}):**`,
-    plan.patches.map((p) => `- \`${p.path}\` — ${p.reasoning}`).join('\n'),
-    '',
-    '_Review carefully before merging. Bug-agent v1 does not auto-merge._',
-    `_Bug: /holding/bugs · run: cockpit.bug_agent_runs_`,
-  ].join('\n');
-  // PBS 2026-07-17 — PR creation is soft-fail. Branch + commits are the
-  // important artifacts; PBS can open PRs in bulk via `gh pr create`.
-  // 2026-07-26 (§0.R R1b): vault token re-verified — POST /pulls returns 422
-  // on a fake head (not 403), i.e. the token DOES have Pull-Requests write.
-  // The historical 403s were a stale token. Soft-fail kept as belt-and-braces.
-  // The agent NEVER merges (PUSH DISCIPLINE rule 530 — PBS merges).
-  try {
-    const pr = await ghOpenPR(branch, prTitle, prBody);
-    return { branch, commit_sha: lastCommit, pr_number: pr.number, pr_url: pr.html_url, pr_error: null };
-  } catch (e) {
-    const err = e instanceof Error ? e.message : String(e);
-    return { branch, commit_sha: lastCommit, pr_number: null, pr_url: null, pr_error: err };
+  // fn_gh_push_file can report ok=null (dispatched) without a commit sha in
+  // the bridge body. Verify still needs a concrete sha — resolve main's head.
+  if (!lastCommit) {
+    try { lastCommit = await ghGetBranchSha(GH_BASE_BRANCH); } catch { /* verify degrades to skipped_no_ci */ }
   }
+  return { branch, commit_sha: lastCommit, pr_number: null, pr_url: null, pr_error: null };
 }
 
 // 2026-07-27 verifier repair (brief §2 + D2 + §0.R R2):
@@ -763,17 +717,14 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
       await updateRun(runId, { phase: 'needs_human', cost_usd: costUsd, ended_at: new Date().toISOString() }, `NEEDS_HUMAN · reviewer said ${review.verdict}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'needs_human', cost_usd: costUsd };
     }
-    await updateRun(runId, { phase: 'shipping' }, `SHIP · creating branch + pushing ${plan.patches.length} file(s)…`);
+    await updateRun(runId, { phase: 'shipping' }, `SHIP · pushing ${plan.patches.length} file(s) direct to main (ADR-291, guarded)…`);
     const ship = await shipPatches(bug, plan);
     await updateRun(runId, {
       branch: ship.branch,
       commit_sha: ship.commit_sha,
-      pr_number: ship.pr_number,
-      pr_url: ship.pr_url,
-    }, ship.pr_url
-      ? `SHIP · PR #${ship.pr_number} → ${ship.pr_url}`
-      : `SHIP · branch=${ship.branch} commit=${ship.commit_sha.slice(0,8)} · PR open BLOCKED: ${ship.pr_error} (open manually via: gh pr create --head ${ship.branch})`
-    );
+      pr_number: null,
+      pr_url: null,
+    }, `SHIP · direct-to-main commit=${ship.commit_sha ? ship.commit_sha.slice(0, 8) : '(dispatched)'} · guards G1/G2/CAS via fn_gh_push_file · ledger=governance.push_ledger`);
     // G3: never poll past the route's remaining lifetime (15s close-out
     // reserve; floor 20s = at least one probe + one retry).
     const remainingMs = jobDeadlineMs ? jobDeadlineMs - Date.now() : Number.MAX_SAFE_INTEGER;
@@ -785,26 +736,22 @@ export async function runOneBug(bug: { id: number; body: string | null; page_url
     // pending CI → done + verify tag. Curl is informational (prod deploy of
     // main can never contain the branch fix — never gate on it).
     const success = verify.ci_ok !== false;
-    // Determine best fix_link: PR URL if opened, else GH branch compare view
-    const fixLink = ship.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${ship.branch}`;
-    const fixLabel = ship.pr_number ? `PR #${ship.pr_number}` : `branch: ${ship.branch}`;
+    // ADR-291: the fix IS on main — link the commit itself.
+    const fixLink = ship.commit_sha
+      ? `https://github.com/${GH_REPO}/commit/${ship.commit_sha}`
+      : `https://github.com/${GH_REPO}/commits/${GH_BASE_BRANCH}`;
+    const fixLabel = ship.commit_sha ? `main @ ${ship.commit_sha.slice(0, 8)}` : 'main (dispatched)';
     if (success) {
-      // ADR-175: verified + reviewer-approved + unprotected → the loop merges its own PR.
-      // 2026-07-28 tightening (run 86 lesson): "verify green" means the typecheck
-      // gate CONCLUDED success (ci_ok === true) — not merely "didn't fail yet".
-      // ci_pending_timeout / skipped_no_ci runs still close as done (D2), but
-      // their PRs await PBS merge instead of auto-merging on an unconcluded gate.
-      let merged = false;
-      if (ship.pr_number && verify.ci_ok === true) merged = await tryAutoMerge(ship.pr_number, plan.patches, runId);
-      await markBug(bug.id, { status: 'done', started_at: new Date().toISOString(), done_at: new Date().toISOString(), fix_link: fixLink, fix_label: merged ? `${fixLabel} · auto-merged` : fixLabel });
-      await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, (merged ? `DONE · auto-merged (ADR-175)` : (ship.pr_url ? `DONE · PR awaits PBS merge (protected/oversize/switch-off)` : `DONE · branch ready — open PR manually`)) + ` · verify=${verify.verify_tag}`);
+      await markBug(bug.id, { status: 'done', started_at: new Date().toISOString(), done_at: new Date().toISOString(), fix_link: fixLink, fix_label: fixLabel });
+      await updateRun(runId, { phase: 'done', cost_usd: costUsd, ended_at: new Date().toISOString() }, `DONE · shipped direct to main (ADR-291) · verify=${verify.verify_tag}`);
       return { bug_id: bug.id, run_id: runId, ok: true, phase: 'done', cost_usd: costUsd };
     } else {
-      // Still record the branch so PBS can see it even if verify failed
+      // ADR-291: the commit is already on main — a red gate here means main
+      // needs a fix-forward or revert, not a discarded branch. Surface loudly.
       // PBS 2026-07-27 (bug-106 family) — DB CHECK allows new/acked/processing/
       // done/wont_fix; 'acknowledged' was silently rejected by Postgres.
       await markBug(bug.id, { status: 'acked', fix_link: fixLink, fix_label: fixLabel });
-      await updateRun(runId, { phase: 'failed', cost_usd: costUsd, ended_at: new Date().toISOString(), error: `verify_failed: ${verify.verify_tag} · ${verify.note.slice(0, 300)}` }, `FAIL · CI check failed on branch`);
+      await updateRun(runId, { phase: 'failed', cost_usd: costUsd, ended_at: new Date().toISOString(), error: `verify_failed: ${verify.verify_tag} · ${verify.note.slice(0, 300)}` }, `FAIL · CI gate failed on MAIN commit ${ship.commit_sha.slice(0, 8)} — fix-forward or revert required (ADR-291 direct-ship)`);
       return { bug_id: bug.id, run_id: runId, ok: false, phase: 'failed', cost_usd: costUsd };
     }
   } catch (e) {
@@ -926,15 +873,19 @@ export async function finalizeOrphanRuns(opts: { olderThanMin?: number } = {}): 
     const nowIso = new Date().toISOString();
     try {
       if (run.commit_sha) {
+        // ADR-291: new runs ship direct to main (branch === main) — link the
+        // commit. Historical branch runs keep their PR / compare-view links.
+        const directLink = `https://github.com/${GH_REPO}/commit/${run.commit_sha}`;
+        const isDirect = !run.branch || run.branch === GH_BASE_BRANCH;
         const s = await ghGetCheckStatus(run.commit_sha);
         if (s.ci_ok === false) {
-          await markBug(run.bug_id, { status: 'acked', fix_link: run.pr_url ?? (run.branch ? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${run.branch}` : null), fix_label: run.branch ? `branch: ${run.branch}` : null });
+          await markBug(run.bug_id, { status: 'acked', fix_link: run.pr_url ?? (isDirect ? directLink : `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${run.branch}`), fix_label: isDirect ? `main @ ${run.commit_sha.slice(0, 8)}` : `branch: ${run.branch}` });
           await updateRun(run.id, { phase: 'failed', ended_at: nowIso, error: `verify_failed: orphan finalizer · ${s.note.slice(0, 250)}` }, `ORPHAN-FINALIZE · route killed mid-run · CI gate failed`);
           finalized.push({ run_id: run.id, bug_id: run.bug_id, outcome: 'failed' });
         } else {
           const tag = s.ci_ok === true ? 'ci_passed' : 'orphaned_timeout';
-          const fixLink = run.pr_url ?? `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${run.branch}`;
-          const fixLabel = run.pr_url ? 'PR (orphan-finalized)' : `branch: ${run.branch}`;
+          const fixLink = run.pr_url ?? (isDirect ? directLink : `https://github.com/${GH_REPO}/compare/${GH_BASE_BRANCH}...${run.branch}`);
+          const fixLabel = run.pr_url ? 'PR (orphan-finalized)' : (isDirect ? `main @ ${run.commit_sha.slice(0, 8)}` : `branch: ${run.branch}`);
           await markBug(run.bug_id, { status: 'done', started_at: nowIso, done_at: nowIso, fix_link: fixLink, fix_label: fixLabel });
           await updateRun(run.id, { phase: 'done', ended_at: nowIso }, `ORPHAN-FINALIZE · route killed mid-run · verify=${tag} · ${s.note.slice(0, 250)}`);
           finalized.push({ run_id: run.id, bug_id: run.bug_id, outcome: 'done' });
