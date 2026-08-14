@@ -16,11 +16,11 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import {
   refreshAccessToken,
-  listGmailMessages,
+  listMessages,
   getGmailMessage,
   getHeader,
   extractBodies,
-  type GmailMessageFull,
+  GmailMessageFull,
 } from '@/lib/gmail';
 
 export const dynamic = 'force-dynamic';
@@ -117,90 +117,89 @@ async function ingestOne(msg: GmailMessageFull, fallbackMailbox: string): Promis
   const toList = parseAddressList(toHdr);
   const ccList = parseAddressList(ccHdr);
   const intendedMailbox = detectIntendedMailbox(toList, ccList, text, fallbackMailbox);
-  const direction = 'inbound'; // always inbound from Gmail API
-  const lang = detectLanguage(text);
-  const { kind, conf } = triage(subject, text);
-  const source = sourceFromMailbox(intendedMailbox);
-  const threadKey = inReplyTo ?? messageIdHdr;
+  const direction = sender.email && NAMKHAN_DOMAIN_RE.test(sender.email) ? 'outbound' : 'inbound';
+  const triageResult = triage(subject, text);
+  const language = detectLanguage(text);
+  const source = direction === 'inbound' ? sourceFromMailbox(intendedMailbox) : 'Internal';
 
-  const row = {
+  const { error } = await sb.schema('sales').from('email_messages').insert({
     property_id: PROPERTY_ID,
     message_id: messageIdHdr,
-    thread_key: threadKey,
-    received_at: receivedAt,
-    direction,
-    mailbox: intendedMailbox,
+    thread_id: msg.threadId,
     sender_email: sender.email,
     sender_name: sender.name,
+    intended_mailbox: intendedMailbox,
+    direction,
     subject,
-    body_text: text,
-    body_html: html,
-    language: lang,
-    inquiry_kind: kind,
-    inquiry_kind_conf: conf,
+    body_text: text || null,
+    body_html: html || null,
+    triaged_kind: triageResult.kind,
+    triaged_confidence: triageResult.conf,
+    language,
     source,
-  };
-
-  const { error } = await sb.schema('sales').from('email_messages').insert(row);
+    received_at: receivedAt,
+    in_reply_to: inReplyTo,
+    tags: [],
+  });
   if (error) return { kind: 'error', error: error.message };
   return { kind: 'inserted' };
 }
 
-// ---- route handler ----
+// ---- GET handler ----
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const key = searchParams.get('key');
-  const authHeader = req.headers.get('Authorization');
-  const CRON_SECRET = process.env.CRON_SECRET || '';
-
-  if (key !== CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const key = url.searchParams.get('key');
+  const authHeader = request.headers.get('authorization');
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return NextResponse.json({ error: 'CRON_SECRET not set' }, { status: 500 });
+  }
+  const keyMatch = key === secret;
+  const bearerMatch = authHeader?.startsWith('Bearer ') && authHeader.slice(7) === secret;
+  if (!keyMatch && !bearerMatch) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const forceEmail = searchParams.get('force_email');
-  const since = searchParams.get('since') || '2026-01-01';
+  const forceEmail = url.searchParams.get('force_email');
+  const forceSince = url.searchParams.get('since');
 
   const sb = getSupabaseAdmin();
-  let q = sb.schema('marketing').from('user_gmail_connections').select('*');
-  if (forceEmail) q = q.eq('email', forceEmail);
-
-  const { data: conns, error: connErr } = await q;
-  if (connErr || !conns) {
-    return NextResponse.json({ error: connErr?.message || 'No connections' }, { status: 500 });
+  // Fetch active connections
+  let query = sb.schema('marketing').from('user_gmail_connections').select('*');
+  if (forceEmail) query = query.eq('email', forceEmail);
+  const { data: connections, error: fetchError } = await query;
+  if (fetchError) {
+    return NextResponse.json({ error: `Failed to fetch connections: ${fetchError.message}` }, { status: 500 });
+  }
+  if (!connections || connections.length === 0) {
+    return NextResponse.json({ note: 'No gmail connections to poll', processed: [] });
   }
 
-  const results: Array<{ email: string; status: string; count?: number; error?: string }> = [];
-
-  for (const conn of conns) {
-    let accessToken = conn.access_token;
-    // If access_token is null, refresh it first (encrypted storage migration).
-    if (!accessToken && conn.refresh_token) {
-      // plaintext user_gmail_connections.refresh_token column is nulled; fall back to
-      // vault. (For legacy contexts where only refresh_token was populated, we'd need
-      // to call refreshAccessToken here. If both are null, skip this connection.)
-      try {
-        const ref = await refreshAccessToken(conn.refresh_token);
-        accessToken = ref.access_token;
-        // Optionally persist the new access_token + expiry if you store them in the DB
-      } catch (e: any) {
-        results.push({ email: conn.email, status: 'refresh_failed', error: e.message });
-        continue;
-      }
-    }
-    if (!accessToken) {
-      results.push({ email: conn.email, status: 'no_token' });
+  const results: Array<{ email: string; ingested: number; error?: string }> = [];
+  for (const conn of connections) {
+    if (conn.paused && !forceEmail) {
+      results.push({ email: conn.email, ingested: 0, error: 'paused' });
       continue;
     }
-
-    const lastSynced = conn.last_synced_at ?? since;
-    const afterDate = lastSynced.split('T')[0].replace(/-/g, '/'); // "YYYY/MM/DD"
-    const query = `after:${afterDate}`;
-
+    // Refresh access token
+    let accessToken: string;
     try {
-      const messageList = await listGmailMessages(accessToken, query);
+      const tokens = await refreshAccessToken(conn.refresh_token);
+      accessToken = tokens.access_token;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push({ email: conn.email, ingested: 0, error: `Refresh failed: ${msg}` });
+      continue;
+    }
+    // Construct Gmail query
+    const since = forceSince ?? conn.last_synced_at ?? '2026-01-01';
+    const date = since.split('T')[0].replace(/-/g, '/'); // YYYY/MM/DD
+    const query = `after:${date}`;
+    try {
+      const messageList = await listMessages(accessToken, query);
       let ingested = 0;
-      for (const m of messageList.slice(0, 100)) { // cap to 100 messages per run
+      for (const m of (messageList.messages ?? []).slice(0, 100)) { // cap to 100 messages per run
         const full = await getGmailMessage(accessToken, m.id);
         const res = await ingestOne(full, conn.email);
         if (res.kind === 'inserted') ingested++;
@@ -209,12 +208,12 @@ export async function GET(req: Request) {
       await sb.schema('marketing').from('user_gmail_connections').update({
         last_synced_at: new Date().toISOString(),
       }).eq('email', conn.email);
-
-      results.push({ email: conn.email, status: 'ok', count: ingested });
-    } catch (e: any) {
-      results.push({ email: conn.email, status: 'error', error: e.message });
+      results.push({ email: conn.email, ingested });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push({ email: conn.email, ingested: 0, error: msg });
     }
   }
 
-  return NextResponse.json({ results });
+  return NextResponse.json({ ok: true, processed: results });
 }
