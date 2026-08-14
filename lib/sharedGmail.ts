@@ -157,6 +157,69 @@ export async function getMailboxById(mailboxId: string): Promise<SharedMailbox |
   };
 }
 
+// ---- PERMISSION-AWARE helpers (PBS 2026-08-14) -----------------------------
+// Added for email_inbox-slice-permissions-legacy-perms: enforce
+// fn_shared_mailbox_list_active membership on sales routes. HoD routes
+// (rm@/rom@) remain intentionally open to any authenticated user (role-based).
+
+/**
+ * List mailboxes the given user has permission to access.
+ * Queries v_shared_mailbox_members to filter by user membership.
+ */
+export async function listUserMailboxes(userId: string): Promise<SharedMailbox[]> {
+  const admin = getSupabaseAdmin();
+  
+  // Get all active mailboxes the user is a member of
+  const { data: memberRows, error: memberErr } = await admin
+    .from('v_shared_mailbox_members')
+    .select('mailbox_id')
+    .eq('user_id', userId);
+  
+  if (memberErr) throw new Error('list_user_mailboxes_failed_' + memberErr.message);
+  
+  const mailboxIds = (memberRows ?? []).map((r) => String((r as { mailbox_id: string }).mailbox_id));
+  if (mailboxIds.length === 0) return [];
+  
+  // Get the full mailbox details for those IDs
+  const { data, error } = await admin
+    .from('v_shared_mailbox_connections')
+    .select('id, mailbox_address, label, badge_color, sort_order, active')
+    .in('id', mailboxIds)
+    .eq('active', true)
+    .order('sort_order', { ascending: true });
+  
+  if (error) throw new Error('list_user_mailboxes_details_failed_' + error.message);
+  
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    mailbox_address: r.mailbox_address as string,
+    label: r.label as string,
+    badge_color: (r.badge_color as string) || '#084838',
+    sort_order: (r.sort_order as number) ?? 100,
+  }));
+}
+
+/**
+ * Get a single mailbox by ID IF the user has permission.
+ * Returns null if mailbox doesn't exist OR user lacks membership.
+ */
+export async function getUserMailboxById(userId: string, mailboxId: string): Promise<SharedMailbox | null> {
+  const admin = getSupabaseAdmin();
+  
+  // Check if user is a member
+  const { data: memberRow, error: memberErr } = await admin
+    .from('v_shared_mailbox_members')
+    .select('mailbox_id')
+    .eq('user_id', userId)
+    .eq('mailbox_id', mailboxId)
+    .maybeSingle();
+  
+  if (memberErr || !memberRow) return null;
+  
+  // Get the mailbox details
+  return getMailboxById(mailboxId);
+}
+
 // ---- inbox read ------------------------------------------------------------
 
 interface GmailListItem { id: string; threadId: string }
