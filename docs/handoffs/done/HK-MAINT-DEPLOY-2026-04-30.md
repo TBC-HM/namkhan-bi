@@ -17,6 +17,15 @@
 
 **Total:** 58 files (57 new + 1 modified config pair).
 
+## URL aliases (added 2026-08-14)
+
+Per owner finding #90 (brief `ops_maintenance_module-owner-findings-v1`), the shorthand `/ops/maintenance` now redirects to `/operations/maintenance` via `next.config.js`. This allows both URLs to resolve to the same page:
+
+- **Canonical:** `https://namkhan-bi.vercel.app/operations/maintenance`
+- **Alias:** `https://namkhan-bi.vercel.app/ops/maintenance` (307 → canonical)
+
+The alias was added to match user expectations and common shorthand usage within the team.
+
 ## What was NOT done
 
 | Action | Why |
