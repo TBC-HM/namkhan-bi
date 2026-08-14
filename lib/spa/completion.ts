@@ -50,113 +50,101 @@ export async function getBookingDetail(
   sb: SupabaseClient,
   bookingId: string,
 ): Promise<BookingDetail | null> {
-  const { data, error } = await sb.rpc('fn_spa_booking_detail', { p_booking_id: bookingId });
-  if (error) return null;
-  const row = Array.isArray(data) ? data[0] : data;
-  return (row as BookingDetail) ?? null;
+  const { data, error } = await sb.rpc('fn_spa_booking_detail', { p_booking_id: bookingId }).single();
+  if (error) throw error;
+  return data ?? null;
 }
 
-export interface CompletionHookResult {
-  inventory: { attempted: boolean; ok: boolean; lines: number; error: string | null };
-  folio: { attempted: boolean; posted: boolean; charge_id: string | null; note: string };
+// ────────────────────────────────────────────────────────────────────
+// Completion hooks: folio + inventory. Non-throwing; partial success ok.
+// ────────────────────────────────────────────────────────────────────
+
+export interface CompletionResult {
+  folio: { posted: boolean; charge_id: string | null; note: string };
+  inventory: { ok: boolean; lines: number; error: string | null };
 }
 
-/** Fire-and-record completion hooks. Never throws; never blocks the transition. */
+/** Run folio post + inventory, record evidence. Called only after status=completed. */
 export async function runCompletionHooks(
   sb: SupabaseClient,
   booking: BookingDetail,
-): Promise<CompletionHookResult> {
-  const result: CompletionHookResult = {
-    inventory: { attempted: false, ok: false, lines: 0, error: null },
-    folio: { attempted: false, posted: false, charge_id: null, note: 'not attempted' },
+): Promise<CompletionResult> {
+  const result: CompletionResult = {
+    folio: { posted: false, charge_id: null, note: '' },
+    inventory: { ok: true, lines: 0, error: null },
   };
 
-  // ── 1. Inventory deduction (recipe-driven; no recipe rows = no-op) ──────
+  // 1. Inventory deduction (non-blocking).
   try {
-    result.inventory.attempted = true;
-    const { data, error } = await sb.rpc('fn_inv_deduct_treatment_products', {
-      p_treatment_name: booking.treatment_name,
-      p_treatments_delivered: 1,
-      p_property_id: booking.property_id,
-    });
+    const { data, error } = await sb.rpc('fn_inv_spa_deduct_daily', { p_booking_id: booking.booking_id });
     if (error) {
+      result.inventory.ok = false;
       result.inventory.error = error.message;
     } else {
-      result.inventory.ok = true;
-      result.inventory.lines = Array.isArray(data) ? data.length : 0;
+      result.inventory.lines = data ?? 0;
     }
   } catch (e) {
+    result.inventory.ok = false;
     result.inventory.error = e instanceof Error ? e.message : String(e);
   }
 
-  // ── 2. Cloudbeds folio post (in-house Namkhan guests only) ──────────────
+  // 2. Folio post: skip if walk-in or Mews, skip if already posted, attempt once.
   if (!booking.reservation_id) {
-    result.folio.note = 'walk-in / day guest — front-desk settle, no folio';
-    // Walk-in explicit skip recording (brief spa-module-v1-slice-folio-posting)
-    try {
-      await sb.rpc('fn_spa_record_folio_post', {
-        p_booking_id: booking.booking_id,
-        p_posted: false,
-        p_charge_id: null,
-        p_evidence: { posted: false, skipped: 'walk_in', note: result.folio.note },
-      });
-    } catch {
-      // best-effort
-    }
+    result.folio.note = 'walk-in (no reservation) — settle at front desk';
   } else if (!CLOUDBEDS_PROPERTY_IDS.has(booking.property_id)) {
-    result.folio.note = 'non-Cloudbeds property — delivery recorded, no folio post';
+    result.folio.note = 'Mews property (no API write)';
   } else if (booking.posted_to_folio) {
-    result.folio.note = 'already posted';
-    result.folio.posted = true;
-    result.folio.charge_id = booking.cloudbeds_charge_id;
+    result.folio.note = `already posted (charge ${booking.cloudbeds_charge_id})`;
   } else {
-    result.folio.attempted = true;
     const attempt = await postCustomItemToFolio(sb, booking);
     result.folio.posted = attempt.posted;
     result.folio.charge_id = attempt.charge_id;
     result.folio.note = attempt.note;
   }
 
-  // ── 3. Record evidence on the booking row + audit log ───────────────────
+  // 3. Record evidence on the booking row.
   try {
-    if (result.folio.attempted || result.folio.posted) {
-      await sb.rpc('fn_spa_record_folio_post', {
-        p_booking_id: booking.booking_id,
-        p_posted: result.folio.posted,
-        p_charge_id: result.folio.charge_id,
-        p_evidence: {
-          note: result.folio.note,
-          reservation_id: booking.reservation_id,
-          amount: booking.price,
-          currency: booking.currency,
-        },
-      });
-    }
+    await sb.rpc('fn_spa_record_folio_post', {
+      p_booking_id: booking.booking_id,
+      p_posted: result.folio.posted,
+      p_charge_id: result.folio.charge_id,
+      p_evidence: {
+        note: result.folio.note,
+        reservation_id: booking.reservation_id,
+        amount: booking.price,
+        currency: booking.currency,
+      },
+    });
+  } catch (e) {
+    // Swallow evidence write errors (not user-facing).
+  }
+
+  // 4. Audit log.
+  try {
     await sb.from('cockpit_audit_log').insert({
       agent: 'spa-completion-hook',
       action: result.folio.posted
         ? 'spa_folio_posted'
-        : result.folio.attempted
-          ? 'spa_folio_post_failed'
-          : !booking.reservation_id
-            ? 'spa_folio_skipped_walkin'
-            : 'spa_completed',
+        : result.folio.note.includes('walk-in')
+          ? 'spa_folio_skipped_walkin'
+          : result.folio.note.includes('Mews')
+            ? 'spa_folio_skipped_mews'
+            : result.folio.note.includes('already')
+              ? 'spa_completed'
+              : 'spa_folio_post_failed',
       target: `spa.booking:${booking.booking_id}`,
-      success: !result.folio.attempted || result.folio.posted,
-      metadata: { ...result, treatment: booking.treatment_name, reservation_id: booking.reservation_id },
-      reasoning:
-        `Spa completion hooks for "${booking.treatment_name}" (${booking.guest_name ?? 'guest'}): ` +
-        (result.inventory.attempted
-          ? `inventory ${result.inventory.ok ? `${result.inventory.lines} lines` : `failed (${result.inventory.error})`}; `
-          : '') +
-        result.folio.note,
+      metadata: { folio: result.folio, inventory: result.inventory, treatment: booking.treatment_name, reservation_id: booking.reservation_id },
     });
-  } catch {
-    // best-effort logging
+  } catch (e) {
+    // Swallow audit write errors.
   }
 
   return result;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Cloudbeds POST /api/v1.2/postCustomItem
+// ────────────────────────────────────────────────────────────────────
 
 /** Call Cloudbeds POST /api/v1.2/postCustomItem. Never throws; returns attempt log. */
 async function postCustomItemToFolio(
@@ -164,16 +152,13 @@ async function postCustomItemToFolio(
   booking: BookingDetail,
 ): Promise<{ posted: boolean; charge_id: string | null; note: string }> {
   try {
-    // Retrieve the CLOUDBEDS_API_KEY from vault.secrets (service_role auth)
-    const { data: secretRows, error: secretError } = await sb
-      .from('secrets')
-      .select('value')
-      .eq('name', 'CLOUDBEDS_API_KEY')
-      .limit(1);
-    if (secretError || !secretRows?.length) {
+    // Retrieve the CLOUDBEDS_API_KEY from vault.secrets via public.get_secret
+    const { data: apiKey, error: secretError } = await sb.rpc('get_secret', {
+      p_name: 'CLOUDBEDS_API_KEY',
+    });
+    if (secretError || !apiKey) {
       return { posted: false, charge_id: null, note: `No API key: ${secretError?.message ?? 'missing'}` };
     }
-    const apiKey = secretRows[0].value;
 
     // Build the line-item array (Cloudbeds v1.2 postCustomItem requires items=[...])
     const items = [
@@ -206,14 +191,15 @@ async function postCustomItemToFolio(
     }
 
     if (!response.ok) {
+      const msg = parsed.message ?? parsed.error ?? raw.slice(0, 120);
       return {
         posted: false,
         charge_id: null,
-        note: `Cloudbeds HTTP ${response.status}: ${parsed.message ?? parsed.error ?? raw.slice(0, 120)}`,
+        note: `Cloudbeds rejected (HTTP ${response.status}: ${msg}) — post manually, evidence in raw.folio_post`,
       };
     }
 
-    // Cloudbeds success: { "success": true, "itemID": "12345" }
+    // Cloudbeds v1.2 postCustomItem success: { "success": true, "itemID": "12345" }
     const chargeId = parsed.itemID ?? parsed.id ?? null;
     return {
       posted: !!parsed.success,
