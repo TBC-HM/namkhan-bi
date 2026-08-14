@@ -47,6 +47,9 @@ const nextConfig = {
       // 2026-07-30 (brief autospec-newsletter_module-20260725 · A8/URL LAW rule 7):
       // Director Studio moved under the tenant tree; legacy path is a Namkhan-only 307.
       { source: '/guest/newsletters/director',  destination: '/h/260955/guest/newsletters/director', permanent: false },
+      // 2026-08-14 (brief ops_maintenance_module-owner-findings-v1 · finding #90):
+      // /ops/maintenance is a shorthand alias for /operations/maintenance.
+      { source: '/ops/maintenance',             destination: '/operations/maintenance',  permanent: false },
     ];
   },
 };
