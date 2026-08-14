@@ -1,152 +1,215 @@
-Ly8gbGliL2dtYWlsLnRzCi8vIEdtYWlsIE9BdXRoICsgcG9sbGluZyBoZWxwZXJzLiBTZWxmLWNv
-bnRhaW5lZCDigJQgbm8gTWFrZS5jb20gZGVwZW5kZW5jeS4KLy8KLy8gRmxvdzoKLy8gIDEuIC9h
-cGkvYXV0aC9nbWFpbC9zdGFydCAgIOKGkiByZWRpcmVjdHMgdG8gR29vZ2xlCi8vICAyLiAvYXBp
-L2F1dGgvZ21haWwvY2FsbGJhY2sg4oaSIGV4Y2hhbmdlcyBjb2RlIGZvciByZWZyZXNoX3Rva2Vu
-LCBzdG9yZXMgaW4KLy8gICAgIG1hcmtldGluZy51c2VyX2dtYWlsX2Nvbm5lY3Rpb25zLCByZWRp
-cmVjdHMgYmFjayB0byBhZG1pbgovLyAgMy4gL2FwaS9jcm9uL3BvbGwtZ21haWwgICAg4oaSIGZv
-ciBlYWNoIHJvdyBpbiB1c2VyX2dtYWlsX2Nvbm5lY3Rpb25zLCByZWZyZXNoCi8vICAgICBhY2Nl
-c3NfdG9rZW4sIGxpc3QgbWVzc2FnZXMgc2luY2UgbGFzdF9oaXN0b3J5X2lkLCBmZXRjaCArIGlu
-c2VydCBpbnRvCi8vICAgICBzYWxlcy5lbWFpbF9tZXNzYWdlcwovLwovLyBFbnYgdmFycyByZXF1
-aXJlZCBvbiBWZXJjZWw6Ci8vICAgR09PR0xFX09BVVRIX0NMSUVOVF9JRAovLyAgIEdPT0dMRV9P
-QVVUSF9DTElFTlRfU0VDUkVUCi8vICAgR09PR0xFX09BVVRIX1JFRElSRUNUX1VSSSA9IGh0dHBz
-Oi8vbmFta2hhbi1iaS52ZXJjZWwuYXBwL2FwaS9hdXRoL2dtYWlsL2NhbGxiYWNrCi8vICAgQ1JP
-Tl9TRUNSRVQgICAgICAgICAgICAgICAgPSBzZWNyZXQgdXNlZCBieSBWZXJjZWwgY3JvbiArIG1h
-bnVhbCB0cmlnZ2VyCgppbXBvcnQgeyBnZXRTdXBhYmFzZUFkbWluIH0gZnJvbSAnQC9saWIvc3Vw
-YWJhc2VBZG1pbic7Cgpjb25zdCBHT09HTEVfVE9LRU5fVVJMID0gJ2h0dHBzOi8vb2F1dGgyLmdv
-b2dsZWFwaXMuY29tL3Rva2VuJzsKY29uc3QgR09PR0xFX1VTRVJJTkZPX1VSTCA9ICdodHRwczov
-L3d3dy5nb29nbGVhcGlzLmNvbS9vYXV0aDIvdjMvdXNlcmluZm8nOwpjb25zdCBHTUFJTF9BUEkg
-PSAnaHR0cHM6Ly9nbWFpbC5nb29nbGVhcGlzLmNvbS9nbWFpbC92MSc7CgpleHBvcnQgY29uc3Qg
-R01BSUxfU0NPUEVTID0gWwogICdodHRwczovL3d3dy5nb29nbGVhcGlzLmNvbS9hdXRoL2dtYWls
-LnJlYWRvbmx5JywKICAnaHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20vYXV0aC91c2VyaW5mby5l
-bWFpbCcsCiAgJ29wZW5pZCcsCl0uam9pbignICcpOwoKLy8gMjAyNi0wNy0zMSAoc2FsZXMgYnJp
-ZWYgcm91bmQgMiwgQTEgZml4KTogcmVzb2x2ZSB0aGUgT0F1dGggY2xpZW50IGZyb20gdGhlCi8v
-IFN1cGFiYXNlIHZhdWx0IEZJUlNUICh1bmlmaWVkIG5hbWtoYW4tYmktdmVyY2VsIGNsaWVudCwg
-cm90YXRlZCAyMDI2LTA3LTEzIOKAlAovLyBzYW1lIHNvdXJjZSBsaWIvdXNlckdtYWlsLnRzIHVz
-ZXMsIHByb3ZhYmx5IHdvcmtpbmcgZm9yIHRva2VuIHJlZnJlc2gpLCBhbmQKLy8gb25seSBmYWxs
-IGJhY2sgdG8gdGhlIGxlZ2FjeSBWZXJjZWwgZW52IHBhaXIuIFJvb3QgY2F1c2Ugb2YgdGhlIGRl
-YWQgc2FsZXMKLy8gcG9sbGVyOiB0b2tlbnMgbWludGVkIHVuZGVyIHRoZSB2YXVsdCBjbGllbnQg
-d2VyZSBiZWluZyByZWZyZXNoZWQgd2l0aCB0aGUKLy8gc3RhbGUgZW52IEdPT0dMRV9PQVVUSF9D
-TElFTlRfU0VDUkVUIOKGkiBHb29nbGUgNDAxIGludmFsaWRfY2xpZW50Lgphc3luYyBmdW5jdGlv
-biBnZXRPQXV0aENsaWVudCgpOiBQcm9taXNlPHsgY2xpZW50SWQ6IHN0cmluZzsgY2xpZW50U2Vj
-cmV0OiBzdHJpbmcgfT4gewogIGxldCBjbGllbnRJZCA9IHByb2Nlc3MuZW52LkdPT0dMRV9DTElF
-TlRfSUQgfHwgcHJvY2Vzcy5lbnYuR09PR0xFX09BVVRIX0NMSUVOVF9JRCB8fCAnJzsKICBsZXQg
-Y2xpZW50U2VjcmV0ID0gcHJvY2Vzcy5lbnYuR09PR0xFX0NMSUVOVF9TRUNSRVQgfHwgcHJvY2Vz
-cy5lbnYuR09PR0xFX09BVVRIX0NMSUVOVF9TRUNSRVQgfHwgJyc7CiAgdHJ5IHsKICAgIGNvbnN0
-IGFkbWluID0gZ2V0U3VwYWJhc2VBZG1pbigpOwogICAgY29uc3QgW2NpZFJlcywgY3NlY1Jlc10g
-PSBhd2FpdCBQcm9taXNlLmFsbChbCiAgICAgIGFkbWluLnJwYygnZm5fZ2V0X3NlY3JldCcsIHsg
-cF9uYW1lOiAnR09PR0xFX0NMSUVOVF9JRCcgfSksCiAgICAgIGFkbWluLnJwYygnZm5fZ2V0X3Nl
-Y3JldCcsIHsgcF9uYW1lOiAnR09PR0xFX0NMSUVOVF9TRUNSRVQnIH0pLAogICAgXSk7CiAgICBp
-ZiAoIWNpZFJlcy5lcnJvciAmJiB0eXBlb2YgY2lkUmVzLmRhdGEgPT09ICdzdHJpbmcnICYmIGNp
-ZFJlcy5kYXRhLmxlbmd0aCA+IDIwKSBjbGllbnRJZCA9IGNpZFJlcy5kYXRhOwogICAgaWYgKCFj
-c2VjUmVzLmVycm9yICYmIHR5cGVvZiBjc2VjUmVzLmRhdGEgPT09ICdzdHJpbmcnICYmIGNzZWNS
-ZXMuZGF0YS5sZW5ndGggPiAxMCkgY2xpZW50U2VjcmV0ID0gY3NlY1Jlcy5kYXRhOwogIH0gY2F0
-Y2ggeyAvKiBrZWVwIGVudiBmYWxsYmFjayAqLyB9CiAgaWYgKCFjbGllbnRJZCB8fCAhY2xpZW50
-U2VjcmV0KSB0aHJvdyBuZXcgRXJyb3IoJ0dvb2dsZSBPQXV0aCBjbGllbnQgbWlzc2luZyBpbiB2
-YXVsdCArIGVudicpOwogIHJldHVybiB7IGNsaWVudElkLCBjbGllbnRTZWNyZXQgfTsKfQoKZXhw
-b3J0IGFzeW5jIGZ1bmN0aW9uIGJ1aWxkQXV0aFVybChzdGF0ZTogc3RyaW5nKTogUHJvbWlzZTxz
-dHJpbmc+IHsKICBjb25zdCB7IGNsaWVudElkIH0gPSBhd2FpdCBnZXRPQXV0aENsaWVudCgpOwog
-IGNvbnN0IHJlZGlyZWN0ID0gcHJvY2Vzcy5lbnYuR09PR0xFX09BVVRIX1JFRElSRUNUX1VSSTsK
-ICBpZiAoIWNsaWVudElkIHx8ICFyZWRpcmVjdCkgdGhyb3cgbmV3IEVycm9yKCdHb29nbGUgT0F1
-dGggZW52IHZhcnMgbm90IHNldCcpOwogIGNvbnN0IHUgPSBuZXcgVVJMKCdodHRwczovL2FjY291
-bnRzLmdvb2dsZS5jb20vby9vYXV0aDIvdjIvYXV0aCcpOwogIHUuc2VhcmNoUGFyYW1zLnNldCgn
-Y2xpZW50X2lkJywgY2xpZW50SWQpOwogIHUuc2VhcmNoUGFyYW1zLnNldCgncmVkaXJlY3RfdXJp
-JywgcmVkaXJlY3QpOwogIHUuc2VhcmNoUGFyYW1zLnNldCgncmVzcG9uc2VfdHlwZScsICdjb2Rl
-Jyk7CiAgdS5zZWFyY2hQYXJhbXMuc2V0KCdzY29wZScsIEdNQUlMX1NDT1BFUyk7CiAgdS5zZWFy
-Y2hQYXJhbXMuc2V0KCdhY2Nlc3NfdHlwZScsICdvZmZsaW5lJyk7ICAgICAvLyBnZXQgcmVmcmVz
-aF90b2tlbgogIHUuc2VhcmNoUGFyYW1zLnNldCgncHJvbXB0JywgJ2NvbnNlbnQnKTsgICAgICAg
-ICAgLy8gZm9yY2UgcmVmcmVzaF90b2tlbiBldmVuIGlmIGFscmVhZHkgZ3JhbnRlZAogIHUuc2Vh
-cmNoUGFyYW1zLnNldCgnaW5jbHVkZV9ncmFudGVkX3Njb3BlcycsICd0cnVlJyk7CiAgdS5zZWFy
-Y2hQYXJhbXMuc2V0KCdzdGF0ZScsIHN0YXRlKTsKICByZXR1cm4gdS50b1N0cmluZygpOwp9Cgpl
-eHBvcnQgaW50ZXJmYWNlIFRva2VuUmVzcG9uc2UgewogIGFjY2Vzc190b2tlbjogc3RyaW5nOwog
-IGV4cGlyZXNfaW46IG51bWJlcjsKICByZWZyZXNoX3Rva2VuPzogc3RyaW5nOwogIHNjb3BlOiBz
-dHJpbmc7CiAgdG9rZW5fdHlwZTogc3RyaW5nOwogIGlkX3Rva2VuPzogc3RyaW5nOwp9CgpleHBv
-cnQgYXN5bmMgZnVuY3Rpb24gZXhjaGFuZ2VDb2RlRm9yVG9rZW5zKGNvZGU6IHN0cmluZyk6IFBy
-b21pc2U8VG9rZW5SZXNwb25zZT4gewogIGNvbnN0IHsgY2xpZW50SWQsIGNsaWVudFNlY3JldCB9
-ID0gYXdhaXQgZ2V0T0F1dGhDbGllbnQoKTsKICBjb25zdCByZWRpcmVjdCA9IHByb2Nlc3MuZW52
-LkdPT0dMRV9PQVVUSF9SRURJUkVDVF9VUkkhOwogIGNvbnN0IHIgPSBhd2FpdCBmZXRjaChHT09H
-TEVfVE9LRU5fVVJMLCB7CiAgICBtZXRob2Q6ICdQT1NUJywKICAgIGhlYWRlcnM6IHsgJ2NvbnRl
-bnQtdHlwZSc6ICdhcHBsaWNhdGlvbi94LXd3dy1mb3JtLXVybGVuY29kZWQnIH0sCiAgICBib2R5
-OiBuZXcgVVJMU2VhcmNoUGFyYW1zKHsKICAgICAgY29kZSwKICAgICAgY2xpZW50X2lkOiBjbGll
-bnRJZCwKICAgICAgY2xpZW50X3NlY3JldDogY2xpZW50U2VjcmV0LAogICAgICByZWRpcmVjdF91
-cmk6IHJlZGlyZWN0LAogICAgICBncmFudF90eXBlOiAnYXV0aG9yaXphdGlvbl9jb2RlJywKICAg
-IH0pLAogIH0pOwogIGlmICghci5vaykgdGhyb3cgbmV3IEVycm9yKGBUb2tlbiBleGNoYW5nZSBm
-YWlsZWQ6ICR7ci5zdGF0dXN9ICR7YXdhaXQgci50ZXh0KCl9YCk7CiAgcmV0dXJuIChhd2FpdCBy
-Lmpzb24oKSkgYXMgVG9rZW5SZXNwb25zZTsKfQoKZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIHJlZnJl
-c2hBY2Nlc3NUb2tlbihyZWZyZXNoVG9rZW46IHN0cmluZyk6IFByb21pc2U8eyBhY2Nlc3NfdG9r
-ZW46IHN0cmluZzsgZXhwaXJlc19pbjogbnVtYmVyIH0+IHsKICBjb25zdCB7IGNsaWVudElkLCBj
-bGllbnRTZWNyZXQgfSA9IGF3YWl0IGdldE9BdXRoQ2xpZW50KCk7CiAgY29uc3QgciA9IGF3YWl0
-IGZldGNoKEdPT0dMRV9UT0tFTl9VUkwsIHsKICAgIG1ldGhvZDogJ1BPU1QnLAogICAgaGVhZGVy
-czogeyAnY29udGVudC10eXBlJzogJ2FwcGxpY2F0aW9uL3gtd3d3LWZvcm0tdXJsZW5jb2RlZCcg
-fSwKICAgIGJvZHk6IG5ldyBVUkxTZWFyY2hQYXJhbXMoewogICAgICBjbGllbnRfaWQ6IGNsaWVu
-dElkLAogICAgICBjbGllbnRfc2VjcmV0OiBjbGllbnRTZWNyZXQsCiAgICAgIHJlZnJlc2hfdG9r
-ZW46IHJlZnJlc2hUb2tlbiwKICAgICAgZ3JhbnRfdHlwZTogJ3JlZnJlc2hfdG9rZW4nLAogICAg
-fSksCiAgfSk7CiAgaWYgKCFyLm9rKSB0aHJvdyBuZXcgRXJyb3IoYFJlZnJlc2ggZmFpbGVkOiAk
-e3Iuc3RhdHVzfSAke2F3YWl0IHIudGV4dCgpfWApOwogIHJldHVybiAoYXdhaXQgci5qc29uKCkp
-IGFzIHsgYWNjZXNzX3Rva2VuOiBzdHJpbmc7IGV4cGlyZXNfaW46IG51bWJlciB9Owp9CgpleHBv
-cnQgYXN5bmMgZnVuY3Rpb24gZ2V0VXNlckVtYWlsKGFjY2Vzc1Rva2VuOiBzdHJpbmcpOiBQcm9t
-aXNlPHN0cmluZz4gewogIGNvbnN0IHIgPSBhd2FpdCBmZXRjaChHT09HTEVfVVNFUklORk9fVVJM
-LCB7CiAgICBoZWFkZXJzOiB7IEF1dGhvcml6YXRpb246IGBCZWFyZXIgJHthY2Nlc3NUb2tlbn1g
-IH0sCiAgfSk7CiAgaWYgKCFyLm9rKSB0aHJvdyBuZXcgRXJyb3IoYFVzZXJpbmZvIGZhaWxlZDog
-JHtyLnN0YXR1c31gKTsKICBjb25zdCBqID0gKGF3YWl0IHIuanNvbigpKSBhcyB7IGVtYWlsPzog
-c3RyaW5nIH07CiAgaWYgKCFqLmVtYWlsKSB0aHJvdyBuZXcgRXJyb3IoJ05vIGVtYWlsIGluIHVz
-ZXJpbmZvIHJlc3BvbnNlJyk7CiAgcmV0dXJuIGouZW1haWwudG9Mb3dlckNhc2UoKTsKfQoKLy8g
-UGVyc2lzdCBhIG5ldyAob3IgcmVmcmVzaGVkKSBjb25uZWN0aW9uIHJvdy4KZXhwb3J0IGFzeW5j
-IGZ1bmN0aW9uIHVwc2VydEdtYWlsQ29ubmVjdGlvbihlbWFpbDogc3RyaW5nLCByZWZyZXNoVG9r
-ZW46IHN0cmluZyk6IFByb21pc2U8dm9pZD4gewogIGNvbnN0IHNiID0gZ2V0U3VwYWJhc2VBZG1p
-bigpOwogIGNvbnN0IHsgZXJyb3IgfSA9IGF3YWl0IHNiCiAgICAuc2NoZW1hKCdtYXJrZXRpbmcn
-KQogICAgLmZyb20oJ3VzZXJfZ21haWxfY29ubmVjdGlvbnMnKQogICAgLnVwc2VydCh7CiAgICAg
-IGVtYWlsLAogICAgICByZWZyZXNoX3Rva2VuOiByZWZyZXNoVG9rZW4sCiAgICAgIHVwZGF0ZWRf
-YXQ6IG5ldyBEYXRlKCkudG9JU09TdHJpbmcoKSwKICAgIH0sIHsgb25Db25mbGljdDogJ2VtYWls
-JyB9KTsKICBpZiAoZXJyb3IpIHRocm93IG5ldyBFcnJvcihgdXBzZXJ0IGZhaWxlZDogJHtlcnJv
-ci5tZXNzYWdlfWApOwp9CgpleHBvcnQgYXN5bmMgZnVuY3Rpb24gbGlzdEdtYWlsQ29ubmVjdGlv
-bnMoKSB7CiAgY29uc3Qgc2IgPSBnZXRTdXBhYmFzZUFkbWluKCk7CiAgY29uc3QgeyBkYXRhLCBl
-cnJvciB9ID0gYXdhaXQgc2IKICAgIC5zY2hlbWEoJ21hcmtldGluZycpLmZyb20oJ3VzZXJfZ21h
-aWxfY29ubmVjdGlvbnMnKQogICAgLnNlbGVjdCgnKicpLm9yZGVyKCdlbWFpbCcpOwogIGlmIChl
-cnJvcikgeyBjb25zb2xlLmVycm9yKCdbbGlzdEdtYWlsQ29ubmVjdGlvbnNdJywgZXJyb3IpOyBy
-ZXR1cm4gW107IH0KICByZXR1cm4gZGF0YSA/PyBbXTsKfQoKLy8gLS0tLS0tLS0tLSBHbWFpbCBB
-UEkKCmV4cG9ydCBpbnRlcmZhY2UgR21haWxNZXNzYWdlIHsKICBpZDogc3RyaW5nOwogIHRocmVh
-ZElkOiBzdHJpbmc7Cn0KCmV4cG9ydCBpbnRlcmZhY2UgR21haWxNZXNzYWdlTGlzdCB7CiAgbWVz
-c2FnZXM/OiBHbWFpbE1lc3NhZ2VbXTsKICBuZXh0UGFnZVRva2VuPzogc3RyaW5nOwogIHJlc3Vs
-dFNpemVFc3RpbWF0ZT86IG51bWJlcjsKfQoKZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGxpc3RHbWFp
-bE1lc3NhZ2VzKAogIGFjY2Vzc1Rva2VuOiBzdHJpbmcsCiAgcGFyYW1zOiB7IHE/OiBzdHJpbmc7
-IHBhZ2VUb2tlbj86IHN0cmluZzsgbWF4UmVzdWx0cz86IG51bWJlciB9Cik6IFByb21pc2U8R21h
-aWxNZXNzYWdlTGlzdD4gewogIGNvbnN0IHUgPSBuZXcgVVJMKGAke0dNQUlMX0FQSX0vdXNlcnMv
-bWUvbWVzc2FnZXNgKTsKICBpZiAocGFyYW1zLnEpIHUuc2VhcmNoUGFyYW1zLnNldCgncScsIHBh
-cmFtcy5xKTsKICBpZiAocGFyYW1zLnBhZ2VUb2tlbikgdS5zZWFyY2hQYXJhbXMuc2V0KCdwYWdl
-VG9rZW4nLCBwYXJhbXMucGFnZVRva2VuKTsKICBpZiAocGFyYW1zLm1heFJlc3VsdHMpIHUuc2Vh
-cmNoUGFyYW1zLnNldCgnbWF4UmVzdWx0cycsIFN0cmluZyhwYXJhbXMubWF4UmVzdWx0cykpOwog
-IGNvbnN0IHIgPSBhd2FpdCBmZXRjaCh1LCB7CiAgICBoZWFkZXJzOiB7IEF1dGhvcml6YXRpb246
-IGBCZWFyZXIgJHthY2Nlc3NUb2tlbn1gIH0sCiAgfSk7CiAgaWYgKCFyLm9rKSB0aHJvdyBuZXcg
-RXJyb3IoYGxpc3RNZXNzYWdlcyBmYWlsZWQ6ICR7ci5zdGF0dXN9ICR7YXdhaXQgci50ZXh0KCl9
-YCk7CiAgcmV0dXJuIChhd2FpdCByLmpzb24oKSkgYXMgR21haWxNZXNzYWdlTGlzdDsKfQoKZXhw
-b3J0IGludGVyZmFjZSBHbWFpbE1lc3NhZ2VQYXJ0IHsKICBwYXJ0SWQ/OiBzdHJpbmc7CiAgbWlt
-ZVR5cGU/OiBzdHJpbmc7CiAgZmlsZW5hbWU/OiBzdHJpbmc7CiAgaGVhZGVycz86IEFycmF5PHsg
-bmFtZTogc3RyaW5nOyB2YWx1ZTogc3RyaW5nIH0+OwogIGJvZHk/OiB7CiAgICBhdHRhY2htZW50
-SWQ/OiBzdHJpbmc7CiAgICBzaXplPzogbnVtYmVyOwogICAgZGF0YT86IHN0cmluZzsgLy8gYmFz
-ZTY0dXJsIGlmIGlubGluZQogIH07CiAgcGFydHM/OiBHbWFpbE1lc3NhZ2VQYXJ0W107Cn0KCmV4
-cG9ydCBpbnRlcmZhY2UgR21haWxNZXNzYWdlRnVsbCB7CiAgaWQ6IHN0cmluZzsKICB0aHJlYWRJ
-ZDogc3RyaW5nOwogIGxhYmVsSWRzPzogc3RyaW5nW107CiAgc25pcHBldD86IHN0cmluZzsKICBo
-aXN0b3J5SWQ/OiBzdHJpbmc7CiAgaW50ZXJuYWxEYXRlPzogc3RyaW5nOwogIHBheWxvYWQ/OiBH
-bWFpbE1lc3NhZ2VQYXJ0OwogIHNpemVFc3RpbWF0ZT86IG51bWJlcjsKICByYXc/OiBzdHJpbmc7
-Cn0KCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBnZXRHbWFpbE1lc3NhZ2UoYWNjZXNzVG9rZW46IHN0
-cmluZywgaWQ6IHN0cmluZyk6IFByb21pc2U8R21haWxNZXNzYWdlRnVsbD4gewogIGNvbnN0IHIg
-PSBhd2FpdCBmZXRjaChgJHtHTUFJTF9BUEl9L3VzZXJzL21lL21lc3NhZ2VzLyR7aWR9P2Zvcm1h
-dD1mdWxsYCwgewogICAgaGVhZGVyczogeyBBdXRob3JpemF0aW9uOiBgQmVhcmVyICR7YWNjZXNz
-VG9rZW59YCB9LAogIH0pOwogIGlmICghci5vaykgdGhyb3cgbmV3IEVycm9yKGBnZXRNZXNzYWdl
-IGZhaWxlZDogJHtyLnN0YXR1c30gJHthd2FpdCByLnRleHQoKX1gKTsKICByZXR1cm4gKGF3YWl0
-IHIuanNvbigpKSBhcyBHbWFpbE1lc3NhZ2VGdWxsOwp9CgpleHBvcnQgZnVuY3Rpb24gZ2V0SGVh
-ZGVyKHBheWxvYWQ6IEdtYWlsTWVzc2FnZVBhcnQgfCB1bmRlZmluZWQsIG5hbWU6IHN0cmluZyk6
-IHN0cmluZyB8IG51bGwgewogIGlmICghcGF5bG9hZD8uaGVhZGVycykgcmV0dXJuIG51bGw7CiAg
-Y29uc3QgaCA9IHBheWxvYWQuaGVhZGVycy5maW5kKGggPT4gaC5uYW1lLnRvTG93ZXJDYXNlKCkg
-PT09IG5hbWUudG9Mb3dlckNhc2UoKSk7CiAgcmV0dXJuIGg/LnZhbHVlID8/IG51bGw7Cn0KCmV4
-cG9ydCBmdW5jdGlvbiBleHRyYWN0Qm9kaWVzKHBheWxvYWQ6IEdtYWlsTWVzc2FnZVBhcnQgfCB1
-bmRlZmluZWQpOiB7IHRleHQ6IHN0cmluZzsgaHRtbDogc3RyaW5nIH0gewogIGxldCB0ZXh0ID0g
-Jyc7CiAgbGV0IGh0bWwgPSAnJzsKICBmdW5jdGlvbiB3YWxrKHBhcnQ6IEdtYWlsTWVzc2FnZVBh
-cnQgfCB1bmRlZmluZWQpIHsKICAgIGlmICghcGFydCkgcmV0dXJuOwogICAgaWYgKHBhcnQubWlt
-ZVR5cGUgPT09ICd0ZXh0L3BsYWluJyAmJiBwYXJ0LmJvZHk/LmRhdGEpIHsKICAgICAgdGV4dCAr
-PSBCdWZmZXIuZnJvbShwYXJ0LmJvZHkuZGF0YSwgJ2Jhc2U2NHVybCcpLnRvU3RyaW5nKCd1dGYt
-OCcpOwogICAgfSBlbHNlIGlmIChwYXJ0Lm1pbWVUeXBlID09PSAndGV4dC9odG1sJyAmJiBwYXJ0
-LmJvZHk/LmRhdGEpIHsKICAgICAgaHRtbCArPSBCdWZmZXIuZnJvbShwYXJ0LmJvZHkuZGF0YSwg
-J2Jhc2U2NHVybCcpLnRvU3RyaW5nKCd1dGYtOCcpOwogICAgfQogICAgaWYgKHBhcnQucGFydHMp
-IHBhcnQucGFydHMuZm9yRWFjaCh3YWxrKTsKICB9CiAgd2FsayhwYXlsb2FkKTsKICByZXR1cm4g
-eyB0ZXh0LCBodG1sIH07Cn0K
+// lib/gmail.ts
+// Gmail OAuth + polling helpers. Self-contained — no Make.com dependency.
+//
+// Flow:
+//  1. /api/auth/gmail/start   → redirects to Google
+//  2. /api/auth/gmail/callback → exchanges code for refresh_token, stores in
+//     marketing.user_gmail_connections, redirects back to admin
+//  3. /api/cron/poll-gmail    → for each row in user_gmail_connections, refresh
+//     access_token, list messages since last_history_id, fetch + insert into
+//     sales.email_messages
+//
+// Env vars required on Vercel:
+//   GOOGLE_OAUTH_CLIENT_ID
+//   GOOGLE_OAUTH_CLIENT_SECRET
+//   GOOGLE_OAUTH_REDIRECT_URI = https://namkhan-bi.vercel.app/api/auth/gmail/callback
+//   CRON_SECRET                = secret used by Vercel cron + manual trigger
+
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
+const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1';
+
+export const GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'openid',
+].join(' ');
+
+// 2026-07-31 (sales brief round 2, A1 fix): resolve the OAuth client from the
+// Supabase vault FIRST (unified namkhan-bi-vercel client, rotated 2026-07-13 —
+// same source lib/userGmail.ts uses, provably working for token refresh), and
+// only fall back to the legacy Vercel env pair. Root cause of the dead sales
+// poller: tokens minted under the vault client were being refreshed with the
+// stale env GOOGLE_OAUTH_CLIENT_SECRET → Google 401 invalid_client.
+async function getOAuthClient(): Promise<{ clientId: string; clientSecret: string }> {
+  let clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID || '';
+  let clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+  try {
+    const admin = getSupabaseAdmin();
+    const [cidRes, csecRes] = await Promise.all([
+      admin.rpc('fn_get_secret', { p_name: 'GOOGLE_CLIENT_ID' }),
+      admin.rpc('fn_get_secret', { p_name: 'GOOGLE_CLIENT_SECRET' }),
+    ]);
+    if (!cidRes.error && typeof cidRes.data === 'string' && cidRes.data.length > 20) clientId = cidRes.data;
+    if (!csecRes.error && typeof csecRes.data === 'string' && csecRes.data.length > 10) clientSecret = csecRes.data;
+  } catch { /* keep env fallback */ }
+  if (!clientId || !clientSecret) throw new Error('Google OAuth client missing in vault + env');
+  return { clientId, clientSecret };
+}
+
+export async function buildAuthUrl(state: string): Promise<string> {
+  const { clientId } = await getOAuthClient();
+  const redirect = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+  if (!clientId || !redirect) throw new Error('Google OAuth env vars not set');
+  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  u.searchParams.set('client_id', clientId);
+  u.searchParams.set('redirect_uri', redirect);
+  u.searchParams.set('response_type', 'code');
+  u.searchParams.set('scope', GMAIL_SCOPES);
+  u.searchParams.set('access_type', 'offline');     // get refresh_token
+  u.searchParams.set('prompt', 'consent');          // force refresh_token even if already granted
+  u.searchParams.set('include_granted_scopes', 'true');
+  u.searchParams.set('state', state);
+  return u.toString();
+}
+
+export interface TokenResponse {
+  access_token: string;
+  expires_in: number;
+  refresh_token?: string;
+  scope: string;
+  token_type: string;
+  id_token?: string;
+}
+
+export async function exchangeCodeForTokens(code: string): Promise<TokenResponse> {
+  const { clientId, clientSecret } = await getOAuthClient();
+  const redirect = process.env.GOOGLE_OAUTH_REDIRECT_URI!;
+  const r = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirect,
+      grant_type: 'authorization_code',
+    }),
+  });
+  if (!r.ok) throw new Error(`Token exchange failed: ${r.status} ${await r.text()}`);
+  return (await r.json()) as TokenResponse;
+}
+
+export async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expires_in: number }> {
+  const { clientId, clientSecret } = await getOAuthClient();
+  const r = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+  if (!r.ok) throw new Error(`Refresh failed: ${r.status} ${await r.text()}`);
+  return (await r.json()) as { access_token: string; expires_in: number };
+}
+
+export async function getUserEmail(accessToken: string): Promise<string> {
+  const r = await fetch(GOOGLE_USERINFO_URL, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!r.ok) throw new Error(`Userinfo failed: ${r.status}`);
+  const j = (await r.json()) as { email?: string };
+  if (!j.email) throw new Error('No email in userinfo response');
+  return j.email.toLowerCase();
+}
+
+// Persist a new (or refreshed) connection row.
+export async function upsertGmailConnection(email: string, refreshToken: string): Promise<void> {
+  const sb = getSupabaseAdmin();
+  const { error } = await sb
+    .schema('marketing')
+    .from('user_gmail_connections')
+    .upsert({
+      email,
+      refresh_token: refreshToken,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'email' });
+  if (error) throw new Error(`upsert failed: ${error.message}`);
+}
+
+export async function listGmailConnections() {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .schema('marketing').from('user_gmail_connections')
+    .select('*').order('email');
+  if (error) { console.error('[listGmailConnections]', error); return []; }
+  return data ?? [];
+}
+
+interface GmailMessageHeader { name: string; value: string }
+interface GmailMessageBody { data?: string; size: number }
+interface GmailMessagePart {
+  partId: string;
+  mimeType: string;
+  filename?: string;
+  headers?: GmailMessageHeader[];
+  body?: GmailMessageBody;
+  parts?: GmailMessagePart[];
+}
+interface GmailMessageFull {
+  id: string;
+  threadId: string;
+  labelIds: string[];
+  snippet: string;
+  payload: GmailMessagePart;
+  sizeEstimate: number;
+  historyId: string;
+  internalDate: string;
+}
+
+interface GmailListResponse {
+  messages?: Array<{ id: string; threadId: string }>;
+  nextPageToken?: string;
+  resultSizeEstimate: number;
+}
+
+export async function listMessages(
+  accessToken: string,
+  query?: string,
+  pageToken?: string,
+): Promise<GmailListResponse> {
+  const url = new URL(`${GMAIL_API}/users/me/messages`);
+  url.searchParams.set('maxResults', '100');
+  if (query) url.searchParams.set('q', query);
+  if (pageToken) url.searchParams.set('pageToken', pageToken);
+  const r = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!r.ok) throw new Error(`listMessages failed: ${r.status} ${await r.text()}`);
+  return (await r.json()) as GmailListResponse;
+}
+
+export async function getGmailMessage(accessToken: string, id: string): Promise<GmailMessageFull> {
+  const r = await fetch(`${GMAIL_API}/users/me/messages/${id}?format=full`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!r.ok) throw new Error(`getMessage failed: ${r.status} ${await r.text()}`);
+  return (await r.json()) as GmailMessageFull;
+}
+
+export function getHeader(payload: GmailMessagePart | undefined, name: string): string | null {
+  if (!payload?.headers) return null;
+  const h = payload.headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+  return h?.value ?? null;
+}
+
+export function extractBodies(payload: GmailMessagePart | undefined): { text: string; html: string } {
+  let text = '';
+  let html = '';
+  function walk(part: GmailMessagePart | undefined) {
+    if (!part) return;
+    if (part.mimeType === 'text/plain' && part.body?.data) {
+      text += Buffer.from(part.body.data, 'base64url').toString('utf-8');
+    } else if (part.mimeType === 'text/html' && part.body?.data) {
+      html += Buffer.from(part.body.data, 'base64url').toString('utf-8');
+    }
+    if (part.parts) part.parts.forEach(walk);
+  }
+  walk(payload);
+  return { text, html };
+}
