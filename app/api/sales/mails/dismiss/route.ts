@@ -4,10 +4,11 @@
 // public.fn_dismiss_mail_thread SECURITY DEFINER RPC on the DB side).
 // Auth required — the actor's user_id is logged to
 // marketing.shared_mailbox_events for accountability (fire-and-forget).
+// PBS 2026-08-14: now enforces fn_shared_mailbox_list_active membership.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getCurrentAuthUser } from '@/lib/userGmail';
-import { logSharedMailboxEvent } from '@/lib/sharedGmail';
+import { logSharedMailboxEvent, listUserMailboxes } from '@/lib/sharedGmail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,12 @@ interface Body {
 export async function POST(req: NextRequest) {
   const user = await getCurrentAuthUser();
   if (!user) return NextResponse.json({ error: 'not_authenticated' }, { status: 401 });
+
+  // Permission gate: user must have access to at least one mailbox
+  const allowedMailboxes = await listUserMailboxes(user.id);
+  if (allowedMailboxes.length === 0) {
+    return NextResponse.json({ error: 'no_mailbox_access' }, { status: 403 });
+  }
 
   let body: Body;
   try { body = (await req.json()) as Body; }
