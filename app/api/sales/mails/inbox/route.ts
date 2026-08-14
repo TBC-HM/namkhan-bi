@@ -2,9 +2,10 @@
 // GET → unified shared-mailbox inbox for the CURRENT USER's Gmail token.
 // Query: ?mailbox_id=<uuid>&unread=true&q=<search>&limit=50
 // Empty mailbox_id → aggregate across ALL active shared aliases.
+// PBS 2026-08-14: now enforces fn_shared_mailbox_list_active membership.
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentAuthUser } from '@/lib/userGmail';
-import { listSharedInbox, listActiveMailboxes, getMailboxById } from '@/lib/sharedGmail';
+import { listSharedInbox, listUserMailboxes, getUserMailboxById } from '@/lib/sharedGmail';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,10 +23,10 @@ export async function GET(req: NextRequest) {
   try {
     let mailboxes;
     if (mailbox_id) {
-      const one = await getMailboxById(mailbox_id);
+      const one = await getUserMailboxById(user.id, mailbox_id);
       mailboxes = one ? [one] : [];
     } else {
-      mailboxes = await listActiveMailboxes();
+      mailboxes = await listUserMailboxes(user.id);
     }
     const threads = await listSharedInbox(user.id, mailboxes, { unreadOnly, q, limit });
     return NextResponse.json({ threads });
