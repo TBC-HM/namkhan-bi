@@ -1078,6 +1078,22 @@ export async function POST(req: Request) {
 
       let replyText = `_(model unavailable — ${providerKey} key not configured)_`;
       let gIn = 0, gOut = 0, gCost = 0, gDur = 0;
+      // Bug #181 fix (2026-08-14): the default model (DeepSeek) started
+      // returning 402 (account out of credit), which left the chat answerless
+      // with a cryptic "(model error 402)" — and the metering row still logged
+      // success:true. Three changes, additive only:
+      //   1. Track the REAL call outcome (llmOk / llmErrorStatus) so metering
+      //      records success=false with the provider error status.
+      //   2. Fail over to Anthropic (env key, always configured) when the
+      //      selected provider is unavailable (missing key, HTTP error, or
+      //      network failure) — the user always gets an answer.
+      //   3. When even the fallback fails, explain the failure in plain
+      //      language instead of a bare status code.
+      let llmOk = false;
+      let llmErrorStatus: number | null = null;
+      let servedProvider = providerKey;
+      let servedModel = selectedModel;
+      let servedByFallback = false;
 
       if (providerApiKey) {
         try {
@@ -1091,13 +1107,14 @@ export async function POST(req: Request) {
           if (r.ok) {
             const j = await r.json();
             const t = provider.parseReply(j);
-            if (t) replyText = t;
+            if (t) { replyText = t; llmOk = true; }
             // Token usage — OpenAI-compatible format used by all providers
             gIn  = (j?.usage?.prompt_tokens ?? j?.usage?.input_tokens ?? 0) as number;
             gOut = (j?.usage?.completion_tokens ?? j?.usage?.output_tokens ?? 0) as number;
             // Rough cost (milli-USD) — approximate for non-Anthropic providers
             gCost = Math.round((gIn * 0.001 + gOut * 0.002));
           } else {
+            llmErrorStatus = r.status;
             replyText = `_(model error ${r.status} — try again)_`;
           }
         } catch (e) {
@@ -1106,19 +1123,65 @@ export async function POST(req: Request) {
         }
       }
 
+      // Failover: selected provider unavailable → answer via Anthropic env key.
+      const fallbackKey = process.env.ANTHROPIC_API_KEY ?? null;
+      if (!llmOk && providerKey !== "anthropic" && fallbackKey) {
+        const FB_MODEL = "claude-haiku-4-5";
+        try {
+          const t0 = Date.now();
+          const r = await fetch(PROVIDERS.anthropic.url, {
+            method: "POST",
+            headers: PROVIDERS.anthropic.headers(fallbackKey),
+            body: JSON.stringify({
+              model: FB_MODEL, max_tokens: 2000, system: GENERAL_SYSTEM,
+              messages: [...collapsed, { role: "user", content: cleanMessage }],
+            }),
+          });
+          gDur += Date.now() - t0;
+          if (r.ok) {
+            const j: any = await r.json();
+            const t = (j?.content ?? []).find((b: any) => b.type === "text")?.text?.trim() ?? "";
+            if (t) {
+              const why = llmErrorStatus === 402
+                ? `${providerKey} account out of credit`
+                : llmErrorStatus
+                  ? `${providerKey} error ${llmErrorStatus}`
+                  : `${providerKey} unavailable`;
+              replyText = `${t}\n\n_— answered by Claude Haiku fallback (${why})_`;
+              llmOk = true;
+              servedProvider = "anthropic";
+              servedModel = FB_MODEL;
+              servedByFallback = true;
+              gIn  += (j?.usage?.input_tokens ?? 0) as number;
+              gOut += (j?.usage?.output_tokens ?? 0) as number;
+              gCost = Math.round((gIn * 0.001 + gOut * 0.002));
+            }
+          } else {
+            console.error(`[chat:llm:fallback] anthropic fallback failed: ${r.status}`);
+          }
+        } catch (e) {
+          console.error("[chat:llm:fallback] anthropic fallback failed:", e);
+        }
+      }
+
+      // Still no answer → make the failure human-readable (Bug #181 UX).
+      if (!llmOk && llmErrorStatus === 402) {
+        replyText = `_(The ${providerKey} account is out of credit (error 402). Pick another model — Claude or GPT — or top up the ${providerKey} account.)_`;
+      }
+
       // Metering per message (V5): provider/model/tokens/latency/cost.
       void supabase.from("cockpit_audit_log").insert({
         ticket_id: pendingTicket?.id ?? null,
         agent: "general_chat",
         action: "chat_llm_call",
         target: "mode:general",
-        success: true,
+        success: llmOk,
         duration_ms: gDur,
         cost_usd_milli: gCost,
         input_tokens: gIn,
         output_tokens: gOut,
-        metadata: { provider: providerKey, model: selectedModel, chat_mode: true, mode: "general", isolation: "no business data in, no memory out" },
-        reasoning: `LLM-mode call (${providerKey}/${selectedModel}); ${gIn}in/${gOut}out tokens`,
+        metadata: { provider: servedProvider, model: servedModel, requested_provider: providerKey, requested_model: selectedModel, fallback: servedByFallback, error_status: llmErrorStatus, chat_mode: true, mode: "general", isolation: "no business data in, no memory out" },
+        reasoning: `LLM-mode call (${servedProvider}/${servedModel}${servedByFallback ? `, fallback from ${providerKey}/${selectedModel}` : ""}); ${gIn}in/${gOut}out tokens${llmOk ? "" : ` — FAILED${llmErrorStatus ? ` (${llmErrorStatus})` : ""}`}`,
       }).then(({ error }) => { if (error) console.warn("[chat:general] audit insert failed:", error.message); });
 
       if (pendingTicket?.id) {
@@ -1132,9 +1195,10 @@ export async function POST(req: Request) {
               mode: "general",
               module_scope: module_scope ?? null,
               property_id: property_id ?? null,
-              provider: providerKey,
-              model: selectedModel,
-              tier: providerKey,
+              provider: servedProvider,
+              model: servedModel,
+              tier: servedProvider,
+              fallback: servedByFallback || undefined,
               llm_tokens_in: gIn,
               llm_tokens_out: gOut,
               llm_cost_usd_milli: gCost,
@@ -1151,9 +1215,9 @@ export async function POST(req: Request) {
         conversationId: convId,
         content: replyText,
         agentRole: null,
-        provider: providerKey,
-        modelId: selectedModel,
-        modelTier: providerKey,
+        provider: servedProvider,
+        modelId: servedModel,
+        modelTier: servedProvider,
         inputTokens: gIn,
         outputTokens: gOut,
         latencyMs: gDur,
