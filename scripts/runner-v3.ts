@@ -98,288 +98,203 @@ async function startHeartbeat(): Promise<number> {
       tickets_picked: 0,
       tickets_processed: 0,
       prs_opened: 0,
-      abort_count: 0,
-      errors: [],
+      started_at: STARTED_AT.toISOString(),
+      status: 'running',
     })
     .select('id')
     .single();
-  if (error) {
-    console.error('HEARTBEAT START FAILED:', error.message);
-    return -1;
+
+  if (error || !data) {
+    console.error('HEARTBEAT START FAILED:', error?.message);
+    process.exit(1);
   }
-  console.log(`heartbeat id=${data.id}`);
-  return data.id as number;
+
+  console.log(`HEARTBEAT STARTED: id=${data.id}`);
+  return data.id;
 }
 
-async function endHeartbeat(
+async function updateHeartbeat(
   hbId: number,
-  results: RunResult[],
-  fatalErr?: string
+  picked: number,
+  processed: number,
+  prs: number,
+  status: 'running' | 'done' | 'error',
+  errorMsg?: string
 ) {
-  if (hbId < 0) return;
-  const tickets_picked = results.length;
-  const tickets_processed = results.filter((r) => r.outcome !== 'error' && r.outcome !== 'timeout').length;
-  const prs_opened = results.filter((r) => r.outcome === 'pr_opened').length;
-  const abort_count = results.filter((r) => r.outcome === 'no_change').length;
-  const errors = results
-    .filter((r) => r.error)
-    .map((r) => ({ ticket: r.ticket_id, error: r.error }));
-  if (fatalErr) errors.push({ ticket: 0, error: fatalErr });
-
   const { error } = await supa
     .from('cockpit_runner_heartbeat')
     .update({
-      ended_at: new Date().toISOString(),
-      tickets_picked,
-      tickets_processed,
-      prs_opened,
-      abort_count,
-      errors,
-      exit_code: fatalErr ? 1 : 0,
-      notes: fatalErr ? fatalErr : `picked ${tickets_picked}, prs ${prs_opened}`,
+      tickets_picked: picked,
+      tickets_processed: processed,
+      prs_opened: prs,
+      finished_at: new Date().toISOString(),
+      status,
+      error_message: errorMsg,
     })
     .eq('id', hbId);
-  if (error) console.error('HEARTBEAT END FAILED:', error.message);
+
+  if (error) console.error('HEARTBEAT UPDATE FAILED:', error.message);
 }
 
 async function fetchTickets(): Promise<Ticket[]> {
-  if (TICKET_ID) {
-    const { data, error } = await supa
-      .from('cockpit_tickets')
-      .select('id, parsed_summary, email_subject, notes, metadata')
-      .eq('id', Number(TICKET_ID))
-      .single();
-    if (error) {
-      console.error('fetch single ticket error:', error.message);
-      return [];
-    }
-    return data ? [data as Ticket] : [];
-  }
-  const { data, error } = await supa
+  let query = supa
     .from('cockpit_tickets')
     .select('id, parsed_summary, email_subject, notes, metadata')
-    .eq('status', 'triaged')
-    .in('arm', ['dev', 'code'])
-    .in('intent', ['build', 'spec', 'fix'])
-    .is('preview_url', null)
-    .is('processed_at', null)
-    .order('updated_at', { ascending: true })
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
     .limit(BATCH);
+
+  if (TICKET_ID) {
+    query = query.eq('id', TICKET_ID);
+  }
+
+  const { data, error } = await query;
   if (error) {
-    console.error('fetch tickets error:', error.message);
+    console.error('FETCH TICKETS FAILED:', error.message);
     return [];
   }
-  return (data ?? []) as Ticket[];
+  return data || [];
 }
 
-const SYSTEM_PROMPT = `You are Carla, the code writer for The Namkhan BI portal.
+function buildPrompt(ticket: Ticket): string {
+  const summary = ticket.parsed_summary || ticket.email_subject || '(no subject)';
+  const notes = ticket.notes || 'No additional notes.';
+  const meta = ticket.metadata ? JSON.stringify(ticket.metadata, null, 2) : '{}';
 
-Stack: Next.js 14 App Router + Supabase + Vercel. Repo: TBC-HM/namkhan-bi.
+  return `
+You are a dev agent. A user has sent this request:
 
-You will be given:
-- The ticket spec
-- The full current contents of files most likely involved (under <<<EXISTING path=...>>> ... <<<END>>> markers)
-- A list of real file paths in the repo
+SUMMARY: ${summary}
 
-CRITICAL RULES — preserve existing code:
-1. The <<<EXISTING>>> blocks are the REAL current content. Do NOT invent or hallucinate file structures.
-2. Make the MINIMUM edit needed. Keep all existing imports, components, props, exports,
-   layouts, hooks, API routes, Supabase queries. Do not remove working code.
-3. For ANY file you edit, you MUST include its full content from <<<EXISTING>>> and modify
-   ONLY the relevant section. Do NOT output "... existing code ..." or "// rest unchanged".
-4. If you do not have the <<<EXISTING>>> block for a file, you must ask for it.
-   NEVER write a new file from scratch if an <<<EXISTING>>> block should have been provided.
+NOTES:
+${notes}
 
-Output Format:
-- Use this exact format for each file you want to create or edit:
+METADATA:
+${meta}
 
-<<<FILE path=relative/path.tsx>>>
-[complete file content]
-<<<END>>>
+Return a JSON object with:
+{
+  "changes": [ {"file": "path/to/file.ts", "content": "full new content"} ],
+  "commit_message": "one-liner describing the change"
+}
 
-- The path must match the repository structure (app/..., lib/..., components/..., etc).
-- You can output multiple <<<FILE>>> blocks in one response.
-- Do NOT include "git diff" style patches. Do NOT say "edit this line" without showing the full file.
-
-Constraints:
-- Do NOT remove or break existing endpoints, components, or database queries.
-- Do NOT change file names or move things without being asked.
-- Do NOT introduce new top-level directories. Keep the existing structure.
-- Preserve all TypeScript types. Do NOT downgrade to "any".
-- If the ticket is unclear or missing critical info, ask for clarification instead of guessing.
-
-End every response with:
-<<<STATUS>>> and one of:
-- COMPLETE — all requested files written, nothing else needed
-- PARTIAL — some files written, but need more info to finish (say what you need)
-- CLARIFY — cannot proceed without owner input (ask your question)
+If no code change is needed, return { "changes": [], "commit_message": "" }.
+Do NOT push or deploy — just produce the file changes.
 `;
+}
 
-async function processTicket(ticket: Ticket): Promise<RunResult> {
+async function processTicket(ticket: Ticket, timeout_ms: number): Promise<RunResult> {
+  const start = Date.now();
   console.log(`\n=== TICKET ${ticket.id} ===`);
-  const t0 = Date.now();
 
-  const spec =
-    ticket.parsed_summary ||
-    ticket.email_subject ||
-    ticket.notes ||
-    'No spec provided';
+  let outcome: RunResult['outcome'] = 'error';
+  let pr_url: string | undefined;
+  let branch: string | undefined;
+  let errMsg: string | undefined;
 
-  await supa
-    .from('cockpit_tickets')
-    .update({ status: 'in_progress', processed_at: new Date().toISOString() })
-    .eq('id', ticket.id);
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => {
+    console.warn(`TIMEOUT after ${timeout_ms}ms for ticket ${ticket.id}`);
+    controller.abort();
+  }, timeout_ms);
 
   try {
-    // Gather context: list files, read likely involved files
-    const filesOutput = sh('git ls-files', { quiet: true });
-    const fileList = filesOutput.split('\n').filter((f) => f.trim() !== '');
-    const contextFiles: string[] = [];
+    const prompt = buildPrompt(ticket);
 
-    // Heuristic: if spec mentions "app/..." or "lib/..." paths, include those
-    const pathMentions = spec.match(/\b(app|lib|components|scripts|supabase)\/[\w\-\.\/]+/g) || [];
-    contextFiles.push(...pathMentions);
-
-    // For build tickets: always include package.json, tsconfig, maybe lib/supabase
-    if (spec.toLowerCase().includes('build')) {
-      contextFiles.push('package.json', 'tsconfig.json', 'lib/supabase.ts');
-    }
-
-    let existingContent = '';
-    for (const fpath of [...new Set(contextFiles)]) {
-      if (fileList.includes(fpath)) {
-        try {
-          const content = sh(`cat "${fpath}"`, { quiet: true });
-          existingContent += `\n<<<EXISTING path=${fpath}>>\n${content}\n<<<END>>>\n`;
-        } catch {
-          // file doesn't exist or unreadable, skip
-        }
-      }
-    }
-
-    const userPrompt = `TICKET #${ticket.id}:
-${spec}
-
-Repository file list (partial):
-${fileList.slice(0, 200).join('\n')}
-${fileList.length > 200 ? '...(truncated)' : ''}
-
-${existingContent}
-
-Instructions: Provide the <<<FILE>>> blocks needed to fulfill this ticket.
-End with <<<STATUS>>> COMPLETE, PARTIAL, or CLARIFY.`;
-
-    console.log(`Calling Claude (model=${CLAUDE_MODEL}) ...`);
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
         'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: 8000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
+        messages: [{ role: 'user', content: prompt }],
       }),
+      signal: controller.signal,
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Claude API error ${response.status}: ${errText}`);
+    clearTimeout(timeoutHandle);
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      errMsg = `Anthropic error ${resp.status}: ${errText}`;
+      console.error(errMsg);
+      outcome = 'error';
+      return { ticket_id: ticket.id, outcome, error: errMsg, duration_ms: Date.now() - start };
     }
 
-    const result = await response.json();
-    const assistantMessage = (result.content?.[0]?.text || '') as string;
-    console.log('Claude response length:', assistantMessage.length);
-
-    // Parse <<<FILE path=...>>> ... <<<END>>> blocks
-    const fileBlocks: { path: string; content: string }[] = [];
-    const fileRegex = /<<<FILE path=([^\>]+)>>>\n([\s\S]*?)<<<END>>>/g;
-    let match: RegExpExecArray | null;
-    while ((match = fileRegex.exec(assistantMessage)) !== null) {
-      fileBlocks.push({ path: match[1].trim(), content: match[2] });
+    const json = await resp.json();
+    const textBlock = json.content?.find((c: any) => c.type === 'text');
+    if (!textBlock) {
+      errMsg = 'No text block in Claude response';
+      console.error(errMsg);
+      outcome = 'error';
+      return { ticket_id: ticket.id, outcome, error: errMsg, duration_ms: Date.now() - start };
     }
 
-    if (fileBlocks.length === 0) {
-      console.log('No <<<FILE>>> blocks found. Possibly CLARIFY or no changes.');
-      await supa
-        .from('cockpit_tickets')
-        .update({ status: 'triaged', notes: 'Carla output had no file changes. May need more info.' })
-        .eq('id', ticket.id);
-      return { ticket_id: ticket.id, outcome: 'no_change', duration_ms: Date.now() - t0 };
+    const raw = textBlock.text || '';
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      errMsg = 'No JSON found in Claude response';
+      console.error(errMsg);
+      outcome = 'error';
+      return { ticket_id: ticket.id, outcome, error: errMsg, duration_ms: Date.now() - start };
     }
 
-    console.log(`Writing ${fileBlocks.length} file(s) ...`);
-    for (const fb of fileBlocks) {
-      writeFileSync(fb.path, fb.content, 'utf-8');
-      console.log(`  wrote ${fb.path}`);
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed.changes || parsed.changes.length === 0) {
+      console.log('No changes proposed → marking no_change');
+      outcome = 'no_change';
+      return { ticket_id: ticket.id, outcome, duration_ms: Date.now() - start };
     }
 
-    // Stage, commit, push
-    const branch = `carla/ticket-${ticket.id}`;
-    sh(`git checkout -B ${branch}`, { quiet: true });
-    sh('git add .', { quiet: true });
-
-    const shortSpec = spec.slice(0, 60).replace(/\n/g, ' ');
-    const commitMsg = `Carla: ticket ${ticket.id} — ${shortSpec}`;
-    sh(`git commit -m "${commitMsg}"`, { quiet: false });
-
-    sh(`git push -f origin ${branch}`, { quiet: false });
-
-    // Open PR if GITHUB_TOKEN available
-    let prUrl: string | undefined;
-    if (GITHUB_TOKEN) {
-      try {
-        const prTitle = `Carla: Ticket #${ticket.id}`;
-        const prBody = `Automated code delivery for ticket #${ticket.id}.\n\n${spec}`;
-        const createPrOutput = sh(
-          `gh pr create --title "${prTitle}" --body "${prBody}" --base main --head ${branch}`,
-          { quiet: false }
-        );
-        prUrl = createPrOutput.trim().split('\n').pop(); // last line is the PR URL
-        console.log(`PR opened: ${prUrl}`);
-      } catch (e) {
-        console.error('gh pr create failed:', (e as Error).message);
-      }
+    // Write files
+    for (const change of parsed.changes) {
+      console.log(`Writing ${change.file}`);
+      writeFileSync(change.file, change.content, 'utf-8');
     }
 
-    // Update ticket with preview_url
+    // Commit and push
+    branch = `ticket-${ticket.id}`;
+    sh(`git checkout -b ${branch}`, { quiet: true });
+    sh('git add -A', { quiet: true });
+    sh(`git commit -m "${parsed.commit_message || 'auto commit'}"`, { quiet: true });
+    sh(`git push origin ${branch}`, { quiet: true });
+
+    // Open PR via gh CLI
+    const prOut = sh(
+      `gh pr create --base main --head ${branch} --title "Ticket #${ticket.id}: ${parsed.commit_message}" --body "Auto-generated by runner_v3"`,
+      { quiet: true }
+    );
+    pr_url = prOut.trim();
+
+    // Mark ticket as completed
     await supa
       .from('cockpit_tickets')
-      .update({ status: 'code_delivered', preview_url: prUrl ?? null })
+      .update({ status: 'completed', resolved_at: new Date().toISOString() })
       .eq('id', ticket.id);
 
-    await audit(ticket.id, 'carla_delivered', true, {
-      branch,
-      pr_url: prUrl,
-      files: fileBlocks.map((f) => f.path),
-    });
+    console.log(`PR opened: ${pr_url}`);
+    outcome = 'pr_opened';
 
-    return {
-      ticket_id: ticket.id,
-      outcome: 'pr_opened',
-      pr_url: prUrl,
-      branch,
-      duration_ms: Date.now() - t0,
-    };
-  } catch (e) {
-    const msg = (e as Error).message ?? String(e);
-    console.error(`TICKET ${ticket.id} ERROR:`, msg);
-    await audit(ticket.id, 'carla_error', false, { error: msg });
-    await supa.from('cockpit_tickets').update({
-      status: 'triaged',
-      notes: JSON.stringify({ kind: 'runner_v3_error', error: msg }),
-    }).eq('id', ticket.id);
-    
-    return {
-      ticket_id: ticket.id,
-      outcome: msg.includes('timeout') ? 'timeout' : 'error',
-      error: msg,
-      duration_ms: Date.now() - t0,
-    };
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      outcome = 'timeout';
+      errMsg = 'Claude call timed out';
+    } else {
+      outcome = 'error';
+      errMsg = err.message || String(err);
+    }
+    console.error('PROCESS ERROR:', errMsg);
+  } finally {
+    clearTimeout(timeoutHandle);
   }
+
+  await audit(ticket.id, `ticket_${outcome}`, outcome !== 'error', { pr_url, branch, error: errMsg });
+  return { ticket_id: ticket.id, outcome, pr_url, branch, error: errMsg, duration_ms: Date.now() - start };
 }
 
 async function main() {
@@ -391,6 +306,20 @@ async function main() {
   if (!automationEnabled) {
     console.log('AUTOMATION DISABLED — runner skipped, no provider calls made');
     await audit(null, 'runner_automation_disabled', true, { run_id: GH_RUN_ID, skipped: true });
+    
+    // Log to scheduled_run_skipped for unified skip tracking (item 1, slice D)
+    const { data: skipId, error: skipErr } = await supa.rpc('fn_scheduled_run_skip_log', {
+      p_scheduler: 'github_actions',
+      p_identifier: 'agent-runner',
+      p_reason: 'automation_disabled',
+      p_notes: JSON.stringify({ github_run_id: GH_RUN_ID })
+    });
+    if (skipErr) {
+      console.error('Failed to log skip record:', skipErr.message);
+    } else {
+      console.log('Skip record logged: id =', skipId);
+    }
+
     return; // exit early, do not fetch tickets or call Claude
   }
   
@@ -409,17 +338,28 @@ async function main() {
       await audit(null, 'runner_no_work', true, { picked: 0 });
     }
     
-    for (const t of tickets) {
-      const r = await processTicket(t);
-      results.push(r);
+    await updateHeartbeat(hbId, tickets.length, 0, 0, 'running');
+    
+    for (const ticket of tickets) {
+      const res = await processTicket(ticket, TICKET_TIMEOUT_MS);
+      results.push(res);
     }
-  } catch (e) {
-    fatalErr = (e as Error).message ?? String(e);
-    console.error('FATAL:', fatalErr);
-  } finally {
-    await endHeartbeat(hbId, results, fatalErr);
-    console.log(`runner_v3 done. picked=${results.length} prs=${results.filter(r => r.outcome === 'pr_opened').length}`);
+    
+    const prs = results.filter(r => r.outcome === 'pr_opened').length;
+    await updateHeartbeat(hbId, tickets.length, results.length, prs, 'done');
+    
+  } catch (err: any) {
+    fatalErr = err.message || String(err);
+    console.error('FATAL ERROR:', fatalErr);
+    await updateHeartbeat(hbId, 0, 0, 0, 'error', fatalErr);
+    await audit(null, 'runner_fatal', false, { error: fatalErr });
+    process.exit(1);
   }
+  
+  console.log(`runner_v3 finished: ${results.length} tickets processed`);
 }
 
-void main();
+main().catch(err => {
+  console.error('UNCAUGHT:', err);
+  process.exit(1);
+});
