@@ -52,7 +52,7 @@ export async function getBookingDetail(
 ): Promise<BookingDetail | null> {
   const { data, error } = await sb.rpc('fn_spa_booking_detail', { p_booking_id: bookingId }).single();
   if (error) throw error;
-  return data ?? null;
+  return (data as BookingDetail) ?? null;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -153,64 +153,52 @@ async function postCustomItemToFolio(
 ): Promise<{ posted: boolean; charge_id: string | null; note: string }> {
   try {
     // Retrieve the CLOUDBEDS_API_KEY from vault.secrets via public.get_secret
-    const { data: apiKey, error: secretError } = await sb.rpc('get_secret', {
-      p_name: 'CLOUDBEDS_API_KEY',
-    });
-    if (secretError || !apiKey) {
-      return { posted: false, charge_id: null, note: `No API key: ${secretError?.message ?? 'missing'}` };
+    const { data: apiKey, error: keyErr } = await sb.rpc('fn_get_secret', { p_name: 'CLOUDBEDS_API_KEY' });
+    if (keyErr) return { posted: false, charge_id: null, note: `Vault key fetch failed: ${keyErr.message}` };
+    if (!apiKey || typeof apiKey !== 'string') {
+      return { posted: false, charge_id: null, note: 'CLOUDBEDS_API_KEY not present in vault' };
     }
 
-    // Build the line-item array (Cloudbeds v1.2 postCustomItem requires items=[...])
-    const items = [
-      {
-        itemName: booking.treatment_name,
-        itemPrice: String(booking.price ?? 0),
-        itemQuantity: '1',
-        itemCategoryName: 'Spa & Wellness',
-        itemNotes: `Spa treatment ${booking.booking_id.slice(0, 8)}`,
-      },
-    ];
-
-    const body = new URLSearchParams({
-      reservationID: booking.reservation_id!,
-      items: JSON.stringify(items),
-    });
-
-    const response = await fetch(`${CB_BASE}/postCustomItem`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    });
-
-    const raw = await response.text();
-    let parsed: any;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      parsed = { raw };
-    }
-
-    if (!response.ok) {
-      const msg = parsed.message ?? parsed.error ?? raw.slice(0, 120);
-      return {
-        posted: false,
-        charge_id: null,
-        note: `Cloudbeds rejected (HTTP ${response.status}: ${msg}) — post manually, evidence in raw.folio_post`,
-      };
-    }
-
-    // Cloudbeds v1.2 postCustomItem success: { "success": true, "itemID": "12345" }
-    const chargeId = parsed.itemID ?? parsed.id ?? null;
-    return {
-      posted: !!parsed.success,
-      charge_id: chargeId,
-      note: chargeId ? `Posted, charge ${chargeId}` : 'Posted (no itemID in response)',
+    // Build the payload.
+    const itemData = {
+      reservationID: booking.reservation_id,
+      quantity: 1,
+      itemCategoryID: null, // Spa posting does not need a category (no tax)
+      itemName: booking.treatment_name,
+      itemPrice: booking.price || 0,
+      itemDate: booking.scheduled_at.split('T')[0], // YYYY-MM-DD
     };
-  } catch (err) {
+
+    const url = `${CB_BASE}/postCustomItem`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(itemData),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      return { posted: false, charge_id: null, note: `Cloudbeds ${resp.status}: ${text.slice(0, 200)}` };
+    }
+
+    const result = (await resp.json()) as { success: boolean; chargeID?: string };
+    if (!result.success) {
+      return { posted: false, charge_id: null, note: `Cloudbeds responded success=false` };
+    }
+
+    return {
+      posted: true,
+      charge_id: result.chargeID ?? null,
+      note: 'Successfully posted to Cloudbeds folio',
+    };
+  } catch (e) {
     return {
       posted: false,
       charge_id: null,
-      note: `Exception: ${err instanceof Error ? err.message : String(err)}`,
+      note: `Exception: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
 }
