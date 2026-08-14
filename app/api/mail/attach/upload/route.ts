@@ -3,9 +3,11 @@
 // Uploads one or more files into storage bucket `mail-attachments`
 // (public read) and returns their public URLs.
 // PBS 2026-07-17 · used by ComposeModal 📎 attach flow.
+// PBS 2026-08-14 · Q4 attachment limits: 25MB cap + executable blocklist.
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentAuthUser } from '@/lib/userGmail';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { validateAttachment } from '@/lib/attachmentValidation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +37,13 @@ export async function POST(req: NextRequest) {
 
   for (const f of files) {
     try {
+      // Q4 attachment validation: 25MB + executable blocklist
+      const validation = validateAttachment(f.name, f.size);
+      if (!validation.ok) {
+        failures.push({ name: f.name, error: validation.error! });
+        continue;
+      }
+
       const safeName = f.name.replace(/[^\w.\- ]+/g, '_').slice(0, 120);
       const key = user.id + '/' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '_' + safeName;
       const buf = new Uint8Array(await f.arrayBuffer());
