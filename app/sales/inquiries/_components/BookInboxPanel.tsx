@@ -4,7 +4,7 @@
 // `sales.email_messages` via `listEmailThreads`.
 //
 // Honest stance: book@ is NOT directly OAuth-connected today (only pb@
-// is in sales.gmail_connections). Every row in here was harvested from
+// is in marketing.user_gmail_connections). Every row in here was harvested from
 // pb@'s mailbox where book@ appears in TO/CC. The header makes that
 // clear and links to /admin/gmail-connect to authorise book@ properly.
 
@@ -184,122 +184,75 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
         <div style={stat}>
           <span style={statLabel}>Threads · view</span>
           <span style={statValue}>{threads.length}</span>
-          <span style={statSub}>{dir === 'all' ? 'all directions' : dir === 'in' ? 'inbound only' : 'outbound only'}</span>
+          <span style={statSub}>{dir === 'all' ? 'all' : dir === 'in' ? 'inbound' : 'outbound'}</span>
         </div>
         <div style={stat}>
-          <span style={statLabel}>↘ Received</span>
-          <span style={{ ...statValue, color: 'var(--moss-glow)' }}>{inb.length}</span>
-          <span style={statSub}>{lastIn ? `last ${relativeTime(lastIn)}` : EMPTY}</span>
+          <span style={statLabel}>Inbound</span>
+          <span style={statValue}>{inb.length}</span>
+          <span style={statSub}>{lastIn ? relativeTime(lastIn) : EMPTY}</span>
         </div>
         <div style={stat}>
-          <span style={statLabel}>↗ Sent</span>
-          <span style={{ ...statValue, color: 'var(--brass)' }}>{outb.length}</span>
-          <span style={statSub}>{lastOut ? `last ${relativeTime(lastOut)}` : EMPTY}</span>
+          <span style={statLabel}>Outbound</span>
+          <span style={statValue}>{outb.length}</span>
+          <span style={statSub}>{lastOut ? relativeTime(lastOut) : EMPTY}</span>
         </div>
         <div style={stat}>
-          <span style={statLabel}>Source</span>
-          <span style={{ ...statValue, fontSize: 'var(--t-md)', fontStyle: 'normal', fontFamily: 'var(--mono)' }}>
-            via pb@
-          </span>
-          <span style={statSub}>
-            <TenantLink href="/admin/gmail-connect" style={{ color: 'var(--brass)' }}>
-              Connect book@ directly →
-            </TenantLink>
-          </span>
+          <span style={statLabel}>Newest</span>
+          <span style={statValue}>{newest ? relativeTime(newest) : EMPTY}</span>
         </div>
       </div>
 
       {/* Thread list */}
-      {threads.length === 0 ? (
-        <div style={{ padding: 18, color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>
-          No messages on book@thenamkhan.com under this filter. The poller may be stalled — check{' '}
-          <TenantLink href="/admin/gmail-connect" style={{ color: 'var(--brass)' }}>
-            /admin/gmail-connect
-          </TenantLink>
-          .
+      {threads.length === 0 && (
+        <div style={{ padding: 20, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>
+          No threads matching filter.
         </div>
-      ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-          {threads.map((t) => {
-            const inbound = t.last_direction === 'inbound';
-            return (
-              <li
-                key={t.thread_id}
-                style={{ borderTop: '1px solid var(--line-soft)' }}
-              >
-                <TenantLink
-                  href={`/inbox?box=${encodeURIComponent(MAILBOX)}&thread=${encodeURIComponent(t.thread_id)}`}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '24px 1.4fr 2.5fr auto',
-                    alignItems: 'baseline',
-                    gap: 12,
-                    padding: '8px 4px',
-                    textDecoration: 'none',
-                    color: 'var(--ink)',
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: 'var(--mono)',
-                      fontSize: 'var(--t-base)',
-                      color: inbound ? 'var(--moss-glow)' : 'var(--brass)',
-                      fontWeight: 700,
-                    }}
-                    title={inbound ? 'inbound' : 'outbound'}
-                  >
-                    {inbound ? '↘' : '↗'}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 'var(--t-sm)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      fontWeight: t.inquiry_status === 'new' ? 700 : 500,
-                    }}
-                  >
-                    {senderLabel(t.last_from_name, t.last_from_email)}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 'var(--t-sm)',
-                      color: 'var(--ink-soft)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {t.last_subject ?? '(no subject)'}
-                    {t.msg_count > 1 && (
-                      <span
-                        style={{
-                          marginLeft: 8,
-                          fontFamily: 'var(--mono)',
-                          fontSize: 'var(--t-xs)',
-                          color: 'var(--ink-mute)',
-                        }}
-                      >
-                        · {t.msg_count} msgs
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--mono)',
-                      fontSize: 'var(--t-xs)',
-                      color: 'var(--ink-mute)',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {relativeTime(t.last_received_at)}
-                  </span>
-                </TenantLink>
-              </li>
-            );
-          })}
-        </ul>
       )}
+      {threads.map((t) => {
+        const isInbound = t.last_direction === 'inbound';
+        const dirIcon = isInbound ? '↘' : '↗';
+        const dirColor = isInbound ? 'var(--moss)' : 'var(--brass)';
+        const time = relativeTime(t.last_received_at);
+        const from = senderLabel(t.sender_name, t.sender_email);
+        return (
+          <TenantLink
+            key={t.thread_id}
+            href={`/sales/inquiries/t/${t.thread_id}`}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '20px 1fr auto',
+              alignItems: 'start',
+              gap: 10,
+              padding: '10px 0',
+              borderBottom: '1px solid var(--line-extra-soft)',
+              textDecoration: 'none',
+              color: 'inherit',
+            }}
+          >
+            <span style={{ fontSize: 'var(--t-lg)', lineHeight: 1, color: dirColor, paddingTop: 2 }}>
+              {dirIcon}
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 'var(--t-base)', color: 'var(--ink)' }}>
+                {t.subject || '(no subject)'}
+              </div>
+              <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>
+                {isInbound ? `From: ${from}` : `To: ${from}`}
+              </div>
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--mono)',
+                fontSize: 'var(--t-xs)',
+                color: 'var(--ink-mute)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {time}
+            </div>
+          </TenantLink>
+        );
+      })}
     </article>
   );
 }
