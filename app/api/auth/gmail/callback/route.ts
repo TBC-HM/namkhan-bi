@@ -1,44 +1,30 @@
-// GET /api/auth/gmail/callback
-// Google OAuth callback. Exchanges authorization code for tokens, fetches the
-// authenticated user's email, persists into sales.gmail_connections.
-
-import { NextResponse } from 'next/server';
-import { exchangeCodeForTokens, getUserEmail, upsertGmailConnection } from '@/lib/gmail';
-
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
-
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const code = url.searchParams.get('code');
-  const error = url.searchParams.get('error');
-  const stateB64 = url.searchParams.get('state') ?? '';
-
-  let back = '/admin/gmail-connect';
-  try {
-    const state = JSON.parse(Buffer.from(stateB64, 'base64url').toString('utf-8'));
-    if (typeof state.back === 'string') back = state.back;
-  } catch {
-    /* ignore — fallback to default */
-  }
-
-  if (error) {
-    return NextResponse.redirect(new URL(`${back}?err=${encodeURIComponent(error)}`, req.url));
-  }
-  if (!code) {
-    return NextResponse.redirect(new URL(`${back}?err=missing_code`, req.url));
-  }
-
-  try {
-    const tokens = await exchangeCodeForTokens(code);
-    if (!tokens.refresh_token) {
-      return NextResponse.redirect(new URL(`${back}?err=no_refresh_token`, req.url));
-    }
-    const email = await getUserEmail(tokens.access_token);
-    await upsertGmailConnection(email, tokens.refresh_token);
-    return NextResponse.redirect(new URL(`${back}?connected=${encodeURIComponent(email)}`, req.url));
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'unknown';
-    return NextResponse.redirect(new URL(`${back}?err=${encodeURIComponent(msg)}`, req.url));
-  }
-}
+Ly8gR0VUIC9hcGkvYXV0aC9nbWFpbC9jYWxsYmFjawovLyBHb29nbGUgT0F1dGggY2FsbGJhY2su
+IEV4Y2hhbmdlcyBhdXRob3JpemF0aW9uIGNvZGUgZm9yIHRva2VucywgZmV0Y2hlcyB0aGUKLy8g
+YXV0aGVudGljYXRlZCB1c2VyJ3MgZW1haWwsIHBlcnNpc3RzIGludG8gbWFya2V0aW5nLnVzZXJf
+Z21haWxfY29ubmVjdGlvbnMuCgppbXBvcnQgeyBOZXh0UmVzcG9uc2UgfSBmcm9tICduZXh0L3Nl
+cnZlcic7CmltcG9ydCB7IGV4Y2hhbmdlQ29kZUZvclRva2VucywgZ2V0VXNlckVtYWlsLCB1cHNl
+cnRHbWFpbENvbm5lY3Rpb24gfSBmcm9tICdAL2xpYi9nbWFpbCc7CgpleHBvcnQgY29uc3QgZHlu
+YW1pYyA9ICdmb3JjZS1keW5hbWljJzsKZXhwb3J0IGNvbnN0IHJ1bnRpbWUgPSAnbm9kZWpzJzsK
+CmV4cG9ydCBhc3luYyBmdW5jdGlvbiBHRVQocmVxOiBSZXF1ZXN0KSB7CiAgY29uc3QgdXJsID0g
+bmV3IFVSTChyZXEudXJsKTsKICBjb25zdCBjb2RlID0gdXJsLnNlYXJjaFBhcmFtcy5nZXQoJ2Nv
+ZGUnKTsKICBjb25zdCBlcnJvciA9IHVybC5zZWFyY2hQYXJhbXMuZ2V0KCdlcnJvcicpOwogIGNv
+bnN0IHN0YXRlQjY0ID0gdXJsLnNlYXJjaFBhcmFtcy5nZXQoJ3N0YXRlJykgPz8gJyc7CgogIGxl
+dCBiYWNrID0gJy9hZG1pbi9nbWFpbC1jb25uZWN0JzsKICB0cnkgewogICAgY29uc3Qgc3RhdGUg
+PSBKU09OLnBhcnNlKEJ1ZmZlci5mcm9tKHN0YXRlQjY0LCAnYmFzZTY0dXJsJykudG9TdHJpbmco
+J3V0Zi04JykpOwogICAgaWYgKHR5cGVvZiBzdGF0ZS5iYWNrID09PSAnc3RyaW5nJykgYmFjayA9
+IHN0YXRlLmJhY2s7CiAgfSBjYXRjaCB7CiAgICAvKiBpZ25vcmUg4oCUIGZhbGxiYWNrIHRvIGRl
+ZmF1bHQgKi8KICB9CgogIGlmIChlcnJvcikgewogICAgcmV0dXJuIE5leHRSZXNwb25zZS5yZWRp
+cmVjdChuZXcgVVJMKGAke2JhY2t9P2Vycj0ke2VuY29kZVVSSUNvbXBvbmVudChlcnJvcil9YCwg
+cmVxLnVybCkpOwogIH0KICBpZiAoIWNvZGUpIHsKICAgIHJldHVybiBOZXh0UmVzcG9uc2UucmVk
+aXJlY3QobmV3IFVSTChgJHtiYWNrfT9lcnI9bWlzc2luZ19jb2RlYCwgcmVxLnVybCkpOwogIH0K
+CiAgdHJ5IHsKICAgIGNvbnN0IHRva2VucyA9IGF3YWl0IGV4Y2hhbmdlQ29kZUZvclRva2Vucyhj
+b2RlKTsKICAgIGlmICghdG9rZW5zLnJlZnJlc2hfdG9rZW4pIHsKICAgICAgcmV0dXJuIE5leHRS
+ZXNwb25zZS5yZWRpcmVjdChuZXcgVVJMKGAke2JhY2t9P2Vycj1ub19yZWZyZXNoX3Rva2VuYCwg
+cmVxLnVybCkpOwogICAgfQogICAgY29uc3QgZW1haWwgPSBhd2FpdCBnZXRVc2VyRW1haWwodG9r
+ZW5zLmFjY2Vzc190b2tlbik7CiAgICBhd2FpdCB1cHNlcnRHbWFpbENvbm5lY3Rpb24oZW1haWws
+IHRva2Vucy5yZWZyZXNoX3Rva2VuKTsKICAgIHJldHVybiBOZXh0UmVzcG9uc2UucmVkaXJlY3Qo
+bmV3IFVSTChgJHtiYWNrfT9jb25uZWN0ZWQ9JHtlbmNvZGVVUklDb21wb25lbnQoZW1haWwpfWAs
+IHJlcS51cmwpKTsKICB9IGNhdGNoIChlKSB7CiAgICBjb25zdCBtc2cgPSBlIGluc3RhbmNlb2Yg
+RXJyb3IgPyBlLm1lc3NhZ2UgOiAndW5rbm93bic7CiAgICByZXR1cm4gTmV4dFJlc3BvbnNlLnJl
+ZGlyZWN0KG5ldyBVUkwoYCR7YmFja30/ZXJyPSR7ZW5jb2RlVVJJQ29tcG9uZW50KG1zZyl9YCwg
+cmVxLnVybCkpOwogIH0KfQo=
