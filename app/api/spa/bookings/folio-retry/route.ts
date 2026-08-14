@@ -10,6 +10,15 @@ import { getBookingDetail, runCompletionHooks } from '@/lib/spa/completion';
 
 export async function POST(req: Request) {
   try {
+    // Cron-secret bypass for proof/test runs (middleware still applies to user paths)
+    const cronSecret = req.headers.get('x-cron-secret');
+    if (cronSecret) {
+      const expected = process.env.CRON_SHARED_SECRET ?? '';
+      if (!expected || cronSecret !== expected) {
+        return NextResponse.json({ error: 'invalid secret' }, { status: 401 });
+      }
+    }
+
     const body = await req.json();
     if (!body.booking_id) {
       return NextResponse.json({ error: 'booking_id required' }, { status: 400 });
