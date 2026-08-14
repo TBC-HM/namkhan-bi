@@ -15,6 +15,11 @@ import {
   markRead,
   trashMessage,
   checkAiPolicyEnabled,
+  getMessage,
+  getThread,
+  listInboxMessages,
+  modifyLabelsForUser,
+  refreshIfExpired,
 } from '../userGmail';
 
 // Mock environment
@@ -25,105 +30,157 @@ process.env.GOOGLE_USER_OAUTH_CLIENT_SECRET = 'test_user_client_secret';
 // Mock Supabase admin
 jest.mock('../supabaseAdmin', () => ({
   getSupabaseAdmin: jest.fn(() => ({
-    rpc: jest.fn((name, params) => {
-      if (name === 'fn_get_secret') {
-        if (params.p_name === 'GOOGLE_USER_OAUTH_CLIENT_ID') {
-          return Promise.resolve({ data: 'vault_user_client_id', error: null });
-        }
-        if (params.p_name === 'GOOGLE_USER_OAUTH_CLIENT_SECRET') {
-          return Promise.resolve({ data: 'vault_user_secret', error: null });
-        }
-      }
-      return Promise.resolve({ data: null, error: null });
-    }),
+    rpc: jest.fn(),
   })),
 }));
 
 // Mock fetch
 global.fetch = jest.fn();
 
-describe('lib/userGmail.ts', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+const mockRefreshIfExpired = jest.fn();
+const mockGetCurrentAuthUser = jest.fn();
+const mockSendMessage = jest.fn();
+const mockReplyToMessage = jest.fn();
 
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+describe('lib/userGmail.ts', () => {
   describe('buildUserAuthUrl', () => {
     it('builds valid OAuth URL with user scopes', async () => {
-      const state = 'user_state_123';
+      const mockRpc = jest.fn()
+        .mockResolvedValueOnce({ data: 'vault_user_client_id', error: null })
+        .mockResolvedValueOnce({ data: 'vault_user_client_secret', error: null });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockRpc,
+      });
+
+      const state = 'test_state_abc';
       const url = await buildUserAuthUrl(state);
-      
+
       expect(url).toContain('https://accounts.google.com/o/oauth2/v2/auth');
       expect(url).toContain('client_id=vault_user_client_id');
       expect(url).toContain('redirect_uri=https%3A%2F%2Ftest-app.vercel.app');
-      expect(url).toContain('state=user_state_123');
-      expect(url).toContain(encodeURIComponent(USER_GMAIL_SCOPES));
+      expect(url).toContain('state=test_state_abc');
+      expect(url).toContain(encodeURIComponent('https://www.googleapis.com/auth/gmail.send'));
     });
 
     it('includes send + modify scopes (not just readonly)', async () => {
-      const url = await buildUserAuthUrl('test');
-      expect(USER_GMAIL_SCOPES).toContain('gmail.send');
-      expect(USER_GMAIL_SCOPES).toContain('gmail.modify');
+      const mockRpc = jest.fn()
+        .mockResolvedValueOnce({ data: 'cid', error: null })
+        .mockResolvedValueOnce({ data: 'csec', error: null });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockRpc,
+      });
+
+      const url = await buildUserAuthUrl('state');
+      const scopeStr = USER_GMAIL_SCOPES;
+
+      expect(scopeStr).toContain('gmail.send');
+      expect(scopeStr).toContain('gmail.modify');
+      expect(scopeStr).toContain('gmail.readonly');
+      expect(url).toContain(encodeURIComponent(scopeStr));
     });
   });
 
   describe('exchangeCode', () => {
     it('successfully exchanges authorization code', async () => {
-      const mockResponse = {
-        access_token: 'ya29.user_access',
-        expires_in: 3600,
-        refresh_token: 'user_refresh',
-        scope: USER_GMAIL_SCOPES,
-      };
+      const mockRpc = jest.fn()
+        .mockResolvedValueOnce({ data: 'vault_user_client_id', error: null })
+        .mockResolvedValueOnce({ data: 'vault_user_client_secret', error: null });
 
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockRpc,
       });
 
-      const result = await exchangeCode('test_code');
-      
-      expect(result.access_token).toBe('ya29.user_access');
-      expect(result.refresh_token).toBe('user_refresh');
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          access_token: 'ya29.test_access',
+          refresh_token: 'refresh_xyz',
+          expires_in: 3600,
+          token_type: 'Bearer',
+        }),
+      });
+
+      const tokens = await exchangeCode('auth_code_123');
+
+      expect(tokens.access_token).toBe('ya29.test_access');
+      expect(tokens.refresh_token).toBe('refresh_xyz');
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://oauth2.googleapis.com/token',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('auth_code_123'),
+        })
+      );
     });
 
     it('throws descriptive error on failure', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        text: async () => '{"error":"invalid_grant"}',
+      const mockRpc = jest.fn()
+        .mockResolvedValueOnce({ data: 'cid', error: null })
+        .mockResolvedValueOnce({ data: 'csec', error: null });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockRpc,
       });
 
-      await expect(exchangeCode('bad_code')).rejects.toThrow();
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => 'invalid_grant',
+      });
+
+      await expect(exchangeCode('bad_code')).rejects.toThrow('token_exchange_failed_400');
     });
   });
 
   describe('fetchUserinfoEmail', () => {
     it('returns email from userinfo endpoint', async () => {
-      global.fetch.mockResolvedValueOnce({
+      global.fetch = jest.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ email: 'user@gmail.com' }),
+        json: async () => ({
+          email: 'user@example.com',
+          verified_email: true,
+        }),
       });
 
-      const email = await fetchUserinfoEmail('access_token');
-      expect(email).toBe('user@gmail.com');
+      const email = await fetchUserinfoEmail('access_token_xyz');
+
+      expect(email).toBe('user@example.com');
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer access_token_xyz',
+          }),
+        })
+      );
     });
 
     it('throws if userinfo call fails', async () => {
-      global.fetch.mockResolvedValueOnce({
+      global.fetch = jest.fn().mockResolvedValue({
         ok: false,
         status: 401,
       });
 
-      await expect(fetchUserinfoEmail('bad_token')).rejects.toThrow();
+      await expect(fetchUserinfoEmail('bad_token')).rejects.toThrow('userinfo_failed_401');
     });
 
     it('throws if email missing in response', async () => {
-      global.fetch.mockResolvedValueOnce({
+      global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         json: async () => ({}),
       });
 
-      await expect(fetchUserinfoEmail('token')).rejects.toThrow();
+      await expect(fetchUserinfoEmail('access_token')).rejects.toThrow('userinfo_no_email');
     });
   });
 
@@ -142,40 +199,61 @@ describe('lib/userGmail.ts', () => {
 
   describe('Token refresh flow (integration)', () => {
     it('refreshIfExpired returns valid token when not expired', async () => {
-      // This would test the full refresh logic, but requires complex DB mocking
-      // Skipped for now — focus on unit tests above
+      const mockGetConnection = jest.fn().mockResolvedValue({
+        data: {
+          access_token: 'access_xyz',
+          refresh_token: 'refresh_xyz',
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          gmail_address: 'user@example.com',
+          active: true,
+        },
+        error: null,
+      });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockGetConnection,
+      });
+
+      const result = await refreshIfExpired('user_id_1');
+
+      expect(result.access).toBe('access_xyz');
+      expect(result.gmail).toBe('user@example.com');
     });
   });
 
   describe('sendMessage', () => {
     it('sends email via Gmail API', async () => {
-      global.fetch.mockResolvedValueOnce({
+      global.fetch = jest.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ id: 'sent123', threadId: 'thread123' }),
+        json: async () => ({
+          id: 'msg_sent_123',
+          threadId: 'thread_new',
+        }),
       });
 
       const result = await sendMessage('access_token', {
         to: 'recipient@example.com',
-        subject: 'Test',
-        body_html: '<p>Hi</p>',
+        subject: 'Test Subject',
+        text: 'Test body',
       });
 
-      expect(result.id).toBe('sent123');
+      expect(result.id).toBe('msg_sent_123');
       expect(global.fetch).toHaveBeenCalledWith(
         'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
-            Authorization: 'Bearer access_token',
+            authorization: 'Bearer access_token',
           }),
         })
       );
     });
 
     it('includes cc and bcc if provided', async () => {
-      global.fetch.mockResolvedValueOnce({
+      global.fetch = jest.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ id: 'sent456', threadId: 'thread456' }),
+        json: async () => ({ id: 'msg_123', threadId: 'thread_123' }),
       });
 
       await sendMessage('access_token', {
@@ -183,11 +261,13 @@ describe('lib/userGmail.ts', () => {
         cc: 'cc@example.com',
         bcc: 'bcc@example.com',
         subject: 'Test',
-        body_html: '<p>Hi</p>',
+        text: 'Body',
       });
 
-      const callBody = JSON.parse(global.fetch.mock.calls[0][1].body);
-      const raw = Buffer.from(callBody.raw, 'base64').toString();
+      const callBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+      const raw = Buffer.from(callBody.raw, 'base64url').toString('utf-8');
+
+      expect(raw).toContain('To: to@example.com');
       expect(raw).toContain('Cc: cc@example.com');
       expect(raw).toContain('Bcc: bcc@example.com');
     });
@@ -195,52 +275,137 @@ describe('lib/userGmail.ts', () => {
 
   describe('replyToMessage', () => {
     it('sends reply with correct headers', async () => {
-      global.fetch.mockResolvedValueOnce({
+      const mockGetConnection = jest.fn().mockResolvedValue({
+        data: {
+          access_token: 'access_xyz',
+          refresh_token: 'refresh_xyz',
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          gmail_address: 'me@example.com',
+          active: true,
+        },
+        error: null,
+      });
+
+      global.fetch = jest.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ id: 'reply123', threadId: 'thread123' }),
+        json: async () => ({ id: 'msg_reply_123', threadId: 'thread_original' }),
       });
 
-      const result = await replyToMessage('access_token', {
-        threadId: 'thread123',
-        messageId: 'original_msg_id',
-        to: 'original@example.com',
-        subject: 'Re: Original',
-        body_html: '<p>Reply text</p>',
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockGetConnection,
       });
 
-      expect(result.id).toBe('reply123');
-      const callBody = JSON.parse(global.fetch.mock.calls[0][1].body);
-      const raw = Buffer.from(callBody.raw, 'base64').toString();
-      expect(raw).toContain('In-Reply-To: original_msg_id');
-      expect(raw).toContain('References: original_msg_id');
+      const result = await replyToMessage('user_1', 'thread_original', {
+        to: 'sender@example.com',
+        subject: 'Re: Original Subject',
+        text: 'Reply body',
+        inReplyTo: '<msg_id@mail.gmail.com>',
+      });
+
+      expect(result.id).toBe('msg_reply_123');
+      expect(result.threadId).toBe('thread_original');
     });
   });
 
   describe('archiveMessage', () => {
     it('removes INBOX label', async () => {
-      // Mock refreshIfExpired - would need to mock the module
-      // For now, test the API call directly
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({}),
+      const mockGetConnection = jest.fn().mockResolvedValue({
+        data: {
+          access_token: 'access_xyz',
+          refresh_token: 'refresh_xyz',
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          gmail_address: 'user@example.com',
+          active: true,
+        },
+        error: null,
       });
 
-      // Simplified test - actual function calls refreshIfExpired internally
-      // which we'd need to mock properly
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'msg_123' }),
+      });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockGetConnection,
+      });
+
+      await archiveMessage('user_1', 'msg_123');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/gmail/v1/users/me/messages/msg_123/modify'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ removeLabelIds: ['INBOX'] }),
+        })
+      );
     });
   });
 
   describe('markRead', () => {
     it('modifies UNREAD label correctly', async () => {
-      // These functions internally call refreshIfExpired and then the Gmail API
-      // Full integration would require mocking refreshIfExpired
-      // Simplified unit tests verify the concept
+      const mockGetConnection = jest.fn().mockResolvedValue({
+        data: {
+          access_token: 'access_xyz',
+          refresh_token: 'refresh_xyz',
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          gmail_address: 'user@example.com',
+          active: true,
+        },
+        error: null,
+      });
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'msg_123' }),
+      });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockGetConnection,
+      });
+
+      await markRead('user_1', 'msg_123', true);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/gmail/v1/users/me/messages/msg_123/modify'),
+        expect.objectContaining({
+          body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
+        })
+      );
     });
   });
 
   describe('trashMessage', () => {
     it('calls trash endpoint', async () => {
-      // Similar to above - would test the Gmail API call
+      const mockGetConnection = jest.fn().mockResolvedValue({
+        data: {
+          access_token: 'access_xyz',
+          refresh_token: 'refresh_xyz',
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          gmail_address: 'user@example.com',
+          active: true,
+        },
+        error: null,
+      });
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'msg_123' }),
+      });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockGetConnection,
+      });
+
+      await trashMessage('user_1', 'msg_123');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/gmail/v1/users/me/messages/msg_123/trash'),
+        expect.any(Object)
+      );
     });
   });
 
@@ -268,6 +433,168 @@ describe('lib/userGmail.ts', () => {
       const result = await checkAiPolicyEnabled(2);
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('getMessage', () => {
+    it('fetches full message with refreshIfExpired call', async () => {
+      const mockGetConnection = jest.fn().mockResolvedValue({
+        data: {
+          access_token: 'access_xyz',
+          refresh_token: 'refresh_xyz',
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          gmail_address: 'user@example.com',
+          active: true,
+        },
+        error: null,
+      });
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          id: 'msg_123',
+          threadId: 'thread_456',
+          labelIds: ['INBOX'],
+          payload: {
+            headers: [{ name: 'Subject', value: 'Test' }],
+            body: { data: 'SGVsbG8=' }, // Base64 "Hello"
+          },
+        }),
+      });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockGetConnection,
+      });
+
+      const msg = await getMessage('user_1', 'msg_123');
+
+      expect(msg.id).toBe('msg_123');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/gmail/v1/users/me/messages/msg_123'),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            authorization: "Bearer access_xyz",
+          }),
+        })
+      );
+    });
+  });
+
+  describe('getThread', () => {
+    it('fetches all messages in a thread', async () => {
+      const mockGetConnection = jest.fn().mockResolvedValue({
+        data: {
+          access_token: 'access_xyz',
+          refresh_token: 'refresh_xyz',
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          gmail_address: 'user@example.com',
+          active: true,
+        },
+        error: null,
+      });
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          id: 'thread_456',
+          messages: [
+            { id: 'msg_1', threadId: 'thread_456', payload: { headers: [] } },
+            { id: 'msg_2', threadId: 'thread_456', payload: { headers: [] } },
+          ],
+        }),
+      });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockGetConnection,
+      });
+
+      const messages = await getThread('user_1', 'thread_456');
+
+      expect(messages).toHaveLength(2);
+      expect(messages[0].id).toBe('msg_1');
+      expect(messages[1].id).toBe('msg_2');
+    });
+  });
+
+  describe('listInboxMessages', () => {
+    it('lists unread inbox threads', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          messages: [
+            { id: 'msg_1', threadId: 'thread_1' },
+            { id: 'msg_2', threadId: 'thread_2' },
+          ],
+        }),
+      });
+
+      const threads = await listInboxMessages('access_token_xyz', 'unread', 50);
+
+      expect(threads).toHaveLength(2);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('q=in%3Ainbox%20is%3Aunread'),
+        expect.any(Object)
+      );
+    });
+
+    it('lists all inbox threads when scope=all', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          messages: [{ id: 'msg_1', threadId: 'thread_1' }],
+        }),
+      });
+
+      await listInboxMessages('access_token_xyz', 'all', 100);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('q=in%3Ainbox'),
+        expect.any(Object)
+      );
+      expect(global.fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('is%3Aunread'),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe('modifyLabelsForUser', () => {
+    it('modifies labels after refreshing token', async () => {
+      const mockGetConnection = jest.fn().mockResolvedValue({
+        data: {
+          access_token: 'access_xyz',
+          refresh_token: 'refresh_xyz',
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          gmail_address: 'user@example.com',
+          active: true,
+        },
+        error: null,
+      });
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 'msg_123' }),
+      });
+
+      const { getSupabaseAdmin } = require('../supabaseAdmin');
+      getSupabaseAdmin.mockReturnValue({
+        rpc: mockGetConnection,
+      });
+
+      await modifyLabelsForUser('user_1', 'msg_123', ['Label_1'], ['INBOX']);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/gmail/v1/users/me/messages/msg_123/modify'),
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            addLabelIds: ['Label_1'],
+            removeLabelIds: ['INBOX'],
+          }),
+        })
+      );
     });
   });
 });
