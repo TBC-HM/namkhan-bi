@@ -33,6 +33,11 @@
 //     bugs/sweep cron, STEP C) closes runs killed mid-flight by Vercel:
 //     branch shipped → single check probe → done/failed; no branch → failed.
 //   - ADR-175 tightening (run 86): auto-merge requires ci_ok === true.
+// 2026-08-14 (unstick-sweep, brief bug_agent_module-owner-findings-v1):
+//   - Finding #99: planner prompt now carries the platform module catalog
+//     (getModuleCatalog(), %_module doc_types via v_documentation_documents)
+//     so the planner cannot recommend external tools for capabilities the
+//     platform already has (TBC University vs Notion, bug #171).
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { callAnthropicTool } from '@/lib/mail/anthropic';
@@ -418,8 +423,43 @@ async function storeNeedsHumanQuestion(bugId: number, reason: string, question?:
   } catch { /* question storage is best-effort; needs_human still lands */ }
 }
 
+// 2026-08-14 (unstick-sweep, brief bug_agent_module-owner-findings-v1, finding #99):
+// The planner had no map of the estate — given "where should documentation live" it
+// recommended Notion/an external wiki while TBC University (a live first-party module
+// with ~98 articles) was the correct answer (bug #171). Root cause: the planner prompt
+// carried the bug body and candidate files but not the module catalog, so "we already
+// have a module for this" was unreachable. Inject the catalog (doc_type + title of every
+// %_module spec in documentation.documents, via the public v_documentation_documents
+// bridge) into every planner prompt. Cached per process; failure degrades to no catalog
+// rather than failing the run.
+let __cachedModuleCatalog: string | null = null;
+async function getModuleCatalog(): Promise<string> {
+  if (__cachedModuleCatalog !== null) return __cachedModuleCatalog;
+  try {
+    const sb = getSupabaseAdmin();
+    const { data, error } = await sb
+      .from('v_documentation_documents')
+      .select('doc_type,title')
+      .like('doc_type', '%_module')
+      .order('doc_type');
+    if (error || !data || data.length === 0) { __cachedModuleCatalog = ''; return ''; }
+    const lines = (data as Array<{ doc_type: string; title: string | null }>)
+      .map((d) => `  ${String(d.doc_type).replace(/_module$/, '')} → ${(d.title ?? d.doc_type).trim()}`);
+    __cachedModuleCatalog = [
+      'PLATFORM MODULE CATALOG (what already exists on this platform — check here BEFORE proposing',
+      'new features, external tools, or documentation homes. Never recommend an external system',
+      '(wiki/Notion/etc.) for a capability listed below; route to the existing module instead):',
+      ...lines,
+    ].join('\n');
+  } catch { __cachedModuleCatalog = ''; }
+  return __cachedModuleCatalog;
+}
+
 async function planBugFix(bug: { id: number; body: string | null; page_url: string | null; property_id: string | null; component?: string | null; file_path?: string | null; reviewFeedback?: string }): Promise<PlannerResult> {
   const candidates = await guessCandidateFiles(bug);
+  // Finding #99: fetch the module catalog once at plan start — the planner must know
+  // the estate it is working on before it reasons about where anything should live.
+  const moduleCatalog = await getModuleCatalog();
   const contexts: Array<{ path: string; content: string }> = [];
   let fetchLog = '';
   for (const p of candidates) {
@@ -441,6 +481,7 @@ async function planBugFix(bug: { id: number; body: string | null; page_url: stri
       ? '(no candidate files fetched — you may need to set skip_reason)'
       : ctxs.map((c) => `=== FILE: ${c.path} (${c.content.length} bytes) ===\n${c.content}\n=== END FILE ===`).join('\n\n');
     return [
+      ...(moduleCatalog ? [moduleCatalog, ''] : []),
       `BUG #${bug.id}`,
       `URL: ${bug.page_url ?? '(none)'}`,
       `COMPONENT (triaged): ${bug.component ?? '(not triaged)'}`,
