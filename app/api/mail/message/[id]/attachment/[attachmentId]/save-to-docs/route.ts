@@ -1,18 +1,21 @@
 // app/api/mail/message/[id]/attachment/[attachmentId]/save-to-docs/route.ts
 // PBS 2026-07-16 (item 6) — save a mail attachment straight into dms.documents.
+// PBS 2026-08-14 · Q4 attachment limits: 25MB cap + executable blocklist.
 // Flow:
 //   1. Auth = the signed-in user (Gmail-scope access).
 //   2. Fetch the raw bytes via lib/userGmail.getAttachmentBytes.
-//   3. Upload to Supabase Storage bucket `dms-docs` at
+//   3. VALIDATE size + file type (Q4 policy).
+//   4. Upload to Supabase Storage bucket `dms-docs` at
 //      mail-imports/{yyyy-mm-dd}/{msgId}/{attachmentId}-{filename}.
-//   4. INSERT a dms.documents row via getSupabaseAdmin() (service role bypasses
+//   5. INSERT a dms.documents row via getSupabaseAdmin() (service role bypasses
 //      the PostgREST public-only rule — see MEMORY §0.5).
-//   5. Return { ok: true, doc_id } so the client can toast + link.
+//   6. Return { ok: true, doc_id } so the client can toast + link.
 // Body (JSON, all optional except title):
 //   { title, doc_type, tags[], filename, mime, size, property_id? }
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentAuthUser, getAttachmentBytes } from '@/lib/userGmail';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { validateAttachment } from '@/lib/attachmentValidation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,14 +52,20 @@ export async function POST(
     // 1. Fetch bytes from Gmail (reuses the same helper as the download route).
     const { data, mimeType, filename, size } = await getAttachmentBytes(user.id, msgId, attachmentId);
 
-    // 2. Path: mail-imports/{yyyy-mm-dd}/{msgId}/{attachmentId}-{safeName}
+    // 2. Q4 attachment validation: 25MB + executable blocklist
+    const validation = validateAttachment(filename, size);
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    // 3. Path: mail-imports/{yyyy-mm-dd}/{msgId}/{attachmentId}-{safeName}
     const day = new Date().toISOString().slice(0, 10);
     const safeName = sanitize(body.filename ?? filename);
     const path = 'mail-imports/' + day + '/' + msgId + '/' + attachmentId + '-' + safeName;
 
     const sb = getSupabaseAdmin();
 
-    // 3. Upload to storage.
+    // 4. Upload to storage.
     const { error: upErr } = await sb.storage.from(BUCKET).upload(path, data, {
       contentType: body.mime ?? mimeType,
       upsert: true,
@@ -65,7 +74,7 @@ export async function POST(
       return NextResponse.json({ error: 'storage_upload_failed: ' + upErr.message }, { status: 500 });
     }
 
-    // 4. Insert dms.documents row via service role.
+    // 5. Insert dms.documents row via service role.
     const insertPayload = {
       property_id: body.property_id ?? NAMKHAN,
       doc_type: body.doc_type ?? 'other',
