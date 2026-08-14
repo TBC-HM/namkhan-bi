@@ -86,7 +86,7 @@ export async function middleware(req: NextRequest) {
   const claims = session?.access_token ? decodeJwtPayload(session.access_token) : {}
   const holdingRole: string = String(claims.holding_role ?? '')
   const propertyIds: number[] = Array.isArray(claims.property_ids)
-    ? (claims.property_ids as unknown[]).map((x) => Number(x)).filter((n) => Number.isfinite(n))
+    ? (claims.property_ids as unknown[]).map((x) => Number(x)).filter((n) => Number.isFinite(n))
     : []
 
   const m = pathname.match(/^\/h\/(\d+)(\/|$)/)
