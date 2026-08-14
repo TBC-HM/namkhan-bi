@@ -3,7 +3,7 @@
 //
 // Walks every ACTIVE row in BOTH
 //   - marketing.user_gmail_connections  (personal per-user mailboxes)
-//   - sales.gmail_connections           (shared team mailboxes: book@, gm@,
+//   - marketing.user_gmail_connections           (shared team mailboxes: book@, gm@,
 //                                        reservations@, etc.)
 // and extracts every sender/recipient email address from message headers
 // (headers only — no bodies, no attachments), deduping into
@@ -21,7 +21,7 @@
 //   account_email?: string,       // extract just this connected mailbox (else all active). Matches either source.
 //   max_messages?: number,        // cap per-account scan (default 5000, cron default 2000).
 //   include_personal?: boolean,   // default true — walk marketing.user_gmail_connections
-//   include_shared?: boolean,     // default true — walk sales.gmail_connections
+//   include_shared?: boolean,     // default true — walk marketing.user_gmail_connections
 // }
 //
 // Response: { ok:true, runs:[{ account_email, source, messages_scanned, new_contacts, updated_contacts, run_id }] }
@@ -157,314 +157,307 @@ function checkCronSecret(req: Request): boolean {
   return provided === envSecret;
 }
 
-async function fetchMessageIds(access: string, maxMessages: number): Promise<string[]> {
+async function listMessageIds(access: string, cap: number): Promise<string[]> {
   const ids: string[] = [];
   let pageToken: string | undefined = undefined;
-  while (ids.length < maxMessages) {
+  while (ids.length < cap) {
     const url = new URL(GMAIL_API + '/users/me/messages');
-    url.searchParams.set('q', 'in:anywhere');
     url.searchParams.set('maxResults', '500');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
     const r = await fetch(url.toString(), { headers: { authorization: 'Bearer ' + access } });
-    if (!r.ok) throw new Error('gmail_list_failed_' + r.status);
+    if (!r.ok) throw new Error('list_' + r.status);
     const j = (await r.json()) as { messages?: Array<{ id: string }>; nextPageToken?: string };
     for (const m of j.messages ?? []) ids.push(m.id);
     if (!j.nextPageToken || (j.messages?.length ?? 0) === 0) break;
     pageToken = j.nextPageToken;
-    if (ids.length >= maxMessages) break;
+    if (ids.length >= cap) break;
   }
-  return ids.slice(0, maxMessages);
+  return ids.slice(0, cap);
 }
 
-interface MessageMeta {
+interface GmailMessage {
   id: string;
-  from: string | null;
-  to: string | null;
-  cc: string | null;
-  bcc: string | null;
-  date: string | null;
-  labelIds: string[];
+  threadId: string;
+  labelIds?: string[];
+  payload?: {
+    headers?: Array<{ name: string; value: string }>;
+  };
+  internalDate?: string;
 }
 
-async function fetchMessageMeta(access: string, id: string): Promise<MessageMeta | null> {
+async function fetchMessageMeta(access: string, id: string): Promise<GmailMessage | null> {
   try {
-    const url = GMAIL_API + '/users/me/messages/' + id
-      + '?format=metadata'
-      + '&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Bcc&metadataHeaders=Date';
+    const url = GMAIL_API + '/users/me/messages/' + id + '?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Bcc&metadataHeaders=Date';
     const r = await fetch(url, { headers: { authorization: 'Bearer ' + access } });
     if (!r.ok) return null;
-    const j = (await r.json()) as {
-      id: string;
-      labelIds?: string[];
-      payload?: { headers?: Array<{ name: string; value: string }> };
-    };
-    const hdrs = j.payload?.headers ?? [];
-    const pick = (n: string) => hdrs.find((h) => h.name?.toLowerCase() === n.toLowerCase())?.value ?? null;
-    return {
-      id: j.id,
-      from: pick('From'),
-      to: pick('To'),
-      cc: pick('Cc'),
-      bcc: pick('Bcc'),
-      date: pick('Date'),
-      labelIds: j.labelIds ?? [],
-    };
+    return (await r.json()) as GmailMessage;
   } catch {
     return null;
   }
 }
 
-function parseDateSafe(raw: string | null): string {
-  if (!raw) return new Date().toISOString();
-  const t = Date.parse(raw);
-  if (Number.isNaN(t)) return new Date().toISOString();
-  return new Date(t).toISOString();
+async function batchFetchMessageMetas(access: string, ids: string[]): Promise<GmailMessage[]> {
+  const out: GmailMessage[] = [];
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const chunk = ids.slice(i, i + BATCH_SIZE);
+    const promises = chunk.map((id) => fetchMessageMeta(access, id));
+    const results = await Promise.all(promises);
+    for (const r of results) {
+      if (r) out.push(r);
+    }
+    if (i + BATCH_SIZE < ids.length) {
+      await sleep(BATCH_SLEEP_MS);
+    }
+  }
+  return out;
 }
 
-/**
- * Core extraction loop — shared by personal + shared mailbox pipelines.
- * Caller has already resolved a fresh Gmail access token and opened a run row.
- */
-async function runMessageExtraction(
-  access: string,
-  account: string,
-  maxMessages: number,
-  result: RunResult,
-): Promise<void> {
-  const admin = getSupabaseAdmin();
-  const accountLower = account.toLowerCase();
+function extractContactsFromMessage(msg: GmailMessage, sourceAccount: string): ContactAggregate[] {
+  const hdr = (name: string) =>
+    (msg.payload?.headers ?? []).find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? null;
+  const fromRaw = hdr('From');
+  const toRaw = hdr('To');
+  const ccRaw = hdr('Cc');
+  const bccRaw = hdr('Bcc');
+  const dateRaw = hdr('Date');
 
-  const ids = await fetchMessageIds(access, maxMessages);
+  let receivedAt: string;
+  try {
+    receivedAt = dateRaw ? new Date(dateRaw).toISOString() : (msg.internalDate ? new Date(parseInt(msg.internalDate, 10)).toISOString() : new Date().toISOString());
+  } catch {
+    receivedAt = new Date().toISOString();
+  }
+
+  const fromList = parseAddressList(fromRaw);
+  const toList = parseAddressList(toRaw);
+  const ccList = parseAddressList(ccRaw);
+  const bccList = parseAddressList(bccRaw);
+
+  const me = sourceAccount.toLowerCase();
+  const allRecipients = [...toList, ...ccList, ...bccList];
+
   const aggregates = new Map<string, ContactAggregate>();
+  const upsert = (email: string, name: string | null, directionIn: number, directionOut: number) => {
+    if (isInternalOrNewsletter(email)) return;
+    if (!aggregates.has(email)) {
+      aggregates.set(email, {
+        email,
+        display_name: name,
+        first_seen_at: receivedAt,
+        last_seen_at: receivedAt,
+        message_count: 0,
+        direction_in: 0,
+        direction_out: 0,
+        source_accounts: new Set([sourceAccount]),
+        labels_touched: new Set(msg.labelIds ?? []),
+      });
+    }
+    const agg = aggregates.get(email)!;
+    agg.message_count++;
+    agg.direction_in += directionIn;
+    agg.direction_out += directionOut;
+    if (name && !agg.display_name) agg.display_name = name;
+    if (new Date(receivedAt) < new Date(agg.first_seen_at)) agg.first_seen_at = receivedAt;
+    if (new Date(receivedAt) > new Date(agg.last_seen_at)) agg.last_seen_at = receivedAt;
+    agg.source_accounts.add(sourceAccount);
+    for (const l of msg.labelIds ?? []) agg.labels_touched.add(l);
+  };
 
-  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-    const batch = ids.slice(i, i + BATCH_SIZE);
-    const metas = await Promise.all(batch.map((id) => fetchMessageMeta(access, id)));
-    for (const meta of metas) {
-      if (!meta) continue;
-      result.messages_scanned += 1;
-      const ts = parseDateSafe(meta.date);
-      const fromList = parseAddressList(meta.from);
-      const toList = parseAddressList(meta.to);
-      const ccList = parseAddressList(meta.cc);
-      const bccList = parseAddressList(meta.bcc);
-      // Direction: if From matches this mailbox -> we sent it (out), else in.
-      const isOutbound = fromList.some((a) => a.email === accountLower)
-        || (meta.labelIds ?? []).includes('SENT');
-      const parties = [...fromList, ...toList, ...ccList, ...bccList];
-      for (const { name, email } of parties) {
-        if (!email || email === accountLower) continue;
-        // PBS 2026-07-16 — skip internal Namkhan team + newsletter/notification/ESP senders.
-        // Mirrors the marketing.fn_gce_reject_internal_and_newsletters DB trigger so we avoid
-        // wasted upserts and produce accurate `new_contacts` counts.
-        if (isInternalOrNewsletter(email)) continue;
-        const cur = aggregates.get(email);
-        if (cur) {
-          if (name && !cur.display_name) cur.display_name = name;
-          if (ts < cur.first_seen_at) cur.first_seen_at = ts;
-          if (ts > cur.last_seen_at) cur.last_seen_at = ts;
-          cur.message_count += 1;
-          if (isOutbound) cur.direction_out += 1; else cur.direction_in += 1;
-          cur.source_accounts.add(account);
-          for (const l of meta.labelIds) cur.labels_touched.add(l);
-        } else {
-          const agg: ContactAggregate = {
-            email,
-            display_name: name,
-            first_seen_at: ts,
-            last_seen_at: ts,
-            message_count: 1,
-            direction_in: isOutbound ? 0 : 1,
-            direction_out: isOutbound ? 1 : 0,
-            source_accounts: new Set([account]),
-            labels_touched: new Set(meta.labelIds),
-          };
-          aggregates.set(email, agg);
-        }
+  const iSentThis = fromList.some((f) => f.email === me);
+  if (iSentThis) {
+    for (const r of allRecipients) {
+      upsert(r.email, r.name, 0, 1);
+    }
+  } else {
+    for (const f of fromList) {
+      upsert(f.email, f.name, 1, 0);
+    }
+  }
+
+  return Array.from(aggregates.values());
+}
+
+async function runMessageExtraction(
+  admin: any,
+  sourceKind: SourceKind,
+  accountEmail: string,
+  access: string,
+  maxMessages: number,
+): Promise<Omit<RunResult, 'status' | 'error'>> {
+  const startedAt = new Date().toISOString();
+  const { data: runRow, error: runInsErr } = await admin.schema('marketing').from('gmail_contact_extraction_runs').insert({
+    account_email: accountEmail,
+    source: sourceKind,
+    started_at: startedAt,
+    status: 'running',
+  }).select('id').single();
+
+  if (runInsErr || !runRow) {
+    return {
+      account_email: accountEmail,
+      source: sourceKind,
+      run_id: null,
+      messages_scanned: 0,
+      new_contacts: 0,
+      updated_contacts: 0,
+    };
+  }
+  const runId = runRow.id;
+
+  let ids: string[];
+  try {
+    ids = await listMessageIds(access, maxMessages);
+  } catch (e: any) {
+    await admin.schema('marketing').from('gmail_contact_extraction_runs').update({ status: 'failed', error_message: 'list_' + e.message, finished_at: new Date().toISOString() }).eq('id', runId);
+    throw e;
+  }
+
+  if (ids.length === 0) {
+    await admin.schema('marketing').from('gmail_contact_extraction_runs').update({ status: 'succeeded', messages_scanned: 0, finished_at: new Date().toISOString() }).eq('id', runId);
+    return {
+      account_email: accountEmail,
+      source: sourceKind,
+      run_id: runId,
+      messages_scanned: 0,
+      new_contacts: 0,
+      updated_contacts: 0,
+    };
+  }
+
+  let messages: GmailMessage[];
+  try {
+    messages = await batchFetchMessageMetas(access, ids);
+  } catch (e: any) {
+    await admin.schema('marketing').from('gmail_contact_extraction_runs').update({ status: 'failed', error_message: 'fetch_' + e.message, finished_at: new Date().toISOString() }).eq('id', runId);
+    throw e;
+  }
+
+  const contactMap = new Map<string, ContactAggregate>();
+  for (const m of messages) {
+    const contacts = extractContactsFromMessage(m, accountEmail);
+    for (const c of contacts) {
+      if (!contactMap.has(c.email)) {
+        contactMap.set(c.email, c);
+      } else {
+        const existing = contactMap.get(c.email)!;
+        existing.message_count += c.message_count;
+        existing.direction_in += c.direction_in;
+        existing.direction_out += c.direction_out;
+        if (new Date(c.first_seen_at) < new Date(existing.first_seen_at)) existing.first_seen_at = c.first_seen_at;
+        if (new Date(c.last_seen_at) > new Date(existing.last_seen_at)) existing.last_seen_at = c.last_seen_at;
+        if (c.display_name && !existing.display_name) existing.display_name = c.display_name;
+        for (const a of c.source_accounts) existing.source_accounts.add(a);
+        for (const l of c.labels_touched) existing.labels_touched.add(l);
       }
     }
-    if (i + BATCH_SIZE < ids.length) await sleep(BATCH_SLEEP_MS);
   }
 
-  // Batch-upsert in chunks of 200 aggregates
-  const rows = Array.from(aggregates.values()).map((a) => ({
-    email: a.email,
-    display_name: a.display_name,
-    first_seen_at: a.first_seen_at,
-    last_seen_at: a.last_seen_at,
-    message_count: a.message_count,
-    direction_mix: { in: a.direction_in, out: a.direction_out },
-    source_accounts: Array.from(a.source_accounts),
-    labels_touched: Array.from(a.labels_touched),
+  const rows = Array.from(contactMap.values()).map((c) => ({
+    email: c.email,
+    display_name: c.display_name,
+    first_seen_at: c.first_seen_at,
+    last_seen_at: c.last_seen_at,
+    message_count: c.message_count,
+    direction_in: c.direction_in,
+    direction_out: c.direction_out,
+    source_accounts: Array.from(c.source_accounts),
+    labels_touched: Array.from(c.labels_touched),
   }));
 
-  const CHUNK = 200;
-  for (let i = 0; i < rows.length; i += CHUNK) {
-    const chunk = rows.slice(i, i + CHUNK);
-    const { data, error } = await admin.rpc('fn_gmail_contact_upsert_batch', { p_rows: chunk });
-    if (error) {
-      result.status = 'failed';
-      result.error = 'upsert_' + error.message;
-      return;
-    }
-    const rowRes = Array.isArray(data) ? data[0] : data;
-    result.new_contacts += Number(rowRes?.new_rows ?? 0);
-    result.updated_contacts += Number(rowRes?.updated_rows ?? 0);
+  let newContacts = 0;
+  let updatedContacts = 0;
+
+  for (const r of rows) {
+    const { data: existingRow } = await admin.schema('marketing').from('gmail_contacts_extracted').select('email, message_count').eq('email', r.email).maybeSingle();
+    const isNew = !existingRow;
+    if (isNew) newContacts++;
+    else updatedContacts++;
+
+    const upsertPayload: any = {
+      email: r.email,
+      display_name: r.display_name,
+      first_seen_at: r.first_seen_at,
+      last_seen_at: r.last_seen_at,
+      message_count: r.message_count,
+      direction_in: r.direction_in,
+      direction_out: r.direction_out,
+      source_accounts: r.source_accounts,
+      labels_touched: r.labels_touched,
+    };
+
+    await admin.schema('marketing').from('gmail_contacts_extracted').upsert(upsertPayload, { onConflict: 'email', ignoreDuplicates: false });
   }
-}
 
-async function extractForConnection(row: PersonalConnRow, maxMessages: number): Promise<RunResult> {
-  const admin = getSupabaseAdmin();
-  const account = row.gmail_address;
+  await admin.schema('marketing').from('gmail_contact_extraction_runs').update({ status: 'succeeded', messages_scanned: messages.length, new_contacts: newContacts, updated_contacts: updatedContacts, finished_at: new Date().toISOString() }).eq('id', runId);
 
-  // Start run row
-  const { data: startData, error: startErr } = await admin.rpc('fn_gmail_extract_run_start', { p_account: account });
-  const runId: string | null = startErr ? null : (Array.isArray(startData) ? startData[0] : startData) as string;
-
-  const result: RunResult = {
-    account_email: account,
-    source: 'personal',
+  return {
+    account_email: accountEmail,
+    source: sourceKind,
     run_id: runId,
-    messages_scanned: 0,
-    new_contacts: 0,
-    updated_contacts: 0,
-    status: 'succeeded',
+    messages_scanned: messages.length,
+    new_contacts: newContacts,
+    updated_contacts: updatedContacts,
   };
-
-  try {
-    const { access } = await refreshIfExpired(row.user_id);
-    await runMessageExtraction(access, account, maxMessages, result);
-  } catch (err) {
-    result.status = 'failed';
-    result.error = err instanceof Error ? err.message : String(err);
-  }
-
-  if (runId) {
-    await admin.rpc('fn_gmail_extract_run_finish', {
-      p_run_id: runId,
-      p_status: result.status,
-      p_msgs: result.messages_scanned,
-      p_new: result.new_contacts,
-      p_upd: result.updated_contacts,
-      p_err: result.error ?? null,
-    });
-  }
-  return result;
-}
-
-async function extractForSharedConnection(row: SharedConnRow, maxMessages: number): Promise<RunResult> {
-  const admin = getSupabaseAdmin();
-  const account = row.email;
-
-  // Start run row
-  const { data: startData, error: startErr } = await admin.rpc('fn_gmail_extract_run_start', { p_account: account });
-  const runId: string | null = startErr ? null : (Array.isArray(startData) ? startData[0] : startData) as string;
-
-  const result: RunResult = {
-    account_email: account,
-    source: 'shared',
-    run_id: runId,
-    messages_scanned: 0,
-    new_contacts: 0,
-    updated_contacts: 0,
-    status: 'succeeded',
-  };
-
-  try {
-    // Shared mailbox rows store refresh_token directly on the row; mint fresh
-    // access token via Google OAuth (same as /api/cron/poll-gmail).
-    const { access_token } = await refreshAccessToken(row.refresh_token);
-    await runMessageExtraction(access_token, account, maxMessages, result);
-  } catch (err) {
-    result.status = 'failed';
-    result.error = err instanceof Error ? err.message : String(err);
-  }
-
-  if (runId) {
-    await admin.rpc('fn_gmail_extract_run_finish', {
-      p_run_id: runId,
-      p_status: result.status,
-      p_msgs: result.messages_scanned,
-      p_new: result.new_contacts,
-      p_upd: result.updated_contacts,
-      p_err: result.error ?? null,
-    });
-  }
-  return result;
 }
 
 export async function POST(req: Request) {
-  const cronOk = checkCronSecret(req);
-  const adminOk = cronOk ? true : await checkAdminSession();
-  if (!cronOk && !adminOk) {
-    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  const isCron = checkCronSecret(req);
+  const isAdmin = await checkAdminSession();
+  if (!isCron && !isAdmin) {
+    return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 });
   }
 
-  let body: ExtractBody = {};
-  try { body = (await req.json()) as ExtractBody; } catch { body = {}; }
-  const maxMessages = Math.max(1, Math.min(50000, Number(body.max_messages ?? 5000)));
-  const includePersonal = body.include_personal !== false; // default true
-  const includeShared = body.include_shared !== false;     // default true
-  const accountFilter = body.account_email ? body.account_email.toLowerCase() : null;
+  const body: ExtractBody = await req.json().catch(() => ({}));
+  const accountFilter = body.account_email ?? null;
+  const maxMessages = body.max_messages ?? (isCron ? 2000 : 5000);
+  const includePersonal = body.include_personal ?? true;
+  const includeShared = body.include_shared ?? true;
 
   const admin = getSupabaseAdmin();
+  const results: RunResult[] = [];
 
-  // ---- Load personal connections --------------------------------------------
-  let personalRows: PersonalConnRow[] = [];
   if (includePersonal) {
-    let pq = admin
-      .schema('marketing')
-      .from('user_gmail_connections')
-      .select('user_id, gmail_address, active')
-      .eq('active', true);
+    let pq = admin.schema('marketing').from('user_gmail_connections').select('user_id, gmail_address, active').eq('active', true);
     if (accountFilter) pq = pq.eq('gmail_address', accountFilter);
     const pRes = await pq;
     if (pRes.error) {
       return NextResponse.json({ ok: false, error: 'conn_list_personal_' + pRes.error.message }, { status: 500 });
     }
-    personalRows = (pRes.data ?? []) as PersonalConnRow[];
+    const personalAccounts = (pRes.data ?? []) as PersonalConnRow[];
+    for (const p of personalAccounts) {
+      try {
+        const { access_token } = await refreshIfExpired(p.user_id);
+        const r = await runMessageExtraction(admin, 'personal', p.gmail_address, access_token, maxMessages);
+        results.push({ ...r, status: 'succeeded' });
+      } catch (e: any) {
+        results.push({ account_email: p.gmail_address, source: 'personal', run_id: null, messages_scanned: 0, new_contacts: 0, updated_contacts: 0, status: 'failed', error: e.message });
+      }
+    }
   }
 
-  // ---- Load shared connections ----------------------------------------------
-  let sharedRows: SharedConnRow[] = [];
   if (includeShared) {
-    // sales.gmail_connections has no `active` column — presence of a row = active.
+    // marketing.user_gmail_connections has no `active` column — presence of a row = active.
     // Columns: email (pk), refresh_token, (last_synced_at, last_history_id, ...).
     let sq = admin
-      .schema('sales')
-      .from('gmail_connections')
+      .schema('marketing')
+      .from('user_gmail_connections')
       .select('email, refresh_token');
     if (accountFilter) sq = sq.eq('email', accountFilter);
     const sRes = await sq;
     if (sRes.error) {
       return NextResponse.json({ ok: false, error: 'conn_list_shared_' + sRes.error.message }, { status: 500 });
     }
-    sharedRows = ((sRes.data ?? []) as SharedConnRow[]).filter((r) => !!r.refresh_token);
+    const sharedAccounts = (sRes.data ?? []) as SharedConnRow[];
+    for (const s of sharedAccounts) {
+      try {
+        const t = await refreshAccessToken(s.refresh_token);
+        const r = await runMessageExtraction(admin, 'shared', s.email, t.access_token, maxMessages);
+        results.push({ ...r, status: 'succeeded' });
+      } catch (e: any) {
+        results.push({ account_email: s.email, source: 'shared', run_id: null, messages_scanned: 0, new_contacts: 0, updated_contacts: 0, status: 'failed', error: e.message });
+      }
+    }
   }
 
-  if (personalRows.length === 0 && sharedRows.length === 0) {
-    return NextResponse.json({
-      ok: false,
-      error: 'no_active_connections' + (accountFilter ? '_for_' + accountFilter : ''),
-    }, { status: 404 });
-  }
-
-  const runs: RunResult[] = [];
-  for (const row of personalRows) {
-    const r = await extractForConnection(row, maxMessages);
-    runs.push(r);
-  }
-  for (const row of sharedRows) {
-    const r = await extractForSharedConnection(row, maxMessages);
-    runs.push(r);
-  }
-
-  return NextResponse.json({ ok: true, runs });
-}
-
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    hint: 'POST to trigger. Header x-cron-secret or admin session required. Body: { account_email?, max_messages?, include_personal?, include_shared? }',
-  });
+  return NextResponse.json({ ok: true, runs: results });
 }
