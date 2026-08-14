@@ -146,65 +146,85 @@ export async function runCompletionHooks(
       metadata: { ...result, treatment: booking.treatment_name, reservation_id: booking.reservation_id },
       reasoning:
         `Spa completion hooks for "${booking.treatment_name}" (${booking.guest_name ?? 'guest'}): ` +
-        `inventory ${result.inventory.ok ? `ok (${result.inventory.lines} recipe lines)` : (result.inventory.error ?? 'skipped')}; ` +
-        `folio ${result.folio.note}.`,
+        (result.inventory.attempted
+          ? `inventory ${result.inventory.ok ? `${result.inventory.lines} lines` : `failed (${result.inventory.error})`}; `
+          : '') +
+        result.folio.note,
     });
   } catch {
-    // Evidence recording is best-effort — never fail the completion.
+    // best-effort logging
   }
 
   return result;
 }
 
+/** Call Cloudbeds POST /api/v1.2/postCustomItem. Never throws; returns attempt log. */
 async function postCustomItemToFolio(
   sb: SupabaseClient,
   booking: BookingDetail,
 ): Promise<{ posted: boolean; charge_id: string | null; note: string }> {
-  if (booking.price == null || Number(booking.price) <= 0) {
-    return { posted: false, charge_id: null, note: 'no price on booking — set price, then re-complete manually in Cloudbeds' };
-  }
   try {
-    const { data: key, error: kErr } = await sb.rpc('get_secret', { p_name: 'CLOUDBEDS_API_KEY' });
-    if (kErr || !key) {
-      return { posted: false, charge_id: null, note: `vault key unavailable (${kErr?.message ?? 'null'}) — post manually in Cloudbeds` };
+    // Retrieve the CLOUDBEDS_API_KEY from vault.secrets (service_role auth)
+    const { data: secretRows, error: secretError } = await sb
+      .from('secrets')
+      .select('value')
+      .eq('name', 'CLOUDBEDS_API_KEY')
+      .limit(1);
+    if (secretError || !secretRows?.length) {
+      return { posted: false, charge_id: null, note: `No API key: ${secretError?.message ?? 'missing'}` };
     }
+    const apiKey = secretRows[0].value;
 
-    // Cloudbeds v1.2 postCustomItem expects an 'items' parameter with JSON array of line items.
-    // Each item must have: itemName, itemPrice, itemQuantity, optional: itemCategoryName, itemNotes.
+    // Build the line-item array (Cloudbeds v1.2 postCustomItem requires items=[...])
     const items = [
       {
-        itemName: `Spa · ${booking.treatment_name}`.slice(0, 100),
-        itemPrice: Number(booking.price),
-        itemQuantity: 1,
-        itemCategoryName: 'Spa',
-        itemNotes: `Spa booking ${booking.booking_id.slice(0, 8)} · ${booking.therapist_name ?? 'therapist n/a'}`.slice(0, 200),
+        itemName: booking.treatment_name,
+        itemPrice: String(booking.price ?? 0),
+        itemQuantity: '1',
+        itemCategoryName: 'Spa & Wellness',
+        itemNotes: `Spa treatment ${booking.booking_id.slice(0, 8)}`,
       },
     ];
 
-    const form = new URLSearchParams();
-    form.append('propertyID', String(booking.property_id));
-    form.append('reservationID', booking.reservation_id!);
-    form.append('items', JSON.stringify(items));
-
-    const r = await fetch(`${CB_BASE}/postCustomItem`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form,
-      // Route handlers must never cache external writes.
-      cache: 'no-store',
+    const body = new URLSearchParams({
+      reservationID: booking.reservation_id!,
+      items: JSON.stringify(items),
     });
-    const j: unknown = await r.json().catch(() => null);
-    const jr = (j ?? {}) as { success?: boolean; data?: { transactionID?: string | number } & Record<string, unknown>; message?: string };
-    if (r.ok && jr.success !== false) {
-      const chargeId = jr.data?.transactionID != null ? String(jr.data.transactionID) : 'posted';
-      return { posted: true, charge_id: chargeId, note: `posted (HTTP ${r.status})` };
+
+    const response = await fetch(`${CB_BASE}/postCustomItem`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+
+    const raw = await response.text();
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = { raw };
     }
+
+    if (!response.ok) {
+      return {
+        posted: false,
+        charge_id: null,
+        note: `Cloudbeds HTTP ${response.status}: ${parsed.message ?? parsed.error ?? raw.slice(0, 120)}`,
+      };
+    }
+
+    // Cloudbeds success: { "success": true, "itemID": "12345" }
+    const chargeId = parsed.itemID ?? parsed.id ?? null;
+    return {
+      posted: !!parsed.success,
+      charge_id: chargeId,
+      note: chargeId ? `Posted, charge ${chargeId}` : 'Posted (no itemID in response)',
+    };
+  } catch (err) {
     return {
       posted: false,
       charge_id: null,
-      note: `Cloudbeds rejected (HTTP ${r.status}${jr.message ? `: ${String(jr.message).slice(0, 140)}` : ''}) — post manually, evidence in raw.folio_post`,
+      note: `Exception: ${err instanceof Error ? err.message : String(err)}`,
     };
-  } catch (e) {
-    return { posted: false, charge_id: null, note: `network/exception: ${e instanceof Error ? e.message : String(e)}` };
   }
 }
