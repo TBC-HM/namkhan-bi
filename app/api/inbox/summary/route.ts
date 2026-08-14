@@ -1,171 +1,228 @@
-Ly8gYXBwL2FwaS9pbmJveC9zdW1tYXJ5L3JvdXRlLnRzCi8vIFBCUyAyMDI2LTA1LTA5IChyZXBh
-aXIgbGlzdCAjNik6IGNvbnRyb2wtY2VudGVyIHN1bW1hcnkgZm9yIHRoZQovLyBIZWFkZXJQaWxs
-cyBpbmJveCBwb3BvdmVyLiBPbmUgc21hbGwgSlNPTiBwYXlsb2FkIHRoYXQgcG93ZXJzOgovLyAg
-IC0gdW5yZWFkIGJhZGdlIGJ1YmJsZQovLyAgIC0gdG9wIDMgc2VuZGVycyAobGFzdCAyNGgpCi8v
-ICAgLSB1bmFuc3dlcmVkICsgc3BhbSB0b3RhbHMKLy8gICAtIHBlci1zZW5kZXIgZHJpbGwtZG93
-biBjb3VudHMgKHNlbnQvZGF5LCByZWNpcGllbnRzLCBsYXN0IGFjdGl2aXR5KQovLwovLyBEYXRh
-IHNvdXJjZXMgKGFsbCBhbHJlYWR5IGluIFN1cGFiYXNlKToKLy8gICBzYWxlcy5lbWFpbF9tZXNz
-YWdlcyAgIChyYXcgaW5ib3VuZC9vdXRib3VuZCByb3dzKQovLyAgIHNhbGVzLnZfbWFpbGJveF9z
-dGF0cyAgKGFnZ3JlZ2F0ZWQgcGVyLW1haWxib3ggc3RhdHMgaW5jbC4gc3BhbS91bmFuc3dlcmVk
-KQovLyAgIHNhbGVzLnZfdW5hbnN3ZXJlZF90aHJlYWRzICAodGhyZWFkcyB3aXRoIG5vIG91dGJv
-dW5kIHJlcGx5KQovLwovLyBSZWFkLW9ubHkuIFVzZXMgdGhlIHByb3BlcnR5IHNjb3BlICgyNjA5
-NTUpIGNvbnNpc3RlbnQgd2l0aCB0aGUgcmVzdAovLyBvZiB0aGUgaW5ib3ggcGFnZS4gUmV0dXJu
-cyAyMDAgd2l0aCBlbXB0eSBhcnJheXMgb24gYW55IGZhaWx1cmUgc28gdGhlCi8vIHBvcG92ZXIg
-bmV2ZXIgYmxvY2tzIHRoZSBoZWFkZXIuCmltcG9ydCB7IE5leHRSZXF1ZXN0LCBOZXh0UmVzcG9u
-c2UgfSBmcm9tICduZXh0L3NlcnZlcic7CmltcG9ydCB7IHVuc3RhYmxlX25vU3RvcmUgYXMgbm9T
-dG9yZSB9IGZyb20gJ25leHQvY2FjaGUnOwppbXBvcnQgeyBnZXRTdXBhYmFzZUFkbWluIH0gZnJv
-bSAnQC9saWIvc3VwYWJhc2VBZG1pbic7CmltcG9ydCB7IFBST1BFUlRZX0lEIH0gZnJvbSAnQC9s
-aWIvc3VwYWJhc2UnOwoKZXhwb3J0IGNvbnN0IHJ1bnRpbWUgPSAnbm9kZWpzJzsKZXhwb3J0IGNv
-bnN0IGR5bmFtaWMgPSAnZm9yY2UtZHluYW1pYyc7CgppbnRlcmZhY2UgU2VuZGVyU3VtbWFyeSB7
-CiAgZW1haWw6IHN0cmluZzsKICBuYW1lOiBzdHJpbmcgfCBudWxsOwogIGluYm91bmRfMjRoOiBu
-dW1iZXI7CiAgaW5ib3VuZF83ZDogbnVtYmVyOwogIHRocmVhZHNfMjRoOiBudW1iZXI7CiAgbGFz
-dF9tc2c6IHN0cmluZyB8IG51bGw7CiAgaXNfYXV0b21hdGlvbjogYm9vbGVhbjsKfQoKaW50ZXJm
-YWNlIEluYm94U3VtbWFyeSB7CiAgcHJvcGVydHlfaWQ6IG51bWJlcjsKICAvLyAyMDI2LTA1LTEy
-OiBkaXN0aW5ndWlzaGVzICJubyBHbWFpbCBPQXV0aCBmb3IgdGhpcyBwcm9wZXJ0eSIgZnJvbQog
-IC8vICJjb25uZWN0ZWQgYnV0IDAgZW1haWxzIC8gcG9sbGVyIHN0YWxsZWQiLiBGcm9udGVuZCB1
-c2VzIHRoaXMgdG8KICAvLyBzaG93IGEgIm5vdCBjb25uZWN0ZWQgeWV0IiBub3RpY2UgaW5zdGVh
-ZCBvZiB6ZXJvIGNvdW50cy4KICBjb25uZWN0ZWQ6IGJvb2xlYW47CiAgdW5yZWFkOiBudW1iZXI7
-CiAgdW5hbnN3ZXJlZDogbnVtYmVyOwogIHNwYW06IG51bWJlcjsKICBpbmJvdW5kXzI0aDogbnVt
-YmVyOwogIG91dGJvdW5kXzI0aDogbnVtYmVyOwogIC8vIFBCUyAyMDI2LTA3LTE3IEZlYXR1cmUg
-ODogZGVmYXVsdCB3aW5kb3cgc2hpZnRlZCBmcm9tIDI0aCB0byA3ZCBmb3IgdGhlCiAgLy8gZGFp
-bHktc3VtbWFyeSBjYXJkLiBMZWdhY3kgMjRoIGZpZWxkcyBrZXB0IGZvciBiYWNrd2FyZHMtY29t
-cGF0IGNhbGxlcnMuCiAgaW5ib3VuZF83ZDogbnVtYmVyOwogIG91dGJvdW5kXzdkOiBudW1iZXI7
-CiAgdG9wX3NlbmRlcnNfN2Q6IFNlbmRlclN1bW1hcnlbXTsKICBmb2N1c19wcm9tcHRfaGludDog
-c3RyaW5nOwogIHRvcF9zZW5kZXJzXzI0aDogU2VuZGVyU3VtbWFyeVtdOwogIGdlbmVyYXRlZF9h
-dDogc3RyaW5nOwogIC8vIEludGFrZSAjMTUgKDIwMjYtMDUtMTIpOiBleHBvc2UgR21haWwgcG9s
-bGVyIGZyZXNobmVzcyBzbyB0aGUgcG9wb3ZlcgogIC8vIGNhbiBkaXN0aW5ndWlzaCAicmVhbGx5
-IDAgZW1haWxzIiBmcm9tICJwaXBlbGluZSBzdGFsbGVkIi4gbnVsbCB3aGVuCiAgLy8gbm8gcm93
-IGV4aXN0czsgb3RoZXJ3aXNlIElTTyB0aW1lc3RhbXAgb2YgdGhlIGxhc3QgcG9sbCBhdHRlbXB0
-LgogIHBvbGxlcl9sYXN0X3J1bl9hdDogc3RyaW5nIHwgbnVsbDsKICBwb2xsZXJfbWludXRlc19z
-aW5jZTogbnVtYmVyIHwgbnVsbDsKICAvLyBMYXN0IGFjdHVhbGx5LXJlY2VpdmVkIGVtYWlsIHJl
-Z2FyZGxlc3Mgb2YgbGFzdC0yNGggd2luZG93LgogIC8vIExldHMgdGhlIHBvcG92ZXIgc2F5ICJM
-YXN0IGVtYWlsIDhkIGFnbyIgc28gMC8wIGRvZXNuJ3QgbG9vayBsaWtlIGEgYnVnLgogIGxhc3Rf
-ZW1haWxfYXQ6IHN0cmluZyB8IG51bGw7CiAgbGFzdF9lbWFpbF9taW51dGVzX3NpbmNlOiBudW1i
-ZXIgfCBudWxsOwp9CgovLyBQQlMgMjAyNi0wNy0xNyBGZWF0dXJlIDggwrcgcHJlY2lzZSBwcm9t
-cHQgdHVuZWQgZm9yIHRoZSBkYWlseS1zdW1tYXJ5IGNhcmQuCi8vIENsaWVudCBoYW5kcyB0aGlz
-IHRvIC9hcGkvbWFpbC9haS9zdW1tYXJpemUgKG9yIGFueSBkb3duc3RyZWFtIEFudGhyb3BpYwov
-LyBjYWxsKSBzbyB0aGUgbW9kZWwgcHJvZHVjZXMgdGhlICJyZXBseS1yZXF1aXJlZCAvIG5ld3Mg
-LyBub2lzZSIgc3BsaXQuCmNvbnN0IEZPQ1VTX1BST01QVF9ISU5UID0gJ1N1bW1hcml6ZSB0aGUg
-bGFzdCA3IGRheXMgb2YgbWFpbC4gR3JvdXAgYnk6ICgxKSByZXF1aXJlcyBteSByZXBseSDigJQg
-YnVsbGV0IGVhY2ggd2l0aCBjb250YWN0ICsgb25lLWxpbmUgY29udGV4dCwgKDIpIG1lYW5pbmdm
-dWwgbmV3cyDigJQgYnVsbGV0IGVhY2gsICgzKSBub2lzZSDigJQgc2luZ2xlIGNvdW50IGxpbmUg
-b25seS4gQmUgY3Jpc3Ag4oCUIG5vIGZpbGxlci4gTWF4IDEyIGJ1bGxldHMgdG90YWwuJzsKCmZ1
-bmN0aW9uIG1ha2VFbXB0eShwcm9wZXJ0eUlkOiBudW1iZXIsIGNvbm5lY3RlZDogYm9vbGVhbik6
-IEluYm94U3VtbWFyeSB7CiAgcmV0dXJuIHsKICAgIHByb3BlcnR5X2lkOiBwcm9wZXJ0eUlkLAog
-ICAgY29ubmVjdGVkLAogICAgdW5yZWFkOiAwLCB1bmFuc3dlcmVkOiAwLCBzcGFtOiAwLAogICAg
-aW5ib3VuZF8yNGg6IDAsIG91dGJvdW5kXzI0aDogMCwgdG9wX3NlbmRlcnNfMjRoOiBbXSwKICAg
-IGluYm91bmRfN2Q6IDAsIG91dGJvdW5kXzdkOiAwLCB0b3Bfc2VuZGVyc183ZDogW10sCiAgICBm
-b2N1c19wcm9tcHRfaGludDogRk9DVVNfUFJPTVBUX0hJTlQsCiAgICBnZW5lcmF0ZWRfYXQ6IG5l
-dyBEYXRlKCkudG9JU09TdHJpbmcoKSwKICAgIHBvbGxlcl9sYXN0X3J1bl9hdDogbnVsbCwKICAg
-IHBvbGxlcl9taW51dGVzX3NpbmNlOiBudWxsLAogICAgbGFzdF9lbWFpbF9hdDogbnVsbCwKICAg
-IGxhc3RfZW1haWxfbWludXRlc19zaW5jZTogbnVsbCwKICB9Owp9CgpleHBvcnQgYXN5bmMgZnVu
-Y3Rpb24gR0VUKHJlcTogTmV4dFJlcXVlc3QpIHsKICBub1N0b3JlKCk7CiAgY29uc3QgcHJvcGVy
-dHlJZCA9IE51bWJlcihyZXEubmV4dFVybC5zZWFyY2hQYXJhbXMuZ2V0KCdwcm9wZXJ0eV9pZCcp
-KSB8fCBQUk9QRVJUWV9JRDsKICB0cnkgewogICAgY29uc3Qgc2IgPSBnZXRTdXBhYmFzZUFkbWlu
-KCk7CgogICAgLy8gQ29ubmVjdGVkID0gYXQgbGVhc3Qgb25lIG1hcmtldGluZy51c2VyX2dtYWls
-X2Nvbm5lY3Rpb25zIHJvdyBmb3IgdGhpcyBwcm9wZXJ0eS4KICAgIC8vIERvbm5hICgxMDAwMDAx
-KSBjdXJyZW50bHkgaGFzIG5vIHJvd3Mg4oaSIGNvbm5lY3RlZD1mYWxzZSDihpIgZnJvbnRlbmQK
-ICAgIC8vIHNob3dzICJub3QgY29ubmVjdGVkIHlldCIgaW5zdGVhZCBvZiB6ZXJvIGNvdW50cy4K
-ICAgIC8vIChQSyBjb2x1bW4gaXMgYGVtYWlsYCwgbm90IGBpZGAg4oCUIGdvdGNoYSBjYXVnaHQg
-MjAyNi0wNS0xMi4pCiAgICBjb25zdCB7IGNvdW50OiBjb25uQ291bnQgfSA9IGF3YWl0IHNiLnNj
-aGVtYSgnbWFya2V0aW5nJykuZnJvbSgndXNlcl9nbWFpbF9jb25uZWN0aW9ucycpCiAgICAgIC5z
-ZWxlY3QoJ2VtYWlsJywgeyBjb3VudDogJ2V4YWN0JywgaGVhZDogdHJ1ZSB9KQogICAgICAuZXEo
-J3Byb3BlcnR5X2lkJywgcHJvcGVydHlJZCk7CiAgICBjb25zdCBjb25uZWN0ZWQgPSAoY29ubkNv
-dW50ID8/IDApID4gMDsKICAgIGlmICghY29ubmVjdGVkKSB7CiAgICAgIHJldHVybiBOZXh0UmVz
-cG9uc2UuanNvbihtYWtlRW1wdHkocHJvcGVydHlJZCwgZmFsc2UpKTsKICAgIH0KCiAgICAvLyBQ
-QlMgMjAyNi0wNy0xNyBGZWF0dXJlIDggwrcgc2hpZnQgZm9jdXMgdG8gbGFzdCA3IGRheXMgKHdh
-cyAyNGgpLgogICAgLy8gV2Uga2VlcCB0aGUgMjRoIGNvdW50ZXJzIGZvciB0aGUgaGVhZGVyIHBp
-bGwgYW5kIGFkZCA3ZCBjb3VudGVycyBmb3IgdGhlCiAgICAvLyBuZXcgZGFpbHktc3VtbWFyeSBj
-YXJkOyBib3RoIGZlZWRzIGFyZSBhbHdheXMgcHJlc2VudCBpbiB0aGUgcGF5bG9hZC4KICAgIGNv
-bnN0IHNpbmNlMjRoID0gbmV3IERhdGUoRGF0ZS5ub3coKSAtIDg2XzQwMF8wMDApLnRvSVNPU3Ry
-aW5nKCk7CiAgICBjb25zdCBzaW5jZTdkICA9IG5ldyBEYXRlKERhdGUubm93KCkgLSA3ICogODZf
-NDAwXzAwMCkudG9JU09TdHJpbmcoKTsKCiAgICAvLyBSdW4gdGhlIGZvdXIgcmVhZHMgaW4gcGFy
-YWxsZWwuCiAgICBjb25zdCBbdW5yZWFkUmVzLCBzdGF0c1JlcywgbXNnUmVzLCBtc2c3UmVzLCBw
-b2xsZXJSZXMsIGxhc3RFbWFpbFJlc10gPSBhd2FpdCBQcm9taXNlLmFsbChbCiAgICAgIC8vIFVu
-cmVhZCA9IGlucXVpcmllcy5zdGF0dXM9J25ldycgZm9yIHRoaXMgcHJvcGVydHkuCiAgICAgIHNi
-LnNjaGVtYSgnc2FsZXMnKS5mcm9tKCdpbnF1aXJpZXMnKQogICAgICAgIC5zZWxlY3QoJ2lkJywg
-eyBjb3VudDogJ2V4YWN0JywgaGVhZDogdHJ1ZSB9KQogICAgICAgIC5lcSgncHJvcGVydHlfaWQn
-LCBwcm9wZXJ0eUlkKS5lcSgnc3RhdHVzJywgJ25ldycpLAogICAgICAvLyBNYWlsYm94IGFnZ3Jl
-Z2F0ZSAoc3BhbSArIHVuYW5zd2VyZWQgcm9sbC11cHMpLgogICAgICBzYi5zY2hlbWEoJ3NhbGVz
-JykuZnJvbSgndl9tYWlsYm94X3N0YXRzJykKICAgICAgICAuc2VsZWN0KCdzcGFtLHVuYW5zd2Vy
-ZWQnKS5lcSgncHJvcGVydHlfaWQnLCBwcm9wZXJ0eUlkKSwKICAgICAgLy8gTGFzdC0yNGggbWVz
-c2FnZXMgKGluYm91bmQgKyBvdXRib3VuZCkgZm9yIHRvcC1zZW5kZXIgcmFua2luZy4KICAgICAg
-c2Iuc2NoZW1hKCdzYWxlcycpLmZyb20oJ2VtYWlsX21lc3NhZ2VzJykKICAgICAgICAuc2VsZWN0
-KCdmcm9tX2VtYWlsLGZyb21fbmFtZSx0aHJlYWRfaWQscmVjZWl2ZWRfYXQsZGlyZWN0aW9uJykK
-ICAgICAgICAuZXEoJ3Byb3BlcnR5X2lkJywgcHJvcGVydHlJZCkuZ3RlKCdyZWNlaXZlZF9hdCcs
-IHNpbmNlMjRoKQogICAgICAgIC5saW1pdCgyMDAwKSwKICAgICAgLy8gTGFzdC03ZCBpbmJvdW5k
-IGNvdW50cyBwZXIgc2VuZGVyIChkcmlsbC1kb3duICJzZW5kcyBwZXIgZGF5IiArCiAgICAgIC8v
-IEZlYXR1cmUgOCDCtyBkYWlseS1zdW1tYXJ5IHRvcC1zZW5kZXIgcmFua2luZykuCiAgICAgIHNi
-LnNjaGVtYSgnc2FsZXMnKS5mcm9tKCdlbWFpbF9tZXNzYWdlcycpCiAgICAgICAgLnNlbGVjdCgn
-ZnJvbV9lbWFpbCxmcm9tX25hbWUsdGhyZWFkX2lkLHJlY2VpdmVkX2F0LGRpcmVjdGlvbicpCiAg
-ICAgICAgLmVxKCdwcm9wZXJ0eV9pZCcsIHByb3BlcnR5SWQpCiAgICAgICAgLmd0ZSgncmVjZWl2
-ZWRfYXQnLCBzaW5jZTdkKQogICAgICAgIC5saW1pdCg4MDAwKSwKICAgICAgLy8gTGF0ZXN0IEdt
-YWlsIHBvbGxlciBydW4g4oCUIHVzZWQgdG8gZGV0ZWN0IGEgc3RhbGxlZCBwaXBlbGluZSAoaW50
-YWtlICMxNSkuCiAgICAgIHNiLnNjaGVtYSgnc2FsZXMnKS5mcm9tKCdnbWFpbF9wb2xsX3J1bnMn
-KQogICAgICAgIC5zZWxlY3QoJ3N0YXJ0ZWRfYXQnKQogICAgICAgIC5vcmRlcignc3RhcnRlZF9h
-dCcsIHsgYXNjZW5kaW5nOiBmYWxzZSB9KQogICAgICAgIC5saW1pdCgxKSwKICAgICAgLy8gTGFz
-dCBlbWFpbCByZWNlaXZlZCByZWdhcmRsZXNzIG9mIHdpbmRvdy4KICAgICAgc2Iuc2NoZW1hKCdz
-YWxlcycpLmZyb20oJ2VtYWlsX21lc3NhZ2VzJykKICAgICAgICAuc2VsZWN0KCdyZWNlaXZlZF9h
-dCcpCiAgICAgICAgLmVxKCdwcm9wZXJ0eV9pZCcsIHByb3BlcnR5SWQpCiAgICAgICAgLmVxKCdk
-aXJlY3Rpb24nLCAnaW5ib3VuZCcpCiAgICAgICAgLm9yZGVyKCdyZWNlaXZlZF9hdCcsIHsgYXNj
-ZW5kaW5nOiBmYWxzZSB9KQogICAgICAgIC5saW1pdCgxKSwKICAgIF0pOwoKICAgIGNvbnN0IHVu
-cmVhZCA9IHVucmVhZFJlcy5jb3VudCA/PyAwOwogICAgY29uc3Qgc3RhdHMgPSBzdGF0c1Jlcy5k
-YXRhPy5bMF07CiAgICBjb25zdCB1bmFuc3dlcmVkID0gc3RhdHM/LnVuYW5zd2VyZWQgPz8gMDsK
-ICAgIGNvbnN0IHNwYW0gPSBzdGF0cz8uc3BhbSA/PyAwOwoKICAgIGNvbnN0IG1zZ3MyNCA9IG1z
-Z1Jlcy5kYXRhID8/IFtdOwogICAgY29uc3QgbXNnczcgPSBtc2c3UmVzLmRhdGEgPz8gW107Cgog
-ICAgLy8gQ29tcHV0ZSBpbmJvdW5kL291dGJvdW5kIGNvdW50cy4KICAgIGNvbnN0IGluYjI0ID0g
-bXNnczI0LmZpbHRlcihtID0+IG0uZGlyZWN0aW9uID09PSAnaW5ib3VuZCcpLmxlbmd0aDsKICAg
-IGNvbnN0IG91dDI0ID0gbXNnczI0LmZpbHRlcihtID0+IG0uZGlyZWN0aW9uID09PSAnb3V0Ym91
-bmQnKS5sZW5ndGg7CiAgICBjb25zdCBpbmI3ID0gbXNnczcuZmlsdGVyKG0gPT4gbS5kaXJlY3Rp
-b24gPT09ICdpbmJvdW5kJykubGVuZ3RoOwogICAgY29uc3Qgb3V0NyA9IG1zZ3M3LmZpbHRlciht
-ID0+IG0uZGlyZWN0aW9uID09PSAnb3V0Ym91bmQnKS5sZW5ndGg7CgogICAgLy8gVG9wIHNlbmRl
-cnMgKDI0aCArIDdkKTogZ3JvdXAgaW5ib3VuZCBtZXNzYWdlcyBieSBmcm9tX2VtYWlsLCBzb3J0
-IGJ5CiAgICAvLyBjb3VudCBkZXNjLCB0YWtlIHRvcCAzIGZvciBlYWNoLgogICAgZnVuY3Rpb24g
-YnVpbGRTZW5kZXJzKG1zZ3M6IHR5cGVvZiBtc2dzMjQpOiBTZW5kZXJTdW1tYXJ5W10gewogICAg
-ICBjb25zdCBtYXAgPSBuZXcgTWFwPHN0cmluZywgewogICAgICAgIG5hbWU6IHN0cmluZ3xudWxs
-LCB0aHJlYWRzOiBTZXQ8c3RyaW5nPiwgbGFzdE1zZzogc3RyaW5nfG51bGwsIGNvdW50OiBudW1i
-ZXIKICAgICAgfT4oKTsKICAgICAgZm9yIChjb25zdCBtIG9mIG1zZ3MpIHsKICAgICAgICBpZiAo
-bS5kaXJlY3Rpb24gIT09ICdpbmJvdW5kJykgY29udGludWU7CiAgICAgICAgY29uc3QgayA9IG0u
-ZnJvbV9lbWFpbC50b0xvd2VyQ2FzZSgpOwogICAgICAgIGNvbnN0IGUgPSBtYXAuZ2V0KGspID8/
-IHsgbmFtZTogbS5mcm9tX25hbWUsIHRocmVhZHM6IG5ldyBTZXQoKSwgbGFzdE1zZzogbnVsbCwg
-Y291bnQ6IDAgfTsKICAgICAgICBlLmNvdW50Kys7CiAgICAgICAgaWYgKG0udGhyZWFkX2lkKSBl
-LnRocmVhZHMuYWRkKG0udGhyZWFkX2lkKTsKICAgICAgICBpZiAoIWUubGFzdE1zZyB8fCBtLnJl
-Y2VpdmVkX2F0ID4gZS5sYXN0TXNnKSBlLmxhc3RNc2cgPSBtLnJlY2VpdmVkX2F0OwogICAgICAg
-IG1hcC5zZXQoaywgZSk7CiAgICAgIH0KICAgICAgY29uc3QgYXJyID0gQXJyYXkuZnJvbShtYXAu
-ZW50cmllcygpKS5tYXAoKFtlbWFpbCwgZV0pID0+ICh7CiAgICAgICAgZW1haWwsCiAgICAgICAg
-bmFtZTogZS5uYW1lLAogICAgICAgIGluYm91bmRfMjRoOiAwLCAgLy8gZmlsbGVkIG5leHQKICAg
-ICAgICBpbmJvdW5kXzdkOiAwLAogICAgICAgIHRocmVhZHNfMjRoOiBlLnRocmVhZHMuc2l6ZSwK
-ICAgICAgICBsYXN0X21zZzogZS5sYXN0TXNnLAogICAgICAgIGlzX2F1dG9tYXRpb246IC9AKG5v
-cmVwbHl8bm90aWZpY2F0aW9ufGRvbm90cmVwbHl8bm8tcmVwbHkpL2kudGVzdChlbWFpbCksCiAg
-ICAgIH0pKTsKICAgICAgYXJyLnNvcnQoKGEsIGIpID0+IChtYXAuZ2V0KGIuZW1haWwpPy5jb3Vu
-dCA/PyAwKSAtIChtYXAuZ2V0KGEuZW1haWwpPy5jb3VudCA/PyAwKSk7CiAgICAgIC8vIEZpbGwg
-aW4gdGhlIGluYm91bmQgY291bnRzIHBlciBzZW5kZXIgKG1zZ3MgbWF5IGJlIDI0aCBvciA3ZCku
-CiAgICAgIGZvciAoY29uc3QgcyBvZiBhcnIpIHsKICAgICAgICBzLmluYm91bmRfMjRoID0gbXNn
-czI0LmZpbHRlcihtID0+IG0uZGlyZWN0aW9uID09PSAnaW5ib3VuZCcgJiYgbS5mcm9tX2VtYWls
-LnRvTG93ZXJDYXNlKCkgPT09IHMuZW1haWwpLmxlbmd0aDsKICAgICAgICBzLmluYm91bmRfN2Qg
-PSBtc2dzNy5maWx0ZXIobSA9PiBtLmRpcmVjdGlvbiA9PT0gJ2luYm91bmQnICYmIG0uZnJvbV9l
-bWFpbC50b0xvd2VyQ2FzZSgpID09PSBzLmVtYWlsKS5sZW5ndGg7CiAgICAgIH0KICAgICAgcmV0
-dXJuIGFyci5zbGljZSgwLCAzKTsKICAgIH0KICAgIGNvbnN0IHRvcDI0ID0gYnVpbGRTZW5kZXJz
-KG1zZ3MyNCk7CiAgICBjb25zdCB0b3A3ID0gYnVpbGRTZW5kZXJzKG1zZ3M3KTsKCiAgICAvLyBQ
-b2xsZXIgZnJlc2huZXNzIChpbnRha2UgIzE1KS4KICAgIGNvbnN0IHBvbGxlclJvdyA9IHBvbGxl
-clJlcy5kYXRhPy5bMF07CiAgICBjb25zdCBwb2xsZXJMYXN0ID0gcG9sbGVyUm93Py5zdGFydGVk
-X2F0ID8/IG51bGw7CiAgICBjb25zdCBwb2xsZXJNaW5zID0gcG9sbGVyTGFzdCA/IE1hdGguZmxv
-b3IoKERhdGUubm93KCkgLSBuZXcgRGF0ZShwb2xsZXJMYXN0KS5nZXRUaW1lKCkpIC8gNjBfMDAw
-KSA6IG51bGw7CgogICAgLy8gTGFzdC1lbWFpbC1hdCBmcmVzaG5lc3MgKGludGFrZSAjMTUpLgog
-ICAgY29uc3QgbGFzdEVtYWlsUm93ID0gbGFzdEVtYWlsUmVzLmRhdGE/LlswXTsKICAgIGNvbnN0
-IGxhc3RFbWFpbEF0ID0gbGFzdEVtYWlsUm93Py5yZWNlaXZlZF9hdCA/PyBudWxsOwogICAgY29u
-c3QgbGFzdEVtYWlsTWlucyA9IGxhc3RFbWFpbEF0ID8gTWF0aC5mbG9vcigoRGF0ZS5ub3coKSAt
-IG5ldyBEYXRlKGxhc3RFbWFpbEF0KS5nZXRUaW1lKCkpIC8gNjBfMDAwKSA6IG51bGw7CgogICAg
-cmV0dXJuIE5leHRSZXNwb25zZS5qc29uKHsKICAgICAgcHJvcGVydHlfaWQ6IHByb3BlcnR5SWQs
-CiAgICAgIGNvbm5lY3RlZCwKICAgICAgdW5yZWFkLAogICAgICB1bmFuc3dlcmVkLAogICAgICBz
-cGFtLAogICAgICBpbmJvdW5kXzI0aDogaW5iMjQsCiAgICAgIG91dGJvdW5kXzI0aDogb3V0MjQs
-CiAgICAgIGluYm91bmRfN2Q6IGluYjcsCiAgICAgIG91dGJvdW5kXzdkOiBvdXQ3LAogICAgICB0
-b3Bfc2VuZGVyc18yNGg6IHRvcDI0LAogICAgICB0b3Bfc2VuZGVyc183ZDogdG9wNywKICAgICAg
-Zm9jdXNfcHJvbXB0X2hpbnQ6IEZPQ1VTX1BST01QVF9ISU5ULAogICAgICBnZW5lcmF0ZWRfYXQ6
-IG5ldyBEYXRlKCkudG9JU09TdHJpbmcoKSwKICAgICAgcG9sbGVyX2xhc3RfcnVuX2F0OiBwb2xs
-ZXJMYXN0LAogICAgICBwb2xsZXJfbWludXRlc19zaW5jZTogcG9sbGVyTWlucywKICAgICAgbGFz
-dF9lbWFpbF9hdDogbGFzdEVtYWlsQXQsCiAgICAgIGxhc3RfZW1haWxfbWludXRlc19zaW5jZTog
-bGFzdEVtYWlsTWlucywKICAgIH0gYXMgSW5ib3hTdW1tYXJ5KTsKICB9IGNhdGNoIChlcnI6IGFu
-eSkgewogICAgY29uc29sZS5lcnJvcignR0VUIC9hcGkvaW5ib3gvc3VtbWFyeSBlcnJvcjonLCBl
-cnIpOwogICAgcmV0dXJuIE5leHRSZXNwb25zZS5qc29uKG1ha2VFbXB0eShwcm9wZXJ0eUlkLCBm
-YWxzZSkpOwogIH0KfQo=
+// app/api/inbox/summary/route.ts
+// PBS 2026-05-09 (repair list #6): control-center summary for the
+// HeaderPills inbox popover. One small JSON payload that powers:
+//   - unread badge bubble
+//   - top 3 senders (last 24h)
+//   - unanswered + spam totals
+//   - per-sender drill-down counts (sent/day, recipients, last activity)
+//
+// Data sources (all already in Supabase):
+//   sales.email_messages   (raw inbound/outbound rows)
+//   sales.v_mailbox_stats  (aggregated per-mailbox stats incl. spam/unanswered)
+//   sales.v_unanswered_threads  (threads with no outbound reply)
+//
+// Read-only. Uses the property scope (260955) consistent with the rest
+// of the inbox page. Returns 200 with empty arrays on any failure so the
+// popover never blocks the header.
+import { NextRequest, NextResponse } from 'next/server';
+import { unstable_noStore as noStore } from 'next/cache';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { PROPERTY_ID } from '@/lib/supabase';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+interface SenderSummary {
+  email: string;
+  name: string | null;
+  inbound_24h: number;
+  inbound_7d: number;
+  threads_24h: number;
+  last_msg: string | null;
+  is_automation: boolean;
+}
+
+interface InboxSummary {
+  property_id: number;
+  // 2026-05-12: distinguishes "no Gmail OAuth for this property" from
+  // "connected but 0 emails / poller stalled". Frontend uses this to
+  // show a "not connected yet" notice instead of zero counts.
+  connected: boolean;
+  unread: number;
+  unanswered: number;
+  spam: number;
+  inbound_24h: number;
+  outbound_24h: number;
+  // PBS 2026-07-17 Feature 8: default window shifted from 24h to 7d for the
+  // daily-summary card. Legacy 24h fields kept for backwards-compat callers.
+  inbound_7d: number;
+  outbound_7d: number;
+  top_senders_7d: SenderSummary[];
+  focus_prompt_hint: string;
+  top_senders_24h: SenderSummary[];
+  generated_at: string;
+  // Intake #15 (2026-05-12): expose Gmail poller freshness so the popover
+  // can distinguish "really 0 emails" from "pipeline stalled". null when
+  // no row exists; otherwise ISO timestamp of the last poll attempt.
+  poller_last_run_at: string | null;
+  poller_minutes_since: number | null;
+  // Last actually-received email regardless of last-24h window.
+  // Lets the popover say "Last email 8d ago" so 0/0 doesn't look like a bug.
+  last_email_at: string | null;
+  last_email_minutes_since: number | null;
+}
+
+// PBS 2026-07-17 Feature 8 · precise prompt tuned for the daily-summary card.
+// Client hands this to /api/mail/ai/summarize (or any downstream Anthropic
+// call) so the model produces the "reply-required / news / noise" split.
+const FOCUS_PROMPT_HINT = 'Summarize the last 7 days of mail. Group by: (1) requires my reply — bullet each with contact + one-line context, (2) meaningful news — bullet each, (3) noise — single count line only. Be crisp — no filler. Max 12 bullets total.';
+
+function makeEmpty(propertyId: number, connected: boolean): InboxSummary {
+  return {
+    property_id: propertyId,
+    connected,
+    unread: 0, unanswered: 0, spam: 0,
+    inbound_24h: 0, outbound_24h: 0, top_senders_24h: [],
+    inbound_7d: 0, outbound_7d: 0, top_senders_7d: [],
+    focus_prompt_hint: FOCUS_PROMPT_HINT,
+    generated_at: new Date().toISOString(),
+    poller_last_run_at: null,
+    poller_minutes_since: null,
+    last_email_at: null,
+    last_email_minutes_since: null,
+  };
+}
+
+export async function GET(req: NextRequest) {
+  noStore();
+  const propertyId = Number(req.nextUrl.searchParams.get('property_id')) || PROPERTY_ID;
+  try {
+    const sb = getSupabaseAdmin();
+
+    // Connected = at least one marketing.user_gmail_connections row for this property.
+    // Donna (1000001) currently has no rows → connected=false → frontend
+    // shows "not connected yet" instead of zero counts.
+    // (PK column is `email`, not `id` — gotcha caught 2026-05-12.)
+    const { count: connCount } = await sb.schema('marketing').from('user_gmail_connections')
+      .select('email', { count: 'exact', head: true })
+      .eq('property_id', propertyId);
+    const connected = (connCount ?? 0) > 0;
+    if (!connected) {
+      return NextResponse.json(makeEmpty(propertyId, false));
+    }
+
+    // PBS 2026-07-17 Feature 8 · shift focus to last 7 days (was 24h).
+    // We keep the 24h counters for the header pill and add 7d counters for the
+    // new daily-summary card; both feeds are always present in the payload.
+    const since24h = new Date(Date.now() - 86_400_000).toISOString();
+    const since7d  = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
+    // Run the four reads in parallel.
+    const [unreadRes, statsRes, msgRes, msg7Res, pollerRes, lastEmailRes] = await Promise.all([
+      // Unread = inquiries.status='new' for this property.
+      sb.schema('sales').from('inquiries')
+        .select('id', { count: 'exact', head: true })
+        .eq('property_id', propertyId).eq('status', 'new'),
+      // Mailbox aggregate (spam + unanswered roll-ups).
+      sb.schema('sales').from('v_mailbox_stats')
+        .select('spam,unanswered').eq('property_id', propertyId),
+      // Last-24h messages (inbound + outbound) for top-sender ranking.
+      sb.schema('sales').from('email_messages')
+        .select('from_email,from_name,thread_id,received_at,direction')
+        .eq('property_id', propertyId).gte('received_at', since24h)
+        .limit(2000),
+      // Last-7d inbound counts per sender (drill-down "sends per day" +
+      // Feature 8 · daily-summary top-sender ranking).
+      sb.schema('sales').from('email_messages')
+        .select('from_email,from_name,thread_id,received_at,direction')
+        .eq('property_id', propertyId)
+        .gte('received_at', since7d)
+        .limit(8000),
+      // Latest Gmail poller run — used to detect a stalled pipeline (intake #15).
+      sb.schema('sales').from('gmail_poll_runs')
+        .select('started_at')
+        .order('started_at', { ascending: false })
+        .limit(1),
+      // Very-last email in the system (regardless of time window).
+      // Supports "Last email 8 days ago" messaging when last 24h is empty.
+      sb.schema('sales').from('email_messages')
+        .select('received_at')
+        .eq('property_id', propertyId)
+        .order('received_at', { ascending: false })
+        .limit(1),
+    ]);
+
+    const unread = unreadRes.count ?? 0;
+    const stats = statsRes.data?.[0] ?? { spam: 0, unanswered: 0 };
+    const spam = stats.spam ?? 0;
+    const unanswered = stats.unanswered ?? 0;
+
+    const msgs = (msgRes.data ?? []).filter(m => m.direction === 'inbound');
+    const sent24h = (msgRes.data ?? []).filter(m => m.direction === 'outbound');
+    const inbound24 = msgs.length;
+    const outbound24 = sent24h.length;
+
+    // 7d inbound only for the sender ranking + Feature 8 card.
+    const msgs7 = (msg7Res.data ?? []).filter(m => m.direction === 'inbound');
+    const inbound7 = msgs7.length;
+    const sent7d = (msg7Res.data ?? []).filter(m => m.direction === 'outbound');
+    const outbound7 = sent7d.length;
+
+    // Poller freshness (intake #15).
+    const pollerRun = pollerRes.data?.[0];
+    const pollerStarted = pollerRun?.started_at ?? null;
+    const pollerMins = pollerStarted
+      ? Math.floor((Date.now() - new Date(pollerStarted).getTime()) / 60_000)
+      : null;
+
+    // Last email (any time window).
+    const lastEmailRec = lastEmailRes.data?.[0];
+    const lastEmailAt = lastEmailRec?.received_at ?? null;
+    const lastEmailMins = lastEmailAt
+      ? Math.floor((Date.now() - new Date(lastEmailAt).getTime()) / 60_000)
+      : null;
+
+    // 24h senders ranking (legacy pill).
+    const senderMap24 = new Map<string, { name: string | null; inbound: number; threads: Set<string>; lastMsg: string }>();
+    for (const msg of msgs) {
+      const k = msg.from_email ?? '';
+      if (!k) continue;
+      if (!senderMap24.has(k)) {
+        senderMap24.set(k, { name: msg.from_name, inbound: 0, threads: new Set(), lastMsg: msg.received_at });
+      }
+      const s = senderMap24.get(k)!;
+      s.inbound++;
+      if (msg.thread_id) s.threads.add(msg.thread_id);
+      if (msg.received_at > s.lastMsg) s.lastMsg = msg.received_at;
+    }
+
+    // 7d senders ranking (daily-summary card).
+    const senderMap7 = new Map<string, { name: string | null; inbound: number; threads: Set<string>; lastMsg: string }>();
+    for (const msg of msgs7) {
+      const k = msg.from_email ?? '';
+      if (!k) continue;
+      if (!senderMap7.has(k)) {
+        senderMap7.set(k, { name: msg.from_name, inbound: 0, threads: new Set(), lastMsg: msg.received_at });
+      }
+      const s = senderMap7.get(k)!;
+      s.inbound++;
+      if (msg.thread_id) s.threads.add(msg.thread_id);
+      if (msg.received_at > s.lastMsg) s.lastMsg = msg.received_at;
+    }
+
+    const topSenders24: SenderSummary[] = Array.from(senderMap24.entries())
+      .map(([email, s]) => ({ email, name: s.name, inbound_24h: s.inbound, inbound_7d: 0, threads_24h: s.threads.size, last_msg: s.lastMsg, is_automation: false }))
+      .sort((a, b) => b.inbound_24h - a.inbound_24h).slice(0, 3);
+
+    const topSenders7: SenderSummary[] = Array.from(senderMap7.entries())
+      .map(([email, s]) => ({ email, name: s.name, inbound_24h: 0, inbound_7d: s.inbound, threads_24h: s.threads.size, last_msg: s.lastMsg, is_automation: false }))
+      .sort((a, b) => b.inbound_7d - a.inbound_7d).slice(0, 10);
+
+    return NextResponse.json({
+      property_id: propertyId,
+      connected: true,
+      unread, unanswered, spam,
+      inbound_24h: inbound24, outbound_24h: outbound24, top_senders_24h: topSenders24,
+      inbound_7d: inbound7, outbound_7d: outbound7, top_senders_7d: topSenders7,
+      focus_prompt_hint: FOCUS_PROMPT_HINT,
+      generated_at: new Date().toISOString(),
+      poller_last_run_at: pollerStarted,
+      poller_minutes_since: pollerMins,
+      last_email_at: lastEmailAt,
+      last_email_minutes_since: lastEmailMins,
+    });
+  } catch (err) {
+    console.error('inbox/summary error', err);
+    return NextResponse.json(makeEmpty(propertyId, false));
+  }
+}
