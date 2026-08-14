@@ -10,6 +10,8 @@ import {
   refreshAccessToken,
   getUserEmail,
   GMAIL_SCOPES,
+  getHeader,
+  extractBodies,
 } from '../gmail';
 
 // Mock environment
@@ -194,10 +196,10 @@ describe('lib/gmail.ts', () => {
     it('throws if no email in response', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ sub: '123456' }), // no email
+        json: async () => ({}),
       });
 
-      await expect(getUserEmail('test_access_token')).rejects.toThrow('No email in userinfo response');
+      await expect(getUserEmail('test_token')).rejects.toThrow('No email in userinfo');
     });
 
     it('throws on userinfo API failure', async () => {
@@ -219,6 +221,87 @@ describe('lib/gmail.ts', () => {
 
     it('is space-separated', () => {
       expect(GMAIL_SCOPES.split(' ').length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe('getHeader', () => {
+    it('extracts header from payload', () => {
+      const payload = {
+        headers: [
+          { name: 'Subject', value: 'Test Email' },
+          { name: 'From', value: 'sender@example.com' },
+        ],
+      };
+      
+      expect(getHeader(payload, 'Subject')).toBe('Test Email');
+      expect(getHeader(payload, 'From')).toBe('sender@example.com');
+    });
+
+    it('is case-insensitive', () => {
+      const payload = {
+        headers: [{ name: 'Content-Type', value: 'text/html' }],
+      };
+      
+      expect(getHeader(payload, 'content-type')).toBe('text/html');
+      expect(getHeader(payload, 'CONTENT-TYPE')).toBe('text/html');
+    });
+
+    it('returns null if header not found', () => {
+      const payload = { headers: [] };
+      expect(getHeader(payload, 'X-Missing')).toBeNull();
+    });
+
+    it('returns null if payload undefined', () => {
+      expect(getHeader(undefined, 'Subject')).toBeNull();
+    });
+  });
+
+  describe('extractBodies', () => {
+    it('extracts plain text body', () => {
+      const payload = {
+        body: { data: Buffer.from('Plain text body').toString('base64url') },
+        mimeType: 'text/plain',
+      };
+      
+      const { text, html } = extractBodies(payload);
+      expect(text).toContain('Plain text body');
+      expect(html).toBe('');
+    });
+
+    it('extracts HTML body', () => {
+      const payload = {
+        body: { data: Buffer.from('<p>HTML body</p>').toString('base64url') },
+        mimeType: 'text/html',
+      };
+      
+      const { text, html } = extractBodies(payload);
+      expect(html).toContain('<p>HTML body</p>');
+    });
+
+    it('handles multipart messages', () => {
+      const payload = {
+        mimeType: 'multipart/alternative',
+        parts: [
+          {
+            mimeType: 'text/plain',
+            body: { data: Buffer.from('Plain version').toString('base64url') },
+          },
+          {
+            mimeType: 'text/html',
+            body: { data: Buffer.from('<p>HTML version</p>').toString('base64url') },
+          },
+        ],
+      };
+      
+      const { text, html } = extractBodies(payload);
+      expect(text).toContain('Plain version');
+      expect(html).toContain('<p>HTML version</p>');
+    });
+
+    it('returns empty strings if no body', () => {
+      const { text, html } = extractBodies(undefined);
+      expect(text).toBe('');
+      expect(html).toBe('');
     });
   });
 });
