@@ -53,7 +53,7 @@ interface PersonalConnRow {
 }
 
 interface SharedConnRow {
-  email: string;
+  gmail_address: string;
   refresh_token: string;
 }
 
@@ -132,10 +132,10 @@ export async function POST(req: Request) {
 
   if (includeShared) {
     let sq = admin
-      .schema('sales')
-      .from('gmail_connections')
-      .select('email, refresh_token');
-    if (accountFilter) sq = sq.eq('email', accountFilter);
+      .schema('marketing')
+      .from('user_gmail_connections')
+      .select('gmail_address, refresh_token, active');
+    if (accountFilter) sq = sq.eq('gmail_address', accountFilter);
     const sRes = await sq;
     if (sRes.error) {
       return NextResponse.json(
@@ -145,7 +145,7 @@ export async function POST(req: Request) {
     }
     for (const r of ((sRes.data ?? []) as SharedConnRow[]).filter((r) => !!r.refresh_token)) {
       mailboxes.push({
-        account_email: r.email,
+        account_email: r.gmail_address,
         source: 'shared',
         max_messages: maxMessages,
       });
@@ -183,8 +183,5 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    hint: 'POST to enqueue an async gmail extract batch. Header x-cron-secret or admin session required. Body: { account_email?, max_messages?, include_personal?, include_shared? }',
-  });
+  return NextResponse.json({ ok: false, error: 'use_POST' }, { status: 405 });
 }
