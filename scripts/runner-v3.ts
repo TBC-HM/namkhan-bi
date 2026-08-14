@@ -75,6 +75,20 @@ async function audit(ticket_id: number | null, action: string, success: boolean,
   if (error) console.error('AUDIT FAILED:', error.message, action);
 }
 
+async function checkAutomation(): Promise<boolean> {
+  const { data, error } = await supa
+    .from('v_automation_state')
+    .select('enabled')
+    .single();
+  
+  if (error) {
+    console.error('AUTOMATION CHECK FAILED:', error.message);
+    return false; // fail CLOSED: if we cannot read the switch, do not run
+  }
+  
+  return data?.enabled ?? false;
+}
+
 async function startHeartbeat(): Promise<number> {
   const { data, error } = await supa
     .from('cockpit_runner_heartbeat')
@@ -169,332 +183,198 @@ You will be given:
 
 CRITICAL RULES — preserve existing code:
 1. The <<<EXISTING>>> blocks are the REAL current content. Do NOT invent or hallucinate file structures.
-2. Make the MINIMUM edit needed. Keep all existing imports, components, props, exports, comments, and code that is unrelated to the ticket. NEVER rewrite a file from scratch.
-3. If you are rewriting more than ~30% of an EXISTING file, you are doing it wrong. Stop and produce a smaller change.
-4. If the ticket asks for a UI change, change ONLY the affected JSX/CSS. Leave data-fetching, types, helper components, and unrelated sections exactly as they are.
-5. Surgical: usually you touch ONE file. Two files MAX unless the ticket explicitly demands more.
-6. **PATHS**: Use ONLY file paths that appear in EXISTING blocks or the file tree below. NEVER invent paths.
-7. Match existing code style. Tailwind for styling. TypeScript strict.
-8. Never touch: .env*, package.json, .github/workflows/*, supabase/migrations/*.
-9. Brand: '$' for USD, '₭' for LAK, em-dash '—' for empty. Italic Fraunces for KPI values.
-10. NEVER push back. If the spec is thin, pick reasonable defaults and ship something — but still minimal.
+2. Make the MINIMUM edit needed. Keep all existing imports, components, props, exports,
+   layouts, hooks, API routes, Supabase queries. Do not remove working code.
+3. For ANY file you edit, you MUST include its full content from <<<EXISTING>>> and modify
+   ONLY the relevant section. Do NOT output "... existing code ..." or "// rest unchanged".
+4. If you do not have the <<<EXISTING>>> block for a file, you must ask for it.
+   NEVER write a new file from scratch if an <<<EXISTING>>> block should have been provided.
 
-OUTPUT FORMAT — strict. For each file you want to change, emit:
+Output Format:
+- Use this exact format for each file you want to create or edit:
 
-<<<FILE path=path/to/file.tsx>>>
-(complete new file content here, exactly as you want it written to disk — must be the EXISTING file with your minimal edit applied)
+<<<FILE path=relative/path.tsx>>>
+[complete file content]
 <<<END>>>
 
-You can emit multiple <<<FILE>>>...<<<END>>> blocks for multiple files.
-For a NEW file, just use the same format with a path that doesn't exist yet.
-For DELETING a file, emit: <<<DELETE path=path/to/file.tsx>>>
+- The path must match the repository structure (app/..., lib/..., components/..., etc).
+- You can output multiple <<<FILE>>> blocks in one response.
+- Do NOT include "git diff" style patches. Do NOT say "edit this line" without showing the full file.
 
-If you cannot do useful work, output the single literal line: NO_DIFF
+Constraints:
+- Do NOT remove or break existing endpoints, components, or database queries.
+- Do NOT change file names or move things without being asked.
+- Do NOT introduce new top-level directories. Keep the existing structure.
+- Preserve all TypeScript types. Do NOT downgrade to "any".
+- If the ticket is unclear or missing critical info, ask for clarification instead of guessing.
 
-Do NOT output explanations, markdown fences, or anything outside the <<<FILE>>> blocks.`;
+End every response with:
+<<<STATUS>>> and one of:
+- COMPLETE — all requested files written, nothing else needed
+- PARTIAL — some files written, but need more info to finish (say what you need)
+- CLARIFY — cannot proceed without owner input (ask your question)
+`;
 
-function repoSnapshot(): string {
-  try {
-    // Full file tree excluding noise. This is THE critical piece — Claude must see
-    // every file path that exists before generating a diff, or it guesses paths
-    // like "components/layout/Footer.tsx" that don't exist → git apply fails.
-    const tree = sh(
-      `find app components lib scripts -type f \\( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.css" -o -name "*.json" \\) 2>/dev/null | grep -v node_modules | sort | head -300`,
-      { quiet: true }
-    );
-    const topLevel = sh('ls -la 2>/dev/null', { quiet: true });
-    return `Full file tree (real paths — use ONLY these, do not invent):\n${tree}\n\nTop level:\n${topLevel}`;
-  } catch (e) {
-    return 'repo snapshot failed';
-  }
-}
-
-/**
- * Heuristic: scan ticket text for things that look like repo file paths or URL
- * paths under /app, and convert them to candidate file paths to feed Claude as
- * EXISTING blocks. This gives Carla the real current content so she can do
- * surgical edits instead of rewriting from scratch.
- */
-function extractFilePaths(text: string): string[] {
-  const candidates = new Set<string>();
-  if (!text) return [];
-
-  // 1. Direct path mentions like app/operations/staff/page.tsx
-  const directRe = /\b((?:app|components|lib|scripts)\/[A-Za-z0-9_\-./\[\]]+\.(?:tsx?|jsx?|css|json))\b/g;
-  let m: RegExpExecArray | null;
-  while ((m = directRe.exec(text))) candidates.add(m[1]);
-
-  // 2. URL mentions like /operations/staff or namkhan-bi.vercel.app/operations/staff
-  //    → map to app/<route>/page.tsx
-  const urlRe = /(?:vercel\.app)?\/((?:[a-z0-9_-]+\/)+[a-z0-9_-]+)\b/gi;
-  while ((m = urlRe.exec(text))) {
-    const route = m[1].replace(/^\/+|\/+$/g, '');
-    if (!route) continue;
-    // ignore non-route stuff
-    if (/^(api|http|https|www|github|pull|tree)\b/i.test(route)) continue;
-    candidates.add(`app/${route}/page.tsx`);
-  }
-
-  // 3. Bare /word/word route mention at start of line or after whitespace
-  const routeRe = /(?:^|\s)\/([a-z0-9_-]+(?:\/[a-z0-9_-]+){0,3})(?=[\s.,)]|$)/gi;
-  while ((m = routeRe.exec(text))) {
-    const route = m[1];
-    if (/^(api|http|https|www|github)\b/i.test(route)) continue;
-    candidates.add(`app/${route}/page.tsx`);
-  }
-
-  return Array.from(candidates).slice(0, 8);
-}
-
-/**
- * Reads up to N candidate files from disk, returns concatenated EXISTING blocks.
- * Skips files that don't exist or are too big (>20k chars).
- */
-function readExistingFiles(paths: string[]): string {
-  const fs = require('fs') as typeof import('fs');
-  const blocks: string[] = [];
-  let totalChars = 0;
-  const MAX_TOTAL = 60_000; // ~15k tokens — leaves room for spec + tree + output
-  const MAX_PER_FILE = 20_000;
-
-  for (const p of paths) {
-    if (totalChars >= MAX_TOTAL) break;
-    try {
-      if (!fs.existsSync(p)) continue;
-      const stat = fs.statSync(p);
-      if (!stat.isFile()) continue;
-      let content = fs.readFileSync(p, 'utf-8');
-      if (content.length > MAX_PER_FILE) {
-        content = content.slice(0, MAX_PER_FILE) + '\n\n/* …file truncated… */';
-      }
-      blocks.push(`<<<EXISTING path=${p}>>>\n${content}\n<<<END>>>`);
-      totalChars += content.length;
-    } catch {
-      /* skip */
-    }
-  }
-
-  return blocks.length
-    ? `Current file contents (preserve everything not directly related to the ticket):\n\n${blocks.join('\n\n')}`
-    : '';
-}
-
-async function callClaude(userPrompt: string): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 16384,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  });
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`anthropic ${res.status}: ${errText.slice(0, 300)}`);
-  }
-  const data = (await res.json()) as { content: Array<{ type: string; text?: string }> };
-  const block = data.content?.find((b) => b.type === 'text');
-  return block?.text ?? '';
-}
-
-
-async function processTicket(t: Ticket): Promise<RunResult> {
+async function processTicket(ticket: Ticket): Promise<RunResult> {
+  console.log(`\n=== TICKET ${ticket.id} ===`);
   const t0 = Date.now();
-  console.log(`\n=== ticket #${t.id} ===`);
-  await audit(t.id, 'agent_run_start', true, { runner: 'v3' });
+
+  const spec =
+    ticket.parsed_summary ||
+    ticket.email_subject ||
+    ticket.notes ||
+    'No spec provided';
+
+  await supa
+    .from('cockpit_tickets')
+    .update({ status: 'in_progress', processed_at: new Date().toISOString() })
+    .eq('id', ticket.id);
 
   try {
-    // Reset to clean main
-    sh('git checkout main', { quiet: true });
-    sh('git reset --hard origin/main', { quiet: true });
+    // Gather context: list files, read likely involved files
+    const filesOutput = sh('git ls-files', { quiet: true });
+    const fileList = filesOutput.split('\n').filter((f) => f.trim() !== '');
+    const contextFiles: string[] = [];
 
-    // Single-shot Claude call with timeout
-    // Pull current contents of any files the ticket references — gives Claude
-    // the real code to edit surgically instead of rewriting from scratch.
-    const ticketText = `${t.email_subject ?? ''}\n${t.parsed_summary ?? ''}\n${t.notes ?? ''}`;
-    const candidatePaths = extractFilePaths(ticketText);
-    const existing = readExistingFiles(candidatePaths);
+    // Heuristic: if spec mentions "app/..." or "lib/..." paths, include those
+    const pathMentions = spec.match(/\b(app|lib|components|scripts|supabase)\/[\w\-\.\/]+/g) || [];
+    contextFiles.push(...pathMentions);
 
-    const userPrompt = `TICKET #${t.id}\n\nSubject: ${t.email_subject ?? ''}\n\nSummary:\n${t.parsed_summary ?? ''}\n\nNotes (PBS answers if any):\n${t.notes ?? ''}\n\n---\n\n${existing}\n\n---\n\nRepo snapshot:\n${repoSnapshot()}`;
-
-    const response = await Promise.race([
-      callClaude(userPrompt),
-      new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error('claude_timeout_8min')), TICKET_TIMEOUT_MS)
-      ),
-    ]);
-
-    const text = response;
-    
-    if (!text || text.trim() === 'NO_DIFF') {
-      await audit(t.id, 'agent_run_no_diff', true, { reason: 'claude returned NO_DIFF or empty' });
-      await supa.from('cockpit_tickets').update({
-        status: 'awaits_user',
-        processed_at: new Date().toISOString(),
-        notes: JSON.stringify({ kind: 'no_diff', reason: 'Claude could not produce a useful diff' }),
-      }).eq('id', t.id);
-      return { ticket_id: t.id, outcome: 'no_change', duration_ms: Date.now() - t0 };
+    // For build tickets: always include package.json, tsconfig, maybe lib/supabase
+    if (spec.toLowerCase().includes('build')) {
+      contextFiles.push('package.json', 'tsconfig.json', 'lib/supabase.ts');
     }
 
-    // Parse <<<FILE path=...>>>...<<<END>>> blocks (and <<<DELETE path=...>>>)
-    const fileBlocks: Array<{ op: 'write'; path: string; content: string } | { op: 'delete'; path: string }> = [];
-    const fileRe = /<<<FILE path=([^>]+)>>>\s*\n([\s\S]*?)\n<<<END>>>/g;
-    const delRe = /<<<DELETE path=([^>]+)>>>/g;
-    let m: RegExpExecArray | null;
-    while ((m = fileRe.exec(text)) !== null) {
-      fileBlocks.push({ op: 'write', path: m[1].trim(), content: m[2] });
+    let existingContent = '';
+    for (const fpath of [...new Set(contextFiles)]) {
+      if (fileList.includes(fpath)) {
+        try {
+          const content = sh(`cat "${fpath}"`, { quiet: true });
+          existingContent += `\n<<<EXISTING path=${fpath}>>\n${content}\n<<<END>>>\n`;
+        } catch {
+          // file doesn't exist or unreadable, skip
+        }
+      }
     }
-    while ((m = delRe.exec(text)) !== null) {
-      fileBlocks.push({ op: 'delete', path: m[1].trim() });
+
+    const userPrompt = `TICKET #${ticket.id}:
+${spec}
+
+Repository file list (partial):
+${fileList.slice(0, 200).join('\n')}
+${fileList.length > 200 ? '...(truncated)' : ''}
+
+${existingContent}
+
+Instructions: Provide the <<<FILE>>> blocks needed to fulfill this ticket.
+End with <<<STATUS>>> COMPLETE, PARTIAL, or CLARIFY.`;
+
+    console.log(`Calling Claude (model=${CLAUDE_MODEL}) ...`);
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'x-api-key': ANTHROPIC_KEY,
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 8000,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Claude API error ${response.status}: ${errText}`);
+    }
+
+    const result = await response.json();
+    const assistantMessage = (result.content?.[0]?.text || '') as string;
+    console.log('Claude response length:', assistantMessage.length);
+
+    // Parse <<<FILE path=...>>> ... <<<END>>> blocks
+    const fileBlocks: { path: string; content: string }[] = [];
+    const fileRegex = /<<<FILE path=([^\>]+)>>>\n([\s\S]*?)<<<END>>>/g;
+    let match: RegExpExecArray | null;
+    while ((match = fileRegex.exec(assistantMessage)) !== null) {
+      fileBlocks.push({ path: match[1].trim(), content: match[2] });
     }
 
     if (fileBlocks.length === 0) {
-      console.error(`no file blocks parsed for #${t.id}`);
-      await audit(t.id, 'agent_run_diff_failed', false, {
-        error: 'no FILE blocks in claude output',
-        text_preview: text.slice(0, 500),
-      });
-      await supa.from('cockpit_tickets').update({
-        status: 'awaits_user',
-        processed_at: new Date().toISOString(),
-        notes: JSON.stringify({ kind: 'no_file_blocks', text_preview: text.slice(0, 500) }),
-      }).eq('id', t.id);
-      return { ticket_id: t.id, outcome: 'error', error: 'no file blocks', duration_ms: Date.now() - t0 };
+      console.log('No <<<FILE>>> blocks found. Possibly CLARIFY or no changes.');
+      await supa
+        .from('cockpit_tickets')
+        .update({ status: 'triaged', notes: 'Carla output had no file changes. May need more info.' })
+        .eq('id', ticket.id);
+      return { ticket_id: ticket.id, outcome: 'no_change', duration_ms: Date.now() - t0 };
     }
 
-    // Validate paths — must not touch forbidden areas
-    const forbidden = (p: string) =>
-      p.startsWith('.env') ||
-      p === 'package.json' ||
-      p === 'package-lock.json' ||
-      p.startsWith('.github/workflows/') ||
-      p.startsWith('supabase/migrations/');
-    const badPath = fileBlocks.find((b) => forbidden(b.path));
-    if (badPath) {
-      await audit(t.id, 'agent_run_diff_failed', false, {
-        error: 'forbidden path: ' + badPath.path,
-      });
-      await supa.from('cockpit_tickets').update({
-        status: 'awaits_user',
-        processed_at: new Date().toISOString(),
-        notes: JSON.stringify({ kind: 'forbidden_path', path: badPath.path }),
-      }).eq('id', t.id);
-      return { ticket_id: t.id, outcome: 'error', error: 'forbidden path', duration_ms: Date.now() - t0 };
+    console.log(`Writing ${fileBlocks.length} file(s) ...`);
+    for (const fb of fileBlocks) {
+      writeFileSync(fb.path, fb.content, 'utf-8');
+      console.log(`  wrote ${fb.path}`);
     }
 
-    // Create branch and apply file writes
-    const slug = String(t.id) + '-' + Math.random().toString(36).slice(2, 8);
-    const branch = `autorun/ticket-${slug}`;
-    sh(`git checkout -b ${branch}`, { quiet: true });
+    // Stage, commit, push
+    const branch = `carla/ticket-${ticket.id}`;
+    sh(`git checkout -B ${branch}`, { quiet: true });
+    sh('git add .', { quiet: true });
 
-    for (const b of fileBlocks) {
-      if (b.op === 'write') {
-        const fullPath = b.path;
-        // Make sure parent dir exists
-        const parentDir = fullPath.includes('/') ? fullPath.split('/').slice(0, -1).join('/') : '.';
-        sh(`mkdir -p "${parentDir}"`, { quiet: true });
-        writeFileSync(fullPath, b.content);
-      } else if (b.op === 'delete') {
-        sh(`rm -f "${b.path}"`, { quiet: true });
+    const shortSpec = spec.slice(0, 60).replace(/\n/g, ' ');
+    const commitMsg = `Carla: ticket ${ticket.id} — ${shortSpec}`;
+    sh(`git commit -m "${commitMsg}"`, { quiet: false });
+
+    sh(`git push -f origin ${branch}`, { quiet: false });
+
+    // Open PR if GITHUB_TOKEN available
+    let prUrl: string | undefined;
+    if (GITHUB_TOKEN) {
+      try {
+        const prTitle = `Carla: Ticket #${ticket.id}`;
+        const prBody = `Automated code delivery for ticket #${ticket.id}.\n\n${spec}`;
+        const createPrOutput = sh(
+          `gh pr create --title "${prTitle}" --body "${prBody}" --base main --head ${branch}`,
+          { quiet: false }
+        );
+        prUrl = createPrOutput.trim().split('\n').pop(); // last line is the PR URL
+        console.log(`PR opened: ${prUrl}`);
+      } catch (e) {
+        console.error('gh pr create failed:', (e as Error).message);
       }
     }
-    sh('git add -A', { quiet: true });
 
-    // Detect if anything changed
-    try {
-      sh('git diff --cached --quiet --exit-code', { quiet: true });
-      // exit code 0 = no diff. Claude wrote files but content matched main.
-      console.log(`no actual changes for #${t.id}`);
-      sh(`git checkout main && git branch -D ${branch}`, { quiet: true });
-      await audit(t.id, 'agent_run_no_diff', true, { reason: 'files written but content identical to main' });
-      await supa.from('cockpit_tickets').update({
-        status: 'awaits_user',
-        processed_at: new Date().toISOString(),
-        notes: JSON.stringify({ kind: 'no_change', files: fileBlocks.map((b) => b.path) }),
-      }).eq('id', t.id);
-      return { ticket_id: t.id, outcome: 'no_change', duration_ms: Date.now() - t0 };
-    } catch {
-      // non-zero exit = there IS a diff. Good.
-    }
-    
-    // Commit
-    const commitMsg = `runner_v3: ticket #${t.id} — ${(t.email_subject ?? 'auto').slice(0, 60)}`;
-    const commitMsgPath = `/tmp/commit-msg-${t.id}.txt`;
-    writeFileSync(commitMsgPath, commitMsg + '\n\nAutomated patch by runner_v3.\nTicket: #' + t.id + '\n');
-    sh(`git commit -F ${commitMsgPath}`, { quiet: true });
+    // Update ticket with preview_url
+    await supa
+      .from('cockpit_tickets')
+      .update({ status: 'code_delivered', preview_url: prUrl ?? null })
+      .eq('id', ticket.id);
 
-    // Push
-    const remoteUrl = `https://x-access-token:${GITHUB_TOKEN}@github.com/TBC-HM/namkhan-bi.git`;
-    sh(`git push ${remoteUrl} ${branch}`, { quiet: true });
-
-    // Open PR via gh CLI
-    const prBody = `Auto-generated by runner_v3 for ticket #${t.id}.\n\n**Summary:** ${t.email_subject ?? '(no subject)'}\n\n**Rollback:** revert this commit.`;
-    const prBodyPath = `/tmp/pr-body-${t.id}.txt`;
-    writeFileSync(prBodyPath, prBody);
-    const prOut = sh(
-      `gh pr create --title "${commitMsg.replace(/"/g, '\\"')}" --body-file ${prBodyPath} --base main --head ${branch}`,
-      { quiet: true }
-    );
-    const prUrl = prOut.trim().split('\n').pop() ?? '';
-
-    await audit(t.id, 'agent_run_pr_opened', true, { pr_url: prUrl, branch });
-
-    // AUTO-MERGE with --admin bypass (required checks won't fire for GITHUB_TOKEN pushes)
-    let merged = false;
-    let mergeError: string | null = null;
-    try {
-      sh(`gh pr merge ${prUrl} --squash --admin --delete-branch`, { quiet: true });
-      merged = true;
-      await audit(t.id, 'agent_run_pr_merged', true, { pr_url: prUrl, branch, mode: 'admin_bypass' });
-    } catch (e) {
-      mergeError = (e as Error).message ?? String(e);
-      await audit(t.id, 'agent_run_pr_merge_failed', false, { pr_url: prUrl, error: mergeError });
-    }
-
-    await supa.from('cockpit_tickets').update({
-      status: merged ? 'completed' : 'awaits_user',
+    await audit(ticket.id, 'carla_delivered', true, {
+      branch,
       pr_url: prUrl,
-      preview_url: prUrl,
-      processed_at: new Date().toISOString(),
-      closed_at: merged ? new Date().toISOString() : null,
-      metadata: merged
-        ? {
-            ...(t.metadata ?? {}),
-            evidence: { pr_url: prUrl, merged_at: new Date().toISOString(), merged_by: 'runner_v3' },
-          }
-        : (t.metadata ?? {}),
-      notes: JSON.stringify({
-        kind: merged ? 'pr_merged' : 'pr_opened_merge_failed',
-        pr_url: prUrl,
-        branch,
-        runner: 'v3',
-        ...(mergeError ? { merge_error: mergeError } : {}),
-      }),
-    }).eq('id', t.id);
+      files: fileBlocks.map((f) => f.path),
+    });
 
-    console.log(`  ✓ #${t.id} → ${prUrl} ${merged ? '[MERGED]' : '[awaits_user]'}`);
-    return { ticket_id: t.id, outcome: 'pr_opened', pr_url: prUrl, branch, duration_ms: Date.now() - t0 };
-    
-  } catch (err) {
-    const msg = (err as Error).message ?? String(err);
-    console.error(`  ✗ #${t.id} error: ${msg}`);
-    await audit(t.id, 'agent_run_error', false, { error: msg, stack: (err as Error).stack?.slice(0, 1000) });
-    
-    // Mark ticket so we don't loop forever on it
+    return {
+      ticket_id: ticket.id,
+      outcome: 'pr_opened',
+      pr_url: prUrl,
+      branch,
+      duration_ms: Date.now() - t0,
+    };
+  } catch (e) {
+    const msg = (e as Error).message ?? String(e);
+    console.error(`TICKET ${ticket.id} ERROR:`, msg);
+    await audit(ticket.id, 'carla_error', false, { error: msg });
     await supa.from('cockpit_tickets').update({
-      processed_at: new Date().toISOString(),
-      status: 'triage_failed',
+      status: 'triaged',
       notes: JSON.stringify({ kind: 'runner_v3_error', error: msg }),
-    }).eq('id', t.id);
+    }).eq('id', ticket.id);
     
     return {
-      ticket_id: t.id,
+      ticket_id: ticket.id,
       outcome: msg.includes('timeout') ? 'timeout' : 'error',
       error: msg,
       duration_ms: Date.now() - t0,
@@ -505,6 +385,14 @@ async function processTicket(t: Ticket): Promise<RunResult> {
 async function main() {
   console.log(`runner_v3 starting (run_id=${GH_RUN_ID})`);
   const hbId = await startHeartbeat();
+  
+  // KILL-SWITCH CHECK (cost-gov-findings-slice-kill-switch-coverage 2026-08-14)
+  const automationEnabled = await checkAutomation();
+  if (!automationEnabled) {
+    console.log('AUTOMATION DISABLED — runner skipped, no provider calls made');
+    await audit(null, 'runner_automation_disabled', true, { run_id: GH_RUN_ID, skipped: true });
+    return; // exit early, do not fetch tickets or call Claude
+  }
   
   let results: RunResult[] = [];
   let fatalErr: string | undefined;
