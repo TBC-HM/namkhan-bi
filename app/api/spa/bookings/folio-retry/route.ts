@@ -2,6 +2,7 @@
 // Spa module v1 — folio post retry (brief spa-module-v1-slice-folio-posting).
 // POST → idempotent retry of a failed folio post for an in-house completed booking.
 //        Rejects with 409 if already posted, 400 if not completed or has no reservation.
+// AUTH: UI path requires middleware auth; proof runs can use x-cron-secret header to bypass.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
