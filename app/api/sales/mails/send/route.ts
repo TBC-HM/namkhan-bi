@@ -4,9 +4,10 @@
 // Sends FROM the alias in mailbox_id using the SHARED mailbox token via
 // Send-As. Alias must be configured under the shared account
 // (pb@thenamkhan.com) — otherwise Gmail returns a Send-As error.
+// PBS 2026-08-14: now enforces getUserMailboxById permission check.
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentAuthUser } from '@/lib/userGmail';
-import { sendFromShared, logSharedMailboxEvent } from '@/lib/sharedGmail';
+import { sendFromShared, logSharedMailboxEvent, getUserMailboxById } from '@/lib/sharedGmail';
 // PBS 2026-07-14 (Sales CRM upgrade · Phase F) — after a shared-mailbox
 // reply lands, look up any matching lead by thread_id and auto-advance stage.
 // Best-effort; a failure here must NEVER break the send response.
@@ -38,6 +39,13 @@ export async function POST(req: NextRequest) {
   if (!mailbox_id || !to || !subject || !body_html) {
     return NextResponse.json({ error: 'missing_params' }, { status: 400 });
   }
+  
+  // Permission check: user must have access to this mailbox
+  const mailbox = await getUserMailboxById(user.id, mailbox_id);
+  if (!mailbox) {
+    return NextResponse.json({ error: 'mailbox_not_found_or_no_access' }, { status: 403 });
+  }
+  
   try {
     const res = await sendFromShared(user.id, mailbox_id, {
       to,
