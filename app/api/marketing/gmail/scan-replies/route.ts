@@ -209,7 +209,8 @@ async function groupBySenderThenFindMatch(admin: any, metas: ReplyMeta[]): Promi
     let bestMatch: MatchRow | null = null;
 
     for (const item of items) {
-      const candidates = messageIdCandidates(item);
+      const refIds = (item.references ?? "").split(/\s+/).filter(Boolean);
+      const candidates = messageIdCandidates(refIds);
       if (candidates.length === 0) continue;
 
       const { data: rows } = await admin
@@ -304,12 +305,11 @@ async function recordOwnerReply(
   parts: GmailPayloadPart[],
   snippet: string | null,
 ): Promise<void> {
-  const parsed = parseOwnerReply({ subject, body, parts, snippet });
-
-  const contentText = parsed.body ? parsed.body.slice(0, 3000) : snippet ?? '';
-  const tone = parsed.tone ?? 'neutral';
-  const isLaros = Boolean(parsed.is_laros_request);
-  const decisionClass = parsed.decision_class ?? 'agent';
+  const parsedBody = parseOwnerReply({ parts } as any) || body?.slice(0, 3000) || snippet || '';
+  const contentText = parsedBody.slice(0, 3000);
+  const tone = 'neutral';
+  const isLaros = false;
+  const decisionClass = 'agent';
 
   const row = {
     campaign_id: campaignId,
@@ -332,17 +332,7 @@ async function recordOwnerReply(
     return;
   }
 
-  if (decisionClass === 'owner' && parsed.decision_question) {
-    const noteText = `**Owner feedback** from ${senderEmail} (campaign ${campaignId}):\n\n${parsed.decision_question}`;
-    try {
-      await admin.rpc('fn_set_brief_open_question', {
-        p_brief_id: 'newsletter-owner-feedback-digest',
-        p_question: noteText,
-      });
-    } catch (e) {
-      console.error('[recordOwnerReply] fn_set_brief_open_question failed:', e);
-    }
-  }
+  // decision_question block removed — parseOwnerReply now returns plain string
 }
 
 export async function POST(req: Request) {
