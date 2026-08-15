@@ -213,7 +213,7 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
         const dirIcon = isInbound ? '↘' : '↗';
         const dirColor = isInbound ? 'var(--moss)' : 'var(--brass)';
         const time = relativeTime(t.last_received_at);
-        const from = senderLabel(t.sender_name, t.sender_email);
+        const from = senderLabel(t.last_from_name, t.last_from_email);
         return (
           <TenantLink
             key={t.thread_id}
@@ -234,7 +234,7 @@ export default async function BookInboxPanel({ dir = 'all', limit = 10 }: Props)
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 'var(--t-base)', color: 'var(--ink)' }}>
-                {t.subject || '(no subject)'}
+                {t.last_subject || '(no subject)'}
               </div>
               <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>
                 {isInbound ? `From: ${from}` : `To: ${from}`}
