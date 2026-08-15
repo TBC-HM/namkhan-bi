@@ -29,7 +29,7 @@ const NAMKHAN_PROPERTY_ID = 260955;
 // requested. This helper pages through in 1000-row chunks (hard cap 10000)
 // and returns a Supabase-shaped { data, error } so downstream code is
 // untouched.
-async function fetchAllMedia(sb: ReturnType<typeof getSupabaseAdmin>): Promise<{ data: any[]; error: any }> {
+async function fetchAllMedia(sb: ReturnType<typeof getSupabaseAdmin>, pid: number): Promise<{ data: any[]; error: any }> {
   const all: any[] = [];
   const CHUNK = 1000;
   const HARD_CAP = 10000;
@@ -37,6 +37,7 @@ async function fetchAllMedia(sb: ReturnType<typeof getSupabaseAdmin>): Promise<{
     const { data, error } = await sb
       .from('v_marketing_media_page')
       .select('*')
+      .eq('property_id', pid)
       .range(start, start + CHUNK - 1);
     if (error) return { data: all, error };
     if (!data || data.length === 0) break;
@@ -63,7 +64,7 @@ async function loadAll(pid: number) {
     videoReviewQueue,
   ] = await Promise.all([
     sb.from('mkt_v_media_by_tier').select('*'),
-    fetchAllMedia(sb),
+    fetchAllMedia(sb, pid),
     sb.from('v_media_channel_specs').select('*'),
     sb.from('v_media_rules_active').select('*'),
     sb.from('v_ai_generations').select('*').order('created_at', { ascending: false }).limit(50),
