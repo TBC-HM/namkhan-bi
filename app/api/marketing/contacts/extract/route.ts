@@ -426,7 +426,7 @@ export async function POST(req: Request) {
     const personalAccounts = (pRes.data ?? []) as PersonalConnRow[];
     for (const p of personalAccounts) {
       try {
-        const { access_token } = await refreshIfExpired(p.user_id);
+        const { access: access_token } = await refreshIfExpired(p.user_id);
         const r = await runMessageExtraction(admin, 'personal', p.gmail_address, access_token, maxMessages);
         results.push({ ...r, status: 'succeeded' });
       } catch (e: any) {
