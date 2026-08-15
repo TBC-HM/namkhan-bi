@@ -18,6 +18,7 @@ import {
   type ChartSeries, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 import BudgetUpload from './BudgetUpload';
 import NarrativeButton from './NarrativeButton';
 
@@ -217,6 +218,7 @@ export default async function FinancePlanningPage({
     <DashboardPage
       title={`Finance · Planning & Control · ${propertyLabel}`}
       subtitle={`budget vs actual by QB class (ADR-159) · 13-week cash forward · GL layer USD (ADR-173)${cash[0] ? '' : ' · no cash data'}`}
+      tabs={financeSubPagesForProperty(propertyId).map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/finance/planning') }))}
     >
       <Container title="Planning headline" subtitle={selMonth ?? 'no month available'} density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
