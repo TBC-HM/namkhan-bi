@@ -14,6 +14,7 @@ import {
   type ChartSeries, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -125,6 +126,7 @@ export default async function TenantCostsPage({ params }: { params: { property_i
     <DashboardPage
       title={`Administration · Costs · ${propertyLabel}`}
       subtitle="your platform usage at cost · immutable ledger costs.cost_events · budgets + chargeback follow at client milestone (Phase 2)"
+      tabs={financeSubPagesForProperty(propertyId).map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/finance/costs') }))}
     >
       <Container title="Usage headline" subtitle={cur ? `month of ${cur.month.slice(0, 7)}` : 'no attributed usage yet'} density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
