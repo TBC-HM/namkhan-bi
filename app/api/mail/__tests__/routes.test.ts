@@ -48,8 +48,8 @@ describe('Mail API Routes', () => {
 
     beforeAll(async () => {
       // Dynamic import to apply mocks
-      const module = await import('../../app/api/mail/send/route');
-      POST = module.POST;
+      const routeModule = await import('../../app/api/mail/send/route');
+      POST = routeModule.POST;
     });
 
     it('returns 401 if user not signed in', async () => {
@@ -194,8 +194,8 @@ describe('Mail API Routes', () => {
     let POST;
 
     beforeAll(async () => {
-      const module = await import('../../app/api/mail/reply/route');
-      POST = module.POST;
+      const routeModule = await import('../../app/api/mail/reply/route');
+      POST = routeModule.POST;
     });
 
     it('returns 401 if user not signed in', async () => {
