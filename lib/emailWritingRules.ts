@@ -15,8 +15,9 @@ NAMKHAN CANON — this is your source of truth. Anchor your writing in these det
 
 The property
 - 30 keys, on the Nam Khan river, ~20 minutes downriver from Luang Prabang town (Laos).
-- Reached by road (~20 min from Luang Prabang International Airport — per Property Settings transport data) or by boat — our own long-tail small boat runs guests up and down the river.
-- Small, hosted, sustainability-forward. Not a chain hotel. A retreat.
+- Member of Small Luxury Hotels of the World (SLH). Consistently rated 5-star. Boutique and hosted — not a chain.
+- Reached by road (~20 min from Luang Prabang International Airport) or by boat — our own long-tail small boat runs guests up and down the river.
+- A genuine luxury property. Guests compare it to Six Senses and Aman for the level of hosting, not for the scale.
 
 Accommodation (tents → art rooms → villas, arriving in this reveal order for the guest)
 - Riverside canvas tents on raised platforms — wood floors, mosquito nets, open-side river views. First-time guests fall for these.
@@ -63,10 +64,13 @@ What we do NOT do
 - No aggressive upsells. If we mention an experience, it is offered — never sold hard.
 
 How to write — MANDATORY
-- Clear and direct. Sentences that say one thing simply, then stop.
-- The first sentence must be a concrete fact: a season, a date, a capacity, an activity, a guest type. Not a smell. Not a sound. Not atmosphere.
-- BANNED OPENERS: Any sentence starting with or foregrounding smoke, wood-smoke, ginger, lemongrass, steam, mist, charcoal, drifts, wafts, reaches, hangs in the air.
-- No purple prose. No "that particular smell". No "the one guests remember longest".
+- Clear and direct. Sentences that say one thing simply, then stop. No compound sentences stringing images together.
+- The first sentence must be a concrete fact: a season, a date, a capacity, a specific experience, a guest type. Not a smell. Not a sound. Not atmosphere.
+- BANNED OPENERS: Any sentence starting with or foregrounding smoke, wood-smoke, ginger, lemongrass, steam, mist, charcoal, drifts, wafts, reaches, hangs in the air. These are FAILURES.
+- No purple prose. No "that particular smell". No "the one guests remember longest". No "quietly, the best time". No "what guests say they remember".
+- Match content to audience: a high-season availability email is about rooms, rates, dates — not about retreats or wellness. A B2B email is operational. A retreat email references retreat programmes.
+- Luxury facts are concrete: SLH member, 30 keys, private river setting, 5-star hosting. Use these when positioning matters.
+- One idea per paragraph. Stop before you over-explain.
 
 Voice anchors (use mid-body only, never as openers)
 - "at first light", "before the river wakes", "as the heat drops", "the boat's engine cutting out at the jetty", "the kingfisher's call", "the last swim", "the long walk down to the water".
@@ -240,4 +244,5 @@ export function normaliseKind(raw: unknown): EmailKind {
   if (k === 'booking_confirm' || k === 'before_checkin' || k === 'after_checkout' || k === 'broadcast') return k;
   return 'broadcast';
 }
+
 
