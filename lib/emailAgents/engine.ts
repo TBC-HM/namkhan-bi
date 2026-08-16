@@ -749,7 +749,17 @@ async function sayaSlots(system: string, userPrompt: string): Promise<SayaSlots>
   const text = await callAnthropic(system, userPrompt, 1600);
   let parsed: Record<string, unknown>;
   try { parsed = JSON.parse(stripCodeFences(text)) as Record<string, unknown>; }
-  catch { throw new Error('saya_json_unparseable'); }
+  catch {
+    // Retry once — Saya occasionally returns a clarification paragraph when the
+    // instruction is ambiguous. Force JSON on the retry.
+    const retryText = await callAnthropic(
+      system,
+      'CRITICAL: Return ONLY a valid JSON object with the keys specified. No prose, no explanation, no code fences. If uncertain, still return JSON with your best attempt.\n\n' + userPrompt,
+      1600,
+    );
+    try { parsed = JSON.parse(stripCodeFences(retryText)) as Record<string, unknown>; }
+    catch { throw new Error('saya_json_unparseable'); }
+  }
   const blurbs = Array.isArray(parsed.product_blurbs)
     ? (parsed.product_blurbs as unknown[]).map(b => String(b ?? '').slice(0, 300))
     : [];
@@ -1193,4 +1203,5 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
     },
   });
 }
+
 
