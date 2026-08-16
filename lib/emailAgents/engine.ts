@@ -116,6 +116,7 @@ const SLOT_OUTPUT_CONTRACT = [
   '  closing_md      (string · slot 06_closing · one short warm closing paragraph · no sign-off, no "Warm regards")',
   '  goal_tag        (short slug like "green-season-family" · optional)',
   'HARD RULES:',
+  '- ABSOLUTE BAN: Do NOT open with wood-smoke, smoke, ginger, lemongrass, steam, mist, or any smell/taste/sensory image. The opening must be a clear factual statement. Violation = reject.',
   '- Do NOT write any greeting ("Hi {{first_name}}") — the system adds it.',
   '- Do NOT write any signature — the system adds the department signature.',
   '- Do NOT include any URL anywhere in your prose or blurbs. Product links are attached deterministically.',
@@ -1203,5 +1204,6 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
     },
   });
 }
+
 
 
