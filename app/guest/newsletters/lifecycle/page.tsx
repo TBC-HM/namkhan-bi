@@ -14,6 +14,8 @@ import RecipientsButton from '../_components/RecipientsButton';
 import DeleteCampaignButton from '../_components/DeleteCampaignButton';
 import NewslettersSubStrip from '../_components/NewslettersSubStrip';
 import ProposeNewsletterButton from '../_components/ProposeNewsletterButton';
+import ArchiveCampaignButton from '../_components/ArchiveCampaignButton';
+import RewriteButton from '../_components/RewriteButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -237,6 +239,8 @@ function MiniTableDrafts({ rows }: { rows: CampaignRow[] }) {
                 <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</TenantLink>
                 <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
                 <ScheduleDrawer campaign_id={r.campaign_id} campaign_name={r.name} planned_date={r.planned_date} />
+                <RewriteButton campaign_id={r.campaign_id} property_id={r.property_id} />
+                <ArchiveCampaignButton campaign_id={r.campaign_id} campaign_name={r.name} />
               </td>
             </tr>
           ))}
@@ -308,3 +312,4 @@ const tdR: CSSProperties = { padding:'8px 10px', fontSize:12, textAlign:'right',
 const pctSub: CSSProperties = { fontSize:10, color:INK_S, marginLeft:4 };
 const actionBtnGreen: CSSProperties = { display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600, background:BRAND, color:'#FFFFFF', border:'none', borderRadius:4, textDecoration:'none' };
 const actionBtnLight: CSSProperties = { display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600, background:'#FFFFFF', color:'#3A3A3A', border:`1px solid ${HAIR}`, borderRadius:4, textDecoration:'none' };
+
