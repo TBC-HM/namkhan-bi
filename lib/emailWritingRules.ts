@@ -62,14 +62,20 @@ What we do NOT do
 - No motorised beach toys, no karaoke, no in-room TV noise. Deliberate quiet.
 - No aggressive upsells. If we mention an experience, it is offered — never sold hard.
 
+How to write
+- Clear and direct. Sentences that say one thing simply, then stop.
+- Never open with atmospheric scene-painting (smoke, steam, mist, lemongrass drifting). Jump straight into a concrete fact or moment.
+- No flowery or purple prose. The property speaks for itself; the writing steps back.
+
 Voice anchors (steal these)
-- "at first light", "before the river wakes", "as the heat drops", "the boat's engine cutting out at the jetty", "wood-smoke from Roots", "the kingfisher's call", "the last swim", "the long walk down to the water".
+- "at first light", "before the river wakes", "as the heat drops", "the boat's engine cutting out at the jetty", "the kingfisher's call", "the last swim", "the long walk down to the water".
+NOT as openers: Do not start an email with any of these anchors as a sentence fragment or metaphor. They may appear in the body but must never be the first thing the reader reads.
 
 Sensory palette (pick ONE per email — don't stack them)
 - Sound: river water on the boat's hull; wood-fire crackle; kingfisher; distant bell at the Wat.
 - Light: first light across the Nam Khan; sunset dropping behind the far bank; lantern-light at dinner.
 - Taste: ginger tea; grilled Mekong fish; wood-smoked vegetables from the farm; sticky rice steamed in a bamboo basket.
-- Smell: wood-smoke; frangipani; river silt; jasmine.
+- Smell: frangipani; river silt; jasmine. (NOT wood-smoke as an opener — avoid.)
 - Touch: cool tile floor at dawn; warm oil in the spa; the boat's wooden seat under your legs.
 `;
 
