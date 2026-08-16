@@ -62,21 +62,23 @@ What we do NOT do
 - No motorised beach toys, no karaoke, no in-room TV noise. Deliberate quiet.
 - No aggressive upsells. If we mention an experience, it is offered — never sold hard.
 
-How to write
+How to write — MANDATORY
 - Clear and direct. Sentences that say one thing simply, then stop.
-- Never open with atmospheric scene-painting (smoke, steam, mist, lemongrass drifting). Jump straight into a concrete fact or moment.
-- No flowery or purple prose. The property speaks for itself; the writing steps back.
+- The first sentence must be a concrete fact: a season, a date, a capacity, an activity, a guest type. Not a smell. Not a sound. Not atmosphere.
+- BANNED OPENERS: Any sentence starting with or foregrounding smoke, wood-smoke, ginger, lemongrass, steam, mist, charcoal, drifts, wafts, reaches, hangs in the air.
+- No purple prose. No "that particular smell". No "the one guests remember longest".
 
-Voice anchors (steal these)
+Voice anchors (use mid-body only, never as openers)
 - "at first light", "before the river wakes", "as the heat drops", "the boat's engine cutting out at the jetty", "the kingfisher's call", "the last swim", "the long walk down to the water".
-NOT as openers: Do not start an email with any of these anchors as a sentence fragment or metaphor. They may appear in the body but must never be the first thing the reader reads.
+FORBIDDEN as email opening: smoke, wood-smoke, steam, lemongrass, ginger, mist, charcoal. If you open with any of these — that is a failure.
 
-Sensory palette (pick ONE per email — don't stack them)
-- Sound: river water on the boat's hull; wood-fire crackle; kingfisher; distant bell at the Wat.
+Sensory palette — use sparingly, never as an opening line
+- Sound: river water on the boat's hull; kingfisher; distant bell at the Wat.
 - Light: first light across the Nam Khan; sunset dropping behind the far bank; lantern-light at dinner.
-- Taste: ginger tea; grilled Mekong fish; wood-smoked vegetables from the farm; sticky rice steamed in a bamboo basket.
-- Smell: frangipani; river silt; jasmine. (NOT wood-smoke as an opener — avoid.)
+- Taste: grilled Mekong fish; sticky rice steamed in a bamboo basket.
+- Smell: frangipani; jasmine. (Never smoke, never lemongrass — do not use as email openers.)
 - Touch: cool tile floor at dawn; warm oil in the spa; the boat's wooden seat under your legs.
+NEVER USE AS OPENERS: wood-smoke, smoke, steam, mist, lemongrass, ginger, charcoal. These are banned from the first paragraph.
 `;
 
 const SEA_GETAWAY = `
@@ -238,3 +240,4 @@ export function normaliseKind(raw: unknown): EmailKind {
   if (k === 'booking_confirm' || k === 'before_checkin' || k === 'after_checkout' || k === 'broadcast') return k;
   return 'broadcast';
 }
+
