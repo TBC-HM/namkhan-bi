@@ -225,6 +225,34 @@ Return STRICT JSON with keys "subject" and "body_md":
 Return ONLY the JSON. No preamble, no code fence.
 `;
 
+
+const AUDIENCE_TONE = `
+AUDIENCE TONE — apply BEFORE writing. The group_slug tells you who you are speaking to.
+
+B2C first-time guests (guests-int, everyone, ota-traveller, fit)
+- Tone: warm but not familiar. Assume they know Luang Prabang but not The Namkhan.
+- Lead with the property's USP for their context: river setting, 30 keys, SLH, organic farm.
+- Explain briefly what makes us different. One concrete detail per paragraph.
+- Do NOT assume they've been before. Do NOT reference past stays.
+
+B2C returning guests (returning-guests, responders)
+- Tone: as if writing to someone who already knows the property.
+- Skip the introduction — they know where we are. Reference the season, a programme, or a reason to return.
+- One line acknowledgement of return is fine: "If you have been here before, you'll know the green season is different."
+- Focus on what's new: a retreat, a seasonal menu, a programme they haven't tried.
+
+B2B trade (btb, dmc, dmc-contracted, retreat-hosts)
+- Tone: direct, professional, peer-to-peer. No "warm regards" style opener.
+- Lead with operational facts: availability, dates, capacity (30 keys / full buyout option), transfer logistics.
+- No sensory language. No atmosphere. Inventory, terms, access, unique programme.
+- Sign off is professional: "Write to us for rates and availability" — not "come and slow down".
+- Do NOT use retreat programme names as the main selling point — lead with infrastructure and site.
+
+OTA guests (ota, ota-traveller)
+- Plain text tone, shorter. No links beyond the booking link.
+- Facts only: dates, what's included, what makes this property different from a chain.
+`;
+
 export function buildEmailSystemPrompt(
   kind: EmailKind,
   policy?: PolicyOverlay | null,
@@ -244,5 +272,6 @@ export function normaliseKind(raw: unknown): EmailKind {
   if (k === 'booking_confirm' || k === 'before_checkin' || k === 'after_checkout' || k === 'broadcast') return k;
   return 'broadcast';
 }
+
 
 
