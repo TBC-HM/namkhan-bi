@@ -258,7 +258,7 @@ export function buildEmailSystemPrompt(
   policy?: PolicyOverlay | null,
   opts?: { b2bVoice?: boolean; lpCanon?: boolean; seaGetaway?: boolean },
 ): string {
-  const parts: string[] = [CORE, NAMKHAN_CANON, KIND_HINTS[kind] ?? KIND_HINTS.broadcast];
+  const parts: string[] = [CORE, NAMKHAN_CANON, AUDIENCE_TONE, KIND_HINTS[kind] ?? KIND_HINTS.broadcast];
   if (opts?.lpCanon || kind === 'broadcast') parts.push(LP_CANON);
   if (opts?.seaGetaway || kind === 'broadcast') parts.push(SEA_GETAWAY);
   if (opts?.b2bVoice) parts.push(B2B_OVERLAY);
@@ -272,6 +272,7 @@ export function normaliseKind(raw: unknown): EmailKind {
   if (k === 'booking_confirm' || k === 'before_checkin' || k === 'after_checkout' || k === 'broadcast') return k;
   return 'broadcast';
 }
+
 
 
 
