@@ -117,13 +117,7 @@ export default async function NewslettersPage({ propertyId }: PageProps = {}) {
           <KpiTile size="sm" label="Click rate" value={clickRate.toFixed(1) + '%'} footnote={`${totalClicks.toLocaleString()} clicks · ${responseRate.toFixed(2)}% booked`} />
         </div>
 
-        <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8, alignItems:'center', marginTop:6 }}>
-          <TenantLink href="/guest/newsletters/broadcasts" style={secondaryButton}>Broadcasts</TenantLink>
-          <TenantLink href="/guest/newsletters/lifecycle" style={secondaryButton}>Lifecycle</TenantLink>
-          <TenantLink href="/guest/newsletters/director" style={secondaryButton}>Open Director</TenantLink>
-          <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Templates</TenantLink>
-          <ProposeNewsletterButton propertyId={pid} defaultKind="broadcast" />
-        </div>
+
 
         {campRes.error && <div style={{ ...errorBox, gridColumn:'1 / -1' }}>Could not load campaigns: {campRes.error.message}</div>}
 
@@ -216,3 +210,4 @@ const errorBox: CSSProperties = { padding:12, background:'#FBE8E4', color:'#8A24
 const th: CSSProperties = { padding:'8px 10px', fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'#1B1B1B', textAlign:'left' };
 const tdL: CSSProperties = { padding:'8px 10px', fontSize:12, color:'#1B1B1B' };
 const tdR: CSSProperties = { padding:'8px 10px', fontSize:12, textAlign:'right', fontVariantNumeric:'tabular-nums', color:'#1B1B1B' };
+
