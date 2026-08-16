@@ -22,10 +22,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 90;
 
-function v2Enabled(): boolean {
-  const v = String(process.env.NEWSLETTER_V2_ENABLED ?? '').trim().toLowerCase();
-  return v === '1' || v === 'true' || v === 'on';
-}
+function v2Enabled(): boolean { return true; } // v2 stable — always on (flag removed 2026-08-16)
 
 type RefineBody = { campaign_id?: string; instruction?: string };
 
