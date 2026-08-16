@@ -704,7 +704,6 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Guests',      href: '/guest/directory'      },
     { label: 'Reputation',  href: '/guest/reputation'     },
     { label: 'Behaviour',   href: '/guest/behaviour'      },
-    { label: 'Subscribers', href: '/marketing/subscribers' }, // PBS 2026-07-16 · surfaced in Contacts sub-nav (page lives under /marketing)
     // PBS 2026-07-21 night · Contacts removed — folded into Subscribers as
     // the "Candidates pool" tab. URL still resolves for bookmarks.
     { label: 'Newsletters', href: '/guest/newsletters'    },
@@ -712,7 +711,6 @@ const GUEST_CFG: DeptCfg = {
   quickChips: [
     { label: 'Guests',      href: '/guest/directory'      },
     { label: 'Reputation',  href: '/guest/reputation'     },
-    { label: 'Subscribers', href: '/marketing/subscribers'},
     { label: 'Behaviour',   href: '/guest/behaviour'      },
     { label: 'Newsletters', href: '/guest/newsletters'    },
   ],
