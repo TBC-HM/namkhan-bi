@@ -315,11 +315,9 @@ async function recordOwnerReply(
     campaign_id: campaignId,
     source: 'owner_test_feedback',
     source_message_id: messageId,
-    feedback_text: contentText,
-    tone,
-    is_laros_request: isLaros,
-    decision_class: decisionClass,
-    status: 'inactive',
+    learned_rule: contentText,
+    active: false,
+    created_by: senderEmail,
     created_at: new Date().toISOString(),
   };
 
