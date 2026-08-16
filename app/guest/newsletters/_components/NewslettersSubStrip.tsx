@@ -24,8 +24,8 @@ export type NewslettersTabKey =
 interface Props { active: NewslettersTabKey }
 
 const TABS: Array<{ key: NewslettersTabKey; label: string; href: string; aliases?: NewslettersTabKey[] }> = [
-  { key: 'overview',    label: 'Overview',    href: '/guest/newsletters'                    },
-  { key: 'broadcasts',  label: 'Broadcasts',  href: '/guest/newsletters?tab=broadcasts',
+  { key: 'overview',    label: 'Overview',    href: '/guest/newsletters/broadcasts'          },
+  { key: 'broadcasts',  label: 'Broadcasts',  href: '/guest/newsletters/broadcasts',
     aliases: ['newsletters'] },
   { key: 'lifecycle',   label: 'Lifecycle',   href: '/guest/newsletters/lifecycle'          },
   { key: 'sequences',   label: 'Sequences',   href: '/guest/newsletters/sequences'          },
@@ -90,3 +90,4 @@ export default function NewslettersSubStrip({ active }: Props) {
     </nav>
   );
 }
+
