@@ -46,7 +46,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith('/api/auth/') || // login / request-access / callback exchange
     pathname.startsWith('/api/marketing/media/preview') || // PBS 2026-07-14
     pathname.startsWith('/api/marketing/contacts/extract') || // PBS 2026-07-16 · cron+admin gate lives inside the route
-    pathname.startsWith('/api/marketing/gmail/scan-replies') || // newsletter-owner-test-feedback-writer-v1 2026-08-01 · job 153 was middleware-401-dead (4th silent-401); x-cron-secret gate lives inside the route
+    pathname.startsWith('/api/marketing/gmail/scan-replies') ||
+    pathname.startsWith('/api/newsletter/refire-broadcasts') || // refire-broadcasts — x-cron-secret gate inside route // newsletter-owner-test-feedback-writer-v1 2026-08-01 · job 153 was middleware-401-dead (4th silent-401); x-cron-secret gate lives inside the route
     pathname.startsWith('/api/marketing/gmail/extract-shared/') || // same fix family 2026-08-01 · job 152 (extract-shared/process) was middleware-401-dead; internal gate lives inside the route
     pathname.startsWith('/api/public/') || // PBS 2026-07-16 (Feature B): public guest confirmation POST
     pathname.startsWith('/api/sales/leads/webhook') || // sales brief A7 2026-07-30: vendor webhook — x-webhook-secret gate lives inside the route
@@ -131,3 +132,4 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
+
