@@ -17,6 +17,11 @@ const GROUP_SEEDS: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  const secret = req.headers.get('x-cron-secret') ?? '';
+  const envSecret = process.env.CRON_SHARED_SECRET ?? '';
+  if (!secret || secret !== envSecret) {
+    return NextResponse.json({ ok: false, error: 'auth' }, { status: 401 });
+  }
   const { property_id } = await req.json().catch(() => ({}));
   const pid = Number(property_id);
   if (!pid) return NextResponse.json({ ok: false, error: 'property_id_required' }, { status: 400 });
@@ -72,3 +77,4 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, archived: ids.length, generated, errors });
 }
+
