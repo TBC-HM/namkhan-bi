@@ -180,13 +180,6 @@ export default async function SocialPage({ searchParams }: Props) {
         subtitle="AI social cockpit — calendar · flow · channels · boost · inbox"
         tabs={tabs}
       >
-        <Banner text="CALENDAR · FLOW · CHANNELS · INBOX are DB-backed (marketing.social_calendar → social_posts, programs drive the plan, guardrails in Property Settings). BOOST is still Phase-1 sample data — needs channel analytics APIs. Export (A5) + per-channel landings ship next." />
-
-        {/* KPI band */}
-        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-
         {/* Sub-strip */}
         <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 8, borderBottom: `1px solid ${HAIR}` }}>
           {VIEWS.map((v) => (
@@ -195,6 +188,13 @@ export default async function SocialPage({ searchParams }: Props) {
               {VIEW_LABEL[v]}
             </a>
           ))}
+        </div>
+
+        <Banner text="CALENDAR · FLOW · CHANNELS · INBOX are DB-backed (marketing.social_calendar → social_posts, programs drive the plan, guardrails in Property Settings). BOOST is still Phase-1 sample data — needs channel analytics APIs. Export (A5) + per-channel landings ship next." />
+
+        {/* KPI band */}
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
 
         {view === 'calendar' && (
