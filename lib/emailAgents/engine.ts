@@ -110,7 +110,7 @@ const SLOT_OUTPUT_CONTRACT = [
   'You do NOT write the full email. Greeting, product links, hero photo and signature are assembled deterministically by the system from the DETERMINISTIC ENVELOPE in your context.',
   'You write PROSE ONLY. Return STRICT JSON with keys:',
   '  subject         (string · <= 65 chars · no exclamation marks · no ALL CAPS)',
-  '  opening_md      (string · slot 03_opening · 1-2 short paragraphs · open with ONE specific sensory Namkhan anchor, never a summary)',
+  '  opening_md      (string · slot 03_opening · 1-2 short, direct paragraphs · ground the reader in a specific Namkhan season or moment — clear and unaffected, never florid · do NOT open with smoke, steam, mist or any single sensory image as a metaphor · no flowery scene-setting),',
   '  practical_md    (string · slot 04_practical · 0-2 short paragraphs of practical or seasonal notes · "" when nothing practical is needed)',
   '  product_blurbs  (array of strings · EXACTLY one 1-sentence blurb per product listed in the DETERMINISTIC ENVELOPE, same order · reason first, never salesy · [] when no products)',
   '  closing_md      (string · slot 06_closing · one short warm closing paragraph · no sign-off, no "Warm regards")',
@@ -1193,3 +1193,4 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
     },
   });
 }
+
