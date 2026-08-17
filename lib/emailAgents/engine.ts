@@ -117,6 +117,7 @@ const SLOT_OUTPUT_CONTRACT = [
   '  goal_tag        (short slug like "green-season-family" · optional)',
   'HARD RULES:',
   '- ABSOLUTE BAN: Do NOT open with wood-smoke, smoke, ginger, lemongrass, steam, mist, or any smell/taste/sensory image. The opening must be a clear factual statement. Violation = reject.',
+  '- RETREAT LINK RULE (HARD): When referencing a retreat programme by name, you MUST link to its exact page URL as shown in the RETREAT DEEP DIVE context. Never link retreat names to /experiences, /dining, /spa, or any other page. Exact retreat URLs: Harmony & Mindfulness Retreat → https://www.thenamkhan.com/retreats/harmony-mindfulness-retreat | Namkhan Detox Retreat → https://www.thenamkhan.com/retreats/namkhan-detox | Serene Couples Retreat → https://www.thenamkhan.com/retreats/serene-couples-retreat | Namkhan Immersion → https://www.thenamkhan.com/retreats/namkhan-immersion',
   '- Do NOT write any greeting ("Hi {{first_name}}") — the system adds it.',
   '- Do NOT write any signature — the system adds the department signature.',
   '- Do NOT include any URL anywhere in your prose or blurbs. Product links are attached deterministically.',
@@ -421,7 +422,7 @@ function keywordScore(text: string, kws: string[]): number {
 }
 
 type DeepActivity = { name: string; description: string | null; price_amount: number | null; price_currency: string | null; duration_min: number | null; service_time_from: string | null; service_time_to: string | null };
-type DeepRetreat = { display_name: string; short_pitch: string | null; long_description: string | null; ideal_for: unknown; min_nights: number | null; max_nights: number | null };
+type DeepRetreat = { display_name: string; short_pitch: string | null; long_description: string | null; ideal_for: unknown; min_nights: number | null; max_nights: number | null; page_url: string | null };
 type DeepRoom = { room_type_name: string; positioning_label: string | null; short_pitch: string | null; long_description: string | null; size_sqm: number | null; view_type: unknown };
 type DeepFacility = { facility_name: string; category: string | null; ai_description: string | null; facility_description: string | null; hours: string | null };
 type DeepDive = { activities: DeepActivity[]; retreats: DeepRetreat[]; rooms: DeepRoom[]; facilities: DeepFacility[] };
@@ -440,7 +441,7 @@ async function loadDeepDive(sb: ReturnType<typeof getSupabaseAdmin>, pid: number
   if (kws.length === 0) return empty;
   const [aR, rR, roR, fR] = await Promise.all([
     sb.from('v_activities_catalog').select('name, description, price_amount, price_currency, duration_min, service_time_from, service_time_to').eq('property_id', pid).eq('is_active', true).limit(30),
-    sb.from('v_property_retreats').select('display_name, short_pitch, long_description, ideal_for, min_nights, max_nights').eq('property_id', pid).eq('is_active', true).limit(10),
+    sb.from('v_property_retreats').select('display_name, short_pitch, long_description, ideal_for, min_nights, max_nights, page_url').eq('property_id', pid).eq('is_active', true).limit(10),
     sb.from('v_room_grounding').select('room_type_name, positioning_label, short_pitch, long_description, size_sqm, view_type').eq('property_id', pid).eq('active', true).limit(12),
     sb.from('v_facility_grounding').select('facility_name, category, ai_description, facility_description, hours').eq('property_id', pid).eq('active', true).limit(25),
   ]);
@@ -625,7 +626,7 @@ function assembleUserPrompt(
 
   if (ctx.retreats.length > 0) {
     parts.push('');
-    parts.push('### PROPERTY · RETREATS (facts only from here)');
+    parts.push('### PROPERTY · RETREATS (use page_url as the markdown link for each retreat — NEVER guess or substitute another URL)');
     for (const r of ctx.retreats) {
       parts.push(`- ${r.name}${r.short_description ? ` — ${r.short_description}` : ''}`);
     }
@@ -1204,6 +1205,7 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
     },
   });
 }
+
 
 
 
