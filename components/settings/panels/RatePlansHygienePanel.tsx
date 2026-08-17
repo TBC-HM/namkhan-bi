@@ -4,7 +4,7 @@
 // Writes via public.fn_upsert_rate_plan_hygiene RPC.
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
@@ -50,9 +50,20 @@ export default function RatePlansHygienePanel({ rows, propertyId }: { rows: Row[
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filterFeatured, setFilterFeatured] = useState<'all'|'featured'|'unfeatured'|'hidden'>('all');
   const [searchText, setSearchText] = useState('');
+  // 2026-08-17 · optimistic local mirror of `rows` — the Newsletter/Feature/Hide toggles
+  // update this immediately on RPC success instead of waiting on router.refresh()'s RSC
+  // round-trip to reflect the change. Root cause of "toggle looks stuck": Next.js
+  // middleware occasionally throws creating the Supabase server client (env var race
+  // under Edge Runtime cold start — 63x since 2026-07-24, see deployment doc §13), which
+  // 503s the RSC refresh silently. The write itself (direct browser -> Supabase RPC) is
+  // unaffected, so the DB was correct all along — only the UI looked stuck with no error
+  // shown. This makes the toggle UI resilient to that regardless of whether the underlying
+  // middleware bug is ever fully eliminated.
+  const [localRows, setLocalRows] = useState<Row[]>(rows);
+  useEffect(() => { setLocalRows(rows); }, [rows]);
 
   const filtered = useMemo(() => {
-    let out = [...rows];
+    let out = [...localRows];
     if (filterFeatured === 'featured') out = out.filter(r => r.featured_for_proposals);
     if (filterFeatured === 'unfeatured') out = out.filter(r => !r.featured_for_proposals && !r.hidden_from_ui);
     if (filterFeatured === 'hidden') out = out.filter(r => r.hidden_from_ui);
@@ -66,16 +77,16 @@ export default function RatePlansHygienePanel({ rows, propertyId }: { rows: Row[
       if ((b.bookings_12m ?? 0) !== (a.bookings_12m ?? 0)) return (b.bookings_12m ?? 0) - (a.bookings_12m ?? 0);
       return (a.effective_label ?? '').localeCompare(b.effective_label ?? '');
     });
-  }, [rows, filterFeatured, searchText]);
+  }, [localRows, filterFeatured, searchText]);
 
   const stats = useMemo(() => ({
-    total: rows.length,
-    featured: rows.filter(r => r.featured_for_proposals).length,
-    newsletter: rows.filter(r => r.featured_for_newsletter).length,
-    hidden: rows.filter(r => r.hidden_from_ui).length,
-    used_12m: rows.filter(r => (r.bookings_12m ?? 0) > 0).length,
-    never_used: rows.filter(r => (r.bookings_total ?? 0) === 0).length,
-  }), [rows]);
+    total: localRows.length,
+    featured: localRows.filter(r => r.featured_for_proposals).length,
+    newsletter: localRows.filter(r => r.featured_for_newsletter).length,
+    hidden: localRows.filter(r => r.hidden_from_ui).length,
+    used_12m: localRows.filter(r => (r.bookings_12m ?? 0) > 0).length,
+    never_used: localRows.filter(r => (r.bookings_total ?? 0) === 0).length,
+  }), [localRows]);
 
   function toggle(row: Row, field: 'featured_for_proposals' | 'hidden_from_ui' | 'featured_for_newsletter', value: boolean) {
     setError(null);
@@ -86,7 +97,10 @@ export default function RatePlansHygienePanel({ rows, propertyId }: { rows: Row[
       if (field === 'hidden_from_ui' && value) patch['p_featured_for_proposals'] = false;
       const { error: e } = await supabase.rpc('fn_upsert_rate_plan_hygiene', patch as any);
       if (e) { setError(e.message); return; }
-      router.refresh();
+      setLocalRows(prev => prev.map(r => r.rate_plan_id === row.rate_plan_id
+        ? { ...r, [field]: value, ...(field === 'hidden_from_ui' && value ? { featured_for_proposals: false } : {}) }
+        : r));
+      try { router.refresh(); } catch { /* non-fatal — local state already reflects the write */ }
     });
   }
 
@@ -97,7 +111,8 @@ export default function RatePlansHygienePanel({ rows, propertyId }: { rows: Row[
       for (const [k, v] of Object.entries(patch)) rpcArgs['p_' + k] = v;
       const { error: e } = await supabase.rpc('fn_upsert_rate_plan_hygiene', rpcArgs as any);
       if (e) { setError(e.message); return; }
-      router.refresh();
+      setLocalRows(prev => prev.map(r => r.rate_plan_id === row.rate_plan_id ? { ...r, ...patch } : r));
+      try { router.refresh(); } catch { /* non-fatal — local state already reflects the write */ }
     });
   }
 
