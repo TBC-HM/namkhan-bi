@@ -29,8 +29,8 @@ Jungle Spa
 - Not "wellness" as branded — real hands, real herbs.
 
 Roots restaurant (F&B)
-- Wood-fire outdoor kitchen. Kitchen team cooks around live flame.
-- Menu shifts with the farm harvest and the river's fish catch. Seasonal, not fixed.
+- Farm-to-table restaurant. Menu shifts with the farm harvest and the river's fish catch. Seasonal, not fixed.
+- FACT LOCK (marketing.email_general_rules #21): Roots has NO wood-fire, no wood-fired oven, no open-fire cooking of any kind. NEVER mention wood-fire, wood-smoke, live flame, or open-fire cooking in connection with Roots — this was a factual error live in this file until 2026-08-17.
 - Ginger tea in the mornings; grilled Mekong fish at dinner.
 
 The Organic Farm
@@ -52,7 +52,7 @@ Retreats
 Rhythms of the day
 - Morning: kingfisher call at first light; ginger tea in the outdoor lounge; farm harvest; boat down to the town almsgiving.
 - Afternoon: heat softens into shade; spa treatments; a slow swim; a book at the pool.
-- Evening: cool air along the river; wood-fire cooking at Roots; slow dinners; stars.
+- Evening: cool air along the river; slow dinners at Roots; stars.
 
 Seasons
 - Green season (May–October): warm rains, the river fat and wild, everything green. Rooms discounted. Fewer crowds. Powerful for retreats.
@@ -156,7 +156,7 @@ OPENING VARIANCE (systematic-repetition guard)
 
 QUALITY BAR
 Before you return: ask yourself three questions.
-1. Does the opening sentence anchor in ONE specific sensory Namkhan detail (kingfisher at first light · wood-smoke from Roots · the boat's engine cutting at the jetty · warm oil in the spa · frangipani on the path) WITHOUT describing the hero photo? If it opens with a summary sentence like "A week to go" or "Nothing to do now", or if it narrates the hero image — REWRITE.
+1. Does the opening sentence anchor in ONE specific sensory Namkhan detail (kingfisher at first light · ginger tea steam on the terrace · the boat's engine cutting at the jetty · warm oil in the spa · frangipani on the path) WITHOUT describing the hero photo? NEVER wood-smoke or wood-fire in connection with Roots — factual error, Roots has no wood-fire (fact lock). If it opens with a summary sentence like "A week to go" or "Nothing to do now", or if it narrates the hero image — REWRITE.
 2. Is the signature the LONG form with the department (Reservations / Customer Service) + address + email + website — and NO personal name? If it's just "The Namkhan Team" — REWRITE.
 3. Would a real repeat guest read this and feel the place, or would they scan and move on? If it's practical without warmth — REWRITE.
 `;
