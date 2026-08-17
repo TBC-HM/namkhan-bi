@@ -46,7 +46,7 @@ async function getPropertyData(propertyId: number) {
     supabase.schema('property').from('boats').select('*').eq('property_id', propertyId).order('name'),
     supabase.schema('property').from('boat_cruises').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.schema('property').from('facilities').select('*').eq('property_id', propertyId).eq('is_meeting_space', true).order('name'),
-    supabase.from('v_property_retreats').select('*').eq('property_id', propertyId).eq('is_active', true).order('retreat_id'),
+    supabase.from('v_property_retreats').select('*').eq('property_id', propertyId).order('retreat_id'), // PBS 2026-08-17: show inactive too — RetreatsPanel has an active/inactive toggle now, so inactive rows must stay visible to be re-activated.
     // PBS 2026-07-18 v2 · spa treatments + fnb menus/items via public bridge views.
     supabase.from('v_property_spa_treatments').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
     supabase.from('v_property_fnb_menus').select('*').eq('property_id', propertyId).order('display_order', { ascending: true, nullsFirst: false }).order('name'),
