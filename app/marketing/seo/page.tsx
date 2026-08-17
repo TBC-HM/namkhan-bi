@@ -55,12 +55,13 @@ export default async function MarketingSeoPage({
   let rankQuery = sb.from('v_seo_rankings').select('*');
   if (locCode) rankQuery = rankQuery.eq('location_name', MARKETS.find(m=>m.loc===locCode)?.label ?? '');
 
-  const [rankRes, localRes, historyRes, marketRes, onpageRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*'),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_market_comparison').select('*') : Promise.resolve({ data: [] }),
     tab === 'technical' ? sb.from('v_seo_onpage').select('*').order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
+    tab === 'ai-visibility' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', 260955).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -72,6 +73,8 @@ export default async function MarketingSeoPage({
   const history = (historyRes.data ?? []) as HistoryRow[];
   const marketData = (marketRes.data ?? []) as MarketRow[];
   const onpageRows = (onpageRes.data ?? []) as Array<{url:string;page_title:string|null;title_length:number|null;meta_length:number|null;page_score:number|null;h1:string|null;word_count:number|null;crawl_date:string|null}>;
+  type LlmSnap={total_mentions:number;ai_search_volume:number;google_mentions:number;chatgpt_mentions:number;platform_raw:unknown;sources_raw:unknown;target:string;snapshot_date:string};
+  const llmSnapshot=((llmRes.data??[])[0]??null) as LlmSnap|null;
 
   const hasData = rankings.some(r => r.snapshot_date !== null);
   const withPos = rankings.filter(r => r.position !== null);
@@ -87,14 +90,14 @@ export default async function MarketingSeoPage({
   const SEO_TABS = [
     { key:'overview',   label:'Overview'   },{ key:'rankings',   label:'Rankings'   },
     { key:'keywords',   label:'Keywords'   },{ key:'competitors',label:'Competitors' },
-    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },
+    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'ai-visibility', label:'AI Visibility' },
   ];
 
   const btnSt: React.CSSProperties = { padding:'3px 10px', fontSize:11, border:`1px solid ${HAIR}`, borderRadius:3, background:'#FAFAF7', cursor:'pointer', textDecoration:'none', color:INK_M, whiteSpace:'nowrap' };
   const btnActiveSt: React.CSSProperties = { ...btnSt, background:GREEN, color:'#fff', borderColor:GREEN };
 
   return (
-    <DashboardPage title="Marketing · SEO" subtitle={`SERP rank tracker · ${allRankings.length} keywords · 6 markets`} tabs={marketingTabs}>
+    <DashboardPage title="Marketing · SEO" subtitle={`SERP rank tracker · ${allRankings.length} keywords · AI visibility`} tabs={marketingTabs}>
 
       {/* SEO sub-tabs */}
       <div style={{ gridColumn:'1/-1', display:'flex', gap:0, borderBottom:`2px solid ${HAIR}`, marginBottom:4 }}>
@@ -343,6 +346,39 @@ export default async function MarketingSeoPage({
               </div>
               {onpageRows.length === 0 ? (<div style={{ padding:'24px 16px', textAlign:'center' as const, color:INK_M, fontSize:13 }}>No on-page data yet — click <strong>Run On-Page Crawl</strong> above.</div>) : (<div style={{ fontSize:12, color:INK }}>{onpageRows.length} pages crawled on {onpageRows[0]?.crawl_date ?? '—'}</div>)}
             </div>
+          </Container>
+        </div>
+      )}
+
+      {tab==='ai-visibility' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          <Container title="AI Visibility · LLM Mentions" subtitle="thenamkhan.com presence in Google AI Overviews + ChatGPT"
+            action={<SeoTriggerBtn mode="llm" label="🔄 Refresh AI data" description="DataForSEO LLM Mentions · live" />}>
+            {!llmSnapshot||llmSnapshot.total_mentions===0?(
+              <div style={{ padding:'32px 16px', textAlign:'center' as const, color:INK_M, fontSize:13 }}>No AI visibility data — click <strong>Refresh AI data</strong>.</div>
+            ):(
+              <div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:8, marginBottom:16 }}>
+                  {([[ 'Total AI mentions',String(llmSnapshot.total_mentions),GREEN],['AI search volume',Number(llmSnapshot.ai_search_volume).toLocaleString(),INK],['Google AI Overview',String(llmSnapshot.google_mentions),GREEN],['ChatGPT',String(llmSnapshot.chatgpt_mentions),INK]] as [string,string,string][]).map(([l,v,c],i)=>(
+                    <div key={i} style={{ background:'#FFFFFF',border:`1px solid ${HAIR}`,borderRadius:6,padding:'10px 14px' }}>
+                      <div style={{ fontSize:10,fontFamily:'ui-monospace,monospace',textTransform:'uppercase' as const,color:INK_F,marginBottom:3 }}>{l}</div>
+                      <div style={{ fontSize:22,fontWeight:700,color:c,fontVariantNumeric:'tabular-nums' }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+                {(llmSnapshot.sources_raw as Array<{key:string;mentions:number}>|null)?.length?(
+                  <>
+                    <div style={{ fontSize:12,fontWeight:600,color:INK,marginBottom:8 }}>Top domains in AI answers</div>
+                    <div style={{ display:'flex',flexWrap:'wrap' as const,gap:6 }}>
+                      {(llmSnapshot.sources_raw as Array<{key:string;mentions:number}>).slice(0,8).map((s,i)=>(
+                        <div key={i} style={{ fontSize:11,fontFamily:'ui-monospace,monospace',border:`1px solid ${HAIR}`,padding:'3px 10px',borderRadius:4,color:INK_M }}>{s.key} · {s.mentions}↗</div>
+                      ))}
+                    </div>
+                  </>
+                ):null}
+                <div style={{ fontSize:10,color:INK_F,marginTop:12 }}>Last fetched: {llmSnapshot.snapshot_date} · {llmSnapshot.target}</div>
+              </div>
+            )}
           </Container>
         </div>
       )}
