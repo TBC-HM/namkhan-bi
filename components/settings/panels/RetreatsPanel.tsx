@@ -5,6 +5,8 @@
 // and 8 pricing rows (tier × season × audience).
 'use client';
 
+import { useState } from 'react';
+
 const HAIR   = '#E6DFCC';
 const INK    = '#1B1B1B';
 const INK_M  = '#5A5A5A';
@@ -42,15 +44,45 @@ function fmtPrice(row: { price_usd: string; taxes_included: boolean }): string {
   return 'USD ' + (Number.isFinite(n) ? n.toFixed(0) : row.price_usd) + (row.taxes_included ? ' inc.' : ' +tax');
 }
 
-export default function RetreatsPanel({ retreats }: Props) {
+export default function RetreatsPanel({ retreats: initialRetreats, propertyId }: Props) {
+  const [retreats, setRetreats] = useState<RetreatRow[]>(initialRetreats);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+
+  async function toggleActive(r: RetreatRow) {
+    setToggleError(null);
+    setTogglingId(r.retreat_id);
+    const nextActive = !r.is_active;
+    try {
+      const res = await fetch('/api/settings/retreats/toggle-active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retreat_id: r.retreat_id, property_id: propertyId, is_active: nextActive }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || `Toggle failed (${res.status})`);
+      setRetreats((rs) => rs.map((row) => (row.retreat_id === r.retreat_id ? { ...row, is_active: nextActive } : row)));
+    } catch (e: any) {
+      setToggleError(e?.message ?? 'Toggle failed');
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
   return (
     <div style={{ padding: 20 }}>
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: INK }}>Retreats</div>
         <div style={{ fontSize: 11, color: INK_M, marginTop: 2 }}>
-          {retreats.length} program{retreats.length === 1 ? '' : 's'} · each has 2 tiers (Essential · Immersion) sourced from content.retreat_programs
+          {retreats.length} program{retreats.length === 1 ? '' : 's'} · each has 2 tiers (Essential · Immersion) sourced from content.retreat_programs · toggle to pull a retreat out of settings/newsletter without deleting it
         </div>
       </div>
+
+      {toggleError && (
+        <div style={{ background: '#FBEDD8', border: '1px solid #E6D2A5', borderRadius: 4, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#8B5A1C' }}>
+          {toggleError}
+        </div>
+      )}
 
       {retreats.length === 0 ? (
         <div style={{ background: CREAM, border: '1px solid ' + HAIR, borderRadius: 4, padding: 20, textAlign: 'center', color: INK_M }}>
@@ -65,6 +97,19 @@ export default function RetreatsPanel({ retreats }: Props) {
               <div key={r.retreat_id} style={{ background: '#FFFFFF', border: '1px solid ' + HAIR, borderRadius: 6, padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
                   <div style={{ fontFamily: 'ui-serif, Georgia, serif', fontSize: 18, fontWeight: 500, color: INK }}>{r.display_name}</div>
+                  <button
+                    type="button"
+                    onClick={() => toggleActive(r)}
+                    disabled={togglingId === r.retreat_id}
+                    style={{
+                      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                      padding: '3px 10px', borderRadius: 12, border: '1px solid ' + (r.is_active ? '#C8DFC8' : HAIR),
+                      background: r.is_active ? '#E4F0E1' : '#FFFFFF', color: r.is_active ? '#1F5C2C' : INK_M,
+                      cursor: togglingId === r.retreat_id ? 'default' : 'pointer', opacity: togglingId === r.retreat_id ? 0.6 : 1,
+                    }}
+                  >
+                    {togglingId === r.retreat_id ? 'Saving…' : r.is_active ? 'Active' : 'Inactive'}
+                  </button>
                   {r.pricing_basis && (
                     <span style={{ fontSize: 10, background: CREAM, color: INK_M, padding: '2px 8px', borderRadius: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       {r.pricing_basis.replace(/_/g, ' ')}
