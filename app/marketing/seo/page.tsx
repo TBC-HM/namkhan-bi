@@ -55,13 +55,14 @@ export default async function MarketingSeoPage({
   let rankQuery = sb.from('v_seo_rankings').select('*');
   if (locCode) rankQuery = rankQuery.eq('location_name', MARKETS.find(m=>m.loc===locCode)?.label ?? '');
 
-  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*'),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_market_comparison').select('*') : Promise.resolve({ data: [] }),
     tab === 'technical' ? sb.from('v_seo_onpage').select('*').order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
     tab === 'ai-visibility' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', 260955).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
+    tab === 'pages' ? sb.from('v_seo_ranked_pages').select('url,keyword,position,volume,search_intent').eq('property_id', 260955).order('position', { ascending: true }).limit(500) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -75,6 +76,11 @@ export default async function MarketingSeoPage({
   const onpageRows = (onpageRes.data ?? []) as Array<{url:string;page_title:string|null;title_length:number|null;meta_length:number|null;page_score:number|null;h1:string|null;word_count:number|null;crawl_date:string|null}>;
   type LlmSnap={total_mentions:number;ai_search_volume:number;google_mentions:number;chatgpt_mentions:number;platform_raw:unknown;sources_raw:unknown;target:string;snapshot_date:string};
   const llmSnapshot=((llmRes.data??[])[0]??null) as LlmSnap|null;
+  type PageKw={url:string;keyword:string;position:number|null;volume:number|null;search_intent:string|null};
+  const pagesRows=(pagesRes.data??[]) as PageKw[];
+  const pagesMap=new Map<string,PageKw[]>();
+  for(const r of pagesRows){if(!r.url)continue;if(!pagesMap.has(r.url))pagesMap.set(r.url,[]);pagesMap.get(r.url)!.push(r);}
+  const pagesArr=[...pagesMap.entries()].map(([url,kws])=>({url,count:kws.length,bestPos:Math.min(...kws.map(k=>k.position??99)),vol:kws.reduce((s,k)=>s+(k.volume??0),0),top:kws.slice(0,3)})).sort((a,b)=>a.bestPos-b.bestPos);
 
   const hasData = rankings.some(r => r.snapshot_date !== null);
   const withPos = rankings.filter(r => r.position !== null);
@@ -90,7 +96,7 @@ export default async function MarketingSeoPage({
   const SEO_TABS = [
     { key:'overview',   label:'Overview'   },{ key:'rankings',   label:'Rankings'   },
     { key:'keywords',   label:'Keywords'   },{ key:'competitors',label:'Competitors' },
-    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'ai-visibility', label:'AI Visibility' },
+    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'ai-visibility', label:'AI Visibility' },{ key:'pages', label:'Pages' },{ key:'hotel', label:'Hotel Data' },
   ];
 
   const btnSt: React.CSSProperties = { padding:'3px 10px', fontSize:11, border:`1px solid ${HAIR}`, borderRadius:3, background:'#FAFAF7', cursor:'pointer', textDecoration:'none', color:INK_M, whiteSpace:'nowrap' };
@@ -379,6 +385,44 @@ export default async function MarketingSeoPage({
                 <div style={{ fontSize:10,color:INK_F,marginTop:12 }}>Last fetched: {llmSnapshot.snapshot_date} · {llmSnapshot.target}</div>
               </div>
             )}
+          </Container>
+        </div>
+      )}
+
+      {tab==='pages' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          <Container title="Ranked Pages" subtitle={`${pagesArr.length} pages · ${pagesRows.length} keywords in Google US top 50`}
+            action={<SeoTriggerBtn mode="ranked" label="🔄 Refresh page rankings" description="DataForSEO Labs · domain full scan" />}>
+            {pagesArr.length===0?(<div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>No page ranking data — click <strong>Refresh page rankings</strong>.</div>):(
+              <div style={{overflowX:'auto' as const}}>
+                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
+                  <thead><tr style={{borderBottom:`2px solid ${HAIR}`}}>
+                    {['Page','Keywords','Best pos','Vol/mo','Top keywords'].map(h=>(
+                      <th key={h} style={{padding:'6px 8px',textAlign:'left' as const,fontSize:10,fontFamily:'ui-monospace,monospace',letterSpacing:'0.1em',textTransform:'uppercase' as const,color:INK_F}}>{h}</th>
+                    ))}</tr></thead>
+                  <tbody>{pagesArr.map((p,i)=>(
+                    <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                      <td style={{padding:'7px 8px',maxWidth:280,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}><a href={p.url} target="_blank" rel="noopener noreferrer" style={{color:GREEN,fontSize:11,textDecoration:'none'}}>{p.url.replace(/^https?:\/\/[^/]+/,'')||'/'}</a></td>
+                      <td style={{padding:'7px 8px',fontFamily:'ui-monospace,monospace',fontSize:11}}>{p.count}</td>
+                      <td style={{padding:'7px 8px'}}><span style={{fontFamily:'ui-monospace,monospace',fontWeight:700,fontSize:12,color:p.bestPos<=10?GREEN:p.bestPos<=20?AMBER:INK_F}}>#{p.bestPos}</span></td>
+                      <td style={{padding:'7px 8px',fontFamily:'ui-monospace,monospace',fontSize:11}}>{p.vol.toLocaleString()}</td>
+                      <td style={{padding:'7px 8px',maxWidth:300,fontSize:11,color:INK_M}}>{p.top.map(k=>`${k.keyword} (#${k.position??'?'})`).join(' · ')}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </Container>
+        </div>
+      )}
+
+      {tab==='hotel' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          <Container title="Hotel Data · Google Hotels" subtitle="Competitive positioning + pricing in Google Hotels results"
+            action={<SeoTriggerBtn mode="hotel" label="🏨 Refresh hotel data" description="business_data/google/hotel_searches · live" />}>
+            <div style={{padding:'24px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
+              Click <strong>Refresh hotel data</strong> to fetch competitive hotel positioning from Google Hotels. Shows which hotels rank for your target keyword, their prices, ratings, and how Namkhan compares.
+            </div>
           </Container>
         </div>
       )}
