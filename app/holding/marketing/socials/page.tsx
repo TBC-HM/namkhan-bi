@@ -4,6 +4,7 @@
 // One Upload Post account; profile slugs: bc260955, bc1000001, bc{N}.
 // Connect flow: POST /api/marketing/social/connect → redirect to authorize_url.
 
+import type { CSSProperties } from 'react';
 import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -69,28 +70,28 @@ export default async function HoldingSocialsPage() {
     { label: 'Total drafts',       value: typedPosts.filter(p => p.status === 'draft').length },
   ];
 
-  const CELL: React.CSSProperties = {
+  const CELL: CSSProperties = {
     padding: '10px 14px', borderBottom: '1px solid var(--hairline,#E6DFCC)',
     fontSize: 13, color: 'var(--ink,#1B1B1B)', whiteSpace: 'nowrap',
   };
-  const TH: React.CSSProperties = {
+  const TH: CSSProperties = {
     ...CELL, fontWeight: 600, color: 'var(--ink-mute,#5A5A5A)',
     background: 'var(--surf-2,#FAFAF7)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em',
   };
 
   return (
-    <DashboardPage title="Marketing · Socials" sub="Cross-property social publishing">
+    <DashboardPage title="Marketing · Socials" subtitle="Cross-property social publishing">
       {/* KPI row */}
-      <Container>
+      <Container title="KPIs">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
           {kpis.map(k => (
-            <KpiTile key={k.label} label={k.label} value={String(k.value)} sub={k.sub} />
+            <KpiTile key={k.label} label={k.label} value={String(k.value)} />
           ))}
         </div>
       </Container>
 
       {/* Connected accounts per property */}
-      <Container title="Connected accounts" style={{ marginTop: 24 }}>
+      <Container title="Connected accounts">
         {typedProfiles.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-mute,#5A5A5A)', fontSize: 14 }}>
             No accounts connected yet. Use the Connect flow per property.
@@ -131,7 +132,7 @@ export default async function HoldingSocialsPage() {
       </Container>
 
       {/* Recent posts across all properties */}
-      <Container title="Recent posts — all properties" style={{ marginTop: 24 }}>
+      <Container title="Recent posts — all properties">
         {typedPosts.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-mute,#5A5A5A)', fontSize: 14 }}>
             No posts yet.
