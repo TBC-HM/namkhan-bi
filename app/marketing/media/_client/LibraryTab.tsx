@@ -498,7 +498,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
 
       {showUpload && (
         <div style={{ marginBottom:16 }}>
-          <UploadDropzone onResult={r => setMsg(r)} />
+          <UploadDropzone propertyId={propertyId} onResult={r => setMsg(r)} onUploadDone={() => window.location.reload()} />
         </div>
       )}
 
