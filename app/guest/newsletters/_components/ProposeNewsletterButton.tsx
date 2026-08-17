@@ -85,7 +85,13 @@ export default function ProposeNewsletterButton({
         setMsg(null);
         if (mode === 'refine') setInstr('');
       } catch (e) {
-        setMsg('Propose error: ' + (e instanceof Error ? e.message : String(e)));
+        // 2026-08-17 fix: same "[object Object]" bug as elsewhere in this app.
+        if (e instanceof Error) setMsg('Propose error: ' + e.message);
+        else if (e && typeof e === 'object') {
+          const anyE = e as Record<string, unknown>;
+          const parts = [anyE.message, anyE.details, anyE.hint, anyE.error].filter((v): v is string => typeof v === 'string' && v.length > 0);
+          setMsg('Propose error: ' + (parts.length ? parts.join(' — ') : JSON.stringify(anyE)));
+        } else setMsg('Propose error: ' + String(e));
       }
     });
   }
