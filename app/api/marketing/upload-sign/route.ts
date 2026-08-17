@@ -40,12 +40,13 @@ export async function POST(req: NextRequest) {
 
   let body: {
     filename?: string; content_type?: string; size?: number; sha256?: string;
-    photographer?: string; license?: string; campaign_tag?: string;
+    photographer?: string; license?: string; campaign_tag?: string; property_id?: number;
   };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
 
   const { filename, content_type, size, sha256 } = body;
+  const property_id = Number(body.property_id ?? 260955);
   if (!filename || !content_type || !size || !sha256) {
     return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
   }
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
     p_size: size,
     p_photographer: body.photographer ?? null,
     p_license: body.license ?? 'owned',
+    p_property_id: property_id,
   });
 
   if (rpcErr) {
@@ -107,3 +109,4 @@ export async function POST(req: NextRequest) {
     token: signed.token,
   });
 }
+
