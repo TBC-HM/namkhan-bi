@@ -98,13 +98,28 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === 'onpage') {
-      const payload = JSON.stringify([{ target: 'thenamkhan.com', max_crawl_pages: 50, store_raw_html: false, tag: `onpage-${propertyId}` }]);
-      const { error: d4sErr } = await sb.rpc('fn_d4s_call', {
-        p_endpoint: 'on_page/task_post', p_payload: JSON.parse(payload),
-        p_property_id: propertyId, p_mode: 'task',
+      const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
+      const cfg = (cfgRows as any[])?.[0] as { domain:string } | undefined;
+      const domain = cfg?.domain ?? 'thenamkhan.com';
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const keyPages = [`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+      const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
+        method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
+        body:JSON.stringify(keyPages.map(url=>({url,enable_javascript:false,load_resources:false}))),
       });
-      if (d4sErr) throw d4sErr;
-      return NextResponse.json({ ok: true, mode, result: { status: 'queued', note: 'On-page crawl queued — results appear in Technical tab after ~5 min' } });
+      const json=await r.json() as Record<string,any>;
+      const rows=(json?.tasks??[]).flatMap((t:any)=>(t?.result?.[0]?.items??[]).map((item:any)=>({
+        property_id:propertyId,url:t?.data?.url,page_title:item?.meta?.title,title_length:item?.meta?.title_length,
+        meta_description:item?.meta?.description,meta_length:item?.meta?.description_length,
+        h1:item?.meta?.htags?.h1?.[0],h2s:item?.meta?.htags?.h2,h3s:item?.meta?.htags?.h3,
+        word_count:item?.meta?.content?.plain_text_word_count,readability:item?.meta?.content?.flesch_kincaid_readability_index,
+        internal_links:item?.meta?.internal_links_count,external_links:item?.meta?.external_links_count,images_count:item?.meta?.images_count,
+        issues:{title_too_long:(item?.meta?.title_length??0)>60,title_too_short:(item?.meta?.title_length??100)<35,meta_too_long:(item?.meta?.description_length??0)>155,meta_missing:!item?.meta?.description,h1_missing:!item?.meta?.htags?.h1?.[0],readability_low:(item?.meta?.content?.flesch_kincaid_readability_index??0)<60,thin_content:(item?.meta?.content?.plain_text_word_count??0)<600},
+        raw:item})),
+      ).filter((r:any)=>r.url);
+      await sb.rpc('fn_seo_upsert_instant_pages',{p_rows:JSON.stringify(rows)});
+      return NextResponse.json({ok:true,mode,result:{pages:rows.length,note:'Pages crawled — refresh Technical tab to see results'}});
     }
 
     if (mode === 'llm') {
