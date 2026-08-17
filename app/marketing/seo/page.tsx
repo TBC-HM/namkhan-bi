@@ -55,11 +55,12 @@ export default async function MarketingSeoPage({
   let rankQuery = sb.from('v_seo_rankings').select('*');
   if (locCode) rankQuery = rankQuery.eq('location_name', MARKETS.find(m=>m.loc===locCode)?.label ?? '');
 
-  const [rankRes, localRes, historyRes, marketRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*'),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_market_comparison').select('*') : Promise.resolve({ data: [] }),
+    tab === 'technical' ? sb.from('v_seo_onpage').select('*').order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -70,6 +71,7 @@ export default async function MarketingSeoPage({
   const localPack = (localRes.data ?? []) as LocalRow[];
   const history = (historyRes.data ?? []) as HistoryRow[];
   const marketData = (marketRes.data ?? []) as MarketRow[];
+  const onpageRows = (onpageRes.data ?? []) as Array<{url:string;page_title:string|null;title_length:number|null;meta_length:number|null;page_score:number|null;h1:string|null;word_count:number|null;crawl_date:string|null}>;
 
   const hasData = rankings.some(r => r.snapshot_date !== null);
   const withPos = rankings.filter(r => r.position !== null);
@@ -318,9 +320,7 @@ export default async function MarketingSeoPage({
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Technical SEO · On-page audit" subtitle="thenamkhan.com · meta, titles, Core Web Vitals, page scores"
             action={
-              <div style={{ fontSize:11, color:'#C28F2C', fontFamily:'ui-monospace,monospace', padding:'4px 10px', background:'#FFF8E1', border:'1px solid #C28F2C', borderRadius:4 }}>
-                🔧 On-Page API — wire to DB first
-              </div>
+              <SeoTriggerBtn mode="onpage" label="🔍 Run On-Page Crawl" description="Up to 50 pages · DataForSEO" />
             }>
             <div style={{ padding:'24px 16px' }}>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12, marginBottom:24 }}>
@@ -341,12 +341,7 @@ export default async function MarketingSeoPage({
                   </div>
                 ))}
               </div>
-              <div style={{ padding:'16px', background:'#FFF8E1', border:`1px solid ${AMBER}`, borderRadius:6 }}>
-                <div style={{ fontSize:12, fontWeight:600, color:'#7A5A00', marginBottom:4 }}>On-Page crawl not yet wired to DB — backend complete, UI display pending</div>
-                <div style={{ fontSize:11, color:INK_M, lineHeight:1.6 }}>
-                  The crawl runs via DataForSEO On-Page API · checks up to 50 pages · results stored in <code style={{ fontFamily:'ui-monospace,monospace' }}>marketing.seo_onpage_audit</code> · run once now, then weekly automatically.
-                </div>
-              </div>
+              {onpageRows.length === 0 ? (<div style={{ padding:'24px 16px', textAlign:'center' as const, color:INK_M, fontSize:13 }}>No on-page data yet — click <strong>Run On-Page Crawl</strong> above.</div>) : (<div style={{ fontSize:12, color:INK }}>{onpageRows.length} pages crawled on {onpageRows[0]?.crawl_date ?? '—'}</div>)}
             </div>
           </Container>
         </div>
