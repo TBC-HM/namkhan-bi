@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors']);
+const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage']);
 
 export async function POST(req: NextRequest) {
   let body: { mode?: string; property_id?: number } = {};
@@ -87,6 +87,24 @@ export async function POST(req: NextRequest) {
           upserted: serp 
         } 
       });
+    }
+
+    if (mode === 'volume' || mode === 'suggestions' || mode === 'local') {
+      const { data: edgeData, error: edgeErr } = await sb.functions.invoke('fetch-serp-rankings', {
+        body: { action: mode, property_id: propertyId },
+      });
+      if (edgeErr) throw edgeErr;
+      return NextResponse.json({ ok: true, mode, result: edgeData ?? { upserted: 0 } });
+    }
+
+    if (mode === 'onpage') {
+      const payload = JSON.stringify([{ target: 'thenamkhan.com', max_crawl_pages: 50, store_raw_html: false, tag: `onpage-${propertyId}` }]);
+      const { error: d4sErr } = await sb.rpc('fn_d4s_call', {
+        p_endpoint: 'on_page/task_post', p_payload: JSON.parse(payload),
+        p_property_id: propertyId, p_mode: 'task',
+      });
+      if (d4sErr) throw d4sErr;
+      return NextResponse.json({ ok: true, mode, result: { status: 'queued', note: 'On-page crawl queued — results appear in Technical tab after ~5 min' } });
     }
 
     return NextResponse.json({ ok: false, error: 'mode not implemented' }, { status: 400 });
