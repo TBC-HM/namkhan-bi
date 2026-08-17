@@ -10,10 +10,10 @@ export const dynamic = 'force-dynamic';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel']);
+const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel', 'instant']);
 
 export async function POST(req: NextRequest) {
-  let body: { mode?: string; property_id?: number } = {};
+  let body: { mode?: string; property_id?: number; url?: string } = {};
   try { 
     body = await req.json(); 
   } catch { /**/ }
@@ -177,6 +177,23 @@ export async function POST(req: NextRequest) {
         if (rows.length>0) await sb.rpc('fn_seo_upsert_hotel_searches',{p_rows:JSON.stringify(rows)});
         return NextResponse.json({ ok: true, mode, result: { hotels: items.length, upserted: rows.length } });
       }
+    }
+
+    if (mode === 'instant') {
+      const pUrl = body.url; if (!pUrl?.startsWith('http')) throw new Error('valid URL required');
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const res = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
+        method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
+        body:JSON.stringify([{url:pUrl,enable_javascript:false,load_resources:false}]),
+      });
+      const json=await res.json() as Record<string,any>;
+      const item=json?.tasks?.[0]?.result?.[0]?.items?.[0];
+      if (!item) throw new Error('no_data_returned');
+      const issues={title_too_long:(item?.meta?.title_length??0)>60,title_too_short:(item?.meta?.title_length??100)<35,meta_too_long:(item?.meta?.description_length??0)>155,meta_missing:!item?.meta?.description,h1_missing:!item?.meta?.htags?.h1?.[0],readability_low:(item?.meta?.content?.flesch_kincaid_readability_index??0)<60,thin_content:(item?.meta?.content?.plain_text_word_count??0)<600};
+      const row={property_id:propertyId,url:pUrl,page_title:item?.meta?.title,title_length:item?.meta?.title_length,meta_description:item?.meta?.description,meta_length:item?.meta?.description_length,h1:item?.meta?.htags?.h1?.[0],h2s:item?.meta?.htags?.h2,h3s:item?.meta?.htags?.h3,word_count:item?.meta?.content?.plain_text_word_count,readability:item?.meta?.content?.flesch_kincaid_readability_index,internal_links:item?.meta?.internal_links_count,external_links:item?.meta?.external_links_count,images_count:item?.meta?.images_count,issues,raw:item};
+      await sb.rpc('fn_seo_upsert_instant_pages',{p_rows:JSON.stringify([row])});
+      return NextResponse.json({ok:true,mode,result:{title:row.page_title,h1:row.h1,h2s:item?.meta?.htags?.h2??[],word_count:row.word_count,readability:row.readability,title_length:row.title_length,meta_length:row.meta_length,issues}});
     }
 
     return NextResponse.json({ ok: false, error: 'mode not implemented' }, { status: 400 });
