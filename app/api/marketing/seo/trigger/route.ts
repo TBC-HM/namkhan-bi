@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage']);
+const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm']);
 
 export async function POST(req: NextRequest) {
   let body: { mode?: string; property_id?: number } = {};
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const propertyId = body.property_id ?? 260955; // Default to The Nam Khan
 
   if (!ALLOWED_MODES.has(mode)) {
-    return NextResponse.json({ ok: false, error: `unknown mode: ${mode}` }, { status: 400 });
+    if (!ALLOWED_MODES.has(mode)) { return NextResponse.json({ ok: false, error: `unknown mode: ${mode}` }, { status: 400 }); }
   }
 
   if (!SUPABASE_SERVICE_KEY) {
@@ -105,6 +105,31 @@ export async function POST(req: NextRequest) {
       });
       if (d4sErr) throw d4sErr;
       return NextResponse.json({ ok: true, mode, result: { status: 'queued', note: 'On-page crawl queued — results appear in Technical tab after ~5 min' } });
+    }
+
+    if (mode === 'llm') {
+      const domain = propertyId === 1000001 ? 'www.thedonnaportals.com' : 'thenamkhan.com';
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const mRes = await fetch('https://api.dataforseo.com/v3/ai_optimization/llm_mentions/target_metrics/live', {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ language_name: 'English', location_code: 2840, target: [{ domain, search_filter: 'include' }] }]),
+      });
+      const mj = await mRes.json() as Record<string, unknown>;
+      const metrics = ((mj?.tasks as any[])?.[0]?.result?.[0]?.aggregated_metrics ?? {}) as Record<string, any>;
+      const platforms = (metrics.platform ?? []) as Array<{key:string;mentions:number;ai_search_volume:number}>;
+      const total  = ((metrics.location ?? [])[0]?.mentions ?? 0) as number;
+      const aiVol  = ((metrics.location ?? [])[0]?.ai_search_volume ?? 0) as number;
+      const google = (platforms.find((p:any) => p.key==='google')?.mentions ?? 0) as number;
+      const chatgpt= (platforms.find((p:any) => p.key==='chat_gpt')?.mentions ?? 0) as number;
+      await sb.rpc('fn_seo_upsert_llm_snapshot', {
+        p_property_id: propertyId, p_target: domain, p_total: total, p_ai_vol: aiVol,
+        p_google: google, p_chatgpt: chatgpt,
+        p_platform: platforms as unknown as string,
+        p_sources: ((metrics.sources_domain ?? []).slice(0, 10)) as unknown as string,
+      });
+      return NextResponse.json({ ok: true, mode, result: { total_mentions: total, ai_search_volume: aiVol, google, chatgpt } });
     }
 
     return NextResponse.json({ ok: false, error: 'mode not implemented' }, { status: 400 });
