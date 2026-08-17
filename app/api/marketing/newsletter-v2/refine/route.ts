@@ -62,7 +62,18 @@ export async function POST(req: NextRequest) {
 
   const proposeBody: ProposeBody = {
     property_id: Number(camp.property_id),
-    kind: camp.campaign_kind ?? 'broadcast',
+    // 2026-08-17 fix: campaign_kind is only ever the coarse 'broadcast'/'lifecycle'
+    // split. normaliseKind() in lib/emailWritingRules.ts only accepts the granular
+    // EmailKind values (booking_confirm/before_checkin/after_checkout/broadcast) and
+    // silently defaults anything else (including 'lifecycle') to 'broadcast'. That
+    // made every lifecycle refine get treated as a broadcast by assembleDraft(), which
+    // then bolted the primary [[CTA]] "Reserve your stay" button onto ALREADY-BOOKED
+    // guests' confirmation/pre-arrival/post-stay emails — exactly the case the code
+    // comment in assembleDraft() says must never happen. No instruction could ever
+    // remove that button because the button is inserted by deterministic code that
+    // runs after Saya and never reads the instruction. Fixed by using relative_kind
+    // (the real granular sub-type) for lifecycle campaigns.
+    kind: camp.campaign_kind === 'lifecycle' ? (camp.relative_kind ?? 'broadcast') : (camp.campaign_kind ?? 'broadcast'),
     seed_text: String(camp.name ?? camp.subject ?? '').trim() || `Campaign ${campaign_id}`,
     group_slug: camp.group_slug ?? null,
     relative_kind: camp.relative_kind ?? null,
