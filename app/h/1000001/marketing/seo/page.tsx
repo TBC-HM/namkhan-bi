@@ -25,22 +25,30 @@ const SEO_TABS = [
   { key:'local',    label:'Local Pack' },
   { key:'technical',label:'Technical' },
   { key:'ai-visibility', label:'AI Visibility' },
+  { key:'pages', label:'Pages' },
+  { key:'hotel', label:'Hotel Data' },
 ];
 
 export default async function DonnaSeoPage({ searchParams }: { searchParams?: { tab?: string } }) {
   const tab = searchParams?.tab ?? 'overview';
   const sb = getSupabaseAdmin();
 
-  const [rankRes, llmRes] = await Promise.all([
+  const [rankRes, llmRes, pagesRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*').eq('property_id', PID),
     tab === 'ai-visibility'
       ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', PID).order('snapshot_date', { ascending: false }).limit(1)
       : Promise.resolve({ data: [] }),
+    tab === 'pages' ? sb.from('v_seo_ranked_pages').select('url,keyword,position,volume,search_intent').eq('property_id', PID).order('position', { ascending: true }).limit(500) : Promise.resolve({ data: [] }),
   ]);
 
   const rankings = (rankRes.data ?? []) as RankRow[];
   const withPos  = rankings.filter(r => r.position !== null);
   const top10    = withPos.filter(r => (r.position ?? 99) <= 10);
+  type PageKw={url:string;keyword:string;position:number|null;volume:number|null};
+  const pagesRows=(pagesRes.data??[]) as PageKw[];
+  const pagesMap=new Map<string,PageKw[]>();
+  for(const r of pagesRows){if(!r.url)continue;if(!pagesMap.has(r.url))pagesMap.set(r.url,[]);pagesMap.get(r.url)!.push(r);}
+  const pagesArr=[...pagesMap.entries()].map(([url,kws])=>({url,count:kws.length,bestPos:Math.min(...kws.map(k=>k.position??99)),vol:kws.reduce((s,k)=>s+(k.volume??0),0),top:kws.slice(0,3)})).sort((a,b)=>a.bestPos-b.bestPos);
   const llmSnap  = ((llmRes.data ?? [])[0] ?? null) as {
     total_mentions:number; ai_search_volume:number; google_mentions:number; chatgpt_mentions:number; sources_raw:unknown; target:string; snapshot_date:string;
   } | null;
@@ -179,6 +187,44 @@ export default async function DonnaSeoPage({ searchParams }: { searchParams?: { 
                 <div style={{ fontSize:10, color:INK_F }}>Last fetched: {llmSnap.snapshot_date} · {llmSnap.target}</div>
               </div>
             )}
+          </Container>
+        </div>
+      )}
+
+      {tab==='pages' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          <Container title="Ranked Pages" subtitle={`${pagesArr.length} pages · ${pagesRows.length} keywords in Google US top 50`}
+            action={<SeoTriggerBtn mode="ranked" label="🔄 Refresh page rankings" description="DataForSEO Labs · full domain scan" />}>
+            {pagesArr.length===0?(<div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>No page ranking data — click <strong>Refresh page rankings</strong>.</div>):(
+              <div style={{overflowX:'auto' as const}}>
+                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
+                  <thead><tr style={{borderBottom:`1px solid ${HAIR}`}}>
+                    {['Page','Kws','Best','Vol','Top keywords'].map(h=>(
+                      <th key={h} style={{...TH}}>{h}</th>
+                    ))}</tr></thead>
+                  <tbody>{pagesArr.map((p,i)=>(
+                    <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                      <td style={{...CELL,maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}><a href={p.url} target="_blank" rel="noopener noreferrer" style={{color:GREEN,fontSize:11,textDecoration:'none'}}>{p.url.replace(/^https?:\/\/[^/]+/,'')||'/'}</a></td>
+                      <td style={{...CELL,fontFamily:'ui-monospace,monospace'}}>{p.count}</td>
+                      <td style={{...CELL}}><span style={{fontFamily:'ui-monospace,monospace',fontWeight:700,fontSize:12,color:p.bestPos<=10?GREEN:p.bestPos<=20?AMBER:INK_F}}>#{p.bestPos}</span></td>
+                      <td style={{...CELL,fontFamily:'ui-monospace,monospace'}}>{p.vol.toLocaleString()}</td>
+                      <td style={{...CELL,maxWidth:300,fontSize:11,color:INK_M}}>{p.top.map(k=>`${k.keyword} (#${k.position??'?'})`).join(' · ')}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </Container>
+        </div>
+      )}
+
+      {tab==='hotel' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          <Container title="Hotel Data · Google Hotels" subtitle={`${DOMAIN} competitive positioning`}
+            action={<SeoTriggerBtn mode="hotel" label="🏨 Refresh hotel data" description="Google Hotels search results" />}>
+            <div style={{padding:'24px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
+              Click <strong>Refresh hotel data</strong> to fetch competitive hotel search results for <strong>{DOMAIN}</strong>.
+            </div>
           </Container>
         </div>
       )}
