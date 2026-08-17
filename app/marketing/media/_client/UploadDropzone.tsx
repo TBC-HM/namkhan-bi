@@ -10,7 +10,7 @@
 
 import { useState, useRef } from 'react';
 
-interface Props { onResult?: (msg: string) => void }
+interface Props { onResult?: (msg: string) => void; propertyId?: number; onUploadDone?: () => void }
 
 const HAIR   = '#E6DFCC';
 const INK    = '#1B1B1B';
@@ -113,12 +113,37 @@ async function extractVideoMetadata(file: File): Promise<VideoMeta | null> {
   }
 }
 
-export default function UploadDropzone({ onResult }: Props) {
+export default function UploadDropzone({ onResult, propertyId = 260955, onUploadDone }: Props) {
   const [busy, setBusy] = useState(false);
   const [prog, setProg] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const [errs, setErrs] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef  = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
+
+  // Recursively collect all files from a dropped folder via FileSystem API
+  async function collectFiles(items: DataTransferItemList): Promise<File[]> {
+    const files: File[] = [];
+    const traverse = async (entry: any): Promise<void> => {
+      if (!entry) return;
+      if (entry.isFile) {
+        await new Promise<void>(res => entry.file((f: File) => { files.push(f); res(); }, () => res()));
+      } else if (entry.isDirectory) {
+        const reader = entry.createReader();
+        const readAll = async (): Promise<void> => {
+          await new Promise<void>(res => reader.readEntries(async (entries: any[]) => {
+            if (!entries.length) { res(); return; }
+            await Promise.all(entries.map(traverse));
+            await readAll();
+            res();
+          }, () => res()));
+        };
+        await readAll();
+      }
+    };
+    await Promise.all(Array.from(items).map(item => traverse(item.webkitGetAsEntry?.())));
+    return files;
+  }
 
   async function handleFiles(files: FileList | File[]) {
     const list = Array.from(files);
@@ -136,7 +161,7 @@ export default function UploadDropzone({ onResult }: Props) {
         setProg(`Signing ${f.name}…`);
         const signRes = await fetch('/api/marketing/upload-sign', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: f.name, content_type: mime, size: f.size, sha256: sha }),
+          body: JSON.stringify({ filename: f.name, content_type: mime, size: f.size, sha256: sha, property_id: propertyId }),
         });
         const signJson = await signRes.json();
         if (!signRes.ok) {
@@ -210,6 +235,7 @@ export default function UploadDropzone({ onResult }: Props) {
     onResult?.(summary);
     setBusy(false);
     setTimeout(() => { setProg(null); setErrs([]); }, 12000);
+    if (ok > 0 && onUploadDone) onUploadDone();
   }
 
   return (
@@ -217,7 +243,16 @@ export default function UploadDropzone({ onResult }: Props) {
       <div
         onDragOver={e => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
-        onDrop={e => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
+        onDrop={e => {
+          e.preventDefault(); setDrag(false);
+          // Support folder drop: recursively collect all files from DataTransferItems
+          const items = e.dataTransfer.items;
+          if (items && items.length > 0) {
+            collectFiles(items).then(files => handleFiles(files));
+          } else {
+            handleFiles(e.dataTransfer.files);
+          }
+        }}
         style={{
           border:'2px dashed ' + (drag ? FOREST : HAIR),
           borderRadius:6, padding:'32px 16px', textAlign:'center',
@@ -227,11 +262,23 @@ export default function UploadDropzone({ onResult }: Props) {
       >
         <input ref={inputRef} type="file" multiple accept="image/*,video/*,application/pdf,image/x-adobe-dng,image/x-canon-cr2,image/x-canon-cr3,image/x-nikon-nef,image/x-sony-arw,image/x-fuji-raf,image/x-panasonic-rw2" style={{ display:'none' }}
           onChange={e => e.target.files && handleFiles(e.target.files)} />
+        <input ref={folderRef} type="file" multiple {...{ webkitdirectory: '', mozdirectory: '' } as any} style={{ display:'none' }}
+          onChange={e => e.target.files && handleFiles(e.target.files)} />
         <div style={{ fontSize:14, color:INK, fontWeight:600, marginBottom:6 }}>
-          {busy ? 'Uploading…' : 'Drag files here or click to browse'}
+          {busy ? 'Uploading…' : 'Drag files or folders here'}
         </div>
-        <div style={{ fontSize:11, color:INK_M }}>
-          {prog ?? 'Photos · Videos · RAW · PDF flyers — up to 5 GB each'}
+        <div style={{ fontSize:11, color:INK_M, marginBottom:8 }}>
+          {prog ?? 'Photos · Videos · RAW · PDF — up to 5 GB each'}
+        </div>
+        <div style={{ display:'flex', gap:8, justifyContent:'center' }}>
+          <button onClick={e => { e.stopPropagation(); inputRef.current?.click(); }} disabled={busy}
+            style={{ padding:'4px 12px', fontSize:11, background:'#FFFFFF', border:'1px solid #E6DFCC', borderRadius:4, cursor:'pointer' }}>
+            + Files
+          </button>
+          <button onClick={e => { e.stopPropagation(); folderRef.current?.click(); }} disabled={busy}
+            style={{ padding:'4px 12px', fontSize:11, background:'#FFFFFF', border:'1px solid #E6DFCC', borderRadius:4, cursor:'pointer' }}>
+            + Folder
+          </button>
         </div>
       </div>
       {errs.length > 0 && (
@@ -242,3 +289,4 @@ export default function UploadDropzone({ onResult }: Props) {
     </div>
   );
 }
+
