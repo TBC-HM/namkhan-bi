@@ -50,6 +50,23 @@ export default function CampaignEditor({ initial, chrome }: Props) {
   const [pickerMode, setPickerMode] = useState<null | 'insert' | 'replace-hero'>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // 2026-08-17 fix: Supabase RPC errors (PostgrestError) are plain objects,
+  // not instances of Error, so `e instanceof Error ? e.message : String(e)`
+  // fell through to String(e) and rendered "Error: [object Object]" with the
+  // real reason completely hidden. This pulls message/details/hint/code off
+  // any shape of thrown value so the real error is always visible.
+  function errMsg(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    if (e && typeof e === 'object') {
+      const anyE = e as Record<string, unknown>;
+      const parts = [anyE.message, anyE.details, anyE.hint, anyE.code]
+        .filter((v): v is string => typeof v === 'string' && v.length > 0);
+      if (parts.length) return parts.join(' — ');
+      try { return JSON.stringify(anyE); } catch { /* fall through */ }
+    }
+    return String(e);
+  }
+
   async function save() {
     setSaving(true); setMsg(null);
     try {
@@ -76,8 +93,7 @@ export default function CampaignEditor({ initial, chrome }: Props) {
 
       setMsg('Saved.'); router.refresh();
     } catch (e) {
-      const em = e instanceof Error ? e.message : String(e);
-      setMsg('Error: ' + em);
+      setMsg('Error: ' + errMsg(e));
     } finally { setSaving(false); }
   }
 
@@ -89,8 +105,7 @@ export default function CampaignEditor({ initial, chrome }: Props) {
       if (error) throw error;
       router.push('/guest/newsletters');
     } catch (e) {
-      const em = e instanceof Error ? e.message : String(e);
-      setMsg('Error: ' + em); setSaving(false);
+      setMsg('Error: ' + errMsg(e)); setSaving(false);
     }
   }
 
