@@ -24,6 +24,7 @@ interface Row {
   parent_name: string | null;
   room_type_names: string[] | null;
   featured_for_proposals: boolean;
+  featured_for_newsletter: boolean;
   hidden_from_ui: boolean;
   category: string | null;
   min_los: number | null;
@@ -70,12 +71,13 @@ export default function RatePlansHygienePanel({ rows, propertyId }: { rows: Row[
   const stats = useMemo(() => ({
     total: rows.length,
     featured: rows.filter(r => r.featured_for_proposals).length,
+    newsletter: rows.filter(r => r.featured_for_newsletter).length,
     hidden: rows.filter(r => r.hidden_from_ui).length,
     used_12m: rows.filter(r => (r.bookings_12m ?? 0) > 0).length,
     never_used: rows.filter(r => (r.bookings_total ?? 0) === 0).length,
   }), [rows]);
 
-  function toggle(row: Row, field: 'featured_for_proposals' | 'hidden_from_ui', value: boolean) {
+  function toggle(row: Row, field: 'featured_for_proposals' | 'hidden_from_ui' | 'featured_for_newsletter', value: boolean) {
     setError(null);
     startTransition(async () => {
       const patch: Record<string, unknown> = { p_property_id: propertyId, p_rate_plan_id: row.rate_plan_id };
@@ -110,11 +112,12 @@ export default function RatePlansHygienePanel({ rows, propertyId }: { rows: Row[
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 14 }}>
         {[
-          { label: 'Total plans', value: stats.total,      tone: INK },
-          { label: 'Featured',    value: stats.featured,   tone: FOREST },
-          { label: 'Used in 12m', value: stats.used_12m,   tone: INK },
-          { label: 'Never used',  value: stats.never_used, tone: AMBER },
-          { label: 'Hidden',      value: stats.hidden,     tone: INK_M },
+          { label: 'Total plans',   value: stats.total,      tone: INK },
+          { label: 'Featured',      value: stats.featured,   tone: FOREST },
+          { label: 'In newsletter', value: stats.newsletter, tone: FOREST },
+          { label: 'Used in 12m',   value: stats.used_12m,   tone: INK },
+          { label: 'Never used',    value: stats.never_used, tone: AMBER },
+          { label: 'Hidden',        value: stats.hidden,     tone: INK_M },
         ].map(t => (
           <div key={t.label} style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 4, padding: '10px 12px' }}>
             <div style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, marginBottom: 3 }}>{t.label}</div>
@@ -151,12 +154,13 @@ export default function RatePlansHygienePanel({ rows, propertyId }: { rows: Row[
               <Th w="80px" right>Total</Th>
               <Th w="120px">Category</Th>
               <Th w="90px" center>Feature</Th>
+              <Th w="90px" center>Newsletter</Th>
               <Th w="90px" center>Hide</Th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: INK_M, fontSize: 12 }}>No rate plans match.</td></tr>
+              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: INK_M, fontSize: 12 }}>No rate plans match.</td></tr>
             )}
             {filtered.map(r => {
               const isOpen = expanded === r.rate_plan_id;
@@ -185,12 +189,15 @@ export default function RatePlansHygienePanel({ rows, propertyId }: { rows: Row[
                       <Toggle checked={r.featured_for_proposals} disabled={busy || r.hidden_from_ui} onChange={v=>toggle(r,'featured_for_proposals',v)} />
                     </td>
                     <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                      <Toggle checked={r.featured_for_newsletter} disabled={busy} onChange={v=>toggle(r,'featured_for_newsletter',v)} />
+                    </td>
+                    <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                       <Toggle checked={r.hidden_from_ui} disabled={busy} onChange={v=>toggle(r,'hidden_from_ui',v)} />
                     </td>
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={6} style={{ padding: 16, background: '#FBFAF6', borderBottom: '1px solid ' + HAIR }}>
+                      <td colSpan={7} style={{ padding: 16, background: '#FBFAF6', borderBottom: '1px solid ' + HAIR }}>
                         <DetailForm row={r} onSave={patch => saveDetails(r, patch)} busy={busy} />
                       </td>
                     </tr>
