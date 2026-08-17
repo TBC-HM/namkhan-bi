@@ -38,9 +38,9 @@ export default async function HoldingMediaSettingsPage() {
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Upload holding media" subtitle="Brand photos · logos · group certificates — Iris QA applies, assets available across all properties">
           <div style={{ padding: 16 }}>
-            <UploadDropzone />
+            <UploadDropzone propertyId={0} onUploadDone={() => window.location.reload()} />
             <p style={{ fontSize: 11, color: '#5A5A5A', marginTop: 8, margin: '8px 0 0' }}>
-              Uploaded assets go through the existing Iris QA pipeline. To browse holding-level media, open Marketing → Media and filter by holding scope.
+              Uploaded assets go through the Iris QA pipeline with property_id = NULL (holding scope). To browse, open Marketing → Media and filter by holding. Supports files AND folders — drag a whole folder to upload all contents.
             </p>
           </div>
         </Container>
@@ -77,3 +77,4 @@ export default async function HoldingMediaSettingsPage() {
     </DashboardPage>
   );
 }
+
