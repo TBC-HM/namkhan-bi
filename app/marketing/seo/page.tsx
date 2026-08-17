@@ -55,7 +55,7 @@ export default async function MarketingSeoPage({
   let rankQuery = sb.from('v_seo_rankings').select('*');
   if (locCode) rankQuery = rankQuery.eq('location_name', MARKETS.find(m=>m.loc===locCode)?.label ?? '');
 
-  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*'),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
@@ -64,6 +64,8 @@ export default async function MarketingSeoPage({
     tab === 'ai-visibility' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', 260955).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
     tab === 'pages' ? sb.from('v_seo_ranked_pages').select('url,keyword,position,volume,search_intent').eq('property_id', 260955).order('position', { ascending: true }).limit(500) : Promise.resolve({ data: [] }),
     tab === 'technical' ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', 260955).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
+    tab === 'ai-visibility' ? sb.from('v_seo_llm_questions').select('keyword,llm,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+    tab === 'hotel' ? sb.from('v_seo_hotel_searches').select('position,hotel_title,stars,price_usd,rating_value,votes_count,search_keyword,is_our_property').eq('property_id', 260955).order('snapshot_date', { ascending: false }).order('position').limit(20) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -79,6 +81,8 @@ export default async function MarketingSeoPage({
   const llmSnapshot=((llmRes.data??[])[0]??null) as LlmSnap|null;
   type PageKw={url:string;keyword:string;position:number|null;volume:number|null;search_intent:string|null};
   const pagesRows=(pagesRes.data??[]) as PageKw[];
+  const questionsRows=(questionsRes.data??[]) as Array<{keyword:string;llm:string;mention_date:string}>;
+  const hotelRows=(hotelRes.data??[]) as Array<{position:number;hotel_title:string;stars:number|null;price_usd:number|null;rating_value:number|null;votes_count:number|null;search_keyword:string;is_our_property:boolean}>;
   type InstantPage={url:string;page_title:string|null;title_length:number|null;h1:string|null;h2s:string[]|null;word_count:number|null;readability:number|null;issues:Record<string,boolean>|null;crawl_date:string|null};
   const instantPages=(instantRes.data??[]) as InstantPage[];
   const pagesMap=new Map<string,PageKw[]>();
@@ -414,6 +418,14 @@ export default async function MarketingSeoPage({
                     </div>
                   </>
                 ):null}
+                {questionsRows.length>0&&(
+                  <>
+                    <div style={{fontSize:12,fontWeight:600,color:INK,marginTop:16,marginBottom:8}}>Questions triggering AI answers mentioning thenamkhan.com</div>
+                    <div style={{display:'flex',flexWrap:'wrap' as const,gap:4}}>
+                      {questionsRows.map((q,i)=>(<span key={i} style={{fontSize:11,border:'1px solid #E6DFCC',padding:'3px 10px',borderRadius:4,color:'#5A5A5A',background:'#F9F6F0'}}>{q.keyword}</span>))}
+                    </div>
+                  </>
+                )}
                 <div style={{ fontSize:10,color:INK_F,marginTop:12 }}>Last fetched: {llmSnapshot.snapshot_date} · {llmSnapshot.target}</div>
               </div>
             )}
@@ -453,7 +465,22 @@ export default async function MarketingSeoPage({
           <Container title="Hotel Data · Google Hotels" subtitle="Competitive positioning + pricing in Google Hotels results"
             action={<SeoTriggerBtn mode="hotel" label="🏨 Refresh hotel data" description="business_data/google/hotel_searches · live" />}>
             <div style={{padding:'24px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
-              Click <strong>Refresh hotel data</strong> to fetch competitive hotel positioning from Google Hotels. Shows which hotels rank for your target keyword, their prices, ratings, and how Namkhan compares.
+              {hotelRows.length>0?(
+                <div style={{overflowX:'auto' as const,marginTop:8}}>
+                  <div style={{fontSize:11,color:'#5A5A5A',marginBottom:8}}>Showing results for: <strong>{hotelRows[0]?.search_keyword}</strong> · Google Hotels US market</div>
+                  <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
+                    <thead><tr style={{borderBottom:'2px solid #E6DFCC'}}>{['#','Hotel','Stars','Rating','Reviews','Price/night'].map(h=>(<th key={h} style={{padding:'6px 8px',textAlign:'left' as const,fontSize:10,fontFamily:'ui-monospace,monospace',textTransform:'uppercase' as const,color:'#8A8A8A'}}>{h}</th>))}</tr></thead>
+                    <tbody>{hotelRows.map((h,i)=>(<tr key={i} style={{borderBottom:'1px solid #E6DFCC'}}>
+                      <td style={{padding:'7px 8px',fontFamily:'ui-monospace,monospace',color:'#8A8A8A'}}>{h.position}</td>
+                      <td style={{padding:'7px 8px',fontWeight:600}}>{h.hotel_title}</td>
+                      <td style={{padding:'7px 8px',color:'#8A8A8A'}}>{h.stars??'—'}</td>
+                      <td style={{padding:'7px 8px',color:'#084838',fontWeight:600}}>{h.rating_value??'—'}</td>
+                      <td style={{padding:'7px 8px',color:'#8A8A8A'}}>{h.votes_count??'—'}</td>
+                      <td style={{padding:'7px 8px',fontFamily:'ui-monospace,monospace'}}>{h.price_usd?`$${h.price_usd}`:'—'}</td>
+                    </tr>))}</tbody>
+                  </table>
+                </div>
+              ):(<span>Note: Google Hotels does not index Luang Prabang boutique hotels. Click <strong>Refresh hotel data</strong> to load competitive eco-resort data from global market.</span>)}
             </div>
           </Container>
         </div>
