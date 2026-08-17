@@ -52,7 +52,16 @@ export default function RewriteButton({ campaign_id, property_id }: Props) {
       setMsg(typeof veda?.score === 'number' ? `Rewritten ✓ (Veda ${veda.score}/100)` : 'Rewritten ✓');
       setTimeout(() => { setOpen(false); setPhase('idle'); setInstruction(''); router.refresh(); }, 800);
     } catch (e) {
-      setPhase('error'); setMsg(String(e));
+      // 2026-08-17 fix: String(e) on a thrown non-Error object (e.g. a fetch
+      // Response body or a Postgrest-style error) renders as "[object Object]"
+      // with the real reason hidden. Pull message/details/hint off any shape.
+      setPhase('error');
+      if (e instanceof Error) setMsg(e.message);
+      else if (e && typeof e === 'object') {
+        const anyE = e as Record<string, unknown>;
+        const parts = [anyE.message, anyE.details, anyE.hint, anyE.error].filter((v): v is string => typeof v === 'string' && v.length > 0);
+        setMsg(parts.length ? parts.join(' — ') : JSON.stringify(anyE));
+      } else setMsg(String(e));
     }
   };
 
