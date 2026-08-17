@@ -183,7 +183,7 @@ type CruiseRow = { name: string; cruise_type: string | null; route_from: string 
 
 async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number, group_slug: string | null) {
   const [rulesR, linksR, retreatsR, activitiesR, sendersR, goalsR, policyR, groupR, realityR, roomsR, facilitiesR, transportR, cruisesR, learningsR] = await Promise.all([
-    sb.from('v_marketing_email_general_rules').select('rule_type, rule_text, group_slug').limit(50),
+    sb.from('v_marketing_email_general_rules').select('rule_kind, rule_text').eq('property_id', pid).eq('active', true).limit(50),
     sb.from('v_marketing_internal_link_catalog')
       .select('section, anchor_hint, url, title, description, is_pinned')
       .eq('property_id', pid).eq('active', true)
@@ -229,9 +229,14 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number,
     learnings: !learningsR.error,
   };
 
-  type RuleRow = { rule_type: string; rule_text: string; group_slug: string | null };
-  const allRules = (rulesR.data as RuleRow[] | null) ?? [];
-  const rules = allRules.filter(r => r.group_slug === group_slug || r.group_slug === null);
+  // 2026-08-17 fix (ADR-297, PBS decision: marketing.email_general_rules is canonical
+  // for voice/facts). This query was selecting rule_type/group_slug, columns that do not
+  // exist on the base table (real columns: rule_kind, property_id) — every call errored,
+  // 'rules' surface was silently excluded from staleness checks, and all 22 active rules
+  // (fact-locks included) never reached the writer. Fixed: rule_kind, property_id-scoped,
+  // active-only. No group_slug column exists to filter on — load all active rows for pid.
+  type RuleRow = { rule_kind: string; rule_text: string };
+  const rules = (rulesR.data as RuleRow[] | null) ?? [];
 
   type GoalRow = { goal_key: string; goal_label: string; weight: number; group_slug: string | null };
   const allGoals = (goalsR.data as GoalRow[] | null) ?? [];
@@ -557,7 +562,7 @@ function assembleUserPrompt(
   parts.push('');
   parts.push('### GUARDRAILS (LOAD-BEARING · you must follow these)');
   if (ctx.rules.length === 0) parts.push('(none loaded)');
-  else for (const r of ctx.rules) parts.push(`- [${r.rule_type}] ${r.rule_text}`);
+  else for (const r of ctx.rules) parts.push(`- [${r.rule_kind}] ${r.rule_text}`);
 
   if (!ctx.policy?.block_links && ctx.links.length > 0) {
     parts.push('');
