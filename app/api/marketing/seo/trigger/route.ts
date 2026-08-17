@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm']);
+const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel']);
 
 export async function POST(req: NextRequest) {
   let body: { mode?: string; property_id?: number } = {};
@@ -130,6 +130,53 @@ export async function POST(req: NextRequest) {
         p_sources: ((metrics.sources_domain ?? []).slice(0, 10)) as unknown as string,
       });
       return NextResponse.json({ ok: true, mode, result: { total_mentions: total, ai_search_volume: aiVol, google, chatgpt } });
+    }
+
+    if (mode === 'ranked' || mode === 'hotel') {
+      const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
+      const cfg = (cfgRows as any[])?.[0] as { domain:string; hotel_search_kw:string; hotel_location_name:string } | undefined;
+      if (!cfg) throw new Error(`no_seo_config_for_property_${propertyId}`);
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      if (mode === 'ranked') {
+        const res = await fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live', {
+          method: 'POST', headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify([{ target: cfg.domain, language_code: 'en', location_code: 2840, limit: 100,
+            filters: ['ranked_serp_element.serp_item.rank_absolute','<=','50'], order_by: ['keyword_data.keyword_info.search_volume,desc'] }]),
+        });
+        const json = await res.json() as Record<string,any>;
+        const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+        const rows = items.map((item:any) => ({
+          property_id: propertyId, domain: cfg.domain,
+          url: item?.ranked_serp_element?.serp_item?.url, keyword: item?.keyword_data?.keyword,
+          position: item?.ranked_serp_element?.serp_item?.rank_absolute, volume: item?.keyword_data?.keyword_info?.search_volume,
+          keyword_difficulty: item?.keyword_data?.keyword_properties?.keyword_difficulty,
+          search_intent: item?.keyword_data?.search_intent_info?.main_intent,
+          etv: item?.ranked_serp_element?.serp_item?.etv, raw: item,
+        }));
+        const { data: stored } = await sb.rpc('fn_seo_upsert_ranked_pages', { p_rows: JSON.stringify(rows) });
+        return NextResponse.json({ ok: true, mode, result: { keywords: items.length, upserted: stored ?? 0 } });
+      }
+      if (mode === 'hotel') {
+        const res = await fetch('https://api.dataforseo.com/v3/business_data/google/hotel_searches/live', {
+          method: 'POST', headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify([{ keyword: cfg.hotel_search_kw, language_code: 'en',
+            location_name: cfg.hotel_location_name, adults: 2, depth: 20, sort_by: 'highest_rating' }]),
+        });
+        const json = await res.json() as Record<string,any>;
+        const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+        const rows = items.map((item:any,i:number) => ({
+          property_id: propertyId, search_keyword: cfg.hotel_search_kw,
+          position: i+1, hotel_title: item.title, stars: item.stars,
+          price_usd: item.prices?.price, rating_value: item.reviews?.value,
+          votes_count: item.reviews?.votes_count, is_paid: item.is_paid??false,
+          is_our_property: (item.title??'').toLowerCase().includes(cfg.domain.split('.')[0].toLowerCase()),
+          latitude: item.location?.latitude, longitude: item.location?.longitude,
+          overview_image: item.overview_images?.[0]??null, raw: item,
+        }));
+        if (rows.length>0) await sb.rpc('fn_seo_upsert_hotel_searches',{p_rows:JSON.stringify(rows)});
+        return NextResponse.json({ ok: true, mode, result: { hotels: items.length, upserted: rows.length } });
+      }
     }
 
     return NextResponse.json({ ok: false, error: 'mode not implemented' }, { status: 400 });
