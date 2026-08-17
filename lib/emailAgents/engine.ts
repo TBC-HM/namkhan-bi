@@ -146,6 +146,13 @@ export type ProposeBody = {
   target_date?: string;
   audience_type?: 'b2c' | 'b2b';
   group_slug?: string | null;
+  // 2026-08-17 fix: lifecycle sequence campaigns (guest.campaigns) already
+  // carry a granular relative_kind (booking_confirm/before_checkin/after_checkout)
+  // distinct from the coarse campaign_kind (broadcast/lifecycle). Group email
+  // policies with a granular allowed_kinds list (e.g. ota-traveller) must be
+  // checked against relative_kind when present, not the coarse kind — see
+  // marketing.group_email_policy + newsletter_module doc §28.
+  relative_kind?: string | null;
   instruction?: string;
   prior?: { subject?: string; body_md?: string };
   concept?: string;
@@ -1029,7 +1036,7 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
   }
 
   // Enforce group policy · reject a broadcast for an audience that only allows lifecycle
-  const requestedKind = body.kind ? String(body.kind) : 'broadcast';
+  const requestedKind = body.relative_kind ? String(body.relative_kind) : (body.kind ? String(body.kind) : 'broadcast');
   if (ctx.policy && ctx.policy.allowed_kinds.length > 0 && !ctx.policy.allowed_kinds.includes(requestedKind)) {
     return NextResponse.json({
       ok: false,
