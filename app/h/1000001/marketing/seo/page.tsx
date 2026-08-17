@@ -5,6 +5,7 @@
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import type { CSSProperties } from 'react';
 import SeoTriggerBtn from '@/components/seo/SeoTriggerBtn';
 
 export const dynamic = 'force-dynamic';
@@ -44,8 +45,8 @@ export default async function DonnaSeoPage({ searchParams }: { searchParams?: { 
     total_mentions:number; ai_search_volume:number; google_mentions:number; chatgpt_mentions:number; sources_raw:unknown; target:string; snapshot_date:string;
   } | null;
 
-  const CELL: React.CSSProperties = { padding:'7px 8px', borderBottom:`1px solid ${HAIR}`, fontSize:12, color:INK };
-  const TH: React.CSSProperties = { ...CELL, fontWeight:600, color:INK_F, fontSize:10, fontFamily:'ui-monospace,monospace', textTransform:'uppercase', letterSpacing:'0.1em', background:'#FAFAF7' };
+  const CELL: CSSProperties = { padding:'7px 8px', borderBottom:`1px solid ${HAIR}`, fontSize:12, color:INK };
+  const TH: CSSProperties = { ...CELL, fontWeight:600, color:INK_F, fontSize:10, fontFamily:'ui-monospace,monospace', textTransform:'uppercase', letterSpacing:'0.1em', background:'#FAFAF7' };
 
   return (
     <DashboardPage title="Donna · SEO" subtitle={`${DOMAIN} · ${rankings.length} keywords · AI visibility`}>
