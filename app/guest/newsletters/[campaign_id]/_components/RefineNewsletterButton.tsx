@@ -50,7 +50,15 @@ export default function RefineNewsletterButton(props: Props) {
       if (!j?.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
       setProposal(j.proposal as CampaignProposal);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // 2026-08-17 fix: same "[object Object]" bug as elsewhere in this app —
+      // a thrown non-Error object stringified to a useless literal. Pull
+      // message/details/hint off any shape so the real reason is visible.
+      if (e instanceof Error) setError(e.message);
+      else if (e && typeof e === 'object') {
+        const anyE = e as Record<string, unknown>;
+        const parts = [anyE.message, anyE.details, anyE.hint, anyE.error].filter((v): v is string => typeof v === 'string' && v.length > 0);
+        setError(parts.length ? parts.join(' — ') : JSON.stringify(anyE));
+      } else setError(String(e));
     } finally { setLoading(false); }
   }
 
