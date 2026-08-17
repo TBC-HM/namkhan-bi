@@ -183,7 +183,7 @@ type CruiseRow = { name: string; cruise_type: string | null; route_from: string 
 
 async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number, group_slug: string | null) {
   const [rulesR, linksR, retreatsR, activitiesR, sendersR, goalsR, policyR, groupR, realityR, roomsR, facilitiesR, transportR, cruisesR, learningsR] = await Promise.all([
-    sb.from('v_marketing_email_general_rules').select('rule_kind, rule_text').eq('property_id', pid).eq('active', true).limit(50),
+    sb.from('v_marketing_email_general_rules').select('rule_kind, rule_text').or(`property_id.eq.${pid},property_id.is.null`).eq('active', true).limit(50),
     sb.from('v_marketing_internal_link_catalog')
       .select('section, anchor_hint, url, title, description, is_pinned')
       .eq('property_id', pid).eq('active', true)
