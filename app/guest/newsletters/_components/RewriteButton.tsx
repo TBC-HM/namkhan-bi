@@ -26,17 +26,30 @@ export default function RewriteButton({ campaign_id, property_id }: Props) {
         body: JSON.stringify({ campaign_id, instruction: instruction.trim() }),
       });
       const refineJ = await refineRes.json();
-      if (!refineJ?.ok || !refineJ?.subject || !refineJ?.body_md) {
+      if (!refineJ?.ok || !refineJ?.proposal?.subject || !refineJ?.proposal?.body_md) {
         setPhase('error'); setMsg(refineJ?.error ?? 'Refine failed — try again'); return;
       }
-      // 2. Patch the campaign with the accepted result
+      // 2026-08-17 fix: refine/route.ts returns { proposal: { subject, body_md } },
+      // not top-level fields — the old code read refineJ.subject/.body_md, which are
+      // always undefined, so every rewrite silently discarded Saya's real output and
+      // fell into the generic error path. Also now forwards the Veda score + issues
+      // so patch-campaign can log before/after to marketing.email_learnings — Rewrite
+      // was the only path in the engine that never fed the learning loop.
+      const veda = refineJ.veda as { score?: number; issues?: string[]; critique?: string } | null;
       const patchRes = await fetch('/api/newsletter/patch-campaign', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaign_id, property_id, subject: refineJ.subject, body_md: refineJ.body_md }),
+        body: JSON.stringify({
+          campaign_id, property_id,
+          subject: refineJ.proposal.subject, body_md: refineJ.proposal.body_md,
+          instruction: instruction.trim(),
+          veda_score: veda?.score ?? null,
+          veda_issues: veda?.issues ?? null,
+        }),
       });
       const patchJ = await patchRes.json();
       if (!patchJ?.ok) { setPhase('error'); setMsg(patchJ?.error ?? 'Save failed'); return; }
-      setPhase('done'); setMsg('Rewritten ✓');
+      setPhase('done');
+      setMsg(typeof veda?.score === 'number' ? `Rewritten ✓ (Veda ${veda.score}/100)` : 'Rewritten ✓');
       setTimeout(() => { setOpen(false); setPhase('idle'); setInstruction(''); router.refresh(); }, 800);
     } catch (e) {
       setPhase('error'); setMsg(String(e));
