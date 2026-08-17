@@ -1159,16 +1159,28 @@ export async function proposeOne(body: ProposeBody): Promise<NextResponse> {
       ? `\n[refine ${new Date().toISOString().slice(0, 16).replace('T', ' ')}] ${String(body.instruction).slice(0, 500)}`
       : '';
     const nextPrompt = (basePrompt + refineTrail);
-    const { error: perr } = await sb.schema('guest').from('campaigns').update({
+    const { data: updRows, error: perr } = await sb.schema('guest').from('campaigns').update({
       subject: draft.subject,
       body_md: draft.body_md,
       hero_asset_id: heroAssetId,
       ai_prompt: nextPrompt.length > 4000 ? nextPrompt.slice(-4000) : nextPrompt,
       ai_model: 'claude-sonnet-4-6',
+      veda_score: veda.score,
       updated_at: new Date().toISOString(),
-    }).eq('campaign_id', campaign_id).in('status', ['draft', 'scheduled']);
-    persisted = perr ? { ok: false, error: perr.message } : { ok: true };
-    trace.push({ step: 'persist', agent_id: AGENT_SAYA, latency_ms: 0, ok: !perr, note: perr ? perr.message : `campaign=${campaign_id}` });
+    }).eq('campaign_id', campaign_id).in('status', ['draft', 'scheduled']).select('campaign_id');
+    // 2026-08-17 fix (ADR-297): the status filter was silently no-opping when a
+    // campaign had moved past draft/scheduled (e.g. mid-refine on an approved or
+    // pending row) — Supabase returns ok with 0 rows matched, not an error, so the
+    // caller (and marketing.email_learnings) recorded success while body_md never
+    // changed. Surface that as an explicit failure instead. Also persists veda_score
+    // so guest.fn_campaign_gate_r8 goes live instead of staying permanently inert.
+    const noMatchingRow = !perr && (!updRows || updRows.length === 0);
+    persisted = perr
+      ? { ok: false, error: perr.message }
+      : noMatchingRow
+        ? { ok: false, error: 'no_write_campaign_status_not_draft_or_scheduled' }
+        : { ok: true };
+    trace.push({ step: 'persist', agent_id: AGENT_SAYA, latency_ms: 0, ok: !perr && !noMatchingRow, note: perr ? perr.message : noMatchingRow ? 'campaign status is not draft/scheduled — write skipped' : `campaign=${campaign_id}` });
   }
 
   return NextResponse.json({
