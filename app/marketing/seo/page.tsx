@@ -5,7 +5,6 @@ import { DashboardPage, Container, type DashboardTab, type KpiTileProps } from '
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import SeoTriggerBtn from '@/components/seo/SeoTriggerBtn';
-import SeoInstantCrawl from '@/components/seo/SeoInstantCrawl';
 import RankingsTable, { type RankRow as RankRowFull, type HistoryRow, type MarketRow } from '@/components/seo/RankingsTable';
 
 export const dynamic = 'force-dynamic';
@@ -354,7 +353,36 @@ export default async function MarketingSeoPage({
                   </div>
                 ))}
               </div>
-              {onpageRows.length === 0 ? (<div style={{ padding:'24px 16px', textAlign:'center' as const, color:INK_M, fontSize:13 }}>No on-page data yet — click <strong>Run On-Page Crawl</strong> above.</div>) : (<div style={{ fontSize:12, color:INK }}>{onpageRows.length} pages crawled on {onpageRows[0]?.crawl_date ?? '—'}</div>)}
+              {instantPages.length>0&&(
+                <div style={{marginTop:8,display:'flex',flexDirection:'column' as const,gap:6}}>
+                  <div style={{fontSize:10,fontWeight:600,color:INK_F,fontFamily:'ui-monospace,monospace',letterSpacing:'0.12em',textTransform:'uppercase' as const,marginBottom:4}}>{instantPages.length} pages audited — on-page keyword structure</div>
+                  {instantPages.map((p,i)=>(
+                    <div key={i} style={{border:`1px solid ${HAIR}`,borderRadius:6,padding:'10px 14px'}}>
+                      <div style={{display:'flex',alignItems:'flex-start',gap:10,marginBottom:4}}>
+                        <div style={{flex:1}}>
+                          <a href={p.url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:GREEN,textDecoration:'none',fontFamily:'ui-monospace,monospace'}}>{p.url.replace(/^https?:\\/\\/[^/]+/,'')||'/'}</a>
+                          <div style={{fontSize:12,fontWeight:600,color:INK,marginTop:2}}>{p.page_title??'—'} <span style={{fontSize:10,color:p.title_length&&p.title_length>60?RED:p.title_length&&p.title_length<35?AMBER:GREEN,fontFamily:'ui-monospace,monospace'}}>({p.title_length} chars)</span></div>
+                          {p.h1&&<div style={{fontSize:11,color:INK_M,marginTop:2}}><span style={{color:INK_F,fontFamily:'ui-monospace,monospace',fontSize:10,marginRight:4}}>H1</span>{p.h1}</div>}
+                        </div>
+                        <div style={{display:'flex',gap:3,flexWrap:'wrap' as const,maxWidth:180,justifyContent:'flex-end' as const}}>
+                          {p.issues?.title_too_long&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:99,background:'#FEE2E2',color:RED}}>Title long</span>}
+                          {p.issues?.title_too_short&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:99,background:'#FEF3C7',color:AMBER}}>Title short</span>}
+                          {p.issues?.readability_low&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:99,background:'#FEF3C7',color:AMBER}}>Low readability</span>}
+                          {p.issues?.thin_content&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:99,background:'#FEF3C7',color:AMBER}}>Thin content</span>}
+                        </div>
+                      </div>
+                      {p.h2s&&(p.h2s as string[]).length>0&&(
+                        <div style={{display:'flex',flexWrap:'wrap' as const,gap:4,marginTop:4}}>
+                          <span style={{fontSize:9,fontFamily:'ui-monospace,monospace',color:INK_F,marginRight:2}}>H2</span>
+                          {(p.h2s as string[]).slice(0,5).map((h,j)=><span key={j} style={{fontSize:10,background:'#F4EFE2',padding:'2px 7px',borderRadius:4,color:INK_M}}>{h}</span>)}
+                        </div>
+                      )}
+                      <div style={{fontSize:10,color:INK_F,fontFamily:'ui-monospace,monospace',marginTop:4}}>{p.word_count} words · Readability <span style={{color:p.readability&&p.readability>=60?GREEN:p.readability&&p.readability>=45?AMBER:RED}}>{p.readability?.toFixed(1)}</span> · {p.crawl_date}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {instantPages.length===0&&onpageRows.length===0&&<div style={{padding:'16px 0',textAlign:'center' as const,color:INK_M,fontSize:13}}>Click <strong>Run On-Page Crawl</strong> above to start.</div>}
             </div>
           </Container>
         </div>
