@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
   const { data: camp, error: campErr } = await sb.schema('guest').from('campaigns')
-    .select('campaign_id, property_id, name, subject, body_md, campaign_kind, group_slug, audience_type, planned_date')
+    .select('campaign_id, property_id, name, subject, body_md, campaign_kind, relative_kind, group_slug, audience_type, planned_date')
     .eq('campaign_id', campaign_id).maybeSingle();
   if (campErr) return NextResponse.json({ ok: false, error: `load_campaign_failed: ${campErr.message}` }, { status: 500 });
   if (!camp) return NextResponse.json({ ok: false, error: 'campaign_not_found' }, { status: 404 });
@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
     kind: camp.campaign_kind ?? 'broadcast',
     seed_text: String(camp.name ?? camp.subject ?? '').trim() || `Campaign ${campaign_id}`,
     group_slug: camp.group_slug ?? null,
+    relative_kind: camp.relative_kind ?? null,
     audience_type: camp.audience_type === 'b2b' ? 'b2b' : 'b2c',
     target_date: camp.planned_date ?? undefined,
     instruction,
