@@ -47,7 +47,6 @@ const HOLDING_DEPTS: DeptLink[] = [
   // Onboarding pipeline (brief onboarding-engine-v1, 2026-07-30): holding
   // Sales substripe → Onboarding. /holding/sales redirects to ./onboarding.
   { label: 'Sales',        slug: 'sales',     href: '/holding/sales'     },
-  { label: 'Marketing',    slug: 'marketing', href: '/holding/marketing' },
   { label: 'Legal',        slug: 'legal',     href: '/holding/legal'     },
   { label: 'Finance',      slug: 'finance',   href: '/holding/finance'   },
   // it-area-reorg-v1 final slice (2026-08-01): the legacy IT entry is retired —
