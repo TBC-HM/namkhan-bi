@@ -124,10 +124,25 @@ export default function RefineNewsletterButton(props: Props) {
 
             {proposal && (
               <div style={{ marginTop: 14, borderTop: '1px solid ' + HAIR, paddingTop: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, marginBottom: 8 }}>Proposal</div>
+                <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: INK_M, marginBottom: 8 }}>Proposal — edit before accepting if needed</div>
+                {/* 2026-08-17 fix: was a read-only <pre>, so a line you did not want
+                    (e.g. an unwanted CTA button) could only be removed AFTER Accept,
+                    by editing the main body field and hitting Save separately. Now
+                    editable in place — edits here are what gets Accepted AND logged
+                    to Mira as the learned preference. */}
                 <div style={{ background: CREAM, border: '1px solid ' + HAIR, borderRadius: 4, padding: 10, marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: INK, marginBottom: 4 }}>{proposal.subject ?? '(no subject)'}</div>
-                  <pre style={{ margin: 0, fontSize: 11, whiteSpace: 'pre-wrap', color: INK, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', maxHeight: 300, overflow: 'auto' }}>{proposal.body_md ?? ''}</pre>
+                  <input
+                    type="text"
+                    value={proposal.subject ?? ''}
+                    onChange={e => setProposal(p => p ? { ...p, subject: e.target.value } : p)}
+                    style={{ width: '100%', fontSize: 12, fontWeight: 700, color: INK, marginBottom: 6, border: '1px solid ' + HAIR, borderRadius: 3, padding: '4px 6px', boxSizing: 'border-box', background: '#FFFFFF' }}
+                  />
+                  <textarea
+                    value={proposal.body_md ?? ''}
+                    onChange={e => setProposal(p => p ? { ...p, body_md: e.target.value } : p)}
+                    rows={12}
+                    style={{ width: '100%', fontSize: 11, whiteSpace: 'pre-wrap', color: INK, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', border: '1px solid ' + HAIR, borderRadius: 3, padding: 6, boxSizing: 'border-box', resize: 'vertical' }}
+                  />
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   <button type="button" onClick={accept} style={{
