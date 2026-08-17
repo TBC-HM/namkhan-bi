@@ -918,7 +918,15 @@ async function vedaScore(draft: SayaDraft, sayaUserPrompt: string, plainText: bo
 
   // One retry on unparseable JSON, then hard fail — never a silent score-50 pass.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await callAnthropic(VEDA_SYSTEM, userPrompt, 700);
+    // 2026-08-17 fix: 700 tokens was too tight for the STRICT JSON schema (up to
+    // 8 issues * 200 chars + a 1500-char critique = 3000+ chars of legitimate
+    // content) — as the rules table grew, Veda had more to flag, output got cut
+    // mid-JSON, and both attempts failed identically (no corrective instruction
+    // on retry). Raised budget + added a brevity instruction on the retry pass.
+    const promptForAttempt = attempt === 0
+      ? userPrompt
+      : 'CRITICAL: Return ONLY the JSON object — no prose, no code fences. Limit "issues" to at most 4 short strings and "critique" to 2 sentences, so the full response fits comfortably within budget.\n\n' + userPrompt;
+    const text = await callAnthropic(VEDA_SYSTEM, promptForAttempt, 1400);
     try {
       const parsed = JSON.parse(stripCodeFences(text)) as { score?: unknown; issues?: unknown; critique?: unknown };
       return {
