@@ -513,7 +513,7 @@ export default async function MarketingSeoPage({
                     <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:p.title_length&&p.title_length>60?RED:GREEN }}>{p.title_length}ch</td>
                     <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11 }}>{p.word_count}</td>
                     <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:p.readability&&p.readability>=60?GREEN:p.readability&&p.readability>=45?AMBER:RED }}>{p.readability?.toFixed(1)}</td>
-                    <td style={{ padding:'7px 8px', fontSize:10 }}>{Object.entries(p.issues??{}).filter(([,v])=>v&&v!==false).map(([k])=><span key={k} style={{ marginRight:3, padding:'1px 5px', borderRadius:99, background:'#FEF3C7', color:AMBER }}>{k.replace(/_/g,' ')}</span>)}</td>
+                    <td style={{ padding:'7px 8px', fontSize:10 }}>{Object.entries(p.issues??{}).filter(([,v])=>!!v).map(([k])=><span key={k} style={{ marginRight:3, padding:'1px 5px', borderRadius:99, background:'#FEF3C7', color:AMBER }}>{k.replace(/_/g,' ')}</span>)}</td>
                   </tr>
                 ))}</tbody>
               </table>
