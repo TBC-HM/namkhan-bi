@@ -405,13 +405,13 @@ export async function POST(req: NextRequest) {
       if (!creds) throw new Error('dataforseo_creds_missing');
       const [sumRes, lnkRes] = await Promise.all([
         fetch('https://api.dataforseo.com/v3/backlinks/summary/live', { method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'}, body:JSON.stringify([{target:cfg.domain,include_subdomains:true}]) }),
-        fetch('https://api.dataforseo.com/v3/backlinks/backlinks/live', { method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'}, body:JSON.stringify([{target:cfg.domain,include_subdomains:true,limit:50,order_by:['rank,desc'],mode:'as_is'}]) }),
+        fetch('https://api.dataforseo.com/v3/backlinks/backlinks/live', { method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'}, body:JSON.stringify([{target:cfg.domain,include_subdomains:true,limit:500,order_by:['rank,desc'],mode:'as_is'}]) }),
       ]);
       const sumJson = await sumRes.json() as Record<string,any>;
       const lnkJson = await lnkRes.json() as Record<string,any>;
       const sum = sumJson?.tasks?.[0]?.result?.[0] ?? {};
       const items = (lnkJson?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
-      const summaryObj = { domain:cfg.domain, total_backlinks:sum.total_count??0, referring_domains:sum.referring_domains??0, authority_score:sum.rank??0, dofollow_links:sum.dofollow_links??0, nofollow_links:sum.nofollow_links??0 };
+      const summaryObj = { domain:cfg.domain, total_backlinks:sum.backlinks??0, referring_domains:sum.referring_domains??0, authority_score:sum.rank??0, dofollow_links:sum.dofollow_links??0, nofollow_links:sum.nofollow_links??0 };
       const rows = items.map((it:any)=>({ domain_from:it.domain_from, url_from:it.url_from, domain_to:cfg.domain, url_to:it.url_to, anchor:it.anchor, is_dofollow:it.dofollow, rank:it.rank, domain_from_rank:it.domain_from_rank, first_seen:it.first_seen?.slice(0,10), last_seen:it.last_seen?.slice(0,10) }));
       await sb.rpc('fn_seo_upsert_backlinks', { p_property_id:propertyId, p_summary:JSON.stringify(summaryObj), p_rows:JSON.stringify(rows) });
       return NextResponse.json({ ok:true, mode, result:{ domain:cfg.domain, total_backlinks:summaryObj.total_backlinks, referring_domains:summaryObj.referring_domains, authority_score:summaryObj.authority_score, backlinks_fetched:rows.length } });
