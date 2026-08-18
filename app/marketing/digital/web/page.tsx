@@ -47,7 +47,7 @@ export default async function DigitalWebPage({searchParams}:{searchParams?:{tab?
     isGsc?sb.from('v_gsc_reports').select('rows').eq('report_type','pages').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
   ]);
 
-  const ov=ovRes.data?.totals as MetricRow|null;
+  const ov=(ovRes.data?.totals??((ovRes.data?.rows as any[])?.[0]??null)) as MetricRow|null;
   const pageRows=(pgRes.data?.rows??[]) as DimMetricRow[];
   const srcRows=(srcRes.data?.rows??[]) as DimMetricRow[];
   const trendRows=(trendRes.data?.rows??[]) as DimMetricRow[];
