@@ -225,8 +225,11 @@ export async function POST(req: NextRequest) {
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       // Get top tracked keywords for trend analysis (US market, top 6 by volume)
-      const { data: kwRows } = await sb.from('v_seo_rankings').select('keyword,monthly_searches').eq('property_id', propertyId).eq('location_code' as any, 2840).order('monthly_searches' as any, {ascending:false}).limit(6);
-      const keywords = ((kwRows ?? []) as any[]).map((r:any) => r.keyword).filter(Boolean);
+      const { data: kwRowsAll } = await sb.from('v_seo_rankings').select('keyword,monthly_searches,location_code').eq('property_id', propertyId).limit(50);
+      const keywords = ((kwRowsAll ?? []) as any[])
+        .filter((r:any) => r.location_code === 2840)
+        .sort((a:any,b:any) => (b.monthly_searches??0)-(a.monthly_searches??0))
+        .slice(0,6).map((r:any) => r.keyword).filter(Boolean);
       if (!keywords.length) return NextResponse.json({ok:false,error:'no_tracked_keywords_for_trends'},{status:400});
       const today = new Date().toISOString().slice(0,10);
       const yearAgo = new Date(Date.now() - 365*24*60*60*1000).toISOString().slice(0,10);
