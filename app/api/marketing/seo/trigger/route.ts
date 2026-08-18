@@ -262,10 +262,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, mode, result: { keywords: items.length, upserted: stored ?? 0 } });
       }
       if (mode === 'hotel') {
-        const res = await fetch('https://api.dataforseo.com/v3/business_data/google/hotel_searches/live', {
+        const res = await fetch('https://api.dataforseo.com/v3/business_data/google/my_business_info/live', {
           method: 'POST', headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify([{ keyword: cfg.hotel_search_kw, language_code: 'en',
-            location_name: cfg.hotel_location_name, adults: 2, depth: 20, sort_by: 'highest_rating' }]),
+          body: JSON.stringify([{keyword:'The Namkhan Luang Prabang', language_code:'en', location_code:2418}]),
         });
         const json = await res.json() as Record<string,any>;
         const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];

@@ -756,7 +756,7 @@ export default async function MarketingSeoPage({
           </div>
 
           {/* Schema Health */}
-          <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
+          <div style={{ display:aiSub==='schema' ? 'block' : 'none', background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
             <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>Schema Markup Health (structured data for AI/Google)</div>
             {instantPages.length===0?(
               <div style={{ fontSize:12, color:INK_M }}>Click <strong>Run AI Web Sweep</strong> to check schema on all key pages.</div>
@@ -783,7 +783,7 @@ export default async function MarketingSeoPage({
           </div>
 
           {/* What AI says about Namkhan */}
-          <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
+          <div style={{ display:aiSub==='visibility' ? 'block' : 'none', background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
             <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>What AI says about thenamkhan.com — top 30 triggers</div>
             {mentionsRows.length===0?(
               <div style={{ fontSize:12, color:INK_M }}>Click <strong>Refresh LLM data</strong> to fetch AI mention details.</div>
@@ -804,7 +804,7 @@ export default async function MarketingSeoPage({
           </div>
 
           {/* Schema to implement */}
-          <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px' }}>
+          <div style={{ display:aiSub==='schema' ? 'block' : 'none', background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px' }}>
             <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:8 }}>Schema to implement on thenamkhan.com (copy to CMS &lt;head&gt;)</div>
             <pre style={{ background:'#1B1B1B', color:'#E6DFCC', padding:'14px 16px', borderRadius:6, fontSize:10, lineHeight:1.6, overflow:'auto', whiteSpace:'pre' as const }}>{`<script type="application/ld+json">
 {
