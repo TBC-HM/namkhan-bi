@@ -1,5 +1,5 @@
 // app/marketing/digital/web/page.tsx
-// Search Intelligence (GSC) + Website Intelligence (GA4)
+// Search Intelligence (GSC) + Website Intelligence (GA4) + Google Trends
 // Rebuilt per brief: google-search-console-ga4-bi-views.md
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
@@ -23,18 +23,24 @@ function fmt(n:number):string{if(n>=1_000_000)return(n/1_000_000).toFixed(1)+'M'
 function fmtDuration(s:number):string{if(s<60)return Math.round(s)+'s';return Math.floor(s/60)+'m '+String(Math.round(s%60)).padStart(2,'0')+'s';}
 function posColor(p:number){return p<=3?GREEN:p<=10?INK:p<=20?AMBER:RED;}
 
-// ─── Query → intent category ──────────────────────────────────────────────────
-const CATEGORY_ORDER=['Brand','Hotel','Spa','Wellness','Retreats','Activities','Restaurant','Destination','Sustainability','Other'];
+// ─── Query → intent category (all 13 from brief) ─────────────────────────────
+// Categories: Brand · Destination · Hotel · Rooms · Wellness · Spa · Retreats
+//             Activities · Restaurant · Family · Groups/Weddings · Sustainability · Competitor · Other
+const CATEGORY_ORDER=['Brand','Hotel','Rooms','Spa','Wellness','Retreats','Activities','Restaurant','Family','Groups/Weddings','Destination','Sustainability','Competitor','Other'];
 function classifyQuery(q:string):string{
   const l=q.toLowerCase();
   if(/namkhan|nam khan|namshan/.test(l)) return 'Brand';
-  if(/spa|massage|treatment/.test(l)) return 'Spa';
-  if(/yoga|wellness retreat|meditation|mindfulness|healing/.test(l)) return 'Wellness';
+  if(/agoda|booking\.com|expedia|tripadvisor|hostelworld|klook|viator/.test(l)) return 'Competitor';
+  if(/room|suite|villa|bungalow|cabin|bed|accommodation|stay/.test(l)) return 'Rooms';
+  if(/wedding|group event|private event|incentive|corporate/.test(l)) return 'Groups/Weddings';
+  if(/family|kids|children|child|baby/.test(l)) return 'Family';
+  if(/spa|massage|treatment|body/.test(l)) return 'Spa';
+  if(/yoga|wellness retreat|meditation|mindfulness|healing|detox retreat/.test(l)) return 'Wellness';
   if(/retreat|detox/.test(l)) return 'Retreats';
-  if(/cooking class|cooking school|laos cooking/.test(l)) return 'Activities';
-  if(/gym|fitness|beach in |kayak|cycling|bike/.test(l)) return 'Activities';
-  if(/restaurant|dining|food|eat|cafe/.test(l)) return 'Restaurant';
-  if(/eco|sustain|green|organic|environmental/.test(l)) return 'Sustainability';
+  if(/cooking class|cooking school|laos cooking|culinary/.test(l)) return 'Activities';
+  if(/gym|fitness|beach in |kayak|cycling|bike|trekking|hiking|elephant/.test(l)) return 'Activities';
+  if(/restaurant|dining|food|eat|cafe|cuisine/.test(l)) return 'Restaurant';
+  if(/eco|sustain|green|organic|environmental|responsible/.test(l)) return 'Sustainability';
   if(/hotel|resort|lodge|accommodation|luxury|glamping/.test(l)) return 'Hotel';
   if(/laos|luang prabang|lao |lp |vientiane/.test(l)) return 'Destination';
   return 'Other';
@@ -78,9 +84,12 @@ const GSC_REQUESTS=[
   {endpoint:'/api/marketing/analytics/gsc',body:{mode:'queries',date_range:'30d'}},
   {endpoint:'/api/marketing/analytics/gsc',body:{mode:'pages',date_range:'30d'}},
 ];
+const TRENDS_REQUESTS=[
+  {endpoint:'/api/marketing/seo/trigger',body:{mode:'trends',property_id:260955}},
+];
 
 export default async function DigitalWebPage({searchParams}:{searchParams?:{tab?:string}}) {
-  // Keep old tab keys (analytics/gsc) + support new keys (web/search)
+  // Keep old tab keys (analytics/gsc) + support new keys (web/search/trends)
   const rawTab=searchParams?.tab??'search';
   const activeTab=rawTab==='analytics'?'web':rawTab==='gsc'?'search':rawTab;
   const cfg=DEPT_CFG.marketing;
@@ -89,14 +98,16 @@ export default async function DigitalWebPage({searchParams}:{searchParams?:{tab?
 
   const isSearch=activeTab==='search';
   const isWeb=activeTab==='web';
+  const isTrends=activeTab==='trends';
 
-  const [ovRes,pgRes,srcRes,trendRes,qRes,gscPgRes]=await Promise.all([
+  const [ovRes,pgRes,srcRes,trendRes,qRes,gscPgRes,trendsRes]=await Promise.all([
     isWeb?sb.from('v_ga4_reports').select('rows,totals,date_range,fetched_at').eq('report_type','overview').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
     isWeb?sb.from('v_ga4_reports').select('rows').eq('report_type','pages').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
     isWeb?sb.from('v_ga4_reports').select('rows').eq('report_type','sources').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
     isWeb?sb.from('v_ga4_reports').select('rows').eq('report_type','trend').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
     isSearch?sb.from('v_gsc_reports').select('rows,totals,date_range,fetched_at').eq('report_type','queries').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
     isSearch?sb.from('v_gsc_reports').select('rows,totals').eq('report_type','pages').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
+    isTrends?sb.from('v_seo_trends').select('keyword,avg_interest,peak_month,interest_timeline,related_queries,fetched_at').eq('property_id',260955).order('avg_interest',{ascending:false}).limit(10):Promise.resolve({data:[]}),
   ]);
 
   // ── GA4 data processing ─────────────────────────────────────────────────────
@@ -175,7 +186,17 @@ export default async function DigitalWebPage({searchParams}:{searchParams?:{tab?
     clicks:r.clicks??0,impressions:r.impressions??0,ctr:r.ctr??0,position:r.position??0,
   }));
 
-  const SUBTABS=[{key:'search',label:'🔍 Search Intelligence (GSC)'},{key:'web',label:'📊 Website Intelligence (GA4)'}];
+  // ── Google Trends data processing ──────────────────────────────────────────
+  type TrendKw={keyword:string;avg_interest:number|null;peak_month:string|null;interest_timeline:Array<{date:string;val:number}>|null;related_queries:string[]|null;fetched_at:string|null};
+  const trendsData=(trendsRes.data??[]) as TrendKw[];
+  const trendsLastFetch=trendsData[0]?.fetched_at?.slice(0,10)??null;
+  const maxInterest=Math.max(...trendsData.map(t=>t.avg_interest??0),1);
+
+  const SUBTABS=[
+    {key:'search',label:'🔍 Search Intelligence (GSC)'},
+    {key:'web',label:'📊 Website Intelligence (GA4)'},
+    {key:'trends',label:'📈 Google Trends'},
+  ];
 
   const th=(label:string,right=false)=>(
     <th key={label} style={{padding:'5px 8px',textAlign:right?'right' as const:'left' as const,fontSize:10,fontWeight:600,color:INK_F,textTransform:'uppercase' as const,letterSpacing:'0.06em',borderBottom:`2px solid ${HAIR}`}}>{label}</th>
@@ -618,6 +639,178 @@ export default async function DigitalWebPage({searchParams}:{searchParams?:{tab?
               <AnalyticsPullBtn requests={GA4_REQUESTS} label="↻ Pull GA4 data" />
             </div>
           )
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* GOOGLE TRENDS                                                       */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {isTrends&&(
+          <>
+            {/* Pull button + last fetch */}
+            <div style={{display:'flex',gap:12,alignItems:'center',padding:'10px 14px',background:'#F4EFE2',borderRadius:6}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:INK}}>Google Trends · Search interest over time</div>
+                <div style={{fontSize:11,color:INK_S,marginTop:2}}>
+                  DataForSEO Google Trends API · 12-month interest (0–100 scale) · top 5 tracked keywords · US market
+                </div>
+              </div>
+              <div style={{marginLeft:'auto',display:'flex',gap:10,alignItems:'center'}}>
+                {trendsLastFetch&&<span style={{fontSize:10,color:INK_F,fontFamily:'ui-monospace,monospace'}}>Last fetch: {trendsLastFetch}</span>}
+                <AnalyticsPullBtn requests={TRENDS_REQUESTS} label="📈 Fetch Trends" />
+              </div>
+            </div>
+
+            {trendsData.length===0?(
+              <div style={{padding:48,textAlign:'center' as const,border:`1px dashed ${HAIR}`,borderRadius:6,display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
+                <div style={{fontSize:40}}>📈</div>
+                <div style={{fontSize:15,fontWeight:700,color:INK}}>No Google Trends data yet</div>
+                <div style={{fontSize:12,color:INK_S,maxWidth:480,lineHeight:1.6}}>
+                  Click <strong>📈 Fetch Trends</strong> above. The system will pull 12-month search interest from DataForSEO Google Trends for your top 5 ranked keywords (US market) and store them here.
+                </div>
+                <div style={{fontSize:11,color:INK_F,marginTop:4}}>
+                  Make sure SERP tasks have been posted and fetched first (Rankings tab) — Trends pulls from your tracked keywords list.
+                </div>
+              </div>
+            ):(
+              <>
+                {/* 1 · KEYWORD INTEREST OVERVIEW */}
+                <div>
+                  <div style={{paddingBottom:6,borderBottom:`2px solid ${HAIR}`,marginBottom:16}}>
+                    <div style={{fontSize:13,fontWeight:700,color:INK}}>1 · Keyword Search Interest Overview</div>
+                    <div style={{fontSize:11,color:INK_F,marginTop:2}}>12-month average interest score (0–100) · Google web search · US market</div>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                    {trendsData.map((kw,i)=>{
+                      const timeline=kw.interest_timeline??[];
+                      const maxVal=Math.max(...timeline.map(t=>t.val),1);
+                      const barW=Math.round((kw.avg_interest??0)/maxInterest*100);
+                      const intColor=(kw.avg_interest??0)>=50?GREEN:(kw.avg_interest??0)>=25?AMBER:INK_F;
+                      return(
+                        <div key={i} style={{border:`1px solid ${HAIR}`,borderRadius:6,padding:'14px 18px',background:'#FFFFFF'}}>
+                          <div style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:16,alignItems:'center',marginBottom:10}}>
+                            <div>
+                              <div style={{fontSize:13,fontWeight:700,color:INK,fontStyle:'italic'}}>{kw.keyword}</div>
+                              {kw.peak_month&&<div style={{fontSize:10,color:INK_F,marginTop:2}}>Peak: <span style={{color:AMBER,fontWeight:600}}>{kw.peak_month}</span></div>}
+                            </div>
+                            <div style={{textAlign:'right' as const}}>
+                              <div style={{fontSize:28,fontWeight:700,color:intColor,fontVariantNumeric:'tabular-nums',lineHeight:1}}>{kw.avg_interest??'—'}</div>
+                              <div style={{fontSize:10,color:INK_F}}>avg / 100</div>
+                            </div>
+                          </div>
+                          {/* Interest bar */}
+                          <div style={{height:6,background:HAIR,borderRadius:3,marginBottom:12,overflow:'hidden'}}>
+                            <div style={{height:6,width:barW+'%',background:intColor,borderRadius:3,transition:'width 0.3s'}} />
+                          </div>
+                          {/* 12-month sparkline */}
+                          {timeline.length>0&&(
+                            <div>
+                              <div style={{fontSize:10,color:INK_F,marginBottom:6,fontFamily:'ui-monospace,monospace'}}>12-month trend</div>
+                              <div style={{display:'flex',gap:3,alignItems:'flex-end',height:40}}>
+                                {timeline.slice(-12).map((t,j)=>{
+                                  const h=Math.max(3,Math.round(40*(t.val/Math.max(maxVal,1))));
+                                  const col=t.val>=50?GREEN:t.val>=25?AMBER:INK_F;
+                                  return(
+                                    <div key={j} style={{flex:1,display:'flex',flexDirection:'column' as const,alignItems:'center',gap:2}}>
+                                      <div title={`${t.date}: ${t.val}`} style={{width:'100%',borderRadius:2,background:col,opacity:0.3+0.7*(t.val/Math.max(maxVal,1)),height:h}} />
+                                      <div style={{fontSize:7,color:INK_F,whiteSpace:'nowrap' as const}}>{t.date?.slice(-2)}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          {/* Related queries */}
+                          {kw.related_queries&&(kw.related_queries as string[]).length>0&&(
+                            <div style={{marginTop:10,display:'flex',flexWrap:'wrap' as const,gap:4}}>
+                              <span style={{fontSize:10,color:INK_F,marginRight:4}}>Related:</span>
+                              {(kw.related_queries as string[]).slice(0,6).map((rq,j)=>(
+                                <span key={j} style={{fontSize:10,padding:'2px 8px',background:'#F4EFE2',borderRadius:99,color:INK_S}}>{rq}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2 · BRAND VS NON-BRAND TREND SIGNAL */}
+                <div>
+                  <div style={{paddingBottom:6,borderBottom:`2px solid ${HAIR}`,marginBottom:16}}>
+                    <div style={{fontSize:13,fontWeight:700,color:INK}}>2 · Brand vs Non-Brand Interest Signal</div>
+                    <div style={{fontSize:11,color:INK_F,marginTop:2}}>Compare interest in brand name ("namkhan") vs destination + product keywords</div>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                    {['Brand','Non-Brand'].map(type=>{
+                      const isB=type==='Brand';
+                      const kws=trendsData.filter(k=>/namkhan|nam khan/.test(k.keyword.toLowerCase())===isB);
+                      const avg=kws.length>0?Math.round(kws.reduce((s,k)=>s+(k.avg_interest??0),0)/kws.length):null;
+                      return(
+                        <div key={type} style={{border:`1px solid ${HAIR}`,borderRadius:6,padding:'16px 18px',background:'#FFFFFF'}}>
+                          <div style={{fontSize:12,fontWeight:700,color:isB?AMBER:GREEN,marginBottom:8}}>{type} search interest</div>
+                          {kws.length===0?(
+                            <div style={{fontSize:11,color:INK_F}}>No {type.toLowerCase()} keywords in tracked list yet.</div>
+                          ):(
+                            <>
+                              <div style={{fontSize:28,fontWeight:700,color:isB?AMBER:GREEN,marginBottom:4}}>{avg??'—'}<span style={{fontSize:12,fontWeight:400,color:INK_F}}>/100</span></div>
+                              <div style={{fontSize:10,color:INK_F,marginBottom:10}}>Average across {kws.length} keyword{kws.length!==1?'s':''}</div>
+                              <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                                {kws.map((k,i)=>(
+                                  <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:11}}>
+                                    <span style={{color:INK,fontStyle:'italic'}}>{k.keyword}</span>
+                                    <span style={{fontFamily:'ui-monospace,monospace',color:isB?AMBER:GREEN,fontWeight:600}}>{k.avg_interest??'—'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{marginTop:12,padding:'10px 14px',background:'#F4EFE2',borderRadius:5,fontSize:11,color:INK_S}}>
+                    A rising non-brand interest trend (destination, wellness, activities) is a leading signal for new guest demand before it appears in bookings. Brand interest confirms existing awareness.
+                  </div>
+                </div>
+
+                {/* 3 · PEAK SEASON CALENDAR */}
+                <div>
+                  <div style={{paddingBottom:6,borderBottom:`2px solid ${HAIR}`,marginBottom:16}}>
+                    <div style={{fontSize:13,fontWeight:700,color:INK}}>3 · Search Demand Seasonality</div>
+                    <div style={{fontSize:11,color:INK_F,marginTop:2}}>Peak search months per keyword — useful for content and campaign timing</div>
+                  </div>
+                  <div style={{border:`1px solid ${HAIR}`,borderRadius:6,padding:'16px 20px',background:'#FFFFFF'}}>
+                    <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
+                      <thead><tr>
+                        <th style={{padding:'5px 8px',textAlign:'left' as const,fontSize:10,fontWeight:600,color:INK_F,textTransform:'uppercase' as const,letterSpacing:'0.06em',borderBottom:`2px solid ${HAIR}`}}>Keyword</th>
+                        <th style={{padding:'5px 8px',textAlign:'center' as const,fontSize:10,fontWeight:600,color:INK_F,textTransform:'uppercase' as const,letterSpacing:'0.06em',borderBottom:`2px solid ${HAIR}`}}>Avg Interest</th>
+                        <th style={{padding:'5px 8px',textAlign:'left' as const,fontSize:10,fontWeight:600,color:INK_F,textTransform:'uppercase' as const,letterSpacing:'0.06em',borderBottom:`2px solid ${HAIR}`}}>Peak Month</th>
+                        <th style={{padding:'5px 8px',textAlign:'left' as const,fontSize:10,fontWeight:600,color:INK_F,textTransform:'uppercase' as const,letterSpacing:'0.06em',borderBottom:`2px solid ${HAIR}`}}>Signal</th>
+                      </tr></thead>
+                      <tbody>
+                        {trendsData.map((kw,i)=>{
+                          const ai=kw.avg_interest??0;
+                          const signal=ai>=50?'Strong demand':ai>=25?'Moderate demand':'Low / niche';
+                          const sigCol=ai>=50?GREEN:ai>=25?AMBER:INK_F;
+                          return(
+                            <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                              <td style={{padding:'6px 8px',color:INK,fontStyle:'italic'}}>{kw.keyword}</td>
+                              <td style={{padding:'6px 8px',textAlign:'center' as const,fontFamily:'ui-monospace,monospace',fontWeight:700,color:sigCol}}>{kw.avg_interest??'—'}</td>
+                              <td style={{padding:'6px 8px',color:AMBER,fontFamily:'ui-monospace,monospace'}}>{kw.peak_month??'—'}</td>
+                              <td style={{padding:'6px 8px'}}><span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:ai>=50?'#E6F4EA':ai>=25?'#FEF3C7':'#F4F4F5',color:sigCol,fontWeight:600}}>{signal}</span></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    <div style={{marginTop:10,fontSize:10,color:INK_F}}>
+                      Schedule content publishing and paid campaigns 6–8 weeks before peak search months. Google Trends search interest typically leads booking intent by 4–10 weeks.
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
         )}
 
       </div>
