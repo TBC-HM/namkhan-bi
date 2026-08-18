@@ -61,7 +61,7 @@ export default async function MarketingSeoPage({
     tab === 'technical' ? sb.from('v_seo_onpage').select('*').order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', 260955).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
     tab === 'pages' ? sb.from('v_seo_ranked_pages').select('url,keyword,position,volume,search_intent').eq('property_id', 260955).order('position', { ascending: true }).limit(500) : Promise.resolve({ data: [] }),
-    (tab === 'technical' || tab === 'ai-web') ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', 260955).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
+    (tab === 'technical' || tab === 'ai-web' || tab === 'pages') ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', 260955).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_questions').select('keyword,llm,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'hotel' ? sb.from('v_seo_hotel_searches').select('position,hotel_title,stars,price_usd,rating_value,votes_count,search_keyword,is_our_property').eq('property_id', 260955).order('snapshot_date', { ascending: false }).order('position').limit(20) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_mentions').select('keyword,llm,snippet,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(30) : Promise.resolve({ data: [] }),
@@ -537,6 +537,42 @@ export default async function MarketingSeoPage({
                 </table>
               </div>
             )}
+
+          {/* Pages not yet ranking in US — from site audit */}
+          {tab==='pages' && instantPages.length>0 && (()=>{
+            const ranked=new Set(pagesArr.map((a:any)=>a.url));
+            const unranked=instantPages.filter((p:any)=>!ranked.has(p.url));
+            if(!unranked.length)return null;
+            return(
+              <div style={{marginTop:20}}>
+                <div style={{fontSize:10,fontWeight:600,color:INK_F,fontFamily:'ui-monospace,monospace',letterSpacing:'0.12em',textTransform:'uppercase' as const,marginBottom:8}}>
+                  {unranked.length} key pages — not yet ranking in Google US top 50
+                </div>
+                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
+                  <thead><tr style={{borderBottom:`2px solid ${HAIR}`}}>
+                    {['Path','Title','Words','Schema'].map(h=>(<th key={h} style={{padding:'4px 8px',textAlign:'left' as const,fontSize:10,color:INK_F,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>{h}</th>))}
+                  </tr></thead>
+                  <tbody>
+                    {unranked.map((p:any,i:number)=>(
+                      <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                        <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:GREEN}}>{(p.url as string).replace('https://www.thenamkhan.com','')}</td>
+                        <td style={{padding:'5px 8px',color:INK,fontSize:11}}>{p.page_title??'—'}</td>
+                        <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:INK_F}}>{p.word_count??'—'}</td>
+                        <td style={{padding:'5px 8px'}}>
+                          <span style={{fontSize:10,padding:'1px 7px',borderRadius:99,background:p.issues?.schema_missing?'#FEE2E2':'#E6F4EA',color:p.issues?.schema_missing?RED:GREEN,fontWeight:600}}>
+                            {p.issues?.schema_missing?'❌ Missing':'✅ Present'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{fontSize:10,color:AMBER,marginTop:8}}>
+                  These pages need SEO content, backlinks, and keyword targeting to rank. Run On-Page Crawl in the AI Intel tab to audit more pages.
+                </div>
+              </div>
+            );
+          })()}
           </Container>
         </div>
       )}
