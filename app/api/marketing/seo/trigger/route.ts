@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
       }
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
-        body:JSON.stringify(keyPages.map(url=>({url,enable_javascript:false,load_resources:false}))),
+        body:JSON.stringify(keyPages.slice(0,6).map(url=>({url,enable_javascript:false,load_resources:false}))),
       });
       const json=await r.json() as Record<string,any>;
       const rows=(json?.tasks??[]).flatMap((t:any)=>(t?.result?.[0]?.items??[]).map((item:any)=>({
@@ -314,7 +314,7 @@ export async function POST(req: NextRequest) {
       }
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
-        body:JSON.stringify(keyPages.map(url=>({url,enable_javascript:false,load_resources:false}))),
+        body:JSON.stringify(keyPages.slice(0,6).map(url=>({url,enable_javascript:false,load_resources:false}))),
       });
       const json=await r.json() as Record<string,any>;
       const rows=(json?.tasks??[]).flatMap((t:any)=>(t?.result?.[0]?.items??[]).map((item:any)=>({

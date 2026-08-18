@@ -17,6 +17,7 @@ type GscRow={keys?:string[];clicks?:number;impressions?:number;ctr?:number;posit
 
 function mv(row:MetricRow,idx:number):number{return parseFloat(row.metricValues?.[idx]?.value??'0')||0;}
 function fmt(n:number,dec=0):string{if(n>=1_000_000)return(n/1_000_000).toFixed(1)+'M';if(n>=1_000)return(n/1_000).toFixed(1)+'K';return n.toFixed(dec);}
+function fmtDuration(s: number): string { if(s<60) return Math.round(s)+'s'; return Math.floor(s/60)+'m '+String(Math.round(s%60)).padStart(2,'0')+'s'; }
 function posColor(p:number){return p<=3?'#16A34A':p<=10?INK:'#DC2626';}
 
 const GA4_REQUESTS=[
