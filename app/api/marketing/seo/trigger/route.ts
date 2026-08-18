@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel', 'instant','schema-sweep','ai-domains','ai-query']);
+const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel', 'instant','schema-sweep','ai-domains','ai-query','backlinks']);
 
 export async function POST(req: NextRequest) {
   let body: { mode?: string; property_id?: number; url?: string } = {};
@@ -169,17 +169,27 @@ export async function POST(req: NextRequest) {
       const domain = cfg?.domain ?? 'thenamkhan.com';
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
+      // Discover pages: known from DB + sitemap + fallback
       let keyPages: string[] = [];
       try {
-        const smRes = await fetch(`https://www.${domain}/sitemap.xml`);
-        if (smRes.ok) {
-          const xml = await smRes.text();
-          const urls = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m:any)=>m[1].trim());
-          keyPages = urls.filter((u:string)=>u.includes(domain)).slice(0,50);
-        }
+        const [ipR,rpR] = await Promise.all([
+          sb.from('v_seo_instant_pages').select('url').eq('property_id',propertyId),
+          sb.from('v_seo_ranked_pages').select('url').eq('property_id',propertyId),
+        ]);
+        keyPages=[...new Set([...((ipR.data??[]) as any[]).map((p:any)=>p.url),...((rpR.data??[]) as any[]).map((p:any)=>p.url)])].filter((u:string)=>u.includes(domain));
       } catch {}
+      for (const sitemap of [`https://www.${domain}/sitemap.xml`,`https://${domain}/sitemap.xml`]) {
+        try {
+          const smRes = await fetch(sitemap);
+          if (smRes.ok) {
+            const xml = await smRes.text();
+            const smUrls=[...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m:any)=>m[1].trim()).filter((u:string)=>u.includes(domain));
+            keyPages=[...new Set([...keyPages,...smUrls])].slice(0,100); break;
+          }
+        } catch {}
+      }
       if (!keyPages.length) {
-        keyPages = [`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+        keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
       }
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
@@ -277,17 +287,27 @@ export async function POST(req: NextRequest) {
       const domain = cfg?.domain ?? 'thenamkhan.com';
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
+      // Discover pages: known from DB + sitemap + fallback
       let keyPages: string[] = [];
       try {
-        const smRes = await fetch(`https://www.${domain}/sitemap.xml`);
-        if (smRes.ok) {
-          const xml = await smRes.text();
-          const urls = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m:any)=>m[1].trim());
-          keyPages = urls.filter((u:string)=>u.includes(domain)).slice(0,50);
-        }
+        const [ipR,rpR] = await Promise.all([
+          sb.from('v_seo_instant_pages').select('url').eq('property_id',propertyId),
+          sb.from('v_seo_ranked_pages').select('url').eq('property_id',propertyId),
+        ]);
+        keyPages=[...new Set([...((ipR.data??[]) as any[]).map((p:any)=>p.url),...((rpR.data??[]) as any[]).map((p:any)=>p.url)])].filter((u:string)=>u.includes(domain));
       } catch {}
+      for (const sitemap of [`https://www.${domain}/sitemap.xml`,`https://${domain}/sitemap.xml`]) {
+        try {
+          const smRes = await fetch(sitemap);
+          if (smRes.ok) {
+            const xml = await smRes.text();
+            const smUrls=[...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m:any)=>m[1].trim()).filter((u:string)=>u.includes(domain));
+            keyPages=[...new Set([...keyPages,...smUrls])].slice(0,100); break;
+          }
+        } catch {}
+      }
       if (!keyPages.length) {
-        keyPages = [`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+        keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
       }
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
@@ -373,6 +393,26 @@ export async function POST(req: NextRequest) {
         results.push({prompt,mentioned,response_length:responseText.length});
       }
       return NextResponse.json({ok:true,mode,result:{queries:results}});
+    }
+
+    if (mode === 'backlinks') {
+      const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
+      const cfg = (cfgRows as any[])?.[0] as { domain:string } | undefined;
+      if (!cfg) throw new Error(`no_seo_config_${propertyId}`);
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const [sumRes, lnkRes] = await Promise.all([
+        fetch('https://api.dataforseo.com/v3/backlinks/summary/live', { method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'}, body:JSON.stringify([{target:cfg.domain,include_subdomains:true}]) }),
+        fetch('https://api.dataforseo.com/v3/backlinks/backlinks/live', { method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'}, body:JSON.stringify([{target:cfg.domain,include_subdomains:true,limit:50,order_by:['rank,desc'],mode:'as_is'}]) }),
+      ]);
+      const sumJson = await sumRes.json() as Record<string,any>;
+      const lnkJson = await lnkRes.json() as Record<string,any>;
+      const sum = sumJson?.tasks?.[0]?.result?.[0] ?? {};
+      const items = (lnkJson?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+      const summaryObj = { domain:cfg.domain, total_backlinks:sum.total_count??0, referring_domains:sum.referring_domains??0, authority_score:sum.rank??0, dofollow_links:sum.dofollow_links??0, nofollow_links:sum.nofollow_links??0 };
+      const rows = items.map((it:any)=>({ domain_from:it.domain_from, url_from:it.url_from, domain_to:cfg.domain, url_to:it.url_to, anchor:it.anchor, is_dofollow:it.dofollow, rank:it.rank, domain_from_rank:it.domain_from_rank, first_seen:it.first_seen?.slice(0,10), last_seen:it.last_seen?.slice(0,10) }));
+      await sb.rpc('fn_seo_upsert_backlinks', { p_property_id:propertyId, p_summary:JSON.stringify(summaryObj), p_rows:JSON.stringify(rows) });
+      return NextResponse.json({ ok:true, mode, result:{ domain:cfg.domain, total_backlinks:summaryObj.total_backlinks, referring_domains:summaryObj.referring_domains, authority_score:summaryObj.authority_score, backlinks_fetched:rows.length } });
     }
 
     return NextResponse.json({ ok: false, error: 'mode not implemented' }, { status: 400 });
