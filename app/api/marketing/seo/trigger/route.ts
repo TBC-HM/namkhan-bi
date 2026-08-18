@@ -89,7 +89,38 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (mode === 'volume' || mode === 'suggestions' || mode === 'local') {
+    if (mode === 'volume') {
+      const { data: kwRows } = await sb.from('v_seo_rankings').select('keyword_id,keyword,location_code').eq('property_id', propertyId);
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const byLoc = new Map<number, {id:number;keyword:string}[]>();
+      for (const r of (kwRows ?? []) as any[]) {
+        if (!byLoc.has(r.location_code)) byLoc.set(r.location_code, []);
+        byLoc.get(r.location_code)!.push({id: r.keyword_id, keyword: r.keyword});
+      }
+      const updates: any[] = [];
+      for (const [locCode, kws] of byLoc.entries()) {
+        const res = await fetch('https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live', {
+          method: 'POST',
+          headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
+          body: JSON.stringify([{keywords: kws.map(k=>k.keyword), location_code: locCode, language_code: 'en'}]),
+        });
+        const json = await res.json() as Record<string,any>;
+        for (const item of (json?.tasks?.[0]?.result ?? []) as any[]) {
+          const kw = kws.find(k => k.keyword === item.keyword);
+          if (!kw) continue;
+          updates.push({keyword_id: kw.id, monthly_searches: item.search_volume ?? 0, keyword_difficulty: item.keyword_properties?.keyword_difficulty ?? null, cpc_usd: item.cpc ?? null, competition: item.competition ?? null});
+        }
+      }
+      const { data: cnt } = await sb.rpc('fn_seo_bulk_update_volume', {p_rows: JSON.stringify(updates)});
+      return NextResponse.json({ok: true, mode, result: {updated: cnt ?? 0, note: 'Laos keywords show 0 volume — Google Ads has no data for this market'}});
+    }
+
+    if (mode === 'suggestions') {
+      return NextResponse.json({ok: false, error: 'DataForSEO Labs plan required for keyword suggestions. Upgrade at dataforseo.com/pricing'}, {status: 402});
+    }
+
+    if (mode === 'local') {
       const { data: edgeData, error: edgeErr } = await sb.functions.invoke('fetch-serp-rankings', {
         body: { action: mode, property_id: propertyId },
       });
