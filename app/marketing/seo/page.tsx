@@ -46,10 +46,11 @@ const WORKFLOW=[
 export default async function MarketingSeoPage({
   searchParams,
 }: {
-  searchParams?: { tab?: string; loc?: string };
+  searchParams?: { tab?: string; loc?: string; sub?: string };
 }) {
   const tab = searchParams?.tab ?? 'overview';
   const locFilter = searchParams?.loc ?? 'all';
+  const aiSub = searchParams?.sub ?? 'visibility';
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
