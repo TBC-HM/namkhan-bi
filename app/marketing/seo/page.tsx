@@ -141,7 +141,7 @@ export default async function MarketingSeoPage({
         <span style={{ marginLeft:8, fontSize:11, color:INK_F }}>
           {rankings.length} keywords · {withPos.length} ranked
         </span>
-      </div>
+      </div>}
 
       {/* ─── OVERVIEW ─────────────────────────────────────────────────────── */}
       {tab==='overview' && (
