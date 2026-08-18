@@ -152,7 +152,18 @@ export async function POST(req: NextRequest) {
       const domain = cfg?.domain ?? 'thenamkhan.com';
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
-      const keyPages = [`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+      let keyPages: string[] = [];
+      try {
+        const smRes = await fetch(`https://www.${domain}/sitemap.xml`);
+        if (smRes.ok) {
+          const xml = await smRes.text();
+          const urls = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m:any)=>m[1].trim());
+          keyPages = urls.filter((u:string)=>u.includes(domain)).slice(0,50);
+        }
+      } catch {}
+      if (!keyPages.length) {
+        keyPages = [`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+      }
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
         body:JSON.stringify(keyPages.map(url=>({url,enable_javascript:false,load_resources:false}))),
@@ -249,7 +260,18 @@ export async function POST(req: NextRequest) {
       const domain = cfg?.domain ?? 'thenamkhan.com';
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
-      const keyPages = [`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+      let keyPages: string[] = [];
+      try {
+        const smRes = await fetch(`https://www.${domain}/sitemap.xml`);
+        if (smRes.ok) {
+          const xml = await smRes.text();
+          const urls = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m:any)=>m[1].trim());
+          keyPages = urls.filter((u:string)=>u.includes(domain)).slice(0,50);
+        }
+      } catch {}
+      if (!keyPages.length) {
+        keyPages = [`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+      }
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
         body:JSON.stringify(keyPages.map(url=>({url,enable_javascript:false,load_resources:false}))),
