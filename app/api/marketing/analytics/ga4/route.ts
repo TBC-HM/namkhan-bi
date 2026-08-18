@@ -85,7 +85,10 @@ export async function POST(req: NextRequest) {
     body:JSON.stringify(config),
   });
   const data = await r.json() as Record<string,unknown>;
-  if (!r.ok) return NextResponse.json({ok:false,error:data},{status:r.status});
+  if (!r.ok) {
+    const errMsg = (data as any)?.error?.message ?? (data as any)?.message ?? `GA4 API error ${r.status}`;
+    return NextResponse.json({ok:false,error:errMsg},{status:r.status});
+  }
 
   const rows = data.rows ?? [];
   const totals = (data.totals as any[])?.[0] ?? null;

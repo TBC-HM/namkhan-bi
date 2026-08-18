@@ -34,7 +34,11 @@ export default function AnalyticsPullBtn({ requests, label, variant='primary' }:
           headers: {'Content-Type':'application/json'},
           body: JSON.stringify(r.body),
         });
-        if (!res.ok) { const j = await res.json().catch(()=>({})); throw new Error(j.error ?? 'request failed'); }
+        if (!res.ok) {
+          const j = await res.json().catch(()=>({}));
+          const msg = typeof j.error === 'string' ? j.error : (j.error?.message ?? j.message ?? `HTTP ${res.status}`);
+          throw new Error(msg);
+        }
       }
       setDone(true);
       startTransition(() => { router.refresh(); });
