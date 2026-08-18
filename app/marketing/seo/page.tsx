@@ -53,7 +53,7 @@ export default async function MarketingSeoPage({
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
-  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*').eq('property_id',260955),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
@@ -86,6 +86,8 @@ export default async function MarketingSeoPage({
   const mentionsRows=(mentionsRes.data??[]) as Array<{keyword:string;llm:string;snippet:string|null;mention_date:string}>;
   type AiIntelRow={intel_type:string;target_keyword:string;item_name:string;mentions:number;ai_search_volume:number};
   type LlmRespRow={prompt:string;response_text:string|null;our_domain_mentioned:boolean;platform:string;fetched_at:string};
+  type CompRow={id:number;domain:string;label:string;active:boolean};
+  const competitorRows=(competitorRes.data??[]) as CompRow[];
   const aiIntelRows=(aiIntelRes.data??[]) as AiIntelRow[];
   const llmRespRows=(llmRespRes.data??[]) as LlmRespRow[];
   const domainIntel=aiIntelRows.filter(r=>r.intel_type==='domain');
@@ -310,9 +312,15 @@ export default async function MarketingSeoPage({
             <div style={{ padding:'16px 0' }}>
               <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:12 }}>Tracked competitor domains</div>
               <div style={{ display:'flex', flexWrap:'wrap' as const, gap:8, marginBottom:24 }}>
-                {['booking.com','agoda.com','tripadvisor.com','expedia.com','rosewoodhotels.com','sofitel.com','belmond.com'].map(d=>(
-                  <div key={d} style={{ fontSize:11, fontFamily:'ui-monospace,monospace', color:INK_M, border:`1px solid ${HAIR}`, padding:'4px 10px', borderRadius:4 }}>{d}</div>
+                {competitorRows.filter(c=>c.active).map(c=>(
+                  <div key={c.id} style={{ fontSize:11, fontFamily:'ui-monospace,monospace', color:INK_M, border:`1px solid ${HAIR}`, padding:'4px 10px', borderRadius:4 }}>
+                    <span style={{fontWeight:600,color:INK}}>{c.label}</span>
+                    <span style={{color:INK_F,marginLeft:6,fontSize:10}}>{c.domain}</span>
+                  </div>
                 ))}
+                {competitorRows.filter(c=>!c.active).length>0&&(
+                  <div style={{fontSize:10,color:INK_F,marginTop:4}}>+ {competitorRows.filter(c=>!c.active).length} inactive: {competitorRows.filter(c=>!c.active).map(c=>c.domain).join(', ')}</div>
+                )}
               </div>
               <div style={{ padding:'24px 16px', background:'#F9F6F0', borderRadius:6, marginBottom:20 }}>
                 <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:6 }}>API endpoint ready · DataForSEO Labs plan needed</div>
