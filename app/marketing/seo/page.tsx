@@ -53,7 +53,7 @@ export default async function MarketingSeoPage({
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
-  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*').eq('property_id',260955),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
@@ -65,6 +65,8 @@ export default async function MarketingSeoPage({
     tab === 'ai-visibility' ? sb.from('v_seo_llm_questions').select('keyword,llm,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'hotel' ? sb.from('v_seo_hotel_searches').select('position,hotel_title,stars,price_usd,rating_value,votes_count,search_keyword,is_our_property').eq('property_id', 260955).order('snapshot_date', { ascending: false }).order('position').limit(20) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_mentions').select('keyword,llm,snippet,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(30) : Promise.resolve({ data: [] }),
+    tab === 'ai-visibility' ? sb.from('v_seo_ai_intel').select('intel_type,target_keyword,item_name,mentions,ai_search_volume').eq('property_id',260955).order('mentions',{ascending:false}).limit(30) : Promise.resolve({ data: [] }),
+    tab === 'ai-visibility' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,fetched_at').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(6) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -82,6 +84,12 @@ export default async function MarketingSeoPage({
   const pagesRows=(pagesRes.data??[]) as PageKw[];
   const questionsRows=(questionsRes.data??[]) as Array<{keyword:string;llm:string;mention_date:string}>;
   const mentionsRows=(mentionsRes.data??[]) as Array<{keyword:string;llm:string;snippet:string|null;mention_date:string}>;
+  type AiIntelRow={intel_type:string;target_keyword:string;item_name:string;mentions:number;ai_search_volume:number};
+  type LlmRespRow={prompt:string;response_text:string|null;our_domain_mentioned:boolean;platform:string;fetched_at:string};
+  const aiIntelRows=(aiIntelRes.data??[]) as AiIntelRow[];
+  const llmRespRows=(llmRespRes.data??[]) as LlmRespRow[];
+  const domainIntel=aiIntelRows.filter(r=>r.intel_type==='domain');
+  const pageIntel=aiIntelRows.filter(r=>r.intel_type==='page');
   const hotelRows=(hotelRes.data??[]) as Array<{position:number;hotel_title:string;stars:number|null;price_usd:number|null;rating_value:number|null;votes_count:number|null;search_keyword:string;is_our_property:boolean}>;
   type InstantPage={url:string;page_title:string|null;title_length:number|null;h1:string|null;h2s:string[]|null;word_count:number|null;readability:number|null;issues:Record<string,boolean>|null;crawl_date:string|null};
   const instantPages=(instantRes.data??[]) as InstantPage[];
@@ -400,6 +408,52 @@ export default async function MarketingSeoPage({
                   </>
                 )}
                 <div style={{ fontSize:10,color:INK_F,marginTop:12 }}>Last fetched: {llmSnapshot.snapshot_date} · {llmSnapshot.target}</div>
+              </div>
+            )}
+
+            {/* Competitor intel */}
+            {domainIntel.length>0&&(
+              <div style={{marginTop:20}}>
+                <div style={{fontSize:11,fontWeight:700,color:INK,marginBottom:8}}>Who AI cites instead — competitor domains</div>
+                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
+                  <thead><tr style={{borderBottom:`1px solid ${HAIR}`}}>
+                    {['Domain','Keyword','AI Mentions','AI Volume'].map(h=><th key={h} style={{padding:'4px 8px',textAlign:'left' as const,fontSize:10,color:INK_M,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {domainIntel.slice(0,15).map((r,i)=>(
+                      <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                        <td style={{padding:'5px 8px',color:r.item_name.includes('namkhan')?GREEN:INK,fontFamily:'monospace',fontSize:11,fontWeight:r.item_name.includes('namkhan')?700:400}}>{r.item_name} {r.item_name.includes('namkhan')&&'✓'}</td>
+                        <td style={{padding:'5px 8px',color:INK_M,fontSize:10,fontStyle:'italic'}}>{r.target_keyword}</td>
+                        <td style={{padding:'5px 8px',fontFamily:'monospace',textAlign:'right' as const}}>{r.mentions}</td>
+                        <td style={{padding:'5px 8px',color:INK_M,fontFamily:'monospace',textAlign:'right' as const}}>{r.ai_search_volume?.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ChatGPT direct responses */}
+            {llmRespRows.length>0&&(
+              <div style={{marginTop:20}}>
+                <div style={{fontSize:11,fontWeight:700,color:INK,marginBottom:8}}>ChatGPT responses to hotel queries</div>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                  {llmRespRows.map((r,i)=>(
+                    <div key={i} style={{border:`1px solid ${HAIR}`,borderRadius:6,padding:'10px 14px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                        <span style={{fontSize:11,fontWeight:600,color:INK,fontStyle:'italic'}}>{r.prompt}</span>
+                        <span style={{fontSize:10,padding:'1px 7px',borderRadius:99,background:r.our_domain_mentioned?'#E6F4EA':'#FEE2E2',color:r.our_domain_mentioned?GREEN:'#B03826',fontWeight:700,marginLeft:'auto'}}>{r.our_domain_mentioned?'✓ Namkhan mentioned':'✗ Not mentioned'}</span>
+                      </div>
+                      {r.response_text&&<div style={{fontSize:11,color:INK_M,lineHeight:1.5}}>{r.response_text.slice(0,300)}...</div>}
+                      <div style={{fontSize:10,color:INK_F,marginTop:4}}>{r.platform} · {r.fetched_at?.slice(0,10)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Closing brace for the !llmSnapshot check was here — re-open */}
+            {!false&&(
               </div>
             )}
           </Container>
