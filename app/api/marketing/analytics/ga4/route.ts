@@ -50,10 +50,10 @@ export async function POST(req: NextRequest) {
   const mode = body.mode ?? 'report';
 
   const sb = getSupabaseAdmin();
-  const { data: saJson } = await sb.rpc('fn_read_vault_secret',{p_name:'GMAIL_SERVICE_ACCOUNT_JSON'}).catch(()=>({data:null}));
-  const { data: propertyId } = await sb.rpc('fn_read_vault_secret',{p_name:'Property_ID'}).catch(()=>({data:'420620068'}));
-  const { data: measurementId } = await sb.rpc('fn_read_vault_secret',{p_name:'Measurement Id'}).catch(()=>({data:null}));
-  const { data: apiSecret } = await sb.rpc('fn_read_vault_secret',{p_name:'Analytics'}).catch(()=>({data:null}));
+  const { data: saJson } = await sb.rpc('fn_read_vault_secret',{p_name:'GMAIL_SERVICE_ACCOUNT_JSON'}).then(r=>r, ()=>({data:null}));
+  const { data: propertyId } = await sb.rpc('fn_read_vault_secret',{p_name:'Property_ID'}).then(r=>r, ()=>({data:'420620068'}));
+  const { data: measurementId } = await sb.rpc('fn_read_vault_secret',{p_name:'Measurement Id'}).then(r=>r, ()=>({data:null}));
+  const { data: apiSecret } = await sb.rpc('fn_read_vault_secret',{p_name:'Analytics'}).then(r=>r, ()=>({data:null}));
 
   if (mode === 'event') {
     if (!measurementId || !apiSecret) return NextResponse.json({ok:false,error:'missing_mp_credentials'},{status:500});
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
 
   const rows = data.rows ?? [];
   const totals = (data.totals as any[])?.[0] ?? null;
-  await sb.rpc('fn_ga4_upsert_report',{p_property_id:pid,p_type:reportType,p_range:dateRange,p_rows:rows,p_totals:totals}).catch(()=>null);
+  await sb.rpc('fn_ga4_upsert_report',{p_property_id:pid,p_type:reportType,p_range:dateRange,p_rows:rows,p_totals:totals}).then(r=>r, ()=>null);
 
   return NextResponse.json({ok:true,property_id:pid,report_type:reportType,date_range:dateRange,rows_count:(rows as any[]).length,rows,totals});
 }
