@@ -71,7 +71,7 @@ export default async function MarketingSeoPage({
     tab === 'competitors' ? sb.from('v_seo_competitors').select('id,domain,label,active').eq('property_id',260955).order('active',{ascending:false}) : Promise.resolve({ data: [] }),
     tab === 'research' ? sb.from('v_seo_keyword_suggestions').select('*').eq('property_id',260955).order('monthly_searches',{ascending:false}).limit(200) : Promise.resolve({ data: [] }),
     tab === 'backlinks' ? sb.from('v_seo_backlinks_summary').select('*').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(1).maybeSingle() : Promise.resolve({ data: null }),
-    tab === 'backlinks' ? sb.from('v_seo_backlinks').select('*').eq('property_id',260955).order('rank',{ascending:false}).limit(50) : Promise.resolve({ data: [] }),
+    tab === 'backlinks' ? sb.from('v_seo_backlinks').select('*').eq('property_id',260955).order('rank',{ascending:false}).limit(400) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -691,6 +691,7 @@ export default async function MarketingSeoPage({
                             <td style={{padding:'5px 8px'}}><span style={{fontSize:10,padding:'1px 6px',borderRadius:99,background:r.is_dofollow?'#E6F4EA':'#FEE2E2',color:r.is_dofollow?GREEN:'#B03826',fontWeight:600}}>{r.is_dofollow?'DoFollow':'NoFollow'}</span></td>
                             <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:INK_F}}>{r.domain_from_rank??'—'}</td>
                             <td style={{padding:'5px 8px',color:INK_F,fontSize:11}}>{r.first_seen?.slice(0,10)??'—'}</td>
+                        <td style={{padding:'5px 8px'}}><a href={r.url_from??'#'} target=\"_blank\" rel=\"noopener noreferrer\" style={{fontSize:10,padding:'2px 8px',border:'1px solid '+HAIR,borderRadius:3,color:GREEN,textDecoration:'none',whiteSpace:'nowrap' as const}}>View</a></td>
                           </tr>
                         ))}
                       </tbody>
@@ -707,6 +708,192 @@ export default async function MarketingSeoPage({
           </Container>
         </div>
       )}
+
+      {tab==='hotel' && (
+
+        <div style={{ gridColumn:'1/-1' }}>
+          <Container title="Hotel Data · Google Hotels" subtitle="Competitive positioning + pricing in Google Hotels results"
+            action={<SeoTriggerBtn mode="hotel" label="🏨 Refresh hotel data" description="business_data/google/hotel_searches · live" />}>
+            <div style={{padding:'24px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
+              {hotelRows.length>0?(
+                <div style={{overflowX:'auto' as const,marginTop:8}}>
+                  <div style={{fontSize:11,color:'#5A5A5A',marginBottom:8}}>Showing results for: <strong>{hotelRows[0]?.search_keyword}</strong> · Google Hotels US market</div>
+                  <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
+                    <thead><tr style={{borderBottom:'2px solid #E6DFCC'}}>{['#','Hotel','Stars','Rating','Reviews','Price/night'].map(h=>(<th key={h} style={{padding:'6px 8px',textAlign:'left' as const,fontSize:10,fontFamily:'ui-monospace,monospace',textTransform:'uppercase' as const,color:'#8A8A8A'}}>{h}</th>))}</tr></thead>
+                    <tbody>{hotelRows.map((h,i)=>(<tr key={i} style={{borderBottom:'1px solid #E6DFCC'}}>
+                      <td style={{padding:'7px 8px',fontFamily:'ui-monospace,monospace',color:'#8A8A8A'}}>{h.position}</td>
+                      <td style={{padding:'7px 8px',fontWeight:600}}>{h.hotel_title}</td>
+                      <td style={{padding:'7px 8px',color:'#8A8A8A'}}>{h.stars??'—'}</td>
+                      <td style={{padding:'7px 8px',color:'#084838',fontWeight:600}}>{h.rating_value??'—'}</td>
+                      <td style={{padding:'7px 8px',color:'#8A8A8A'}}>{h.votes_count??'—'}</td>
+                      <td style={{padding:'7px 8px',fontFamily:'ui-monospace,monospace'}}>{h.price_usd?`$${h.price_usd}`:'—'}</td>
+                    </tr>))}</tbody>
+                  </table>
+                </div>
+              ):(<span>Note: Google Hotels does not index Luang Prabang boutique hotels. Click <strong>Refresh hotel data</strong> to load competitive eco-resort data from global market.</span>)}
+            </div>
+          </Container>
+        </div>
+      )}
+
+      {tab==='ai-web' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          {/* AI Intel sub-tab navigation */}
+          <div style={{display:'flex',gap:0,borderBottom:'2px solid '+HAIR,marginBottom:16}}>
+            {([{key:'visibility',label:'AI Visibility'},{key:'intel',label:'Competitor Intel'},{key:'chat',label:'LLM Responses'},{key:'schema',label:'Schema & Fixes'}] as const).map(s=>(
+              <a key={s.key} href={'?tab=ai-web&sub='+s.key} style={{
+                padding:'7px 16px',fontSize:12,fontWeight:600,textDecoration:'none',
+                color:aiSub===s.key?GREEN:INK_M,
+                borderBottom:aiSub===s.key?'2px solid '+GREEN:'2px solid transparent',
+                marginBottom:-2,whiteSpace:'nowrap' as const,
+              }}>{s.label}</a>
+            ))}
+            <span style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6,paddingBottom:6}}>
+              {aiSub==='visibility'&&<SeoTriggerBtn mode="llm" label="↻ Refresh" variant="secondary" />}
+              {aiSub==='intel'&&<SeoTriggerBtn mode="ai-domains" label="🏢 Update intel" variant="secondary" />}
+              {aiSub==='chat'&&<SeoTriggerBtn mode="ai-query" label="💬 Ask ChatGPT" />}
+              {aiSub==='schema'&&<SeoTriggerBtn mode="schema-sweep" label="🔍 Run audit" variant="secondary" />}
+            </span>
+          </div>
+
+          
+{/* ── Visibility ── */}
+          {aiSub==='visibility'&&(
+            !llmSnapshot||llmSnapshot.total_mentions===0 ? (
+              <div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>No AI visibility data — click ↻ Refresh to pull mentions.</div>
+            ) : (
+              <>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:16}}>
+                  {([[' Total AI Mentions',String(llmSnapshot.total_mentions),GREEN],['AI Search Volume',Number(llmSnapshot.ai_search_volume).toLocaleString(),INK],['Google AI Overview',String(llmSnapshot.google_mentions),GREEN],['ChatGPT Mentions',String(llmSnapshot.chatgpt_mentions),INK]] as [string,string,string][]).map(([l,v,c],i)=>(
+                    <div key={i} style={{border:'1px solid '+HAIR,borderRadius:6,padding:'12px 14px',background:'#FFFFFF'}}>
+                      <div style={{fontSize:22,fontWeight:700,color:c}}>{v}</div>
+                      <div style={{fontSize:10,color:INK_F,marginTop:2,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+                {questionsRows.length>0&&(
+                  <div style={{marginBottom:16}}>
+                    <div style={{fontSize:11,fontWeight:600,color:INK,marginBottom:8}}>Queries where AI mentions thenamkhan.com</div>
+                    <div style={{display:'flex',flexWrap:'wrap' as const,gap:6}}>
+                      {questionsRows.map((q,i)=>(<span key={i} style={{fontSize:11,border:'1px solid '+HAIR,padding:'3px 10px',borderRadius:4,color:INK_M,background:'#F9F6F0'}}>{q.keyword}</span>))}
+                    </div>
+                  </div>
+                )}
+                <div style={{border:'1px solid '+HAIR,borderRadius:6,padding:'16px 20px',background:'#FFFFFF'}}>
+                  <div style={{fontSize:12,fontWeight:700,color:INK,marginBottom:12}}>What AI says about thenamkhan.com</div>
+                  {mentionsRows.length===0?(<div style={{fontSize:12,color:INK_M}}>Click ↻ Refresh to fetch AI mention details.</div>):(
+                    <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                      {mentionsRows.slice(0,5).map((m,i)=>(
+                        <div key={i} style={{border:'1px solid '+HAIR,borderRadius:5,padding:'10px 14px'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                            <span style={{fontSize:11,fontWeight:600,color:INK,fontStyle:'italic'}}>{m.keyword}</span>
+                            <span style={{fontSize:10,padding:'1px 6px',borderRadius:99,background:'#E8F0FE',color:'#1A56DB'}}>{m.llm}</span>
+                            <span style={{fontSize:10,color:INK_F,marginLeft:'auto'}}>{m.mention_date}</span>
+                          </div>
+                          {m.snippet&&<div style={{fontSize:11,color:INK_M,lineHeight:1.5,fontStyle:'italic'}}>"{m.snippet.slice(0,200)}..."</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{fontSize:10,color:INK_F,marginTop:8}}>Last fetched: {llmSnapshot.snapshot_date} · {llmSnapshot.target}</div>
+              </>
+            )
+          )}
+
+          {/* ── Competitor Intel ── */}
+          {aiSub==='intel'&&(
+            domainIntel.length>0 ? (
+              <>
+                <div style={{fontSize:12,color:INK_M,marginBottom:12}}>Domains Google AI cites for hotel queries — your visibility gap.</div>
+                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
+                  <thead><tr style={{borderBottom:'2px solid '+HAIR}}>
+                    {['Domain','Keyword','AI Mentions','AI Volume'].map(h=>(<th key={h} style={{padding:'4px 8px',textAlign:'left' as const,fontSize:10,color:INK_F,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>{h}</th>))}
+                  </tr></thead>
+                  <tbody>{domainIntel.slice(0,15).map((r,i)=>(
+                    <tr key={i} style={{borderBottom:'1px solid '+HAIR}}>
+                      <td style={{padding:'5px 8px',color:r.item_name.includes('namkhan')?GREEN:INK,fontFamily:'monospace',fontSize:11}}>{r.item_name}</td>
+                      <td style={{padding:'5px 8px',color:INK_M,fontSize:10,fontStyle:'italic'}}>{r.target_keyword}</td>
+                      <td style={{padding:'5px 8px',fontFamily:'monospace',textAlign:'right' as const}}>{r.mentions}</td>
+                      <td style={{padding:'5px 8px',color:INK_M,fontFamily:'monospace',textAlign:'right' as const}}>{r.ai_search_volume?.toLocaleString()}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+                <div style={{fontSize:11,color:AMBER,marginTop:10,padding:'8px 12px',border:'1px solid #E6DFCC',borderRadius:5}}>
+                  💡 Build links from these domains and get cited in their content to improve AI visibility.
+                </div>
+              </>
+            ) : (
+              <div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>No competitor intel yet — click 🏢 Update intel.</div>
+            )
+          )}
+
+          {/* ── LLM Responses ── */}
+          {aiSub==='chat'&&(
+            llmRespRows.length>0 ? (
+              <>
+                <div style={{fontSize:12,color:INK_M,marginBottom:12}}>Direct ChatGPT responses to hotel queries. ✓ = Namkhan named · ✗ = not mentioned.</div>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
+                  {llmRespRows.map((r,i)=>(
+                    <div key={i} style={{border:'1px solid '+HAIR,borderRadius:6,padding:'12px 16px'}}>
+                      <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:8}}>
+                        <span style={{fontSize:12,fontWeight:600,color:INK,fontStyle:'italic',flex:1}}>&ldquo;{r.prompt}&rdquo;</span>
+                        <span style={{flexShrink:0,fontSize:11,padding:'2px 10px',borderRadius:99,background:r.our_domain_mentioned?'#E6F4EA':'#FEE2E2',color:r.our_domain_mentioned?GREEN:'#B03826',fontWeight:700}}>{r.our_domain_mentioned?'✓ Namkhan mentioned':'✗ Not mentioned'}</span>
+                      </div>
+                      {r.response_text&&<div style={{fontSize:11,color:INK_M,lineHeight:1.6,background:'#F9F6F0',borderRadius:4,padding:'8px 12px'}}>{(r.response_text as string).slice(0,500)}...</div>}
+                      <div style={{fontSize:10,color:INK_F,marginTop:6}}>{r.platform} · {(r.fetched_at as string)?.slice(0,10)}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>No ChatGPT responses yet — click 💬 Ask ChatGPT.</div>
+            )
+          )}
+
+          {/* ── Schema & Fixes ── */}
+          {aiSub==='schema'&&(
+            <div>
+              {instantPages.length===0 ? (
+                <div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>No audit data — click 🔍 Run audit to check schema on all pages.</div>
+              ) : (
+                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12,marginBottom:16}}>
+                  <thead><tr style={{borderBottom:'2px solid '+HAIR}}>
+                    {['Page','Schema','Title','Words','Readability','Issues'].map(h=>(<th key={h} style={{padding:'6px 8px',textAlign:'left' as const,fontSize:10,fontFamily:'ui-monospace,monospace',textTransform:'uppercase' as const,color:INK_F}}>{h}</th>))}
+                  </tr></thead>
+                  <tbody>{instantPages.map((p,i)=>(
+                    <tr key={i} style={{borderBottom:'1px solid '+HAIR}}>
+                      <td style={{padding:'7px 8px',fontFamily:'monospace',fontSize:11,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}><a href={p.url} target="_blank" rel="noopener noreferrer" style={{color:GREEN,textDecoration:'none'}}>{p.url.replace(/^https?:\/\/[^/]+/,'')}</a></td>
+                      <td style={{padding:'7px 8px'}}><span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:p.issues?.schema_missing?'#FEE2E2':'#E6F4EA',color:p.issues?.schema_missing?RED:GREEN,fontWeight:600}}>{p.issues?.schema_missing?'❌ MISSING':'✅ Present'}</span></td>
+                      <td style={{padding:'7px 8px',fontFamily:'monospace',fontSize:11,color:p.title_length&&p.title_length>60?RED:GREEN}}>{p.title_length}ch</td>
+                      <td style={{padding:'7px 8px',fontFamily:'monospace',fontSize:11}}>{p.word_count}</td>
+                      <td style={{padding:'7px 8px',fontFamily:'monospace',fontSize:11,color:p.readability&&p.readability>=60?GREEN:p.readability&&p.readability>=45?AMBER:RED}}>{p.readability?.toFixed(1)}</td>
+                      <td style={{padding:'7px 8px',fontSize:10}}>{Object.entries(p.issues??{}).filter(([,v])=>!!v).map(([k])=>(<span key={k} style={{marginRight:3,padding:'1px 5px',borderRadius:99,background:'#FEF3C7',color:AMBER}}>{k.replace(/_/g,' ')}</span>))}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              )}
+              <div style={{marginTop:12,padding:'10px 14px',background:'#FFF8E1',border:'1px solid #C28F2C',borderRadius:5,fontSize:11,color:'#5A5A5A',marginBottom:16}}>
+                <strong>Fix required:</strong> Add Hotel JSON-LD schema to thenamkhan.com. Without it Google AI cannot classify the site as a bookable hotel.
+              </div>
+              <div style={{background:'#FFFFFF',border:'1px solid '+HAIR,borderRadius:6,padding:'16px 20px'}}>
+                <div style={{fontSize:12,fontWeight:600,color:INK,marginBottom:8}}>Copy to CMS &lt;head&gt;</div>
+                <pre style={{background:'#1B1B1B',color:'#E6DFCC',padding:'14px 16px',borderRadius:6,fontSize:10,lineHeight:1.6,overflow:'auto',whiteSpace:'pre' as const}}>{`<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Hotel",
+  "name": "The Namkhan",
+  "url": "https://www.thenamkhan.com",
+  "description": "5-star eco-luxury wellness retreat, Luang Prabang, Laos.",
+  "starRating": { "@type": "Rating", "ratingValue": "5" },
+  "address": { "@type": "PostalAddress", "addressLocality": "Luang Prabang", "addressCountry": "LA" },
+  "checkInTime": "14:00", "checkOutTime": "12:00"
+}
+</script>`}</pre>
+              </div>
+            </div>
+          )}
+        
 
       {tab==='hotel' && (
 
