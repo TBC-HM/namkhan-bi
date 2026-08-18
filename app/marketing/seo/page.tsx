@@ -319,25 +319,12 @@ export default async function MarketingSeoPage({
             action={
               <SeoTriggerBtn mode="onpage" label="🔍 Run On-Page Crawl" description="Up to 50 pages · DataForSEO" />
             }>
-            <div style={{ padding:'24px 16px' }}>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12, marginBottom:24 }}>
-                {[
-                  { icon:'📄', title:'Page titles', desc:'Length, duplicates, missing titles' },
-                  { icon:'📝', title:'Meta descriptions', desc:'Length, quality, missing' },
-                  { icon:'🔗', title:'Internal links', desc:'Broken links, orphan pages' },
-                  { icon:'⚡', title:'Core Web Vitals', desc:'LCP, CLS, FID per page' },
-                  { icon:'🖼️', title:'Image alt text', desc:'Missing alt attributes' },
-                  { icon:'📱', title:'Mobile ready', desc:'Viewport, tap targets' },
-                ].map((it,i)=>(
-                  <div key={i} style={{ background:'#F9F6F0', borderRadius:6, padding:'12px 14px', display:'flex', gap:10 }}>
-                    <span style={{ fontSize:20 }}>{it.icon}</span>
-                    <div>
-                      <div style={{ fontSize:12, fontWeight:600, color:INK }}>{it.title}</div>
-                      <div style={{ fontSize:11, color:INK_M }}>{it.desc}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div style={{ padding:'16px 0' }}>
+              {instantPages.length===0&&(
+                <div style={{ padding:'32px 16px', textAlign:'center' as const, color:INK_M, fontSize:13 }}>
+                  Click <strong>Run On-Page Crawl</strong> to audit all pages from thenamkhan.com sitemap.
+                </div>
+              )}
               {instantPages.length>0&&(
                 <div style={{marginTop:8,display:'flex',flexDirection:'column' as const,gap:6}}>
                   <div style={{fontSize:10,fontWeight:600,color:INK_F,fontFamily:'ui-monospace,monospace',letterSpacing:'0.12em',textTransform:'uppercase' as const,marginBottom:4}}>{instantPages.length} pages audited — on-page keyword structure</div>
