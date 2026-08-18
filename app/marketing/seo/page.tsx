@@ -691,7 +691,7 @@ export default async function MarketingSeoPage({
                             <td style={{padding:'5px 8px'}}><span style={{fontSize:10,padding:'1px 6px',borderRadius:99,background:r.is_dofollow?'#E6F4EA':'#FEE2E2',color:r.is_dofollow?GREEN:'#B03826',fontWeight:600}}>{r.is_dofollow?'DoFollow':'NoFollow'}</span></td>
                             <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:INK_F}}>{r.domain_from_rank??'—'}</td>
                             <td style={{padding:'5px 8px',color:INK_F,fontSize:11}}>{r.first_seen?.slice(0,10)??'—'}</td>
-                        <td style={{padding:'5px 8px'}}><a href={r.url_from??'#'} target=\"_blank\" rel=\"noopener noreferrer\" style={{fontSize:10,padding:'2px 8px',border:'1px solid '+HAIR,borderRadius:3,color:GREEN,textDecoration:'none',whiteSpace:'nowrap' as const}}>View</a></td>
+                        <td style={{padding:'5px 8px'}}><a href={r.url_from??'#'} target="_blank" rel="noopener noreferrer" style={{fontSize:10,padding:'2px 8px',border:'1px solid '+HAIR,borderRadius:3,color:GREEN,textDecoration:'none',whiteSpace:'nowrap' as const}}>View</a></td>
                           </tr>
                         ))}
                       </tbody>
