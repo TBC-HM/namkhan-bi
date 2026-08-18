@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel', 'instant','schema-sweep']);
+const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel', 'instant','schema-sweep','ai-domains','ai-query']);
 
 export async function POST(req: NextRequest) {
   let body: { mode?: string; property_id?: number; url?: string } = {};
@@ -284,6 +284,56 @@ export async function POST(req: NextRequest) {
       const row={property_id:propertyId,url:pUrl,page_title:item?.meta?.title,title_length:item?.meta?.title_length,meta_description:item?.meta?.description,meta_length:item?.meta?.description_length,h1:item?.meta?.htags?.h1?.[0],h2s:item?.meta?.htags?.h2,h3s:item?.meta?.htags?.h3,word_count:item?.meta?.content?.plain_text_word_count,readability:item?.meta?.content?.flesch_kincaid_readability_index,internal_links:item?.meta?.internal_links_count,external_links:item?.meta?.external_links_count,images_count:item?.meta?.images_count,issues,raw:item};
       await sb.rpc('fn_seo_upsert_instant_pages',{p_rows:JSON.stringify([row])});
       return NextResponse.json({ok:true,mode,result:{title:row.page_title,h1:row.h1,h2s:item?.meta?.htags?.h2??[],word_count:row.word_count,readability:row.readability,title_length:row.title_length,meta_length:row.meta_length,issues}});
+    }
+
+    if (mode === 'ai-domains' || mode === 'ai-pages') {
+      const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
+      const cfg = (cfgRows as any[])?.[0] as {ai_target_keywords?: string[]} | undefined;
+      const keywords = cfg?.ai_target_keywords ?? ['eco lodge laos','luxury hotel luang prabang','wellness retreat laos'];
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const endpoint = mode === 'ai-domains' ? 'top_mentioned_domains' : 'top_mentioned_pages';
+      const allRows: any[] = [];
+      for (const kw of keywords.slice(0,3)) {
+        const res = await fetch(`https://api.dataforseo.com/v3/ai_optimization/llm_mentions/${endpoint}/live`, {
+          method: 'POST',
+          headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
+          body: JSON.stringify([{target:[{keyword:kw,search_filter:'include'}],location_code:2840,language_code:'en',limit:10}]),
+        });
+        const json = await res.json() as Record<string,any>;
+        const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+        const type = mode === 'ai-domains' ? 'domain' : 'page';
+        const rows = items.map((it:any) => ({item_name: it.domain ?? it.page ?? '',mentions: it.total?.mentions ?? 0,ai_search_volume: it.total?.ai_search_volume ?? 0,platform: 'both'}));
+        await sb.rpc('fn_seo_upsert_ai_intel',{p_property_id:propertyId,p_type:type,p_keyword:kw,p_rows:JSON.stringify(rows)});
+        allRows.push(...rows.map((r:any)=>({...r,keyword:kw})));
+      }
+      return NextResponse.json({ok:true,mode,result:{rows:allRows.length,note:`Top AI-cited ${mode==='ai-domains'?'domains':'pages'} for 3 hotel keywords`}});
+    }
+
+    if (mode === 'ai-query') {
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const prompts = [
+        'What are the best eco lodges in Laos for a wellness retreat?',
+        'Recommend luxury boutique hotels near Luang Prabang.',
+        'Best nature resorts in Laos — list top options.',
+      ];
+      const results: any[] = [];
+      for (const prompt of prompts) {
+        const res = await fetch('https://api.dataforseo.com/v3/ai_optimization/chat_gpt/llm_responses/live', {
+          method: 'POST',
+          headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
+          body: JSON.stringify([{user_prompt: prompt, model_name: 'gpt-4o'}]),
+        });
+        const json = await res.json() as Record<string,any>;
+        const item = (json?.tasks?.[0]?.result?.[0]?.items?.[0] ?? {}) as any;
+        const responseText = item?.message ?? '';
+        const annotations = (item?.annotations ?? []) as any[];
+        const mentioned = responseText.toLowerCase().includes('namkhan') || annotations.some((a:any) => (a.url ?? '').includes('namkhan'));
+        await sb.rpc('fn_seo_insert_llm_response',{p_property_id:propertyId,p_platform:'chatgpt',p_model:'gpt-4o',p_prompt:prompt,p_response:responseText,p_annotations:JSON.stringify(annotations),p_mentioned:mentioned});
+        results.push({prompt,mentioned,response_length:responseText.length});
+      }
+      return NextResponse.json({ok:true,mode,result:{queries:results}});
     }
 
     return NextResponse.json({ ok: false, error: 'mode not implemented' }, { status: 400 });
