@@ -68,6 +68,7 @@ export default async function MarketingSeoPage({
     tab === 'ai-web' ? sb.from('v_seo_llm_mentions').select('keyword,llm,snippet,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(30) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_ai_intel').select('intel_type,target_keyword,item_name,mentions,ai_search_volume').eq('property_id',260955).order('mentions',{ascending:false}).limit(30) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,fetched_at').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(6) : Promise.resolve({ data: [] }),
+    tab === 'competitors' ? sb.from('v_seo_competitors').select('id,domain,label,active').eq('property_id',260955).order('active',{ascending:false}) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
