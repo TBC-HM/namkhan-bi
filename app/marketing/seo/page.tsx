@@ -59,14 +59,14 @@ export default async function MarketingSeoPage({
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_market_comparison').select('*') : Promise.resolve({ data: [] }),
     tab === 'technical' ? sb.from('v_seo_onpage').select('*').order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
-    tab === 'ai-visibility' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', 260955).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
+    tab === 'ai-web' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', 260955).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
     tab === 'pages' ? sb.from('v_seo_ranked_pages').select('url,keyword,position,volume,search_intent').eq('property_id', 260955).order('position', { ascending: true }).limit(500) : Promise.resolve({ data: [] }),
     (tab === 'technical' || tab === 'ai-web') ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', 260955).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
-    tab === 'ai-visibility' ? sb.from('v_seo_llm_questions').select('keyword,llm,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+    tab === 'ai-web' ? sb.from('v_seo_llm_questions').select('keyword,llm,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'hotel' ? sb.from('v_seo_hotel_searches').select('position,hotel_title,stars,price_usd,rating_value,votes_count,search_keyword,is_our_property').eq('property_id', 260955).order('snapshot_date', { ascending: false }).order('position').limit(20) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_mentions').select('keyword,llm,snippet,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(30) : Promise.resolve({ data: [] }),
-    tab === 'ai-visibility' ? sb.from('v_seo_ai_intel').select('intel_type,target_keyword,item_name,mentions,ai_search_volume').eq('property_id',260955).order('mentions',{ascending:false}).limit(30) : Promise.resolve({ data: [] }),
-    tab === 'ai-visibility' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,fetched_at').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(6) : Promise.resolve({ data: [] }),
+    tab === 'ai-web' ? sb.from('v_seo_ai_intel').select('intel_type,target_keyword,item_name,mentions,ai_search_volume').eq('property_id',260955).order('mentions',{ascending:false}).limit(30) : Promise.resolve({ data: [] }),
+    tab === 'ai-web' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,fetched_at').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(6) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -111,7 +111,7 @@ export default async function MarketingSeoPage({
   const SEO_TABS = [
     { key:'overview',   label:'Overview'   },{ key:'rankings',   label:'Rankings'   },
     { key:'keywords',   label:'Keywords'   },{ key:'competitors',label:'Competitors' },
-    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'ai-visibility', label:'AI Visibility' },{ key:'pages', label:'Pages' },{ key:'hotel', label:'Hotel Data' },{ key:'ai-web', label:'AI Web' },
+    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'pages', label:'Pages' },{ key:'hotel', label:'Hotel Data' },{ key:'ai-web', label:'AI Intel' },
   ];
 
   const btnSt: React.CSSProperties = { padding:'3px 10px', fontSize:11, border:`1px solid ${HAIR}`, borderRadius:3, background:'#FAFAF7', cursor:'pointer', textDecoration:'none', color:INK_M, whiteSpace:'nowrap' };
