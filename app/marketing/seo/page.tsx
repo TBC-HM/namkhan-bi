@@ -146,39 +146,109 @@ export default async function MarketingSeoPage({
       {/* ─── OVERVIEW ─────────────────────────────────────────────────────── */}
       {tab==='overview' && (
         <>
-          <div style={{ gridColumn:'1/-1', display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(155px,1fr))', gap:8 }}>
-            {[
-              { l:'Total keywords', v:allRankings.length, fn:'All markets combined' },
-              { l:'In top 3',  v:top3.length,  fn:'Google desktop', col:top3.length>0?GREEN:INK_F },
-              { l:'In top 10', v:top10.length, fn:'Google desktop', col:top10.length>0?GREEN:INK_F },
-              { l:'Avg position', v:avgPos??'—', fn:`${withPos.length} of ${rankings.length} ranked` },
-              { l:'Outside top 30', v:rankings.length-withPos.length, fn:'not in top 30', col:(rankings.length-withPos.length)>10?RED:INK_F },
-              { l:'Last synced', v:lastSync?lastSync.slice(0,10):'—', fn:'daily 06:00 UTC' },
-            ].map((k,i)=>(
+          {/* KPI tiles */}
+          <div style={{ gridColumn:'1/-1', display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:8 }}>
+            {([
+              { l:'Keywords', v:allRankings.length, sub:'All markets', col:INK },
+              { l:'Ranked', v:withPos.length, sub:'Any position', col:withPos.length>0?GREEN:INK_F },
+              { l:'Top 3', v:top3.length, sub:'Google desktop', col:top3.length>0?GREEN:INK_F },
+              { l:'Top 10', v:top10.length, sub:'Google desktop', col:top10.length>0?GREEN:INK_F },
+              { l:'Avg position', v:avgPos??'—', sub:withPos.length+' ranked kws', col:INK },
+              { l:'Quick wins', v:allRankings.filter(r=>r.position!==null&&(r.position??99)>10&&(r.position??99)<=30).length, sub:'Positions 11–30', col:AMBER },
+              { l:'Not ranking', v:allRankings.length-withPos.length, sub:'Below pos 30', col:(allRankings.length-withPos.length)>15?RED:INK_F },
+              { l:'Last synced', v:lastSync?lastSync.slice(0,10):'—', sub:'SERP data', col:INK_F },
+            ] as Array<{l:string;v:string|number;sub:string;col:string}>).map((k,i)=>(
               <div key={i} style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'12px 14px' }}>
-                <div style={{ fontSize:10, fontFamily:'ui-monospace,monospace', letterSpacing:'0.13em', textTransform:'uppercase' as const, color:INK_F, marginBottom:4 }}>{k.l}</div>
-                <div style={{ fontSize:24, fontWeight:700, color:k.col??INK, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{String(k.v)}</div>
-                {k.fn&&<div style={{ fontSize:10, color:INK_F, marginTop:4 }}>{k.fn}</div>}
+                <div style={{ fontSize:10, fontFamily:'ui-monospace,monospace', letterSpacing:'0.1em', textTransform:'uppercase' as const, color:INK_F, marginBottom:4 }}>{k.l}</div>
+                <div style={{ fontSize:22, fontWeight:700, color:k.col, fontVariantNumeric:'tabular-nums', lineHeight:1 }}>{String(k.v)}</div>
+                <div style={{ fontSize:10, color:INK_F, marginTop:3 }}>{k.sub}</div>
               </div>
             ))}
           </div>
-          <div style={{ gridColumn:'1/-1', display:'flex', gap:10, flexWrap:'wrap' as const, alignItems:'center', padding:'12px 16px', background:'#F4EFE2', borderRadius:6 }}>
-            <span style={{ fontSize:12, fontWeight:600, color:INK }}>Pipeline actions</span>
-            <SeoTriggerBtn mode="post" label="▶ Post SERP tasks" description="Submit all active keywords to DataForSEO queue" />
-            <SeoTriggerBtn mode="fetch" label="⬇ Fetch results" description="Download ready SERP results" variant="secondary" />
-            <SeoTriggerBtn mode="volume" label="📊 Refresh volume" description="Update keyword difficulty + volume" variant="secondary" />
-          </div>
+
+          {/* Market breakdown */}
           <div style={{ gridColumn:'1/-1' }}>
-            <div style={{ fontSize:10, fontWeight:600, color:INK_F, marginBottom:8, fontFamily:'ui-monospace,monospace', letterSpacing:'0.13em', textTransform:'uppercase' as const }}>AI production loop</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(155px,1fr))', gap:8 }}>
-              {WORKFLOW.map(s=>(
-                <div key={s.step} style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'10px 12px' }}>
-                  <div style={{ fontFamily:'ui-monospace,monospace', fontSize:10, letterSpacing:'0.16em', color:GREEN }}>{s.step}</div>
-                  <div style={{ fontSize:12, fontWeight:600, color:INK }}>{s.title}</div>
-                  <div style={{ fontSize:11, color:INK_M, lineHeight:1.5, marginTop:2 }}>{s.desc}</div>
-                </div>
-              ))}
+            <div style={{ fontSize:10, fontWeight:600, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.12em', textTransform:'uppercase' as const, marginBottom:8 }}>Market breakdown</div>
+            <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
+              <thead><tr style={{ borderBottom:`2px solid ${HAIR}` }}>
+                {['Market','Tracked','Ranked','Top 3','Top 10','Avg Pos'].map(h=>(
+                  <th key={h} style={{ padding:'5px 8px', textAlign:'left' as const, fontSize:10, fontFamily:'ui-monospace,monospace', letterSpacing:'0.08em', textTransform:'uppercase' as const, color:INK_F, fontWeight:600 }}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {MARKETS.filter(m=>m.loc!==null).map(m=>{
+                  const mr=allRankings.filter(r=>(r as any).location_code===m.loc);
+                  if(!mr.length)return null;
+                  const mwp=mr.filter(r=>r.position!==null);
+                  const mt3=mwp.filter(r=>(r.position??99)<=3).length;
+                  const mt10=mwp.filter(r=>(r.position??99)<=10).length;
+                  const mavg=mwp.length>0?Math.round(mwp.reduce((s,r)=>s+(r.position??0),0)/mwp.length):null;
+                  return(
+                    <tr key={m.code} style={{ borderBottom:`1px solid ${HAIR}` }}>
+                      <td style={{ padding:'6px 8px', fontWeight:600, color:INK }}>{m.label}</td>
+                      <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', color:INK_F }}>{mr.length}</td>
+                      <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', color:mwp.length>0?INK:INK_F }}>{mwp.length}</td>
+                      <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', color:mt3>0?GREEN:INK_F, fontWeight:mt3>0?700:400 }}>{mt3}</td>
+                      <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', color:mt10>0?GREEN:INK_F }}>{mt10}</td>
+                      <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', color:mavg!==null&&mavg<=10?GREEN:mavg!==null&&mavg<=20?AMBER:INK_F }}>{mavg??'—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Best ranked + Quick wins */}
+          <div style={{ gridColumn:'1/-1', display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+            <div>
+              <div style={{ fontSize:10, fontWeight:600, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.12em', textTransform:'uppercase' as const, marginBottom:8 }}>Best ranked keywords</div>
+              <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:11 }}>
+                <thead><tr style={{ borderBottom:`1px solid ${HAIR}` }}>
+                  {['Keyword','Market','Pos','Δ'].map(h=><th key={h} style={{ padding:'4px 6px', textAlign:'left' as const, fontSize:10, color:INK_F, fontWeight:600 }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {[...withPos].sort((a,b)=>(a.position??99)-(b.position??99)).slice(0,10).map((r,i)=>(
+                    <tr key={i} style={{ borderBottom:`1px solid ${HAIR}` }}>
+                      <td style={{ padding:'5px 6px', color:INK, fontStyle:'italic', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{r.keyword}</td>
+                      <td style={{ padding:'5px 6px', color:INK_F, fontSize:10 }}>{(r.location_name??'').split(',')[0]}</td>
+                      <td style={{ padding:'5px 6px', fontFamily:'ui-monospace,monospace', fontWeight:700, color:(r.position??99)<=3?GREEN:(r.position??99)<=10?INK:AMBER }}>{'#'+(r.position??'?')}</td>
+                      <td style={{ padding:'5px 6px', fontSize:10, color:r.delta&&r.delta>0?GREEN:r.delta&&r.delta<0?RED:INK_F }}>{r.delta?r.delta>0?('+'+r.delta):String(r.delta):'—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+            <div>
+              <div style={{ fontSize:10, fontWeight:600, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.12em', textTransform:'uppercase' as const, marginBottom:8 }}>Quick wins (pos 11–30)</div>
+              {withPos.filter(r=>(r.position??99)>10&&(r.position??99)<=30).length===0?(
+                <div style={{ fontSize:12, color:INK_F, padding:'16px 0' }}>No quick wins yet — keep building content and backlinks.</div>
+              ):(
+                <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:11 }}>
+                  <thead><tr style={{ borderBottom:`1px solid ${HAIR}` }}>
+                    {['Keyword','Market','Pos','Vol/mo'].map(h=><th key={h} style={{ padding:'4px 6px', textAlign:'left' as const, fontSize:10, color:INK_F, fontWeight:600 }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {withPos.filter(r=>(r.position??99)>10&&(r.position??99)<=30).sort((a,b)=>((b.monthly_searches??0)-(a.monthly_searches??0))||((a.position??99)-(b.position??99))).slice(0,8).map((r,i)=>(
+                      <tr key={i} style={{ borderBottom:`1px solid ${HAIR}` }}>
+                        <td style={{ padding:'5px 6px', color:INK, fontStyle:'italic', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}>{r.keyword}</td>
+                        <td style={{ padding:'5px 6px', color:INK_F, fontSize:10 }}>{(r.location_name??'').split(',')[0]}</td>
+                        <td style={{ padding:'5px 6px', fontFamily:'ui-monospace,monospace', color:AMBER }}>{'#'+(r.position??'?')}</td>
+                        <td style={{ padding:'5px 6px', color:INK_F, fontFamily:'ui-monospace,monospace', fontSize:10 }}>{r.monthly_searches?.toLocaleString()??'—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* Compact action strip */}
+          <div style={{ gridColumn:'1/-1', display:'flex', gap:8, alignItems:'center', padding:'10px 14px', background:'#F4EFE2', borderRadius:6 }}>
+            <span style={{ fontSize:11, fontWeight:600, color:INK, marginRight:4 }}>SERP sync</span>
+            <SeoTriggerBtn mode="post" label="▶ Post tasks" variant="secondary" />
+            <SeoTriggerBtn mode="fetch" label="⬇ Fetch results" variant="secondary" />
+            <SeoTriggerBtn mode="volume" label="📊 Volume" variant="secondary" />
+            <span style={{ marginLeft:'auto', fontSize:11, color:INK_F }}>Last: {lastSync?lastSync.slice(0,10):'never'}</span>
           </div>
         </>
       )}
