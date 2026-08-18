@@ -117,7 +117,25 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === 'suggestions') {
-      return NextResponse.json({ok: false, error: 'DataForSEO Labs plan required for keyword suggestions. Upgrade at dataforseo.com/pricing'}, {status: 402});
+      const { data: kwRows } = await sb.from('v_seo_rankings').select('keyword_id,keyword,location_code').eq('property_id', propertyId).eq('location_code', 2840).limit(5);
+      const seeds = (kwRows ?? []) as any[];
+      if (!seeds.length) return NextResponse.json({ok:false,error:'no_tracked_keywords'},{status:400});
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const res = await fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/related_keywords/live', {
+        method: 'POST',
+        headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
+        body: JSON.stringify(seeds.slice(0,3).map((k:any) => ({keyword: k.keyword, location_code: 2840, language_code: 'en', depth: 1, include_seed_keyword: false, limit: 20, order_by: ['keyword_data.keyword_info.search_volume,desc']}))),
+      });
+      const json = await res.json() as Record<string,any>;
+      const suggestions: string[] = [];
+      for (const task of (json?.tasks ?? []) as any[]) {
+        for (const item of (task?.result ?? []) as any[]) {
+          const kw = item?.keyword_data?.keyword as string|undefined;
+          if (kw && !suggestions.includes(kw)) suggestions.push(kw);
+        }
+      }
+      return NextResponse.json({ok: true, mode, result: { suggestions: suggestions.slice(0,30), count: suggestions.length, note: 'Related keywords — add via + Add keyword button in Keywords tab' }});
     }
 
     if (mode === 'local') {
