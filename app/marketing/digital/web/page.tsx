@@ -39,7 +39,7 @@ export default async function DigitalWebPage({searchParams}:{searchParams?:{tab?
   const isGsc=activeTab==='gsc';
 
   const [ovRes,pgRes,srcRes,trendRes,qRes,gscPgRes]=await Promise.all([
-    isAnalytics?sb.from('v_ga4_reports').select('totals,date_range,fetched_at').eq('report_type','overview').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
+    isAnalytics?sb.from('v_ga4_reports').select('rows,totals,date_range,fetched_at').eq('report_type','overview').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
     isAnalytics?sb.from('v_ga4_reports').select('rows').eq('report_type','pages').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
     isAnalytics?sb.from('v_ga4_reports').select('rows').eq('report_type','sources').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
     isAnalytics?sb.from('v_ga4_reports').select('rows').eq('report_type','trend').order('fetched_at',{ascending:false}).limit(1).maybeSingle():Promise.resolve({data:null}),
