@@ -1,6 +1,5 @@
 // app/api/marketing/seo/trigger/route.ts
 // Trigger SEO pipeline actions via the governed d4s adapter
-// Replaces direct edge-function calls with DB-side orchestration
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -13,16 +12,16 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel', 'instant','schema-sweep','ai-domains','ai-query','backlinks']);
 
 export async function POST(req: NextRequest) {
-  let body: { mode?: string; property_id?: number; url?: string } = {};
-  try { 
-    body = await req.json(); 
+  let body: { mode?: string; property_id?: number; url?: string; seed_keyword?: string } = {};
+  try {
+    body = await req.json();
   } catch { /**/ }
 
   const mode = body.mode ?? 'post';
-  const propertyId = body.property_id ?? 260955; // Default to The Nam Khan
+  const propertyId = body.property_id ?? 260955;
 
   if (!ALLOWED_MODES.has(mode)) {
-    if (!ALLOWED_MODES.has(mode)) { return NextResponse.json({ ok: false, error: `unknown mode: ${mode}` }, { status: 400 }); }
+    return NextResponse.json({ ok: false, error: `unknown mode: ${mode}` }, { status: 400 });
   }
 
   if (!SUPABASE_SERVICE_KEY) {
@@ -35,59 +34,75 @@ export async function POST(req: NextRequest) {
 
   try {
     if (mode === 'post' || mode === 'rankings') {
-      // Post SERP ranking tasks
       const { data, error } = await sb.rpc('fn_d4s_rank_weekly', { p_property_id: propertyId });
       if (error) throw error;
-      return NextResponse.json({ 
-        ok: true, 
-        mode, 
-        result: { posted: data?.keywords_queued ?? 0 } 
+      return NextResponse.json({
+        ok: true,
+        mode,
+        result: { posted: data?.keywords_queued ?? 0 }
       });
     }
 
     if (mode === 'gbp') {
-      // Post GBP daily tasks
       const { data, error } = await sb.rpc('fn_d4s_gbp_daily', { p_property_id: propertyId });
       if (error) throw error;
-      return NextResponse.json({ 
-        ok: true, 
-        mode, 
-        result: { posted: data?.tasks_posted ?? 0 } 
+      return NextResponse.json({
+        ok: true,
+        mode,
+        result: { posted: data?.tasks_posted ?? 0 }
       });
     }
 
     if (mode === 'competitors') {
-      // DataForSEO Labs — competitors_domain/live
       const { data: creds3 } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds3) return NextResponse.json({ok:false,error:'dataforseo_creds_missing'},{status:500});
-      const compRes = await fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live', {
-        method:'POST', headers:{'Authorization':`Basic ${creds3}`,'Content-Type':'application/json'},
-        body: JSON.stringify([{target:'thenamkhan.com',location_code:2840,language_code:'en',limit:10,order_by:['intersections,desc']}]),
-      });
-      const compJson = await compRes.json() as Record<string,any>;
-      const compItems = (compJson?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
-      return NextResponse.json({ ok:true, mode, result: { competitors: compItems.length, top: compItems.slice(0,5).map((d:any)=>d.domain) } });
+      // Fetch active competitors from DB
+      const { data: compRows } = await sb.from('v_seo_competitors').select('domain').eq('property_id', propertyId).eq('active', true);
+      const competitors = ((compRows ?? []) as any[]).map((c:any) => c.domain).slice(0, 5);
+      if (!competitors.length) return NextResponse.json({ok:false,error:'no_active_competitors'},{status:400});
+      // Keyword intersection per competitor (parallel)
+      const overlapResults = await Promise.all(competitors.map((compDomain:string) =>
+        fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/domain_intersection/live', {
+          method:'POST', headers:{'Authorization':`Basic ${creds3}`,'Content-Type':'application/json'},
+          body:JSON.stringify([{target1:'thenamkhan.com',target2:compDomain,location_code:2840,language_code:'en',limit:20,order_by:['second_domain_serp_element.serp_item.rank_absolute,asc']}]),
+        }).then(r=>r.json()).then((json:any) => {
+          const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+          return items.map((it:any)=>({
+            competitor_domain:compDomain,keyword:it.keyword_data?.keyword,
+            our_position:it.first_domain_serp_element?.serp_item?.rank_absolute??null,
+            competitor_position:it.second_domain_serp_element?.serp_item?.rank_absolute??99,
+            location_code:2840,volume:it.keyword_data?.keyword_info?.search_volume??null,
+          })).filter((r:any)=>r.keyword);
+        }).catch(()=>([] as any[]))
+      ));
+      let totalStored = 0;
+      for (const rows of overlapResults) {
+        if (rows.length > 0) {
+          const { data: cnt } = await sb.rpc('fn_seo_upsert_competitor_overlap',{p_property_id:propertyId,p_rows:JSON.stringify(rows)});
+          totalStored += (cnt as number) ?? 0;
+        }
+      }
+      return NextResponse.json({ ok:true, mode, result: { competitors:competitors.length, overlap_keywords:totalStored } });
     }
 
     if (mode === 'fetch') {
-      // Poll tasks and ingest results
       const pollRes = await sb.rpc('fn_d4s_poll');
       if (pollRes.error) throw pollRes.error;
-      
+
       const ingestRes = await sb.rpc('fn_d4s_ingest');
       if (ingestRes.error) throw ingestRes.error;
 
       const fetched = pollRes.data?.fetched ?? 0;
       const serp = ingestRes.data?.[0]?.serp_count ?? 0;
-      
-      return NextResponse.json({ 
-        ok: true, 
-        mode, 
-        result: { 
-          fetched, 
+
+      return NextResponse.json({
+        ok: true,
+        mode,
+        result: {
+          fetched,
           with_position: serp,
-          upserted: serp 
-        } 
+          upserted: serp
+        }
       });
     }
 
@@ -119,15 +134,19 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === 'suggestions') {
+      const seedKw = body.seed_keyword?.trim();
       const { data: kwRows } = await sb.from('v_seo_rankings').select('keyword_id,keyword,location_code').eq('property_id', propertyId).eq('location_code', 2840).limit(5);
       const seeds = (kwRows ?? []) as any[];
-      if (!seeds.length) return NextResponse.json({ok:false,error:'no_tracked_keywords'},{status:400});
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
+      const seedTerms = seedKw
+        ? [{keyword: seedKw, location_code: 2840, language_code: 'en', depth: 1, include_seed_keyword: false, limit: 20, order_by: ['keyword_data.keyword_info.search_volume,desc']}]
+        : seeds.slice(0,3).map((k:any) => ({keyword: k.keyword, location_code: 2840, language_code: 'en', depth: 1, include_seed_keyword: false, limit: 20, order_by: ['keyword_data.keyword_info.search_volume,desc']}));
+      if (!seedTerms.length) return NextResponse.json({ok:false,error:'no_tracked_keywords'},{status:400});
       const res = await fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/related_keywords/live', {
         method: 'POST',
         headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
-        body: JSON.stringify(seeds.slice(0,3).map((k:any) => ({keyword: k.keyword, location_code: 2840, language_code: 'en', depth: 1, include_seed_keyword: false, limit: 20, order_by: ['keyword_data.keyword_info.search_volume,desc']}))),
+        body: JSON.stringify(seedTerms),
       });
       const json = await res.json() as Record<string,any>;
       const suggestions: string[] = [];
@@ -137,9 +156,10 @@ export async function POST(req: NextRequest) {
           if (kw && !suggestions.includes(kw)) suggestions.push(kw);
         }
       }
-      const resRows=suggestions.slice(0,30).map((kw:string)=>({seed_keyword:seeds[0]?.keyword??'',keyword:kw,monthly_searches:null,keyword_difficulty:null,cpc_usd:null,competition:null,location_code:2840}));
+      const seedLabel = seedKw ?? seeds[0]?.keyword ?? 'unknown';
+      const resRows=suggestions.slice(0,30).map((kw:string)=>({seed_keyword:seedLabel,keyword:kw,monthly_searches:null,keyword_difficulty:null,cpc_usd:null,competition:null,location_code:2840}));
       if(resRows.length>0) await sb.rpc('fn_seo_upsert_keyword_suggestions',{p_property_id:propertyId,p_rows:JSON.stringify(resRows)}).then(r=>r,()=>null);
-      return NextResponse.json({ok:true,mode,result:{suggestions:suggestions.slice(0,30),stored:resRows.length,note:'Stored — see Research tab at ?tab=research'}});
+      return NextResponse.json({ok:true,mode,result:{suggestions:suggestions.slice(0,30),stored:resRows.length,upserted:resRows.length,note:'Stored — see Research tab at ?tab=research'}});
     }
 
     if (mode === 'local') {
@@ -173,7 +193,6 @@ export async function POST(req: NextRequest) {
       const domain = cfg?.domain ?? 'thenamkhan.com';
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
-      // Discover pages: known from DB + sitemap + fallback
       let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
       try {
         const [ipR,rpR] = await Promise.all([
@@ -245,23 +264,29 @@ export async function POST(req: NextRequest) {
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       if (mode === 'ranked') {
-        const res = await fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live', {
-          method: 'POST', headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify([{ target: cfg.domain, language_code: 'en', location_code: 2840, limit: 100,
-            filters: ['ranked_serp_element.serp_item.rank_absolute','<=','50'], order_by: ['keyword_data.keyword_info.search_volume,desc'] }]),
-        });
-        const json = await res.json() as Record<string,any>;
-        const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
-        const rows = items.map((item:any) => ({
-          property_id: propertyId, domain: cfg.domain,
-          url: item?.ranked_serp_element?.serp_item?.url, keyword: item?.keyword_data?.keyword,
-          position: item?.ranked_serp_element?.serp_item?.rank_absolute, volume: item?.keyword_data?.keyword_info?.search_volume,
-          keyword_difficulty: item?.keyword_data?.keyword_properties?.keyword_difficulty,
-          search_intent: item?.keyword_data?.search_intent_info?.main_intent,
-          etv: item?.ranked_serp_element?.serp_item?.etv, raw: item,
-        }));
-        const { data: stored } = await sb.rpc('fn_seo_upsert_ranked_pages', { p_rows: JSON.stringify(rows) });
-        return NextResponse.json({ ok: true, mode, result: { keywords: items.length, upserted: stored ?? 0 } });
+        // Fetch ranked keywords across all 6 markets in parallel
+        const markets = [2840, 2418, 2826, 2276, 2250, 2036];
+        const marketJsons = await Promise.all(markets.map(locCode =>
+          fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live', {
+            method: 'POST', headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify([{ target: cfg.domain, language_code: 'en', location_code: locCode, limit: 50,
+              filters: ['ranked_serp_element.serp_item.rank_absolute','<=','50'], order_by: ['keyword_data.keyword_info.search_volume,desc'] }]),
+          }).then(r => r.json()).catch(() => ({}))
+        ));
+        const allRows: any[] = [];
+        for (const json of marketJsons as Record<string,any>[]) {
+          const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+          allRows.push(...items.map((item:any) => ({
+            property_id: propertyId, domain: cfg.domain,
+            url: item?.ranked_serp_element?.serp_item?.url, keyword: item?.keyword_data?.keyword,
+            position: item?.ranked_serp_element?.serp_item?.rank_absolute, volume: item?.keyword_data?.keyword_info?.search_volume,
+            keyword_difficulty: item?.keyword_data?.keyword_properties?.keyword_difficulty,
+            search_intent: item?.keyword_data?.search_intent_info?.main_intent,
+            etv: item?.ranked_serp_element?.serp_item?.etv, raw: item,
+          })));
+        }
+        const { data: stored } = await sb.rpc('fn_seo_upsert_ranked_pages', { p_rows: JSON.stringify(allRows) });
+        return NextResponse.json({ ok: true, mode, result: { keywords: allRows.length, upserted: stored ?? 0, markets: markets.length } });
       }
       if (mode === 'hotel') {
         const res = await fetch('https://api.dataforseo.com/v3/business_data/google/my_business_info/live', {
@@ -290,15 +315,7 @@ export async function POST(req: NextRequest) {
       const domain = cfg?.domain ?? 'thenamkhan.com';
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
-      // Discover pages: known from DB + sitemap + fallback
       let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
-      try {
-        const [ipR,rpR] = await Promise.all([
-          sb.from('v_seo_instant_pages').select('url').eq('property_id',propertyId),
-          sb.from('v_seo_ranked_pages').select('url').eq('property_id',propertyId),
-        ]);
-        if(!keyPages.length) keyPages=[...new Set([...((ipR.data??[]) as any[]).map((p:any)=>p.url),...((rpR.data??[]) as any[]).map((p:any)=>p.url)])].filter((u:string)=>u.includes(domain));
-      } catch {}
       for (const sitemap of [`https://www.${domain}/sitemap.xml`,`https://${domain}/sitemap.xml`]) {
         try {
           const smRes = await fetch(sitemap);
@@ -422,9 +439,9 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     console.error('SEO trigger error:', err);
-    return NextResponse.json({ 
-      ok: false, 
-      result: { error: err.message ?? 'Internal error' } 
+    return NextResponse.json({
+      ok: false,
+      result: { error: err.message ?? 'Internal error' }
     }, { status: 500 });
   }
 }

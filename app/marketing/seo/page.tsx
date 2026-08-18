@@ -1,5 +1,5 @@
 // app/marketing/seo/page.tsx
-// Full 6-tab SEO area — DataForSEO pipeline + multi-market ranking
+// Full 11-tab SEO area — DataForSEO pipeline + multi-market ranking
 // Markets: Laos (home) · Germany · UK · US · France · Australia
 import { DashboardPage, Container, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -7,6 +7,8 @@ import { MARKETING_SUBPAGES } from '../_subpages';
 import SeoTriggerBtn from '@/components/seo/SeoTriggerBtn';
 import RankingsTable, { type RankRow as RankRowFull, type HistoryRow, type MarketRow } from '@/components/seo/RankingsTable';
 import SeoKeywordsManager from '@/components/seo/SeoKeywordsManager';
+import SeoLlmResponseCard from '@/components/seo/SeoLlmResponseCard';
+import SeoResearchBar from '@/components/seo/SeoResearchBar';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -43,6 +45,21 @@ const WORKFLOW=[
   {step:'08',title:'Refine',desc:'AI refreshes weak pages, expands clusters.'},
 ];
 
+/** Per-tab context text shown beneath the sub-tab strip */
+const TAB_CONTEXT: Record<string, string> = {
+  overview:     'Rankings summary across all markets · Data from DataForSEO SERP tracking + your tracked keyword list',
+  rankings:     'Google search positions per keyword + market · Updated by clicking ▶ Post tasks then ⬇ Fetch results',
+  keywords:     'Your tracked keyword list · Add / dismiss keywords here to control what gets tracked across all tabs',
+  research:     'Longtail keyword ideas from DataForSEO Labs related keywords API · Enter a seed keyword or use your top 3 tracked keywords to discover new opportunities',
+  backlinks:    'Link profile from DataForSEO · Authority score, referring domains, top linking pages',
+  competitors:  "Real LP hotel competitors from your compset database · Gap shows keywords you don't rank for yet",
+  local:        'Google Maps local pack positions for hotel keywords in Luang Prabang · Data from DataForSEO Maps API',
+  technical:    'Per-page on-page audit · Schema health, titles, readability from DataForSEO instant_pages crawler',
+  pages:        'Pages ranking in Google top 50 · From DataForSEO ranked_keywords + unranked pages from site audit',
+  hotel:        'Google Business Profile for The Namkhan · Rating, reviews, info from Google via DataForSEO GBP API',
+  'ai-web':     'AI search visibility across Google AI Overviews and ChatGPT · From DataForSEO LLM Mentions API',
+};
+
 export default async function MarketingSeoPage({
   searchParams,
 }: {
@@ -54,7 +71,7 @@ export default async function MarketingSeoPage({
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
-  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes, researchRes, blSumRes, blRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes, researchRes, blSumRes, blRes, overlapRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*').eq('property_id',260955),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
@@ -67,15 +84,15 @@ export default async function MarketingSeoPage({
     tab === 'hotel' ? sb.from('v_seo_hotel_searches').select('position,hotel_title,stars,price_usd,rating_value,votes_count,search_keyword,is_our_property').eq('property_id', 260955).order('snapshot_date', { ascending: false }).order('position').limit(20) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_mentions').select('keyword,llm,snippet,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(30) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_ai_intel').select('intel_type,target_keyword,item_name,mentions,ai_search_volume').eq('property_id',260955).order('mentions',{ascending:false}).limit(30) : Promise.resolve({ data: [] }),
-    tab === 'ai-web' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,fetched_at').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(6) : Promise.resolve({ data: [] }),
+    tab === 'ai-web' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,model,fetched_at').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(20) : Promise.resolve({ data: [] }),
     tab === 'competitors' ? sb.from('v_seo_competitors').select('id,domain,label,active').eq('property_id',260955).order('active',{ascending:false}) : Promise.resolve({ data: [] }),
     tab === 'research' ? sb.from('v_seo_keyword_suggestions').select('*').eq('property_id',260955).order('monthly_searches',{ascending:false}).limit(200) : Promise.resolve({ data: [] }),
     tab === 'backlinks' ? sb.from('v_seo_backlinks_summary').select('*').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(1).maybeSingle() : Promise.resolve({ data: null }),
     tab === 'backlinks' ? sb.from('v_seo_backlinks').select('*').eq('property_id',260955).order('rank',{ascending:false}).limit(50) : Promise.resolve({ data: [] }),
+    tab === 'competitors' ? sb.from('v_seo_competitor_overlap').select('*').eq('property_id',260955).order('competitor_position',{ascending:true}).limit(100) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
-  // Apply location filter client-side on the data
   const rankings = locCode
     ? allRankings.filter(r => (r as any).location_code === locCode)
     : allRankings;
@@ -90,10 +107,12 @@ export default async function MarketingSeoPage({
   const questionsRows=(questionsRes.data??[]) as Array<{keyword:string;llm:string;mention_date:string}>;
   const mentionsRows=(mentionsRes.data??[]) as Array<{keyword:string;llm:string;snippet:string|null;mention_date:string}>;
   type AiIntelRow={intel_type:string;target_keyword:string;item_name:string;mentions:number;ai_search_volume:number};
-  type LlmRespRow={prompt:string;response_text:string|null;our_domain_mentioned:boolean;platform:string;fetched_at:string};
+  type LlmRespRow={prompt:string;response_text:string|null;our_domain_mentioned:boolean;platform:string;model?:string|null;fetched_at:string};
   type CompRow={id:number;domain:string;label:string;active:boolean};
   const competitorRows=(competitorRes.data??[]) as CompRow[];
-  type ResRow={id:string;seed_keyword:string;keyword:string;monthly_searches:number|null;keyword_difficulty:number|null;cpc_usd:number|null;competition:number|null;location_code:number};
+  type OverlapRow={competitor_domain:string;keyword:string;our_position:number|null;competitor_position:number;volume:number|null;location_code:number};
+  const overlapRows=(overlapRes.data??[]) as OverlapRow[];
+  type ResRow={id:string;seed_keyword:string;keyword:string;monthly_searches:number|null;keyword_difficulty:number|null;cpc_usd:number|null;competition:number|null;location_code:number;fetched_at?:string};
   const researchRows=(researchRes.data??[]) as ResRow[];
   type BlSumRow={total_backlinks:number;referring_domains:number;authority_score:number;dofollow_links:number;nofollow_links:number;fetched_at:string};
   const blSum=blSumRes.data as BlSumRow|null;
@@ -102,7 +121,6 @@ export default async function MarketingSeoPage({
   const aiIntelRows=(aiIntelRes.data??[]) as AiIntelRow[];
   const llmRespRows=(llmRespRes.data??[]) as LlmRespRow[];
   const domainIntel=aiIntelRows.filter(r=>r.intel_type==='domain');
-  const pageIntel=aiIntelRows.filter(r=>r.intel_type==='page');
   const hotelRows=(hotelRes.data??[]) as Array<{position:number;hotel_title:string;stars:number|null;price_usd:number|null;rating_value:number|null;votes_count:number|null;search_keyword:string;is_our_property:boolean}>;
   type InstantPage={url:string;page_title:string|null;title_length:number|null;h1:string|null;h2s:string[]|null;word_count:number|null;readability:number|null;issues:Record<string,boolean>|null;crawl_date:string|null};
   const instantPages=(instantRes.data??[]) as InstantPage[];
@@ -116,6 +134,18 @@ export default async function MarketingSeoPage({
   const top10 = withPos.filter(r => (r.position ?? 99) <= 10);
   const avgPos = withPos.length > 0 ? Math.round(withPos.reduce((s,r)=>s+(r.position??0),0)/withPos.length) : null;
   const lastSync = allRankings.reduce((max:string|null,r)=>{ if(!r.last_checked)return max; return !max||r.last_checked>max?r.last_checked:max; },null);
+
+  const researchLastFetched = researchRows.length > 0
+    ? ((researchRows[0] as any).fetched_at ?? (researchRows[0] as any).created_at ?? null)
+    : null;
+
+  const llmByPlatform = llmRespRows.reduce<Record<string, LlmRespRow[]>>((acc, r) => {
+    const key = r.platform ?? 'unknown';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(r);
+    return acc;
+  }, {});
+  const llmPlatforms = Object.keys(llmByPlatform).sort();
 
   const marketingTabs: DashboardTab[] = MARKETING_SUBPAGES.map(s => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/marketing/seo',
@@ -134,7 +164,7 @@ export default async function MarketingSeoPage({
     <DashboardPage title="Marketing · SEO" subtitle={`SERP rank tracker · ${allRankings.length} keywords · AI visibility`} tabs={marketingTabs}>
 
       {/* SEO sub-tabs */}
-      <div style={{ gridColumn:'1/-1', display:'flex', gap:0, borderBottom:`2px solid ${HAIR}`, marginBottom:4 }}>
+      <div style={{ gridColumn:'1/-1', display:'flex', gap:0, borderBottom:`2px solid ${HAIR}`, marginBottom:0 }}>
         {SEO_TABS.map(t=>(
           <a key={t.key} href={`?tab=${t.key}&loc=${locFilter}`}
             style={{ padding:'8px 16px', fontSize:12, fontWeight:600, textDecoration:'none',
@@ -143,7 +173,14 @@ export default async function MarketingSeoPage({
         ))}
       </div>
 
-      {/* Market filter — only on tabs where it's relevant */}
+      {/* Tab context text */}
+      {TAB_CONTEXT[tab] && (
+        <div style={{ gridColumn:'1/-1', fontSize:11, color:INK_F, padding:'6px 2px 8px', lineHeight:1.5 }}>
+          {TAB_CONTEXT[tab]}
+        </div>
+      )}
+
+      {/* Market filter */}
       {['overview','rankings','keywords'].includes(tab) && <div style={{ gridColumn:'1/-1', display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' as const }}>
         <span style={{ fontSize:10, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.1em', textTransform:'uppercase' as const }}>Market</span>
         {MARKETS.map(m=>(
@@ -159,7 +196,6 @@ export default async function MarketingSeoPage({
       {/* ─── OVERVIEW ─────────────────────────────────────────────────────── */}
       {tab==='overview' && (
         <>
-          {/* KPI tiles */}
           <div style={{ gridColumn:'1/-1', display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:8 }}>
             {([
               { l:'Keywords', v:allRankings.length, sub:'All markets', col:INK },
@@ -179,7 +215,6 @@ export default async function MarketingSeoPage({
             ))}
           </div>
 
-          {/* Market breakdown */}
           <div style={{ gridColumn:'1/-1' }}>
             <div style={{ fontSize:10, fontWeight:600, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.12em', textTransform:'uppercase' as const, marginBottom:8 }}>Market breakdown</div>
             <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
@@ -211,7 +246,6 @@ export default async function MarketingSeoPage({
             </table>
           </div>
 
-          {/* Best ranked + Quick wins */}
           <div style={{ gridColumn:'1/-1', display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
             <div>
               <div style={{ fontSize:10, fontWeight:600, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.12em', textTransform:'uppercase' as const, marginBottom:8 }}>Best ranked keywords</div>
@@ -255,7 +289,6 @@ export default async function MarketingSeoPage({
             </div>
           </div>
 
-          {/* Compact action strip */}
           <div style={{ gridColumn:'1/-1', display:'flex', gap:8, alignItems:'center', padding:'10px 14px', background:'#F4EFE2', borderRadius:6 }}>
             <span style={{ fontSize:11, fontWeight:600, color:INK, marginRight:4 }}>SERP sync</span>
             <SeoTriggerBtn mode="post" label="▶ Post tasks" variant="secondary" />
@@ -276,6 +309,25 @@ export default async function MarketingSeoPage({
                 <SeoTriggerBtn mode="fetch" label="⬇ Fetch" variant="secondary" />
               </div>
             }>
+            {/* Step-by-step guide */}
+            <div style={{ padding:'10px 14px', background:'#F4EFE2', border:`1px solid ${HAIR}`, borderRadius:5, marginBottom:12 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:INK, marginBottom:6 }}>How to get ranking data</div>
+              <div style={{ display:'flex', gap:12, flexWrap:'wrap' as const }}>
+                {([
+                  { n:'1', t:'Post SERP tasks', d:'Click ▶ Post tasks — queues all keywords in DataForSEO (takes seconds).' },
+                  { n:'2', t:'Wait up to 1 hour', d:'DataForSEO crawls Google SERP. Most results are ready within 1 hour.' },
+                  { n:'3', t:'Fetch results', d:'Click ⬇ Fetch — pulls completed tasks and writes positions to DB.' },
+                ] as Array<{n:string;t:string;d:string}>).map(s=>(
+                  <div key={s.n} style={{ display:'flex', gap:6, flex:'1 1 180px', minWidth:160 }}>
+                    <span style={{ fontSize:16, fontWeight:900, color:GREEN, fontFamily:'ui-monospace,monospace', minWidth:18 }}>{s.n}</span>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:700, color:INK }}>{s.t}</div>
+                      <div style={{ fontSize:11, color:INK_M }}>{s.d}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
             {rankings.length === 0 ? (
               <div style={{ padding:'40px 16px', textAlign:'center' }}>
                 <div style={{ fontSize:32, marginBottom:10 }}>📡</div>
@@ -345,6 +397,37 @@ export default async function MarketingSeoPage({
                   </div>
                 ))}
               </div>
+
+              {/* Keyword overlap with competitors */}
+              {overlapRows.length > 0 && (
+                <div style={{ marginTop:28 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:4 }}>Keyword overlap — both Namkhan and competitors rank for these</div>
+                  <div style={{ fontSize:11, color:INK_F, marginBottom:10 }}>Outranked by competitors on these keywords — best opportunities to improve content or build backlinks.</div>
+                  <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
+                    <thead><tr style={{ borderBottom:`2px solid ${HAIR}` }}>
+                      {['Competitor','Keyword','Their rank','Our rank','Vol/mo'].map(h=>(
+                        <th key={h} style={{ padding:'5px 8px', textAlign:'left' as const, fontSize:10, fontFamily:'ui-monospace,monospace', letterSpacing:'0.08em', textTransform:'uppercase' as const, color:INK_F, fontWeight:600 }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {overlapRows.slice(0,30).map((r,i)=>(
+                        <tr key={i} style={{ borderBottom:`1px solid ${HAIR}` }}>
+                          <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:INK_F }}>{r.competitor_domain}</td>
+                          <td style={{ padding:'6px 8px', color:INK, fontStyle:'italic' }}>{r.keyword}</td>
+                          <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', fontWeight:700, color:r.competitor_position<=3?GREEN:r.competitor_position<=10?INK:INK_F }}>#{r.competitor_position}</td>
+                          <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', color:r.our_position===null?RED:r.our_position<=3?GREEN:r.our_position<=10?INK:INK_F }}>{r.our_position===null?'—':'#'+r.our_position}</td>
+                          <td style={{ padding:'6px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:INK_F }}>{r.volume?.toLocaleString()??'—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {overlapRows.length === 0 && (
+                <div style={{ marginTop:20, padding:'12px 14px', background:'#F9F6F0', border:`1px solid ${HAIR}`, borderRadius:5, fontSize:12, color:INK_M }}>
+                  No keyword overlap data yet — click <strong>▶ Fetch competitor data</strong> above to run the DataForSEO domain intersection analysis.
+                </div>
+              )}
             </div>
           </Container>
         </div>
@@ -437,100 +520,15 @@ export default async function MarketingSeoPage({
                   ))}
                 </div>
               )}
-
             </div>
-          </Container>
-        </div>
-      )}
-
-      {tab==='ai-visibility' && (
-        <div style={{ gridColumn:'1/-1' }}>
-          <Container title="AI Visibility · LLM Mentions" subtitle="thenamkhan.com presence in Google AI Overviews + ChatGPT"
-            action={<SeoTriggerBtn mode="llm" label="🔄 Refresh AI data" description="DataForSEO LLM Mentions · live" />}>
-            {!llmSnapshot||llmSnapshot.total_mentions===0?(
-              <div style={{ padding:'32px 16px', textAlign:'center' as const, color:INK_M, fontSize:13 }}>No AI visibility data — click <strong>Refresh AI data</strong>.</div>
-            ):(
-              <div>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:8, marginBottom:16 }}>
-                  {([[ 'Total AI mentions',String(llmSnapshot.total_mentions),GREEN],['AI search volume',Number(llmSnapshot.ai_search_volume).toLocaleString(),INK],['Google AI Overview',String(llmSnapshot.google_mentions),GREEN],['ChatGPT',String(llmSnapshot.chatgpt_mentions),INK]] as [string,string,string][]).map(([l,v,c],i)=>(
-                    <div key={i} style={{ background:'#FFFFFF',border:`1px solid ${HAIR}`,borderRadius:6,padding:'10px 14px' }}>
-                      <div style={{ fontSize:10,fontFamily:'ui-monospace,monospace',textTransform:'uppercase' as const,color:INK_F,marginBottom:3 }}>{l}</div>
-                      <div style={{ fontSize:22,fontWeight:700,color:c,fontVariantNumeric:'tabular-nums' }}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-                {(llmSnapshot.sources_raw as Array<{key:string;mentions:number}>|null)?.length?(
-                  <>
-                    <div style={{ fontSize:12,fontWeight:600,color:INK,marginBottom:8 }}>Top domains in AI answers</div>
-                    <div style={{ display:'flex',flexWrap:'wrap' as const,gap:6 }}>
-                      {(llmSnapshot.sources_raw as Array<{key:string;mentions:number}>).slice(0,8).map((s,i)=>(
-                        <div key={i} style={{ fontSize:11,fontFamily:'ui-monospace,monospace',border:`1px solid ${HAIR}`,padding:'3px 10px',borderRadius:4,color:INK_M }}>{s.key} · {s.mentions}↗</div>
-                      ))}
-                    </div>
-                  </>
-                ):null}
-                {questionsRows.length>0&&(
-                  <>
-                    <div style={{fontSize:12,fontWeight:600,color:INK,marginTop:16,marginBottom:8}}>Questions triggering AI answers mentioning thenamkhan.com</div>
-                    <div style={{display:'flex',flexWrap:'wrap' as const,gap:4}}>
-                      {questionsRows.map((q,i)=>(<span key={i} style={{fontSize:11,border:'1px solid #E6DFCC',padding:'3px 10px',borderRadius:4,color:'#5A5A5A',background:'#F9F6F0'}}>{q.keyword}</span>))}
-                    </div>
-                  </>
-                )}
-                <div style={{ fontSize:10,color:INK_F,marginTop:12 }}>Last fetched: {llmSnapshot.snapshot_date} · {llmSnapshot.target}</div>
-              </div>
-            )}
-
-            {/* Competitor intel */}
-            {domainIntel.length>0&&(
-              <div style={{marginTop:20}}>
-                <div style={{fontSize:11,fontWeight:700,color:INK,marginBottom:8}}>Who AI cites instead — competitor domains</div>
-                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
-                  <thead><tr style={{borderBottom:`1px solid ${HAIR}`}}>
-                    {['Domain','Keyword','AI Mentions','AI Volume'].map(h=><th key={h} style={{padding:'4px 8px',textAlign:'left' as const,fontSize:10,color:INK_M,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>{h}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {domainIntel.slice(0,15).map((r,i)=>(
-                      <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
-                        <td style={{padding:'5px 8px',color:r.item_name.includes('namkhan')?GREEN:INK,fontFamily:'monospace',fontSize:11,fontWeight:r.item_name.includes('namkhan')?700:400}}>{r.item_name} {r.item_name.includes('namkhan')&&'✓'}</td>
-                        <td style={{padding:'5px 8px',color:INK_M,fontSize:10,fontStyle:'italic'}}>{r.target_keyword}</td>
-                        <td style={{padding:'5px 8px',fontFamily:'monospace',textAlign:'right' as const}}>{r.mentions}</td>
-                        <td style={{padding:'5px 8px',color:INK_M,fontFamily:'monospace',textAlign:'right' as const}}>{r.ai_search_volume?.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* ChatGPT direct responses */}
-            {llmRespRows.length>0&&(
-              <div style={{marginTop:20}}>
-                <div style={{fontSize:11,fontWeight:700,color:INK,marginBottom:8}}>ChatGPT responses to hotel queries</div>
-                <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
-                  {llmRespRows.map((r,i)=>(
-                    <div key={i} style={{border:`1px solid ${HAIR}`,borderRadius:6,padding:'10px 14px'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-                        <span style={{fontSize:11,fontWeight:600,color:INK,fontStyle:'italic'}}>{r.prompt}</span>
-                        <span style={{fontSize:10,padding:'1px 7px',borderRadius:99,background:r.our_domain_mentioned?'#E6F4EA':'#FEE2E2',color:r.our_domain_mentioned?GREEN:'#B03826',fontWeight:700,marginLeft:'auto'}}>{r.our_domain_mentioned?'✓ Namkhan mentioned':'✗ Not mentioned'}</span>
-                      </div>
-                      {r.response_text&&<div style={{fontSize:11,color:INK_M,lineHeight:1.5}}>{r.response_text.slice(0,300)}...</div>}
-                      <div style={{fontSize:10,color:INK_F,marginTop:4}}>{r.platform} · {r.fetched_at?.slice(0,10)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            
           </Container>
         </div>
       )}
 
       {tab==='pages' && (
         <div style={{ gridColumn:'1/-1' }}>
-          <Container title="Ranked Pages" subtitle={`${pagesArr.length} pages · ${pagesRows.length} keywords in Google US top 50`}
-            action={<SeoTriggerBtn mode="ranked" label="🔄 Refresh page rankings" description="DataForSEO Labs · domain full scan" />}>
+          <Container title="Ranked Pages" subtitle={`${pagesArr.length} pages · ${pagesRows.length} keywords in Google top 50 · all markets`}
+            action={<SeoTriggerBtn mode="ranked" label="🔄 Refresh page rankings" description="DataForSEO Labs · 6 markets" />}>
             {pagesArr.length===0?(<div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>No page ranking data — click <strong>Refresh page rankings</strong>.</div>):(
               <div style={{overflowX:'auto' as const}}>
                 <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
@@ -551,7 +549,6 @@ export default async function MarketingSeoPage({
               </div>
             )}
 
-          {/* Pages not yet ranking in US — from site audit */}
           {tab==='pages' && instantPages.length>0 && (()=>{
             const ranked=new Set(pagesArr.map((a:any)=>a.url));
             const unranked=instantPages.filter((p:any)=>!ranked.has(p.url));
@@ -559,7 +556,7 @@ export default async function MarketingSeoPage({
             return(
               <div style={{marginTop:20}}>
                 <div style={{fontSize:10,fontWeight:600,color:INK_F,fontFamily:'ui-monospace,monospace',letterSpacing:'0.12em',textTransform:'uppercase' as const,marginBottom:8}}>
-                  {unranked.length} key pages — not yet ranking in Google US top 50
+                  {unranked.length} key pages — not yet ranking in Google top 50
                 </div>
                 <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
                   <thead><tr style={{borderBottom:`2px solid ${HAIR}`}}>
@@ -581,7 +578,7 @@ export default async function MarketingSeoPage({
                   </tbody>
                 </table>
                 <div style={{fontSize:10,color:AMBER,marginTop:8}}>
-                  These pages need SEO content, backlinks, and keyword targeting to rank. Run On-Page Crawl in the AI Intel tab to audit more pages.
+                  These pages need SEO content, backlinks, and keyword targeting to rank. Run On-Page Crawl in the Technical tab to audit more pages.
                 </div>
               </div>
             );
@@ -590,25 +587,19 @@ export default async function MarketingSeoPage({
         </div>
       )}
 
-
       {tab==='research' && (
         <div style={{ gridColumn:'1/-1' }}>
-          <Container title="Keyword Research" subtitle="Longtail keyword ideas — save to tracking for blog + web team"
-            action={
-              <div style={{display:'flex',gap:8}}>
-                <SeoTriggerBtn mode="suggestions" label="🔍 Research keywords" description="Finds related longtails from top 3 tracked keywords" />
-                <SeoTriggerBtn mode="volume" label="📊 Add volume data" variant="secondary" />
-              </div>
-            }>
+          <Container title="Keyword Research" subtitle="Longtail keyword ideas — save to tracking for blog + web team">
+            <SeoResearchBar
+              resultCount={researchRows.length}
+              lastFetched={researchLastFetched ? String(researchLastFetched).slice(0, 10) : null}
+            />
             {researchRows.length===0 ? (
-              <div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
-                No research data — click <strong>🔍 Research keywords</strong> to discover longtail opportunities.
+              <div style={{padding:'24px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
+                No research data — enter a seed keyword above and click <strong>🔍 Research keywords</strong> to discover longtail opportunities.
               </div>
             ) : (
               <div>
-                <div style={{marginBottom:8,fontSize:11,color:INK_M}}>
-                  {researchRows.length} keyword ideas found · Click <strong>Add to tracking</strong> to include in SERP monitoring
-                </div>
                 <div style={{overflowX:'auto' as const}}>
                   <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
                     <thead><tr style={{borderBottom:`2px solid ${HAIR}`}}>
@@ -645,7 +636,6 @@ export default async function MarketingSeoPage({
         </div>
       )}
 
-      {/* Backlinks tab */}
       {tab==='backlinks' && (
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Backlinks · Link profile" subtitle="thenamkhan.com · referring domains, authority, anchor distribution"
@@ -709,7 +699,6 @@ export default async function MarketingSeoPage({
       )}
 
       {tab==='hotel' && (
-
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Hotel Data · Google Hotels" subtitle="Competitive positioning + pricing in Google Hotels results"
             action={<SeoTriggerBtn mode="hotel" label="🏨 Refresh hotel data" description="business_data/google/hotel_searches · live" />}>
@@ -755,58 +744,167 @@ export default async function MarketingSeoPage({
             </span>
           </div>
 
-          {/* Schema Health */}
-          <div style={{ display:aiSub==='schema' ? 'block' : 'none', background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
-            <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>Schema Markup Health (structured data for AI/Google)</div>
-            {instantPages.length===0?(
-              <div style={{ fontSize:12, color:INK_M }}>Click <strong>Run AI Web Sweep</strong> to check schema on all key pages.</div>
-            ):(
-              <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
-                <thead><tr style={{ borderBottom:`2px solid ${HAIR}` }}>
-                  {['Page','Schema','Title len','Words','Readability','Issues'].map(h=><th key={h} style={{ padding:'6px 8px', textAlign:'left' as const, fontSize:10, fontFamily:'ui-monospace,monospace', textTransform:'uppercase' as const, color:INK_F }}>{h}</th>)}
-                </tr></thead>
-                <tbody>{instantPages.map((p,i)=>(
-                  <tr key={i} style={{ borderBottom:`1px solid ${HAIR}` }}>
-                    <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}><a href={p.url} target="_blank" rel="noopener noreferrer" style={{ color:GREEN, textDecoration:'none' }}>{p.url.replace(/^https?:\/\/[^/]+/,'')}</a></td>
-                    <td style={{ padding:'7px 8px' }}><span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:p.issues?.schema_missing?'#FEE2E2':'#E6F4EA', color:p.issues?.schema_missing?RED:GREEN, fontWeight:600 }}>{p.issues?.schema_missing?'❌ MISSING':'✅ Present'}</span></td>
-                    <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:p.title_length&&p.title_length>60?RED:GREEN }}>{p.title_length}ch</td>
-                    <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11 }}>{p.word_count}</td>
-                    <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:p.readability&&p.readability>=60?GREEN:p.readability&&p.readability>=45?AMBER:RED }}>{p.readability?.toFixed(1)}</td>
-                    <td style={{ padding:'7px 8px', fontSize:10 }}>{Object.entries(p.issues??{}).filter(([,v])=>!!v).map(([k])=><span key={k} style={{ marginRight:3, padding:'1px 5px', borderRadius:99, background:'#FEF3C7', color:AMBER }}>{k.replace(/_/g,' ')}</span>)}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            )}
-            <div style={{ marginTop:12, padding:'10px 14px', background:'#FFF8E1', border:`1px solid ${AMBER}`, borderRadius:5, fontSize:11, color:'#5A5A5A' }}>
-              <strong>Fix required:</strong> Add <code>@type: Hotel</code> JSON-LD schema to thenamkhan.com homepage and <code>@type: Product</code> + <code>Offer</code> to each retreat page. Without this, Google AI cannot classify the site as a bookable hotel and won't surface it for commercial queries like "wellness retreat laos" or "eco lodge luang prabang".
-            </div>
-          </div>
-
-          {/* What AI says about Namkhan */}
-          <div style={{ display:aiSub==='visibility' ? 'block' : 'none', background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
-            <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>What AI says about thenamkhan.com — top 30 triggers</div>
-            {mentionsRows.length===0?(
-              <div style={{ fontSize:12, color:INK_M }}>Click <strong>Refresh LLM data</strong> to fetch AI mention details.</div>
-            ):(
-              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                {mentionsRows.map((m,i)=>(
-                  <div key={i} style={{ border:`1px solid ${HAIR}`, borderRadius:5, padding:'10px 14px' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
-                      <span style={{ fontSize:12, fontWeight:600, color:INK, fontStyle:'italic' }}>{m.keyword}</span>
-                      <span style={{ fontSize:10, padding:'1px 6px', borderRadius:99, background:'#E8F0FE', color:'#1A56DB' }}>{m.llm}</span>
-                      <span style={{ fontSize:10, color:INK_F, marginLeft:'auto' }}>{m.mention_date}</span>
-                    </div>
-                    {m.snippet&&<div style={{ fontSize:11, color:INK_M, lineHeight:1.5, fontStyle:'italic' }}>"{m.snippet.replace(/!\[.*?\]\(.*?\)\n?/g,'').slice(0,200)}..."</div>}
+          {/* Visibility sub-tab */}
+          {aiSub==='visibility' && (
+            <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>thenamkhan.com in AI search — LLM Mentions</div>
+              {llmSnapshot && llmSnapshot.total_mentions > 0 && (
+                <div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:8, marginBottom:16 }}>
+                    {([['Total AI mentions',String(llmSnapshot.total_mentions),GREEN],['AI search volume',Number(llmSnapshot.ai_search_volume).toLocaleString(),INK],['Google AI Overview',String(llmSnapshot.google_mentions),GREEN],['ChatGPT',String(llmSnapshot.chatgpt_mentions),INK]] as [string,string,string][]).map(([l,v,c],i)=>(
+                      <div key={i} style={{ background:'#F9F6F0',border:`1px solid ${HAIR}`,borderRadius:6,padding:'10px 14px' }}>
+                        <div style={{ fontSize:10,fontFamily:'ui-monospace,monospace',textTransform:'uppercase' as const,color:INK_F,marginBottom:3 }}>{l}</div>
+                        <div style={{ fontSize:22,fontWeight:700,color:c,fontVariantNumeric:'tabular-nums' }}>{v}</div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  {(llmSnapshot.sources_raw as Array<{key:string;mentions:number}>|null)?.length?(
+                    <>
+                      <div style={{ fontSize:12,fontWeight:600,color:INK,marginBottom:8 }}>Top domains in AI answers</div>
+                      <div style={{ display:'flex',flexWrap:'wrap' as const,gap:6,marginBottom:12 }}>
+                        {(llmSnapshot.sources_raw as Array<{key:string;mentions:number}>).slice(0,8).map((s,i)=>(
+                          <div key={i} style={{ fontSize:11,fontFamily:'ui-monospace,monospace',border:`1px solid ${HAIR}`,padding:'3px 10px',borderRadius:4,color:INK_M }}>{s.key} · {s.mentions}↗</div>
+                        ))}
+                      </div>
+                    </>
+                  ):null}
+                  {questionsRows.length>0&&(
+                    <>
+                      <div style={{fontSize:12,fontWeight:600,color:INK,marginBottom:8}}>AI queries mentioning thenamkhan.com</div>
+                      <div style={{display:'flex',flexWrap:'wrap' as const,gap:4,marginBottom:12}}>
+                        {questionsRows.map((q,i)=>(<span key={i} style={{fontSize:11,border:'1px solid #E6DFCC',padding:'3px 10px',borderRadius:4,color:'#5A5A5A',background:'#F9F6F0'}}>{q.keyword}</span>))}
+                      </div>
+                    </>
+                  )}
+                  <div style={{ fontSize:10,color:INK_F }}>Last fetched: {llmSnapshot.snapshot_date} · {llmSnapshot.target}</div>
+                </div>
+              )}
+              <div style={{ fontSize:12, fontWeight:700, color:INK, marginTop:16, marginBottom:12 }}>What AI says about thenamkhan.com — top 30 triggers</div>
+              {mentionsRows.length===0?(
+                <div style={{ fontSize:12, color:INK_M }}>Click <strong>↻ Refresh</strong> to fetch AI mention details.</div>
+              ):(
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {mentionsRows.map((m,i)=>(
+                    <div key={i} style={{ border:`1px solid ${HAIR}`, borderRadius:5, padding:'10px 14px' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                        <span style={{ fontSize:12, fontWeight:600, color:INK, fontStyle:'italic' }}>{m.keyword}</span>
+                        <span style={{ fontSize:10, padding:'1px 6px', borderRadius:99, background:'#E8F0FE', color:'#1A56DB' }}>{m.llm}</span>
+                        <span style={{ fontSize:10, color:INK_F, marginLeft:'auto' }}>{m.mention_date}</span>
+                      </div>
+                      {m.snippet&&<div style={{ fontSize:11, color:INK_M, lineHeight:1.5, fontStyle:'italic' }}>&quot;{m.snippet.replace(/!\[.*?\]\(.*?\)\n?/g,'').slice(0,200)}&quot;...</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Schema to implement */}
-          <div style={{ display:aiSub==='schema' ? 'block' : 'none', background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px' }}>
-            <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:8 }}>Schema to implement on thenamkhan.com (copy to CMS &lt;head&gt;)</div>
-            <pre style={{ background:'#1B1B1B', color:'#E6DFCC', padding:'14px 16px', borderRadius:6, fontSize:10, lineHeight:1.6, overflow:'auto', whiteSpace:'pre' as const }}>{`<script type="application/ld+json">
+          {/* Competitor Intel sub-tab */}
+          {aiSub==='intel' && (
+            <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>Who AI cites instead — competitor domains per keyword</div>
+              {domainIntel.length === 0 ? (
+                <div style={{ fontSize:12, color:INK_M, padding:'24px 0', textAlign:'center' as const }}>
+                  No competitor AI intel data — click <strong>🏢 Update intel</strong> above.
+                </div>
+              ) : (
+                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
+                  <thead><tr style={{borderBottom:`1px solid ${HAIR}`}}>
+                    {['Domain','Keyword','AI Mentions','AI Volume'].map(h=><th key={h} style={{padding:'4px 8px',textAlign:'left' as const,fontSize:10,color:INK_M,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {domainIntel.slice(0,20).map((r,i)=>(
+                      <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                        <td style={{padding:'5px 8px',color:r.item_name.includes('namkhan')?GREEN:INK,fontFamily:'monospace',fontSize:11,fontWeight:r.item_name.includes('namkhan')?700:400}}>{r.item_name} {r.item_name.includes('namkhan')&&'✓'}</td>
+                        <td style={{padding:'5px 8px',color:INK_M,fontSize:10,fontStyle:'italic'}}>{r.target_keyword}</td>
+                        <td style={{padding:'5px 8px',fontFamily:'monospace',textAlign:'right' as const}}>{r.mentions}</td>
+                        <td style={{padding:'5px 8px',color:INK_M,fontFamily:'monospace',textAlign:'right' as const}}>{r.ai_search_volume?.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* LLM Responses — chat sub-tab */}
+          {aiSub==='chat' && (
+            <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:4 }}>
+                LLM responses to hotel queries — {llmRespRows.length} responses stored
+              </div>
+              <div style={{ fontSize:11, color:INK_F, marginBottom:16 }}>
+                What ChatGPT / Perplexity / Gemini say when asked about Luang Prabang hotels · Green border = Namkhan mentioned
+              </div>
+              {llmRespRows.length === 0 ? (
+                <div style={{ fontSize:12, color:INK_M, padding:'24px 0', textAlign:'center' as const }}>
+                  No LLM responses stored — click <strong>💬 Ask ChatGPT</strong> above to query live.
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column' as const, gap:28 }}>
+                  {llmPlatforms.map(platform => {
+                    const rows = llmByPlatform[platform] ?? [];
+                    return (
+                      <div key={platform}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:INK, letterSpacing:'0.05em', textTransform:'uppercase' as const }}>{platform}</div>
+                          <div style={{ fontSize:10, color:INK_F, fontFamily:'ui-monospace,monospace' }}>
+                            {rows.length} response{rows.length !== 1 ? 's' : ''} · {rows.filter(r => r.our_domain_mentioned).length} mention Namkhan
+                          </div>
+                          <div style={{ flex:1, height:1, background:HAIR }} />
+                        </div>
+                        <div style={{ display:'flex', flexDirection:'column' as const, gap:10 }}>
+                          {rows.map((r, i) => (
+                            <SeoLlmResponseCard
+                              key={`${platform}-${i}`}
+                              prompt={r.prompt}
+                              response_text={r.response_text}
+                              our_domain_mentioned={r.our_domain_mentioned}
+                              platform={r.platform}
+                              model={r.model ?? null}
+                              fetched_at={r.fetched_at}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Schema Health */}
+          {aiSub==='schema' && (
+            <>
+              <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>Schema Markup Health (structured data for AI/Google)</div>
+                {instantPages.length===0?(
+                  <div style={{ fontSize:12, color:INK_M }}>Click <strong>🔍 Run audit</strong> to check schema on all key pages.</div>
+                ):(
+                  <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
+                    <thead><tr style={{ borderBottom:`2px solid ${HAIR}` }}>
+                      {['Page','Schema','Title len','Words','Readability','Issues'].map(h=><th key={h} style={{ padding:'6px 8px', textAlign:'left' as const, fontSize:10, fontFamily:'ui-monospace,monospace', textTransform:'uppercase' as const, color:INK_F }}>{h}</th>)}
+                    </tr></thead>
+                    <tbody>{instantPages.map((p,i)=>(
+                      <tr key={i} style={{ borderBottom:`1px solid ${HAIR}` }}>
+                        <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}><a href={p.url} target="_blank" rel="noopener noreferrer" style={{ color:GREEN, textDecoration:'none' }}>{p.url.replace(/^https?:\/\/[^/]+/,'')}</a></td>
+                        <td style={{ padding:'7px 8px' }}><span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:p.issues?.schema_missing?'#FEE2E2':'#E6F4EA', color:p.issues?.schema_missing?RED:GREEN, fontWeight:600 }}>{p.issues?.schema_missing?'❌ MISSING':'✅ Present'}</span></td>
+                        <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:p.title_length&&p.title_length>60?RED:GREEN }}>{p.title_length}ch</td>
+                        <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11 }}>{p.word_count}</td>
+                        <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:p.readability&&p.readability>=60?GREEN:p.readability&&p.readability>=45?AMBER:RED }}>{p.readability?.toFixed(1)}</td>
+                        <td style={{ padding:'7px 8px', fontSize:10 }}>{Object.entries(p.issues??{}).filter(([,v])=>!!v).map(([k])=><span key={k} style={{ marginRight:3, padding:'1px 5px', borderRadius:99, background:'#FEF3C7', color:AMBER }}>{k.replace(/_/g,' ')}</span>)}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                )}
+                <div style={{ marginTop:12, padding:'10px 14px', background:'#FFF8E1', border:`1px solid ${AMBER}`, borderRadius:5, fontSize:11, color:'#5A5A5A' }}>
+                  <strong>Fix required:</strong> Add <code>@type: Hotel</code> JSON-LD schema to thenamkhan.com homepage and <code>@type: Product</code> + <code>Offer</code> to each retreat page. Without this, Google AI cannot classify the site as a bookable hotel and won&apos;t surface it for commercial queries like &quot;wellness retreat laos&quot; or &quot;eco lodge luang prabang&quot;.
+                </div>
+              </div>
+              <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px' }}>
+                <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:8 }}>Schema to implement on thenamkhan.com (copy to CMS &lt;head&gt;)</div>
+                <pre style={{ background:'#1B1B1B', color:'#E6DFCC', padding:'14px 16px', borderRadius:6, fontSize:10, lineHeight:1.6, overflow:'auto', whiteSpace:'pre' as const }}>{`<script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "Hotel",
@@ -828,7 +926,9 @@ export default async function MarketingSeoPage({
   "brand": {"@type":"Brand","name":"Small Luxury Hotels of the World"}
 }
 </script>`}</pre>
-          </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
