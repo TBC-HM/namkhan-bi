@@ -118,7 +118,7 @@ export default async function DigitalWebPage({searchParams}:{searchParams?:{tab?
           kpis.length>0?(
             <>
               {/* KPI strip */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:8}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:8}}>
                 {kpis.map(k=>(
                   <div key={k.label} style={{border:'1px solid '+HAIR,borderRadius:6,padding:'12px 14px',background:'#FFFFFF'}}>
                     <div style={{fontSize:22,fontWeight:700,color:INK}}>{k.value}</div>
