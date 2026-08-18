@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
     if (mode === 'local') {
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
-      const localKws = ['hotels luang prabang','hotel luang prabang','luxury hotel luang prabang','eco lodge luang prabang','the namkhan'];
+      const { data: kwArr } = await sb.rpc('fn_seo_local_pack_keywords', {p_property_id: propertyId, p_location_code: 2418, p_limit: 10});\n      const localKws: string[] = (kwArr as string[]) ?? ['hotels luang prabang','luxury hotels luang prabang','resort luang prabang','the namkhan'];
       const today = new Date().toISOString().slice(0,10);
       const rows: any[] = [];
       for (const kw of localKws) {
