@@ -50,7 +50,7 @@ const TAB_CONTEXT: Record<string, string> = {
   overview:     'Rankings summary across all markets · Data from DataForSEO SERP tracking + your tracked keyword list',
   rankings:     'Google search positions per keyword + market · Updated by clicking ▶ Post tasks then ⬇ Fetch results',
   keywords:     'Your tracked keyword list · Add / dismiss keywords here to control what gets tracked across all tabs',
-  research:     'Longtail keyword ideas from DataForSEO Labs related keywords API · Enter a seed keyword or use your top 3 tracked keywords to discover new opportunities',
+  research:     'Longtail keyword ideas from DataForSEO Labs + Google Trends 12-month interest · Enter a seed keyword or use your top 3 tracked keywords',
   backlinks:    'Link profile from DataForSEO · Authority score, referring domains, top linking pages',
   competitors:  "Real LP hotel competitors from your compset database · Gap shows keywords you don't rank for yet",
   local:        'Google Maps local pack positions for hotel keywords in Luang Prabang · Data from DataForSEO Maps API',
@@ -71,7 +71,7 @@ export default async function MarketingSeoPage({
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
-  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes, researchRes, blSumRes, blRes, overlapRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes, researchRes, blSumRes, blRes, overlapRes, trendsRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*').eq('property_id',260955),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
@@ -90,6 +90,7 @@ export default async function MarketingSeoPage({
     tab === 'backlinks' ? sb.from('v_seo_backlinks_summary').select('*').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(1).maybeSingle() : Promise.resolve({ data: null }),
     tab === 'backlinks' ? sb.from('v_seo_backlinks').select('*').eq('property_id',260955).order('rank',{ascending:false}).limit(50) : Promise.resolve({ data: [] }),
     tab === 'competitors' ? sb.from('v_seo_competitor_overlap').select('*').eq('property_id',260955).order('competitor_position',{ascending:true}).limit(100) : Promise.resolve({ data: [] }),
+    tab === 'research' ? sb.from('v_seo_trends').select('keyword,avg_interest,peak_month,interest_timeline,fetched_at').eq('property_id',260955).order('avg_interest',{ascending:false}).limit(10) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -112,6 +113,8 @@ export default async function MarketingSeoPage({
   const competitorRows=(competitorRes.data??[]) as CompRow[];
   type OverlapRow={competitor_domain:string;keyword:string;our_position:number|null;competitor_position:number;volume:number|null;location_code:number};
   const overlapRows=(overlapRes.data??[]) as OverlapRow[];
+  type TrendRow={keyword:string;avg_interest:number|null;peak_month:string|null;interest_timeline:Array<{date:string;val:number}>|null;fetched_at:string};
+  const trendsRows=(trendsRes.data??[]) as TrendRow[];
   type ResRow={id:string;seed_keyword:string;keyword:string;monthly_searches:number|null;keyword_difficulty:number|null;cpc_usd:number|null;competition:number|null;location_code:number;fetched_at?:string};
   const researchRows=(researchRes.data??[]) as ResRow[];
   type BlSumRow={total_backlinks:number;referring_domains:number;authority_score:number;dofollow_links:number;nofollow_links:number;fetched_at:string};
@@ -589,7 +592,7 @@ export default async function MarketingSeoPage({
 
       {tab==='research' && (
         <div style={{ gridColumn:'1/-1' }}>
-          <Container title="Keyword Research" subtitle="Longtail keyword ideas — save to tracking for blog + web team">
+          <Container title="Keyword Research" subtitle="Longtail keyword ideas + Google Trends — save to tracking for blog + web team">
             <SeoResearchBar
               resultCount={researchRows.length}
               lastFetched={researchLastFetched ? String(researchLastFetched).slice(0, 10) : null}
@@ -632,6 +635,48 @@ export default async function MarketingSeoPage({
                 </div>
               </div>
             )}
+
+            {/* Google Trends section */}
+            <div style={{marginTop:24,paddingTop:20,borderTop:`1px solid ${HAIR}`}}>
+              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
+                <div style={{fontSize:13,fontWeight:600,color:INK}}>Google Trends — Search interest over time</div>
+                <SeoTriggerBtn mode="trends" label="📈 Fetch Trends" description="DataForSEO Google Trends · top 5 keywords" variant="secondary" />
+                {trendsRows.length>0&&<span style={{fontSize:10,color:INK_F,fontFamily:'ui-monospace,monospace'}}>Updated: {trendsRows[0]?.fetched_at?.slice(0,10)}</span>}
+              </div>
+              {trendsRows.length===0?(
+                <div style={{fontSize:12,color:INK_M,padding:'16px 0'}}>
+                  No trend data — click <strong>📈 Fetch Trends</strong> to load 12-month search interest for your top 5 tracked keywords.
+                </div>
+              ):(
+                <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
+                  <thead><tr style={{borderBottom:`2px solid ${HAIR}`}}>
+                    {['Keyword','Avg interest','Peak month','12-month trend'].map(h=>(
+                      <th key={h} style={{padding:'5px 8px',textAlign:'left' as const,fontSize:10,fontFamily:'ui-monospace,monospace',letterSpacing:'0.08em',textTransform:'uppercase' as const,color:INK_F,fontWeight:600}}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {trendsRows.map((r,i)=>{
+                      const timeline=(r.interest_timeline??[]).slice(-12);
+                      const max=Math.max(...timeline.map(t=>t.val),1);
+                      return(
+                        <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                          <td style={{padding:'7px 8px',color:INK,fontStyle:'italic'}}>{r.keyword}</td>
+                          <td style={{padding:'7px 8px',fontFamily:'ui-monospace,monospace',fontSize:12,color:r.avg_interest&&r.avg_interest>=50?GREEN:r.avg_interest&&r.avg_interest>=20?AMBER:INK_F,fontWeight:600}}>{r.avg_interest??'—'}<span style={{fontSize:10,color:INK_F,fontWeight:400}}>/100</span></td>
+                          <td style={{padding:'7px 8px',color:INK_M,fontSize:11}}>{r.peak_month??'—'}</td>
+                          <td style={{padding:'7px 8px'}}>
+                            <div style={{display:'flex',gap:2,alignItems:'flex-end',height:24}}>
+                              {timeline.map((t,j)=>(
+                                <div key={j} title={`${t.date}: ${t.val}`} style={{width:8,borderRadius:2,background:GREEN,opacity:0.3+0.7*(t.val/max),height:Math.max(3,Math.round(24*(t.val/max)))}} />
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </Container>
         </div>
       )}

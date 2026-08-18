@@ -5,11 +5,12 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 55;
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
-const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel', 'instant','schema-sweep','ai-domains','ai-query','backlinks']);
+const ALLOWED_MODES = new Set(['post', 'fetch', 'rankings', 'gbp', 'competitors', 'volume', 'suggestions', 'local', 'onpage', 'llm', 'ranked', 'hotel', 'instant','schema-sweep','ai-domains','ai-query','backlinks','trends']);
 
 export async function POST(req: NextRequest) {
   let body: { mode?: string; property_id?: number; url?: string; seed_keyword?: string } = {};
@@ -36,31 +37,21 @@ export async function POST(req: NextRequest) {
     if (mode === 'post' || mode === 'rankings') {
       const { data, error } = await sb.rpc('fn_d4s_rank_weekly', { p_property_id: propertyId });
       if (error) throw error;
-      return NextResponse.json({
-        ok: true,
-        mode,
-        result: { posted: data?.keywords_queued ?? 0 }
-      });
+      return NextResponse.json({ ok: true, mode, result: { posted: data?.keywords_queued ?? 0 } });
     }
 
     if (mode === 'gbp') {
       const { data, error } = await sb.rpc('fn_d4s_gbp_daily', { p_property_id: propertyId });
       if (error) throw error;
-      return NextResponse.json({
-        ok: true,
-        mode,
-        result: { posted: data?.tasks_posted ?? 0 }
-      });
+      return NextResponse.json({ ok: true, mode, result: { posted: data?.tasks_posted ?? 0 } });
     }
 
     if (mode === 'competitors') {
       const { data: creds3 } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds3) return NextResponse.json({ok:false,error:'dataforseo_creds_missing'},{status:500});
-      // Fetch active competitors from DB
       const { data: compRows } = await sb.from('v_seo_competitors').select('domain').eq('property_id', propertyId).eq('active', true);
       const competitors = ((compRows ?? []) as any[]).map((c:any) => c.domain).slice(0, 5);
       if (!competitors.length) return NextResponse.json({ok:false,error:'no_active_competitors'},{status:400});
-      // Keyword intersection per competitor (parallel)
       const overlapResults = await Promise.all(competitors.map((compDomain:string) =>
         fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/domain_intersection/live', {
           method:'POST', headers:{'Authorization':`Basic ${creds3}`,'Content-Type':'application/json'},
@@ -88,22 +79,11 @@ export async function POST(req: NextRequest) {
     if (mode === 'fetch') {
       const pollRes = await sb.rpc('fn_d4s_poll');
       if (pollRes.error) throw pollRes.error;
-
       const ingestRes = await sb.rpc('fn_d4s_ingest');
       if (ingestRes.error) throw ingestRes.error;
-
       const fetched = pollRes.data?.fetched ?? 0;
       const serp = ingestRes.data?.[0]?.serp_count ?? 0;
-
-      return NextResponse.json({
-        ok: true,
-        mode,
-        result: {
-          fetched,
-          with_position: serp,
-          upserted: serp
-        }
-      });
+      return NextResponse.json({ ok: true, mode, result: { fetched, with_position: serp, upserted: serp } });
     }
 
     if (mode === 'volume') {
@@ -182,9 +162,10 @@ export async function POST(req: NextRequest) {
           result_count: items.length,
           items: items.slice(0,5).map((it:any,i:number) => ({pos:i+1, title:it.title, rating:it.rating?.value ?? null}))});
       }
-      await sb.rpc('fn_seo_upsert_local_pack', {p_rows: JSON.stringify(rows)});
+      const { error: rpcErr } = await sb.rpc('fn_seo_upsert_local_pack', {p_rows: JSON.stringify(rows)});
+      if (rpcErr) console.error('local pack upsert error:', rpcErr);
       const found = rows.filter(r => r.our_position !== null);
-      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, namkhan_found: found.length, note: found.length===0 ? 'Namkhan not found in Google Maps local pack for these keywords' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
+      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, namkhan_found: found.length, stored: rows.length, note: found.length===0 ? 'Namkhan not found in Google Maps local pack — LP has limited Maps coverage' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
     }
 
     if (mode === 'onpage') {
@@ -207,29 +188,82 @@ export async function POST(req: NextRequest) {
           if (smRes.ok) {
             const xml = await smRes.text();
             const smUrls=[...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((m:any)=>m[1].trim()).filter((u:string)=>u.includes(domain));
-            keyPages=[...new Set([...keyPages,...smUrls])].slice(0,100); break;
+            keyPages=[...new Set([...keyPages,...smUrls])].slice(0,50); break;
           }
         } catch {}
       }
       if (!keyPages.length) {
         keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
       }
-      const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
-        method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
-        body:JSON.stringify(keyPages.slice(0,6).map(url=>({url,enable_javascript:false,load_resources:false}))),
+      // Batch crawl: 2 rounds of 6 pages in parallel → 12 pages max
+      const batches = [keyPages.slice(0,6), keyPages.slice(6,12)].filter(b => b.length > 0);
+      const batchResults = await Promise.all(batches.map(batch =>
+        fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
+          method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
+          body:JSON.stringify(batch.map(url=>({url,enable_javascript:false,load_resources:false}))),
+        }).then(r=>r.json()).catch(()=>null)
+      ));
+      const allRows: any[] = [];
+      for (const json of batchResults as Record<string,any>[]) {
+        if (!json) continue;
+        const rows=(json?.tasks??[]).flatMap((t:any)=>(t?.result?.[0]?.items??[]).map((item:any)=>({
+          property_id:propertyId,url:t?.data?.url,page_title:item?.meta?.title,title_length:item?.meta?.title_length,
+          meta_description:item?.meta?.description,meta_length:item?.meta?.description_length,
+          h1:item?.meta?.htags?.h1?.[0],h2s:item?.meta?.htags?.h2,h3s:item?.meta?.htags?.h3,
+          word_count:item?.meta?.content?.plain_text_word_count,readability:item?.meta?.content?.flesch_kincaid_readability_index,
+          internal_links:item?.meta?.internal_links_count,external_links:item?.meta?.external_links_count,images_count:item?.meta?.images_count,
+          issues:{title_too_long:(item?.meta?.title_length??0)>60,title_too_short:(item?.meta?.title_length??100)<35,meta_too_long:(item?.meta?.description_length??0)>155,meta_missing:!item?.meta?.description,h1_missing:!item?.meta?.htags?.h1?.[0],readability_low:(item?.meta?.content?.flesch_kincaid_readability_index??0)<60,thin_content:(item?.meta?.content?.plain_text_word_count??0)<600},
+          raw:item})),
+        ).filter((r:any)=>r.url);
+        allRows.push(...rows);
+      }
+      await sb.rpc('fn_seo_upsert_instant_pages',{p_rows:JSON.stringify(allRows)});
+      return NextResponse.json({ok:true,mode,result:{pages:allRows.length,batches:batches.length,note:`${allRows.length} pages crawled in ${batches.length} batches — refresh Technical tab`}});
+    }
+
+    if (mode === 'trends') {
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      // Get top tracked keywords for trend analysis (US market, top 6 by volume)
+      const { data: kwRows } = await sb.from('v_seo_rankings').select('keyword,monthly_searches').eq('property_id', propertyId).eq('location_code' as any, 2840).order('monthly_searches' as any, {ascending:false}).limit(6);
+      const keywords = ((kwRows ?? []) as any[]).map((r:any) => r.keyword).filter(Boolean);
+      if (!keywords.length) return NextResponse.json({ok:false,error:'no_tracked_keywords_for_trends'},{status:400});
+      const today = new Date().toISOString().slice(0,10);
+      const yearAgo = new Date(Date.now() - 365*24*60*60*1000).toISOString().slice(0,10);
+      const res = await fetch('https://api.dataforseo.com/v3/keywords_data/google_trends/explore/live', {
+        method: 'POST',
+        headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
+        body: JSON.stringify([{
+          keywords: keywords.slice(0,5),
+          date_from: yearAgo,
+          date_to: today,
+          category_code: 67,
+          location_code: 2840,
+          language_code: 'en',
+          type: 'web_search'
+        }]),
       });
-      const json=await r.json() as Record<string,any>;
-      const rows=(json?.tasks??[]).flatMap((t:any)=>(t?.result?.[0]?.items??[]).map((item:any)=>({
-        property_id:propertyId,url:t?.data?.url,page_title:item?.meta?.title,title_length:item?.meta?.title_length,
-        meta_description:item?.meta?.description,meta_length:item?.meta?.description_length,
-        h1:item?.meta?.htags?.h1?.[0],h2s:item?.meta?.htags?.h2,h3s:item?.meta?.htags?.h3,
-        word_count:item?.meta?.content?.plain_text_word_count,readability:item?.meta?.content?.flesch_kincaid_readability_index,
-        internal_links:item?.meta?.internal_links_count,external_links:item?.meta?.external_links_count,images_count:item?.meta?.images_count,
-        issues:{title_too_long:(item?.meta?.title_length??0)>60,title_too_short:(item?.meta?.title_length??100)<35,meta_too_long:(item?.meta?.description_length??0)>155,meta_missing:!item?.meta?.description,h1_missing:!item?.meta?.htags?.h1?.[0],readability_low:(item?.meta?.content?.flesch_kincaid_readability_index??0)<60,thin_content:(item?.meta?.content?.plain_text_word_count??0)<600},
-        raw:item})),
-      ).filter((r:any)=>r.url);
-      await sb.rpc('fn_seo_upsert_instant_pages',{p_rows:JSON.stringify(rows)});
-      return NextResponse.json({ok:true,mode,result:{pages:rows.length,note:'Pages crawled — refresh Technical tab to see results'}});
+      const json = await res.json() as Record<string,any>;
+      const timelineItems = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+      const rows: any[] = [];
+      for (const kw of keywords.slice(0,5)) {
+        const kwData = timelineItems.find((it:any) => it.keyword === kw) ?? {};
+        const timeline = (kwData.data ?? []) as Array<{date:string;values:number[]}>;
+        const avgInterest = timeline.length > 0
+          ? Math.round(timeline.reduce((s:number,t:any) => s + (t.values?.[0] ?? 0), 0) / timeline.length)
+          : null;
+        const peakEntry = timeline.reduce((max:any,t:any) => (t.values?.[0] ?? 0) > (max?.values?.[0] ?? 0) ? t : max, null);
+        rows.push({
+          keyword: kw,
+          location_code: 2840,
+          avg_interest: avgInterest,
+          peak_month: peakEntry?.date?.slice(0,7) ?? null,
+          interest_timeline: timeline.slice(-24).map((t:any) => ({date:t.date?.slice(0,7), val:t.values?.[0]??0})),
+          related_queries: kwData.related_queries?.slice(0,10) ?? [],
+        });
+      }
+      const { data: cnt } = await sb.rpc('fn_seo_upsert_trends',{p_property_id:propertyId,p_rows:JSON.stringify(rows)});
+      return NextResponse.json({ok:true,mode,result:{keywords:keywords.length,stored:cnt??0,note:'Google Trends data stored — see Research tab'}});
     }
 
     if (mode === 'llm') {
@@ -264,7 +298,6 @@ export async function POST(req: NextRequest) {
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       if (mode === 'ranked') {
-        // Fetch ranked keywords across all 6 markets in parallel
         const markets = [2840, 2418, 2826, 2276, 2250, 2036];
         const marketJsons = await Promise.all(markets.map(locCode =>
           fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/ranked_keywords/live', {
@@ -326,9 +359,7 @@ export async function POST(req: NextRequest) {
           }
         } catch {}
       }
-      if (!keyPages.length) {
-        keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
-      }
+      if (!keyPages.length) keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
         body:JSON.stringify(keyPages.slice(0,6).map(url=>({url,enable_javascript:false,load_resources:false}))),
@@ -344,8 +375,7 @@ export async function POST(req: NextRequest) {
         raw:item})),
       ).filter((r:any)=>r.url);
       await sb.rpc('fn_seo_upsert_instant_pages',{p_rows:JSON.stringify(rows)});
-      const report=rows.map((r:any)=>({url:r.url,has_schema:!r.issues.schema_missing,title:r.page_title,word_count:r.word_count,readability:r.readability}));
-      return NextResponse.json({ok:true,mode,result:{pages:rows.length,schema_report:report,note:'Schema missing on all pages — add Hotel JSON-LD to thenamkhan.com CMS'}});
+      return NextResponse.json({ok:true,mode,result:{pages:rows.length,note:'Schema audit done — refresh AI Intel tab → Schema & Fixes'}});
     }
 
     if (mode === 'instant') {
@@ -386,7 +416,7 @@ export async function POST(req: NextRequest) {
         await sb.rpc('fn_seo_upsert_ai_intel',{p_property_id:propertyId,p_type:type,p_keyword:kw,p_rows:JSON.stringify(rows)});
         allRows.push(...rows.map((r:any)=>({...r,keyword:kw})));
       }
-      return NextResponse.json({ok:true,mode,result:{rows:allRows.length,note:`Top AI-cited ${mode==='ai-domains'?'domains':'pages'} for 3 hotel keywords`}});
+      return NextResponse.json({ok:true,mode,result:{rows:allRows.length}});
     }
 
     if (mode === 'ai-query') {
