@@ -737,10 +737,22 @@ export default async function MarketingSeoPage({
 
       {tab==='ai-web' && (
         <div style={{ gridColumn:'1/-1' }}>
-          <div style={{ display:'flex', gap:16, marginBottom:16, alignItems:'center' }}>
-            <span style={{ fontSize:14, fontWeight:700, color:INK }}>AI Web Presence Audit</span>
-            <SeoTriggerBtn mode="schema-sweep" label="🔍 Run AI Web Sweep" description="Crawls key pages · checks schema · takes ~15s" />
-            <SeoTriggerBtn mode="llm" label="🔄 Refresh LLM data" variant="secondary" />
+          {/* AI Intel sub-tab navigation */}
+          <div style={{display:'flex',gap:0,borderBottom:'2px solid '+HAIR,marginBottom:16}}>
+            {([{key:'visibility',label:'AI Visibility'},{key:'intel',label:'Competitor Intel'},{key:'chat',label:'LLM Responses'},{key:'schema',label:'Schema & Fixes'}] as const).map(s=>(
+              <a key={s.key} href={'?tab=ai-web&sub='+s.key} style={{
+                padding:'7px 16px',fontSize:12,fontWeight:600,textDecoration:'none',
+                color:aiSub===s.key?GREEN:INK_M,
+                borderBottom:aiSub===s.key?'2px solid '+GREEN:'2px solid transparent',
+                marginBottom:-2,whiteSpace:'nowrap' as const,
+              }}>{s.label}</a>
+            ))}
+            <span style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6,paddingBottom:6}}>
+              {aiSub==='visibility'&&<SeoTriggerBtn mode="llm" label="↻ Refresh" variant="secondary" />}
+              {aiSub==='intel'&&<SeoTriggerBtn mode="ai-domains" label="🏢 Update intel" variant="secondary" />}
+              {aiSub==='chat'&&<SeoTriggerBtn mode="ai-query" label="💬 Ask ChatGPT" />}
+              {aiSub==='schema'&&<SeoTriggerBtn mode="schema-sweep" label="🔍 Run audit" variant="secondary" />}
+            </span>
           </div>
 
           {/* Schema Health */}
