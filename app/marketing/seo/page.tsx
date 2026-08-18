@@ -55,7 +55,7 @@ export default async function MarketingSeoPage({
   let rankQuery = sb.from('v_seo_rankings').select('*');
   if (locCode) rankQuery = rankQuery.eq('location_name', MARKETS.find(m=>m.loc===locCode)?.label ?? '');
 
-  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*'),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
@@ -66,6 +66,7 @@ export default async function MarketingSeoPage({
     tab === 'technical' ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', 260955).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
     tab === 'ai-visibility' ? sb.from('v_seo_llm_questions').select('keyword,llm,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'hotel' ? sb.from('v_seo_hotel_searches').select('position,hotel_title,stars,price_usd,rating_value,votes_count,search_keyword,is_our_property').eq('property_id', 260955).order('snapshot_date', { ascending: false }).order('position').limit(20) : Promise.resolve({ data: [] }),
+    tab === 'ai-web' ? sb.from('v_seo_llm_mentions').select('keyword,llm,snippet,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(30) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -82,6 +83,7 @@ export default async function MarketingSeoPage({
   type PageKw={url:string;keyword:string;position:number|null;volume:number|null;search_intent:string|null};
   const pagesRows=(pagesRes.data??[]) as PageKw[];
   const questionsRows=(questionsRes.data??[]) as Array<{keyword:string;llm:string;mention_date:string}>;
+  const mentionsRows=(mentionsRes.data??[]) as Array<{keyword:string;llm:string;snippet:string|null;mention_date:string}>;
   const hotelRows=(hotelRes.data??[]) as Array<{position:number;hotel_title:string;stars:number|null;price_usd:number|null;rating_value:number|null;votes_count:number|null;search_keyword:string;is_our_property:boolean}>;
   type InstantPage={url:string;page_title:string|null;title_length:number|null;h1:string|null;h2s:string[]|null;word_count:number|null;readability:number|null;issues:Record<string,boolean>|null;crawl_date:string|null};
   const instantPages=(instantRes.data??[]) as InstantPage[];
@@ -103,7 +105,7 @@ export default async function MarketingSeoPage({
   const SEO_TABS = [
     { key:'overview',   label:'Overview'   },{ key:'rankings',   label:'Rankings'   },
     { key:'keywords',   label:'Keywords'   },{ key:'competitors',label:'Competitors' },
-    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'ai-visibility', label:'AI Visibility' },{ key:'pages', label:'Pages' },{ key:'hotel', label:'Hotel Data' },
+    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'ai-visibility', label:'AI Visibility' },{ key:'pages', label:'Pages' },{ key:'hotel', label:'Hotel Data' },{ key:'ai-web', label:'AI Web' },
   ];
 
   const btnSt: React.CSSProperties = { padding:'3px 10px', fontSize:11, border:`1px solid ${HAIR}`, borderRadius:3, background:'#FAFAF7', cursor:'pointer', textDecoration:'none', color:INK_M, whiteSpace:'nowrap' };
@@ -483,6 +485,91 @@ export default async function MarketingSeoPage({
               ):(<span>Note: Google Hotels does not index Luang Prabang boutique hotels. Click <strong>Refresh hotel data</strong> to load competitive eco-resort data from global market.</span>)}
             </div>
           </Container>
+        </div>
+      )}
+
+      {tab==='ai-web' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          <div style={{ display:'flex', gap:16, marginBottom:16, alignItems:'center' }}>
+            <span style={{ fontSize:14, fontWeight:700, color:INK }}>AI Web Presence Audit</span>
+            <SeoTriggerBtn mode="schema-sweep" label="🔍 Run AI Web Sweep" description="Crawls key pages · checks schema · takes ~15s" />
+            <SeoTriggerBtn mode="llm" label="🔄 Refresh LLM data" variant="secondary" />
+          </div>
+
+          {/* Schema Health */}
+          <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>Schema Markup Health (structured data for AI/Google)</div>
+            {instantPages.length===0?(
+              <div style={{ fontSize:12, color:INK_M }}>Click <strong>Run AI Web Sweep</strong> to check schema on all key pages.</div>
+            ):(
+              <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
+                <thead><tr style={{ borderBottom:`2px solid ${HAIR}` }}>
+                  {['Page','Schema','Title len','Words','Readability','Issues'].map(h=><th key={h} style={{ padding:'6px 8px', textAlign:'left' as const, fontSize:10, fontFamily:'ui-monospace,monospace', textTransform:'uppercase' as const, color:INK_F }}>{h}</th>)}
+                </tr></thead>
+                <tbody>{instantPages.map((p,i)=>(
+                  <tr key={i} style={{ borderBottom:`1px solid ${HAIR}` }}>
+                    <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' as const }}><a href={p.url} target="_blank" rel="noopener noreferrer" style={{ color:GREEN, textDecoration:'none' }}>{p.url.replace(/^https?:\/\/[^/]+/,'')}</a></td>
+                    <td style={{ padding:'7px 8px' }}><span style={{ fontSize:10, padding:'2px 8px', borderRadius:99, background:p.issues?.schema_missing?'#FEE2E2':'#E6F4EA', color:p.issues?.schema_missing?RED:GREEN, fontWeight:600 }}>{p.issues?.schema_missing?'❌ MISSING':'✅ Present'}</span></td>
+                    <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:p.title_length&&p.title_length>60?RED:GREEN }}>{p.title_length}ch</td>
+                    <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11 }}>{p.word_count}</td>
+                    <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11, color:p.readability&&p.readability>=60?GREEN:p.readability&&p.readability>=45?AMBER:RED }}>{p.readability?.toFixed(1)}</td>
+                    <td style={{ padding:'7px 8px', fontSize:10 }}>{Object.entries(p.issues??{}).filter(([,v])=>v&&v!==false).map(([k])=><span key={k} style={{ marginRight:3, padding:'1px 5px', borderRadius:99, background:'#FEF3C7', color:AMBER }}>{k.replace(/_/g,' ')}</span>)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+            <div style={{ marginTop:12, padding:'10px 14px', background:'#FFF8E1', border:`1px solid ${AMBER}`, borderRadius:5, fontSize:11, color:'#5A5A5A' }}>
+              <strong>Fix required:</strong> Add <code>@type: Hotel</code> JSON-LD schema to thenamkhan.com homepage and <code>@type: Product</code> + <code>Offer</code> to each retreat page. Without this, Google AI cannot classify the site as a bookable hotel and won't surface it for commercial queries like "wellness retreat laos" or "eco lodge luang prabang".
+            </div>
+          </div>
+
+          {/* What AI says about Namkhan */}
+          <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>What AI says about thenamkhan.com — top 30 triggers</div>
+            {mentionsRows.length===0?(
+              <div style={{ fontSize:12, color:INK_M }}>Click <strong>Refresh LLM data</strong> to fetch AI mention details.</div>
+            ):(
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                {mentionsRows.map((m,i)=>(
+                  <div key={i} style={{ border:`1px solid ${HAIR}`, borderRadius:5, padding:'10px 14px' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                      <span style={{ fontSize:12, fontWeight:600, color:INK, fontStyle:'italic' }}>{m.keyword}</span>
+                      <span style={{ fontSize:10, padding:'1px 6px', borderRadius:99, background:'#E8F0FE', color:'#1A56DB' }}>{m.llm}</span>
+                      <span style={{ fontSize:10, color:INK_F, marginLeft:'auto' }}>{m.mention_date}</span>
+                    </div>
+                    {m.snippet&&<div style={{ fontSize:11, color:INK_M, lineHeight:1.5, fontStyle:'italic' }}>"{m.snippet.replace(/!\[.*?\]\(.*?\)\n?/g,'').slice(0,200)}..."</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Schema to implement */}
+          <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px' }}>
+            <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:8 }}>Schema to implement on thenamkhan.com (copy to CMS &lt;head&gt;)</div>
+            <pre style={{ background:'#1B1B1B', color:'#E6DFCC', padding:'14px 16px', borderRadius:6, fontSize:10, lineHeight:1.6, overflow:'auto', whiteSpace:'pre' as const }}>{`<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Hotel",
+  "name": "The Namkhan",
+  "alternateName": "The Namkhan, A Small Luxury Hotel of the World",
+  "url": "https://www.thenamkhan.com",
+  "description": "5-star eco-luxury wellness retreat on the Nam Khan River, Luang Prabang, Laos. Member of Small Luxury Hotels of the World.",
+  "starRating": { "@type": "Rating", "ratingValue": "5" },
+  "priceRange": "$$$$",
+  "address": { "@type": "PostalAddress", "addressLocality": "Luang Prabang", "addressCountry": "LA" },
+  "checkInTime": "14:00", "checkOutTime": "12:00",
+  "amenityFeature": [
+    {"@type":"LocationFeatureSpecification","name":"Pool","value":true},
+    {"@type":"LocationFeatureSpecification","name":"Spa","value":true},
+    {"@type":"LocationFeatureSpecification","name":"Restaurant","value":true},
+    {"@type":"LocationFeatureSpecification","name":"Organic Farm","value":true},
+    {"@type":"LocationFeatureSpecification","name":"Wellness Retreats","value":true}
+  ],
+  "brand": {"@type":"Brand","name":"Small Luxury Hotels of the World"}
+}
+</script>`}</pre>
+          </div>
         </div>
       )}
 
