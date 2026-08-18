@@ -135,7 +135,9 @@ export async function POST(req: NextRequest) {
           if (kw && !suggestions.includes(kw)) suggestions.push(kw);
         }
       }
-      return NextResponse.json({ok: true, mode, result: { suggestions: suggestions.slice(0,30), count: suggestions.length, note: 'Related keywords — add via + Add keyword button in Keywords tab' }});
+      const resRows=suggestions.slice(0,30).map((kw:string)=>({seed_keyword:seeds[0]?.keyword??'',keyword:kw,monthly_searches:null,keyword_difficulty:null,cpc_usd:null,competition:null,location_code:2840}));
+      if(resRows.length>0) await sb.rpc('fn_seo_upsert_keyword_suggestions',{p_property_id:propertyId,p_rows:JSON.stringify(resRows)}).then(r=>r,()=>null);
+      return NextResponse.json({ok:true,mode,result:{suggestions:suggestions.slice(0,30),stored:resRows.length,note:'Stored — see Research tab at ?tab=research'}});
     }
 
     if (mode === 'local') {

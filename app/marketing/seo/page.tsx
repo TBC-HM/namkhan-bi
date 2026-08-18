@@ -54,7 +54,7 @@ export default async function MarketingSeoPage({
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
-  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes] = await Promise.all([
+  const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes, researchRes, blSumRes, blRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*').eq('property_id',260955),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
@@ -69,6 +69,9 @@ export default async function MarketingSeoPage({
     tab === 'ai-web' ? sb.from('v_seo_ai_intel').select('intel_type,target_keyword,item_name,mentions,ai_search_volume').eq('property_id',260955).order('mentions',{ascending:false}).limit(30) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,fetched_at').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(6) : Promise.resolve({ data: [] }),
     tab === 'competitors' ? sb.from('v_seo_competitors').select('id,domain,label,active').eq('property_id',260955).order('active',{ascending:false}) : Promise.resolve({ data: [] }),
+    tab === 'research' ? sb.from('v_seo_keyword_suggestions').select('*').eq('property_id',260955).order('monthly_searches',{ascending:false}).limit(200) : Promise.resolve({ data: [] }),
+    tab === 'backlinks' ? sb.from('v_seo_backlinks_summary').select('*').eq('property_id',260955).order('fetched_at',{ascending:false}).limit(1).maybeSingle() : Promise.resolve({ data: null }),
+    tab === 'backlinks' ? sb.from('v_seo_backlinks').select('*').eq('property_id',260955).order('rank',{ascending:false}).limit(50) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -90,6 +93,12 @@ export default async function MarketingSeoPage({
   type LlmRespRow={prompt:string;response_text:string|null;our_domain_mentioned:boolean;platform:string;fetched_at:string};
   type CompRow={id:number;domain:string;label:string;active:boolean};
   const competitorRows=(competitorRes.data??[]) as CompRow[];
+  type ResRow={id:string;seed_keyword:string;keyword:string;monthly_searches:number|null;keyword_difficulty:number|null;cpc_usd:number|null;competition:number|null;location_code:number};
+  const researchRows=(researchRes.data??[]) as ResRow[];
+  type BlSumRow={total_backlinks:number;referring_domains:number;authority_score:number;dofollow_links:number;nofollow_links:number;fetched_at:string};
+  const blSum=blSumRes.data as BlSumRow|null;
+  type BlRow={url_from:string;domain_from:string;anchor:string|null;is_dofollow:boolean;rank:number|null;domain_from_rank:number|null;first_seen:string|null};
+  const blRows=(blRes.data??[]) as BlRow[];
   const aiIntelRows=(aiIntelRes.data??[]) as AiIntelRow[];
   const llmRespRows=(llmRespRes.data??[]) as LlmRespRow[];
   const domainIntel=aiIntelRows.filter(r=>r.intel_type==='domain');
@@ -115,7 +124,7 @@ export default async function MarketingSeoPage({
   const SEO_TABS = [
     { key:'overview',   label:'Overview'   },{ key:'rankings',   label:'Rankings'   },
     { key:'keywords',   label:'Keywords'   },{ key:'competitors',label:'Competitors' },
-    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'pages', label:'Pages' },{ key:'hotel', label:'Hotel Data' },{ key:'ai-web', label:'AI Intel' },
+    { key:'local',      label:'Local Pack' },{ key:'technical',  label:'Technical'  },{ key:'pages', label:'Pages' },{ key:'research', label:'Research' },{ key:'backlinks', label:'Backlinks' },{ key:'hotel', label:'Hotel Data' },{ key:'ai-web', label:'AI Intel' },
   ];
 
   const btnSt: React.CSSProperties = { padding:'3px 10px', fontSize:11, border:`1px solid ${HAIR}`, borderRadius:3, background:'#FAFAF7', cursor:'pointer', textDecoration:'none', color:INK_M, whiteSpace:'nowrap' };
@@ -581,7 +590,126 @@ export default async function MarketingSeoPage({
         </div>
       )}
 
+
+      {tab==='research' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          <Container title="Keyword Research" subtitle="Longtail keyword ideas — save to tracking for blog + web team"
+            action={
+              <div style={{display:'flex',gap:8}}>
+                <SeoTriggerBtn mode="suggestions" label="🔍 Research keywords" description="Finds related longtails from top 3 tracked keywords" />
+                <SeoTriggerBtn mode="volume" label="📊 Add volume data" variant="secondary" />
+              </div>
+            }>
+            {researchRows.length===0 ? (
+              <div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
+                No research data — click <strong>🔍 Research keywords</strong> to discover longtail opportunities.
+              </div>
+            ) : (
+              <div>
+                <div style={{marginBottom:8,fontSize:11,color:INK_M}}>
+                  {researchRows.length} keyword ideas found · Click <strong>Add to tracking</strong> to include in SERP monitoring
+                </div>
+                <div style={{overflowX:'auto' as const}}>
+                  <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
+                    <thead><tr style={{borderBottom:`2px solid ${HAIR}`}}>
+                      {['Keyword','Seed','Vol/mo','Difficulty','CPC','Comp.',''].map(h=>(
+                        <th key={h} style={{padding:'6px 8px',textAlign:'left' as const,fontSize:10,fontFamily:'ui-monospace,monospace',letterSpacing:'0.1em',textTransform:'uppercase' as const,color:INK_F,fontWeight:600}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {researchRows.map((r,i)=>{
+                        const kd=r.keyword_difficulty; const kdc=kd===null?INK_F:kd<=30?GREEN:kd<=60?AMBER:RED;
+                        return (
+                          <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                            <td style={{padding:'7px 8px',color:INK,fontStyle:'italic'}}>{r.keyword}</td>
+                            <td style={{padding:'7px 8px',color:INK_F,fontSize:10}}>{r.seed_keyword}</td>
+                            <td style={{padding:'7px 8px',fontFamily:'ui-monospace,monospace',fontSize:11}}>{r.monthly_searches!=null?r.monthly_searches.toLocaleString():'—'}</td>
+                            <td style={{padding:'7px 8px'}}>{kd!=null?<span style={{color:kdc,fontSize:11,fontFamily:'ui-monospace,monospace',fontWeight:600}}>{kd}% {kd<=30?'Easy':kd<=60?'Med':'Hard'}</span>:<span style={{color:INK_F,fontSize:11}}>—</span>}</td>
+                            <td style={{padding:'7px 8px',color:INK_F,fontFamily:'ui-monospace,monospace',fontSize:11}}>{r.cpc_usd!=null?'$'+Number(r.cpc_usd).toFixed(2):'—'}</td>
+                            <td style={{padding:'7px 8px',color:INK_F,fontSize:11}}>{r.competition!=null?(r.competition*100).toFixed(0)+'%':'—'}</td>
+                            <td style={{padding:'7px 8px'}}>
+                              <a href={`/marketing/seo?tab=keywords`} style={{fontSize:10,padding:'2px 8px',border:`1px solid ${GREEN}`,borderRadius:3,color:GREEN,textDecoration:'none',whiteSpace:'nowrap' as const}}>+ Add</a>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{marginTop:10,fontSize:11,color:INK_M,padding:'8px 12px',background:'#F4EFE2',borderRadius:5}}>
+                  💡 Sort by difficulty ≤30 (Easy) + volume &gt;100 for quick-win blog topics. Save to Keywords tab, then post SERP tasks to track rankings.
+                </div>
+              </div>
+            )}
+          </Container>
+        </div>
+      )}
+
+      {/* Backlinks tab */}
+      {tab==='backlinks' && (
+        <div style={{ gridColumn:'1/-1' }}>
+          <Container title="Backlinks · Link profile" subtitle="thenamkhan.com · referring domains, authority, anchor distribution"
+            action={
+              <div style={{display:'flex',gap:8}}>
+                <SeoTriggerBtn mode="backlinks" label="↻ Refresh backlinks" description="DataForSEO Backlinks API · top 50" />
+              </div>
+            }>
+            {!blSum ? (
+              <div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
+                No backlink data — click <strong>↻ Refresh backlinks</strong> to fetch link profile.
+              </div>
+            ) : (
+              <div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:20}}>
+                  {[
+                    {l:'Authority Score',v:String(blSum.authority_score??'—'),col:blSum.authority_score>=30?GREEN:blSum.authority_score>=15?AMBER:RED},
+                    {l:'Total Backlinks',v:(blSum.total_backlinks??0).toLocaleString(),col:INK},
+                    {l:'Referring Domains',v:(blSum.referring_domains??0).toLocaleString(),col:INK},
+                    {l:'DoFollow Links',v:blSum.total_backlinks>0?((blSum.dofollow_links/blSum.total_backlinks)*100).toFixed(0)+'%':'—',col:GREEN},
+                  ].map((k,i)=>(
+                    <div key={i} style={{border:`1px solid ${HAIR}`,borderRadius:6,padding:'12px 14px',background:'#FFFFFF'}}>
+                      <div style={{fontSize:22,fontWeight:700,color:k.col}}>{k.v}</div>
+                      <div style={{fontSize:10,color:INK_F,marginTop:2,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>{k.l}</div>
+                    </div>
+                  ))}
+                </div>
+                {blRows.length>0&&(
+                  <div>
+                    <div style={{fontSize:11,fontWeight:600,color:INK,marginBottom:8}}>Top backlinks by domain rank</div>
+                    <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
+                      <thead><tr style={{borderBottom:`2px solid ${HAIR}`}}>
+                        {['Source domain','Anchor','Page','DoFollow','Domain rank','First seen'].map(h=>(
+                          <th key={h} style={{padding:'5px 8px',textAlign:'left' as const,fontSize:10,color:INK_F,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>{h}</th>
+                        ))}
+                      </tr></thead>
+                      <tbody>
+                        {blRows.map((r,i)=>(
+                          <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
+                            <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:GREEN}}>{r.domain_from}</td>
+                            <td style={{padding:'5px 8px',color:INK,fontStyle:'italic',maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{r.anchor??'—'}</td>
+                            <td style={{padding:'5px 8px',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}><a href={r.url_from} target="_blank" rel="noopener noreferrer" style={{color:INK_M,fontSize:10,textDecoration:'none'}}>{r.url_from?.replace(/^https?:\/\//,'').slice(0,40)}</a></td>
+                            <td style={{padding:'5px 8px'}}><span style={{fontSize:10,padding:'1px 6px',borderRadius:99,background:r.is_dofollow?'#E6F4EA':'#FEE2E2',color:r.is_dofollow?GREEN:'#B03826',fontWeight:600}}>{r.is_dofollow?'DoFollow':'NoFollow'}</span></td>
+                            <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:INK_F}}>{r.domain_from_rank??'—'}</td>
+                            <td style={{padding:'5px 8px',color:INK_F,fontSize:11}}>{r.first_seen?.slice(0,10)??'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div style={{marginTop:12,padding:'10px 14px',background:'#F4EFE2',borderRadius:5,fontSize:11,color:INK_M,display:'flex',gap:16,flexWrap:'wrap' as const,alignItems:'center'}}>
+                      <strong style={{color:INK}}>CTA options:</strong>
+                      <a href={`mailto:?subject=Backlink+Outreach+—+thenamkhan.com&body=Hi,%0A%0AWe+noticed+you+link+to+similar+eco+lodges+in+Southeast+Asia.+We+would+love+to+be+featured+in+your+content+too.%0A%0AThe+Namkhan+is+an+award-winning+eco-luxury+hotel+in+Luang+Prabang,+Laos.%0A%0Ahttps://www.thenamkhan.com%0A%0ABest+regards`} style={{fontSize:11,padding:'4px 10px',border:`1px solid ${GREEN}`,borderRadius:4,color:GREEN,textDecoration:'none'}}>📧 Outreach template</a>
+                      <span style={{fontSize:11,color:INK_F}}>Last updated: {blSum.fetched_at?.slice(0,10)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Container>
+        </div>
+      )}
+
       {tab==='hotel' && (
+
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Hotel Data · Google Hotels" subtitle="Competitive positioning + pricing in Google Hotels results"
             action={<SeoTriggerBtn mode="hotel" label="🏨 Refresh hotel data" description="business_data/google/hotel_searches · live" />}>
