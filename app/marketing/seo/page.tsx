@@ -130,8 +130,8 @@ export default async function MarketingSeoPage({
         ))}
       </div>
 
-      {/* Market filter */}
-      <div style={{ gridColumn:'1/-1', display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' as const }}>
+      {/* Market filter — only on tabs where it's relevant */}
+      {['overview','rankings','keywords'].includes(tab) && <div style={{ gridColumn:'1/-1', display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' as const }}>
         <span style={{ fontSize:10, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.1em', textTransform:'uppercase' as const }}>Market</span>
         {MARKETS.map(m=>(
           <a key={m.code} href={`?tab=${tab}&loc=${m.code}`} style={locFilter===m.code?btnActiveSt:btnSt}>
