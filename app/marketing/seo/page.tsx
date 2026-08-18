@@ -322,13 +322,7 @@ export default async function MarketingSeoPage({
                   <div style={{fontSize:10,color:INK_F,marginTop:4}}>+ {competitorRows.filter(c=>!c.active).length} inactive: {competitorRows.filter(c=>!c.active).map(c=>c.domain).join(', ')}</div>
                 )}
               </div>
-              <div style={{ padding:'24px 16px', background:'#F9F6F0', borderRadius:6, marginBottom:20 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:6 }}>API endpoint ready · DataForSEO Labs plan needed</div>
-                <div style={{ fontSize:12, color:INK_M, lineHeight:1.6 }}>
-                  Endpoint: <code style={{ fontFamily:'ui-monospace,monospace', fontSize:11 }}>/dataforseo_labs/google/competitors_domain/live</code><br/>
-                  Will show: which keywords competitors rank for that we miss · overlap score · quick-win opportunities (position 4–10, high volume)
-                </div>
-              </div>
+
               <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:8 }}>Keywords we don&apos;t rank for yet (current gap)</div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 {rankings.filter(r=>r.position===null).slice(0,10).map(r=>(
