@@ -6,6 +6,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import SeoTriggerBtn from '@/components/seo/SeoTriggerBtn';
 import RankingsTable, { type RankRow as RankRowFull, type HistoryRow, type MarketRow } from '@/components/seo/RankingsTable';
+import SeoKeywordsManager from '@/components/seo/SeoKeywordsManager';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -52,18 +53,15 @@ export default async function MarketingSeoPage({
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
-  let rankQuery = sb.from('v_seo_rankings').select('*');
-  if (locCode) rankQuery = rankQuery.eq('location_name', MARKETS.find(m=>m.loc===locCode)?.label ?? '');
-
   const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes] = await Promise.all([
-    sb.from('v_seo_rankings').select('*'),
+    sb.from('v_seo_rankings').select('*').eq('property_id',260955),
     tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_market_comparison').select('*') : Promise.resolve({ data: [] }),
     tab === 'technical' ? sb.from('v_seo_onpage').select('*').order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
     tab === 'ai-visibility' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', 260955).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
     tab === 'pages' ? sb.from('v_seo_ranked_pages').select('url,keyword,position,volume,search_intent').eq('property_id', 260955).order('position', { ascending: true }).limit(500) : Promise.resolve({ data: [] }),
-    tab === 'technical' ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', 260955).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
+    (tab === 'technical' || tab === 'ai-web') ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', 260955).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
     tab === 'ai-visibility' ? sb.from('v_seo_llm_questions').select('keyword,llm,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'hotel' ? sb.from('v_seo_hotel_searches').select('position,hotel_title,stars,price_usd,rating_value,votes_count,search_keyword,is_our_property').eq('property_id', 260955).order('snapshot_date', { ascending: false }).order('position').limit(20) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_mentions').select('keyword,llm,snippet,mention_date').eq('property_id', 260955).order('id', { ascending: false }).limit(30) : Promise.resolve({ data: [] }),
@@ -221,34 +219,7 @@ export default async function MarketingSeoPage({
                 <SeoTriggerBtn mode="suggestions" label="💡 Get suggestions" variant="secondary" />
               </div>
             }>
-            <div style={{ marginBottom:12, fontSize:11, color:INK_M }}>
-              Volume data note: Laos keywords have very low/no Google Ads data — volume shows as — for niche markets. International keywords (DE/UK/US) will have volume data.
-            </div>
-            <div style={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-                <thead><tr style={{ borderBottom:`2px solid ${HAIR}` }}>
-                  {['Keyword','Market','Volume/mo','Difficulty','CPC','Position'].map(h=>(
-                    <th key={h} style={{ padding:'6px 8px', textAlign:'left', fontSize:10, fontFamily:'ui-monospace,monospace', letterSpacing:'0.1em', textTransform:'uppercase' as const, color:INK_F, fontWeight:600 }}>{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {rankings.map(r=>{
-                    const kd=r.keyword_difficulty; const kdc=kd===null?INK_F:kd<=30?GREEN:kd<=60?AMBER:RED;
-                    const kdLabel=kd===null?'—':kd<=30?'Easy':kd<=60?'Medium':'Hard';
-                    return (
-                      <tr key={r.keyword_id} style={{ borderBottom:`1px solid ${HAIR}` }}>
-                        <td style={{ padding:'7px 8px', color:INK, fontStyle:'italic' }}>{r.keyword}</td>
-                        <td style={{ padding:'7px 8px', color:INK_F, fontSize:11, whiteSpace:'nowrap' as const }}>{r.location_name}</td>
-                        <td style={{ padding:'7px 8px', fontFamily:'ui-monospace,monospace', fontSize:11 }}>{r.monthly_searches!=null?r.monthly_searches.toLocaleString():'—'}</td>
-                        <td style={{ padding:'7px 8px' }}>{kd!=null?<span style={{ color:kdc, fontSize:11, fontFamily:'ui-monospace,monospace', fontWeight:600 }}>{kd}% · {kdLabel}</span>:<span style={{ color:INK_F, fontSize:11 }}>—</span>}</td>
-                        <td style={{ padding:'7px 8px', color:INK_F, fontFamily:'ui-monospace,monospace', fontSize:11 }}>{r.cpc_usd!=null?`$${Number(r.cpc_usd).toFixed(2)}`:'—'}</td>
-                        <td style={{ padding:'7px 8px' }}><span style={{ fontSize:10, fontFamily:'ui-monospace,monospace', color:r.position!=null?GREEN:INK_F, border:'1px solid', borderColor:r.position!=null?GREEN:HAIR, padding:'2px 6px', borderRadius:3 }}>{r.position!=null?`#${r.position}`:'not ranked'}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+<SeoKeywordsManager initialKeywords={rankings as any} propertyId={260955} />
           </Container>
         </div>
       )}
