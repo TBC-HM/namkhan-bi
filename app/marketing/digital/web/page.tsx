@@ -2,6 +2,7 @@
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import AnalyticsPullBtn from '@/components/analytics/AnalyticsPullBtn';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,17 @@ function fmt(n: number, dec = 0): string {
 function posColor(p: number) {
   return p <= 3 ? '#16A34A' : p <= 10 ? INK : '#DC2626';
 }
+
+const GA4_REQUESTS = [
+  { endpoint: '/api/marketing/analytics/ga4', body: { mode: 'report', report_type: 'overview', date_range: '30d' } },
+  { endpoint: '/api/marketing/analytics/ga4', body: { mode: 'report', report_type: 'pages',    date_range: '30d' } },
+  { endpoint: '/api/marketing/analytics/ga4', body: { mode: 'report', report_type: 'sources',  date_range: '30d' } },
+];
+
+const GSC_REQUESTS = [
+  { endpoint: '/api/marketing/analytics/gsc', body: { mode: 'queries', date_range: '30d' } },
+  { endpoint: '/api/marketing/analytics/gsc', body: { mode: 'pages',   date_range: '30d' } },
+];
 
 export default async function DigitalWebPage() {
   const cfg = DEPT_CFG.marketing;
@@ -71,17 +83,20 @@ export default async function DigitalWebPage() {
 
         {/* ── GA4 ── */}
         <section>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, paddingBottom: 8, borderBottom: `1px solid ${HAIR}`, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 8, borderBottom: '1px solid '+HAIR, marginBottom: 16 }}>
             <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK }}>GA4 Analytics</span>
             {ovRes.data?.date_range && <span style={{ fontSize: 11, color: INK_S }}>Last {ovRes.data.date_range}</span>}
-            {ovRes.data?.fetched_at && <span style={{ fontSize: 10, color: INK_S, marginLeft: 'auto' }}>Updated {new Date(ovRes.data.fetched_at as string).toLocaleDateString()}</span>}
+            {ovRes.data?.fetched_at && <span style={{ fontSize: 10, color: INK_S }}>{new Date(ovRes.data.fetched_at as string).toISOString().slice(0,10)}</span>}
+            <span style={{ marginLeft: 'auto' }}>
+              <AnalyticsPullBtn requests={GA4_REQUESTS} label="↻ Pull GA4 data" variant="secondary" />
+            </span>
           </div>
 
           {kpis.length > 0 ? (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 8, marginBottom: 24 }}>
                 {kpis.map(k => (
-                  <div key={k.label} style={{ border: `1px solid ${HAIR}`, borderRadius: 6, padding: '12px 14px', background: '#FFFFFF' }}>
+                  <div key={k.label} style={{ border: '1px solid '+HAIR, borderRadius: 6, padding: '12px 14px', background: '#FFFFFF' }}>
                     <div style={{ fontSize: 20, fontWeight: 700, color: INK }}>{k.value}</div>
                     <div style={{ fontSize: 10, color: INK_S, marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</div>
                   </div>
@@ -92,10 +107,10 @@ export default async function DigitalWebPage() {
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 10, fontWeight: 600, color: INK_S, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Top Pages</div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                    <thead><tr style={{ borderBottom: `1px solid ${HAIR}` }}>{[th('Page'), th('Sessions',true), th('Views',true), th('Engagement',true), th('Avg Duration',true)]}</tr></thead>
+                    <thead><tr style={{ borderBottom: '1px solid '+HAIR }}>{[th('Page'), th('Sessions',true), th('Views',true), th('Engagement',true), th('Avg Duration',true)]}</tr></thead>
                     <tbody>
                       {pageRows.slice(0, 15).map((row, i) => (
-                        <tr key={i} style={{ borderBottom: `1px solid ${HAIR}` }}>
+                        <tr key={i} style={{ borderBottom: '1px solid '+HAIR }}>
                           <td style={{ padding: '5px 8px', color: INK, fontFamily: 'monospace', fontSize: 11 }}>{row.dimensionValues?.[0]?.value ?? '-'}</td>
                           <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{fmt(mv(row,0))}</td>
                           <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{fmt(mv(row,1))}</td>
@@ -112,10 +127,10 @@ export default async function DigitalWebPage() {
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 600, color: INK_S, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Traffic Sources</div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                    <thead><tr style={{ borderBottom: `1px solid ${HAIR}` }}>{[th('Source / Medium'), th('Sessions',true), th('New Users',true), th('Conversions',true)]}</tr></thead>
+                    <thead><tr style={{ borderBottom: '1px solid '+HAIR }}>{[th('Source / Medium'), th('Sessions',true), th('New Users',true), th('Conversions',true)]}</tr></thead>
                     <tbody>
                       {srcRows.slice(0, 10).map((row, i) => (
-                        <tr key={i} style={{ borderBottom: `1px solid ${HAIR}` }}>
+                        <tr key={i} style={{ borderBottom: '1px solid '+HAIR }}>
                           <td style={{ padding: '5px 8px', color: INK }}>{row.dimensionValues?.[0]?.value} / {row.dimensionValues?.[1]?.value}</td>
                           <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{fmt(mv(row,0))}</td>
                           <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{fmt(mv(row,1))}</td>
@@ -128,19 +143,22 @@ export default async function DigitalWebPage() {
               )}
             </>
           ) : (
-            <div style={{ padding: 24, textAlign: 'center', color: INK_S, fontSize: 12, border: `1px dashed ${HAIR}`, borderRadius: 6 }}>
-              No GA4 data yet — trigger a pull via{' '}
-              <code style={{ fontSize: 11 }}>POST /api/marketing/analytics/ga4 &#123;&ldquo;mode&rdquo;:&ldquo;report&rdquo;&#125;</code>
+            <div style={{ padding: 24, textAlign: 'center', color: INK_S, fontSize: 12, border: '1px dashed '+HAIR, borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <span>No GA4 data yet — click to pull the last 30 days</span>
+              <AnalyticsPullBtn requests={GA4_REQUESTS} label="↻ Pull GA4 data" />
             </div>
           )}
         </section>
 
         {/* ── Search Console ── */}
         <section>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, paddingBottom: 8, borderBottom: `1px solid ${HAIR}`, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 8, borderBottom: '1px solid '+HAIR, marginBottom: 16 }}>
             <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK }}>Search Console</span>
             {qRes.data?.date_range && <span style={{ fontSize: 11, color: INK_S }}>Last {qRes.data.date_range}</span>}
-            {qRes.data?.fetched_at && <span style={{ fontSize: 10, color: INK_S, marginLeft: 'auto' }}>Updated {new Date(qRes.data.fetched_at as string).toLocaleDateString()}</span>}
+            {qRes.data?.fetched_at && <span style={{ fontSize: 10, color: INK_S }}>{new Date(qRes.data.fetched_at as string).toISOString().slice(0,10)}</span>}
+            <span style={{ marginLeft: 'auto' }}>
+              <AnalyticsPullBtn requests={GSC_REQUESTS} label="↻ Pull GSC data" variant="secondary" />
+            </span>
           </div>
 
           {qRows.length > 0 ? (
@@ -148,31 +166,30 @@ export default async function DigitalWebPage() {
               <div>
                 <div style={{ fontSize: 10, fontWeight: 600, color: INK_S, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Top Queries</div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                  <thead><tr style={{ borderBottom: `1px solid ${HAIR}` }}>{[th('Query'), th('Clicks',true), th('Impr.',true), th('CTR',true), th('Pos.',true)]}</tr></thead>
+                  <thead><tr style={{ borderBottom: '1px solid '+HAIR }}>{[th('Query'), th('Clicks',true), th('Impr.',true), th('CTR',true), th('Pos.',true)]}</tr></thead>
                   <tbody>
                     {qRows.slice(0, 20).map((row, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${HAIR}` }}>
+                      <tr key={i} style={{ borderBottom: '1px solid '+HAIR }}>
                         <td style={{ padding: '5px 8px', color: INK }}>{row.keys?.[0] ?? '-'}</td>
                         <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{row.clicks ?? 0}</td>
                         <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{fmt(row.impressions ?? 0)}</td>
                         <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{((row.ctr ?? 0)*100).toFixed(1)}%</td>
                         <td style={{ padding: '5px 8px', textAlign: 'right', color: posColor(row.position ?? 99), fontWeight: (row.position ?? 99) <= 10 ? 600 : 400 }}>
-                          #{Math.round(row.position ?? 0)}
+                          {'#'+Math.round(row.position ?? 0)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-
               {gscPgRows.length > 0 && (
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 600, color: INK_S, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Top Pages (Search)</div>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                    <thead><tr style={{ borderBottom: `1px solid ${HAIR}` }}>{[th('Page'), th('Clicks',true), th('Impr.',true), th('CTR',true), th('Pos.',true)]}</tr></thead>
+                    <thead><tr style={{ borderBottom: '1px solid '+HAIR }}>{[th('Page'), th('Clicks',true), th('Impr.',true), th('CTR',true), th('Pos.',true)]}</tr></thead>
                     <tbody>
                       {gscPgRows.slice(0, 15).map((row, i) => (
-                        <tr key={i} style={{ borderBottom: `1px solid ${HAIR}` }}>
+                        <tr key={i} style={{ borderBottom: '1px solid '+HAIR }}>
                           <td style={{ padding: '5px 8px', color: INK, fontFamily: 'monospace', fontSize: 10 }}>
                             {(row.keys?.[0] ?? '/').replace('https://www.thenamkhan.com','')}
                           </td>
@@ -180,7 +197,7 @@ export default async function DigitalWebPage() {
                           <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{fmt(row.impressions ?? 0)}</td>
                           <td style={{ padding: '5px 8px', color: INK, textAlign: 'right' }}>{((row.ctr ?? 0)*100).toFixed(1)}%</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', color: posColor(row.position ?? 99), fontWeight: (row.position ?? 99) <= 10 ? 600 : 400 }}>
-                            #{Math.round(row.position ?? 0)}
+                            {'#'+Math.round(row.position ?? 0)}
                           </td>
                         </tr>
                       ))}
@@ -190,9 +207,9 @@ export default async function DigitalWebPage() {
               )}
             </div>
           ) : (
-            <div style={{ padding: 24, textAlign: 'center', color: INK_S, fontSize: 12, border: `1px dashed ${HAIR}`, borderRadius: 6 }}>
-              No Search Console data yet — add service account to GSC, then trigger{' '}
-              <code style={{ fontSize: 11 }}>POST /api/marketing/analytics/gsc</code>
+            <div style={{ padding: 24, textAlign: 'center', color: INK_S, fontSize: 12, border: '1px dashed '+HAIR, borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <span>No Search Console data yet — service account must be added to GSC first</span>
+              <AnalyticsPullBtn requests={GSC_REQUESTS} label="↻ Pull GSC data" />
             </div>
           )}
         </section>
