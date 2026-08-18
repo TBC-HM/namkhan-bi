@@ -354,7 +354,7 @@ export default async function MarketingSeoPage({
                   ))}
                 </div>
               )}
-              {instantPages.length===0&&onpageRows.length===0&&<div style={{padding:'16px 0',textAlign:'center' as const,color:INK_M,fontSize:13}}>Click <strong>Run On-Page Crawl</strong> above to start.</div>}
+
             </div>
           </Container>
         </div>
