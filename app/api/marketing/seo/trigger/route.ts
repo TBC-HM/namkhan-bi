@@ -139,11 +139,28 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === 'local') {
-      const { data: edgeData, error: edgeErr } = await sb.functions.invoke('fetch-serp-rankings', {
-        body: { action: mode, property_id: propertyId },
-      });
-      if (edgeErr) throw edgeErr;
-      return NextResponse.json({ ok: true, mode, result: edgeData ?? { upserted: 0 } });
+      const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds) throw new Error('dataforseo_creds_missing');
+      const localKws = ['boutique hotel luang prabang','hotel luang prabang','eco lodge luang prabang','luxury hotel luang prabang','the namkhan'];
+      const today = new Date().toISOString().slice(0,10);
+      const rows: any[] = [];
+      for (const kw of localKws) {
+        const res = await fetch('https://api.dataforseo.com/v3/serp/google/maps/live/regular', {
+          method: 'POST',
+          headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
+          body: JSON.stringify([{keyword: kw, location_code: 2418, language_code: 'en', depth: 10}]),
+        });
+        const json = await res.json() as Record<string,any>;
+        const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+        const ourIdx = items.findIndex((it:any) => (it.title ?? '').toLowerCase().includes('namkhan'));
+        rows.push({property_id: propertyId, keyword: kw, snapshot_date: today,
+          our_position: ourIdx >= 0 ? ourIdx + 1 : null,
+          result_count: items.length,
+          items: items.slice(0,5).map((it:any,i:number) => ({pos:i+1, title:it.title, rating:it.rating?.value ?? null}))});
+      }
+      await sb.rpc('fn_seo_upsert_local_pack', {p_rows: JSON.stringify(rows)});
+      const found = rows.filter(r => r.our_position !== null);
+      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, namkhan_found: found.length, note: found.length===0 ? 'Namkhan not found in Google Maps local pack for these keywords' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
     }
 
     if (mode === 'onpage') {
