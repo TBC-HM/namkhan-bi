@@ -57,14 +57,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === 'competitors') {
-      // Post competitor analysis tasks
-      const { data, error } = await sb.rpc('fn_d4s_competitors_weekly', { p_property_id: propertyId });
-      if (error) throw error;
-      return NextResponse.json({ 
-        ok: true, 
-        mode, 
-        result: { posted: data?.competitors_queued ?? 0 } 
+      // DataForSEO Labs — competitors_domain/live
+      const { data: creds3 } = await sb.rpc('fn_dataforseo_credentials');
+      if (!creds3) return NextResponse.json({ok:false,error:'dataforseo_creds_missing'},{status:500});
+      const compRes = await fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/competitors_domain/live', {
+        method:'POST', headers:{'Authorization':`Basic ${creds3}`,'Content-Type':'application/json'},
+        body: JSON.stringify([{target:'thenamkhan.com',location_code:2840,language_code:'en',limit:10,order_by:['intersections,desc']}]),
       });
+      const compJson = await compRes.json() as Record<string,any>;
+      const compItems = (compJson?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+      return NextResponse.json({ ok:true, mode, result: { competitors: compItems.length, top: compItems.slice(0,5).map((d:any)=>d.domain) } });
     }
 
     if (mode === 'fetch') {
