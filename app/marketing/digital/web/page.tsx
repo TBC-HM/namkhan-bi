@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import AnalyticsPullBtn from '@/components/analytics/AnalyticsPullBtn';
 import TrendChart from '@/components/analytics/TrendChart';
 import SourcesChart from '@/components/analytics/SourcesChart';
+import PositionDistChart from '@/components/analytics/PositionDistChart';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +86,12 @@ export default async function DigitalWebPage({searchParams}:{searchParams?:{tab?
 
   const SUBTABS=[{key:'analytics',label:'GA4 Analytics'},{key:'gsc',label:'Search Console'}];
 
+  const posDistData = [
+    { bucket: '1–3 (Top)',    count: qRows.filter(r => (r.position??99)<=3).length,             color: '#16A34A' },
+    { bucket: '4–10 (P.1)',  count: qRows.filter(r => (r.position??99)>3 && (r.position??99)<=10).length, color: '#084838' },
+    { bucket: '11–30',       count: qRows.filter(r => (r.position??99)>10 && (r.position??99)<=30).length, color: '#C28F2C' },
+    { bucket: '31+',         count: qRows.filter(r => (r.position??99)>30).length,              color: '#DC2626' },
+  ];
   return (
     <DashboardPage title="Marketing · Analytics" subtitle="thenamkhan.com — website performance" tabs={tabs}>
       <div style={{gridColumn:'1/-1',display:'flex',flexDirection:'column',gap:20}}>
