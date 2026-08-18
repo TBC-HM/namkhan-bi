@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
     pages: { dateRanges:[{startDate,endDate:'today'}], metrics:[{name:'sessions'},{name:'screenPageViews'},{name:'engagementRate'},{name:'averageSessionDuration'}], dimensions:[{name:'pagePath'}], orderBys:[{metric:{metricName:'screenPageViews'},desc:true}], limit:30 },
     sources: { dateRanges:[{startDate,endDate:'today'}], metrics:[{name:'sessions'},{name:'newUsers'},{name:'conversions'}], dimensions:[{name:'sessionSource'},{name:'sessionMedium'}], orderBys:[{metric:{metricName:'sessions'},desc:true}], limit:20 },
     overview: { dateRanges:[{startDate,endDate:'today'}], metrics:[{name:'sessions'},{name:'totalUsers'},{name:'newUsers'},{name:'screenPageViews'},{name:'engagementRate'},{name:'averageSessionDuration'},{name:'bounceRate'}] },
+    trend:    { dateRanges:[{startDate,endDate:'today'}], metrics:[{name:'sessions'},{name:'screenPageViews'}], dimensions:[{name:'date'}], orderBys:[{dimension:{dimensionName:'date'}}], limit:30 },
   };
 
   const config = reportConfigs[reportType] ?? reportConfigs.pages;
