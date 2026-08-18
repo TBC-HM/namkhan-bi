@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
           sb.from('v_seo_instant_pages').select('url').eq('property_id',propertyId),
           sb.from('v_seo_ranked_pages').select('url').eq('property_id',propertyId),
         ]);
-        keyPages=[...new Set([...((ipR.data??[]) as any[]).map((p:any)=>p.url),...((rpR.data??[]) as any[]).map((p:any)=>p.url)])].filter((u:string)=>u.includes(domain));
+        if(!keyPages.length) keyPages=[...new Set([...((ipR.data??[]) as any[]).map((p:any)=>p.url),...((rpR.data??[]) as any[]).map((p:any)=>p.url)])].filter((u:string)=>u.includes(domain));
       } catch {}
       for (const sitemap of [`https://www.${domain}/sitemap.xml`,`https://${domain}/sitemap.xml`]) {
         try {
@@ -295,7 +295,7 @@ export async function POST(req: NextRequest) {
           sb.from('v_seo_instant_pages').select('url').eq('property_id',propertyId),
           sb.from('v_seo_ranked_pages').select('url').eq('property_id',propertyId),
         ]);
-        keyPages=[...new Set([...((ipR.data??[]) as any[]).map((p:any)=>p.url),...((rpR.data??[]) as any[]).map((p:any)=>p.url)])].filter((u:string)=>u.includes(domain));
+        if(!keyPages.length) keyPages=[...new Set([...((ipR.data??[]) as any[]).map((p:any)=>p.url),...((rpR.data??[]) as any[]).map((p:any)=>p.url)])].filter((u:string)=>u.includes(domain));
       } catch {}
       for (const sitemap of [`https://www.${domain}/sitemap.xml`,`https://${domain}/sitemap.xml`]) {
         try {

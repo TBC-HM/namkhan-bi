@@ -319,7 +319,7 @@ export default async function MarketingSeoPage({
       {tab==='competitors' && (
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Competitor gap analysis" subtitle="Who ranks for keywords we don't · DataForSEO Domain Analytics"
-            action={<SeoTriggerBtn mode="post" label="▶ Fetch competitor data" description="Requires DataForSEO Labs plan upgrade" />}>
+            action={<SeoTriggerBtn mode="competitors" label="▶ Fetch competitor data" description="DataForSEO Labs · keyword overlap" />}>
             <div style={{ padding:'16px 0' }}>
               <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:12 }}>Tracked competitor domains</div>
               <div style={{ display:'flex', flexWrap:'wrap' as const, gap:8, marginBottom:24 }}>
