@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       // Discover pages: known from DB + sitemap + fallback
-      let keyPages: string[] = [];
+      let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
       try {
         const [ipR,rpR] = await Promise.all([
           sb.from('v_seo_instant_pages').select('url').eq('property_id',propertyId),
@@ -290,7 +290,7 @@ export async function POST(req: NextRequest) {
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       // Discover pages: known from DB + sitemap + fallback
-      let keyPages: string[] = [];
+      let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
       try {
         const [ipR,rpR] = await Promise.all([
           sb.from('v_seo_instant_pages').select('url').eq('property_id',propertyId),
