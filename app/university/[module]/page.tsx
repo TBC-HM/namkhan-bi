@@ -8,7 +8,6 @@
 
 import type { CSSProperties } from 'react';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import CentralChat from '@/components/chat/CentralChat';
 import Breadcrumbs from '../_components/Breadcrumbs';
 import { FALLBACK_MODULES, groupArticles, type ArticleMeta, type ModuleCard } from '../_lib/ia';
 import { INK, INK_SOFT, HAIR, GREEN, GOLD, WARM, SANS } from '../_lib/theme';
@@ -58,7 +57,7 @@ export default async function ModuleGuidePage({ params }: { params: { module: st
         )}
       </header>
 
-      <CentralChat mode="second-brain" moduleScope={moduleSlug} />
+      
 
       {loadError && (
         <div style={{ marginTop: 14, fontSize: 13, color: '#B03826' }}>Could not load articles: {loadError}</div>
