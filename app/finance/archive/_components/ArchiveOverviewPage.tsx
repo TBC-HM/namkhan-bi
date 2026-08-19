@@ -103,12 +103,7 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
 
   return (
     <DashboardPage title={title} subtitle={subtitle} tabs={tabs.length ? tabs : undefined}>
-      {/* Ask window — the document brain, NOT Felix (PBS 2026-08-06) */}
-      <div style={fullRow}>
-        <Container title="Ask the archive" subtitle="Cited answers from the company document brain · contracts · SOPs · certifications" density="compact">
-          
-        </Container>
-      </div>
+      {/* PBS 2026-08-19: Ask-archive window removed — brain access via floating panel only. */}
 
       {/* Stripe 1 · registry health */}
       <div style={fullRow}>
