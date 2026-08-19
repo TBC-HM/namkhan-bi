@@ -159,7 +159,9 @@ async function run(req: NextRequest): Promise<NextResponse> {
         else { await set('skipped', null, { reason: 'unsupported_format', mime: row.mime }); }
         continue;
       }
-      if (kind === 'xlsx') { await set('skipped', null, { reason: 'xlsx_unsupported_v1' }); continue; }
+      // xlsx falls through to extractText() — lib/docs/extract.ts already dumps
+      // every sheet as TSV (200k-char cap). The v1 skip predated that support
+      // and hid financial workbooks from the brain (PBS 2026-08-19).
       if (kind === 'doc_legacy') { await set('skipped', null, { reason: 'legacy_doc_unsupported' }); continue; }
 
       const { data: blob, error: dlErr } = await sb.storage.from(row.storage_bucket).download(row.storage_path);
