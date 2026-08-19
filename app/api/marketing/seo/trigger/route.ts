@@ -47,6 +47,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === 'competitors') {
+      const { data: cfgRowsC } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
+      const cfgC = (cfgRowsC as any[])?.[0] as { domain:string } | undefined;
+      if (!cfgC) throw new Error(`no_seo_config_for_property_${propertyId}`);
+      const ourDomain = cfgC.domain.replace(/^www\./,'');
       const { data: creds3 } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds3) return NextResponse.json({ok:false,error:'dataforseo_creds_missing'},{status:500});
       const { data: compRows } = await sb.from('v_seo_competitors').select('domain').eq('property_id', propertyId).eq('active', true);
@@ -55,7 +59,7 @@ export async function POST(req: NextRequest) {
       const overlapResults = await Promise.all(competitors.map((compDomain:string) =>
         fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/domain_intersection/live', {
           method:'POST', headers:{'Authorization':`Basic ${creds3}`,'Content-Type':'application/json'},
-          body:JSON.stringify([{target1:'thenamkhan.com',target2:compDomain,location_code:2840,language_code:'en',limit:20,order_by:['second_domain_serp_element.serp_item.rank_absolute,asc']}]),
+          body:JSON.stringify([{target1:ourDomain,target2:compDomain,location_code:2840,language_code:'en',limit:20,order_by:['second_domain_serp_element.serp_item.rank_absolute,asc']}]),
         }).then(r=>r.json()).then((json:any) => {
           const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
           return items.map((it:any)=>({
@@ -145,18 +149,23 @@ export async function POST(req: NextRequest) {
     if (mode === 'local') {
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
-      const localKws: string[] = ((await sb.rpc('fn_seo_local_pack_keywords', {p_property_id: propertyId, p_location_code: 2418, p_limit: 10})).data as string[]) ?? ['hotels luang prabang','luxury hotels luang prabang','resort luang prabang','the namkhan'];
+      const { data: cfgRowsLP } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
+      const cfgLP = (cfgRowsLP as any[])?.[0] as { domain:string; hotel_search_kw:string; hotel_location_code:number; hotel_location_name:string } | undefined;
+      if (!cfgLP) throw new Error(`no_seo_config_for_property_${propertyId}`);
+      const brandCore = cfgLP.domain.replace(/^www\./,'').split('.')[0].replace(/^the/,'');
+      const localKwsRaw = ((await sb.rpc('fn_seo_local_pack_keywords', {p_property_id: propertyId, p_location_code: cfgLP.hotel_location_code, p_limit: 10})).data as string[]) ?? [];
+      const localKws: string[] = localKwsRaw.length ? localKwsRaw : [cfgLP.hotel_search_kw];
       const today = new Date().toISOString().slice(0,10);
       const rows: any[] = [];
       for (const kw of localKws) {
         const res = await fetch('https://api.dataforseo.com/v3/serp/google/maps/live/advanced', {
           method: 'POST',
           headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
-          body: JSON.stringify([{keyword: kw, location_code: 2418, language_code: 'en', depth: 10}]),
+          body: JSON.stringify([{keyword: kw, location_name: cfgLP.hotel_location_name, language_code: 'en', depth: 10}]),
         });
         const json = await res.json() as Record<string,any>;
         const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
-        const ourIdx = items.findIndex((it:any) => (it.title ?? '').toLowerCase().includes('namkhan'));
+        const ourIdx = items.findIndex((it:any) => (it.title ?? '').toLowerCase().replace(/\s+/g,'').includes(brandCore));
         rows.push({property_id: propertyId, keyword: kw, snapshot_date: today,
           our_position: ourIdx >= 0 ? ourIdx + 1 : null,
           result_count: items.length,
@@ -165,7 +174,7 @@ export async function POST(req: NextRequest) {
       const { error: rpcErr } = await sb.rpc('fn_seo_upsert_local_pack', {p_rows: JSON.stringify(rows)});
       if (rpcErr) console.error('local pack upsert error:', rpcErr);
       const found = rows.filter(r => r.our_position !== null);
-      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, namkhan_found: found.length, stored: rows.length, note: found.length===0 ? 'Namkhan not found in Google Maps local pack — LP has limited Maps coverage' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
+      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, namkhan_found: found.length, stored: rows.length, note: found.length===0 ? 'Property not found in Google Maps local pack for tracked keywords' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
     }
 
     if (mode === 'onpage') {
@@ -270,7 +279,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (mode === 'llm') {
-      const domain = propertyId === 1000001 ? 'www.thedonnaportals.com' : 'thenamkhan.com';
+      const { data: cfgRowsL } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
+      const cfgL = (cfgRowsL as any[])?.[0] as { domain:string } | undefined;
+      if (!cfgL) throw new Error(`no_seo_config_for_property_${propertyId}`);
+      const domain = cfgL.domain;
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       const mRes = await fetch('https://api.dataforseo.com/v3/ai_optimization/llm_mentions/target_metrics/live', {
@@ -336,7 +348,7 @@ export async function POST(req: NextRequest) {
           position: i+1, hotel_title: item.title, stars: item.stars,
           price_usd: item.prices?.price, rating_value: item.reviews?.value,
           votes_count: item.reviews?.votes_count, is_paid: item.is_paid??false,
-          is_our_property: (item.title??'').toLowerCase().includes(cfg.domain.split('.')[0].toLowerCase()),
+          is_our_property: (item.title??'').toLowerCase().replace(/\s+/g,'').includes(cfg.domain.replace(/^www\./,'').split('.')[0].replace(/^the/,'')),
           latitude: item.location?.latitude, longitude: item.location?.longitude,
           overview_image: item.overview_images?.[0]??null, raw: item,
         }));
@@ -400,8 +412,9 @@ export async function POST(req: NextRequest) {
 
     if (mode === 'ai-domains' || mode === 'ai-pages') {
       const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
-      const cfg = (cfgRows as any[])?.[0] as {ai_target_keywords?: string[]} | undefined;
-      const keywords = cfg?.ai_target_keywords ?? ['eco lodge laos','luxury hotel luang prabang','wellness retreat laos'];
+      const cfg = (cfgRows as any[])?.[0] as {ai_target_keywords?: string[]; hotel_search_kw?: string} | undefined;
+      const keywords = (cfg?.ai_target_keywords && cfg.ai_target_keywords.length) ? cfg.ai_target_keywords : (cfg?.hotel_search_kw ? [cfg.hotel_search_kw] : []);
+      if (!keywords.length) return NextResponse.json({ok:false,error:'no_ai_target_keywords'},{status:400});
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       const endpoint = mode === 'ai-domains' ? 'top_mentioned_domains' : 'top_mentioned_pages';
@@ -425,10 +438,14 @@ export async function POST(req: NextRequest) {
     if (mode === 'ai-query') {
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
+      const { data: cfgRowsQ } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
+      const cfgQ = (cfgRowsQ as any[])?.[0] as { domain:string; hotel_search_kw:string } | undefined;
+      if (!cfgQ) throw new Error(`no_seo_config_for_property_${propertyId}`);
+      const brandQ = cfgQ.domain.replace(/^www\./,'').split('.')[0].replace(/^the/,'');
       const prompts = [
-        'What are the best eco lodges in Laos for a wellness retreat?',
-        'Recommend luxury boutique hotels near Luang Prabang.',
-        'Best nature resorts in Laos — list top options.',
+        `What are the best ${cfgQ.hotel_search_kw}? Recommend top options.`,
+        `I am planning a trip — recommend the best ${cfgQ.hotel_search_kw} with great reviews.`,
+        `List the top-rated ${cfgQ.hotel_search_kw} and what makes each special.`,
       ];
       const results: any[] = [];
       for (const prompt of prompts) {
@@ -441,7 +458,7 @@ export async function POST(req: NextRequest) {
         const item = (json?.tasks?.[0]?.result?.[0]?.items?.[0] ?? {}) as any;
         const responseText = item?.message ?? '';
         const annotations = (item?.annotations ?? []) as any[];
-        const mentioned = responseText.toLowerCase().includes('namkhan') || annotations.some((a:any) => (a.url ?? '').includes('namkhan'));
+        const mentioned = responseText.toLowerCase().replace(/\s+/g,'').includes(brandQ) || annotations.some((a:any) => (a.url ?? '').toLowerCase().includes(brandQ));
         await sb.rpc('fn_seo_insert_llm_response',{p_property_id:propertyId,p_platform:'chatgpt',p_model:'gpt-4o',p_prompt:prompt,p_response:responseText,p_annotations:JSON.stringify(annotations),p_mentioned:mentioned});
         results.push({prompt,mentioned,response_length:responseText.length});
       }
