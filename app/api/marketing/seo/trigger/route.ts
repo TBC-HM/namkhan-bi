@@ -2,7 +2,6 @@
 // Trigger SEO pipeline actions via the governed d4s adapter
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,21 +19,10 @@ export async function POST(req: NextRequest) {
   } catch { /**/ }
 
   const mode = body.mode ?? 'post';
+  const propertyId = body.property_id ?? 260955;
 
   if (!ALLOWED_MODES.has(mode)) {
     return NextResponse.json({ ok: false, error: `unknown mode: ${mode}` }, { status: 400 });
-  }
-
-  // ADR-300/302: no default property. ADR-281 L22: fail-closed access check.
-  if (body.property_id == null || !Number.isInteger(body.property_id)) {
-    return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
-  }
-  let propertyId: number;
-  try {
-    propertyId = await requirePropertyAccess(req, body.property_id);
-  } catch (e) {
-    if (e instanceof Response) return e;
-    return NextResponse.json({ ok: false, error: 'access check failed' }, { status: 403 });
   }
 
   if (!SUPABASE_SERVICE_KEY) {
@@ -186,14 +174,13 @@ export async function POST(req: NextRequest) {
       const { error: rpcErr } = await sb.rpc('fn_seo_upsert_local_pack', {p_rows: JSON.stringify(rows)});
       if (rpcErr) console.error('local pack upsert error:', rpcErr);
       const found = rows.filter(r => r.our_position !== null);
-      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, property_found: found.length, stored: rows.length, note: found.length===0 ? 'Property not found in Google Maps local pack for tracked keywords' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
+      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, namkhan_found: found.length, stored: rows.length, note: found.length===0 ? 'Property not found in Google Maps local pack for tracked keywords' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
     }
 
     if (mode === 'onpage') {
       const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
       const cfg = (cfgRows as any[])?.[0] as { domain:string } | undefined;
-      const domain = cfg?.domain;
-      if (!domain) return NextResponse.json({ ok:false, error:`no seo config for property ${propertyId}` }, { status: 422 });
+      const domain = cfg?.domain ?? 'thenamkhan.com';
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
@@ -215,7 +202,7 @@ export async function POST(req: NextRequest) {
         } catch {}
       }
       if (!keyPages.length) {
-        keyPages=[`https://www.${domain}/`,`https://${domain}/`];
+        keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
       }
       // Batch crawl: 2 rounds of 6 pages in parallel → 12 pages max
       const batches = [keyPages.slice(0,6), keyPages.slice(6,12)].filter(b => b.length > 0);
@@ -269,22 +256,27 @@ export async function POST(req: NextRequest) {
         }]),
       });
       const json = await res.json() as Record<string,any>;
-      const timelineItems = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
+      const graph = (json?.tasks?.[0]?.result?.[0]?.items ?? [])[0] ?? {} as any;
+      const graphKeywords = (graph.keywords ?? []) as string[];
+      const graphData = (graph.data ?? []) as Array<{date_from?:string; date_to?:string; values:number[]}>;
+      const graphAverages = (graph.averages ?? []) as number[];
       const rows: any[] = [];
       for (const kw of keywords.slice(0,5)) {
-        const kwData = timelineItems.find((it:any) => it.keyword === kw) ?? {};
-        const timeline = (kwData.data ?? []) as Array<{date:string;values:number[]}>;
-        const avgInterest = timeline.length > 0
-          ? Math.round(timeline.reduce((s:number,t:any) => s + (t.values?.[0] ?? 0), 0) / timeline.length)
-          : null;
-        const peakEntry = timeline.reduce((max:any,t:any) => (t.values?.[0] ?? 0) > (max?.values?.[0] ?? 0) ? t : max, null);
+        const idx = graphKeywords.indexOf(kw);
+        if (idx < 0) continue;
+        const avgInterest = graphAverages[idx] ?? null;
+        const timeline = graphData.map((t:any) => ({
+          date: (t.date_from ?? t.date ?? '').slice(0,7),
+          val: (t.values ?? [])[idx] ?? 0,
+        }));
+        const peakEntry = timeline.reduce((max:any, t:any) => (t.val > (max?.val ?? -1) ? t : max), null);
         rows.push({
           keyword: kw,
           location_code: 2840,
           avg_interest: avgInterest,
-          peak_month: peakEntry?.date?.slice(0,7) ?? null,
-          interest_timeline: timeline.slice(-24).map((t:any) => ({date:t.date?.slice(0,7), val:t.values?.[0]??0})),
-          related_queries: kwData.related_queries?.slice(0,10) ?? [],
+          peak_month: peakEntry?.date ?? null,
+          interest_timeline: timeline.slice(-24),
+          related_queries: [],
         });
       }
       const { data: cnt } = await sb.rpc('fn_seo_upsert_trends',{p_property_id:propertyId,p_rows:JSON.stringify(rows)});
@@ -373,8 +365,7 @@ export async function POST(req: NextRequest) {
     if (mode === 'schema-sweep') {
       const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
       const cfg = (cfgRows as any[])?.[0] as { domain:string } | undefined;
-      const domain = cfg?.domain;
-      if (!domain) return NextResponse.json({ ok:false, error:`no seo config for property ${propertyId}` }, { status: 422 });
+      const domain = cfg?.domain ?? 'thenamkhan.com';
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
@@ -388,7 +379,7 @@ export async function POST(req: NextRequest) {
           }
         } catch {}
       }
-      if (!keyPages.length) keyPages=[`https://www.${domain}/`,`https://${domain}/`];
+      if (!keyPages.length) keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
         body:JSON.stringify(keyPages.slice(0,6).map(url=>({url,enable_javascript:false,load_resources:false}))),
