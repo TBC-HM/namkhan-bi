@@ -307,9 +307,9 @@ export default async function MarketingSeoPage({
 
           <div style={{ gridColumn:'1/-1', display:'flex', gap:8, alignItems:'center', padding:'10px 14px', background:'#F4EFE2', borderRadius:6 }}>
             <span style={{ fontSize:11, fontWeight:600, color:INK, marginRight:4 }}>SERP sync</span>
-            <SeoTriggerBtn mode="post" label="▶ Post tasks" variant="secondary" />
-            <SeoTriggerBtn mode="fetch" label="⬇ Fetch results" variant="secondary" />
-            <SeoTriggerBtn mode="volume" label="📊 Volume" variant="secondary" />
+            <SeoTriggerBtn propertyId={propertyId} mode="post" label="▶ Post tasks" variant="secondary" />
+            <SeoTriggerBtn propertyId={propertyId} mode="fetch" label="⬇ Fetch results" variant="secondary" />
+            <SeoTriggerBtn propertyId={propertyId} mode="volume" label="📊 Volume" variant="secondary" />
             <span style={{ marginLeft:'auto', fontSize:11, color:INK_F }}>Last: {lastSync?lastSync.slice(0,10):'never'}</span>
           </div>
         </>
@@ -321,8 +321,8 @@ export default async function MarketingSeoPage({
           <Container title="Keyword rankings" subtitle="Click row → competitors · 🏳️ flag → market compare · ⚡ quick wins filter"
             action={
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <SeoTriggerBtn mode="post" label="▶ Post tasks" variant="secondary" />
-                <SeoTriggerBtn mode="fetch" label="⬇ Fetch" variant="secondary" />
+                <SeoTriggerBtn propertyId={propertyId} mode="post" label="▶ Post tasks" variant="secondary" />
+                <SeoTriggerBtn propertyId={propertyId} mode="fetch" label="⬇ Fetch" variant="secondary" />
               </div>
             }>
             {/* Step-by-step guide */}
@@ -374,8 +374,8 @@ export default async function MarketingSeoPage({
           <Container title="Tracked keywords" subtitle="Volume · difficulty · CPC · all markets"
             action={
               <div style={{ display:'flex', gap:8 }}>
-                <SeoTriggerBtn mode="volume" label="📊 Refresh volume" variant="secondary" />
-                <SeoTriggerBtn mode="suggestions" label="💡 Get suggestions" variant="secondary" />
+                <SeoTriggerBtn propertyId={propertyId} mode="volume" label="📊 Refresh volume" variant="secondary" />
+                <SeoTriggerBtn propertyId={propertyId} mode="suggestions" label="💡 Get suggestions" variant="secondary" />
               </div>
             }>
 <SeoKeywordsManager initialKeywords={rankings as any} propertyId={propertyId} />
@@ -387,7 +387,7 @@ export default async function MarketingSeoPage({
       {tab==='competitors' && (
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Competitor gap analysis" subtitle="Who ranks for keywords we don't · DataForSEO Domain Analytics"
-            action={<SeoTriggerBtn mode="competitors" label="▶ Fetch competitor data" description="DataForSEO Labs · keyword overlap" />}>
+            action={<SeoTriggerBtn propertyId={propertyId} mode="competitors" label="▶ Fetch competitor data" description="DataForSEO Labs · keyword overlap" />}>
             <div style={{ padding:'16px 0' }}>
               <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:12 }}>Tracked competitor domains</div>
               <div style={{ display:'flex', flexWrap:'wrap' as const, gap:8, marginBottom:24 }}>
@@ -453,13 +453,13 @@ export default async function MarketingSeoPage({
       {tab==='local' && (
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Google Maps · Local pack" subtitle={`${propertyDomain} position in local map results · ${propertyLocCity} geo`}
-            action={<SeoTriggerBtn mode="local" label="🔄 Refresh local data" description="5 keywords · DataForSEO Maps API" />}>
+            action={<SeoTriggerBtn propertyId={propertyId} mode="local" label="🔄 Refresh local data" description="5 keywords · DataForSEO Maps API" />}>
             {localPack.length===0 ? (
               <div style={{ padding:'40px 16px', textAlign:'center' }}>
                 <div style={{ fontSize:32, marginBottom:10 }}>🗺️</div>
                 <div style={{ fontSize:14, fontWeight:600, color:INK, marginBottom:6 }}>No local pack data yet</div>
                 <div style={{ fontSize:12, color:INK_M, marginBottom:16 }}>Click Refresh to fetch Google Maps results for hotel keywords</div>
-                <SeoTriggerBtn mode="local" label="🗺️ Fetch local pack now" />
+                <SeoTriggerBtn propertyId={propertyId} mode="local" label="🗺️ Fetch local pack now" />
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
@@ -499,7 +499,7 @@ export default async function MarketingSeoPage({
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Technical SEO · On-page audit" subtitle={`${propertyDomain} · meta, titles, Core Web Vitals, page scores`}
             action={
-              <SeoTriggerBtn mode="onpage" label="🔍 Run On-Page Crawl" description="Up to 50 pages · DataForSEO" />
+              <SeoTriggerBtn propertyId={propertyId} mode="onpage" label="🔍 Run On-Page Crawl" description="Up to 50 pages · DataForSEO" />
             }>
             <div style={{ padding:'16px 0' }}>
               {instantPages.length===0&&(
@@ -544,7 +544,7 @@ export default async function MarketingSeoPage({
       {tab==='pages' && (
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Ranked Pages" subtitle={`${pagesArr.length} pages · ${pagesRows.length} keywords in Google top 50 · all markets`}
-            action={<SeoTriggerBtn mode="ranked" label="🔄 Refresh page rankings" description="DataForSEO Labs · 6 markets" />}>
+            action={<SeoTriggerBtn propertyId={propertyId} mode="ranked" label="🔄 Refresh page rankings" description="DataForSEO Labs · 6 markets" />}>
             {pagesArr.length===0?(<div style={{padding:'32px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>No page ranking data — click <strong>Refresh page rankings</strong>.</div>):(
               <div style={{overflowX:'auto' as const}}>
                 <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
@@ -607,6 +607,7 @@ export default async function MarketingSeoPage({
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Keyword Research" subtitle="Longtail keyword ideas + Google Trends — save to tracking for blog + web team">
             <SeoResearchBar
+              propertyId={propertyId}
               resultCount={researchRows.length}
               lastFetched={researchLastFetched ? String(researchLastFetched).slice(0, 10) : null}
             />
@@ -653,7 +654,7 @@ export default async function MarketingSeoPage({
             <div style={{marginTop:24,paddingTop:20,borderTop:`1px solid ${HAIR}`}}>
               <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
                 <div style={{fontSize:13,fontWeight:600,color:INK}}>Google Trends — Search interest over time</div>
-                <SeoTriggerBtn mode="trends" label="📈 Fetch Trends" description="DataForSEO Google Trends · top 5 keywords" variant="secondary" />
+                <SeoTriggerBtn propertyId={propertyId} mode="trends" label="📈 Fetch Trends" description="DataForSEO Google Trends · top 5 keywords" variant="secondary" />
                 {trendsRows.length>0&&<span style={{fontSize:10,color:INK_F,fontFamily:'ui-monospace,monospace'}}>Updated: {trendsRows[0]?.fetched_at?.slice(0,10)}</span>}
               </div>
               {trendsRows.length===0?(
@@ -699,7 +700,7 @@ export default async function MarketingSeoPage({
           <Container title="Backlinks · Link profile" subtitle={`${propertyDomain} · referring domains, authority, anchor distribution`}
             action={
               <div style={{display:'flex',gap:8}}>
-                <SeoTriggerBtn mode="backlinks" label="↻ Refresh backlinks" description="DataForSEO Backlinks API · top 50" />
+                <SeoTriggerBtn propertyId={propertyId} mode="backlinks" label="↻ Refresh backlinks" description="DataForSEO Backlinks API · top 50" />
               </div>
             }>
             {!blSum ? (
@@ -759,7 +760,7 @@ export default async function MarketingSeoPage({
       {tab==='hotel' && (
         <div style={{ gridColumn:'1/-1' }}>
           <Container title="Hotel Data · Google Hotels" subtitle="Competitive positioning + pricing in Google Hotels results"
-            action={<SeoTriggerBtn mode="hotel" label="🏨 Refresh hotel data" description="business_data/google/hotel_searches · live" />}>
+            action={<SeoTriggerBtn propertyId={propertyId} mode="hotel" label="🏨 Refresh hotel data" description="business_data/google/hotel_searches · live" />}>
             <div style={{padding:'24px 16px',textAlign:'center' as const,color:INK_M,fontSize:13}}>
               {hotelRows.length>0?(
                 <div style={{overflowX:'auto' as const,marginTop:8}}>
@@ -795,10 +796,10 @@ export default async function MarketingSeoPage({
               }}>{s.label}</a>
             ))}
             <span style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6,paddingBottom:6}}>
-              {aiSub==='visibility'&&<SeoTriggerBtn mode="llm" label="↻ Refresh" variant="secondary" />}
-              {aiSub==='intel'&&<SeoTriggerBtn mode="ai-domains" label="🏢 Update intel" variant="secondary" />}
-              {aiSub==='chat'&&<SeoTriggerBtn mode="ai-query" label="💬 Ask ChatGPT" />}
-              {aiSub==='schema'&&<SeoTriggerBtn mode="schema-sweep" label="🔍 Run audit" variant="secondary" />}
+              {aiSub==='visibility'&&<SeoTriggerBtn propertyId={propertyId} mode="llm" label="↻ Refresh" variant="secondary" />}
+              {aiSub==='intel'&&<SeoTriggerBtn propertyId={propertyId} mode="ai-domains" label="🏢 Update intel" variant="secondary" />}
+              {aiSub==='chat'&&<SeoTriggerBtn propertyId={propertyId} mode="ai-query" label="💬 Ask ChatGPT" />}
+              {aiSub==='schema'&&<SeoTriggerBtn propertyId={propertyId} mode="schema-sweep" label="🔍 Run audit" variant="secondary" />}
             </span>
           </div>
 
