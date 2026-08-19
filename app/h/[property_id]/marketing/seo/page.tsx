@@ -3,7 +3,7 @@
 // Markets: Laos (home) · Germany · UK · US · France · Australia
 import { DashboardPage, Container, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { MARKETING_SUBPAGES } from '../_subpages';
+import { MARKETING_SUBPAGES } from '@/app/marketing/_subpages';
 import SeoTriggerBtn from '@/components/seo/SeoTriggerBtn';
 import RankingsTable, { type RankRow as RankRowFull, type HistoryRow, type MarketRow } from '@/components/seo/RankingsTable';
 import SeoKeywordsManager from '@/components/seo/SeoKeywordsManager';
