@@ -129,15 +129,13 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   }));
 
   // Central Chat is the ONE channel — Felix dispatches per one-channel law.
-  // /holding/chat renders CentralChat with Second Brain / General mode toggle.
-  const chatHref = '/holding/chat';
+  // PBS 2026-08-19: brain access is floating-panel only (FloatingHOSPanel). No inline Ask button.
 
   const actionBar = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       {settingsHref && (
         <a href={settingsHref} title="Settings" aria-label="Settings" style={gearBtnStyle}>⚙</a>
       )}
-      <TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask the Brain →`}</TenantLink>
     </div>
   );
 
