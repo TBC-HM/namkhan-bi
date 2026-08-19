@@ -633,6 +633,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Menus',            href: '/operations/menus'           },
     { label: 'Inventory',        href: '/operations/inventory'       },
     { label: 'Suppliers',        href: '/operations/suppliers'       },
+    { label: 'Maintenance',      href: '/operations/maintenance'     },
     { label: 'QA',               href: '/operations/sops'            },
   ],
   quickChips: [
