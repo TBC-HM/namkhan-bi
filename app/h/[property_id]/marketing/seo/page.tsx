@@ -46,19 +46,19 @@ const WORKFLOW=[
 ];
 
 /** Per-tab context text shown beneath the sub-tab strip */
-const TAB_CONTEXT: Record<string, string> = {
+const tabContext = (locCity: string): Record<string, string> => ({
   overview:     'Rankings summary across all markets · Data from DataForSEO SERP tracking + your tracked keyword list',
   rankings:     'Google search positions per keyword + market · Updated by clicking ▶ Post tasks then ⬇ Fetch results',
   keywords:     'Your tracked keyword list · Add / dismiss keywords here to control what gets tracked across all tabs',
   research:     'Longtail keyword ideas from DataForSEO Labs + Google Trends 12-month interest · Enter a seed keyword or use your top 3 tracked keywords',
   backlinks:    'Link profile from DataForSEO · Authority score, referring domains, top linking pages',
-  competitors:  "Real LP hotel competitors from your compset database · Gap shows keywords you don't rank for yet",
-  local:        'Google Maps local pack positions for hotel keywords in Luang Prabang · Data from DataForSEO Maps API',
+  competitors:  "Real hotel competitors from your compset database · Gap shows keywords you don't rank for yet",
+  local:        `Google Maps local pack positions for hotel keywords in ${locCity || 'your market'} · Data from DataForSEO Maps API`,
   technical:    'Per-page on-page audit · Schema health, titles, readability from DataForSEO instant_pages crawler',
   pages:        'Pages ranking in Google top 50 · From DataForSEO ranked_keywords + unranked pages from site audit',
-  hotel:        'Google Business Profile for The Namkhan · Rating, reviews, info from Google via DataForSEO GBP API',
+  hotel:        'Google Business Profile for this property · Rating, reviews, info from Google via DataForSEO GBP API',
   'ai-web':     'AI search visibility across Google AI Overviews and ChatGPT · From DataForSEO LLM Mentions API',
-};
+});
 
 export default async function MarketingSeoPage({
   params,
@@ -84,12 +84,19 @@ export default async function MarketingSeoPage({
   const propertyLocCountry = propertyLocFull.split(',').pop()?.trim() ?? '';
   const propertyHotelKw = (propCfg as any)?.hotel_search_kw ?? '';
   const propertyLocCode = Number((propCfg as any)?.hotel_location_code) || 0;
+  const tabCtx = tabContext(propertyLocCity);
+  // R4: v_seo_ranking_history and v_seo_market_comparison carry no property_id column.
+  // Scope them by this property's keyword_ids (from the property-filtered rankings view).
+  const propKeywordIds: number[] = tab === 'rankings'
+    ? (((await sb.from('v_seo_rankings').select('keyword_id').eq('property_id', propertyId)).data ?? []) as Array<{keyword_id:number}>).map(r => r.keyword_id).filter(Boolean)
+    : [];
+  const hasPropKeywords = propKeywordIds.length > 0;
   const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes, researchRes, blSumRes, blRes, overlapRes, trendsRes] = await Promise.all([
     sb.from('v_seo_rankings').select('*').eq('property_id',propertyId),
-    tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
-    tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
-    tab === 'rankings' ? sb.from('v_seo_market_comparison').select('*') : Promise.resolve({ data: [] }),
-    tab === 'technical' ? sb.from('v_seo_onpage').select('*').order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
+    tab === 'local' ? sb.from('v_seo_local_pack').select('*').eq('property_id',propertyId).order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+    tab === 'rankings' && hasPropKeywords ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').in('keyword_id', propKeywordIds).limit(500) : Promise.resolve({ data: [] }),
+    tab === 'rankings' && hasPropKeywords ? sb.from('v_seo_market_comparison').select('*').in('keyword_id', propKeywordIds) : Promise.resolve({ data: [] }),
+    tab === 'technical' ? sb.from('v_seo_onpage').select('*').eq('property_id',propertyId).order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', propertyId).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
     tab === 'pages' ? sb.from('v_seo_ranked_pages').select('url,keyword,position,volume,search_intent').eq('property_id', propertyId).order('position', { ascending: true }).limit(500) : Promise.resolve({ data: [] }),
     (tab === 'technical' || tab === 'ai-web' || tab === 'pages') ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', propertyId).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
@@ -190,9 +197,9 @@ export default async function MarketingSeoPage({
       </div>
 
       {/* Tab context text */}
-      {TAB_CONTEXT[tab] && (
+      {tabCtx[tab] && (
         <div style={{ gridColumn:'1/-1', fontSize:11, color:INK_F, padding:'6px 2px 8px', lineHeight:1.5 }}>
-          {TAB_CONTEXT[tab]}
+          {tabCtx[tab]}
         </div>
       )}
 
@@ -417,7 +424,7 @@ export default async function MarketingSeoPage({
               {/* Keyword overlap with competitors */}
               {overlapRows.length > 0 && (
                 <div style={{ marginTop:28 }}>
-                  <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:4 }}>Keyword overlap — both Namkhan and competitors rank for these</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:INK, marginBottom:4 }}>Keyword overlap — both this property and competitors rank for these</div>
                   <div style={{ fontSize:11, color:INK_F, marginBottom:10 }}>Outranked by competitors on these keywords — best opportunities to improve content or build backlinks.</div>
                   <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
                     <thead><tr style={{ borderBottom:`2px solid ${HAIR}` }}>
@@ -893,7 +900,7 @@ export default async function MarketingSeoPage({
                 LLM responses to hotel queries — {llmRespRows.length} responses stored
               </div>
               <div style={{ fontSize:11, color:INK_F, marginBottom:16 }}>
-                What ChatGPT / Perplexity / Gemini say when asked about Luang Prabang hotels · Green border = Namkhan mentioned
+                What ChatGPT / Perplexity / Gemini say when asked about hotels in {propertyLocCity || 'your market'} · Green border = {propertyDomain} mentioned
               </div>
               {llmRespRows.length === 0 ? (
                 <div style={{ fontSize:12, color:INK_M, padding:'24px 0', textAlign:'center' as const }}>
@@ -908,7 +915,7 @@ export default async function MarketingSeoPage({
                         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
                           <div style={{ fontSize:11, fontWeight:700, color:INK, letterSpacing:'0.05em', textTransform:'uppercase' as const }}>{platform}</div>
                           <div style={{ fontSize:10, color:INK_F, fontFamily:'ui-monospace,monospace' }}>
-                            {rows.length} response{rows.length !== 1 ? 's' : ''} · {rows.filter(r => r.our_domain_mentioned).length} mention Namkhan
+                            {rows.length} response{rows.length !== 1 ? 's' : ''} · {rows.filter(r => r.our_domain_mentioned).length} mention {propertyDomain}
                           </div>
                           <div style={{ flex:1, height:1, background:HAIR }} />
                         </div>
@@ -958,7 +965,7 @@ export default async function MarketingSeoPage({
                   </table>
                 )}
                 <div style={{ marginTop:12, padding:'10px 14px', background:'#FFF8E1', border:`1px solid ${AMBER}`, borderRadius:5, fontSize:11, color:'#5A5A5A' }}>
-                  <strong>Fix required:</strong> Add <code>@type: Hotel</code> JSON-LD schema to {propertyDomain} homepage and <code>@type: Product</code> + <code>Offer</code> to each retreat page. Without this, Google AI cannot classify the site as a bookable hotel and won&apos;t surface it for commercial queries like &quot;wellness retreat laos&quot; or &quot;eco lodge luang prabang&quot;.
+                  <strong>Fix required:</strong> Add <code>@type: Hotel</code> JSON-LD schema to {propertyDomain} homepage and <code>@type: Product</code> + <code>Offer</code> to each bookable room/experience page. Without this, Google AI cannot classify the site as a bookable hotel and won&apos;t surface it for commercial queries like &quot;{propertyHotelKw || 'hotel'}&quot;.
                 </div>
               </div>
               <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px' }}>
@@ -967,22 +974,18 @@ export default async function MarketingSeoPage({
 {
   "@context": "https://schema.org",
   "@type": "Hotel",
-  "name": "The Namkhan",
-  "alternateName": "The Namkhan, A Small Luxury Hotel of the World",
-  "url": "https://www.thenamkhan.com",
-  "description": "5-star eco-luxury wellness retreat on the Nam Khan River, Luang Prabang, Laos. Member of Small Luxury Hotels of the World.",
+  "name": "<your property name>",
+  "url": "https://www.${propertyDomain}",
+  "description": "<one-sentence positioning line — what the property is and who it is for>",
   "starRating": { "@type": "Rating", "ratingValue": "5" },
   "priceRange": "$$$$",
-  "address": { "@type": "PostalAddress", "addressLocality": "Luang Prabang", "addressCountry": "LA" },
+  "address": { "@type": "PostalAddress", "addressLocality": "${propertyLocCity}", "addressCountry": "${propertyLocCountry}" },
   "checkInTime": "14:00", "checkOutTime": "12:00",
   "amenityFeature": [
     {"@type":"LocationFeatureSpecification","name":"Pool","value":true},
     {"@type":"LocationFeatureSpecification","name":"Spa","value":true},
-    {"@type":"LocationFeatureSpecification","name":"Restaurant","value":true},
-    {"@type":"LocationFeatureSpecification","name":"Organic Farm","value":true},
-    {"@type":"LocationFeatureSpecification","name":"Wellness Retreats","value":true}
-  ],
-  "brand": {"@type":"Brand","name":"Small Luxury Hotels of the World"}
+    {"@type":"LocationFeatureSpecification","name":"Restaurant","value":true}
+  ]
 }
 </script>`}</pre>
               </div>
