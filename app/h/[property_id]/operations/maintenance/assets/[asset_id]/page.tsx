@@ -83,7 +83,7 @@ export default function AssetDetailPage() {
   }
 
   function handleBack() {
-    router.push(`/h/${propertyId}/ops/maintenance`);
+    router.push(`/h/${propertyId}/operations/maintenance`);
   }
 
   if (loading) {
@@ -171,56 +171,45 @@ export default function AssetDetailPage() {
 
           {asset.notes && (
             <div className="mt-6 p-4 bg-gray-50 rounded border border-gray-200">
-              <span className="text-gray-600 text-sm font-medium">Notes</span>
-              <p className="mt-2 text-gray-800">{asset.notes}</p>
+              <span className="text-gray-600 text-sm font-medium">Notes:</span>
+              <p className="mt-2 text-gray-900">{asset.notes}</p>
             </div>
           )}
         </div>
 
-        {/* PM Tasks Section */}
+        {/* Related PM Tasks */}
         <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Maintenance History & Schedule</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Maintenance History</h2>
           
           {tasks.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No maintenance tasks found for this asset</p>
           ) : (
             <div className="space-y-3">
               {tasks.map((task) => (
-                <div key={task.instance_id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                <Link
+                  key={task.instance_id}
+                  href={`/h/${propertyId}/operations/maintenance/tasks/${task.instance_id}`}
+                  className="block p-4 border border-gray-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                >
                   <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-gray-900">{task.title}</h3>
+                    <div>
+                      <h3 className="font-medium text-gray-900">{task.title}</h3>
                       <p className="text-sm text-gray-600">{task.task_code}</p>
                     </div>
-                    <div className="flex gap-2">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        task.status === "completed" ? "bg-green-100 text-green-800" :
-                        task.status === "scheduled" ? "bg-yellow-100 text-yellow-800" :
-                        "bg-gray-100 text-gray-800"
-                      }`}>
-                        {task.status}
-                      </span>
-                      <span className="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                        {task.provider}
-                      </span>
-                    </div>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      task.status === "completed" ? "bg-green-100 text-green-800" :
+                      task.status === "scheduled" ? "bg-yellow-100 text-yellow-800" :
+                      "bg-gray-100 text-gray-800"
+                    }`}>
+                      {task.status}
+                    </span>
                   </div>
-                  
-                  <div className="flex justify-between items-center mt-3 text-sm">
-                    <div>
-                      <span className="text-gray-600">Scheduled: </span>
-                      <span className="font-medium">{task.scheduled_date}</span>
-                      <span className="text-gray-600 ml-4">Duration: </span>
-                      <span className="font-medium">{task.estimated_minutes} min</span>
-                    </div>
-                    <Link 
-                      href={`/h/${propertyId}/operations/maintenance/tasks/${task.instance_id}`}
-                      className="text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      View Details →
-                    </Link>
+                  <div className="mt-2 flex gap-4 text-sm text-gray-600">
+                    <span>📅 {task.scheduled_date}</span>
+                    <span>⏱️ {task.estimated_minutes} min</span>
+                    <span>🔧 {task.provider}</span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
