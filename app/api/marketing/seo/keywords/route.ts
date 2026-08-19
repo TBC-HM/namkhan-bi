@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,9 +16,16 @@ export async function DELETE(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(()=>({})) as {keyword?:string;location_name?:string;location_code?:number;property_id?:number};
-  const { keyword, location_name, location_code, property_id = 260955 } = body;
-  if (!keyword?.trim() || !location_name || !location_code) {
+  const { keyword, location_name, location_code, property_id } = body;
+  if (!keyword?.trim() || !location_name || !location_code || property_id == null) {
     return NextResponse.json({ok:false,error:'missing_fields'},{status:400});
+  }
+  // ADR-281 L22 + ADR-300: no default property, fail-closed access check
+  try {
+    await requirePropertyAccess(req, property_id);
+  } catch (e) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ok:false,error:'access check failed'},{status:403});
   }
   const sb = getSupabaseAdmin();
   const { data: newId, error } = await sb.rpc('fn_seo_add_keyword',{
