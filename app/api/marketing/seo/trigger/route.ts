@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
           category_code: 67,
           location_code: 2840,
           language_code: 'en',
-          type: 'web_search'
+          type: 'web'
         }]),
       });
       const json = await res.json() as Record<string,any>;
