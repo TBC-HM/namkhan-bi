@@ -342,7 +342,7 @@ export default async function SpecsPage({ searchParams }: { searchParams?: { toa
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1B1B1B', margin: 0 }}>Module Documentation</h1>
           <p style={{ fontSize: 12, color: '#5A5A5A', margin: '4px 0 0' }}>
-            Spec docs for all modules · auditor every 6h · builder + checker hourly · pick a department, expand a row for detail
+            Spec docs for all modules · auditor every 24h · builder + checker hourly · pick a department, expand a row for detail
           </p>
           <p style={{ fontSize: 11, color: '#1B1B1B', margin: '6px 0 0', fontWeight: 600 }}>
             SPEC % = the agent&apos;s conformance estimate — NOT proof it works. TESTED % = evidence-counted good runs.
