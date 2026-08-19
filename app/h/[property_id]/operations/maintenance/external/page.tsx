@@ -62,7 +62,7 @@ export default function ExternalContractorPage() {
   }
 
   function handleBack() {
-    router.push(`/h/${propertyId}/ops/maintenance`);
+    router.push(`/h/${propertyId}/operations/maintenance`);
   }
 
   const scheduledTasks = tasks.filter(t => t.status === "scheduled");
@@ -162,7 +162,7 @@ export default function ExternalContractorPage() {
                     <span className="text-gray-600">Assigned:</span>
                     <p className="font-medium">{task.assigned_to || "Unassigned"}</p>
                   </div>
-                  {task.status === "completed" && (
+                  {task.status === "completed" && task.completed_at && (
                     <div>
                       <span className="text-gray-600">Completed:</span>
                       <p className="font-medium">{task.completed_at}</p>
@@ -170,29 +170,19 @@ export default function ExternalContractorPage() {
                   )}
                 </div>
 
-                {task.status === "completed" && task.actual_minutes && (
-                  <div className="mt-3 p-3 bg-green-50 rounded border border-green-200">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span className="text-sm text-green-900">✅ Completed by {task.completed_by}</span>
-                        <p className="text-sm text-green-800 mt-1">Actual duration: {task.actual_minutes} min</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {task.sop_doc_id && (
+                {task.provider_note && (
                   <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-                    <span className="text-sm text-blue-900">📋 SOP: {task.sop_doc_id}</span>
+                    <span className="text-xs text-blue-700 font-medium">Contact:</span>
+                    <p className="text-sm text-blue-900">{task.provider_note}</p>
                   </div>
                 )}
 
-                <div className="mt-4 flex justify-end">
-                  <Link 
+                <div className="mt-4">
+                  <Link
                     href={`/h/${propertyId}/operations/maintenance/tasks/${task.instance_id}`}
-                    className="text-blue-600 hover:text-blue-800 font-medium"
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
-                    View Full Details →
+                    View Details →
                   </Link>
                 </div>
               </div>
