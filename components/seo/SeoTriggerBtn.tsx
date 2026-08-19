@@ -7,11 +7,12 @@ const GREEN = '#084838';
 interface Props {
   mode: string;
   label: string;
+  propertyId: number;
   description?: string;
   variant?: 'primary' | 'secondary';
 }
 
-export default function SeoTriggerBtn({ mode, label, description, variant = 'primary' }: Props) {
+export default function SeoTriggerBtn({ mode, label, propertyId, description, variant = 'primary' }: Props) {
   const [state, setState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -23,7 +24,7 @@ export default function SeoTriggerBtn({ mode, label, description, variant = 'pri
       const res = await fetch('/api/marketing/seo/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify({ mode, property_id: propertyId }),
       });
       const j = await res.json();
       if (j.ok) {
