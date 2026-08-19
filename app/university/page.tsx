@@ -8,7 +8,6 @@
 
 import type { CSSProperties } from 'react';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import CentralChat from '@/components/chat/CentralChat';
 import { FALLBACK_MODULES, type ModuleCard } from './_lib/ia';
 import { INK, INK_SOFT, HAIR, GREEN, GOLD, WARM, SANS } from './_lib/theme';
 
@@ -68,7 +67,7 @@ export default async function UniversityPage() {
         </p>
       </header>
 
-      <CentralChat mode="second-brain" moduleScope="university" />
+      
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12, marginTop: 20 }}>
         {modules.map((m) => {
