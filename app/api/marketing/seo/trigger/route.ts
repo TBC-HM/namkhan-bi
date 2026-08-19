@@ -2,6 +2,7 @@
 // Trigger SEO pipeline actions via the governed d4s adapter
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,15 +20,21 @@ export async function POST(req: NextRequest) {
   } catch { /**/ }
 
   const mode = body.mode ?? 'post';
-  // ADR-300/302: property_id is required — no default tenant. Callers must pass it explicitly.
-  const propertyId = body.property_id;
 
   if (!ALLOWED_MODES.has(mode)) {
     return NextResponse.json({ ok: false, error: `unknown mode: ${mode}` }, { status: 400 });
   }
 
-  if (!propertyId || !Number.isInteger(propertyId)) {
+  // ADR-300/302: no default property. ADR-281 L22: fail-closed access check.
+  if (body.property_id == null || !Number.isInteger(body.property_id)) {
     return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
+  }
+  let propertyId: number;
+  try {
+    propertyId = await requirePropertyAccess(req, body.property_id);
+  } catch (e) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ ok: false, error: 'access check failed' }, { status: 403 });
   }
 
   if (!SUPABASE_SERVICE_KEY) {
@@ -186,7 +193,7 @@ export async function POST(req: NextRequest) {
       const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
       const cfg = (cfgRows as any[])?.[0] as { domain:string } | undefined;
       const domain = cfg?.domain;
-      if (!domain) throw new Error(`no_seo_config_for_property_${propertyId}`);
+      if (!domain) return NextResponse.json({ ok:false, error:`no seo config for property ${propertyId}` }, { status: 422 });
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
@@ -367,7 +374,7 @@ export async function POST(req: NextRequest) {
       const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
       const cfg = (cfgRows as any[])?.[0] as { domain:string } | undefined;
       const domain = cfg?.domain;
-      if (!domain) throw new Error(`no_seo_config_for_property_${propertyId}`);
+      if (!domain) return NextResponse.json({ ok:false, error:`no seo config for property ${propertyId}` }, { status: 422 });
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
