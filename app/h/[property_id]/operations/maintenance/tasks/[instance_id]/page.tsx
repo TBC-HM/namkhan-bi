@@ -67,7 +67,7 @@ export default function TaskDetailPage() {
   }
 
   function handleBack() {
-    router.push(`/h/${propertyId}/ops/maintenance`);
+    router.push(`/h/${propertyId}/operations/maintenance`);
   }
 
   if (loading) {
