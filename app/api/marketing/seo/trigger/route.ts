@@ -2,7 +2,6 @@
 // Trigger SEO pipeline actions via the governed d4s adapter
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,21 +19,15 @@ export async function POST(req: NextRequest) {
   } catch { /**/ }
 
   const mode = body.mode ?? 'post';
+  // ADR-300/302: property_id is required — no default tenant. Callers must pass it explicitly.
+  const propertyId = body.property_id;
 
   if (!ALLOWED_MODES.has(mode)) {
     return NextResponse.json({ ok: false, error: `unknown mode: ${mode}` }, { status: 400 });
   }
 
-  // ADR-300/302: no default property. ADR-281 L22: fail-closed access check.
-  if (body.property_id == null) {
+  if (!propertyId || !Number.isInteger(propertyId)) {
     return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
-  }
-  let propertyId: number;
-  try {
-    propertyId = await requirePropertyAccess(req, body.property_id);
-  } catch (e) {
-    if (e instanceof Response) return e;
-    return NextResponse.json({ ok: false, error: 'access check failed' }, { status: 403 });
   }
 
   if (!SUPABASE_SERVICE_KEY) {
@@ -186,14 +179,14 @@ export async function POST(req: NextRequest) {
       const { error: rpcErr } = await sb.rpc('fn_seo_upsert_local_pack', {p_rows: JSON.stringify(rows)});
       if (rpcErr) console.error('local pack upsert error:', rpcErr);
       const found = rows.filter(r => r.our_position !== null);
-      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, namkhan_found: found.length, stored: rows.length, note: found.length===0 ? 'Property not found in Google Maps local pack for tracked keywords' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
+      return NextResponse.json({ok:true, mode, result: {keywords: rows.length, property_found: found.length, stored: rows.length, note: found.length===0 ? 'Property not found in Google Maps local pack for tracked keywords' : found.map(r=>`#${r.our_position} for ${r.keyword}`).join(', ')}});
     }
 
     if (mode === 'onpage') {
       const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
       const cfg = (cfgRows as any[])?.[0] as { domain:string } | undefined;
       const domain = cfg?.domain;
-      if (!domain) return NextResponse.json({ ok:false, error:`no seo config for property ${propertyId}` }, { status: 422 });
+      if (!domain) throw new Error(`no_seo_config_for_property_${propertyId}`);
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
@@ -215,7 +208,7 @@ export async function POST(req: NextRequest) {
         } catch {}
       }
       if (!keyPages.length) {
-        keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+        keyPages=[`https://www.${domain}/`,`https://${domain}/`];
       }
       // Batch crawl: 2 rounds of 6 pages in parallel → 12 pages max
       const batches = [keyPages.slice(0,6), keyPages.slice(6,12)].filter(b => b.length > 0);
@@ -374,7 +367,7 @@ export async function POST(req: NextRequest) {
       const { data: cfgRows } = await sb.rpc('fn_seo_get_property_config', { p_property_id: propertyId });
       const cfg = (cfgRows as any[])?.[0] as { domain:string } | undefined;
       const domain = cfg?.domain;
-      if (!domain) return NextResponse.json({ ok:false, error:`no seo config for property ${propertyId}` }, { status: 422 });
+      if (!domain) throw new Error(`no_seo_config_for_property_${propertyId}`);
       const { data: creds } = await sb.rpc('fn_dataforseo_credentials');
       if (!creds) throw new Error('dataforseo_creds_missing');
       let keyPages: string[] = ((await sb.rpc('fn_seo_get_crawl_urls_filtered',{p_property_id:propertyId,p_domain:domain})).data as string[])??[];
@@ -388,7 +381,7 @@ export async function POST(req: NextRequest) {
           }
         } catch {}
       }
-      if (!keyPages.length) keyPages=[`https://www.${domain}/`,`https://www.${domain}/retreats`,`https://www.${domain}/accommodation`,`https://www.${domain}/spa`,`https://www.${domain}/experiences`,`https://www.${domain}/eco-farm`];
+      if (!keyPages.length) keyPages=[`https://www.${domain}/`,`https://${domain}/`];
       const r = await fetch('https://api.dataforseo.com/v3/on_page/instant_pages', {
         method:'POST', headers:{'Authorization':`Basic ${creds}`,'Content-Type':'application/json'},
         body:JSON.stringify(keyPages.slice(0,6).map(url=>({url,enable_javascript:false,load_resources:false}))),
