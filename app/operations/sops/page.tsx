@@ -11,7 +11,6 @@ import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import SopBrowser, { type SopRow } from './_components/SopBrowser';
-import CentralChat from '@/components/chat/CentralChat';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -61,7 +60,7 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
             duplicate that broke the industry-standard SubTab visual. */}
 
         <div style={{ gridColumn: '1 / -1' }}>
-          <CentralChat mode="second-brain" moduleScope="operations" />
+          
           <SopBrowser sops={sops} />
         </div>
       </DashboardPage>
