@@ -13,9 +13,10 @@ const AMBER = '#C28F2C';
 interface Props {
   resultCount: number;
   lastFetched: string | null;
+  propertyId: number;
 }
 
-export default function SeoResearchBar({ resultCount, lastFetched }: Props) {
+export default function SeoResearchBar({ resultCount, lastFetched, propertyId }: Props) {
   const [seed, setSeed] = useState('');
   const [state, setState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [msg, setMsg] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export default function SeoResearchBar({ resultCount, lastFetched }: Props) {
     setState('running');
     setMsg(null);
     try {
-      const body: Record<string, unknown> = { mode: 'suggestions' };
+      const body: Record<string, unknown> = { mode: 'suggestions', property_id: propertyId };
       if (seed.trim()) body.seed_keyword = seed.trim();
 
       const res = await fetch('/api/marketing/seo/trigger', {
