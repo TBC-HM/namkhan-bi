@@ -1,9 +1,9 @@
-// app/h/[property_id]/marketing/seo/page.tsx
+// app/marketing/seo/page.tsx
 // Full 11-tab SEO area — DataForSEO pipeline + multi-market ranking
 // Markets: Laos (home) · Germany · UK · US · France · Australia
 import { DashboardPage, Container, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { MARKETING_SUBPAGES } from '@/app/marketing/_subpages';
+import { MARKETING_SUBPAGES } from '../_subpages';
 import SeoTriggerBtn from '@/components/seo/SeoTriggerBtn';
 import RankingsTable, { type RankRow as RankRowFull, type HistoryRow, type MarketRow } from '@/components/seo/RankingsTable';
 import SeoKeywordsManager from '@/components/seo/SeoKeywordsManager';
@@ -67,35 +67,43 @@ export default async function MarketingSeoPage({
   params: { property_id: string };
   searchParams?: { tab?: string; loc?: string; sub?: string };
 }) {
-  const propertyId = Number(params.property_id);
   const tab = searchParams?.tab ?? 'overview';
   const locFilter = searchParams?.loc ?? 'all';
   const aiSub = searchParams?.sub ?? 'visibility';
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
-  const { data: cfg } = await sb.from('v_seo_property_config').select('*').eq('property_id', propertyId).maybeSingle();
-  const domain = (cfg?.domain as string | undefined) ?? (propertyId === 260955 ? 'thenamkhan.com' : '');
+  const propertyId = Number(params.property_id);
+  if (!Number.isFinite(propertyId) || propertyId <= 0) {
+    return <div style={{padding:24,color:'#B03826'}}>Invalid property_id</div>;
+  }
+  const { data: propCfg } = await sb.from('v_seo_property_config').select('domain,hotel_search_kw,hotel_location_code,hotel_location_name,currency').eq('property_id', propertyId).maybeSingle();
+  const propertyDomain = (propCfg as any)?.domain ?? '';
+  const propertyLocFull = (propCfg as any)?.hotel_location_name ?? '';
+  const propertyLocCity = propertyLocFull.split(',')[0].trim();
+  const propertyLocCountry = propertyLocFull.split(',').pop()?.trim() ?? '';
+  const propertyHotelKw = (propCfg as any)?.hotel_search_kw ?? '';
+  const propertyLocCode = Number((propCfg as any)?.hotel_location_code) || 0;
   const [rankRes, localRes, historyRes, marketRes, onpageRes, llmRes, pagesRes, instantRes, questionsRes, hotelRes, mentionsRes, aiIntelRes, llmRespRes, competitorRes, researchRes, blSumRes, blRes, overlapRes, trendsRes] = await Promise.all([
-    sb.from('v_seo_rankings').select('*').eq('property_id', propertyId),
-    tab === 'local' ? sb.from('v_seo_local_pack').select('*').eq('property_id', propertyId).order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+    sb.from('v_seo_rankings').select('*').eq('property_id',propertyId),
+    tab === 'local' ? sb.from('v_seo_local_pack').select('*').order('snapshot_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_ranking_history').select('keyword_id,keyword,location_name,location_code,snapshot_date,position,serp_features').limit(500) : Promise.resolve({ data: [] }),
     tab === 'rankings' ? sb.from('v_seo_market_comparison').select('*') : Promise.resolve({ data: [] }),
-    tab === 'technical' ? sb.from('v_seo_onpage').select('*').eq('property_id', propertyId).order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
+    tab === 'technical' ? sb.from('v_seo_onpage').select('*').order('page_score', { ascending: true }).limit(50) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_snapshots').select('*').eq('property_id', propertyId).order('snapshot_date', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
     tab === 'pages' ? sb.from('v_seo_ranked_pages').select('url,keyword,position,volume,search_intent').eq('property_id', propertyId).order('position', { ascending: true }).limit(500) : Promise.resolve({ data: [] }),
     (tab === 'technical' || tab === 'ai-web' || tab === 'pages') ? sb.from('v_seo_instant_pages').select('url,page_title,title_length,h1,h2s,word_count,readability,issues,crawl_date').eq('property_id', propertyId).order('crawl_date', { ascending: false }) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_questions').select('keyword,llm,mention_date').eq('property_id', propertyId).order('id', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
     tab === 'hotel' ? sb.from('v_seo_hotel_searches').select('position,hotel_title,stars,price_usd,rating_value,votes_count,search_keyword,is_our_property').eq('property_id', propertyId).order('snapshot_date', { ascending: false }).order('position').limit(20) : Promise.resolve({ data: [] }),
     tab === 'ai-web' ? sb.from('v_seo_llm_mentions').select('keyword,llm,snippet,mention_date').eq('property_id', propertyId).order('id', { ascending: false }).limit(30) : Promise.resolve({ data: [] }),
-    tab === 'ai-web' ? sb.from('v_seo_ai_intel').select('intel_type,target_keyword,item_name,mentions,ai_search_volume').eq('property_id', propertyId).order('mentions',{ascending:false}).limit(30) : Promise.resolve({ data: [] }),
-    tab === 'ai-web' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,model,fetched_at').eq('property_id', propertyId).order('fetched_at',{ascending:false}).limit(20) : Promise.resolve({ data: [] }),
-    tab === 'competitors' ? sb.from('v_seo_competitors').select('id,domain,label,active').eq('property_id', propertyId).order('active',{ascending:false}) : Promise.resolve({ data: [] }),
-    tab === 'research' ? sb.from('v_seo_keyword_suggestions').select('*').eq('property_id', propertyId).order('monthly_searches',{ascending:false}).limit(200) : Promise.resolve({ data: [] }),
-    tab === 'backlinks' ? sb.from('v_seo_backlinks_summary').select('*').eq('property_id', propertyId).order('fetched_at',{ascending:false}).limit(1).maybeSingle() : Promise.resolve({ data: null }),
-    tab === 'backlinks' ? sb.from('v_seo_backlinks').select('*').eq('property_id', propertyId).order('rank',{ascending:false}).limit(50) : Promise.resolve({ data: [] }),
-    tab === 'competitors' ? sb.from('v_seo_competitor_overlap').select('*').eq('property_id', propertyId).order('competitor_position',{ascending:true}).limit(100) : Promise.resolve({ data: [] }),
-    tab === 'research' ? sb.from('v_seo_trends').select('keyword,avg_interest,peak_month,interest_timeline,fetched_at').eq('property_id', propertyId).order('avg_interest',{ascending:false}).limit(10) : Promise.resolve({ data: [] }),
+    tab === 'ai-web' ? sb.from('v_seo_ai_intel').select('intel_type,target_keyword,item_name,mentions,ai_search_volume').eq('property_id',propertyId).order('mentions',{ascending:false}).limit(30) : Promise.resolve({ data: [] }),
+    tab === 'ai-web' ? sb.from('v_seo_llm_responses').select('prompt,response_text,our_domain_mentioned,platform,model,fetched_at').eq('property_id',propertyId).order('fetched_at',{ascending:false}).limit(20) : Promise.resolve({ data: [] }),
+    tab === 'competitors' ? sb.from('v_seo_competitors').select('id,domain,label,active').eq('property_id',propertyId).order('active',{ascending:false}) : Promise.resolve({ data: [] }),
+    tab === 'research' ? sb.from('v_seo_keyword_suggestions').select('*').eq('property_id',propertyId).order('monthly_searches',{ascending:false}).limit(200) : Promise.resolve({ data: [] }),
+    tab === 'backlinks' ? sb.from('v_seo_backlinks_summary').select('*').eq('property_id',propertyId).order('fetched_at',{ascending:false}).limit(1).maybeSingle() : Promise.resolve({ data: null }),
+    tab === 'backlinks' ? sb.from('v_seo_backlinks').select('*').eq('property_id',propertyId).order('rank',{ascending:false}).limit(50) : Promise.resolve({ data: [] }),
+    tab === 'competitors' ? sb.from('v_seo_competitor_overlap').select('*').eq('property_id',propertyId).order('competitor_position',{ascending:true}).limit(100) : Promise.resolve({ data: [] }),
+    tab === 'research' ? sb.from('v_seo_trends').select('keyword,avg_interest,peak_month,interest_timeline,fetched_at').eq('property_id',propertyId).order('avg_interest',{ascending:false}).limit(10) : Promise.resolve({ data: [] }),
   ]);
 
   const allRankings = (rankRes.data ?? []) as RankRow[];
@@ -156,7 +164,7 @@ export default async function MarketingSeoPage({
   const llmPlatforms = Object.keys(llmByPlatform).sort();
 
   const marketingTabs: DashboardTab[] = MARKETING_SUBPAGES.map(s => ({
-    key: s.href, label: s.label, href: `/h/${propertyId}${s.href}`, active: s.href === '/marketing/seo',
+    key: s.href, label: s.label, href: s.href, active: s.href === '/marketing/seo',
   }));
 
   const SEO_TABS = [
@@ -444,7 +452,7 @@ export default async function MarketingSeoPage({
       {/* ─── LOCAL PACK ───────────────────────────────────────────────────── */}
       {tab==='local' && (
         <div style={{ gridColumn:'1/-1' }}>
-          <Container title="Google Maps · Local pack" subtitle={`${domain} position in local map results`}
+          <Container title="Google Maps · Local pack" subtitle={`${propertyDomain} position in local map results · ${propertyLocCity} geo`}
             action={<SeoTriggerBtn mode="local" label="🔄 Refresh local data" description="5 keywords · DataForSEO Maps API" />}>
             {localPack.length===0 ? (
               <div style={{ padding:'40px 16px', textAlign:'center' }}>
@@ -489,14 +497,14 @@ export default async function MarketingSeoPage({
       {/* ─── TECHNICAL ────────────────────────────────────────────────────── */}
       {tab==='technical' && (
         <div style={{ gridColumn:'1/-1' }}>
-          <Container title="Technical SEO · On-page audit" subtitle={`${domain} · meta, titles, Core Web Vitals, page scores`}
+          <Container title="Technical SEO · On-page audit" subtitle={`${propertyDomain} · meta, titles, Core Web Vitals, page scores`}
             action={
               <SeoTriggerBtn mode="onpage" label="🔍 Run On-Page Crawl" description="Up to 50 pages · DataForSEO" />
             }>
             <div style={{ padding:'16px 0' }}>
               {instantPages.length===0&&(
                 <div style={{ padding:'32px 16px', textAlign:'center' as const, color:INK_M, fontSize:13 }}>
-                  Click <strong>Run On-Page Crawl</strong> to audit all pages from {domain} sitemap.
+                  Click <strong>Run On-Page Crawl</strong> to audit all pages from ${propertyDomain} sitemap.
                 </div>
               )}
               {instantPages.length>0&&(
@@ -573,7 +581,7 @@ export default async function MarketingSeoPage({
                   <tbody>
                     {unranked.map((p:any,i:number)=>(
                       <tr key={i} style={{borderBottom:`1px solid ${HAIR}`}}>
-                        <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:GREEN}}>{(p.url as string).replace(/^https?:\/\/[^/]+/,'')}</td>
+                        <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:GREEN}}>{(p.url as string).replace(`https://${propertyDomain}`,'').replace(`https://www.${propertyDomain}`,'')}</td>
                         <td style={{padding:'5px 8px',color:INK,fontSize:11}}>{p.page_title??'—'}</td>
                         <td style={{padding:'5px 8px',fontFamily:'ui-monospace,monospace',fontSize:11,color:INK_F}}>{p.word_count??'—'}</td>
                         <td style={{padding:'5px 8px'}}>
@@ -627,7 +635,7 @@ export default async function MarketingSeoPage({
                             <td style={{padding:'7px 8px',color:INK_F,fontFamily:'ui-monospace,monospace',fontSize:11}}>{r.cpc_usd!=null?'$'+Number(r.cpc_usd).toFixed(2):'—'}</td>
                             <td style={{padding:'7px 8px',color:INK_F,fontSize:11}}>{r.competition!=null?(r.competition*100).toFixed(0)+'%':'—'}</td>
                             <td style={{padding:'7px 8px'}}>
-                              <a href={`/h/${propertyId}/marketing/seo?tab=keywords`} style={{fontSize:10,padding:'2px 8px',border:`1px solid ${GREEN}`,borderRadius:3,color:GREEN,textDecoration:'none',whiteSpace:'nowrap' as const}}>+ Add</a>
+                              <a href={`/marketing/seo?tab=keywords`} style={{fontSize:10,padding:'2px 8px',border:`1px solid ${GREEN}`,borderRadius:3,color:GREEN,textDecoration:'none',whiteSpace:'nowrap' as const}}>+ Add</a>
                             </td>
                           </tr>
                         );
@@ -688,7 +696,7 @@ export default async function MarketingSeoPage({
 
       {tab==='backlinks' && (
         <div style={{ gridColumn:'1/-1' }}>
-          <Container title="Backlinks · Link profile" subtitle={`${domain} · referring domains, authority, anchor distribution`}
+          <Container title="Backlinks · Link profile" subtitle={`${propertyDomain} · referring domains, authority, anchor distribution`}
             action={
               <div style={{display:'flex',gap:8}}>
                 <SeoTriggerBtn mode="backlinks" label="↻ Refresh backlinks" description="DataForSEO Backlinks API · top 50" />
@@ -737,7 +745,7 @@ export default async function MarketingSeoPage({
                     </table>
                     <div style={{marginTop:12,padding:'10px 14px',background:'#F4EFE2',borderRadius:5,fontSize:11,color:INK_M,display:'flex',gap:16,flexWrap:'wrap' as const,alignItems:'center'}}>
                       <strong style={{color:INK}}>CTA options:</strong>
-                      <a href={`mailto:?subject=Backlink+Outreach+—+${domain}&body=Hi,%0A%0AWe+noticed+you+link+to+similar+eco+lodges+in+Southeast+Asia.+We+would+love+to+be+featured+in+your+content+too.%0A%0AWe+are+an+award-winning+independent+hotel.%0A%0Ahttps://${domain}%0A%0ABest+regards`} style={{fontSize:11,padding:'4px 10px',border:`1px solid ${GREEN}`,borderRadius:4,color:GREEN,textDecoration:'none'}}>📧 Outreach template</a>
+                      <a href={`mailto:?subject=Backlink+Outreach+—+${propertyDomain}&body=Hi,%0A%0AWe+noticed+you+link+to+similar+properties.+We+would+love+to+be+featured+in+your+content+too.%0A%0Ahttps://${propertyDomain}%0A%0ABest+regards`} style={{fontSize:11,padding:'4px 10px',border:`1px solid ${GREEN}`,borderRadius:4,color:GREEN,textDecoration:'none'}}>📧 Outreach template</a>
                       <span style={{fontSize:11,color:INK_F}}>Last updated: {blSum.fetched_at?.slice(0,10)}</span>
                     </div>
                   </div>
@@ -797,7 +805,7 @@ export default async function MarketingSeoPage({
           {/* Visibility sub-tab */}
           {aiSub==='visibility' && (
             <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px', marginBottom:16 }}>
-              <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>{domain} in AI search — LLM Mentions</div>
+              <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:12 }}>{propertyDomain} in AI search — LLM Mentions</div>
               {llmSnapshot && llmSnapshot.total_mentions > 0 && (
                 <div>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:8, marginBottom:16 }}>
@@ -820,7 +828,7 @@ export default async function MarketingSeoPage({
                   ):null}
                   {questionsRows.length>0&&(
                     <>
-                      <div style={{fontSize:12,fontWeight:600,color:INK,marginBottom:8}}>AI queries mentioning {domain}</div>
+                      <div style={{fontSize:12,fontWeight:600,color:INK,marginBottom:8}}>AI queries mentioning {propertyDomain}</div>
                       <div style={{display:'flex',flexWrap:'wrap' as const,gap:4,marginBottom:12}}>
                         {questionsRows.map((q,i)=>(<span key={i} style={{fontSize:11,border:'1px solid #E6DFCC',padding:'3px 10px',borderRadius:4,color:'#5A5A5A',background:'#F9F6F0'}}>{q.keyword}</span>))}
                       </div>
@@ -829,7 +837,7 @@ export default async function MarketingSeoPage({
                   <div style={{ fontSize:10,color:INK_F }}>Last fetched: {llmSnapshot.snapshot_date} · {llmSnapshot.target}</div>
                 </div>
               )}
-              <div style={{ fontSize:12, fontWeight:700, color:INK, marginTop:16, marginBottom:12 }}>What AI says about {domain} — top 30 triggers</div>
+              <div style={{ fontSize:12, fontWeight:700, color:INK, marginTop:16, marginBottom:12 }}>What AI says about {propertyDomain} — top 30 triggers</div>
               {mentionsRows.length===0?(
                 <div style={{ fontSize:12, color:INK_M }}>Click <strong>↻ Refresh</strong> to fetch AI mention details.</div>
               ):(
@@ -949,18 +957,18 @@ export default async function MarketingSeoPage({
                   </table>
                 )}
                 <div style={{ marginTop:12, padding:'10px 14px', background:'#FFF8E1', border:`1px solid ${AMBER}`, borderRadius:5, fontSize:11, color:'#5A5A5A' }}>
-                  <strong>Fix required:</strong> Add <code>@type: Hotel</code> JSON-LD schema to {domain} homepage and <code>@type: Product</code> + <code>Offer</code> to each retreat page. Without this, Google AI cannot classify the site as a bookable hotel and won&apos;t surface it for commercial queries like &quot;wellness retreat laos&quot; or &quot;eco lodge luang prabang&quot;.
+                  <strong>Fix required:</strong> Add <code>@type: Hotel</code> JSON-LD schema to {propertyDomain} homepage and <code>@type: Product</code> + <code>Offer</code> to each retreat page. Without this, Google AI cannot classify the site as a bookable hotel and won&apos;t surface it for commercial queries like &quot;wellness retreat laos&quot; or &quot;eco lodge luang prabang&quot;.
                 </div>
               </div>
               <div style={{ background:'#FFFFFF', border:`1px solid ${HAIR}`, borderRadius:6, padding:'16px 20px' }}>
-                <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:8 }}>Schema to implement on {domain} (copy to CMS &lt;head&gt;)</div>
+                <div style={{ fontSize:12, fontWeight:700, color:INK, marginBottom:8 }}>Schema to implement on {propertyDomain} (copy to CMS &lt;head&gt;)</div>
                 <pre style={{ background:'#1B1B1B', color:'#E6DFCC', padding:'14px 16px', borderRadius:6, fontSize:10, lineHeight:1.6, overflow:'auto', whiteSpace:'pre' as const }}>{`<script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "Hotel",
   "name": "The Namkhan",
   "alternateName": "The Namkhan, A Small Luxury Hotel of the World",
-  "url": "https://${domain}",
+  "url": "https://www.thenamkhan.com",
   "description": "5-star eco-luxury wellness retreat on the Nam Khan River, Luang Prabang, Laos. Member of Small Luxury Hotels of the World.",
   "starRating": { "@type": "Rating", "ratingValue": "5" },
   "priceRange": "$$$$",
