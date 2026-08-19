@@ -25,9 +25,6 @@ import AgentEditModal from '@/components/agents/AgentEditModal';
 import BugWidget from '@/components/cockpit/BugWidget';
 // HelpButton removed — University integrated into FloatingHOSPanel header (📚 University link)
 import FloatingHOSPanel from '@/components/chat/FloatingHOSPanel';
-// PBS brief autospec-university_module-20260725 (design item 1): global Cmd+K
-// University search palette — articles, KPI reference, learning paths, Ask-AI.
-import CommandPalette from '@/components/university/CommandPalette';
 import TopDeptStrip from '@/components/page/TopDeptStrip';
 import PropertyThemeWatcher from '@/components/PropertyThemeWatcher';
 
@@ -100,7 +97,7 @@ document.documentElement.setAttribute('data-property',v);}catch(e){}})();
         <AgentEditModal />
         <BugWidget />
         <FloatingHOSPanel />
-        <CommandPalette />
+        
         <SpeedInsights />
       </body>
     </html>
