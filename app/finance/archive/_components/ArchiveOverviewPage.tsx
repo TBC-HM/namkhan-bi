@@ -15,7 +15,6 @@
 
 import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import BrainAskPage from '@/app/holding/chat/_components/BrainAskPage';
 
 interface Props {
   propertyId: number;
@@ -107,7 +106,7 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
       {/* Ask window — the document brain, NOT Felix (PBS 2026-08-06) */}
       <div style={fullRow}>
         <Container title="Ask the archive" subtitle="Cited answers from the company document brain · contracts · SOPs · certifications" density="compact">
-          <BrainAskPage initialQuestion="" propertyId={propertyId} dept={propertyLabel ?? ''} embedded />
+          
         </Container>
       </div>
 
