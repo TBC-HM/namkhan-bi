@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
       const today = new Date().toISOString().slice(0,10);
       const rows: any[] = [];
       for (const kw of localKws) {
-        const res = await fetch('https://api.dataforseo.com/v3/serp/google/maps/live/regular', {
+        const res = await fetch('https://api.dataforseo.com/v3/serp/google/maps/live/advanced', {
           method: 'POST',
           headers: {'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json'},
           body: JSON.stringify([{keyword: kw, location_code: 2418, language_code: 'en', depth: 10}]),
@@ -276,7 +276,7 @@ export async function POST(req: NextRequest) {
       const mRes = await fetch('https://api.dataforseo.com/v3/ai_optimization/llm_mentions/target_metrics/live', {
         method: 'POST',
         headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ language_name: 'English', location_code: 2840, target: [{ domain, search_filter: 'include' }] }]),
+        body: JSON.stringify([{ language_code: 'en', location_code: 2840, target: [{ domain, search_filter: 'include' }] }]),
       });
       const mj = await mRes.json() as Record<string, unknown>;
       const metrics = ((mj?.tasks as any[])?.[0]?.result?.[0]?.aggregated_metrics ?? {}) as Record<string, any>;
@@ -327,7 +327,7 @@ export async function POST(req: NextRequest) {
       if (mode === 'hotel') {
         const res = await fetch('https://api.dataforseo.com/v3/business_data/google/my_business_info/live', {
           method: 'POST', headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify([{keyword:'The Namkhan Luang Prabang', language_code:'en', location_code:2418}]),
+          body: JSON.stringify([{keyword: cfg.hotel_search_kw, language_code: 'en', location_name: cfg.hotel_location_name}]),
         });
         const json = await res.json() as Record<string,any>;
         const items = (json?.tasks?.[0]?.result?.[0]?.items ?? []) as any[];
