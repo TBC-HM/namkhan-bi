@@ -141,7 +141,7 @@ export default async function SocialPage({ searchParams }: Props) {
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const sb = getSupabaseAdmin();
-  const [accounts, rules, programs, slots, posts, upProfiles, upAnalytics] = await Promise.all([
+  const [accounts, rules, programs, slots, posts, upProfiles, upAnalytics, upDestinations, platformSpecs] = await Promise.all([
     getSocialAccountsForProperty(NAMKHAN_PID),
     getSocialChannelRules(NAMKHAN_PID),
     getSocialPrograms(NAMKHAN_PID),
@@ -149,6 +149,8 @@ export default async function SocialPage({ searchParams }: Props) {
     getSocialPostsForProperty(NAMKHAN_PID),
     sb.from('v_up_profiles').select('*').eq('property_id', NAMKHAN_PID).then(r => r.data ?? []),
     view === 'analytics' ? sb.from('v_up_analytics').select('*').limit(50).then(r => r.data ?? []) : Promise.resolve([]),
+    sb.from('v_up_destinations').select('*').eq('property_id', NAMKHAN_PID).eq('active', true).then(r => r.data ?? []),
+    sb.from('v_social_platform_specs').select('*').then(r => r.data ?? []),
   ]);
 
   const activePlatforms = rules.filter((r) => r.active).map((r) => r.platform);
@@ -214,15 +216,22 @@ export default async function SocialPage({ searchParams }: Props) {
         )}
         {view === 'flow' && <SocialFlow slots={slots} posts={posts} />}
         {view === 'channels' && (
-          <>
-            <ChannelsManager propertyId={NAMKHAN_PID} accounts={accounts} rules={rules} programs={programs} />
-          </>
+          <ChannelsManager
+            propertyId={NAMKHAN_PID}
+            accounts={accounts}
+            rules={rules}
+            programs={programs}
+            connectedProfiles={upProfiles as any}
+            destinations={upDestinations as any}
+            platformSpecs={platformSpecs as any}
+          />
         )}
         {view === 'boost' && <BoostView />}
         {view === 'inbox' && <SocialInbox posts={posts} rules={rules} />}
 
-        {/* ── Upload Post: Publish (merged into Channels view — PBS 2026-08-20) ── */}
-        {view === 'channels' && (
+        {/* Publish block REMOVED (2026-08-20) — merged into ChannelsManager v2
+           per-card ▶ Quick post button + ✓ CONNECTED badge. See ChannelsManager. */}
+        {false && (
           <div style={{ gridColumn: '1 / -1' }}>
             {/* Connected accounts */}
             <div style={{ marginBottom: 16 }}>
@@ -465,64 +474,9 @@ export default async function SocialPage({ searchParams }: Props) {
           </div>
         )}
 
-        {/* Two-col: loop + ICP list + guardrails */}
-        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 340px)', gap: 12, alignItems: 'start' }}>
-          <Section title="Production loop" note="program → analyze">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-              {LOOP.map((s) => (
-                <div key={s.step} style={workflowCellSt}>
-                  <div style={workflowStepSt}>{s.step}</div>
-                  <div style={workflowTitleSt}>{s.title}</div>
-                  <div style={workflowDescSt}>{s.desc}</div>
-                </div>
-              ))}
-            </div>
-          </Section>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Section title="ICPs being targeted" note={`${ICPS.length} segments`}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {ICPS.map((icp) => (
-                  <div key={icp.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px' }}>
-                    <span style={{ fontSize: 16, color: FOREST }}>{icp.emoji}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, color: INK, fontWeight: 600 }}>{icp.name}</div>
-                      <div style={{ fontSize: 10, color: INK_M }}>{icp.market} · {icp.pillars.join(' · ')}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Section>
-
-            <Section title="Guardrails" note="non-negotiable">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <Callout tone="brass">Per-channel caption/hashtag/format limits live in Property Settings → Social rules.</Callout>
-                <Callout tone="warn">Nothing publishes without human sign-off in the inbox. <strong>Never skip</strong>.</Callout>
-                <Callout tone="soft">Every post comes from a program slot: category + channel + weekday. No random brand noise.</Callout>
-              </div>
-            </Section>
-          </div>
-        </div>
-
-        {/* Agent fleet */}
-        <Section title="Agent fleet" note={`${AGENTS.length} planned social specialists · queue-only`}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
-            {AGENTS.map((a) => (
-              <div key={a.name} style={agentCardSt}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: INK }}>{a.name}</span>
-                  <span style={signalPillSt}>{a.signal}</span>
-                </div>
-                <div style={{ fontSize: 11, color: INK_M, lineHeight: 1.5, marginTop: 4 }}>{a.desc}</div>
-              </div>
-            ))}
-          </div>
-        </Section>
-
-        <div style={{ gridColumn: '1 / -1', padding: '10px 12px', fontSize: 11, color: INK_M, fontStyle: 'italic', borderTop: `1px solid ${HAIR}` }}>
-          Loop: programs → generate plan → accept → inbox sign-off → export/publish.
-          Data: <code>marketing.social_calendar · social_posts · social_programs · social_channel_rules</code>.
-        </div>
+        {/* Bottom hardcoded blocks removed (2026-08-20 · PBS): Production loop / ICPs / Agent fleet
+           were static — no CTAs, no live data. ICPs live in Sales · ICP Segments (dynamic).
+           Production loop is documented in the inline banner + guardrails on each channel card. */}
       </DashboardPage>
     </div>
   );
