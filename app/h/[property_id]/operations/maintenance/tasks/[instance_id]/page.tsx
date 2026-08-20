@@ -1,8 +1,8 @@
 // app/h/[property_id]/operations/maintenance/tasks/[instance_id]/page.tsx
 // PM v3 slice 5 — task detail deep-link route
-// PM v3 slice 6 (design-system conformance, 2026-08-20): raw Tailwind color classes
-// and emoji removed; colors via var(--*) tokens, buttons via .btn-ghost
-// (same pattern as assets/[asset_id]/page.tsx).
+// PM v3 slice 6 — design-system conformance: paper-white card + hairline border,
+// token colors only, no emoji. TaskDetail is content-only; this route supplies
+// the page chrome (the hub supplies a right-side Drawer instead).
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -98,15 +98,17 @@ export default function TaskDetailPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--paper)" }}>
       <div className="max-w-4xl mx-auto p-6">
-        <button onClick={handleBack} className="mb-4 btn-ghost">
+        <button onClick={handleBack} className="btn-ghost mb-4">
           ← Back to Maintenance
         </button>
-        <TaskDetail
-          task={task}
-          propertyId={propertyId}
-          onComplete={handleComplete}
-          standalone={true}
-        />
+        <div style={{ ...S.card, padding: 24 }}>
+          <TaskDetail
+            task={task}
+            propertyId={propertyId}
+            onComplete={handleComplete}
+            standalone={true}
+          />
+        </div>
       </div>
     </div>
   );
