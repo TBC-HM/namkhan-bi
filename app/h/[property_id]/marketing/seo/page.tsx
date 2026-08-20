@@ -70,6 +70,7 @@ export default async function MarketingSeoPage({
   const tab = searchParams?.tab ?? 'overview';
   const locFilter = searchParams?.loc ?? 'all';
   const aiSub = searchParams?.sub ?? 'visibility';
+  const overviewSub = searchParams?.sub ?? 'kpis';
   const locCode = MARKETS.find(m => m.code === locFilter)?.loc ?? null;
 
   const sb = getSupabaseAdmin();
@@ -219,6 +220,21 @@ export default async function MarketingSeoPage({
       {/* ─── OVERVIEW ─────────────────────────────────────────────────────── */}
       {tab==='overview' && (
         <>
+          {/* Sub-substripe — split scroll-heavy Overview into focused subtabs */}
+          <div style={{ gridColumn:'1/-1', display:'flex', gap:4, borderBottom:`1px solid ${HAIR}`, paddingBottom:6, marginBottom:2 }}>
+            {([
+              { key:'kpis',    label:'KPIs' },
+              { key:'markets', label:'Markets' },
+              { key:'movers',  label:'Movers' },
+            ] as Array<{key:string;label:string}>).map(s=>(
+              <a key={s.key} href={`?tab=overview&loc=${locFilter}&sub=${s.key}`}
+                style={{ padding:'5px 12px', fontSize:11, fontWeight:600, borderRadius:4, textDecoration:'none',
+                  color:overviewSub===s.key?'#fff':INK_M, background:overviewSub===s.key?GREEN:'#FAFAF7',
+                  border:`1px solid ${overviewSub===s.key?GREEN:HAIR}` }}>{s.label}</a>
+            ))}
+          </div>
+
+          {overviewSub==='kpis' && (<>
           <div style={{ gridColumn:'1/-1', display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:8 }}>
             {([
               { l:'Keywords', v:allRankings.length, sub:'All markets', col:INK },
@@ -237,7 +253,9 @@ export default async function MarketingSeoPage({
               </div>
             ))}
           </div>
+          </>)}
 
+          {overviewSub==='markets' && (
           <div style={{ gridColumn:'1/-1' }}>
             <div style={{ fontSize:10, fontWeight:600, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.12em', textTransform:'uppercase' as const, marginBottom:8 }}>Market breakdown</div>
             <table style={{ width:'100%', borderCollapse:'collapse' as const, fontSize:12 }}>
@@ -268,7 +286,9 @@ export default async function MarketingSeoPage({
               </tbody>
             </table>
           </div>
+          )}
 
+          {overviewSub==='movers' && (
           <div style={{ gridColumn:'1/-1', display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
             <div>
               <div style={{ fontSize:10, fontWeight:600, color:INK_F, fontFamily:'ui-monospace,monospace', letterSpacing:'0.12em', textTransform:'uppercase' as const, marginBottom:8 }}>Best ranked keywords</div>
@@ -311,7 +331,9 @@ export default async function MarketingSeoPage({
               )}
             </div>
           </div>
+          )}
 
+          {/* SERP sync CTA — visible on all Overview subtabs */}
           <div style={{ gridColumn:'1/-1', display:'flex', gap:8, alignItems:'center', padding:'10px 14px', background:'#F4EFE2', borderRadius:6 }}>
             <span style={{ fontSize:11, fontWeight:600, color:INK, marginRight:4 }}>SERP sync</span>
             <SeoTriggerBtn propertyId={propertyId} mode="post" label="▶ Post tasks" variant="secondary" />
