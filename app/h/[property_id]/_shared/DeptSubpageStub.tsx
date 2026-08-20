@@ -69,8 +69,11 @@ export default function DeptSubpageStub({
             <p style={{ margin: 0, fontSize: 13, color: '#1B1B1B', lineHeight: 1.55 }}>
               This page is part of the Donna {deptLabel.toLowerCase()} navigation but isn&apos;t wired to
               Donna&apos;s data yet. The canonical implementation lives at{' '}
-              <a href={namkhanPath} style={{ color: '#1F3A2E', fontWeight: 600 }}>{namkhanPath}</a>
+              <code style={{ background: '#F5F0E1', padding: '1px 5px', borderRadius: 3, fontSize: 11, color: '#3A3A3A' }}>{namkhanPath}</code>
               {' '}(Namkhan-scoped). Rather than show Namkhan numbers under a Donna URL, we stop here.
+              To open the Namkhan reference:{' '}
+              <a href={`/h/${NAMKHAN_PROPERTY_ID}${namkhanPath}`} style={{ color: '#1F3A2E', fontWeight: 600 }}>view on Namkhan →</a>{' '}
+              <span style={{ color: '#8A8A8A' }}>(leaves Donna context)</span>
             </p>
             {hint && (
               <p style={{ margin: 0, fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>{hint}</p>
