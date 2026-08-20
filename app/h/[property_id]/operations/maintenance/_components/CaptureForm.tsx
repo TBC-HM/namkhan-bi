@@ -1,8 +1,12 @@
 // app/h/[property_id]/operations/maintenance/_components/CaptureForm.tsx
 // Extracted from ops/maintenance/page.tsx for slice 5 deep-link routes
+// PM v3 slice 6 — design-system conformance: form primitives styled via var(--*)
+// tokens, buttons via global .btn-primary / .btn-ghost, no emoji, no Tailwind
+// color classes. Photo capture (camera + upload fallback) stays functional.
 "use client";
 import { useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import * as S from "./pmStyles";
 
 type Category = { id: number; category_name: string; category_code: string };
 type Location = { id: number; location_name: string; location_type: string };
@@ -15,16 +19,16 @@ type CaptureFormProps = {
 };
 
 export default function CaptureForm({ propertyId, categories, locations, onSuccess }: CaptureFormProps) {
-  const [captureForm, setCaptureForm] = useState({ 
-    code: "", 
-    name: "", 
-    category: 16, 
-    location: "", 
-    manufacturer: "", 
-    model: "", 
-    serial: "", 
-    notes: "", 
-    photoUrl: "" 
+  const [captureForm, setCaptureForm] = useState({
+    code: "",
+    name: "",
+    category: 16,
+    location: "",
+    manufacturer: "",
+    model: "",
+    serial: "",
+    notes: "",
+    photoUrl: ""
   });
   const [uploading, setUploading] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string>("");
@@ -99,33 +103,35 @@ export default function CaptureForm({ propertyId, categories, locations, onSucce
         p_notes: captureForm.notes || null
       });
       if (error) throw error;
-      alert(`✅ Asset ${captureForm.code} created!`);
+      alert(`Asset ${captureForm.code} created`);
       setCaptureForm({ code: "", name: "", category: 16, location: "", manufacturer: "", model: "", serial: "", notes: "", photoUrl: "" });
       setCapturedImage("");
       if (onSuccess) onSuccess();
     } catch (e: any) {
-      alert("❌ " + e.message);
+      alert(e.message);
     } finally {
       setUploading(false);
     }
   }
 
+  const fieldLabel = { display: "block" as const, marginBottom: 4, fontWeight: 500, ...S.label };
+
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-bold mb-4">Capture New Asset</h2>
-        
+      <div style={{ ...S.card, padding: 24 }}>
+        <h2 style={{ ...S.sectionTitle, marginBottom: 16 }}>Capture New Asset</h2>
+
         {/* Photo capture section */}
-        <div className="mb-6 p-4 bg-gray-50 rounded border border-gray-200">
-          <h3 className="font-semibold mb-3">📸 Photo (Optional)</h3>
-          
+        <div className="mb-6" style={S.inset}>
+          <h3 style={{ ...S.sectionTitle, fontSize: "var(--t-lg)", marginBottom: 12 }}>Photo (Optional)</h3>
+
           {!capturedImage && !cameraActive && (
             <div className="space-y-2">
-              <button onClick={startCamera} className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
-                📷 Open Camera
+              <button onClick={startCamera} className="btn-primary w-full">
+                Open Camera
               </button>
-              <button onClick={() => fileInputRef.current?.click()} className="w-full bg-gray-600 text-white py-2 rounded hover:bg-gray-700">
-                📁 Upload Photo
+              <button onClick={() => fileInputRef.current?.click()} className="btn-ghost w-full">
+                Upload Photo
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
             </div>
@@ -133,13 +139,13 @@ export default function CaptureForm({ propertyId, categories, locations, onSucce
 
           {cameraActive && (
             <div className="space-y-2">
-              <video ref={videoRef} className="w-full rounded border border-gray-300" autoPlay playsInline />
+              <video ref={videoRef} className="w-full" style={{ borderRadius: 6, border: "1px solid var(--hairline)" }} autoPlay playsInline />
               <div className="flex gap-2">
-                <button onClick={capturePhoto} className="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700">
-                  ✓ Capture
+                <button onClick={capturePhoto} className="btn-primary flex-1">
+                  Capture
                 </button>
-                <button onClick={stopCamera} className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700">
-                  ✕ Cancel
+                <button onClick={stopCamera} className="btn-ghost flex-1">
+                  Cancel
                 </button>
               </div>
             </div>
@@ -147,9 +153,9 @@ export default function CaptureForm({ propertyId, categories, locations, onSucce
 
           {capturedImage && (
             <div className="space-y-2">
-              <img src={capturedImage} alt="Captured" className="w-full rounded border border-gray-300" />
-              <button onClick={() => setCapturedImage("")} className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700">
-                🗑 Remove
+              <img src={capturedImage} alt="Captured" className="w-full" style={{ borderRadius: 6, border: "1px solid var(--hairline)" }} />
+              <button onClick={() => setCapturedImage("")} className="btn-ghost w-full">
+                Remove
               </button>
             </div>
           )}
@@ -160,35 +166,35 @@ export default function CaptureForm({ propertyId, categories, locations, onSucce
         {/* Form fields */}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Asset Code *</label>
-            <input 
-              type="text" 
-              value={captureForm.code} 
+            <label style={fieldLabel}>Asset Code *</label>
+            <input
+              type="text"
+              value={captureForm.code}
               onChange={e => setCaptureForm({...captureForm, code: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded"
+              style={S.input}
               placeholder="e.g. AC-101"
               required
             />
           </div>
-          
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Asset Name *</label>
-            <input 
-              type="text" 
-              value={captureForm.name} 
+            <label style={fieldLabel}>Asset Name *</label>
+            <input
+              type="text"
+              value={captureForm.name}
               onChange={e => setCaptureForm({...captureForm, name: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded"
+              style={S.input}
               placeholder="e.g. Split AC Unit - Lobby"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-            <select 
-              value={captureForm.category} 
+            <label style={fieldLabel}>Category *</label>
+            <select
+              value={captureForm.category}
               onChange={e => setCaptureForm({...captureForm, category: Number(e.target.value)})}
-              className="w-full px-3 py-2 border border-gray-300 rounded"
+              style={S.input}
             >
               {categories.map(cat => (
                 <option key={cat.id} value={cat.id}>{cat.category_name} ({cat.category_code})</option>
@@ -197,11 +203,11 @@ export default function CaptureForm({ propertyId, categories, locations, onSucce
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-            <select 
-              value={captureForm.location} 
+            <label style={fieldLabel}>Location</label>
+            <select
+              value={captureForm.location}
               onChange={e => setCaptureForm({...captureForm, location: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded"
+              style={S.input}
             >
               <option value="">Select location...</option>
               {locations.map(loc => (
@@ -212,52 +218,53 @@ export default function CaptureForm({ propertyId, categories, locations, onSucce
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Manufacturer</label>
-              <input 
-                type="text" 
-                value={captureForm.manufacturer} 
+              <label style={fieldLabel}>Manufacturer</label>
+              <input
+                type="text"
+                value={captureForm.manufacturer}
                 onChange={e => setCaptureForm({...captureForm, manufacturer: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded"
+                style={S.input}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-              <input 
-                type="text" 
-                value={captureForm.model} 
+              <label style={fieldLabel}>Model</label>
+              <input
+                type="text"
+                value={captureForm.model}
                 onChange={e => setCaptureForm({...captureForm, model: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded"
+                style={S.input}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Serial Number</label>
-            <input 
-              type="text" 
-              value={captureForm.serial} 
+            <label style={fieldLabel}>Serial Number</label>
+            <input
+              type="text"
+              value={captureForm.serial}
               onChange={e => setCaptureForm({...captureForm, serial: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded"
+              style={S.input}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea 
-              value={captureForm.notes} 
+            <label style={fieldLabel}>Notes</label>
+            <textarea
+              value={captureForm.notes}
               onChange={e => setCaptureForm({...captureForm, notes: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded"
+              style={S.input}
               rows={3}
               placeholder="Installation date, warranty, special instructions..."
             />
           </div>
 
-          <button 
+          <button
             onClick={handleCapture}
             disabled={uploading || !captureForm.code || !captureForm.name}
-            className="w-full bg-green-600 text-white py-3 rounded font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="btn-primary w-full"
+            style={{ opacity: (uploading || !captureForm.code || !captureForm.name) ? 0.5 : 1 }}
           >
-            {uploading ? "Creating..." : "✓ Create Asset"}
+            {uploading ? "Creating..." : "Create Asset"}
           </button>
         </div>
       </div>
