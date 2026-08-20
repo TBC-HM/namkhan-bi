@@ -305,7 +305,7 @@ const OPS_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
   // in documentation.revenue_report_templates (key='operations_daily'). Preview
   // page at /operations/reports/scheduled/daily/preview. Backing edge fn:
   // supabase/functions/render-operations-report.
-  { value: 'operations_daily', label: 'Operations Daily Report', hrefBase: '/operations/reports/scheduled/daily/preview', dimGroups: [] },
+  { value: 'operations_daily', label: 'Operations Daily Report', hrefBase: '/h/260955/operations/reports/scheduled/daily/preview', dimGroups: [] },
   { value: 'covers', label: 'Covers', hrefBase: '/h/260955/reports?dept=operations&type=covers', dimGroups: [
     { key: 'win', label: 'Window', options: [
       { value: 'today', label: 'Today' }, { value: '7d', label: 'Last 7d' }, { value: '30d', label: 'Last 30d' },
@@ -637,15 +637,15 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'QA',               href: '/h/260955/operations/sops'            },
   ],
   quickChips: [
-    { label: 'HoD',        href: '/operations'             },
-    { label: 'Rooms',      href: '/operations/rooms'       },
-    { label: 'F&B',        href: '/operations/restaurant'  },
-    { label: 'Spa',        href: '/operations/spa'         },
-    { label: 'Activities', href: '/operations/activities'  },
-    { label: 'Retail',     href: '/operations/retail'      },
-    { label: 'Transport',  href: '/operations/transport'   },
-    { label: 'Other',      href: '/operations/other'       },
-    { label: 'Suppliers',  href: '/operations/suppliers'   },
+    { label: 'HoD',        href: '/h/260955/operations'             },
+    { label: 'Rooms',      href: '/h/260955/operations/rooms'       },
+    { label: 'F&B',        href: '/h/260955/operations/restaurant'  },
+    { label: 'Spa',        href: '/h/260955/operations/spa'         },
+    { label: 'Activities', href: '/h/260955/operations/activities'  },
+    { label: 'Retail',     href: '/h/260955/operations/retail'      },
+    { label: 'Transport',  href: '/h/260955/operations/transport'   },
+    { label: 'Other',      href: '/h/260955/operations/other'       },
+    { label: 'Suppliers',  href: '/h/260955/operations/suppliers'   },
   ],
   defaultAttn: [
     { id: 'l1', label: 'F&B waste +18% vs last week',         severity: 'medium', kind: 'leakage'     },
@@ -654,9 +654,9 @@ const OPERATIONS_CFG: DeptCfg = {
     { id: 'o2', label: 'Activities cross-sell at check-in',   severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'd1', label: 'F&B SOP 2026',          href: '/operations/restaurant' },
-    { id: 'd2', label: 'Spa treatment menu',    href: '/operations/spa'        },
-    { id: 'd3', label: 'Inventory par levels',  href: '/operations/inventory'  },
+    { id: 'd1', label: 'F&B SOP 2026',          href: '/h/260955/operations/restaurant' },
+    { id: 'd2', label: 'Spa treatment menu',    href: '/h/260955/operations/spa'        },
+    { id: 'd3', label: 'Inventory par levels',  href: '/h/260955/operations/inventory'  },
   ],
   defaultTasks: [
     { id: 't1', label: 'Restock coffee beans',         done: false, created: TODAY },
@@ -664,15 +664,15 @@ const OPERATIONS_CFG: DeptCfg = {
     { id: 't3', label: 'Audit activity bookings',      done: false, created: TODAY },
   ],
   attentionRoutes: [
-    { matcher: 'staff',      href: '/operations/staff'           },
-    { matcher: 'f&b',        href: '/operations/restaurant'      },
-    { matcher: 'restaurant', href: '/operations/restaurant'      },
-    { matcher: 'spa',        href: '/operations/spa'             },
-    { matcher: 'activit',    href: '/operations/activities'      },
-    { matcher: 'inventory',  href: '/operations/inventory'       },
+    { matcher: 'staff',      href: '/h/260955/operations/staff'           },
+    { matcher: 'f&b',        href: '/h/260955/operations/restaurant'      },
+    { matcher: 'restaurant', href: '/h/260955/operations/restaurant'      },
+    { matcher: 'spa',        href: '/h/260955/operations/spa'             },
+    { matcher: 'activit',    href: '/h/260955/operations/activities'      },
+    { matcher: 'inventory',  href: '/h/260955/operations/inventory'       },
     { matcher: 'catalog',    href: '/finance/messy-data'         },
   ],
-  defaultDrilldown: '/operations',
+  defaultDrilldown: '/h/260955/operations',
   kpiTiles: [
     { k: 'OCC TODAY',  v: '24/30', d: 'incl. 2 walk-ins'    },
     { k: 'F&B COVERS', v: '38',    d: 'lunch · today'       },
