@@ -3044,3 +3044,8 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-06 — bug-agent · fix #174
 - ## Bug #174 — DQ banner renders for informational staleness even when the user can't dismiss or act on it  ### Root cause The `getDqIssues` query in `page.tsx` 
 - touched `app/h/[property_id]/revenue/cockpit/page.tsx`
+
+### 2026-08-20 — PM v3 slice 6 · maintenance surface design-system conformance (L26)
+- Full maintenance surface (`app/h/[property_id]/operations/maintenance/*`, 8 files) rewritten from raw Tailwind to tokens + `_design` primitives: DashboardPage shell, right-side Drawer (§3.4), token status semantics (`--st-bad`/`--st-good`), zero hardcoded hex, zero emoji headings
+- `PmCalendar.tsx`: MonthCalendar atom bound to `public.v_cal_maintenance` (9-col universal feed) + Overdue/Upcoming ListContainer split (commit 0d3505f, push ledger 1691)
+- `styles/globals.css` untouched (protected); nav tab deferred to slice 7
