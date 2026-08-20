@@ -19,7 +19,7 @@
 // Reads platform specs from v_social_platform_specs (limits + required fields)
 // and destinations from v_up_destinations (auto-picks first when only 1).
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SocialAccountRow, SocialChannelRule, SocialProgram } from '@/lib/marketing';
 
@@ -243,9 +243,9 @@ export default function ChannelsManager({
       if (quickPost.platform === 'x' && quickPost.long_text_as_post) fd.set('x_long_text_as_post', 'true');
       if (quickPost.platform === 'google_business') fd.set('google_business_type', quickPost.gbp_post_type);
 
-      const res = await fetch('/api/marketing/social/quick-push', { method: 'POST', body: fd, redirect: 'manual' });
-      // 303 redirect returns opaqueredirect (via body-less follow); anything non-error we treat as sent
-      if (res.type === 'opaqueredirect' || res.ok || res.status === 303) {
+      // Follow redirect naturally — the endpoint returns 303 back to /marketing/social?view=channels
+      const res = await fetch('/api/marketing/social/quick-push', { method: 'POST', body: fd });
+      if (res.ok || res.redirected) {
         setQuickPost({ ...quickPost, busy: false, msg: '✓ Sent — check Publish or platform for confirmation.' });
         setTimeout(() => { setQuickPost(null); router.refresh(); }, 1400);
       } else {
