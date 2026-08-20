@@ -1,22 +1,26 @@
 // app/h/[property_id]/operations/maintenance/assets/[asset_id]/page.tsx
 // PM v3 slice 5 — asset detail deep-link route
+// PM v3 slice 6 — design-system conformance: token colors only, global
+// .status-pill / .btn-ghost classes, paper-white cards with hairline borders,
+// no emoji, no Tailwind color classes, tabular-nums on counts/dates.
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import * as S from "../../_components/pmStyles";
 
-type Asset = { 
-  id: number; 
-  asset_code: string; 
-  asset_name: string; 
-  category_name: string; 
-  location_name: string; 
-  status: string; 
-  manufacturer: string; 
-  model: string; 
-  maintenance_count: number; 
-  last_maintenance: string; 
+type Asset = {
+  id: number;
+  asset_code: string;
+  asset_name: string;
+  category_name: string;
+  location_name: string;
+  status: string;
+  manufacturer: string;
+  model: string;
+  maintenance_count: number;
+  last_maintenance: string;
   next_maintenance: string;
   serial_number: string;
   purchase_date: string;
@@ -24,14 +28,14 @@ type Asset = {
   notes: string;
 };
 
-type PMTask = { 
-  instance_id: string; 
-  task_code: string; 
-  title: string; 
-  scheduled_date: string; 
-  status: string; 
-  provider: string; 
-  estimated_minutes: number; 
+type PMTask = {
+  instance_id: string;
+  task_code: string;
+  title: string;
+  scheduled_date: string;
+  status: string;
+  provider: string;
+  estimated_minutes: number;
 };
 
 export default function AssetDetailPage() {
@@ -51,7 +55,7 @@ export default function AssetDetailPage() {
   async function loadAsset() {
     try {
       const sb = createClient();
-      
+
       // Load asset details
       const { data: assetData, error: assetError } = await sb
         .from("v_asset_register")
@@ -59,10 +63,10 @@ export default function AssetDetailPage() {
         .eq("property_id", propertyId)
         .eq("id", assetId)
         .single();
-      
+
       if (assetError) throw assetError;
       if (!assetData) throw new Error("Asset not found");
-      
+
       setAsset(assetData as Asset);
 
       // Load related PM tasks
@@ -73,7 +77,7 @@ export default function AssetDetailPage() {
         .eq("asset_id", assetId)
         .order("scheduled_date", { ascending: false })
         .limit(20);
-      
+
       if (tasksData) setTasks(tasksData as PMTask[]);
     } catch (e: any) {
       setError(e.message);
@@ -88,18 +92,18 @@ export default function AssetDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">Loading asset...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--paper)" }}>
+        <div style={S.muted}>Loading asset...</div>
       </div>
     );
   }
 
   if (error || !asset) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--paper)" }}>
         <div className="text-center">
-          <p className="text-red-600 mb-4">❌ {error || "Asset not found"}</p>
-          <button onClick={handleBack} className="text-blue-600 hover:text-blue-800">
+          <p className="mb-4" style={{ color: "var(--st-bad)", fontSize: "var(--t-md)" }}>{error || "Asset not found"}</p>
+          <button onClick={handleBack} className="btn-ghost">
             ← Back to Maintenance
           </button>
         </div>
@@ -108,23 +112,19 @@ export default function AssetDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: "var(--paper)" }}>
       <div className="max-w-5xl mx-auto p-6">
-        <button onClick={handleBack} className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2">
+        <button onClick={handleBack} className="btn-ghost mb-4">
           ← Back to Maintenance
         </button>
 
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="mb-6" style={{ ...S.card, padding: 24 }}>
           <div className="flex justify-between items-start mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">{asset.asset_name}</h1>
-              <p className="text-gray-600 text-lg mt-1">{asset.asset_code}</p>
+              <h1 style={{ ...S.sectionTitle, fontSize: "var(--t-2xl)" }}>{asset.asset_name}</h1>
+              <p className="mt-1" style={{ ...S.muted, fontSize: "var(--t-lg)" }}>{asset.asset_code}</p>
             </div>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              asset.status === "active" ? "bg-green-100 text-green-800" :
-              asset.status === "maintenance" ? "bg-yellow-100 text-yellow-800" :
-              "bg-gray-100 text-gray-800"
-            }`}>
+            <span className={S.statusPillClass(asset.status)}>
               {asset.status}
             </span>
           </div>
@@ -132,82 +132,79 @@ export default function AssetDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
             <div className="space-y-3">
               <div>
-                <span className="text-gray-600 text-sm">Category</span>
-                <p className="font-medium text-gray-900">{asset.category_name}</p>
+                <span style={S.label}>Category</span>
+                <p style={S.value}>{asset.category_name}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Location</span>
-                <p className="font-medium text-gray-900">{asset.location_name}</p>
+                <span style={S.label}>Location</span>
+                <p style={S.value}>{asset.location_name}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Manufacturer</span>
-                <p className="font-medium text-gray-900">{asset.manufacturer || "—"}</p>
+                <span style={S.label}>Manufacturer</span>
+                <p style={S.value}>{asset.manufacturer || "—"}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Model</span>
-                <p className="font-medium text-gray-900">{asset.model || "—"}</p>
+                <span style={S.label}>Model</span>
+                <p style={S.value}>{asset.model || "—"}</p>
               </div>
             </div>
 
             <div className="space-y-3">
               <div>
-                <span className="text-gray-600 text-sm">Serial Number</span>
-                <p className="font-medium text-gray-900">{asset.serial_number || "—"}</p>
+                <span style={S.label}>Serial Number</span>
+                <p style={S.value}>{asset.serial_number || "—"}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Total Maintenance Tasks</span>
-                <p className="font-medium text-gray-900">{asset.maintenance_count}</p>
+                <span style={S.label}>Total Maintenance Tasks</span>
+                <p style={{ ...S.value, ...S.num }}>{asset.maintenance_count}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Last Maintenance</span>
-                <p className="font-medium text-gray-900">{asset.last_maintenance || "—"}</p>
+                <span style={S.label}>Last Maintenance</span>
+                <p style={{ ...S.value, ...S.num }}>{asset.last_maintenance || "—"}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Next Maintenance</span>
-                <p className="font-medium text-gray-900">{asset.next_maintenance || "—"}</p>
+                <span style={S.label}>Next Maintenance</span>
+                <p style={{ ...S.value, ...S.num }}>{asset.next_maintenance || "—"}</p>
               </div>
             </div>
           </div>
 
           {asset.notes && (
-            <div className="mt-6 p-4 bg-gray-50 rounded border border-gray-200">
-              <span className="text-gray-600 text-sm font-medium">Notes:</span>
-              <p className="mt-2 text-gray-900">{asset.notes}</p>
+            <div className="mt-6" style={S.inset}>
+              <span style={{ ...S.label, fontWeight: 500 }}>Notes:</span>
+              <p className="mt-2" style={{ color: "var(--ink)", fontSize: "var(--t-md)" }}>{asset.notes}</p>
             </div>
           )}
         </div>
 
         {/* Related PM Tasks */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Maintenance History</h2>
-          
+        <div style={{ ...S.card, padding: 24 }}>
+          <h2 style={{ ...S.sectionTitle, fontSize: "var(--t-xl)", marginBottom: 16 }}>Maintenance History</h2>
+
           {tasks.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No maintenance tasks found for this asset</p>
+            <p className="text-center py-8" style={S.muted}>No maintenance tasks found for this asset</p>
           ) : (
             <div className="space-y-3">
               {tasks.map((task) => (
                 <Link
                   key={task.instance_id}
                   href={`/h/${propertyId}/operations/maintenance/tasks/${task.instance_id}`}
-                  className="block p-4 border border-gray-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                  className="block"
+                  style={{ ...S.inset, background: "var(--paper-warm)", textDecoration: "none" }}
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-medium text-gray-900">{task.title}</h3>
-                      <p className="text-sm text-gray-600">{task.task_code}</p>
+                      <h3 style={S.value}>{task.title}</h3>
+                      <p style={S.label}>{task.task_code}</p>
                     </div>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      task.status === "completed" ? "bg-green-100 text-green-800" :
-                      task.status === "scheduled" ? "bg-yellow-100 text-yellow-800" :
-                      "bg-gray-100 text-gray-800"
-                    }`}>
+                    <span className={S.statusPillClass(task.status, task.scheduled_date)}>
                       {task.status}
                     </span>
                   </div>
-                  <div className="mt-2 flex gap-4 text-sm text-gray-600">
-                    <span>📅 {task.scheduled_date}</span>
-                    <span>⏱️ {task.estimated_minutes} min</span>
-                    <span>🔧 {task.provider}</span>
+                  <div className="mt-2 flex gap-4" style={{ ...S.label, ...S.num }}>
+                    <span>{task.scheduled_date}</span>
+                    <span>{task.estimated_minutes} min</span>
+                    <span>{task.provider}</span>
                   </div>
                 </Link>
               ))}
