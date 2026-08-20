@@ -7,9 +7,16 @@
 //   none / NULL  → actual_minutes + notes (previous behaviour)
 // Also fixes completion RPC: fn_complete_pm_task did not exist in the DB;
 // canonical bridge is public.fn_complete_task_instance (verified via pg_proc).
+// PM v3 slice 6 — design-system conformance:
+//   - CONTENT-ONLY component now: the center-modal overlay chrome was removed.
+//     The hub renders this inside the design-system <Drawer> (right side, §3.4);
+//     the /tasks/[instance_id] route renders it inside a paper-white card.
+//   - All colors via var(--*) tokens, status via global .status-pill classes,
+//     buttons via global .btn-primary, zero Tailwind color classes, no emoji.
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import { createClient } from "@/lib/supabase/client";
+import * as S from "./pmStyles";
 
 type PMTask = {
   instance_id: string;
@@ -38,6 +45,8 @@ type TaskDetailProps = {
   propertyId: number;
   onComplete?: () => void;
   onClose?: () => void;
+  /** true = full-page route context (renders the title header);
+   *  false = drawer context (Drawer supplies title + close). */
   standalone?: boolean;
 };
 
@@ -115,7 +124,7 @@ export default function TaskDetail({ task, propertyId, onComplete, onClose, stan
       }
       setPhotos(prev => [...prev, ...uploaded]);
     } catch (e: any) {
-      alert("❌ Photo upload failed: " + e.message);
+      alert("Photo upload failed: " + e.message);
     } finally {
       setUploading(false);
     }
@@ -174,213 +183,206 @@ export default function TaskDetail({ task, propertyId, onComplete, onClose, stan
       });
       if (error) throw error;
       if (data === false) throw new Error("Task not in a completable state (already done or cancelled)");
-      alert("✅ Task completed!");
+      alert("Task completed");
       if (onComplete) onComplete();
       if (onClose) onClose();
     } catch (e: any) {
-      alert("❌ " + e.message);
+      alert(e.message);
     } finally {
       setSubmitting(false);
     }
   }
 
-  const containerClass = standalone
-    ? "min-h-screen bg-gray-50 p-6"
-    : "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4";
-
   const blockedReason = verificationBlocked();
 
+  const fieldLabel: CSSProperties = { display: "block", marginBottom: 4, fontWeight: 500, ...S.label };
+
   return (
-    <div className={containerClass}>
-      <div className={standalone ? "max-w-3xl mx-auto bg-white rounded-lg shadow-lg p-6" : "bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"}>
+    <div>
+      {standalone && (
         <div className="flex justify-between items-start mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">{task.title}</h2>
-          {onClose && (
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl font-bold">×</button>
+          <h2 style={{ ...S.sectionTitle, fontSize: "var(--t-xl)" }}>{task.title}</h2>
+        </div>
+      )}
+
+      <div className="space-y-3 mb-6">
+        <div className="flex gap-2 flex-wrap">
+          <span className="status-pill pill-info">{task.task_code}</span>
+          <span className={S.statusPillClass(task.status, task.scheduled_date)}>{task.status}</span>
+          <span className="status-pill pill-info">{task.provider}</span>
+          {task.verification_type && (
+            <span className="status-pill pill-pending">
+              {isPhoto ? "photo evidence" : isChecklist ? "checklist" : isMeasurement ? "readings" : task.verification_type}
+            </span>
           )}
         </div>
 
-        <div className="space-y-3 mb-6">
-          <div className="flex gap-2 flex-wrap">
-            <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">{task.task_code}</span>
-            <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-              task.status === "completed" ? "bg-green-100 text-green-800" :
-              task.status === "scheduled" ? "bg-yellow-100 text-yellow-800" :
-              "bg-gray-100 text-gray-800"
-            }`}>{task.status}</span>
-            <span className="inline-block px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">{task.provider}</span>
-            {task.verification_type && (
-              <span className="inline-block px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
-                {isPhoto ? "📷 photo" : isChecklist ? "☑ checklist" : isMeasurement ? "📏 readings" : task.verification_type}
-              </span>
-            )}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <span style={S.label}>Asset:</span>
+            <p style={S.value}>{task.asset_code} – {task.asset_name}</p>
           </div>
-
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-600">Asset:</span>
-              <p className="font-medium">{task.asset_code} – {task.asset_name}</p>
-            </div>
-            <div>
-              <span className="text-gray-600">Scheduled:</span>
-              <p className="font-medium">{task.scheduled_date}</p>
-            </div>
-            <div>
-              <span className="text-gray-600">Estimated:</span>
-              <p className="font-medium">{task.estimated_minutes} min</p>
-            </div>
-            <div>
-              <span className="text-gray-600">Assigned:</span>
-              <p className="font-medium">{task.assigned_to || "Unassigned"}</p>
-            </div>
+          <div>
+            <span style={S.label}>Scheduled:</span>
+            <p style={{ ...S.value, ...S.num }}>{task.scheduled_date}</p>
           </div>
-
-          {task.description && (
-            <div className="mt-4">
-              <span className="text-gray-600 text-sm">Description:</span>
-              <p className="mt-1 text-gray-800">{task.description}</p>
-            </div>
-          )}
-
-          {task.sop_doc_id && (
-            <div className="mt-4 p-3 bg-blue-50 rounded border border-blue-200">
-              <span className="text-sm text-blue-900">📋 SOP: {task.sop_doc_id}</span>
-            </div>
-          )}
+          <div>
+            <span style={S.label}>Estimated:</span>
+            <p style={{ ...S.value, ...S.num }}>{task.estimated_minutes} min</p>
+          </div>
+          <div>
+            <span style={S.label}>Assigned:</span>
+            <p style={S.value}>{task.assigned_to || "Unassigned"}</p>
+          </div>
         </div>
 
-        {task.status === "completed" ? (
-          <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded">
-            <p className="text-green-900 font-medium">✅ Completed</p>
-            <div className="mt-2 text-sm text-green-800">
-              <p>Duration: {task.actual_minutes} min</p>
-              <p>Completed: {task.completed_at}</p>
-              <p>By: {task.completed_by}</p>
-            </div>
+        {task.description && (
+          <div className="mt-4">
+            <span style={S.label}>Description:</span>
+            <p className="mt-1" style={{ color: "var(--ink-soft)", fontSize: "var(--t-md)" }}>{task.description}</p>
           </div>
-        ) : (
-          <div className="mt-6 border-t pt-4">
-            <h3 className="font-bold text-lg mb-4">Complete Task</h3>
-            <div className="space-y-4">
+        )}
 
-              {isChecklist && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Verification Checklist *</label>
-                  {sopLoading ? (
-                    <p className="text-sm text-gray-500">Loading SOP checklist…</p>
-                  ) : checklistItems.length === 0 ? (
-                    <p className="text-sm text-gray-500 italic">No checklist items found in the linked SOP — complete with duration and notes.</p>
-                  ) : (
-                    <div className="space-y-2 border border-gray-200 rounded p-3 bg-gray-50">
-                      {checklistItems.map(item => (
-                        <label key={item} className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={!!completionForm.checklist[item]}
-                            onChange={e => setCompletionForm({
-                              ...completionForm,
-                              checklist: { ...completionForm.checklist, [item]: e.target.checked }
-                            })}
-                            className="mt-0.5"
-                          />
-                          <span>{item}</span>
-                        </label>
-                      ))}
-                      <p className="text-xs text-gray-500 pt-1">
-                        {checklistItems.filter(i => completionForm.checklist[i]).length}/{checklistItems.length} checked
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {isPhoto && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Photo Evidence * (min. 1)</label>
-                  <div className="flex gap-2">
-                    <label className="flex-1 text-center px-3 py-2 border border-gray-300 rounded cursor-pointer bg-gray-50 hover:bg-gray-100 text-sm">
-                      📷 Take Photo
-                      <input type="file" accept="image/*" capture="environment" className="hidden"
-                        onChange={e => { handlePhotoFiles(e.target.files); e.target.value = ""; }} />
-                    </label>
-                    <label className="flex-1 text-center px-3 py-2 border border-gray-300 rounded cursor-pointer bg-gray-50 hover:bg-gray-100 text-sm">
-                      🖼 Upload
-                      <input type="file" accept="image/*" multiple className="hidden"
-                        onChange={e => { handlePhotoFiles(e.target.files); e.target.value = ""; }} />
-                    </label>
-                  </div>
-                  {uploading && <p className="text-sm text-gray-500 mt-2">Uploading…</p>}
-                  {photos.length > 0 && (
-                    <div className="flex gap-2 mt-3 flex-wrap">
-                      {photos.map(p => (
-                        <div key={p.path} className="relative">
-                          <img src={p.previewUrl} alt="evidence" className="w-20 h-20 object-cover rounded border border-gray-300" />
-                          <button
-                            onClick={() => setPhotos(photos.filter(x => x.path !== p.path))}
-                            className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-xs leading-5"
-                          >×</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {isMeasurement && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Readings *</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["r1", "r2", "r3"] as const).map((k, idx) => (
-                      <div key={k}>
-                        <label className="block text-xs text-gray-600 mb-1">Reading {idx + 1}</label>
-                        <input
-                          type="number"
-                          step="any"
-                          value={completionForm.measurements[k]}
-                          onChange={e => setCompletionForm({
-                            ...completionForm,
-                            measurements: { ...completionForm.measurements, [k]: e.target.value }
-                          })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Actual Duration (minutes) *</label>
-                <input
-                  type="number"
-                  value={completionForm.actual_minutes || ""}
-                  onChange={e => setCompletionForm({...completionForm, actual_minutes: Number(e.target.value)})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded"
-                  min="1"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  value={completionForm.notes}
-                  onChange={e => setCompletionForm({...completionForm, notes: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded"
-                  rows={3}
-                  placeholder="Any observations or issues..."
-                />
-              </div>
-              <button
-                onClick={handleComplete}
-                disabled={submitting || uploading || !completionForm.actual_minutes || !!blockedReason}
-                className="w-full bg-green-600 text-white py-3 rounded font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                {submitting ? "Saving..." : blockedReason ? blockedReason : "✓ Complete Task"}
-              </button>
-            </div>
+        {task.sop_doc_id && (
+          <div className="mt-4" style={S.inset}>
+            <span style={{ fontSize: "var(--t-md)", color: "var(--ink)" }}>SOP: {task.sop_doc_id}</span>
           </div>
         )}
       </div>
+
+      {task.status === "completed" ? (
+        <div className="mt-6" style={{ ...S.inset, borderColor: "var(--st-good-bd)", background: "var(--st-good-bg)" }}>
+          <p style={{ color: "var(--moss)", fontWeight: 600, fontSize: "var(--t-md)", margin: 0 }}>Completed</p>
+          <div className="mt-2" style={{ fontSize: "var(--t-md)", color: "var(--ink-soft)" }}>
+            <p style={S.num}>Duration: {task.actual_minutes} min</p>
+            <p style={S.num}>Completed: {task.completed_at}</p>
+            <p>By: {task.completed_by}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-6 pt-4" style={{ borderTop: "1px solid var(--hairline)" }}>
+          <h3 style={{ ...S.sectionTitle, marginBottom: 16 }}>Complete Task</h3>
+          <div className="space-y-4">
+
+            {isChecklist && (
+              <div>
+                <label style={fieldLabel}>Verification Checklist *</label>
+                {sopLoading ? (
+                  <p style={S.muted}>Loading SOP checklist…</p>
+                ) : checklistItems.length === 0 ? (
+                  <p style={{ ...S.muted, fontStyle: "italic" }}>No checklist items found in the linked SOP — complete with duration and notes.</p>
+                ) : (
+                  <div className="space-y-2" style={S.inset}>
+                    {checklistItems.map(item => (
+                      <label key={item} className="flex items-start gap-2 cursor-pointer" style={{ fontSize: "var(--t-md)", color: "var(--ink)" }}>
+                        <input
+                          type="checkbox"
+                          checked={!!completionForm.checklist[item]}
+                          onChange={e => setCompletionForm({
+                            ...completionForm,
+                            checklist: { ...completionForm.checklist, [item]: e.target.checked }
+                          })}
+                          className="mt-0.5"
+                        />
+                        <span>{item}</span>
+                      </label>
+                    ))}
+                    <p className="pt-1" style={{ ...S.label, ...S.num }}>
+                      {checklistItems.filter(i => completionForm.checklist[i]).length}/{checklistItems.length} checked
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isPhoto && (
+              <div>
+                <label style={fieldLabel}>Photo Evidence * (min. 1)</label>
+                <div className="flex gap-2">
+                  <label className="flex-1 text-center cursor-pointer" style={{ ...S.inset, padding: "8px 12px", fontSize: "var(--t-md)", color: "var(--ink)" }}>
+                    Take Photo
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => { handlePhotoFiles(e.target.files); e.target.value = ""; }} />
+                  </label>
+                  <label className="flex-1 text-center cursor-pointer" style={{ ...S.inset, padding: "8px 12px", fontSize: "var(--t-md)", color: "var(--ink)" }}>
+                    Upload
+                    <input type="file" accept="image/*" multiple className="hidden"
+                      onChange={e => { handlePhotoFiles(e.target.files); e.target.value = ""; }} />
+                  </label>
+                </div>
+                {uploading && <p className="mt-2" style={S.muted}>Uploading…</p>}
+                {photos.length > 0 && (
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {photos.map(p => (
+                      <div key={p.path} className="relative">
+                        <img src={p.previewUrl} alt="evidence" className="w-20 h-20 object-cover" style={{ borderRadius: 6, border: "1px solid var(--hairline)" }} />
+                        <button
+                          onClick={() => setPhotos(photos.filter(x => x.path !== p.path))}
+                          className="absolute -top-2 -right-2 rounded-full w-5 h-5 text-xs leading-5"
+                          style={{ background: "var(--oxblood)", color: "var(--paper-warm)", border: "none" }}
+                        >×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isMeasurement && (
+              <div>
+                <label style={fieldLabel}>Readings *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["r1", "r2", "r3"] as const).map((k, idx) => (
+                    <div key={k}>
+                      <label style={{ ...S.label, display: "block", marginBottom: 4, fontSize: "var(--t-xs)" }}>Reading {idx + 1}</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={completionForm.measurements[k]}
+                        onChange={e => setCompletionForm({
+                          ...completionForm,
+                          measurements: { ...completionForm.measurements, [k]: e.target.value }
+                        })}
+                        style={S.input}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label style={fieldLabel}>Actual Duration (minutes) *</label>
+              <input
+                type="number"
+                value={completionForm.actual_minutes || ""}
+                onChange={e => setCompletionForm({...completionForm, actual_minutes: Number(e.target.value)})}
+                style={S.input}
+                min="1"
+                required
+              />
+            </div>
+            <div>
+              <label style={fieldLabel}>Notes</label>
+              <textarea
+                value={completionForm.notes}
+                onChange={e => setCompletionForm({...completionForm, notes: e.target.value})}
+                style={S.input}
+                rows={3}
+                placeholder="Any observations or issues..."
+              />
+            </div>
+            <button
+              onClick={handleComplete}
+              disabled={submitting || uploading || !completionForm.actual_minutes || !!blockedReason}
+              className="btn-primary w-full"
+              style={{ opacity: (submitting || uploading || !completionForm.actual_minutes || blockedReason) ? 0.5 : 1 }}
+            >
+              {submitting ? "Saving..." : blockedReason ? blockedReason : "Complete Task"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
