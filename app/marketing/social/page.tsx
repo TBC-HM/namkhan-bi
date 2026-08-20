@@ -103,15 +103,20 @@ const AGENTS: SocialAgent[] = [
 
 // ─── View params ──────────────────────────────────────────────────────────
 
-type View = 'calendar' | 'flow' | 'channels' | 'boost' | 'inbox' | 'publish' | 'analytics' | 'queue' | 'comments';
-const VIEWS: View[] = ['calendar', 'flow', 'channels', 'boost', 'inbox', 'publish', 'analytics', 'queue', 'comments'];
+// PBS 2026-08-20 — merged Publish into Channels (per-channel push + Quick Post
+// live under Channels view). The 'publish' view key is kept as a legacy alias
+// so old ?view=publish URLs still resolve — parseView() below aliases it.
+type View = 'calendar' | 'flow' | 'channels' | 'boost' | 'inbox' | 'analytics' | 'queue' | 'comments';
+const VIEWS: View[] = ['calendar', 'flow', 'channels', 'boost', 'inbox', 'analytics', 'queue', 'comments'];
 const VIEW_LABEL: Record<View, string> = {
   calendar: 'Calendar', flow: 'Content flow', channels: 'Channels', boost: 'Boost', inbox: 'Channel inbox',
-  publish: '🚀 Publish', analytics: '📊 Analytics', queue: '⏳ Queue', comments: '💬 Comments',
+  analytics: 'Analytics', queue: 'Queue', comments: 'Comments',
 };
 
 function parseView(v: string | string[] | undefined): View {
   const s = typeof v === 'string' ? v : 'calendar';
+  // Legacy alias: publish is merged into channels (PBS 2026-08-20)
+  if (s === 'publish') return 'channels';
   return (VIEWS as string[]).includes(s) ? (s as View) : 'calendar';
 }
 type Win = 14 | 28 | 60;
@@ -180,11 +185,14 @@ export default async function SocialPage({ searchParams }: Props) {
         subtitle="AI social cockpit — calendar · flow · channels · boost · inbox"
         tabs={tabs}
       >
-        {/* Sub-strip */}
-        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 8, borderBottom: `1px solid ${HAIR}` }}>
+        {/* Sub-strip — standard underline pattern (matches SEO / other cockpit pages) */}
+        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 0, borderBottom: `2px solid ${HAIR}`, marginBottom: 0, flexWrap: 'wrap' as const }}>
           {VIEWS.map((v) => (
             <a key={v} href={`?view=${v}`}
-               style={{ ...subLinkSt, ...(v === view ? subLinkActiveSt : {}) }}>
+               style={{ padding: '8px 16px', fontSize: 12, fontWeight: 600, textDecoration: 'none',
+                        color: v === view ? FOREST : INK_M,
+                        borderBottom: v === view ? `2px solid ${FOREST}` : '2px solid transparent',
+                        marginBottom: -2, whiteSpace: 'nowrap' as const }}>
               {VIEW_LABEL[v]}
             </a>
           ))}
@@ -206,13 +214,15 @@ export default async function SocialPage({ searchParams }: Props) {
         )}
         {view === 'flow' && <SocialFlow slots={slots} posts={posts} />}
         {view === 'channels' && (
-          <ChannelsManager propertyId={NAMKHAN_PID} accounts={accounts} rules={rules} programs={programs} />
+          <>
+            <ChannelsManager propertyId={NAMKHAN_PID} accounts={accounts} rules={rules} programs={programs} />
+          </>
         )}
         {view === 'boost' && <BoostView />}
         {view === 'inbox' && <SocialInbox posts={posts} rules={rules} />}
 
-        {/* ── Upload Post: Publish ────────────────────────────────────── */}
-        {view === 'publish' && (
+        {/* ── Upload Post: Publish (merged into Channels view — PBS 2026-08-20) ── */}
+        {view === 'channels' && (
           <div style={{ gridColumn: '1 / -1' }}>
             {/* Connected accounts */}
             <div style={{ marginBottom: 16 }}>
