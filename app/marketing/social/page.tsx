@@ -235,6 +235,45 @@ export default async function SocialPage({ searchParams }: Props) {
               )}
             </div>
 
+            {/* Quick Post composer — PBS 2026-08-20 */}
+            {upProfiles.length > 0 && (
+              <div style={{ marginBottom: 20, padding: '16px 18px', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: INK, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>▶ Quick post</div>
+                  <div style={{ fontSize: 10, color: INK_M }}>Compose → publishes now or schedules · goes straight to Upload Post</div>
+                </div>
+                <form action="/api/marketing/social/quick-push" method="POST">
+                  <input type="hidden" name="property_id" value="260955" />
+                  <input type="hidden" name="return_to" value="/marketing/social?view=publish" />
+
+                  <div style={{ fontSize: 10, fontWeight: 600, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 6 }}>Platforms · {upProfiles.length} connected</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 12 }}>
+                    {(upProfiles as any[]).map((p: any) => (
+                      <label key={p.platform} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', background: '#F9F6F0', border: `1px solid ${HAIR}`, borderRadius: 20, fontSize: 12, cursor: 'pointer' }}>
+                        <input type="checkbox" name="platforms" value={p.platform} defaultChecked style={{ margin: 0, cursor: 'pointer' }} />
+                        <span style={{ fontWeight: 600, color: INK }}>{(p.platform || '').replace(/_/g, ' ').toUpperCase()}</span>
+                        <span style={{ color: INK_M, fontSize: 10 }}>· {p.display_name ?? p.handle}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <textarea name="caption" required placeholder="Caption — what you want to say. Emoji ok. First line becomes the title." rows={4}
+                    style={{ width: '100%', padding: 10, fontSize: 13, border: `1px solid ${HAIR}`, borderRadius: 5, background: '#FAFAF7', color: INK, boxSizing: 'border-box' as const, fontFamily: 'inherit', resize: 'vertical' as const, marginBottom: 10 }} />
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, marginBottom: 12 }}>
+                    <input type="url" name="media_url" placeholder="Media URL (optional · https://…)" style={{ padding: '7px 10px', fontSize: 12, border: `1px solid ${HAIR}`, borderRadius: 5, background: '#FAFAF7', color: INK }} />
+                    <input type="text" name="hashtags" placeholder="#hashtag1 #hashtag2" style={{ padding: '7px 10px', fontSize: 12, border: `1px solid ${HAIR}`, borderRadius: 5, background: '#FAFAF7', color: INK }} />
+                    <input type="datetime-local" name="scheduled_at" title="Leave blank to publish immediately" style={{ padding: '7px 10px', fontSize: 12, border: `1px solid ${HAIR}`, borderRadius: 5, background: '#FAFAF7', color: INK }} />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <button type="submit" style={{ padding: '9px 20px', background: FOREST, color: WHITE, border: 'none', borderRadius: 5, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>▶ Publish</button>
+                    <span style={{ fontSize: 11, color: INK_M }}>Empty schedule = publish now. Set a datetime = schedule for that moment (local time).</span>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {/* Posts ready to push */}
             <div style={{ fontSize: 11, fontWeight: 700, color: INK_M, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Posts ready to push</div>
             {posts.filter((p: any) => ['ready', 'scheduled'].includes(p.status)).length === 0 ? (
