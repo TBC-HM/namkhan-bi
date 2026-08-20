@@ -238,8 +238,40 @@ export default async function SocialPage({ searchParams }: Props) {
             {/* Posts ready to push */}
             <div style={{ fontSize: 11, fontWeight: 700, color: INK_M, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 8 }}>Posts ready to push</div>
             {posts.filter((p: any) => ['ready', 'scheduled'].includes(p.status)).length === 0 ? (
-              <div style={{ padding: '28px 16px', textAlign: 'center', color: INK_M, fontSize: 13 }}>
-                No posts in Ready or Scheduled status. Draft posts in the Inbox, approve them, then push here.
+              <div style={{ padding: '20px 16px', background: '#F9F6F0', border: `1px solid ${HAIR}`, borderRadius: 6 }}>
+                <div style={{ fontSize: 13, color: INK, marginBottom: 10, lineHeight: 1.5 }}>
+                  Nothing ready to push yet. The flow is:{' '}
+                  <b>Calendar</b> → <b>Content Flow</b> → <b>Channel Inbox</b> (approve drafts) → <b>Publish</b>.
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8 }}>
+                  {(() => {
+                    const draftCount = posts.filter((p: any) => p.status === 'draft').length;
+                    const slotCount = slots?.length ?? 0;
+                    return (
+                      <>
+                        {draftCount > 0 && (
+                          <a href="?view=inbox" style={{ padding: '7px 14px', background: FOREST, color: WHITE, textDecoration: 'none', borderRadius: 5, fontSize: 12, fontWeight: 700 }}>
+                            → Approve {draftCount} draft{draftCount === 1 ? '' : 's'} in Inbox
+                          </a>
+                        )}
+                        {slotCount > 0 && draftCount === 0 && (
+                          <a href="?view=flow" style={{ padding: '7px 14px', background: FOREST, color: WHITE, textDecoration: 'none', borderRadius: 5, fontSize: 12, fontWeight: 700 }}>
+                            → Review {slotCount} proposed slot{slotCount === 1 ? '' : 's'}
+                          </a>
+                        )}
+                        <a href="?view=calendar" style={{ padding: '7px 14px', background: WHITE, color: INK, textDecoration: 'none', border: `1px solid ${HAIR}`, borderRadius: 5, fontSize: 12, fontWeight: 700 }}>
+                          → Calendar
+                        </a>
+                        <a href="?view=flow" style={{ padding: '7px 14px', background: WHITE, color: INK, textDecoration: 'none', border: `1px solid ${HAIR}`, borderRadius: 5, fontSize: 12, fontWeight: 700 }}>
+                          → Content Flow
+                        </a>
+                        <a href="?view=channels" style={{ padding: '7px 14px', background: WHITE, color: INK, textDecoration: 'none', border: `1px solid ${HAIR}`, borderRadius: 5, fontSize: 12, fontWeight: 700 }}>
+                          → Channels
+                        </a>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -258,7 +290,7 @@ export default async function SocialPage({ searchParams }: Props) {
                         </div>
                       )}
                     </div>
-                    <form action="/api/marketing/social-push" method="POST" style={{ flexShrink: 0 }}>
+                    <form action="/api/marketing/social/push" method="POST" style={{ flexShrink: 0 }}>
                       <input type="hidden" name="post_id" value={p.post_id} />
                       <button type="submit" style={{ padding: '6px 14px', background: FOREST, color: WHITE, border: 'none', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
                         Push →
