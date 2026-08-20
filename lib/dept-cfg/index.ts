@@ -627,14 +627,14 @@ const OPERATIONS_CFG: DeptCfg = {
   subPages: [
     // PBS 2026-07-07 night: QA back as top-level tab. Docs moved to a sub-tab
     // of Overview (renders below the top strip when on Overview).
-    { label: 'HoD',              href: '/operations'                 },
-    { label: 'Overview',         href: '/operations/overview'        },
-    { label: 'Departments',      href: '/operations/rooms'           },
-    { label: 'Menus',            href: '/operations/menus'           },
-    { label: 'Inventory',        href: '/operations/inventory'       },
-    { label: 'Suppliers',        href: '/operations/suppliers'       },
-    { label: 'Maintenance',      href: '/operations/maintenance'     },
-    { label: 'QA',               href: '/operations/sops'            },
+    { label: 'HoD',              href: '/h/260955/operations'                 },
+    { label: 'Overview',         href: '/h/260955/operations/overview'        },
+    { label: 'Departments',      href: '/h/260955/operations/rooms'           },
+    { label: 'Menus',            href: '/h/260955/operations/menus'           },
+    { label: 'Inventory',        href: '/h/260955/operations/inventory'       },
+    { label: 'Suppliers',        href: '/h/260955/operations/suppliers'       },
+    { label: 'Maintenance',      href: '/h/260955/operations/maintenance'     },
+    { label: 'QA',               href: '/h/260955/operations/sops'            },
   ],
   quickChips: [
     { label: 'HoD',        href: '/operations'             },
