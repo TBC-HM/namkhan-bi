@@ -1,30 +1,34 @@
 // app/h/[property_id]/operations/maintenance/external/page.tsx
 // PM v3 slice 5 — external contractor view
+// PM v3 slice 6 — design-system conformance: token colors only, global
+// .status-pill / .btn-primary / .btn-ghost classes, paper-white cards with
+// hairline borders, no emoji, no Tailwind color classes.
 "use client";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import * as S from "../_components/pmStyles";
 
-type PMTask = { 
-  instance_id: string; 
-  task_id: string; 
-  task_code: string; 
-  title: string; 
-  description: string; 
-  scheduled_date: string; 
-  status: string; 
-  dept_id: number; 
-  provider: string; 
-  asset_id: number; 
-  asset_code: string; 
-  asset_name: string; 
-  estimated_minutes: number; 
-  assigned_to: string; 
-  verification_type: string; 
-  sop_doc_id: string; 
-  actual_minutes: number; 
-  completed_at: string; 
+type PMTask = {
+  instance_id: string;
+  task_id: string;
+  task_code: string;
+  title: string;
+  description: string;
+  scheduled_date: string;
+  status: string;
+  dept_id: number;
+  provider: string;
+  asset_id: number;
+  asset_code: string;
+  asset_name: string;
+  estimated_minutes: number;
+  assigned_to: string;
+  verification_type: string;
+  sop_doc_id: string;
+  actual_minutes: number;
+  completed_at: string;
   completed_by: string;
   provider_note: string;
 };
@@ -51,7 +55,7 @@ export default function ExternalContractorPage() {
         .eq("provider", "external")
         .order("scheduled_date", { ascending: false })
         .limit(100);
-      
+
       if (error) throw error;
       if (data) setTasks(data as PMTask[]);
     } catch (e: any) {
@@ -73,24 +77,24 @@ export default function ExternalContractorPage() {
   const providerNotes = Array.from(new Set(tasks.map(t => t.provider_note).filter(Boolean)));
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: "var(--paper)" }}>
       <div className="max-w-6xl mx-auto p-6">
-        <button onClick={handleBack} className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2">
+        <button onClick={handleBack} className="btn-ghost mb-4">
           ← Back to Maintenance
         </button>
 
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">External Contractor View</h1>
-          <p className="text-gray-600">Tasks assigned to external maintenance providers</p>
+        <div className="mb-6" style={{ ...S.card, padding: 24 }}>
+          <h1 style={{ ...S.sectionTitle, fontSize: "var(--t-2xl)", marginBottom: 4 }}>External Contractor View</h1>
+          <p style={S.muted}>Tasks assigned to external maintenance providers</p>
         </div>
 
         {/* Contact Info Section */}
         {providerNotes.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h2 className="font-bold text-blue-900 mb-2">📞 Provider Contact Information</h2>
+          <div className="mb-6" style={S.inset}>
+            <h2 style={{ ...S.sectionTitle, fontSize: "var(--t-lg)", marginBottom: 8 }}>Provider Contact Information</h2>
             <div className="space-y-1">
               {providerNotes.map((note, idx) => (
-                <p key={idx} className="text-sm text-blue-800">{note}</p>
+                <p key={idx} style={{ fontSize: "var(--t-md)", color: "var(--ink-soft)", margin: 0 }}>{note}</p>
               ))}
             </div>
           </div>
@@ -100,87 +104,75 @@ export default function ExternalContractorPage() {
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setView("scheduled")}
-            className={`px-4 py-2 rounded font-medium ${
-              view === "scheduled" 
-                ? "bg-yellow-100 text-yellow-800 border-2 border-yellow-500" 
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+            className={view === "scheduled" ? "btn-primary" : "btn-ghost"}
           >
-            📅 Scheduled ({scheduledTasks.length})
+            Scheduled ({scheduledTasks.length})
           </button>
           <button
             onClick={() => setView("completed")}
-            className={`px-4 py-2 rounded font-medium ${
-              view === "completed" 
-                ? "bg-green-100 text-green-800 border-2 border-green-500" 
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+            className={view === "completed" ? "btn-primary" : "btn-ghost"}
           >
-            ✅ Completed ({completedTasks.length})
+            Completed ({completedTasks.length})
           </button>
         </div>
 
         {/* Tasks List */}
         {loading ? (
-          <div className="text-center py-12 text-gray-500">Loading external tasks...</div>
+          <div className="text-center py-12" style={S.muted}>Loading external tasks...</div>
         ) : displayTasks.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+          <div className="text-center" style={{ ...S.card, padding: 32, color: "var(--ink-mute)" }}>
             No {view} external tasks found
           </div>
         ) : (
           <div className="space-y-4">
             {displayTasks.map((task) => (
-              <div key={task.instance_id} className="bg-white rounded-lg shadow p-5 hover:shadow-lg transition-shadow">
+              <div key={task.instance_id} style={{ ...S.card, padding: 20 }}>
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-900">{task.title}</h3>
-                    <p className="text-gray-600">{task.task_code} – {task.asset_code} {task.asset_name}</p>
+                    <h3 style={{ ...S.sectionTitle, fontSize: "var(--t-xl)" }}>{task.title}</h3>
+                    <p style={S.muted}>{task.task_code} – {task.asset_code} {task.asset_name}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    task.status === "completed" ? "bg-green-100 text-green-800" :
-                    task.status === "scheduled" ? "bg-yellow-100 text-yellow-800" :
-                    "bg-gray-100 text-gray-800"
-                  }`}>
+                  <span className={S.statusPillClass(task.status, task.scheduled_date)}>
                     {task.status}
                   </span>
                 </div>
 
                 {task.description && (
-                  <p className="text-gray-700 mb-3">{task.description}</p>
+                  <p className="mb-3" style={{ color: "var(--ink-soft)", fontSize: "var(--t-md)" }}>{task.description}</p>
                 )}
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3" style={{ fontSize: "var(--t-md)" }}>
                   <div>
-                    <span className="text-gray-600">Scheduled:</span>
-                    <p className="font-medium">{task.scheduled_date}</p>
+                    <span style={S.label}>Scheduled:</span>
+                    <p style={{ ...S.value, ...S.num }}>{task.scheduled_date}</p>
                   </div>
                   <div>
-                    <span className="text-gray-600">Duration:</span>
-                    <p className="font-medium">{task.estimated_minutes} min</p>
+                    <span style={S.label}>Duration:</span>
+                    <p style={{ ...S.value, ...S.num }}>{task.estimated_minutes} min</p>
                   </div>
                   <div>
-                    <span className="text-gray-600">Assigned:</span>
-                    <p className="font-medium">{task.assigned_to || "Unassigned"}</p>
+                    <span style={S.label}>Assigned:</span>
+                    <p style={S.value}>{task.assigned_to || "Unassigned"}</p>
                   </div>
                   {task.status === "completed" && task.completed_at && (
                     <div>
-                      <span className="text-gray-600">Completed:</span>
-                      <p className="font-medium">{task.completed_at}</p>
+                      <span style={S.label}>Completed:</span>
+                      <p style={{ ...S.value, ...S.num }}>{task.completed_at}</p>
                     </div>
                   )}
                 </div>
 
                 {task.provider_note && (
-                  <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-                    <span className="text-xs text-blue-700 font-medium">Contact:</span>
-                    <p className="text-sm text-blue-900">{task.provider_note}</p>
+                  <div className="mt-3" style={S.inset}>
+                    <span style={{ ...S.label, fontWeight: 500 }}>Contact:</span>
+                    <p style={{ fontSize: "var(--t-md)", color: "var(--ink)", margin: 0 }}>{task.provider_note}</p>
                   </div>
                 )}
 
                 <div className="mt-4">
                   <Link
                     href={`/h/${propertyId}/operations/maintenance/tasks/${task.instance_id}`}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    style={{ color: "var(--moss)", fontWeight: 500, fontSize: "var(--t-md)" }}
                   >
                     View Details →
                   </Link>
