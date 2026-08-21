@@ -27,6 +27,8 @@ import {
   type StatusTone,
 } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
+import { REVENUE_SUBPAGES } from '@/app/revenue/_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { ActionQueue, ProposeForm, FindingButton, type RateActionRow } from './RateActionPanel';
 
 export const dynamic = 'force-dynamic';
@@ -542,14 +544,16 @@ export default async function RevenueCockpitPage({
     ota.ota_share_guardrail != null &&
     Number(ota.ota_share_pct) > Number(ota.ota_share_guardrail);
 
-  // Tabs — DashboardPage auto-detects active via pathname; subPages via nav-subgroups
-  const tabs: DashboardTab[] = [
-    {
-      key: 'desk',
-      label: 'Rate Desk',
-      href: `/h/${pid}/revenue/cockpit`,
-    },
-  ];
+  // PBS 2026-08-21: use full REVENUE_SUBPAGES so top strip shows every dept tab
+  // (Briefing / Overview / Demand & Pace / Performance / Market & Control /
+  // Rate Desk / Forecast). Rate Desk href ends with /cockpit → mark active.
+  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
+  const tabs: DashboardTab[] = subPages.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href.endsWith('/cockpit'),
+  }));
 
   // KPI Tiles (next 30d summary strip)
   const kpis: KpiTileProps[] = [
