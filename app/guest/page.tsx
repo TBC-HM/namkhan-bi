@@ -348,7 +348,7 @@ async function renderHodBody() {
         <Container title="Shortcuts" subtitle="Pin any Contacts page · × to remove" density="compact">
           <ShortcutsPanel initial={shortcuts} propertyId={PROPERTY_ID} deptSlug="guest" userEmail={GUEST_USER_EMAIL} />
         </Container>
-        <Container title="My Reports" subtitle={`${myReportRows.length} report${myReportRows.length === 1 ? '' : 's'} sent to you · from send log`} density="compact">
+        <Container title="Reports" subtitle={`${myReportRows.length} report${myReportRows.length === 1 ? '' : 's'} sent to you · from send log`} density="compact">
           {myReportRows.length === 0 ? (
             <div style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic', padding: '8px 4px' }}>
               No reports have been sent to you yet. Add yourself as a recipient below.
@@ -364,10 +364,10 @@ async function renderHodBody() {
             </ul>
           )}
         </Container>
-        <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
+        <Container title="Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
           <HodTasksList deptSlug="guest" propertyId={PROPERTY_ID} />
         </Container>
-        <Container title="External links" subtitle="Cloudbeds guest inbox · Google Business · anywhere outside" density="compact">
+        <Container title="Links" subtitle="Cloudbeds guest inbox · Google Business · anywhere outside" density="compact">
           <ExternalLinksPanel initial={externalLinks} propertyId={PROPERTY_ID} deptSlug="guest" userEmail={GUEST_USER_EMAIL} />
         </Container>
       </div>
