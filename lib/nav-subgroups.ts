@@ -172,20 +172,22 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // the legacy /marketing/acquisition subgroup below on /marketing/campaigns.
   {
     // PBS 2026-07-21 · Content sub-strip · replaces box grid on /marketing/content hub
-    // PBS 2026-08-21: removed 'Products & Offers' tab (Namkhan + Donna).
+    // PBS 2026-08-21: removed 'Products & Offers' tab. Newsletter surfaced under
+    // /marketing/content/newsletters (redirects to /h/260955/... on Namkhan; tenant
+    // route mounts the /guest/newsletters body directly with propertyId scope).
     parentHref: '/marketing/content',
     members: [
       '/marketing/content',
       '/marketing/compiler',
       '/marketing/campaigns',
-      '/marketing/newsletter',
+      '/marketing/content/newsletters',
       '/marketing/media',
     ],
     tabs: [
-      { label: 'Compiler',          href: '/marketing/compiler'   },
-      { label: 'Campaigns',         href: '/marketing/campaigns'  },
-      { label: 'Newsletter',        href: '/marketing/newsletter' },
-      { label: 'Media',             href: '/marketing/media'      },
+      { label: 'Compiler',          href: '/marketing/compiler'             },
+      { label: 'Campaigns',         href: '/marketing/campaigns'            },
+      { label: 'Newsletter',        href: '/marketing/content/newsletters'  },
+      { label: 'Media',             href: '/marketing/media'                },
     ],
   },
   // PBS 2026-07-21 · Digital sub-strip · YouTube moved here from Channels · SEO restored as 4th tab per PBS
