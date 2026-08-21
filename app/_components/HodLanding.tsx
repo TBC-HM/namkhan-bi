@@ -45,7 +45,7 @@ interface Props {
   liveTiles?: KpiTileProps[];
   extraContainers?: React.ReactNode;
   /** PBS 2026-07-23: 4-col grid slot rendered directly below the top row of 4
-   *  (Shortcuts / My Reports / My Tasks / External Links). Used on /holding/it
+   *  (Shortcuts / My Reports / My Tasks / Links). Used on /holding/it
    *  for the Module Documentation panel — same-size sits under Shortcuts. */
   secondRow?: React.ReactNode;
   conclusions?: {
@@ -156,7 +156,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </div>
       )}
 
-      {/* Top row of 4 · Shortcuts / My Reports / My Tasks / External Links */}
+      {/* Top row of 4 · Shortcuts / My Reports / My Tasks / Links */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
         <Container title="Shortcuts" subtitle="Pin any page for one-click access · × to remove" density="compact">
           <ShortcutsPanel initial={shortcuts} propertyId={pid} deptSlug={slug} userEmail={DEFAULT_USER_EMAIL} />
@@ -180,7 +180,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         <Container title="Tasks" subtitle={dueTasksCount > 0 ? `${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
           <HodTasksList deptSlug={slug} propertyId={pid} />
         </Container>
-        <Container title="External links" subtitle="Extranet · Cloudbeds · SLH login · anywhere outside the cockpit" density="compact">
+        <Container title="Links" subtitle="Extranet · Cloudbeds · SLH login · anywhere outside the cockpit" density="compact">
           <ExternalLinksPanel initial={externalLinks} propertyId={pid} deptSlug={slug} userEmail={DEFAULT_USER_EMAIL} />
         </Container>
       </div>
