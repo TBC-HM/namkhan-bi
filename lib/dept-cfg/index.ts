@@ -392,7 +392,6 @@ const REVENUE_CFG: DeptCfg = {
     // dismiss/snooze CTAs and a learning loop that scores whether accepts
     // actually moved the KPI. See app/revenue/briefing/page.tsx.
     { label: 'Briefing',        href: '/h/260955/revenue/briefing' },
-    { label: 'Overview',        href: '/h/260955/revenue/pulse'    },
     { label: 'Demand & Pace',   href: '/h/260955/revenue/demand'   },
     { label: 'Performance',     href: '/h/260955/revenue/rooms'    },
     { label: 'Comp & Parity',href: '/h/260955/revenue/compset'  },
