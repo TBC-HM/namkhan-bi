@@ -391,11 +391,11 @@ const REVENUE_CFG: DeptCfg = {
     // PBS 2026-07-15: Briefing = revenue-area guardrail inbox with accept/
     // dismiss/snooze CTAs and a learning loop that scores whether accepts
     // actually moved the KPI. See app/revenue/briefing/page.tsx.
-    { label: 'Briefing',        href: '/revenue/briefing' },
-    { label: 'Overview',        href: '/revenue/pulse'    },
-    { label: 'Demand & Pace',   href: '/revenue/demand'   },
-    { label: 'Performance',     href: '/revenue/rooms'    },
-    { label: 'Market & Control',href: '/revenue/compset'  },
+    { label: 'Briefing',        href: '/h/260955/revenue/briefing' },
+    { label: 'Overview',        href: '/h/260955/revenue/pulse'    },
+    { label: 'Demand & Pace',   href: '/h/260955/revenue/demand'   },
+    { label: 'Performance',     href: '/h/260955/revenue/rooms'    },
+    { label: 'Market & Control',href: '/h/260955/revenue/compset'  },
     // PBS 2026-08-04 (brief revenue-module-v1, owner answer to open_question):
     // Rate Desk = the rate-action cockpit (pace board · action queue · compset ·
     // decision ledger) at app/h/[property_id]/revenue/cockpit. Stored Namkhan-
@@ -406,16 +406,16 @@ const REVENUE_CFG: DeptCfg = {
     { label: 'Rate Desk',       href: '/h/260955/revenue/cockpit' },
     // 2026-08-05 unstick-sweep F7 re-apply: Forecast tab (commit c822fca intent),
     // restored after truncation-disease repair of this file (memory 767).
-    { label: 'Forecast',        href: '/revenue/forecast' },
+    { label: 'Forecast',        href: '/h/260955/revenue/forecast' },
   ],
   quickChips: [
-    { label: 'Pulse',    href: '/revenue/pulse'    },
-    { label: 'Demand',   href: '/revenue/demand'   },
-    { label: 'Pace',     href: '/revenue/pace'     },
-    { label: 'Channels', href: '/revenue/channels' },
-    { label: 'Comp Set', href: '/revenue/compset'  },
-    { label: 'Parity',   href: '/revenue/parity'   },
-    { label: 'Forecast', href: '/revenue/forecast' },
+    { label: 'Pulse',    href: '/h/260955/revenue/pulse'    },
+    { label: 'Demand',   href: '/h/260955/revenue/demand'   },
+    { label: 'Pace',     href: '/h/260955/revenue/pace'     },
+    { label: 'Channels', href: '/h/260955/revenue/channels' },
+    { label: 'Comp Set', href: '/h/260955/revenue/compset'  },
+    { label: 'Parity',   href: '/h/260955/revenue/parity'   },
+    { label: 'Forecast', href: '/h/260955/revenue/forecast' },
   ],
   defaultAttn: [
     { id: 'l1', label: 'OTA parity breach — BDC $142 vs direct $158',  severity: 'high',   kind: 'leakage'     },
@@ -428,10 +428,10 @@ const REVENUE_CFG: DeptCfg = {
   // open in a new tab (target=_blank handled in DeptEntry via /revenue
   // prefix → same-origin link).
   defaultDocs: [
-    { id: 'd1', label: 'Pulse · last 30d',            href: '/revenue/reports/render?type=pulse&win=30d&cmp=stly',  kind: 'report', report_type: 'pulse'    },
-    { id: 'd2', label: 'Pace · −30d → +30d vs STLY',   href: '/revenue/reports/render?type=pace&win=30d&cmp=stly',   kind: 'report', report_type: 'pace'     },
-    { id: 'd3', label: 'Channel mix · last 30d',       href: '/revenue/reports/render?type=channels&win=30d',        kind: 'report', report_type: 'channels' },
-    { id: 'd4', label: 'P&L · current month',          href: '/revenue/reports/render?type=pl-month',                kind: 'report', report_type: 'pl-month' },
+    { id: 'd1', label: 'Pulse · last 30d',            href: '/h/260955/revenue/reports/render?type=pulse&win=30d&cmp=stly',  kind: 'report', report_type: 'pulse'    },
+    { id: 'd2', label: 'Pace · −30d → +30d vs STLY',   href: '/h/260955/revenue/reports/render?type=pace&win=30d&cmp=stly',   kind: 'report', report_type: 'pace'     },
+    { id: 'd3', label: 'Channel mix · last 30d',       href: '/h/260955/revenue/reports/render?type=channels&win=30d',        kind: 'report', report_type: 'channels' },
+    { id: 'd4', label: 'P&L · current month',          href: '/h/260955/revenue/reports/render?type=pl-month',                kind: 'report', report_type: 'pl-month' },
   ],
   defaultTasks: [
     { id: 't1', label: 'Review OTA parity alerts',    done: false, created: TODAY },
@@ -439,14 +439,14 @@ const REVENUE_CFG: DeptCfg = {
     { id: 't3', label: 'Sign off on group quote #12', done: false, created: TODAY },
   ],
   attentionRoutes: [
-    { matcher: 'parity',  href: '/revenue/parity'   },
-    { matcher: 'comp',    href: '/revenue/compset'  },
-    { matcher: 'compset', href: '/revenue/compset'  },
-    { matcher: 'pace',    href: '/revenue/pace'     },
-    { matcher: 'channel', href: '/revenue/channels' },
-    { matcher: 'rate',    href: '/revenue/pricing'  },
-    { matcher: 'bar',     href: '/revenue/pricing'  },
-    { matcher: 'forecast', href: '/revenue/forecast' },
+    { matcher: 'parity',  href: '/h/260955/revenue/parity'   },
+    { matcher: 'comp',    href: '/h/260955/revenue/compset'  },
+    { matcher: 'compset', href: '/h/260955/revenue/compset'  },
+    { matcher: 'pace',    href: '/h/260955/revenue/pace'     },
+    { matcher: 'channel', href: '/h/260955/revenue/channels' },
+    { matcher: 'rate',    href: '/h/260955/revenue/pricing'  },
+    { matcher: 'bar',     href: '/h/260955/revenue/pricing'  },
+    { matcher: 'forecast', href: '/h/260955/revenue/forecast' },
   ],
   defaultDrilldown: '/revenue/pulse',
   kpiTiles: [
@@ -479,21 +479,21 @@ const SALES_CFG: DeptCfg = {
     // (full-screen client), and /sales/mails is a permanent redirect stub.
     // PBS 2026-07-14: nav rename "Create New" → "Leads" (points at the new CRM at /sales/leads).
     // /sales/new route stays live; the CreateLead client is still accessible from within the Leads CMS drawer.
-    { label: 'Leads',         href: '/sales/leads'    },
+    { label: 'Leads',         href: '/h/260955/sales/leads'    },
     // PBS 2026-07-15: Proposals index tab. New page at /sales/proposals lists
     // every sales.proposals row; individual composer stays at /sales/proposals/[id]/edit.
     // Entry point for the "Create proposal" flow from a lead row (see LeadsCMSClient).
-    { label: 'Proposals',     href: '/sales/proposals' },
-    { label: 'Pipeline',      href: '/sales/pipeline'  },
-    { label: 'Accounts',      href: '/sales/accounts'  },
-    { label: 'ICP Segments',  href: '/sales/icp'       },
-    { label: 'Packages',      href: '/sales/packages'  },
+    { label: 'Proposals',     href: '/h/260955/sales/proposals' },
+    { label: 'Pipeline',      href: '/h/260955/sales/pipeline'  },
+    { label: 'Accounts',      href: '/h/260955/sales/accounts'  },
+    { label: 'ICP Segments',  href: '/h/260955/sales/icp'       },
+    { label: 'Packages',      href: '/h/260955/sales/packages'  },
   ],
   quickChips: [
-    { label: 'Inquiries', href: '/sales/inquiries' },
-    { label: 'Leads',     href: '/sales/leads'     },
-    { label: 'Packages',  href: '/sales/packages'  },
-    { label: 'B2B / DMC', href: '/sales/b2b'       },
+    { label: 'Inquiries', href: '/h/260955/sales/inquiries' },
+    { label: 'Leads',     href: '/h/260955/sales/leads'     },
+    { label: 'Packages',  href: '/h/260955/sales/packages'  },
+    { label: 'B2B / DMC', href: '/h/260955/sales/b2b'       },
   ],
   defaultAttn: [
     { id: 'l1', label: 'Inquiry → quote SLA breach (>48h) for 4 leads', severity: 'high',   kind: 'leakage'     },
@@ -502,9 +502,9 @@ const SALES_CFG: DeptCfg = {
     { id: 'o2', label: 'Repeat guest enquiring about retreat package',  severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'd1', label: 'Sales Playbook 2026',     href: '/sales/inquiries' },
-    { id: 'd2', label: 'B2B Rate Card · Apr 2026', href: '/sales/b2b'      },
-    { id: 'd3', label: 'Group Quote Template',     href: '/sales/groups'   },
+    { id: 'd1', label: 'Sales Playbook 2026',     href: '/h/260955/sales/inquiries' },
+    { id: 'd2', label: 'B2B Rate Card · Apr 2026', href: '/h/260955/sales/b2b'      },
+    { id: 'd3', label: 'Group Quote Template',     href: '/h/260955/sales/groups'   },
   ],
   defaultTasks: [
     { id: 't1', label: 'Reply to overdue inquiries',          done: false, created: TODAY },
@@ -512,14 +512,14 @@ const SALES_CFG: DeptCfg = {
     { id: 't3', label: 'DMC contract renewal call',           done: false, created: TODAY },
   ],
   attentionRoutes: [
-    { matcher: 'inquir',   href: '/sales/inquiries' },
-    { matcher: 'lead',     href: '/sales/leads'     },
-    { matcher: 'group',    href: '/sales/groups'    },
-    { matcher: 'package',  href: '/sales/packages'  },
-    { matcher: 'b2b',      href: '/sales/b2b'       },
-    { matcher: 'dmc',      href: '/sales/b2b'       },
-    { matcher: 'pipeline', href: '/sales/pipeline'  },
-    { matcher: 'fit',      href: '/sales/fit'       },
+    { matcher: 'inquir',   href: '/h/260955/sales/inquiries' },
+    { matcher: 'lead',     href: '/h/260955/sales/leads'     },
+    { matcher: 'group',    href: '/h/260955/sales/groups'    },
+    { matcher: 'package',  href: '/h/260955/sales/packages'  },
+    { matcher: 'b2b',      href: '/h/260955/sales/b2b'       },
+    { matcher: 'dmc',      href: '/h/260955/sales/b2b'       },
+    { matcher: 'pipeline', href: '/h/260955/sales/pipeline'  },
+    { matcher: 'fit',      href: '/h/260955/sales/fit'       },
   ],
   defaultDrilldown: '/sales/inquiries',
   kpiTiles: [
@@ -668,7 +668,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { matcher: 'spa',        href: '/h/260955/operations/spa'             },
     { matcher: 'activit',    href: '/h/260955/operations/activities'      },
     { matcher: 'inventory',  href: '/h/260955/operations/inventory'       },
-    { matcher: 'catalog',    href: '/finance/messy-data'         },
+    { matcher: 'catalog',    href: '/h/260955/finance/messy-data'         },
   ],
   defaultDrilldown: '/h/260955/operations',
   kpiTiles: [
@@ -700,18 +700,18 @@ const GUEST_CFG: DeptCfg = {
     // - Newsletters moved to just before Reports
     // PBS 2026-07-06 late evening: Prospects URL moved from /marketing/prospects → /guest/prospects.
     { label: 'HoD',         href: '/h/260955/guest'                },
-    { label: 'Guests',      href: '/guest/directory'      },
-    { label: 'Reputation',  href: '/guest/reputation'     },
-    { label: 'Behaviour',   href: '/guest/behaviour'      },
+    { label: 'Guests',      href: '/h/260955/guest/directory'      },
+    { label: 'Reputation',  href: '/h/260955/guest/reputation'     },
+    { label: 'Behaviour',   href: '/h/260955/guest/behaviour'      },
     // PBS 2026-07-21 night · Contacts removed — folded into Subscribers as
     // the "Candidates pool" tab. URL still resolves for bookmarks.
-    { label: 'Newsletters', href: '/guest/newsletters'    },
+    { label: 'Newsletters', href: '/h/260955/guest/newsletters'    },
   ],
   quickChips: [
-    { label: 'Guests',      href: '/guest/directory'      },
-    { label: 'Reputation',  href: '/guest/reputation'     },
-    { label: 'Behaviour',   href: '/guest/behaviour'      },
-    { label: 'Newsletters', href: '/guest/newsletters'    },
+    { label: 'Guests',      href: '/h/260955/guest/directory'      },
+    { label: 'Reputation',  href: '/h/260955/guest/reputation'     },
+    { label: 'Behaviour',   href: '/h/260955/guest/behaviour'      },
+    { label: 'Newsletters', href: '/h/260955/guest/newsletters'    },
   ],
   defaultAttn: [
     { id: 'l1', label: 'Negative review on TripAdvisor — needs reply', severity: 'high',   kind: 'leakage'     },
@@ -720,9 +720,9 @@ const GUEST_CFG: DeptCfg = {
     { id: 'o2', label: 'Loyalty member 3rd stay — upgrade window',     severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'd1', label: 'Retention cockpit',     href: '/guest/behaviour'   },
-    { id: 'd2', label: 'Guest directory',       href: '/guest/directory'   },
-    { id: 'd3', label: 'Reputation',            href: '/guest/reputation'  },
+    { id: 'd1', label: 'Retention cockpit',     href: '/h/260955/guest/behaviour'   },
+    { id: 'd2', label: 'Guest directory',       href: '/h/260955/guest/directory'   },
+    { id: 'd3', label: 'Reputation',            href: '/h/260955/guest/reputation'  },
   ],
   defaultTasks: [
     { id: 't1', label: 'Reply to TripAdvisor review',         done: false, created: TODAY },
@@ -730,15 +730,15 @@ const GUEST_CFG: DeptCfg = {
     { id: 't3', label: 'Confirm loyalty upgrade for room 12', done: false, created: TODAY },
   ],
   attentionRoutes: [
-    { matcher: 'review',     href: '/guest/reputation' },
-    { matcher: 'reputation', href: '/guest/reputation' },
-    { matcher: 'no-show',    href: '/guest/behaviour'  },
-    { matcher: 'directory',  href: '/guest/directory'  },
-    { matcher: 'journey',    href: '/guest/behaviour'  },
-    { matcher: 'loyalty',    href: '/guest/behaviour'  },
-    { matcher: 'behaviour',  href: '/guest/behaviour'  },
-    { matcher: 'retention',  href: '/guest/behaviour'  },
-    { matcher: 'vip',        href: '/guest/directory'  },
+    { matcher: 'review',     href: '/h/260955/guest/reputation' },
+    { matcher: 'reputation', href: '/h/260955/guest/reputation' },
+    { matcher: 'no-show',    href: '/h/260955/guest/behaviour'  },
+    { matcher: 'directory',  href: '/h/260955/guest/directory'  },
+    { matcher: 'journey',    href: '/h/260955/guest/behaviour'  },
+    { matcher: 'loyalty',    href: '/h/260955/guest/behaviour'  },
+    { matcher: 'behaviour',  href: '/h/260955/guest/behaviour'  },
+    { matcher: 'retention',  href: '/h/260955/guest/behaviour'  },
+    { matcher: 'vip',        href: '/h/260955/guest/directory'  },
   ],
   defaultDrilldown: '/h/260955/guest',
   kpiTiles: [
@@ -767,36 +767,36 @@ const FINANCE_CFG: DeptCfg = {
     // by mistake). Ledger stays a sub-tab of Finance (visible when on any Finance
     // child page — see nav-subgroups /finance/pnl group).
     { label: 'HoD',             href: '/h/260955/finance'                          },
-    { label: 'Overview',        href: '/finance/overview'                 },
-    { label: 'HR',              href: '/finance/hr'                       },
-    { label: 'Finance',         href: '/finance/pnl'                      },
+    { label: 'Overview',        href: '/h/260955/finance/overview'                 },
+    { label: 'HR',              href: '/h/260955/finance/hr'                       },
+    { label: 'Finance',         href: '/h/260955/finance/pnl'                      },
     // FP&C module 2026-07-28: budget vs actual by class + 13-week cash forward
     // (brief module-financial-planning-control-v1, completion gap #2).
-    { label: 'Planning',        href: '/finance/planning'                 },
-    { label: 'Legal',           href: '/finance/legal'                    },
+    { label: 'Planning',        href: '/h/260955/finance/planning'                 },
+    { label: 'Legal',           href: '/h/260955/finance/legal'                    },
     // PBS 2026-07-24: Archive tab — brain-backed archive overview (prompt +
     // headline stripes). Replaces the two "Open Docs register" links that
     // lived on the Legal page.
-    { label: 'Archive',         href: '/finance/archive'                  },
+    { label: 'Archive',         href: '/h/260955/finance/archive'                  },
     // cost-governance-v1 (2026-07-30): tenant-scoped platform usage at cost
     // (PBS placement correction: Administration -> Costs on the client surface).
-    { label: 'Costs',           href: '/finance/costs'                    },
-    { label: 'Suppliers',      href: '/finance/suppliers'                },
+    { label: 'Costs',           href: '/h/260955/finance/costs'                    },
+    { label: 'Suppliers',      href: '/h/260955/finance/suppliers'                },
   ],
   quickChips: [
     { label: 'HoD',            href: '/h/260955/finance'             },
-    { label: 'Overview',       href: '/finance/overview'    },
-    { label: 'P&L',            href: '/finance/pnl'         },
-    { label: 'Ledger',         href: '/finance/ledger'      },
-    { label: 'Transactions',   href: '/finance/transactions' },
-    { label: 'HR',             href: '/finance/hr'          },
-    { label: 'Budget',         href: '/finance/budget'      },
-    { label: 'Cashflow',       href: '/finance/cashflow'    },
+    { label: 'Overview',       href: '/h/260955/finance/overview'    },
+    { label: 'P&L',            href: '/h/260955/finance/pnl'         },
+    { label: 'Ledger',         href: '/h/260955/finance/ledger'      },
+    { label: 'Transactions',   href: '/h/260955/finance/transactions' },
+    { label: 'HR',             href: '/h/260955/finance/hr'          },
+    { label: 'Budget',         href: '/h/260955/finance/budget'      },
+    { label: 'Cashflow',       href: '/h/260955/finance/cashflow'    },
   ],
   // PBS 2026-05-15: Messy data pulled out of submenu, surfaced as an
   // orange accent button under the HoD chat input on /finance.
   extraChatButtons: [
-    { label: 'Messy data', href: '/finance/messy-data', color: '#d68a3a' },
+    { label: 'Messy data', href: '/h/260955/finance/messy-data', color: '#d68a3a' },
   ],
   defaultAttn: [
     { id: 'l1', label: 'AR > 60 days — $4.2k unpaid',          severity: 'high',   kind: 'leakage'     },
@@ -805,9 +805,9 @@ const FINANCE_CFG: DeptCfg = {
     { id: 'o2', label: 'Refund rate down — keep cancellation policy', severity: 'low', kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'd1', label: 'USALI 11 chart of accounts', href: '/finance/mapping' },
-    { id: 'd2', label: 'Budget 2026 v3',             href: '/finance/budget'  },
-    { id: 'd3', label: 'AP supplier playbook',       href: '/finance/supplier-mapping' },
+    { id: 'd1', label: 'USALI 11 chart of accounts', href: '/h/260955/finance/mapping' },
+    { id: 'd2', label: 'Budget 2026 v3',             href: '/h/260955/finance/budget'  },
+    { id: 'd3', label: 'AP supplier playbook',       href: '/h/260955/finance/supplier-mapping' },
   ],
   defaultTasks: [
     { id: 't1', label: 'Reconcile POS · Cloudbeds (last 7d)', done: false, created: TODAY },
@@ -815,15 +815,15 @@ const FINANCE_CFG: DeptCfg = {
     { id: 't3', label: 'Sign off on April P&L',               done: false, created: TODAY },
   ],
   attentionRoutes: [
-    { matcher: 'p&l',        href: '/finance/pnl'          },
-    { matcher: 'ledger',     href: '/finance/ledger'       },
-    { matcher: 'transaction', href: '/finance/transactions' },
-    { matcher: 'pos',        href: '/finance/pos'              },
-    { matcher: 'budget',     href: '/finance/budget'       },
-    { matcher: 'supplier',   href: '/finance/supplier-mapping' },
-    { matcher: 'mapping',    href: '/finance/mapping'      },
-    { matcher: 'cash',       href: '/finance/cashflow'     },
-    { matcher: 'variance',   href: '/finance/variance'     },
+    { matcher: 'p&l',        href: '/h/260955/finance/pnl'          },
+    { matcher: 'ledger',     href: '/h/260955/finance/ledger'       },
+    { matcher: 'transaction', href: '/h/260955/finance/transactions' },
+    { matcher: 'pos',        href: '/h/260955/finance/pos'              },
+    { matcher: 'budget',     href: '/h/260955/finance/budget'       },
+    { matcher: 'supplier',   href: '/h/260955/finance/supplier-mapping' },
+    { matcher: 'mapping',    href: '/h/260955/finance/mapping'      },
+    { matcher: 'cash',       href: '/h/260955/finance/cashflow'     },
+    { matcher: 'variance',   href: '/h/260955/finance/variance'     },
   ],
   defaultDrilldown: '/h/260955/finance',
   kpiTiles: [
@@ -849,7 +849,7 @@ const IT_CFG: DeptCfg = {
     { label: 'Cockpit',   href: '/holding/it2'           },
     { label: 'Tasks',     href: '/holding/it2/fleet/tasks'     },
     { label: 'Schedule',  href: '/holding/it2/fleet/tasks'  },
-    { label: 'Knowledge', href: '/knowledge'         },
+    { label: 'Knowledge', href: '/h/260955/knowledge'         },
     { label: 'Audit log', href: '/holding/it2/system/activity' },
     { label: 'Agents',    href: '/holding/it2/fleet/team'  },
   ],
@@ -857,7 +857,7 @@ const IT_CFG: DeptCfg = {
     { label: 'Cockpit',   href: '/holding/it2'           },
     { label: 'Tasks',     href: '/holding/it2/fleet/tasks'     },
     { label: 'Schedule',  href: '/holding/it2/fleet/tasks'  },
-    { label: 'Knowledge', href: '/knowledge'         },
+    { label: 'Knowledge', href: '/h/260955/knowledge'         },
     { label: 'Audit log', href: '/holding/it2/system/activity' },
     { label: 'Agents',    href: '/holding/it2/fleet/team'  },
   ],
@@ -867,9 +867,9 @@ const IT_CFG: DeptCfg = {
     { id: 'o1', label: 'Agent SLA improving — 2x throughput',  severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'd1', label: 'CLAUDE.md',         href: '/knowledge'      },
+    { id: 'd1', label: 'CLAUDE.md',         href: '/h/260955/knowledge'      },
     { id: 'd2', label: 'Deploy runbook',    href: '/holding/it2'        },
-    { id: 'd3', label: 'Cockpit constraints', href: '/knowledge'    },
+    { id: 'd3', label: 'Cockpit constraints', href: '/h/260955/knowledge'    },
   ],
   defaultTasks: [
     { id: 't1', label: 'Review pending PRs',         done: false, created: TODAY },
@@ -881,7 +881,7 @@ const IT_CFG: DeptCfg = {
     { matcher: 'deploy',   href: '/holding/it2'           },
     { matcher: 'agent',    href: '/holding/it2/fleet/team'  },
     { matcher: 'audit',    href: '/holding/it2/system/activity' },
-    { matcher: 'knowledge', href: '/knowledge'        },
+    { matcher: 'knowledge', href: '/h/260955/knowledge'        },
   ],
   defaultDrilldown: '/holding/it2',
   // tile-truth-wiring 2026-07-29: hardcoded values (8 · 7/9 · 94% · 12)
@@ -931,7 +931,7 @@ const ARCHITECT_CFG: DeptCfg = {
   defaultDocs: [
     { id: 'd1', label: 'Cockpit overview',  href: '/holding/it2'       },
     { id: 'd2', label: 'Tasks board',       href: '/holding/it2/fleet/tasks' },
-    { id: 'd3', label: 'Knowledge base',    href: '/knowledge'     },
+    { id: 'd3', label: 'Knowledge base',    href: '/h/260955/knowledge'     },
   ],
   defaultTasks: [
     { id: 't1', label: 'Review pending PRs',      done: false, created: TODAY },
@@ -984,7 +984,7 @@ const HOLDING_CFG: DeptCfg = {
   defaultDocs: [
     { id: 'hd1', label: 'Cockpit (operations command)', href: '/holding/it2' },
     { id: 'hd2', label: 'TBC public homepage',          href: '/tbc'         },
-    { id: 'hd3', label: 'Knowledge base',               href: '/knowledge'   },
+    { id: 'hd3', label: 'Knowledge base',               href: '/h/260955/knowledge'   },
   ],
   defaultTasks: [
     { id: 'ht1', label: 'Confirm DCO 1/2025 casación state with Letrada Cañellas', done: false, created: TODAY, alert: true },
@@ -1100,7 +1100,7 @@ const HOLDING_IT_CFG: DeptCfg = {
   defaultDocs: [
     { id: 'id1', label: 'Cockpit V2',                href: '/holding/it2'           },
     { id: 'id2', label: 'Tasks board',               href: '/holding/it2/fleet/tasks'        },
-    { id: 'id3', label: 'Knowledge base',            href: '/knowledge'            },
+    { id: 'id3', label: 'Knowledge base',            href: '/h/260955/knowledge'            },
     { id: 'id4', label: 'Claude operating manual',   href: '/holding/it2/knowledge/docs'  },
   ],
   defaultTasks: [
@@ -1144,7 +1144,7 @@ const HOLDING_STRATEGY_CFG: DeptCfg = {
   defaultAttn: [],
   defaultDocs: [
     { id: 'sd1', label: 'Cockpit (operations command)', href: '/holding/it2' },
-    { id: 'sd2', label: 'Knowledge base',               href: '/knowledge'   },
+    { id: 'sd2', label: 'Knowledge base',               href: '/h/260955/knowledge'   },
   ],
   defaultTasks: [],
   attentionRoutes: [],
@@ -1173,7 +1173,7 @@ const HOLDING_JOHN_CFG: DeptCfg = {
   defaultAttn: [],
   defaultDocs: [
     { id: 'jd1', label: 'Cockpit (operations command)', href: '/holding/it2' },
-    { id: 'jd2', label: 'Knowledge base',               href: '/knowledge'   },
+    { id: 'jd2', label: 'Knowledge base',               href: '/h/260955/knowledge'   },
   ],
   defaultTasks: [],
   attentionRoutes: [],
@@ -1214,7 +1214,7 @@ const HOLDING_CEO_CFG: DeptCfg = {
   ],
   defaultDocs: [
     { id: 'ceod1', label: 'Cockpit (operations command)', href: '/holding/it2' },
-    { id: 'ceod2', label: 'Knowledge base',               href: '/knowledge'  },
+    { id: 'ceod2', label: 'Knowledge base',               href: '/h/260955/knowledge'  },
     { id: 'ceod3', label: 'Holding overview',             href: '/holding'    },
   ],
   defaultTasks: [],
