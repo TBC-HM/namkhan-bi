@@ -37,6 +37,16 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  // PBS 2026-08-21 · URL LAW: bare /operations/* → tenant-scoped /h/260955/operations/*
+  // Bare pages exist as Namkhan-only bodies; tenant chrome (Marketing/Ops sub-strip +
+  // ThemeInjector) only renders under /h/[property_id]/*. Redirect runs BEFORE auth
+  // so the login-redirect `next` param carries the tenant URL — no double bounce.
+  if (pathname === '/operations' || pathname.startsWith('/operations/')) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/h/260955' + pathname
+    return NextResponse.redirect(url, 307)
+  }
+
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/cron') ||
