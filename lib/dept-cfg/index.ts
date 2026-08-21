@@ -555,26 +555,26 @@ const MARKETING_CFG: DeptCfg = {
     // to top-strip peers. YouTube moved under Digital sub-strip. SEO dropped from
     // nav (URL /marketing/seo still resolves — just no longer surfaced). Socials
     // label with singular /marketing/social href preserves existing page path.
-    { label: 'Overview', href: '/marketing/overview' },
-    { label: 'Audience', href: '/marketing/audience' },
-    { label: 'Content',  href: '/marketing/content'  },
-    { label: 'Socials',  href: '/marketing/social'   },
-    { label: 'Digital',  href: '/marketing/digital'  },
+    { label: 'Overview', href: '/h/260955/marketing/overview' },
+    { label: 'Audience', href: '/h/260955/marketing/audience' },
+    { label: 'Content',  href: '/h/260955/marketing/content'  },
+    { label: 'Socials',  href: '/h/260955/marketing/social'   },
+    { label: 'Digital',  href: '/h/260955/marketing/digital'  },
     // A4 · brief autospec-compiler_module-20260725 (2026-07-30): Compiler was
     // reachable only by typed URL — surfaced as a top tab so the retreat/offer
     // compiler is discoverable. Hub tab row derives from this list.
-    { label: 'Compiler', href: '/marketing/compiler' },
+    { label: 'Compiler', href: '/h/260955/marketing/compiler' },
   ],
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
-    { label: 'Library',   href: '/marketing/library'     },
-    { label: 'Media',     href: '/marketing/gallery'       },
-    { label: 'Campaigns', href: '/marketing/campaigns'   },
-    { label: 'Prospects', href: '/marketing/prospects'   },
-    { label: 'Funnels',   href: '/marketing/funnels'     },
-    { label: 'Social',    href: '/marketing/social'      },
-    { label: 'Reviews',   href: '/marketing/reviews'     },
-    { label: 'Audiences', href: '/marketing/audiences'   },
+    { label: 'Library',   href: '/h/260955/marketing/library'     },
+    { label: 'Media',     href: '/h/260955/marketing/media' },
+    { label: 'Campaigns', href: '/h/260955/marketing/campaigns'   },
+    { label: 'Prospects', href: '/h/260955/marketing/prospects'   },
+    { label: 'Funnels',   href: '/h/260955/marketing/funnels'     },
+    { label: 'Social',    href: '/h/260955/marketing/social'      },
+    { label: 'Reviews',   href: '/h/260955/marketing/reviews'     },
+    { label: 'Audiences', href: '/h/260955/marketing/audiences'   },
   ],
   defaultAttn: [
     { id: 'l1', label: 'BDC review score down 0.2 vs comp area',     severity: 'high',   kind: 'leakage'     },
@@ -583,9 +583,9 @@ const MARKETING_CFG: DeptCfg = {
     { id: 'o2', label: 'Untapped audience: returning guests · 2024', severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'd1', label: 'Brand Guide 2026',          href: '/marketing/taxonomy'  },
-    { id: 'd2', label: 'Q2 Campaign Plan',          href: '/marketing/campaigns' },
-    { id: 'd3', label: 'Social media calendar',     href: '/marketing/social'    },
+    { id: 'd1', label: 'Brand Guide 2026',          href: '/h/260955/marketing/taxonomy'  },
+    { id: 'd2', label: 'Q2 Campaign Plan',          href: '/h/260955/marketing/campaigns' },
+    { id: 'd3', label: 'Social media calendar',     href: '/h/260955/marketing/social'    },
   ],
   defaultTasks: [
     { id: 't1', label: 'Reply to 7 BDC reviews (last 7d)',     done: false, created: TODAY },
@@ -593,12 +593,12 @@ const MARKETING_CFG: DeptCfg = {
     { id: 't3', label: 'Schedule influencer site-visit',       done: false, created: TODAY },
   ],
   attentionRoutes: [
-    { matcher: 'review',     href: '/marketing/reviews'     },
-    { matcher: 'social',     href: '/marketing/social'      },
-    { matcher: 'influenc',   href: '/marketing/influencers' },
-    { matcher: 'campaign',   href: '/marketing/campaigns'   },
-    { matcher: 'audience',   href: '/marketing/audiences'   },
-    { matcher: 'library',    href: '/marketing/library'     },
+    { matcher: 'review',     href: '/h/260955/marketing/reviews'     },
+    { matcher: 'social',     href: '/h/260955/marketing/social'      },
+    { matcher: 'influenc',   href: '/h/260955/marketing/influencers' },
+    { matcher: 'campaign',   href: '/h/260955/marketing/campaigns'   },
+    { matcher: 'audience',   href: '/h/260955/marketing/audiences'   },
+    { matcher: 'library',    href: '/h/260955/marketing/library'     },
   ],
   defaultDrilldown: '/marketing',
   kpiTiles: [
