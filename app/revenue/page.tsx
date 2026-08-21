@@ -28,6 +28,7 @@ import RmMailPanel from './_components/RmMailPanel';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 import RevenueMtdStripe from '@/app/(cockpit)/_design/RevenueMtdStripe';
 import RevenueYtdStripe from '@/app/(cockpit)/_design/RevenueYtdStripe';
+import RoomsInHouseStripe from '@/app/(cockpit)/_design/RoomsInHouseStripe';
 // PBS 2026-07-17: ConclusionBlock removed — Daily Briefing moved to /revenue/briefing.
 // import ConclusionBlock from '@/app/_components/ConclusionBlock';
 import {
@@ -639,6 +640,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
 
       {/* PBS 2026-08-21: Year-to-date stripe · self-contained · sits below MTD. */}
       <RevenueYtdStripe propertyId={pid} />
+
+      {/* PBS 2026-08-21: Rooms in house · 30d trend (migrated from /revenue/pulse) sits below YTD stripe. */}
+      <RoomsInHouseStripe propertyId={pid} />
 
       {/* PBS 2026-07-08 (final): grid tightened to 4 tiles — Attention · My Reports (self-sends) · My Tasks · Bugs.
           Scheduled + Send log get their own full-width containers below. */}

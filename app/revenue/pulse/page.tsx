@@ -322,24 +322,10 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
         </Container>
       </div>
 
-      {/* PBS 2026-07-17: renamed "sold" → "in house" to avoid confusion with pickup.
-          Same underlying data (v_pulse_rn_sold_30d = rooms actually occupied per night). */}
-      <div style={fullRow}>
-        <Container title="Rooms in house · last 30 days" subtitle="rooms occupied each night · dashed line = average" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
-            <TrendTile
-              label="Avg rooms in house · 30d"
-              value={avgRnSold.toFixed(1)}
-              series={rnSoldSeries}
-              footnote={`${rnSoldSeries.length} days · ${Math.round(rnSoldSeries.reduce((s, r) => s + r.value, 0))} total room-nights in house`}
-            />
-          </div>
-        </Container>
-      </div>
+      {/* PBS 2026-08-21: "Rooms in house · last 30 days" container moved to Revenue HoD. */}
 
-      {/* Rows 2+3 · 3×2 grid — all six cells identical size.
-          Row 2: Pickup+Cancellations | Performance vs STLY | Top 10 sources
-          Row 3: Performance · graph  | Events calendar     | Occupancy calendar */}
+      {/* PBS 2026-08-21: Row 3 (Performance · graph / Events / Occupancy) migrated to Operations HoD.
+          Rooms in house stripe migrated to Revenue HoD. Pulse now shows Row 1 (headline) + Row 2 (pickup/perf/sources) only. */}
       <div style={sixCell}>
         {/* R2C1 */}
         <div style={cellFill}>
@@ -386,48 +372,6 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
           </Container>
         </div>
 
-        {/* R3C1 — moved down from row 2 per PBS 2026-07-08 */}
-        <div style={cellFill}>
-          <Container
-            title={`Performance · ${winDays}d`}
-            subtitle={`${fmtLongDate(heroFrom)} → ${fmtLongDate(heroTo)}${offset !== 0 ? ` · ${offset > 0 ? '+' : ''}${offset}d` : ''}`}
-          >
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-              <PillRow>
-                <PillLink href={scrubHref(offset - 7)} active={false}>← 7d</PillLink>
-                {offset !== 0 && <PillLink href={scrubHref(0)} active={false}>today</PillLink>}
-                <PillLink href={scrubHref(offset + 7)} active={false}>7d →</PillLink>
-              </PillRow>
-              <PillRow>
-                {(['7d','14d','30d','60d'] as const).map((w) => (
-                  <PillLink key={w} href={winHref(w)} active={w === winParam}>{w}</PillLink>
-                ))}
-              </PillRow>
-            </div>
-            <Chart
-              variant="line"
-              data={heroData}
-              xKey="night_date"
-              series={heroSeries}
-              height={220}
-              empty={{ title: 'No data in window' }}
-            />
-          </Container>
-        </div>
-
-        {/* R3C2 */}
-        <div style={cellFill}>
-          <Container title="Upcoming events · next 30 days" subtitle="hover any day to see events">
-            <MonthCalendar days={eventCalendar} variant="events" />
-          </Container>
-        </div>
-
-        {/* R3C3 */}
-        <div style={cellFill}>
-          <Container title="Occupancy · next 30 days" subtitle="hover any day for the OCC %">
-            <MonthCalendar days={occCalendar} variant="occ" />
-          </Container>
-        </div>
       </div>
     </DashboardPage>
   );

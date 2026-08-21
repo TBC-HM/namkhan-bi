@@ -7,6 +7,7 @@ import HodLanding from '@/app/_components/HodLanding';
 import type { KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import OpsFlightsContainer from './_components/OpsFlightsContainer';
+import OpsPulseInsights from '@/app/(cockpit)/_design/OpsPulseInsights';
 // PBS 2026-07-14 #93: Reservations Operations Manager mail panel — sits between
 // Flights and Scheduled reports, uses shared HOD-DISMISSED Gmail label.
 import RomMailPanel from './_components/RomMailPanel';
@@ -74,6 +75,8 @@ export default async function OperationsPage() {
       liveTiles={liveTiles}
       extraContainers={
         <>
+          {/* PBS 2026-08-21: 3 containers migrated from /revenue/pulse — Upcoming events + Occupancy + Performance · 30d */}
+          <OpsPulseInsights propertyId={pid} />
           <OpsFlightsContainer initial={initialFlights} />
           <div style={{ gridColumn: '1 / -1' }}>
             <Container
