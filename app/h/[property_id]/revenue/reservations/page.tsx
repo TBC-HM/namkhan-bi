@@ -1,29 +1,23 @@
 // app/h/[property_id]/revenue/reservations/page.tsx
 // PBS 2026-08-21 · Reservations subtab under Revenue > Demand & Pace.
-// Renders the same "Bookings & cancellations · feed" container used on the
-// Revenue HoD page (BookingActivity server component · reads
-// public.fn_pulse_recent_activity for up to 200 unified booking + cancellation
-// events, sortable columns).
+// Renders the "Bookings & cancellations · feed" container (BookingActivity
+// server component · reads public.fn_pulse_recent_activity for up to 200
+// unified booking + cancellation events, sortable columns).
+//
+// v2 fix: pass REVENUE_SUBPAGES as the TOP strip so the page shows
+// Briefing / Overview / Demand & Pace / Performance / Market & Control /
+// Rate Desk / Forecast — and the Demand sub-strip
+// (Demand / Pace / Pickup / Reservations / Cancellations) auto-renders
+// via lib/nav-subgroups (members includes /revenue/reservations).
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
+import { REVENUE_SUBPAGES } from '@/app/revenue/_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { notFound } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
-
-const DEMAND_TABS: DashboardTab[] = [
-  { key: 'demand',        label: 'Demand',        href: '/h/260955/revenue/demand'        },
-  { key: 'pace',          label: 'Pace',          href: '/h/260955/revenue/pace'          },
-  { key: 'pickup',        label: 'Pickup',        href: '/h/260955/revenue/pickup'        },
-  { key: 'reservations',  label: 'Reservations',  href: '/h/260955/revenue/reservations', active: true },
-  { key: 'cancellations', label: 'Cancellations', href: '/h/260955/revenue/cancellations' },
-];
-
-function scopeTabs(tabs: DashboardTab[], pid: number): DashboardTab[] {
-  if (pid === 260955) return tabs;
-  return tabs.map(t => ({ ...t, href: t.href?.replace('/h/260955/', `/h/${pid}/`) }));
-}
 
 export default async function TenantRevenueReservationsPage({
   params,
@@ -37,11 +31,21 @@ export default async function TenantRevenueReservationsPage({
   const pid = Number(property_id);
   if (!Number.isFinite(pid)) notFound();
 
+  // Same pattern as bare /revenue/demand: build top strip from REVENUE_SUBPAGES.
+  // Reservations lives under the "Demand & Pace" parent → mark that active.
+  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
+  const tabs: DashboardTab[] = subPages.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href.endsWith('/demand'),
+  }));
+
   return (
     <DashboardPage
       title="Revenue · Reservations"
       subtitle={`property_id=${pid} · bookings + cancellations feed · last 200 events`}
-      tabs={scopeTabs(DEMAND_TABS, pid)}
+      tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <BookingActivity propertyId={pid} searchParams={sp} />
