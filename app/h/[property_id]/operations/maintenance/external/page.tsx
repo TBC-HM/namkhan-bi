@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import * as S from "../_components/pmStyles";
+import OpsTopStrip from "@/app/(cockpit)/_design/OpsTopStrip";
 
 type PMTask = {
   instance_id: string;
@@ -78,6 +79,7 @@ export default function ExternalContractorPage() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--paper)" }}>
+      <OpsTopStrip propertyId={propertyId} activeSuffix="/maintenance" />
       <div className="max-w-6xl mx-auto p-6">
         <button onClick={handleBack} className="btn-ghost mb-4">
           ← Back to Maintenance

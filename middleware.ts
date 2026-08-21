@@ -62,6 +62,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 307)
   }
 
+  // Same URL LAW for /guest/* — only the /guest HoD page is Namkhan-canonical
+  // (tenant page self-redirects Namkhan back). All sub-pages are safe to redirect.
+  const BARE_CANONICAL_GUEST = new Set(['/guest']);
+  if (
+    (pathname === '/guest' || pathname.startsWith('/guest/')) &&
+    !BARE_CANONICAL_GUEST.has(pathname)
+  ) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/h/260955' + pathname
+    return NextResponse.redirect(url, 307)
+  }
+
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/cron') ||
