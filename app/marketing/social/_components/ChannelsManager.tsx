@@ -102,6 +102,11 @@ interface QuickPostState {
   post_mode: string;       // TikTok (DIRECT_POST | MEDIA_UPLOAD)
   long_text_as_post: boolean; // X
   gbp_post_type: string;   // WHATS_NEW | EVENT | OFFER
+  youtube_title: string;   // YouTube (required)
+  youtube_description: string; // YouTube
+  youtube_first_comment: string; // YouTube (like Instagram)
+  linkedin_description: string;  // LinkedIn (rich caption)
+  linkedin_document_url: string; // LinkedIn (optional PDF/PPT upload URL)
   aiBusy: boolean;
   busy: boolean;
   msg: string | null;
@@ -193,6 +198,8 @@ export default function ChannelsManager({
       dest_id: dests.length ? dests[0].dest_id : '',
       first_comment: '', post_mode: 'MEDIA_UPLOAD', long_text_as_post: false,
       gbp_post_type: 'WHATS_NEW',
+      youtube_title: '', youtube_description: '', youtube_first_comment: '',
+      linkedin_description: '', linkedin_document_url: '',
       aiBusy: false, busy: false, msg: null,
     });
   }
@@ -242,6 +249,19 @@ export default function ChannelsManager({
       if (quickPost.platform === 'tiktok' && quickPost.post_mode) fd.set('tiktok_post_mode', quickPost.post_mode);
       if (quickPost.platform === 'x' && quickPost.long_text_as_post) fd.set('x_long_text_as_post', 'true');
       if (quickPost.platform === 'google_business') fd.set('google_business_type', quickPost.gbp_post_type);
+      // YouTube — title required + description + first-comment (Upload Post /upload passes these
+      // through to YouTube Data API v3; quota-aware handling belongs to the edge fn).
+      if (quickPost.platform === 'youtube') {
+        if (quickPost.youtube_title) fd.set('youtube_title', quickPost.youtube_title);
+        if (quickPost.youtube_description) fd.set('youtube_description', quickPost.youtube_description);
+        if (quickPost.youtube_first_comment) fd.set('youtube_first_comment', quickPost.youtube_first_comment);
+      }
+      // LinkedIn — org URN comes from the destination picker above (linkedin_page_urn).
+      // Description + optional document upload passthrough to Upload Post /upload.
+      if (quickPost.platform === 'linkedin') {
+        if (quickPost.linkedin_description) fd.set('linkedin_description', quickPost.linkedin_description);
+        if (quickPost.linkedin_document_url) fd.set('linkedin_document_url', quickPost.linkedin_document_url);
+      }
 
       // Follow redirect naturally — the endpoint returns 303 back to /marketing/social?view=channels
       const res = await fetch('/api/marketing/social/quick-push', { method: 'POST', body: fd });
@@ -505,6 +525,38 @@ export default function ChannelsManager({
                            onChange={(e) => setQuickPost({ ...quickPost, long_text_as_post: e.target.checked })} />
                     Publish long text as single post (X Premium)
                   </label>
+                )}
+                {quickPost.platform === 'youtube' && (
+                  <>
+                    <Field label="Video title (required · ≤ 100 chars)">
+                      <input style={inputSt} maxLength={100}
+                             value={quickPost.youtube_title}
+                             onChange={(e) => setQuickPost({ ...quickPost, youtube_title: e.target.value })} />
+                    </Field>
+                    <Field label="Description (optional · shown under video)">
+                      <textarea style={{ ...inputSt, minHeight: 60, fontFamily: 'inherit' }}
+                                value={quickPost.youtube_description}
+                                onChange={(e) => setQuickPost({ ...quickPost, youtube_description: e.target.value })} />
+                    </Field>
+                    <Field label="First comment (optional · pinned reply)">
+                      <input style={inputSt} value={quickPost.youtube_first_comment}
+                             onChange={(e) => setQuickPost({ ...quickPost, youtube_first_comment: e.target.value })} />
+                    </Field>
+                  </>
+                )}
+                {quickPost.platform === 'linkedin' && (
+                  <>
+                    <Field label="Rich description (optional · LinkedIn-specific caption, falls back to caption above)">
+                      <textarea style={{ ...inputSt, minHeight: 60, fontFamily: 'inherit' }}
+                                value={quickPost.linkedin_description}
+                                onChange={(e) => setQuickPost({ ...quickPost, linkedin_description: e.target.value })} />
+                    </Field>
+                    <Field label="Document URL (optional · PDF/PPT for document post · https://…)">
+                      <input type="url" style={inputSt}
+                             value={quickPost.linkedin_document_url}
+                             onChange={(e) => setQuickPost({ ...quickPost, linkedin_document_url: e.target.value })} />
+                    </Field>
+                  </>
                 )}
 
                 <Field label="Schedule (optional · empty = post now)">
