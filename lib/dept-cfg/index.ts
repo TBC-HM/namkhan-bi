@@ -556,7 +556,7 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Audience', href: '/h/260955/marketing/audience' },
     { label: 'Content',  href: '/h/260955/marketing/content'  },
     { label: 'Socials',  href: '/h/260955/marketing/social'   },
-    { label: 'Digital',  href: '/h/260955/marketing/digital'  },
+    { label: 'Web',      href: '/h/260955/marketing/digital'  },
     // PBS 2026-08-21: top-level Compiler tab removed — duplicate; Compiler
     // lives under Content sub-strip. URL /marketing/compiler still resolves.
   ],
@@ -623,11 +623,8 @@ const OPERATIONS_CFG: DeptCfg = {
     // PBS 2026-07-07 night: QA back as top-level tab. Docs moved to a sub-tab
     // of Overview (renders below the top strip when on Overview).
     { label: 'HoD',              href: '/h/260955/operations'                 },
-    { label: 'Overview',         href: '/h/260955/operations/overview'        },
     { label: 'Departments',      href: '/h/260955/operations/rooms'           },
-    { label: 'Menus',            href: '/h/260955/operations/menus'           },
     { label: 'Inventory',        href: '/h/260955/operations/inventory'       },
-    { label: 'Suppliers',        href: '/h/260955/operations/suppliers'       },
     { label: 'Maintenance',      href: '/h/260955/operations/maintenance'     },
     { label: 'QA',               href: '/h/260955/operations/sops'            },
   ],
@@ -764,7 +761,6 @@ const FINANCE_CFG: DeptCfg = {
     // by mistake). Ledger stays a sub-tab of Finance (visible when on any Finance
     // child page — see nav-subgroups /finance/pnl group).
     { label: 'HoD',             href: '/h/260955/finance'                          },
-    { label: 'Overview',        href: '/h/260955/finance/overview'                 },
     { label: 'HR',              href: '/h/260955/finance/hr'                       },
     { label: 'Finance',         href: '/h/260955/finance/pnl'                      },
     // FP&C module 2026-07-28: budget vs actual by class + 13-week cash forward

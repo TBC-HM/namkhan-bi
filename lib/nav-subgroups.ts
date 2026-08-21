@@ -111,6 +111,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/retail',
       '/operations/transport',
       '/operations/other',
+      '/operations/menus',
     ],
     tabs: [
       { label: 'Rooms',      href: '/h/260955/operations/rooms'      },
@@ -120,6 +121,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Retail',     href: '/h/260955/operations/retail'     },
       { label: 'Transport',  href: '/h/260955/operations/transport'  },
       { label: 'Other',      href: '/h/260955/operations/other'      },
+      { label: 'Menus',      href: '/h/260955/operations/menus'      },
     ],
   },
   // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
@@ -142,6 +144,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/inventory/spa',
       '/operations/inventory/stock',
       '/operations/inventory/suppliers',
+          '/operations/suppliers',
     ],
     tabs: [
       { label: 'Overview',  href: '/h/260955/operations/inventory'           },
@@ -157,7 +160,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Shop',      href: '/h/260955/operations/inventory/shop'      },
       { label: 'Spa',       href: '/h/260955/operations/inventory/spa'       },
       { label: 'Stock',     href: '/h/260955/operations/inventory/stock'     },
-      { label: 'Suppliers', href: '/h/260955/operations/inventory/suppliers' },
+      { label: 'Suppliers', href: '/h/260955/operations/suppliers' },
     ],
   },
 
