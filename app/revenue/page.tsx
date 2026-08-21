@@ -27,6 +27,8 @@ import AttentionList from './_components/AttentionList';
 import RmMailPanel from './_components/RmMailPanel';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
+import RevenueMtdStripe from '@/app/(cockpit)/_design/RevenueMtdStripe';
+import RevenueYtdStripe from '@/app/(cockpit)/_design/RevenueYtdStripe';
 // PBS 2026-07-17: ConclusionBlock removed — Daily Briefing moved to /revenue/briefing.
 // import ConclusionBlock from '@/app/_components/ConclusionBlock';
 import {
@@ -632,6 +634,12 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
           </Container>
         </div>
       )}
+
+      {/* PBS 2026-08-21: Month-to-date stripe · self-contained · sits below Yesterday. */}
+      <RevenueMtdStripe propertyId={pid} />
+
+      {/* PBS 2026-08-21: Year-to-date stripe · self-contained · sits below MTD. */}
+      <RevenueYtdStripe propertyId={pid} />
 
       {/* PBS 2026-07-08 (final): grid tightened to 4 tiles — Attention · My Reports (self-sends) · My Tasks · Bugs.
           Scheduled + Send log get their own full-width containers below. */}
