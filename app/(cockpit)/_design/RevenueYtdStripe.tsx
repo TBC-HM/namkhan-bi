@@ -5,7 +5,8 @@
 // untouched. Reads v_kpi_daily_property for Jan 1 → yesterday in property TZ.
 
 import Container from './layout/Container';
-import KpiTile, { type KpiTileProps } from './tile/KpiTile';
+import KpiTile from './tile/KpiTile';
+import type { KpiTileProps } from './types';
 import { supabase } from '@/lib/supabase';
 
 interface Props { propertyId: number }
