@@ -12,16 +12,9 @@ export interface SubGroup {
 
 export const NAV_SUBGROUPS: SubGroup[] = [
   // ─── Revenue ──────────────────────────────────────────────
-  // PBS 2026-07-07 night: Overview tab lands on /revenue/pulse. Sub-strip surfaces
-  // Calendar (Pulse itself hidden by sibling filter in DashboardPage).
-  {
-    parentHref: '/revenue/pulse',
-    members: ['/revenue/pulse', '/revenue/pricing'],
-    tabs: [
-      { label: 'Pulse',    href: '/revenue/pulse'   },
-      { label: 'Calendar', href: '/revenue/pricing' },
-    ],
-  },
+  // PBS 2026-08-21: Overview sub-strip removed. Pulse stands alone as the
+  // single Overview page. Calendar (/revenue/pricing) moved to the Demand &
+  // Pace sub-strip below (after Cancellations, per PBS request).
   // PBS 2026-07-08: Pickup Month/Day dropped from nav-subgroups. Was causing
   // the Demand & Pace strip to disappear when landing on /revenue/pickup.
   // Month/Day is now rendered inline inside the Pickup page body (like a
@@ -29,15 +22,17 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // Cancellations sub-strip while still switching Month ↔ Day.
   {
     parentHref: '/revenue/demand',
-    // PBS 2026-08-21: Reservations added before Cancellations · all hrefs
+    // PBS 2026-08-21: Reservations added before Cancellations · Calendar appended
+    // after Cancellations (moved out of Overview per PBS request) · all hrefs
     // property-scoped per URL LAW (rewriter swaps /h/260955/ → /h/{pid}/ for Donna).
-    members: ['/revenue/demand', '/revenue/pace', '/revenue/pickup', '/revenue/pickup-day', '/revenue/reservations', '/revenue/cancellations'],
+    members: ['/revenue/demand', '/revenue/pace', '/revenue/pickup', '/revenue/pickup-day', '/revenue/reservations', '/revenue/cancellations', '/revenue/pricing'],
     tabs: [
       { label: 'Demand',        href: '/h/260955/revenue/demand'        },
       { label: 'Pace',          href: '/h/260955/revenue/pace'          },
       { label: 'Pickup',        href: '/h/260955/revenue/pickup'        },
       { label: 'Reservations',  href: '/h/260955/revenue/reservations'  },
       { label: 'Cancellations', href: '/h/260955/revenue/cancellations' },
+      { label: 'Calendar',      href: '/h/260955/revenue/pricing'       },
     ],
   },
   {
