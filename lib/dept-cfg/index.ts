@@ -395,7 +395,7 @@ const REVENUE_CFG: DeptCfg = {
     { label: 'Overview',        href: '/h/260955/revenue/pulse'    },
     { label: 'Demand & Pace',   href: '/h/260955/revenue/demand'   },
     { label: 'Performance',     href: '/h/260955/revenue/rooms'    },
-    { label: 'Market & Control',href: '/h/260955/revenue/compset'  },
+    { label: 'Comp & Parity',href: '/h/260955/revenue/compset'  },
     // PBS 2026-08-04 (brief revenue-module-v1, owner answer to open_question):
     // Rate Desk = the rate-action cockpit (pace board · action queue · compset ·
     // decision ledger) at app/h/[property_id]/revenue/cockpit. Stored Namkhan-
