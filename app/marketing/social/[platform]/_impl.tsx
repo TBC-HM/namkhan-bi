@@ -18,6 +18,7 @@ import { notFound } from 'next/navigation';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSocialAccounts, getSocialChannelRules, getSocialPrograms } from '@/lib/marketing';
 import { getSocialPostsForProperty } from '@/lib/marketing-social';
+import { supabase } from '@/lib/supabase';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 
 // Legacy /marketing/social/* surface is Namkhan-scoped by contract (§0.7);
@@ -66,12 +67,24 @@ export default async function SocialPlatformPage({ params }: Props) {
   const platform = decodeURIComponent(params.platform).toLowerCase();
   if (!SOCIAL_ALLOW.has(platform)) notFound();
 
-  const [all, rules, programs, allPosts] = await Promise.all([
+  const [all, rules, programs, allPosts, analyticsRes] = await Promise.all([
     getSocialAccounts(),
     getSocialChannelRules(NAMKHAN_PID),
     getSocialPrograms(NAMKHAN_PID),
     getSocialPostsForProperty(NAMKHAN_PID),
+    // PBS 2026-08-21 · Upload Post analytics snapshot per platform.
+    supabase
+      .from('v_upload_post_analytics_latest')
+      .select('impressions, likes, comments, shares, reach, views, snapshot_date, raw')
+      .eq('property_id', NAMKHAN_PID)
+      .eq('platform', platform)
+      .maybeSingle(),
   ]);
+  const analytics = (analyticsRes?.data ?? null) as {
+    impressions?: number | null; likes?: number | null; comments?: number | null;
+    shares?: number | null; reach?: number | null; views?: number | null;
+    snapshot_date?: string | null; raw?: Record<string, unknown> | null;
+  } | null;
   const dbRow = all.find((a: any) => a.platform.toLowerCase() === platform);
   const rule = rules.find((r) => r.platform === platform);
   const chanPrograms = programs.filter((p) => p.platform === platform);
@@ -97,11 +110,44 @@ export default async function SocialPlatformPage({ params }: Props) {
     active: s.href === '/marketing/social',
   }));
 
+  // PBS 2026-08-21 · Analytics hydration from Upload Post snapshot.
+  //   Followers pill prefers analytics.raw.followers if fresher than social_accounts.
+  //   Engagement rate = (likes+comments+shares+saves) / impressions.
+  //   Impressions + Reach tiles appear only when a snapshot exists.
+  const aFollowers = Number((analytics?.raw as { followers?: number | string } | null)?.followers ?? NaN);
+  const aSaves = Number((analytics?.raw as { saves?: number | string } | null)?.saves ?? 0);
+  const aProfileViews = Number((analytics?.raw as { profileViews?: number | string } | null)?.profileViews ?? NaN);
+  const followers = Number.isFinite(aFollowers) && aFollowers > 0
+    ? aFollowers
+    : Number(account.followers ?? 0);
+  const engagementActs = (analytics?.likes ?? 0) + (analytics?.comments ?? 0) + (analytics?.shares ?? 0) + aSaves;
+  const engagementRate = analytics?.impressions && analytics.impressions > 0
+    ? (engagementActs / analytics.impressions) * 100
+    : null;
+  const snapshotFoot = analytics?.snapshot_date
+    ? `snapshot ${analytics.snapshot_date} · upload_post_analytics`
+    : 'awaiting insights API · pull /analytics/{platform}';
+
   const tiles: KpiTileProps[] = [
-    { label: 'Followers',        value: (account.followers ?? 0).toLocaleString(), size: 'sm', footnote: 'marketing.social_accounts' },
+    { label: 'Followers',        value: followers.toLocaleString(), size: 'sm',
+      footnote: aFollowers > 0 ? snapshotFoot : 'marketing.social_accounts' },
+    { label: 'Impressions',      value: analytics?.impressions != null ? analytics.impressions.toLocaleString() : '—',
+      size: 'sm', footnote: snapshotFoot },
+    { label: 'Reach',            value: analytics?.reach != null ? analytics.reach.toLocaleString() : '—',
+      size: 'sm', footnote: snapshotFoot },
+    { label: 'Engagement rate',  value: engagementRate != null ? `${engagementRate.toFixed(2)}%` : '—',
+      size: 'sm', footnote: engagementRate != null ? `${engagementActs} acts / ${analytics!.impressions!.toLocaleString()} imp` : snapshotFoot,
+      status: engagementRate != null ? (engagementRate >= 3 ? 'green' : engagementRate >= 1 ? 'amber' : 'grey') : 'grey' },
+    { label: 'Likes',            value: analytics?.likes != null ? analytics.likes.toLocaleString() : '—',
+      size: 'sm', footnote: snapshotFoot },
+    { label: 'Comments',         value: analytics?.comments != null ? analytics.comments.toLocaleString() : '—',
+      size: 'sm', footnote: snapshotFoot },
+    { label: 'Saves',            value: aSaves > 0 ? aSaves.toLocaleString() : '—',
+      size: 'sm', footnote: snapshotFoot },
+    { label: 'Profile views',    value: Number.isFinite(aProfileViews) ? aProfileViews.toLocaleString() : '—',
+      size: 'sm', footnote: snapshotFoot },
     { label: 'Open drafts',      value: openDrafts.length, size: 'sm', footnote: 'marketing.social_posts' },
     { label: 'Ready to export',  value: exportQueue.length, size: 'sm', footnote: 'approved · awaiting upload' },
-    { label: 'Engagement rate',  value: '—', size: 'sm', footnote: 'awaiting insights API' },
     { label: 'Total posts',      value: (account.posts ?? 0).toLocaleString(), size: 'sm', footnote: 'lifetime' },
   ];
 
