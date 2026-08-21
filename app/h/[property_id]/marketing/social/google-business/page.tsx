@@ -1,18 +1,23 @@
 // app/h/[property_id]/marketing/social/google-business/page.tsx
-// PBS 2026-08-20 · Donna tenant stub for Google Business Profile.
-import DeptSubpageStub from '@/app/h/[property_id]/_shared/DeptSubpageStub';
+// PBS 2026-08-21 · Tenant delegate mounts the real GBP body from _impl.tsx
+// (previously a stub blocked on allowlist — real page always rendered fine,
+// stub was only preventing the tenant URL from working). Bare
+// /marketing/social/google-business now redirects here so tenant chrome
+// renders correctly for both Namkhan (260955) and Donna (1000001).
+import { notFound } from 'next/navigation';
+import GbpBody from '@/app/marketing/social/google-business/_impl';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function DonnaSocialGoogleBusiness({ params }: { params: { property_id: string } }) {
-  return (
-    <DeptSubpageStub
-      propertyId={Number(params.property_id)}
-      deptLabel="Marketing"
-      routeLabel="Social · Google Business Profile"
-      namkhanPath="/marketing/social/google-business"
-      hint="Google Business Profile — Donna wiring blocked on allowlist case 7-4375000040952 and Donna OAuth pending."
-    />
-  );
+interface Params { property_id: string }
+
+export default function TenantSocialGbpPage({
+  params,
+}: {
+  params: Params;
+}) {
+  const pid = Number(params.property_id);
+  if (!Number.isFinite(pid)) notFound();
+  return <GbpBody />;
 }
