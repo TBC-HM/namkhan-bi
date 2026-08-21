@@ -358,8 +358,23 @@ function stripTenantPrefix(p: string): { normalized: string; tenantPrefix: strin
 
 export function findSubGroup(pathname: string): SubGroup | null {
   const { normalized } = stripTenantPrefix(pathname);
+  // Exact match on member first
   for (const g of NAV_SUBGROUPS) {
     if (g.members.includes(normalized)) return g;
+  }
+  // PBS 2026-08-21: detail-page fallback — strip ONE trailing segment
+  // so /revenue/compset/{uuid} still shows the Comp & Parity sub-strip
+  // (and /revenue/rooms/{id} shows Performance, /marketing/social/{platform}
+  // already handled by explicit members). Only kicks in when the stripped
+  // parent is a 2-segment path (/a/b), never for shallower URLs — avoids
+  // /revenue/pulse accidentally matching /revenue.
+  const segCount = normalized.split('/').filter(Boolean).length;
+  if (segCount >= 3) {
+    const idx = normalized.lastIndexOf('/');
+    const parent = normalized.slice(0, idx);
+    for (const g of NAV_SUBGROUPS) {
+      if (g.members.includes(parent)) return g;
+    }
   }
   return null;
 }
