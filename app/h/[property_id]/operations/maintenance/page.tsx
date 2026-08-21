@@ -20,6 +20,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DashboardPage, Drawer, type DashboardTab } from "@/app/(cockpit)/_design";
+import { OPERATIONS_SUBPAGES } from "@/app/operations/_subpages";
 import TaskDetail from "./_components/TaskDetail";
 import AssetTable from "./_components/AssetTable";
 import PmCalendar from "./_components/PmCalendar";
@@ -63,11 +64,22 @@ export default function MaintenancePage() {
     setLoading(false);
   }
 
-  const tabs: DashboardTab[] = [
-    { key: "calendar", label: "PM Calendar", active: view === "calendar", onSelect: () => setView("calendar") },
-    { key: "assets", label: "Asset Register", active: view === "assets", count: assets.length, onSelect: () => setView("assets") },
-    { key: "capture", label: "Capture Asset", active: view === "capture", onSelect: () => setView("capture") },
-  ];
+  // PBS 2026-08-21: tabs = OPERATIONS_SUBPAGES top strip (was the internal
+  // view-switcher which was hiding the department nav). View switcher is now
+  // rendered inline as pill buttons below the header.
+  const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((sp) => ({
+    key: sp.href,
+    label: sp.label,
+    href: sp.href.replace('/h/260955/', `/h/${propertyId}/`),
+    active: sp.href.endsWith('/maintenance'),
+  }));
+  const viewPill = (v: "calendar"|"assets"|"capture", label: string, count?: number): React.CSSProperties => ({
+    padding: '6px 14px', fontSize: 12, fontWeight: view === v ? 700 : 500,
+    color: view === v ? '#FFFFFF' : '#1B1B1B',
+    background: view === v ? '#1B1B1B' : 'transparent',
+    border: '1px solid #E6DFCC', borderRadius: 4, cursor: 'pointer',
+    letterSpacing: '0.02em',
+  });
 
   if (loading) {
     return (
@@ -88,6 +100,15 @@ export default function MaintenancePage() {
         </Link>
       }
     >
+      {/* PBS 2026-08-21: view switcher (was in top tabs, now inline pills) */}
+      <div style={{ gridColumn: "1 / -1", display: 'flex', gap: 6, marginBottom: 4 }}>
+        <button type="button" style={viewPill("calendar", "PM Calendar")}
+                onClick={() => setView("calendar")}>PM Calendar</button>
+        <button type="button" style={viewPill("assets", "Asset Register", assets.length)}
+                onClick={() => setView("assets")}>Asset Register ({assets.length})</button>
+        <button type="button" style={viewPill("capture", "Capture Asset")}
+                onClick={() => setView("capture")}>Capture Asset</button>
+      </div>
       <div style={{ gridColumn: "1 / -1" }}>
         {view === "calendar" && (
           <div>

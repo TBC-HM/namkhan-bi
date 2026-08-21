@@ -41,7 +41,22 @@ export async function middleware(req: NextRequest) {
   // Bare pages exist as Namkhan-only bodies; tenant chrome (Marketing/Ops sub-strip +
   // ThemeInjector) only renders under /h/[property_id]/*. Redirect runs BEFORE auth
   // so the login-redirect `next` param carries the tenant URL — no double bounce.
-  if (pathname === '/operations' || pathname.startsWith('/operations/')) {
+  //
+  // EXCLUSION: 14 bare paths where the BARE page is the Namkhan-canonical body
+  // and the tenant delegate self-redirects Namkhan back to bare (USD/Cloudbeds vs
+  // EUR/Mews duality). Redirecting bare→tenant here would create an infinite loop.
+  const BARE_CANONICAL_OPS = new Set([
+    '/operations',
+    '/operations/menus', '/operations/suppliers', '/operations/rooms',
+    '/operations/other', '/operations/retail', '/operations/activities',
+    '/operations/transport', '/operations/restaurant',
+    '/operations/spa', '/operations/spa/passes', '/operations/spa/schedule',
+    '/operations/spa/delivery', '/operations/spa/catalogue',
+  ]);
+  if (
+    (pathname === '/operations' || pathname.startsWith('/operations/')) &&
+    !BARE_CANONICAL_OPS.has(pathname)
+  ) {
     const url = req.nextUrl.clone()
     url.pathname = '/h/260955' + pathname
     return NextResponse.redirect(url, 307)
