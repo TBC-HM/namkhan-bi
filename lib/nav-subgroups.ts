@@ -172,17 +172,16 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // the legacy /marketing/acquisition subgroup below on /marketing/campaigns.
   {
     // PBS 2026-07-21 · Content sub-strip · replaces box grid on /marketing/content hub
+    // PBS 2026-08-21: removed 'Products & Offers' tab (Namkhan + Donna).
     parentHref: '/marketing/content',
     members: [
       '/marketing/content',
-      '/marketing/offers',
       '/marketing/compiler',
       '/marketing/campaigns',
       '/marketing/newsletter',
       '/marketing/media',
     ],
     tabs: [
-      { label: 'Products & Offers', href: '/marketing/offers'     },
       { label: 'Compiler',          href: '/marketing/compiler'   },
       { label: 'Campaigns',         href: '/marketing/campaigns'  },
       { label: 'Newsletter',        href: '/marketing/newsletter' },
