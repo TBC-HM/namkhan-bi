@@ -47,6 +47,7 @@ export async function middleware(req: NextRequest) {
   // EUR/Mews duality). Redirecting bare→tenant here would create an infinite loop.
   const BARE_CANONICAL_OPS = new Set([
     '/operations',
+    '/operations/overview',
     '/operations/menus', '/operations/suppliers', '/operations/rooms',
     '/operations/other', '/operations/retail', '/operations/activities',
     '/operations/transport', '/operations/restaurant',
@@ -68,6 +69,18 @@ export async function middleware(req: NextRequest) {
   if (
     (pathname === '/guest' || pathname.startsWith('/guest/')) &&
     !BARE_CANONICAL_GUEST.has(pathname)
+  ) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/h/260955' + pathname
+    return NextResponse.redirect(url, 307)
+  }
+
+  // /finance URL LAW · same pattern as /operations + /guest.
+  // Tenant self-redirects for /finance, /finance/hr, /finance/pnl.
+  const BARE_CANONICAL_FINANCE = new Set(['/finance', '/finance/hr', '/finance/pnl']);
+  if (
+    (pathname === '/finance' || pathname.startsWith('/finance/')) &&
+    !BARE_CANONICAL_FINANCE.has(pathname)
   ) {
     const url = req.nextUrl.clone()
     url.pathname = '/h/260955' + pathname
