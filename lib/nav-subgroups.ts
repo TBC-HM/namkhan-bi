@@ -29,12 +29,15 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // Cancellations sub-strip while still switching Month ↔ Day.
   {
     parentHref: '/revenue/demand',
-    members: ['/revenue/demand', '/revenue/pace', '/revenue/pickup', '/revenue/pickup-day', '/revenue/cancellations'],
+    // PBS 2026-08-21: Reservations added before Cancellations · all hrefs
+    // property-scoped per URL LAW (rewriter swaps /h/260955/ → /h/{pid}/ for Donna).
+    members: ['/revenue/demand', '/revenue/pace', '/revenue/pickup', '/revenue/pickup-day', '/revenue/reservations', '/revenue/cancellations'],
     tabs: [
-      { label: 'Demand',        href: '/revenue/demand'        },
-      { label: 'Pace',          href: '/revenue/pace'          },
-      { label: 'Pickup',        href: '/revenue/pickup'        },
-      { label: 'Cancellations', href: '/revenue/cancellations' },
+      { label: 'Demand',        href: '/h/260955/revenue/demand'        },
+      { label: 'Pace',          href: '/h/260955/revenue/pace'          },
+      { label: 'Pickup',        href: '/h/260955/revenue/pickup'        },
+      { label: 'Reservations',  href: '/h/260955/revenue/reservations'  },
+      { label: 'Cancellations', href: '/h/260955/revenue/cancellations' },
     ],
   },
   {
