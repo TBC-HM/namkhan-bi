@@ -6,13 +6,11 @@
 import HodLanding from '@/app/_components/HodLanding';
 import type { KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import OpsFlightsContainer from './_components/OpsFlightsContainer';
 // PBS 2026-07-14 #93: Reservations Operations Manager mail panel — sits between
 // Flights and Scheduled reports, uses shared HOD-DISMISSED Gmail label.
 import RomMailPanel from './_components/RomMailPanel';
 import { Container } from '@/app/(cockpit)/_design';
-import { evaluateOperationsRules, type OperationsContext, type OperationsTargets } from '@/lib/rules/operations';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -62,58 +60,6 @@ export default async function OperationsPage() {
     { label: 'Check-outs today', value: checkOuts, footnote: `${todayIso}`, status: checkOuts > 0 ? 'green' : 'grey', size: 'sm' },
   ];
 
-  // PBS 2026-07-07: build operations conclusion context.
-  const sbAdmin = getSupabaseAdmin();
-  const targets: OperationsTargets = {};
-  try {
-    const { data } = await sbAdmin
-      .from('guardrails')
-      .select('rule_key, threshold_val')
-      .eq('property_id', pid).eq('domain', 'operations').eq('active', true);
-    for (const g of (data ?? []) as Array<{ rule_key: string; threshold_val: number | string }>) {
-      const n = typeof g.threshold_val === 'string' ? Number(g.threshold_val) : g.threshold_val;
-      if (!Number.isFinite(n)) continue;
-      if (g.rule_key === 'fnb_capture_target') targets.fnb_capture_target = n;
-      else if (g.rule_key === 'spa_capture_target') targets.spa_capture_target = n;
-      else if (g.rule_key === 'activities_capture') targets.activities_capture = n;
-      else if (g.rule_key === 'housekeeping_lag_min') targets.housekeeping_lag_min = n;
-    }
-  } catch { /* ignore */ }
-
-  // Capture rates — from kpi.v_ancillary_capture_daily if reachable. Best-effort.
-  let fnbCapture: number | null = null;
-  let spaCapture: number | null = null;
-  let activitiesCapture: number | null = null;
-  try {
-    const { data } = await sbAdmin
-      .from('v_ancillary_capture_daily')
-      .select('fb_capture_pct, spa_capture_pct, activity_capture_pct')
-      .eq('property_id', pid)
-      .eq('date', todayIso)
-      .maybeSingle();
-    if (data) {
-      const row = data as { fb_capture_pct?: number | null; spa_capture_pct?: number | null; activity_capture_pct?: number | null };
-      fnbCapture = row.fb_capture_pct ?? null;
-      spaCapture = row.spa_capture_pct ?? null;
-      activitiesCapture = row.activity_capture_pct ?? null;
-    }
-  } catch { /* view unreachable = rules silent */ }
-
-  const opsCtx: OperationsContext = {
-    occToday,
-    capacity: cap,
-    occPct,
-    checkIns,
-    checkOuts,
-    fnbCaptureToday: fnbCapture,
-    spaCaptureToday: spaCapture,
-    activitiesCaptureToday: activitiesCapture,
-    targets,
-  };
-  const insights = evaluateOperationsRules(opsCtx);
-
-  const activeTargets = Object.entries(targets)
-    .map(([k, v]) => `${k}=${v}`).join(' · ') || 'no DB targets · using fallback defaults';
 
   const initialFlights = (flightsResp.data as Array<{
     flight_date: string; origin: string; destination: string;
@@ -140,11 +86,6 @@ export default async function OperationsPage() {
           </div>
         </>
       }
-      conclusions={{
-        insights,
-        title: 'CONCLUSIONS · capture · arrivals · sold-out',
-        subtitle: `Live: ${occToday}/${cap} · ${checkIns} check-ins · ${checkOuts} check-outs · DB targets: ${activeTargets}`,
-      }}
     />
   );
 }

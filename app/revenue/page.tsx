@@ -26,7 +26,6 @@ import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
 import RmMailPanel from './_components/RmMailPanel';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
-import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
 import RevenueMtdStripe from '@/app/(cockpit)/_design/RevenueMtdStripe';
 import RevenueYtdStripe from '@/app/(cockpit)/_design/RevenueYtdStripe';
 // PBS 2026-07-17: ConclusionBlock removed — Daily Briefing moved to /revenue/briefing.
@@ -680,9 +679,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
           (daily @ 06:00 Vientiane + manual Refresh button on the briefing page).
           No duplicate rendering of the same rule set on two surfaces. */}
 
-      <div style={fullRow}>
-        <BookingActivity propertyId={pid} searchParams={searchParams} />
-      </div>
+      {/* PBS 2026-08-21: Bookings-cancellations feed moved to /revenue/reservations subtab
+          (no duplicate rendering — reservations page owns this feed now). */}
 
       {/* PBS 2026-07-14: Reservations Manager mail feed — Mai Vo only.
           Full-width, sits above Scheduled reports. Client component polls

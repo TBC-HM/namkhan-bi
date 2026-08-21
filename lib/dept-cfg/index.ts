@@ -403,10 +403,8 @@ const REVENUE_CFG: DeptCfg = {
     // active property (same pattern as Reports), and Namkhan renders it as-is.
     // NOT '/revenue/cockpit' — that legacy unprefixed URL renders the engine
     // DeptCockpit (a different, URL-only surface), not the Rate Desk.
-    { label: 'Rate Desk',       href: '/h/260955/revenue/cockpit' },
     // 2026-08-05 unstick-sweep F7 re-apply: Forecast tab (commit c822fca intent),
     // restored after truncation-disease repair of this file (memory 767).
-    { label: 'Forecast',        href: '/h/260955/revenue/forecast' },
   ],
   quickChips: [
     { label: 'Pulse',    href: '/h/260955/revenue/pulse'    },

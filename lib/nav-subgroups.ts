@@ -82,7 +82,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     parentHref: '/operations/overview',
     members: ['/operations/overview', '/operations/docs'],
     tabs: [
-      { label: 'Docs', href: '/operations/docs' },
+      { label: 'Docs', href: '/h/260955/operations/docs' },
     ],
   },
   // PBS 2026-07-09 pm: QA sub-strip — SOPs + Registry + Proposals + Generate.
@@ -94,11 +94,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/qa/generate', '/operations/qa/agent-instructions',
     ],
     tabs: [
-      { label: 'SOPs',               href: '/operations/sops'                  },
-      { label: 'QA registry',        href: '/operations/qa/registry'           },
-      { label: 'Proposals',          href: '/operations/qa/proposals'          },
-      { label: 'Generate',           href: '/operations/qa/generate'           },
-      { label: 'Agent instructions', href: '/operations/qa/agent-instructions' },
+      { label: 'SOPs',               href: '/h/260955/operations/sops'                  },
+      { label: 'QA registry',        href: '/h/260955/operations/qa/registry'           },
+      { label: 'Proposals',          href: '/h/260955/operations/qa/proposals'          },
+      { label: 'Generate',           href: '/h/260955/operations/qa/generate'           },
+      { label: 'Agent instructions', href: '/h/260955/operations/qa/agent-instructions' },
     ],
   },
   {
@@ -113,13 +113,13 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/other',
     ],
     tabs: [
-      { label: 'Rooms',      href: '/operations/rooms'      },
-      { label: 'F&B',        href: '/operations/restaurant' },
-      { label: 'Spa',        href: '/operations/spa'        },
-      { label: 'Activities', href: '/operations/activities' },
-      { label: 'Retail',     href: '/operations/retail'     },
-      { label: 'Transport',  href: '/operations/transport'  },
-      { label: 'Other',      href: '/operations/other'      },
+      { label: 'Rooms',      href: '/h/260955/operations/rooms'      },
+      { label: 'F&B',        href: '/h/260955/operations/restaurant' },
+      { label: 'Spa',        href: '/h/260955/operations/spa'        },
+      { label: 'Activities', href: '/h/260955/operations/activities' },
+      { label: 'Retail',     href: '/h/260955/operations/retail'     },
+      { label: 'Transport',  href: '/h/260955/operations/transport'  },
+      { label: 'Other',      href: '/h/260955/operations/other'      },
     ],
   },
   // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
@@ -144,20 +144,20 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/inventory/suppliers',
     ],
     tabs: [
-      { label: 'Overview',  href: '/operations/inventory'           },
-      { label: 'Assets',    href: '/operations/inventory/assets'    },
-      { label: 'Capex',     href: '/operations/inventory/capex'     },
-      { label: 'Catalog',   href: '/operations/inventory/catalog'   },
-      { label: 'Counts',    href: '/operations/inventory/counts'    },
-      { label: 'Dishes',    href: '/operations/inventory/dishes'    },
-      { label: 'Items',     href: '/operations/inventory/items'     },
-      { label: 'Orders',    href: '/operations/inventory/orders'    },
-      { label: 'Par',       href: '/operations/inventory/par'       },
-      { label: 'Requests',  href: '/operations/inventory/requests'  },
-      { label: 'Shop',      href: '/operations/inventory/shop'      },
-      { label: 'Spa',       href: '/operations/inventory/spa'       },
-      { label: 'Stock',     href: '/operations/inventory/stock'     },
-      { label: 'Suppliers', href: '/operations/inventory/suppliers' },
+      { label: 'Overview',  href: '/h/260955/operations/inventory'           },
+      { label: 'Assets',    href: '/h/260955/operations/inventory/assets'    },
+      { label: 'Capex',     href: '/h/260955/operations/inventory/capex'     },
+      { label: 'Catalog',   href: '/h/260955/operations/inventory/catalog'   },
+      { label: 'Counts',    href: '/h/260955/operations/inventory/counts'    },
+      { label: 'Dishes',    href: '/h/260955/operations/inventory/dishes'    },
+      { label: 'Items',     href: '/h/260955/operations/inventory/items'     },
+      { label: 'Orders',    href: '/h/260955/operations/inventory/orders'    },
+      { label: 'Par',       href: '/h/260955/operations/inventory/par'       },
+      { label: 'Requests',  href: '/h/260955/operations/inventory/requests'  },
+      { label: 'Shop',      href: '/h/260955/operations/inventory/shop'      },
+      { label: 'Spa',       href: '/h/260955/operations/inventory/spa'       },
+      { label: 'Stock',     href: '/h/260955/operations/inventory/stock'     },
+      { label: 'Suppliers', href: '/h/260955/operations/inventory/suppliers' },
     ],
   },
 
@@ -299,6 +299,50 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Data',         href: '/finance/hr/data'         },
     ],
   },
+  // ─── Revenue HoD sub-strip (Rate Desk + Forecast) ───────────
+  // PBS 2026-08-21: Rate Desk + Forecast moved out of the top strip.
+  // They now surface as a sub-strip on the Revenue HoD landing (and
+  // stay visible when the user clicks into either one, so the flow
+  // Landing ↔ Rate Desk ↔ Forecast is discoverable in one place).
+  {
+    parentHref: '/revenue',
+    members: ['/revenue', '/revenue/cockpit', '/revenue/forecast'],
+    tabs: [
+      { label: 'Overview',  href: '/h/260955/revenue'           },
+      { label: 'Rate Desk', href: '/h/260955/revenue/cockpit'   },
+      { label: 'Forecast',  href: '/h/260955/revenue/forecast'  },
+    ],
+  },
+
+  // ─── Marketing · Socials · Channels sub-strip ──────────────
+  // PBS 2026-08-21: sub-strip listing every social channel + GBP.
+  // Renders on the /marketing/social landing AND on each channel
+  // landing (IG/FB/X/LinkedIn/Pinterest/TikTok/GBP) so the operator
+  // can jump between channels without going back to the parent.
+  {
+    parentHref: '/marketing/social',
+    members: [
+      '/marketing/social',
+      '/marketing/social/instagram',
+      '/marketing/social/facebook',
+      '/marketing/social/x',
+      '/marketing/social/linkedin',
+      '/marketing/social/pinterest',
+      '/marketing/social/tiktok',
+      '/marketing/social/google-business',
+    ],
+    tabs: [
+      { label: 'Overview',         href: '/h/260955/marketing/social'                    },
+      { label: 'Instagram',        href: '/h/260955/marketing/social/instagram'          },
+      { label: 'Facebook',         href: '/h/260955/marketing/social/facebook'           },
+      { label: 'X / Twitter',      href: '/h/260955/marketing/social/x'                  },
+      { label: 'LinkedIn',         href: '/h/260955/marketing/social/linkedin'           },
+      { label: 'Pinterest',        href: '/h/260955/marketing/social/pinterest'          },
+      { label: 'TikTok',           href: '/h/260955/marketing/social/tiktok'             },
+      { label: 'Google Business',  href: '/h/260955/marketing/social/google-business'    },
+    ],
+  },
+
 ];
 
 // PBS 2026-07-07 pm: sub-strip matching must survive the tenant `/h/{id}` prefix.
