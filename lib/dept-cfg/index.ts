@@ -387,7 +387,7 @@ const REVENUE_CFG: DeptCfg = {
     // PBS 2026-07-07 night: Overview tab lands on /revenue/pulse (dept summary
     // page is no longer used). Sub-strip on Pulse shows Calendar (sibling filter
     // hides Pulse itself).
-    { label: 'HoD',             href: '/revenue'          },
+    { label: 'HoD',             href: '/h/260955/revenue'          },
     // PBS 2026-07-15: Briefing = revenue-area guardrail inbox with accept/
     // dismiss/snooze CTAs and a learning loop that scores whether accepts
     // actually moved the KPI. See app/revenue/briefing/page.tsx.
@@ -474,7 +474,7 @@ const SALES_CFG: DeptCfg = {
     // as filter chips. Accounts is the new mini-CRM.
     // PBS 2026-07-11 pm (ADR-147 sales CRM): in-page label rename "Pipeline"→"Leads",
     // ICP Segments added as read-only sub-tab. TOP MENU UNCHANGED.
-    { label: 'HoD',           href: '/sales'           },
+    { label: 'HoD',           href: '/h/260955/sales'           },
     // PBS 2026-07-16 (item 7): 'Mails' tab removed. Shared mailbox now lives under /mail
     // (full-screen client), and /sales/mails is a permanent redirect stub.
     // PBS 2026-07-14: nav rename "Create New" → "Leads" (points at the new CRM at /sales/leads).
@@ -566,7 +566,7 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Compiler', href: '/h/260955/marketing/compiler' },
   ],
   quickChips: [
-    { label: 'HoD',       href: '/marketing'             },
+    { label: 'HoD',       href: '/h/260955/marketing'             },
     { label: 'Library',   href: '/h/260955/marketing/library'     },
     { label: 'Media',     href: '/h/260955/marketing/media' },
     { label: 'Campaigns', href: '/h/260955/marketing/campaigns'   },
@@ -600,7 +600,7 @@ const MARKETING_CFG: DeptCfg = {
     { matcher: 'audience',   href: '/h/260955/marketing/audiences'   },
     { matcher: 'library',    href: '/h/260955/marketing/library'     },
   ],
-  defaultDrilldown: '/marketing',
+  defaultDrilldown: '/h/260955/marketing',
   kpiTiles: [
     { k: 'REVIEW',    v: '4.7', d: '128 last 30d'       },
     { k: 'IG REACH',  v: '38k', d: '+12% vs LM'         },
@@ -701,7 +701,7 @@ const GUEST_CFG: DeptCfg = {
     // - Findings dropped (all its content lives on HoD conclusions now)
     // - Newsletters moved to just before Reports
     // PBS 2026-07-06 late evening: Prospects URL moved from /marketing/prospects → /guest/prospects.
-    { label: 'HoD',         href: '/guest'                },
+    { label: 'HoD',         href: '/h/260955/guest'                },
     { label: 'Guests',      href: '/guest/directory'      },
     { label: 'Reputation',  href: '/guest/reputation'     },
     { label: 'Behaviour',   href: '/guest/behaviour'      },
@@ -742,7 +742,7 @@ const GUEST_CFG: DeptCfg = {
     { matcher: 'retention',  href: '/guest/behaviour'  },
     { matcher: 'vip',        href: '/guest/directory'  },
   ],
-  defaultDrilldown: '/guest',
+  defaultDrilldown: '/h/260955/guest',
   kpiTiles: [
     { k: 'NPS',     v: '64',  d: 'last 30d'         },
     { k: 'REPUTE',  v: '4.7', d: 'all channels'     },
@@ -768,7 +768,7 @@ const FINANCE_CFG: DeptCfg = {
     // PBS 2026-07-07 night: Legal restored as a top-level tab (helpers stripped it
     // by mistake). Ledger stays a sub-tab of Finance (visible when on any Finance
     // child page — see nav-subgroups /finance/pnl group).
-    { label: 'HoD',             href: '/finance'                          },
+    { label: 'HoD',             href: '/h/260955/finance'                          },
     { label: 'Overview',        href: '/finance/overview'                 },
     { label: 'HR',              href: '/finance/hr'                       },
     { label: 'Finance',         href: '/finance/pnl'                      },
@@ -786,7 +786,7 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'Suppliers',      href: '/finance/suppliers'                },
   ],
   quickChips: [
-    { label: 'HoD',            href: '/finance'             },
+    { label: 'HoD',            href: '/h/260955/finance'             },
     { label: 'Overview',       href: '/finance/overview'    },
     { label: 'P&L',            href: '/finance/pnl'         },
     { label: 'Ledger',         href: '/finance/ledger'      },
@@ -827,7 +827,7 @@ const FINANCE_CFG: DeptCfg = {
     { matcher: 'cash',       href: '/finance/cashflow'     },
     { matcher: 'variance',   href: '/finance/variance'     },
   ],
-  defaultDrilldown: '/finance',
+  defaultDrilldown: '/h/260955/finance',
   kpiTiles: [
     { k: 'GOP',    v: '$48k', d: 'MTD · +6% LY'   },
     { k: 'F&B',    v: '32%',  d: 'cost ratio'      },
@@ -908,22 +908,22 @@ const ARCHITECT_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. ship the dept-page redesign',
   storageKeyPrefix: 'arch',
   subPages: [
-    { label: 'Revenue',    href: '/revenue'    },
-    { label: 'Sales',      href: '/sales'      },
-    { label: 'Marketing',  href: '/marketing'  },
-    { label: 'Operations', href: '/operations' },
-    { label: 'Administration', href: '/finance' },
-    { label: 'Guest',      href: '/guest'      },
-    { label: 'IT',         href: '/it'         },
+    { label: 'Revenue',    href: '/h/260955/revenue'    },
+    { label: 'Sales',      href: '/h/260955/sales'      },
+    { label: 'Marketing',  href: '/h/260955/marketing'  },
+    { label: 'Operations', href: '/h/260955/operations' },
+    { label: 'Administration', href: '/h/260955/finance' },
+    { label: 'Guest',      href: '/h/260955/guest'      },
+    { label: 'IT',         href: '/h/260955/it'         },
   ],
   quickChips: [
-    { label: 'Revenue',    href: '/revenue'    },
-    { label: 'Sales',      href: '/sales'      },
-    { label: 'Marketing',  href: '/marketing'  },
-    { label: 'Operations', href: '/operations' },
-    { label: 'Administration', href: '/finance' },
-    { label: 'Guest',      href: '/guest'      },
-    { label: 'IT',         href: '/it'         },
+    { label: 'Revenue',    href: '/h/260955/revenue'    },
+    { label: 'Sales',      href: '/h/260955/sales'      },
+    { label: 'Marketing',  href: '/h/260955/marketing'  },
+    { label: 'Operations', href: '/h/260955/operations' },
+    { label: 'Administration', href: '/h/260955/finance' },
+    { label: 'Guest',      href: '/h/260955/guest'      },
+    { label: 'IT',         href: '/h/260955/it'         },
   ],
   defaultAttn: [
     { id: 'l1', label: 'Open cockpit tickets need triage',                 severity: 'medium', kind: 'leakage'     },
