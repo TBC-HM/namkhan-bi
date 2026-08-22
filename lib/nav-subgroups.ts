@@ -360,6 +360,28 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
 
+  // ─── Finance · Archive sub-strip · PBS 2026-08-22 ────────────
+  // 2 bottom-of-page links promoted to a top sub-menu.
+  {
+    parentHref: '/finance/archive',
+    members: ['/finance/archive'],
+    tabs: [
+      { label: 'Overview',       href: '/h/260955/finance/archive'        },
+      { label: 'Directory',      href: '/h/260955/finance/legal/docs'     },
+      { label: 'Brain Settings', href: '/h/260955/settings/brain'         },
+    ],
+  },
+
+  // ─── Sales · ICP sub-strip · PBS 2026-08-22 ────────────────
+  // Ensures /sales/icp renders a sub-strip below the top strip.
+  {
+    parentHref: '/sales/icp',
+    members: ['/sales/icp'],
+    tabs: [
+      { label: 'ICP Segments', href: '/h/260955/sales/icp' },
+    ],
+  },
+
 ];
 
 // PBS 2026-07-07 pm: sub-strip matching must survive the tenant `/h/{id}` prefix.

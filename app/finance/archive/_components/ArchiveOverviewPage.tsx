@@ -202,13 +202,6 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
         </Container>
       </div>
 
-      {/* Quiet exits */}
-      <div style={fullRow}>
-        <div style={{ fontSize: 12, color: 'var(--ink-mute, #5A5A5A)', display: 'flex', gap: 18 }}>
-          <a href={docsHref} style={{ textDecoration: 'underline' }}>Open the full document register (triage / edit / classify) →</a>
-          <a href={`/h/${propertyId}/settings/brain`} style={{ textDecoration: 'underline' }}>Brain settings (review queue · classifier rules) →</a>
-        </div>
-      </div>
     </DashboardPage>
   );
 }

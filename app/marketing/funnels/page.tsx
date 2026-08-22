@@ -20,6 +20,7 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
+import { supabase } from '@/lib/supabase';
 import { MARKETING_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
@@ -37,30 +38,15 @@ const RED = '#B03826';
 
 // ─── Data ─────────────────────────────────────────────────────────────────
 
-interface Funnel {
-  name: string;
-  domain: string;
-  type: 'B2C Wellness' | 'B2C Yoga' | 'B2C Couples' | 'B2C Eco' | 'B2C Slow Travel' | 'B2C Detox' | 'B2B Host' | 'B2B DMC';
-  icp: string;
-  market: string;
-  keyword: string;
-  trafficTrend: string;
-  score: number;
-  status: 'Scaling' | 'Testing' | 'Research' | 'Needs Approval' | 'Live';
-  cvr: string;
-  revenue: string;
-  leadMagnet: string;
-  cta: string;
+// PBS 2026-08-22 · funnels now driven by v_marketing_domains (Namkhan registry).
+interface MarketingDomain {
+  id: number;
+  domain_name: string | null;
+  funnel_theme: string | null;
+  status: string | null;
+  days_to_expiry: number | null;
+  renewal_at_risk: boolean | null;
 }
-
-const FUNNELS: Funnel[] = [
-  { name: 'Retreat Laos',      domain: 'retreatlaos.xy',        type: 'B2C Wellness',    icp: 'EU Wellness Women',    market: 'DACH · UK',  keyword: 'wellness retreat Laos',       trafficTrend: '+42%', score: 91, status: 'Scaling',        cvr: '4.2%', revenue: '$38k MTD', leadMagnet: '5-Day Laos Reset PDF',          cta: 'Booking + WhatsApp' },
-  { name: 'Yoga Retreat Asia', domain: 'yogaretreatasia.xy',    type: 'B2C Yoga',        icp: 'Yoga Guests',          market: 'EU · US',    keyword: 'yoga retreat Laos',           trafficTrend: '+28%', score: 84, status: 'Testing',        cvr: '3.1%', revenue: '$12k MTD', leadMagnet: 'Which Retreat Fits You Quiz',   cta: 'Inquiry form' },
-  { name: 'Couples Laos',      domain: 'couplesretreatasia.xy', type: 'B2C Couples',     icp: 'Luxury Couples',       market: 'US · EU',    keyword: 'couples retreat Laos',        trafficTrend: '+19%', score: 78, status: 'Live',           cvr: '5.4%', revenue: '$24k MTD', leadMagnet: 'Romantic Laos Escape Planner',  cta: 'Booking + package link' },
-  { name: 'Eco Retreat Asia',  domain: 'ecoretreatasia.xy',     type: 'B2C Eco',         icp: 'Conscious Travelers',  market: 'EU · NL',    keyword: 'eco retreat Southeast Asia',  trafficTrend: '+33%', score: 81, status: 'Live',           cvr: '3.8%', revenue: '$18k MTD', leadMagnet: 'Farm-to-Table Laos Guide',      cta: 'Email + booking' },
-  { name: 'Slow Travel Laos',  domain: 'travellaos.xy',         type: 'B2C Slow Travel', icp: 'Cultural Travelers',   market: 'EU · AU',    keyword: 'slow travel Laos',            trafficTrend: '+11%', score: 72, status: 'Research',       cvr: '2.4%', revenue: '$7k MTD',  leadMagnet: '7-Day Slow Travel Itinerary',   cta: 'Itinerary download' },
-  { name: 'Digital Detox',     domain: 'digitaldetoxasia.xy',   type: 'B2C Detox',       icp: 'Burnout Travelers',    market: 'DACH · UK',  keyword: 'digital detox Asia',          trafficTrend: '+63%', score: 76, status: 'Needs Approval', cvr: '—',    revenue: '—',        leadMagnet: 'Digital Detox Checklist',       cta: 'Retreat inquiry' },
-];
 
 interface FunnelAgent { name: string; desc: string; signal: string; cta: string }
 
@@ -124,9 +110,18 @@ const SCORE_WEIGHTS: { label: string; weight: number }[] = [
 
 // ─── Page ─────────────────────────────────────────────────────────────────
 
-export default function MarketingFunnelsPage() {
-  const activeFunnels   = FUNNELS.filter((f) => f.status === 'Live' || f.status === 'Scaling').length;
-  const avgScore        = Math.round(FUNNELS.reduce((s, f) => s + f.score, 0) / FUNNELS.length);
+export default async function MarketingFunnelsPage() {
+  // PBS 2026-08-22 · domains fetched from Supabase (public.v_marketing_domains).
+  const domainsRes = await supabase
+    .from('v_marketing_domains')
+    .select('id, domain_name, funnel_theme, status, days_to_expiry, renewal_at_risk')
+    .eq('status', 'planned')
+    .not('domain_name', 'is', null)
+    .order('domain_name');
+  const domains: MarketingDomain[] = (domainsRes.data ?? []) as MarketingDomain[];
+
+  const activeFunnels   = domains.length;
+  const avgScore        = 0;
   const totalMtdRevenue = 99_000;
   const totalLeads      = 247;
   const totalSessions   = 31_400;
@@ -164,9 +159,14 @@ export default function MarketingFunnelsPage() {
 
         {/* Funnel domain portfolio */}
         <div style={{ gridColumn:'1 / -1' }}>
-          <SectionHead title="Funnel domain portfolio" eyebrow={`${FUNNELS.length} domains · controlled portfolio`} />
+          <SectionHead title="Funnel domain portfolio" eyebrow={`${domains.length} live domain${domains.length===1?'':'s'} · from registry`} />
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:12 }}>
-            {FUNNELS.map((f) => <FunnelCard key={f.domain} funnel={f} />)}
+            {domains.length === 0 && (
+              <div style={{ padding:'16px 20px', border:`1px solid ${HAIR}`, borderRadius:6, fontSize:12, color:INK_M }}>
+                No domains published yet. Add rows to <code>v_marketing_domains</code>.
+              </div>
+            )}
+            {domains.map((d) => <DomainCard key={d.id} domain={d} />)}
           </div>
         </div>
 
@@ -558,3 +558,29 @@ const S: Record<string, CSSProperties> = {
     textAlign: 'right',
   },
 };
+
+
+// PBS 2026-08-22 · DomainCard replaces hardcoded FunnelCard for registry-driven domain list.
+function DomainCard({ domain }: { domain: MarketingDomain }) {
+  const isRisked = domain.renewal_at_risk === true;
+  const expiryLabel = domain.days_to_expiry != null && domain.days_to_expiry > 0
+    ? `Renews in ${domain.days_to_expiry}d`
+    : 'EXPIRED';
+  return (
+    <div style={{ padding:'12px 14px', background:'#FFFFFF', border:`1px solid ${isRisked ? RED : HAIR}`, borderRadius:6, display:'flex', flexDirection:'column', gap:8 }}>
+      <div>
+        <div style={{ fontSize:13, fontWeight:700, color:GREEN, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{domain.domain_name}</div>
+        <div style={{ fontSize:12, color:INK, marginTop:2 }}>{domain.funnel_theme ?? '—'}</div>
+      </div>
+      <div style={{ display:'flex', gap:14, fontSize:11, color:INK_M }}>
+        <span>Status: <strong style={{ color:INK }}>{domain.status ?? '—'}</strong></span>
+        <span style={{ color: isRisked ? RED : INK_M, fontWeight: isRisked ? 700 : 400 }}>{expiryLabel}</span>
+      </div>
+      {isRisked && (
+        <div style={{ padding:'6px 8px', borderLeft:`2px solid ${RED}`, background:'#F7F0E1', fontSize:11, color:INK }}>
+          <strong>Renewal urgent</strong> · contact registrar to renew <code>{domain.domain_name}</code>.
+        </div>
+      )}
+    </div>
+  );
+}

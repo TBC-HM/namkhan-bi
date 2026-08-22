@@ -1,7 +1,10 @@
 // app/sales/icp/page.tsx — ICP Engine v2 · goal-driven · criteria-based matcher · 100% classified
 // PBS 2026-08-04 icp-engine-v2 brief — findings 10/11/12 resolution
 import Link from 'next/link';
-import { DashboardPage } from '@/app/(cockpit)/_design';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
+import { SALES_SUBPAGES } from '@/app/sales/_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
+import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { 
   IcpCriteriaEditor, 
@@ -156,10 +159,17 @@ export default async function IcpEngineV2Page() {
     );
   }
 
+  const subPages = rewriteSubPagesForProperty(SALES_SUBPAGES, NAMKHAN_PROPERTY_ID);
+  const tabs: DashboardTab[] = subPages.map((sp) => ({
+    key: sp.href, label: sp.label, href: sp.href,
+    active: sp.href.endsWith('/icp'),
+  }));
+
   return (
     <DashboardPage 
       title="ICP Engine v2 · Goal-Driven" 
       subtitle="100% classified · criteria-driven matcher · findings 10+11+12 resolution"
+      tabs={tabs}
     >
       <div style={{ display: 'grid', gap: 20, gridColumn: '1 / -1' }}>
 
