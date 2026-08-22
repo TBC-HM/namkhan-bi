@@ -1,7 +1,7 @@
 // app/sales/icp/page.tsx — ICP Engine v2 · goal-driven · criteria-based matcher · 100% classified
 // PBS 2026-08-04 icp-engine-v2 brief — findings 10/11/12 resolution
 import Link from 'next/link';
-import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, KpiTile, type DashboardTab } from '@/app/(cockpit)/_design';
 import { SALES_SUBPAGES } from '@/app/sales/_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
@@ -94,14 +94,21 @@ export default async function IcpEngineV2Page() {
     
     return (
       <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, overflow: 'hidden' }}>
-        <div style={{ background: icp.color || FOREST, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: WHITE }}>{icp.name}</div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {/* PBS 2026-08-22 · category badge visible for both B2C + B2B (task #11) */}
-            <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', background: 'rgba(255,255,255,.25)', color: WHITE, borderRadius: 2, letterSpacing: '0.05em' }}>
-              {(icp.icp_type ?? 'b2c').toUpperCase()}
-            </span>
-          </div>
+        {/* PBS 2026-08-22 · canonical header — quieter palette, colored left border denotes segment identity */}
+        <div style={{
+          padding: '10px 14px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: 'var(--paper, #FFFFFF)',
+          borderBottom: `1px solid ${HAIR}`,
+          borderLeft: `3px solid ${icp.color || 'var(--primary, #1F3A2E)'}`,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink, #1B1B1B)' }}>{icp.name}</div>
+          <span style={{
+            fontSize: 9, fontWeight: 700, padding: '2px 8px',
+            background: 'var(--paper-soft, #F7F5EE)',
+            color: 'var(--ink-soft, #5A5A5A)',
+            border: `1px solid ${HAIR}`, borderRadius: 3, letterSpacing: '0.06em', textTransform: 'uppercase',
+          }}>{(icp.icp_type ?? 'b2c').toUpperCase()}</span>
         </div>
         
         <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -174,42 +181,45 @@ export default async function IcpEngineV2Page() {
     >
       <div style={{ display: 'grid', gap: 20, gridColumn: '1 / -1' }}>
 
-        {/* Container 1: Coverage Header */}
-        <div style={{ padding: '16px 20px', background: coverage.classified_pct >= 95 ? OK : AMBER, color: WHITE, borderRadius: 6 }}>
-          <div style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', opacity: 0.9, marginBottom: 4 }}>
-            COVERAGE · LAST 89 DAYS (revenue-bearing stays only)
+        {/* Container 1: Coverage Header (canonical primitives · PBS 2026-08-22) */}
+        <Container
+          title="Coverage · last 89 days"
+          subtitle="Revenue-bearing stays only · goal ≥ 95% classified"
+          status={coverage.classified_pct >= 95 ? 'green' : 'amber'}
+          density="compact"
+        >
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <KpiTile
+              label="Bookings classified"
+              value={`${coverage.classified_pct.toFixed(1)}%`}
+              size="sm"
+              footnote={`${coverage.bookings_matched} of ${coverage.bookings_total}`}
+              status={coverage.classified_pct >= 95 ? 'green' : 'amber'}
+            />
+            <KpiTile
+              label="Revenue classified"
+              value={`${coverage.revenue_matched_pct.toFixed(1)}%`}
+              size="sm"
+              footnote={`$${fmt(coverage.revenue_matched)} of $${fmt(coverage.revenue_total)}`}
+              status={coverage.revenue_matched_pct >= 95 ? 'green' : 'amber'}
+            />
           </div>
-          <div style={{ display: 'flex', gap: 32, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{coverage.classified_pct.toFixed(1)}%</div>
-              <div style={{ fontSize: 11, opacity: 0.9 }}>
-                {coverage.bookings_matched} of {coverage.bookings_total} bookings classified
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{coverage.revenue_matched_pct.toFixed(1)}%</div>
-              <div style={{ fontSize: 11, opacity: 0.9 }}>
-                ${fmt(coverage.revenue_matched)} of ${fmt(coverage.revenue_total)} revenue
-              </div>
-            </div>
-            <div style={{ marginLeft: 'auto', fontSize: 11, maxWidth: 360, lineHeight: 1.5, opacity: 0.95 }}>
-              {coverage.classified_pct >= 95 
-                ? '✓ Target met: ≥95% classified. Matcher is honest — 100% of stays bucketed (ICP or Unclassified).'
-                : `⚠️ Target ≥95% classified. Current: ${coverage.classified_pct.toFixed(1)}%. Review unclassified bucket below.`}
-            </div>
-          </div>
-        </div>
+          <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+            {coverage.classified_pct >= 95
+              ? 'Target met · matcher is honest (100% of stays bucketed — ICP or Unclassified).'
+              : `Target ≥ 95% classified. Review unclassified bucket below.`}
+          </p>
+        </Container>
 
         {/* Container 3: Unclassified Bucket (first-class, before goal ICPs per brief) */}
         {unclassified && (
-          <div style={{ background: WHITE, border: `2px solid ${AMBER}`, borderRadius: 6, overflow: 'hidden' }}>
-            <div style={{ background: AMBER, padding: '12px 16px', color: WHITE }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>Unclassified Bucket · First-Class</div>
-              <div style={{ fontSize: 10, opacity: 0.9, marginTop: 2 }}>
-                Revenue-bearing stays with no ICP match — opportunity to discover new segments
-              </div>
-            </div>
-            <div style={{ padding: 16, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <Container
+            title="Unclassified bucket · first-class"
+            subtitle="Revenue-bearing stays with no ICP match — opportunity to discover new segments"
+            status="amber"
+            density="compact"
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 10, color: INK_M, textTransform: 'uppercase', letterSpacing: '.05em' }}>Bookings</div>
                 <div style={{ fontSize: 22, fontWeight: 700, color: INK }}>{unclassified.bookings_89d}</div>
@@ -225,7 +235,7 @@ export default async function IcpEngineV2Page() {
                 <ProposeFromUnclassified />
               </div>
             </div>
-          </div>
+          </Container>
         )}
 
         {/* Container 2: Goal ICP Board — B2C */}
@@ -298,7 +308,7 @@ export default async function IcpEngineV2Page() {
 
         {/* Container 5: Trend Signals (honest dormant state) */}
         <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, overflow: 'hidden' }}>
-          <div style={{ background: FOREST, padding: '12px 16px', color: WHITE }}>
+          <div style={{ background: 'var(--paper, #FFFFFF)', padding: '12px 16px', color: 'var(--ink, #1B1B1B)', borderBottom: `1px solid ${HAIR}`, borderLeft: `3px solid var(--primary, #1F3A2E)` }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>Trend Signals · Market Intelligence</div>
             <div style={{ fontSize: 10, opacity: 0.9, marginTop: 2 }}>
               External signals mapped to goal ICPs (flight capacity, search volume, market calendar)
