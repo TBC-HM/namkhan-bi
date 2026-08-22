@@ -99,6 +99,7 @@ interface QuickPostState {
   scheduled_at: string;
   dest_id: string;
   first_comment: string;   // Instagram
+  instagram_media_type: string; // Instagram: IMAGE | CAROUSEL | REELS | STORY
   post_mode: string;       // TikTok (DIRECT_POST | MEDIA_UPLOAD)
   long_text_as_post: boolean; // X
   gbp_post_type: string;   // WHATS_NEW | EVENT | OFFER
@@ -196,7 +197,7 @@ export default function ChannelsManager({
       platform,
       caption: '', media_url: '', hashtags: '', scheduled_at: '',
       dest_id: dests.length ? dests[0].dest_id : '',
-      first_comment: '', post_mode: 'MEDIA_UPLOAD', long_text_as_post: false,
+      first_comment: '', instagram_media_type: 'IMAGE', post_mode: 'MEDIA_UPLOAD', long_text_as_post: false,
       gbp_post_type: 'WHATS_NEW',
       youtube_title: '', youtube_description: '', youtube_first_comment: '',
       linkedin_description: '', linkedin_document_url: '',
@@ -246,6 +247,7 @@ export default function ChannelsManager({
         if (quickPost.platform === 'linkedin') fd.set('linkedin_page_urn', quickPost.dest_id);
       }
       if (quickPost.platform === 'instagram' && quickPost.first_comment) fd.set('instagram_first_comment', quickPost.first_comment);
+      if (quickPost.platform === 'instagram' && quickPost.instagram_media_type) fd.set('instagram_media_type', quickPost.instagram_media_type);
       if (quickPost.platform === 'tiktok' && quickPost.post_mode) fd.set('tiktok_post_mode', quickPost.post_mode);
       if (quickPost.platform === 'x' && quickPost.long_text_as_post) fd.set('x_long_text_as_post', 'true');
       if (quickPost.platform === 'google_business') fd.set('google_business_type', quickPost.gbp_post_type);
@@ -494,6 +496,17 @@ export default function ChannelsManager({
                 </Field>
 
                 {/* Platform-specific extras */}
+                {quickPost.platform === 'instagram' && (
+                  <Field label="Format" hint="Photo/Carousel = feed post · Reels = short video · Story = 24h vertical">
+                    <select style={inputSt} value={quickPost.instagram_media_type}
+                            onChange={(e) => setQuickPost({ ...quickPost, instagram_media_type: e.target.value })}>
+                      <option value="IMAGE">Photo (feed)</option>
+                      <option value="CAROUSEL">Carousel (multi-image)</option>
+                      <option value="REELS">Reels (short video)</option>
+                      <option value="STORY">Story (24h vertical)</option>
+                    </select>
+                  </Field>
+                )}
                 {quickPost.platform === 'instagram' && spec?.first_comment_supported && (
                   <Field label="First comment (optional · e.g. hashtags stack)">
                     <input style={inputSt} value={quickPost.first_comment}
