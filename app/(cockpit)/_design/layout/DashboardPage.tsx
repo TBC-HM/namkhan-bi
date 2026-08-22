@@ -216,7 +216,8 @@ const S: Record<string, CSSProperties> = {
   tab: {
     background: 'transparent',
     border: 'none',
-    padding: '6px 12px',
+    // PBS 2026-08-22 · left-align to match subTab (8px) so 3-strip pages read as one column.
+    padding: '6px 8px',
     fontSize: 13,
     fontWeight: 500,
     color: 'var(--ink-soft, #5A5A5A)',
