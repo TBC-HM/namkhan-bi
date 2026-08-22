@@ -236,7 +236,8 @@ const S: Record<string, CSSProperties> = {
     gap: 8,
     flexWrap: 'nowrap',
     overflowX: 'auto',
-    marginTop: 2,
+    // PBS 2026-08-22 · tightened vertical gap between top strip and sub-strip.
+    marginTop: 0,
   },
   subTab: {
     background: 'transparent',
@@ -256,6 +257,7 @@ const S: Record<string, CSSProperties> = {
     gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
     gap: 10,
     alignItems: 'start',
-    marginTop: 4,
+    // PBS 2026-08-22 · tightened gap so inline page sub-sub-strips (SEO 11-tab, etc.) sit right under the sub-strip.
+    marginTop: 0,
   },
 };

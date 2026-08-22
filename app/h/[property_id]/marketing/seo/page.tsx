@@ -191,7 +191,7 @@ export default async function MarketingSeoPage({
       <div style={{ gridColumn:'1/-1', display:'flex', gap:0, borderBottom:`2px solid ${HAIR}`, marginBottom:0 }}>
         {SEO_TABS.map(t=>(
           <a key={t.key} href={`?tab=${t.key}&loc=${locFilter}`}
-            style={{ padding:'8px 16px', fontSize:12, fontWeight:600, textDecoration:'none',
+            style={{ padding:'6px 14px', fontSize:12, fontWeight:600, textDecoration:'none',
               color:tab===t.key?GREEN:INK_M, borderBottom:tab===t.key?`2px solid ${GREEN}`:'2px solid transparent',
               marginBottom:-2, whiteSpace:'nowrap' as const }}>{t.label}</a>
         ))}
