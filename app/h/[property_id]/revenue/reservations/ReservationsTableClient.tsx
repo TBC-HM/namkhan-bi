@@ -6,10 +6,9 @@
 // once (up to 5000 rows), client owns sort + search + pagination so column
 // clicks and typing feel instant with no roundtrip.
 //
-// Columns mirror Cloudbeds (see /Users/paulbauer/Downloads/Screenshot
-// 2026-08-22 at 14.19.51.png): Reservation ID · First · Surname · Date
-// Booked · Room#(s) · Room Type · Check In · Check Out · Nights · Total
-// Price · Status · Source.
+// Columns mirror Cloudbeds: Reservation ID · First · Surname · Date Booked
+// · Room#(s) · Room Type · Check In · Check Out · Nights · Total Price ·
+// Status · Source.
 
 import { useMemo, useState, type CSSProperties } from 'react';
 
@@ -18,8 +17,8 @@ export interface ReservationRow {
   guest_first_name: string | null;
   guest_last_name: string | null;
   guest_name: string | null;
-  booking_date: string | null;      // timestamptz
-  room_numbers: string | null;      // comma-separated
+  booking_date: string | null;
+  room_numbers: string | null;
   room_type_name: string | null;
   check_in_date: string | null;
   check_out_date: string | null;
@@ -34,8 +33,8 @@ export interface ReservationRow {
 
 interface Props {
   rows: ReservationRow[];
-  sym: string;   // currency symbol (from v_property_display.display_symbol)
-  tz: string;    // property TZ for date formatting
+  sym: string;
+  tz: string;
 }
 
 type SortCol =
@@ -50,26 +49,25 @@ type SortCol =
 type SortDir = 'asc' | 'desc';
 
 const PAGE_SIZE = 50;
+const EMDASH = '—';
 
 function fmtMoney(n: number | string | null, sym: string): string {
-  if (n === null || n === undefined || n === '') return '—';
+  if (n === null || n === undefined || n === '') return EMDASH;
   const num = typeof n === 'string' ? Number(n) : n;
-  if (!Number.isFinite(num)) return '—';
-  return `${sym}${num.toFixed(2)}`;
+  if (!Number.isFinite(num)) return EMDASH;
+  return sym + num.toFixed(2);
 }
 
 function fmtDate(iso: string | null, tz: string): string {
-  if (!iso) return '—';
-  // Accepts YYYY-MM-DD (date) or full ISO timestamp.
+  if (!iso) return EMDASH;
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
-    // Pure date — format without TZ shift (parse as UTC to avoid slip).
     const [y, m, d] = iso.split('-').map(Number);
     return new Intl.DateTimeFormat('en-GB', {
       day: '2-digit', month: 'short', year: 'numeric',
     }).format(new Date(Date.UTC(y, m - 1, d)));
   }
   const dt = new Date(iso);
-  if (Number.isNaN(dt.getTime())) return '—';
+  if (Number.isNaN(dt.getTime())) return EMDASH;
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: tz,
     day: '2-digit', month: 'short', year: 'numeric',
@@ -97,7 +95,7 @@ function statusPill(status: string | null, isCancelled: boolean | null): {
   if (s === 'no_show' || s === 'no-show') {
     return { label: 'No-show', color: '#8B4513', bg: 'rgba(200,120,60,0.10)' };
   }
-  return { label: status ?? '—', color: 'var(--ink, #1B1B1B)', bg: 'rgba(0,0,0,0.04)' };
+  return { label: status ?? EMDASH, color: 'var(--ink, #1B1B1B)', bg: 'rgba(0,0,0,0.04)' };
 }
 
 function valueFor(r: ReservationRow, col: SortCol): string | number {
@@ -118,7 +116,7 @@ function valueFor(r: ReservationRow, col: SortCol): string | number {
   }
 }
 
-const thStyle = (active: boolean, dir: SortDir): CSSProperties => ({
+const thStyle = (active: boolean): CSSProperties => ({
   padding: '8px 10px',
   fontSize: 11,
   fontWeight: 600,
@@ -243,7 +241,7 @@ export default function ReservationsTableClient({ rows, sym, tz }: Props) {
           }}
         />
         <div style={{ fontSize: 11, color: 'var(--ink, #1B1B1B)', opacity: 0.7 }}>
-          {sorted.length.toLocaleString('en-US')} shown · page {safePage + 1} / {totalPages}
+          {sorted.length.toLocaleString('en-US')} shown {'·'} page {safePage + 1} / {totalPages}
         </div>
       </div>
 
@@ -274,7 +272,7 @@ export default function ReservationsTableClient({ rows, sym, tz }: Props) {
                   <th
                     key={c.key}
                     onClick={() => onSort(c.key)}
-                    style={thStyle(sortCol === c.key, sortDir)}
+                    style={thStyle(sortCol === c.key)}
                     title="Click to sort"
                   >
                     {c.label}
@@ -291,14 +289,14 @@ export default function ReservationsTableClient({ rows, sym, tz }: Props) {
                     <td style={{ ...tdStyle, fontFamily: 'var(--mono, ui-monospace, monospace)' }}>
                       {r.reservation_id}
                     </td>
-                    <td style={tdStyle}>{r.guest_first_name ?? '—'}</td>
-                    <td style={tdStyle}>{r.guest_last_name ?? '—'}</td>
+                    <td style={tdStyle}>{r.guest_first_name ?? EMDASH}</td>
+                    <td style={tdStyle}>{r.guest_last_name ?? EMDASH}</td>
                     <td style={tdStyle}>{fmtDate(r.booking_date, tz)}</td>
-                    <td style={tdStyle}>{r.room_numbers ?? '—'}</td>
-                    <td style={tdStyle}>{r.room_type_name ?? '—'}</td>
+                    <td style={tdStyle}>{r.room_numbers ?? EMDASH}</td>
+                    <td style={tdStyle}>{r.room_type_name ?? EMDASH}</td>
                     <td style={tdStyle}>{fmtDate(r.check_in_date, tz)}</td>
                     <td style={tdStyle}>{fmtDate(r.check_out_date, tz)}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right' }}>{r.nights ?? '—'}</td>
+                    <td style={{ ...tdStyle, textAlign: 'right' }}>{r.nights ?? EMDASH}</td>
                     <td style={{ ...tdStyle, textAlign: 'right' }}>
                       {fmtMoney(r.total_amount, sym)}
                     </td>
@@ -319,7 +317,7 @@ export default function ReservationsTableClient({ rows, sym, tz }: Props) {
                         {pill.label}
                       </span>
                     </td>
-                    <td style={tdStyle}>{r.source_name ?? r.source ?? '—'}</td>
+                    <td style={tdStyle}>{r.source_name ?? r.source ?? EMDASH}</td>
                   </tr>
                 );
               })}
@@ -376,4 +374,3 @@ export default function ReservationsTableClient({ rows, sym, tz }: Props) {
     </div>
   );
 }
-'
