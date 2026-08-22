@@ -67,7 +67,7 @@ export default async function SocialPlatformPage({ params }: Props) {
   const platform = decodeURIComponent(params.platform).toLowerCase();
   if (!SOCIAL_ALLOW.has(platform)) notFound();
 
-  const [all, rules, programs, allPosts, analyticsRes] = await Promise.all([
+  const [all, rules, programs, allPosts, analyticsRes, boardsRes, postsMetricsRes] = await Promise.all([
     getSocialAccounts(),
     getSocialChannelRules(NAMKHAN_PID),
     getSocialPrograms(NAMKHAN_PID),
@@ -79,12 +79,32 @@ export default async function SocialPlatformPage({ params }: Props) {
       .eq('property_id', NAMKHAN_PID)
       .eq('platform', platform)
       .maybeSingle(),
+    // PBS 2026-08-22 · Pinterest boards (via v_social_post_boards) — LIVE 11 boards.
+    supabase.from('v_social_post_boards')
+      .select('board_id, board_name, pin_count')
+      .eq('property_id', NAMKHAN_PID).eq('platform', platform)
+      .order('board_name'),
+    // PBS 2026-08-22 · Per-post metrics from Upload Post (getMedia + getCachedPostAnalytics).
+    supabase.from('v_social_posts_latest')
+      .select('external_post_id, post_url, media_type, caption, posted_at, impressions, reach, views, likes, comments, shares, saves, pin_clicks, outbound_clicks, engagement_rate, raw')
+      .eq('property_id', NAMKHAN_PID).eq('platform', platform)
+      .order('posted_at', { ascending: false, nullsFirst: false })
+      .limit(24),
   ]);
   const analytics = (analyticsRes?.data ?? null) as {
     impressions?: number | null; likes?: number | null; comments?: number | null;
     shares?: number | null; reach?: number | null; views?: number | null;
     snapshot_date?: string | null; raw?: Record<string, unknown> | null;
   } | null;
+  // PBS 2026-08-22 · Boards + per-post metrics.
+  const boards = (boardsRes?.data ?? []) as Array<{ board_id: string; board_name: string | null; pin_count: number | null }>;
+  const postMetrics = (postsMetricsRes?.data ?? []) as Array<{
+    external_post_id: string; post_url: string | null; media_type: string | null; caption: string | null;
+    posted_at: string | null; impressions: number | null; reach: number | null; views: number | null;
+    likes: number | null; comments: number | null; shares: number | null; saves: number | null;
+    pin_clicks: number | null; outbound_clicks: number | null; engagement_rate: number | null;
+    raw: Record<string, unknown> | null;
+  }>;
   const dbRow = all.find((a: any) => a.platform.toLowerCase() === platform);
   const rule = rules.find((r) => r.platform === platform);
   const chanPrograms = programs.filter((p) => p.platform === platform);
@@ -247,7 +267,60 @@ export default async function SocialPlatformPage({ params }: Props) {
           </Section>
         </div>
 
-        {/* Recent posts + export queue */}
+        {/* PBS 2026-08-22 · Pinterest Boards (LIVE from v_social_post_boards) */}
+        {platform === 'pinterest' && boards.length > 0 && (
+          <Section title="Pinterest Boards" note={`${boards.length} boards · pin to schedule from Quick Post`}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+              {boards.map((b) => (
+                <div key={b.board_id} style={{ padding: '10px 12px', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: INK }}>{b.board_name ?? b.board_id}</div>
+                  <div style={{ fontSize: 10, color: INK_M }}>
+                    {b.pin_count != null ? `${b.pin_count} pins` : 'board'}
+                    {' · '}<span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{b.board_id.slice(0,12)}…</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* PBS 2026-08-22 · Live posts with metrics + visuals (LIVE from v_social_posts_latest) */}
+        {postMetrics.length > 0 && (
+          <Section title={`Published posts · ${label}`} note={`${postMetrics.length} recent · per-post metrics from Upload Post`}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+              {postMetrics.map((pm) => {
+                const raw = (pm.raw ?? {}) as Record<string, unknown>;
+                const thumb = (raw.thumbnail_url ?? raw.media_url ?? raw.image_url ?? raw.picture ?? raw.cover_url) as string | undefined;
+                return (
+                  <div key={pm.external_post_id} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                    {thumb && (
+                      <a href={pm.post_url ?? '#'} target="_blank" rel="noopener noreferrer" style={{ display: 'block', width: '100%', paddingTop: '100%', background: `#F5F0E5 center/cover url(${thumb})` }} />
+                    )}
+                    <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ fontSize: 10.5, color: INK, lineHeight: 1.35 }}>
+                        {pm.caption ? (pm.caption.length > 80 ? pm.caption.slice(0, 80) + '…' : pm.caption) : '—'}
+                      </div>
+                      <div style={{ fontSize: 10, color: INK_M }}>
+                        {pm.posted_at ? pm.posted_at.slice(0, 10) : ''}
+                        {pm.media_type ? ` · ${pm.media_type}` : ''}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, fontSize: 10, color: INK_S, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                        {pm.likes != null && <span>♥ {pm.likes}</span>}
+                        {pm.comments != null && <span>💬 {pm.comments}</span>}
+                        {pm.shares != null && <span>↻ {pm.shares}</span>}
+                        {pm.saves != null && <span>⌘ {pm.saves}</span>}
+                        {pm.pin_clicks != null && <span>◉ {pm.pin_clicks}</span>}
+                        {pm.impressions != null && <span>👁 {pm.impressions}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+        )}
+
+                {/* Recent posts + export queue */}
         <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
           <Section title={`Recent posts · ${label}`} note="marketing.social_posts">
             {recentPosts.length > 0 ? (
