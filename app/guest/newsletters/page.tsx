@@ -36,9 +36,9 @@ function fmtDate(iso: string | null | undefined): string {
 }
 function pctOr(n: number, d: number): string { if (!d) return '—'; return `${((n/d)*100).toFixed(1)}%`; }
 
-interface PageProps { propertyId?: number }
+interface PageProps { propertyId?: number; tabsOverride?: DashboardTab[]; titleOverride?: string }
 
-export default async function NewslettersPage({ propertyId }: PageProps = {}) {
+export default async function NewslettersPage({ propertyId, tabsOverride, titleOverride }: PageProps = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1).toISOString();
