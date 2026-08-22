@@ -2,7 +2,7 @@
 // app/h/[property_id]/revenue/reservations/RangeChips.tsx
 //
 // PBS 2026-08-21 · URL-driven date-range chip row for the Reservations
-// page. Chips are Next <Link>-style client anchors (via router.push)
+// page. Chips are Next router-style client anchors (via router.push)
 // so switching a chip only changes ?range=... without a hard reload.
 // Custom range = two <input type=date> that submit ?range=custom&from&to.
 
@@ -30,7 +30,7 @@ function chipStyle(active: boolean): CSSProperties {
     alignItems: 'center',
     padding: '4px 10px',
     borderRadius: 999,
-    border: `1px solid var(--hairline, #E6DFCC)`,
+    border: '1px solid var(--hairline, #E6DFCC)',
     background: active ? 'var(--ink, #1B1B1B)' : 'var(--paper, #FFFFFF)',
     color: active ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
     cursor: 'pointer',
@@ -49,13 +49,13 @@ export default function RangeChips({ basePath, range, from, to }: Props) {
 
   const go = (key: Exclude<RangeKey, 'custom'>) => {
     setCustomOpen(false);
-    router.push(`${basePath}?range=${key}`);
+    router.push(basePath + '?range=' + key);
   };
 
   const applyCustom = () => {
     const f = fromLocal || from;
     const t = toLocal || to;
-    router.push(`${basePath}?range=custom&from=${f}&to=${t}`);
+    router.push(basePath + '?range=custom&from=' + f + '&to=' + t);
   };
 
   return (
@@ -110,7 +110,7 @@ export default function RangeChips({ basePath, range, from, to }: Props) {
               color: 'var(--ink, #1B1B1B)',
             }}
           />
-          <span>→</span>
+          <span>{'→'}</span>
           <input
             type="date"
             value={toLocal}
@@ -140,4 +140,3 @@ export default function RangeChips({ basePath, range, from, to }: Props) {
     </div>
   );
 }
-'
