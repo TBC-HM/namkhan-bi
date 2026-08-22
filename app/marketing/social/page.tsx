@@ -14,6 +14,7 @@
 //
 // Five inner sections switched via ?view=: calendar · flow · channels · boost · inbox
 
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import {
   getSocialAccountsForProperty, getSocialChannelRules, getSocialPrograms,
