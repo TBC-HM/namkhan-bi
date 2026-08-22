@@ -251,17 +251,30 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // so P&L/Ledger/Transactions/Budget are visible even before you click Finance.
   {
     parentHref: '/finance/pnl',
-    // 2026-07-30: + Studio (Spreadsheet Studio v1, brief module-spreadsheet-studio-v1 —
-    // Administration substripe placement per PBS 2026-07-29 menu directive).
-    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/banks', '/finance/pos', '/finance/budget', '/finance/studio'],
+    // PBS 2026-08-22 · Banks + POS moved to /finance/transactions sub-sub-strip;
+    // Costs + Suppliers + Planning inserted between Transactions and Budget.
+    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/costs', '/finance/suppliers', '/finance/planning', '/finance/budget', '/finance/studio'],
     tabs: [
       { label: 'P&L',          href: '/finance/pnl'          },
       { label: 'Ledger',       href: '/finance/ledger'       },
       { label: 'Transactions', href: '/finance/transactions' },
-      { label: 'Banks',        href: '/finance/banks'        },
-      { label: 'POS',          href: '/finance/pos'          },
+      { label: 'Costs',        href: '/finance/costs'        },
+      { label: 'Suppliers',    href: '/finance/suppliers'    },
+      { label: 'Planning',     href: '/finance/planning'     },
       { label: 'Budget',       href: '/finance/budget'       },
       { label: 'Studio',       href: '/finance/studio'       },
+    ],
+  },
+
+  // ─── Administration · Transactions sub-sub-strip ───────────
+  // PBS 2026-08-22 · Banks + POS live here as children of Transactions.
+  {
+    parentHref: '/finance/transactions',
+    members: ['/finance/transactions', '/finance/banks', '/finance/pos'],
+    tabs: [
+      { label: 'Transactions', href: '/finance/transactions' },
+      { label: 'Banks',        href: '/finance/banks'        },
+      { label: 'POS',          href: '/finance/pos'          },
     ],
   },
 

@@ -765,7 +765,6 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'Finance',         href: '/h/260955/finance/pnl'                      },
     // FP&C module 2026-07-28: budget vs actual by class + 13-week cash forward
     // (brief module-financial-planning-control-v1, completion gap #2).
-    { label: 'Planning',        href: '/h/260955/finance/planning'                 },
     { label: 'Legal',           href: '/h/260955/finance/legal'                    },
     // PBS 2026-07-24: Archive tab — brain-backed archive overview (prompt +
     // headline stripes). Replaces the two "Open Docs register" links that
@@ -773,8 +772,6 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'Archive',         href: '/h/260955/finance/archive'                  },
     // cost-governance-v1 (2026-07-30): tenant-scoped platform usage at cost
     // (PBS placement correction: Administration -> Costs on the client surface).
-    { label: 'Costs',           href: '/h/260955/finance/costs'                    },
-    { label: 'Suppliers',      href: '/h/260955/finance/suppliers'                },
   ],
   quickChips: [
     { label: 'HoD',            href: '/h/260955/finance'             },
