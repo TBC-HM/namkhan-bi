@@ -169,7 +169,7 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
     return (data as CompetitorRow[]) ?? [];
   })();
 
-  const [oauthR, reviewsR, mapsR, summaryR, compRows, allowlistR, keywordsR] = await Promise.all([
+  const [oauthR, reviewsR, mapsR, summaryR, compRows, allowlistR, keywordsR, questionsR, gbpPostsR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', pid).eq('source', 'google').order('reviewed_at', { ascending: false }).limit(500),
     sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', pid).order('date', { ascending: false }).limit(400),
@@ -183,6 +183,14 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
       .order('month', { ascending: false })
       .order('impressions_value', { ascending: false, nullsFirst: false })
       .limit(60),
+    // PBS 2026-08-22: Q&A queue from marketing.gbp_questions (LIVE — 20 rows).
+    sb.from('v_gbp_questions').select('question_id, question_text, asked_at, asked_by, answer_text, answered_at, upvote_count')
+      .eq('property_id', pid).order('asked_at', { ascending: false, nullsFirst: false }).limit(50),
+    // PBS 2026-08-22: Posts from marketing.social_posts platform='google_business'.
+    sb.schema('marketing').from('social_posts')
+      .select('post_id, title, caption, status, up_status, pushed_at, created_at')
+      .eq('property_id', pid).eq('platform', 'google_business')
+      .order('created_at', { ascending: false }).limit(20),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
@@ -253,9 +261,36 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
     }));
 
   // ── Placeholders for API-gated sections ────────────────────────────────
-  const photoRows: PhotoRow[] = [];
-  const qaRows: QaRow[] = [];
-  const postRows: PostRow[] = [];
+  const photoRows: PhotoRow[] = [];  // Blocked on GBP media insights allowlist.
+
+  // PBS 2026-08-22: Q&A queue now LIVE from marketing.gbp_questions.
+  const qaRows: QaRow[] = ((questionsR?.data as Array<{
+    question_id: string; question_text: string; asked_at: string | null;
+    asked_by: string | null; answer_text: string | null;
+  }> | null) ?? []).map((q) => ({
+    question: q.question_text ?? '—',
+    asked_by: q.asked_by ?? 'Anonymous',
+    asked_at: q.asked_at ?? '',
+    answered: !!q.answer_text,
+    answer: q.answer_text ?? null,
+  }));
+
+  // PBS 2026-08-22: Posts feed now LIVE from marketing.social_posts (platform=google_business).
+  const postRows: PostRow[] = ((gbpPostsR?.data as Array<{
+    post_id: string; title: string | null; caption: string | null;
+    status: string | null; up_status: string | null;
+    pushed_at: string | null; created_at: string;
+  }> | null) ?? []).map((p) => ({
+    title: p.title ?? (p.caption ? p.caption.slice(0, 60) : 'Draft'),
+    body: p.caption ?? '',
+    posted_at: p.pushed_at ?? p.created_at ?? null,
+    type: 'update' as const,
+    views: null,
+    clicks: null,
+    status: (p.up_status === 'published' || p.status === 'published') ? ('published' as const)
+          : (p.status === 'scheduled') ? ('scheduled' as const)
+          : ('draft' as const),
+  }));
 
   const connectedParam = (Array.isArray(searchParams.google) ? searchParams.google[0] : searchParams.google) ?? null;
 
