@@ -5,6 +5,9 @@
 // PickupMatrix). Backwards-compat: legacy `?tab=density` redirects to
 // `?tab=holidays` (PBS 2026-05-22 — "Density" was misleading, it was always
 // just the country-holidays overlay).
+// 2026-08-21 OTB Density redesigned: one-month calendar view (Mon-Sun × 6
+// rows). Reads mv_kpi_daily (rooms_sold, rooms_revenue, occupancy_pct).
+// Nav via ?month=YYYY-MM, cell heat by OCC (grey/amber/green) using tokens.
 
 import TenantLink from '@/components/nav/TenantLink';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
@@ -47,7 +50,36 @@ function parseWin(raw: string | undefined): WindowKey {
   return (VALID_FWD.includes(raw as WindowKey) ? raw : 'next90') as WindowKey;
 }
 
-interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string; roff?: string }
+// PBS 2026-08-21: parse ?month=YYYY-MM for OTB Density navigator. Falls back
+// to current UTC month. Silently clamps invalid values.
+function parseMonth(raw: string | undefined): { year: number; month: number } {
+  const now = new Date();
+  const fallback = { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 };
+  if (!raw || typeof raw !== 'string') return fallback;
+  const m = /^(\d{4})-(\d{2})$/.exec(raw);
+  if (!m) return fallback;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 1 || mo > 12 || y < 2000 || y > 2100) return fallback;
+  return { year: y, month: mo };
+}
+function shiftMonth(y: number, m: number, delta: number): { year: number; month: number } {
+  const idx = y * 12 + (m - 1) + delta;
+  return { year: Math.floor(idx / 12), month: (idx % 12) + 1 };
+}
+function fmtMonthParam(y: number, m: number): string {
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+function monthBounds(y: number, m: number): { fromIso: string; toIso: string; monthLabel: string } {
+  const start = new Date(Date.UTC(y, m - 1, 1));
+  const end   = new Date(Date.UTC(y, m, 0)); // last day of month
+  const fromIso = start.toISOString().slice(0, 10);
+  const toIso   = end.toISOString().slice(0, 10);
+  const monthLabel = start.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return { fromIso, toIso, monthLabel };
+}
+
+interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string; roff?: string; month?: string }
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
@@ -95,42 +127,135 @@ export default async function PricingPage({ searchParams, propertyId }: { search
 
 
   // ─── Tab: OTB Density ─────────────────────────────────────────────────
+  // PBS 2026-08-21: rebuilt as a proper month calendar (was legacy heatmap).
+  // One month at a time via ?month=YYYY-MM, arrow buttons for prev/next.
+  // Each cell = day number (top-left), rooms sold (big), revenue (small),
+  // heat background by OCC bucket (grey/amber/green) using L26 tokens.
   if (tab === 'otb_density') {
-    const today = new Date(); today.setUTCHours(0,0,0,0);
-    const horizon = new Date(today); horizon.setUTCDate(today.getUTCDate() + 90);
-    const fromIso = today.toISOString().slice(0, 10);
-    const toIso = horizon.toISOString().slice(0, 10);
-    const { data: pace } = await supabase
-      .from('v_otb_pace')
-      .select('night_date, confirmed_rooms')
+    const { year, month } = parseMonth(searchParams.month);
+    const { fromIso, toIso, monthLabel } = monthBounds(year, month);
+    const prev = shiftMonth(year, month, -1);
+    const next = shiftMonth(year, month, 1);
+    const nowUtc = new Date();
+    const curMonth = { year: nowUtc.getUTCFullYear(), month: nowUtc.getUTCMonth() + 1 };
+    const isCurrent = year === curMonth.year && month === curMonth.month;
+
+    const { data: mv } = await supabase
+      .from('mv_kpi_daily')
+      .select('night_date, rooms_sold, rooms_available, occupancy_pct, rooms_revenue, adr')
       .eq('property_id', pid)
       .gte('night_date', fromIso)
       .lte('night_date', toIso)
       .order('night_date');
-    const cap = capacity;
-    const heat = ((pace ?? []) as Array<{ night_date: string; confirmed_rooms: number }>).map((r) => {
-      const d = new Date(r.night_date + 'T00:00:00Z');
-      return {
-        day:   String(d.getUTCDate()).padStart(2, '0'),
-        month: `${d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })} ${String(d.getUTCFullYear()).slice(2)}`,
-        occ:   cap > 0 ? Math.round((Number(r.confirmed_rooms ?? 0) / cap) * 100) : 0,
-      };
-    });
+
+    type MvRow = {
+      night_date: string;
+      rooms_sold: number | null;
+      rooms_available: number | null;
+      occupancy_pct: number | null;
+      rooms_revenue: number | null;
+      adr: number | null;
+    };
+    const byDay = new Map<string, MvRow>();
+    for (const r of ((mv ?? []) as MvRow[])) {
+      byDay.set(String(r.night_date).slice(0, 10), r);
+    }
+
+    const mHref = (y: number, m: number) => `${basePath}?tab=otb_density&month=${fmtMonthParam(y, m)}`;
+    const navPill: React.CSSProperties = {
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      minWidth: 36, height: 32, padding: '0 12px',
+      border: '1px solid var(--hairline, #E6DFCC)',
+      borderRadius: 4,
+      background: 'var(--paper, #FFFFFF)',
+      color: 'var(--ink, #1B1B1B)',
+      fontSize: 12, fontWeight: 500,
+      textDecoration: 'none',
+      letterSpacing: '0.04em',
+    };
+    const todayPill: React.CSSProperties = {
+      ...navPill,
+      background: isCurrent ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+      color: isCurrent ? '#FFFFFF' : 'var(--ink, #1B1B1B)',
+      opacity: isCurrent ? 0.55 : 1,
+      pointerEvents: isCurrent ? 'none' : 'auto',
+    };
+
+    // Compute month totals for a headline row.
+    let totRoomsSold = 0;
+    let totRoomsAvail = 0;
+    let totRevenue = 0;
+    let daysWithData = 0;
+    for (const r of byDay.values()) {
+      const rs = Number(r.rooms_sold ?? 0);
+      const ra = Number(r.rooms_available ?? 0);
+      const rv = Number(r.rooms_revenue ?? 0);
+      totRoomsSold += rs;
+      totRoomsAvail += ra;
+      totRevenue   += rv;
+      if (r.rooms_sold != null || r.rooms_revenue != null) daysWithData += 1;
+    }
+    const monthOcc = totRoomsAvail > 0 ? (totRoomsSold / totRoomsAvail) * 100 : null;
+    const monthAdr = totRoomsSold > 0 ? totRevenue / totRoomsSold : null;
+
     return (
-      <DashboardPage title="Revenue · Calendar" subtitle="forward OTB occupancy · next 90 days" tabs={tabs}>
+      <DashboardPage
+        title="Revenue · Calendar"
+        subtitle={`OTB density · ${monthLabel}`}
+        tabs={tabs}
+      >
         {stripBlock}
         <div style={fullRow}>
-          <Container title="OTB occupancy · forward 90d" subtitle="occupancy % per night · confirmed rooms ÷ sellable · colour intensity = % occ · hover any cell for month · day · occ%">
-            <Chart
-              variant="heatmap"
-              data={heat}
-              xKey="day"
-              yKey="month"
-              series={[{ key: 'occ', label: 'Occ %' }]}
-              valueSuffix="%"
-              height={Math.max(220, Math.min(560, new Set(heat.map((c) => c.month)).size * 60))}
-              empty={{ title: 'No OTB rows in next 90 days' }}
+          <Container
+            title={`OTB density · ${monthLabel}`}
+            subtitle="on-the-books rooms sold per night · revenue below · cell colour = occupancy bucket (grey <60% · amber 60-85% · green ≥85%). Source: mv_kpi_daily."
+          >
+            {/* Month navigator */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+              <a href={mHref(prev.year, prev.month)} style={navPill} aria-label={`Previous month (${monthBounds(prev.year, prev.month).monthLabel})`}>←</a>
+              <div style={{
+                minWidth: 180, textAlign: 'center', fontSize: 13, fontWeight: 600,
+                color: 'var(--ink, #1B1B1B)', letterSpacing: '0.02em',
+              }}>{monthLabel}</div>
+              <a href={mHref(next.year, next.month)} style={navPill} aria-label={`Next month (${monthBounds(next.year, next.month).monthLabel})`}>→</a>
+              <a href={mHref(curMonth.year, curMonth.month)} style={todayPill}>This month</a>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em' }}>
+                {daysWithData > 0 ? (
+                  <>
+                    Month: <strong style={{ color: 'var(--ink, #1B1B1B)' }}>{totRoomsSold}</strong> RN sold ·{' '}
+                    <strong style={{ color: 'var(--ink, #1B1B1B)' }}>{currencySym}{Math.round(totRevenue).toLocaleString('en-US')}</strong> revenue{' '}
+                    {monthOcc != null && <>· <strong style={{ color: 'var(--ink, #1B1B1B)' }}>{monthOcc.toFixed(1)}%</strong> OCC </>}
+                    {monthAdr != null && <>· ADR {currencySym}{Math.round(monthAdr)}</>}
+                  </>
+                ) : (
+                  <>No OTB rows for this month</>
+                )}
+              </span>
+            </div>
+            <OtbDensityMonth
+              year={year}
+              month={month}
+              byDay={byDay}
+              currencySym={currencySym}
             />
+            {/* Legend */}
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 12, fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 12, height: 12, border: '1px solid var(--hairline, #E6DFCC)', background: 'var(--status-grey-tint, rgba(90,90,90,0.10))', borderRadius: 2 }} />
+                Low &lt; 60%
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 12, height: 12, border: '1px solid var(--hairline, #E6DFCC)', background: 'var(--status-amber-tint, rgba(196,160,107,0.18))', borderRadius: 2 }} />
+                Mid 60-85%
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-block', width: 12, height: 12, border: '1px solid var(--hairline, #E6DFCC)', background: 'var(--status-green-tint, rgba(31,122,91,0.16))', borderRadius: 2 }} />
+                High ≥ 85%
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                Hover any day for full breakdown · property: {propertyLabel} · capacity {capacity}
+              </span>
+            </div>
           </Container>
         </div>
       </DashboardPage>
@@ -707,6 +832,181 @@ function WindowPills({ win, basePath }: { win: WindowKey; basePath: string }) {
           })}
         </div>
       </Container>
+    </div>
+  );
+}
+
+// PBS 2026-08-21: OTB density month calendar. Server-rendered grid, 7 cols
+// (Mon-Sun) × 5-6 rows. Each cell = day number + rooms sold (big) + revenue
+// (small) + heat background by OCC bucket. Hover = HTML `title` tooltip
+// (server-safe; no client JS). Uses L26 tokens for colours.
+type OtbRow = {
+  night_date: string;
+  rooms_sold: number | null;
+  rooms_available: number | null;
+  occupancy_pct: number | null;
+  rooms_revenue: number | null;
+  adr: number | null;
+};
+
+function OtbDensityMonth({
+  year, month, byDay, currencySym,
+}: {
+  year: number;
+  month: number;
+  byDay: Map<string, OtbRow>;
+  currencySym: '€' | '$';
+}) {
+  const firstDow = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7; // Mon=0
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
+  const todayIso = (() => { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`; })();
+
+  // OCC bucket → background + accent colour tokens
+  type Bucket = 'grey' | 'amber' | 'green' | 'empty';
+  const bucketFor = (occ: number | null): Bucket => {
+    if (occ == null) return 'empty';
+    if (occ >= 85) return 'green';
+    if (occ >= 60) return 'amber';
+    return 'grey';
+  };
+  const bg = (b: Bucket) => {
+    switch (b) {
+      case 'green': return 'var(--status-green-tint, rgba(31, 122, 91, 0.16))';
+      case 'amber': return 'var(--status-amber-tint, rgba(196, 160, 107, 0.18))';
+      case 'grey':  return 'var(--status-grey-tint, rgba(90, 90, 90, 0.10))';
+      default:      return 'var(--paper, #FFFFFF)';
+    }
+  };
+  const border = (b: Bucket) => {
+    switch (b) {
+      case 'green': return 'var(--status-green, #1F7A5B)';
+      case 'amber': return 'var(--status-amber, #C4A06B)';
+      case 'grey':  return 'var(--hairline, #E6DFCC)';
+      default:      return 'var(--hairline, #E6DFCC)';
+    }
+  };
+  const accent = (b: Bucket) => {
+    switch (b) {
+      case 'green': return 'var(--status-green, #1F7A5B)';
+      case 'amber': return 'var(--status-amber, #C4A06B)';
+      case 'grey':  return 'var(--ink-soft, #5A5A5A)';
+      default:      return 'var(--ink-soft, #5A5A5A)';
+    }
+  };
+
+  const wdHeaderStyle: React.CSSProperties = {
+    fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em',
+    color: 'var(--ink-soft, #5A5A5A)', textAlign: 'center',
+    padding: '6px 4px', fontWeight: 600,
+  };
+
+  const cells: React.ReactNode[] = [];
+  // Weekday header row
+  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  for (const wd of weekdays) {
+    cells.push(<div key={`wd-${wd}`} style={wdHeaderStyle}>{wd}</div>);
+  }
+
+  for (let i = 0; i < totalCells; i++) {
+    const dayNum = i - firstDow + 1;
+    const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+
+    if (!inMonth) {
+      cells.push(
+        <div
+          key={`pad-${i}`}
+          style={{
+            minHeight: 96, border: '1px solid var(--hairline, #E6DFCC)',
+            borderRadius: 4, background: 'transparent', opacity: 0.35,
+          }}
+        />
+      );
+      continue;
+    }
+
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    const row = byDay.get(iso) ?? null;
+    const rs = row?.rooms_sold != null ? Number(row.rooms_sold) : null;
+    const ra = row?.rooms_available != null ? Number(row.rooms_available) : null;
+    const occ = row?.occupancy_pct != null ? Number(row.occupancy_pct) : null;
+    const rv = row?.rooms_revenue != null ? Number(row.rooms_revenue) : null;
+    const adr = row?.adr != null ? Number(row.adr) : (rs != null && rs > 0 && rv != null ? rv / rs : null);
+    const b = bucketFor(occ);
+    const isToday = iso === todayIso;
+
+    const tooltip = [
+      iso,
+      rs != null ? `Rooms sold: ${rs}${ra != null ? ` / ${ra}` : ''}` : 'Rooms sold: —',
+      occ != null ? `Occupancy: ${occ.toFixed(1)}%` : 'Occupancy: —',
+      rv != null ? `Revenue: ${currencySym}${Math.round(rv).toLocaleString('en-US')}` : 'Revenue: —',
+      adr != null ? `ADR: ${currencySym}${Math.round(adr)}` : 'ADR: —',
+    ].join(' · ');
+
+    cells.push(
+      <div
+        key={iso}
+        title={tooltip}
+        style={{
+          position: 'relative',
+          minHeight: 96,
+          border: `1px solid ${border(b)}`,
+          borderLeft: isToday ? '3px solid var(--primary, #1F3A2E)' : `1px solid ${border(b)}`,
+          borderRadius: 4,
+          background: bg(b),
+          padding: '6px 8px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          fontVariantNumeric: 'tabular-nums',
+          cursor: rs != null ? 'help' : 'default',
+        }}
+      >
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+        }}>
+          <span style={{
+            fontSize: 11, fontWeight: isToday ? 700 : 500,
+            color: isToday ? 'var(--primary, #1F3A2E)' : 'var(--ink-soft, #5A5A5A)',
+            letterSpacing: '0.02em',
+          }}>{dayNum}</span>
+          {occ != null && (
+            <span style={{
+              fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em',
+              color: accent(b), fontWeight: 600,
+            }}>{Math.round(occ)}%</span>
+          )}
+        </div>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', flexGrow: 1, gap: 2,
+        }}>
+          <span style={{
+            fontSize: 22, fontWeight: 700, lineHeight: 1,
+            color: 'var(--ink, #1B1B1B)',
+          }}>{rs != null ? rs : '—'}</span>
+          {rv != null && rv > 0 ? (
+            <span style={{
+              fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.02em',
+            }}>
+              {currencySym}{Math.round(rv).toLocaleString('en-US')}
+            </span>
+          ) : (
+            <span style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', opacity: 0.4 }}>·</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+      gap: 6,
+      background: 'var(--paper, #FFFFFF)',
+    }}>
+      {cells}
     </div>
   );
 }
