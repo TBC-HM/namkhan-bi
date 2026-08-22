@@ -101,6 +101,10 @@ interface QuickPostState {
   first_comment: string;   // Instagram
   instagram_media_type: string; // Instagram: IMAGE | CAROUSEL | REELS | STORY
   post_mode: string;       // TikTok (DIRECT_POST | MEDIA_UPLOAD)
+  tiktok_privacy_level: string; // TikTok (PUBLIC | PRIVATE | FRIENDS_ONLY)
+  tiktok_disable_comment: boolean;
+  tiktok_disable_duet: boolean;
+  tiktok_disable_stitch: boolean;
   long_text_as_post: boolean; // X
   gbp_post_type: string;   // WHATS_NEW | EVENT | OFFER
   youtube_title: string;   // YouTube (required)
@@ -198,6 +202,7 @@ export default function ChannelsManager({
       caption: '', media_url: '', hashtags: '', scheduled_at: '',
       dest_id: dests.length ? dests[0].dest_id : '',
       first_comment: '', instagram_media_type: 'IMAGE', post_mode: 'MEDIA_UPLOAD', long_text_as_post: false,
+      tiktok_privacy_level: 'PUBLIC', tiktok_disable_comment: false, tiktok_disable_duet: false, tiktok_disable_stitch: false,
       gbp_post_type: 'WHATS_NEW',
       youtube_title: '', youtube_description: '', youtube_first_comment: '',
       linkedin_description: '', linkedin_document_url: '',
@@ -249,6 +254,12 @@ export default function ChannelsManager({
       if (quickPost.platform === 'instagram' && quickPost.first_comment) fd.set('instagram_first_comment', quickPost.first_comment);
       if (quickPost.platform === 'instagram' && quickPost.instagram_media_type) fd.set('instagram_media_type', quickPost.instagram_media_type);
       if (quickPost.platform === 'tiktok' && quickPost.post_mode) fd.set('tiktok_post_mode', quickPost.post_mode);
+      if (quickPost.platform === 'tiktok') {
+        fd.set('tiktok_privacy_level', quickPost.tiktok_privacy_level);
+        if (quickPost.tiktok_disable_comment) fd.set('tiktok_disable_comment', 'true');
+        if (quickPost.tiktok_disable_duet)    fd.set('tiktok_disable_duet', 'true');
+        if (quickPost.tiktok_disable_stitch)  fd.set('tiktok_disable_stitch', 'true');
+      }
       if (quickPost.platform === 'x' && quickPost.long_text_as_post) fd.set('x_long_text_as_post', 'true');
       if (quickPost.platform === 'google_business') fd.set('google_business_type', quickPost.gbp_post_type);
       // YouTube — title required + description + first-comment (Upload Post /upload passes these
@@ -514,13 +525,42 @@ export default function ChannelsManager({
                   </Field>
                 )}
                 {quickPost.platform === 'tiktok' && (
-                  <Field label="Post mode" hint="Draft (recommended) sends to TikTok inbox — user finalizes in app for best organic reach">
-                    <select style={inputSt} value={quickPost.post_mode}
-                            onChange={(e) => setQuickPost({ ...quickPost, post_mode: e.target.value })}>
-                      <option value="MEDIA_UPLOAD">Draft (recommended)</option>
-                      <option value="DIRECT_POST">Direct publish</option>
-                    </select>
-                  </Field>
+                  <>
+                    <Field label="Post mode" hint="Draft (recommended) sends to TikTok inbox — user finalizes in app for best organic reach">
+                      <select style={inputSt} value={quickPost.post_mode}
+                              onChange={(e) => setQuickPost({ ...quickPost, post_mode: e.target.value })}>
+                        <option value="MEDIA_UPLOAD">Draft (recommended)</option>
+                        <option value="DIRECT_POST">Direct publish</option>
+                      </select>
+                    </Field>
+                    {quickPost.post_mode === 'DIRECT_POST' && (
+                      <>
+                        <Field label="Privacy level">
+                          <select style={inputSt} value={quickPost.tiktok_privacy_level}
+                                  onChange={(e) => setQuickPost({ ...quickPost, tiktok_privacy_level: e.target.value })}>
+                            <option value="PUBLIC">Public</option>
+                            <option value="FRIENDS_ONLY">Friends only</option>
+                            <option value="PRIVATE">Private (self)</option>
+                          </select>
+                        </Field>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: INK, marginTop: 4 }}>
+                          <input type="checkbox" checked={quickPost.tiktok_disable_comment}
+                                 onChange={(e) => setQuickPost({ ...quickPost, tiktok_disable_comment: e.target.checked })} />
+                          Disable comments
+                        </label>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: INK }}>
+                          <input type="checkbox" checked={quickPost.tiktok_disable_duet}
+                                 onChange={(e) => setQuickPost({ ...quickPost, tiktok_disable_duet: e.target.checked })} />
+                          Disable duet
+                        </label>
+                        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: INK }}>
+                          <input type="checkbox" checked={quickPost.tiktok_disable_stitch}
+                                 onChange={(e) => setQuickPost({ ...quickPost, tiktok_disable_stitch: e.target.checked })} />
+                          Disable stitch
+                        </label>
+                      </>
+                    )}
+                  </>
                 )}
                 {quickPost.platform === 'google_business' && (
                   <Field label="Post type">
