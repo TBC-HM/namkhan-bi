@@ -199,23 +199,15 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/marketing/digital/web',
       '/marketing/web',
       '/marketing/funnels',
-      '/marketing/youtube',
-      '/marketing/youtube/dashboard',
-      '/marketing/youtube/playlists',
-      '/marketing/youtube/planning',
-      '/marketing/youtube/production',
-      '/marketing/youtube/analytics',
       '/marketing/seo',
       '/marketing/website',
     ],
     tabs: [
-      { label: 'Web',     href: '/marketing/digital/web'       },
-      { label: 'Funnels', href: '/marketing/funnels'           },
-      { label: 'YouTube', href: '/marketing/youtube/dashboard' },
-      { label: 'SEO',     href: '/marketing/seo'               },
-      // website-module-v1 P3 (2026-07-30): Website capability — editor over
-      // website.* rows + publish. Brief §MENU: Marketing substripe → Website.
-      { label: 'Website', href: '/marketing/website'           },
+      // PBS 2026-08-22: "Web" tab renamed to "Analytics"; YouTube moved to Socials sub-strip.
+      { label: 'Analytics', href: '/marketing/digital/web'     },
+      { label: 'Funnels',   href: '/marketing/funnels'         },
+      { label: 'SEO',       href: '/marketing/seo'             },
+      { label: 'Website',   href: '/marketing/website'         },
     ],
   },
   // PBS 2026-07-21 · Channels subgroup deleted — Socials + Digital are now top-strip peers.
@@ -333,6 +325,12 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/marketing/social/pinterest',
       '/marketing/social/tiktok',
       '/marketing/social/google-business',
+      '/marketing/youtube',
+      '/marketing/youtube/dashboard',
+      '/marketing/youtube/playlists',
+      '/marketing/youtube/planning',
+      '/marketing/youtube/production',
+      '/marketing/youtube/analytics',
     ],
     tabs: [
       { label: 'Overview',         href: '/h/260955/marketing/social'                    },
@@ -343,6 +341,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Pinterest',        href: '/h/260955/marketing/social/pinterest'          },
       { label: 'TikTok',           href: '/h/260955/marketing/social/tiktok'             },
       { label: 'Google Business',  href: '/h/260955/marketing/social/google-business'    },
+      { label: 'YouTube',          href: '/h/260955/marketing/youtube/dashboard'         },
     ],
   },
 

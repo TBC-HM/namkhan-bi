@@ -87,6 +87,47 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url, 307)
   }
 
+  // /sales URL LAW · bare-canonical: /sales HoD + /sales/icp
+  const BARE_CANONICAL_SALES = new Set(['/sales', '/sales/icp']);
+  if (
+    (pathname === '/sales' || pathname.startsWith('/sales/')) &&
+    !BARE_CANONICAL_SALES.has(pathname)
+  ) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/h/260955' + pathname
+    return NextResponse.redirect(url, 307)
+  }
+
+  // /marketing URL LAW · bare-canonical: HoD + website + youtube + socials-legacy
+  const BARE_CANONICAL_MARKETING = new Set([
+    '/marketing', '/marketing/website', '/marketing/socials',
+    // /marketing/youtube kept bare-canonical for now — tenant page self-redirects.
+    '/marketing/youtube',
+  ]);
+  if (
+    (pathname === '/marketing' || pathname.startsWith('/marketing/')) &&
+    !BARE_CANONICAL_MARKETING.has(pathname) &&
+    !pathname.startsWith('/marketing/youtube/')  // youtube subroutes also bare
+  ) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/h/260955' + pathname
+    return NextResponse.redirect(url, 307)
+  }
+
+  // /revenue URL LAW · bare-canonical: parity + pricing + briefing + rateplans/dead
+  const BARE_CANONICAL_REVENUE = new Set([
+    '/revenue/parity', '/revenue/pricing', '/revenue/briefing',
+    '/revenue/rateplans/dead',
+  ]);
+  if (
+    (pathname === '/revenue' || pathname.startsWith('/revenue/')) &&
+    !BARE_CANONICAL_REVENUE.has(pathname)
+  ) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/h/260955' + pathname
+    return NextResponse.redirect(url, 307)
+  }
+
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/cron') ||
