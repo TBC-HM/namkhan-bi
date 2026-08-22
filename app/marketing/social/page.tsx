@@ -232,7 +232,7 @@ export default async function SocialPage({ searchParams }: Props) {
                 { label: 'YouTube',         href: '/h/260955/marketing/youtube/dashboard'         },
               ].map((t) => (
                 <TenantLink key={t.href} href={t.href} style={{
-                  padding: '6px 14px', fontSize: 12, fontWeight: t.label === 'Overview' ? 700 : 500,
+                  padding: '6px 8px', fontSize: 12, fontWeight: t.label === 'Overview' ? 700 : 500,
                   color: t.label === 'Overview' ? WHITE : INK,
                   background: t.label === 'Overview' ? INK : 'transparent',
                   border: `1px solid ${t.label === 'Overview' ? INK : HAIR}`,

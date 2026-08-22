@@ -28,7 +28,7 @@ export default function OpsTopStrip({ propertyId, activeSuffix }: Props) {
         const active = sp.href.endsWith(activeSuffix);
         return (
           <Link key={sp.href} href={href} style={{
-            padding: '6px 14px', fontSize: 12,
+            padding: '6px 8px', fontSize: 12,
             color: active ? '#FFFFFF' : INK,
             background: active ? INK : 'transparent',
             border: `1px solid ${active ? INK : HAIR}`,
