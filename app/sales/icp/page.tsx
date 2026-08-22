@@ -97,9 +97,10 @@ export default async function IcpEngineV2Page() {
         <div style={{ background: icp.color || FOREST, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: WHITE }}>{icp.name}</div>
           <div style={{ display: 'flex', gap: 6 }}>
-            {icp.icp_type === 'b2b' && (
-              <span style={{ fontSize: 9, padding: '2px 6px', background: 'rgba(255,255,255,.2)', color: WHITE, borderRadius: 2 }}>B2B</span>
-            )}
+            {/* PBS 2026-08-22 · category badge visible for both B2C + B2B (task #11) */}
+            <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', background: 'rgba(255,255,255,.25)', color: WHITE, borderRadius: 2, letterSpacing: '0.05em' }}>
+              {(icp.icp_type ?? 'b2c').toUpperCase()}
+            </span>
           </div>
         </div>
         
