@@ -93,14 +93,14 @@ export default async function NewslettersPage({ propertyId }: PageProps = {}) {
     .sort((a,b) => (b.last_run_at ?? b.updated_at).localeCompare(a.last_run_at ?? a.updated_at))
     .slice(0, 20);
 
-  const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
+  const tabs: DashboardTab[] = tabsOverride ?? GUEST_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/guest/newsletters',
   }));
 
   return (
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage
-        title="Contacts · Newsletters"
+        title={titleOverride ?? "Contacts · Newsletters"}
         subtitle={`${subscribersTotal.toLocaleString()} subscribers · ${sentThisYear.toLocaleString()} sends year-to-date · one cockpit for the whole engine.`}
         tabs={tabs}>
         <NewslettersSubStrip active="broadcasts" />
