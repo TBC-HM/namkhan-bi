@@ -162,7 +162,7 @@ export default async function MarketingFunnelsPage() {
           <SectionHead title="Funnel domain portfolio" eyebrow={`${domains.length} live domain${domains.length===1?'':'s'} · from registry`} />
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:12 }}>
             {domains.length === 0 && (
-              <div style={{ padding:'16px 20px', border:`1px solid ${HAIR}`, borderRadius:6, fontSize:12, color:INK_M }}>
+              <div style={{ padding:'16px 20px', border:`1px solid ${HAIR}`, borderRadius:6, fontSize:12, color:INK_MUTE }}>
                 No domains published yet. Add rows to <code>v_marketing_domains</code>.
               </div>
             )}
@@ -285,37 +285,6 @@ function SectionHead({ title, eyebrow }: { title: string; eyebrow?: string }) {
   );
 }
 
-function FunnelCard({ funnel }: { funnel: Funnel }) {
-  const statusTone: 'brass' | 'soft' | 'warn' | 'mute' =
-    funnel.status === 'Scaling' || funnel.status === 'Live' ? 'brass' :
-    funnel.status === 'Needs Approval'                     ? 'warn'  :
-    funnel.status === 'Testing'                            ? 'soft'  : 'mute';
-  return (
-    <div style={S.funnelCard}>
-      <div style={S.funnelHead}>
-        <span style={S.funnelName}>{funnel.name}</span>
-        <span style={statusPill(statusTone)}>{funnel.status}</span>
-      </div>
-      <div style={S.funnelDomain}>{funnel.domain}</div>
-      <div style={S.funnelType}>{funnel.type} · {funnel.icp} · {funnel.market}</div>
-      <div style={S.funnelKeyword}>&ldquo;{funnel.keyword}&rdquo;</div>
-      <div style={S.funnelStatRow}>
-        <Stat label="Score"   value={`${funnel.score}/100`} />
-        <Stat label="CVR"     value={funnel.cvr} />
-        <Stat label="Trend"   value={funnel.trafficTrend} />
-        <Stat label="Revenue" value={funnel.revenue} />
-      </div>
-      <div style={S.funnelFooter}>
-        <span style={S.funnelFooterLabel}>Lead magnet</span>
-        <span style={S.funnelFooterValue}>{funnel.leadMagnet}</span>
-      </div>
-      <div style={S.funnelFooter}>
-        <span style={S.funnelFooterLabel}>CTA</span>
-        <span style={S.funnelFooterValue}>{funnel.cta}</span>
-      </div>
-    </div>
-  );
-}
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -572,9 +541,9 @@ function DomainCard({ domain }: { domain: MarketingDomain }) {
         <div style={{ fontSize:13, fontWeight:700, color:GREEN, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{domain.domain_name}</div>
         <div style={{ fontSize:12, color:INK, marginTop:2 }}>{domain.funnel_theme ?? '—'}</div>
       </div>
-      <div style={{ display:'flex', gap:14, fontSize:11, color:INK_M }}>
+      <div style={{ display:'flex', gap:14, fontSize:11, color:INK_MUTE }}>
         <span>Status: <strong style={{ color:INK }}>{domain.status ?? '—'}</strong></span>
-        <span style={{ color: isRisked ? RED : INK_M, fontWeight: isRisked ? 700 : 400 }}>{expiryLabel}</span>
+        <span style={{ color: isRisked ? RED : INK_MUTE, fontWeight: isRisked ? 700 : 400 }}>{expiryLabel}</span>
       </div>
       {isRisked && (
         <div style={{ padding:'6px 8px', borderLeft:`2px solid ${RED}`, background:'#F7F0E1', fontSize:11, color:INK }}>
