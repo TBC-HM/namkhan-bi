@@ -328,9 +328,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // landing (IG/FB/X/LinkedIn/Pinterest/TikTok/GBP) so the operator
   // can jump between channels without going back to the parent.
   {
-    parentHref: '/marketing/social',
+    parentHref: '/marketing/social/channels',  // synthetic parent — sub-strip renders on individual channel pages only
     members: [
-      '/marketing/social',
+      // PBS 2026-08-22: '/marketing/social' removed from members so the parent
+      // page can host an inline channel-tabs strip inside the "channels" view
+      // (below the calendar/flow/channels/boost view-switcher).
       '/marketing/social/instagram',
       '/marketing/social/facebook',
       '/marketing/social/x',

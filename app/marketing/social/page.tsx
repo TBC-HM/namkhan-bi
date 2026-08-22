@@ -216,15 +216,39 @@ export default async function SocialPage({ searchParams }: Props) {
         )}
         {view === 'flow' && <SocialFlow slots={slots} posts={posts} />}
         {view === 'channels' && (
-          <ChannelsManager
-            propertyId={NAMKHAN_PID}
-            accounts={accounts}
-            rules={rules}
-            programs={programs}
-            connectedProfiles={upProfiles as any}
-            destinations={upDestinations as any}
-            platformSpecs={platformSpecs as any}
-          />
+          <>
+            {/* PBS 2026-08-22 · platform sub-strip · sits BELOW the view-switcher, only when Channels is active */}
+            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 4, alignItems: 'center', overflowX: 'auto', borderBottom: `1px solid ${HAIR}`, paddingBottom: 8, marginBottom: 8 }}>
+              {[
+                { label: 'Overview',        href: '/h/260955/marketing/social'                    },
+                { label: 'Instagram',       href: '/h/260955/marketing/social/instagram'          },
+                { label: 'Facebook',        href: '/h/260955/marketing/social/facebook'           },
+                { label: 'X / Twitter',     href: '/h/260955/marketing/social/x'                  },
+                { label: 'LinkedIn',        href: '/h/260955/marketing/social/linkedin'           },
+                { label: 'Pinterest',       href: '/h/260955/marketing/social/pinterest'          },
+                { label: 'TikTok',          href: '/h/260955/marketing/social/tiktok'             },
+                { label: 'Google Business', href: '/h/260955/marketing/social/google-business'    },
+                { label: 'YouTube',         href: '/h/260955/marketing/youtube/dashboard'         },
+              ].map((t) => (
+                <TenantLink key={t.href} href={t.href} style={{
+                  padding: '6px 14px', fontSize: 12, fontWeight: t.label === 'Overview' ? 700 : 500,
+                  color: t.label === 'Overview' ? WHITE : INK,
+                  background: t.label === 'Overview' ? INK : 'transparent',
+                  border: `1px solid ${t.label === 'Overview' ? INK : HAIR}`,
+                  borderRadius: 4, textDecoration: 'none', whiteSpace: 'nowrap', letterSpacing: '0.02em',
+                }}>{t.label}</TenantLink>
+              ))}
+            </div>
+            <ChannelsManager
+              propertyId={NAMKHAN_PID}
+              accounts={accounts}
+              rules={rules}
+              programs={programs}
+              connectedProfiles={upProfiles as any}
+              destinations={upDestinations as any}
+              platformSpecs={platformSpecs as any}
+            />
+          </>
         )}
         {view === 'boost' && <BoostView />}
         {view === 'inbox' && <SocialInbox posts={posts} rules={rules} />}
