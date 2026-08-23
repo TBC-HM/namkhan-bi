@@ -419,14 +419,23 @@ export function findSubGroup(pathname: string): SubGroup | null {
 }
 
 /**
- * Rewrite an unprefixed subgroup tab href to include the current tenant prefix.
- * Returns href unchanged when there's no tenant prefix in the current pathname,
- * or the href is already tenant-prefixed / non-root.
+ * Rewrite a tab href to include the current tenant prefix.
+ * - Bare /some/path → /h/{pid}/some/path
+ * - /h/260955/some/path on a Donna URL → /h/1000001/some/path
+ *   (cross-tenant swap so DEPT_CFG Namkhan-anchored hrefs work on any tenant)
  */
 export function prefixTabHref(pathname: string, href: string): string {
   const { tenantPrefix } = stripTenantPrefix(pathname);
   if (!tenantPrefix) return href;
-  if (href.startsWith('/h/')) return href; // already prefixed
+  if (href.startsWith('/h/')) {
+    // Cross-tenant rewrite: swap /h/{other}/ → /h/{current}/ so tabs built
+    // from DEPT_CFG (which anchors to Namkhan) stay in the active tenant.
+    const hrefStripped = stripTenantPrefix(href);
+    if (hrefStripped.tenantPrefix && hrefStripped.tenantPrefix !== tenantPrefix) {
+      return tenantPrefix + hrefStripped.normalized;
+    }
+    return href; // same tenant prefix — already correct
+  }
   if (href.startsWith('/'))  return tenantPrefix + href;
   return href;
 }
