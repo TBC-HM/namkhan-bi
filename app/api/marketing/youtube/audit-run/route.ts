@@ -94,8 +94,35 @@ export async function POST(req: Request) {
   const playlists = isErr(plRes) ? [] : plRes.data;
   const vidResult = isErr(vidRes) ? { data: [], nextPageToken: null } : vidRes;
   const videos = Array.isArray(vidResult.data) ? vidResult.data : (Array.isArray(vidResult) ? vidResult : []);
-  const nextPageToken: string | null = (vidResult as any).nextPageToken ?? null;
+  let currentNextPageToken: string | null = (vidResult as any).nextPageToken ?? null;
   if (videos.length === 0) return err('no_videos_to_audit', 400, { detail: `channel ${ch.id} has 0 videos in this batch` });
+
+  // --- skip already-audited videos (expired pageToken fix) ---
+  // YouTube pageTokens expire in hours. When they expire the API resets to page 1
+  // and we re-audit the same newest videos on every run. Fix: query which video_ids
+  // already have a grade, filter them out, auto-advance through pages to find unaudited.
+  const { data: auditedRows } = await sb.from('v_yt_channel_audit_videos')
+    .select('video_id').not('current_grade', 'is', null);
+  const auditedSet = new Set((auditedRows ?? []).map((r: any) => r.video_id as string));
+
+  let candidates = videos.filter((v: any) => !auditedSet.has(v.id));
+  let advancedPageToken = currentNextPageToken;
+  let pageAttempts = 0;
+  // Auto-advance up to 10 pages to find unaudited videos when current page is all-audited
+  while (candidates.length === 0 && advancedPageToken && pageAttempts < 10) {
+    pageAttempts++;
+    const nextRes = await fetchRecentVideos(tok.access_token, tok.channel_id, batch, advancedPageToken);
+    const nextBatch = isErr(nextRes) ? { data: [], nextPageToken: null } : nextRes;
+    const nextVids = Array.isArray((nextBatch as any).data) ? (nextBatch as any).data : (Array.isArray(nextBatch) ? nextBatch : []);
+    advancedPageToken = (nextBatch as any).nextPageToken ?? null;
+    candidates = nextVids.filter((v: any) => !auditedSet.has(v.id));
+  }
+
+  const nextPageToken = advancedPageToken;
+  if (candidates.length === 0) {
+    return ok({ message: 'all_videos_audited', video_count: 0, overall_grade: null, next_page_token: null });
+  }
+  const videosToAudit = candidates.slice(0, batch);
 
   // === 2) Pull brand context — vocab + pillars + reality ===
   const [vocabRes, pillarsRes, realityRes] = await Promise.all([
@@ -114,7 +141,7 @@ export async function POST(req: Request) {
   const playlistList = playlists.map((p) => `  • ${p.id} — "${p.title}" — ${p.itemCount} videos`).join('\n');
 
   // Compact video payload the LLM will audit
-  const videoPayload = videos.map((v) => {
+  const videoPayload = videosToAudit.map((v) => {
     const durationSec = (() => {
       const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(v.duration ?? '');
       if (!m) return null;
@@ -225,7 +252,7 @@ export async function POST(req: Request) {
   const userPrompt = [
     `CHANNEL: ${ch.title} — ${ch.subscriberCount} subs · ${ch.viewCount} total views · ${ch.videoCount} videos total.`,
     '',
-    `VIDEOS TO AUDIT (${videoPayload.length}, recent uploads):`,
+    `VIDEOS TO AUDIT (${videoPayload.length}, unaudited — ${auditedSet.size} already done):`,
     JSON.stringify(videoPayload, null, 2),
     '',
     'Return the JSON object now. Grade honestly — do not sugarcoat. Prioritise brand-voice hits and playlist mapping.',
@@ -250,7 +277,7 @@ export async function POST(req: Request) {
 
   // === 5) Persist via SECURITY DEFINER RPC (marketing schema is not PostgREST-exposed).
   const videoRowsJson = parsed.videos.map((v) => {
-    const meta = videos.find((x) => x.id === v.video_id);
+    const meta = videosToAudit.find((x: any) => x.id === v.video_id);
     return {
       video_id:               v.video_id,
       video_title:            meta?.title ?? null,
