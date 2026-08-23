@@ -142,7 +142,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
   // (PBS rule 2026-05-15 — sales inbox stays sales-only).
   if (STUB_PROPERTIES.has(propertyId)) {
     return (
-      <DashboardPage title={}>
+      <DashboardPage title={'Inbox · ' + propertyLabel}>
         <div
           style={{
             marginTop: 24,

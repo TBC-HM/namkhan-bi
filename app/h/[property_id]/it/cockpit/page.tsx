@@ -47,7 +47,7 @@ export default async function PropertyCockpitPage({
 
   const label = scope === 'namkhan' ? 'Namkhan' : scope === 'donna' ? 'Donna' : 'Holding';
   return (
-    <DashboardPage title={}>
+    <DashboardPage title={label + ' cockpit'}>
       <div style={{ gridColumn: '1 / -1' }}>
         <CockpitV3Client
           propertyId={propertyId}
