@@ -1,18 +1,16 @@
 // app/h/[property_id]/guest/newsletters/lifecycle/page.tsx
-// PBS 2026-08-20 · Donna tenant stub for newsletter lifecycle view.
-import DeptSubpageStub from '@/app/h/[property_id]/_shared/DeptSubpageStub';
+// PBS 2026-08-23 · Donna tenant delegate — mounts LifecyclePage body with
+// propertyId scoping. Replaces DeptSubpageStub so Donna operators see their
+// own lifecycle campaigns.
+
+import { notFound } from 'next/navigation';
+import LifecycleBody from '@/app/guest/newsletters/lifecycle/page';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default function DonnaNewslettersLifecycle({ params }: { params: { property_id: string } }) {
-  return (
-    <DeptSubpageStub
-      propertyId={Number(params.property_id)}
-      deptLabel="Guest"
-      routeLabel="Newsletters · Lifecycle"
-      namkhanPath="/guest/newsletters/lifecycle"
-      hint="Lifecycle sequence viewer — activates for Donna once cron 122 fires against tenant recipients."
-    />
-  );
+  const pid = Number(params.property_id);
+  if (!Number.isFinite(pid)) notFound();
+  return <LifecycleBody propertyId={pid} />;
 }

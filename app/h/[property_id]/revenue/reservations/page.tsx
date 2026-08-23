@@ -19,6 +19,7 @@
 // Tabs strip: REVENUE_SUBPAGES with 'Demand & Pace' active
 // (Reservations lives under it — see lib/nav-subgroups).
 
+import React from 'react';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { REVENUE_SUBPAGES } from '@/app/revenue/_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
@@ -28,6 +29,7 @@ import ReservationsTableClient, {
   type ReservationRow,
 } from './ReservationsTableClient';
 import RangeChips from './RangeChips';
+import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -121,6 +123,7 @@ export default async function TenantRevenueReservationsPage({
 
   const range = normalizeRange(spVal('range'), spVal('from'), spVal('to'));
   const win = windowFor(range, tz, spVal('from'), spVal('to'));
+  const activeTab = spVal('tab') === 'bookings' ? 'bookings' : 'arrivals';
 
   // Currency symbol for the property (for money formatting).
   const { data: prop } = await supabase
@@ -180,42 +183,62 @@ export default async function TenantRevenueReservationsPage({
 
   const basePath = '/h/' + pid + '/revenue/reservations';
 
+  const tabBase = `${basePath}?range=${range}${range === 'custom' ? `&from=${spVal('from') ?? win.fromIso}&to=${spVal('to') ?? win.toIso}` : ''}`;
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    padding: '4px 8px', fontSize: 12, fontWeight: active ? 700 : 500,
+    color: active ? 'var(--ink, #1B1B1B)' : 'var(--ink-soft, #5A5A5A)',
+    borderBottom: active ? '2px solid var(--primary, #1F3A2E)' : '2px solid transparent',
+    textDecoration: 'none', background: 'transparent', marginBottom: -1, fontFamily: 'inherit',
+  });
+
   return (
     <DashboardPage
       title="Revenue · Reservations"
       subtitle={subtitle}
       tabs={tabs}
     >
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Container
-          title="Reservations"
-          subtitle={win.label}
-          density="compact"
-          action={
-            <RangeChips
-              basePath={basePath}
-              range={range}
-              from={spVal('from') ?? win.fromIso}
-              to={spVal('to') ?? win.toIso}
-            />
-          }
-        >
-          {err ? (
-            <div
-              style={{
-                padding: 16,
-                color: 'var(--ink, #1B1B1B)',
-                fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
-                fontSize: 13,
-              }}
-            >
-              Failed to load reservations: {err}
-            </div>
-          ) : (
-            <ReservationsTableClient rows={rows} sym={sym} tz={tz} />
-          )}
-        </Container>
-      </div>
+      {/* page-internal tab strip: Arrivals | Bookings */}
+      <nav style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, borderBottom: '1px solid var(--hairline, #E6DFCC)', marginBottom: 4 }} role="tablist" aria-label="Reservations view">
+        <a href={tabBase} role="tab" aria-selected={activeTab === 'arrivals'} style={tabStyle(activeTab === 'arrivals')}>Arrivals</a>
+        <a href={`${basePath}?tab=bookings`} role="tab" aria-selected={activeTab === 'bookings'} style={tabStyle(activeTab === 'bookings')}>Bookings</a>
+      </nav>
+
+      {activeTab === 'arrivals' ? (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Container
+            title="Arrivals"
+            subtitle={win.label}
+            density="compact"
+            action={
+              <RangeChips
+                basePath={basePath}
+                range={range}
+                from={spVal('from') ?? win.fromIso}
+                to={spVal('to') ?? win.toIso}
+              />
+            }
+          >
+            {err ? (
+              <div
+                style={{
+                  padding: 16,
+                  color: 'var(--ink, #1B1B1B)',
+                  fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
+                  fontSize: 13,
+                }}
+              >
+                Failed to load reservations: {err}
+              </div>
+            ) : (
+              <ReservationsTableClient rows={rows} sym={sym} tz={tz} />
+            )}
+          </Container>
+        </div>
+      ) : (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <BookingActivity propertyId={pid} />
+        </div>
+      )}
     </DashboardPage>
   );
 }

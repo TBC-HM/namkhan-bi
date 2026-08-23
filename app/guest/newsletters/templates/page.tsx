@@ -46,10 +46,11 @@ function fmtDate(d: string | null): string {
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default async function TemplatesListPage() {
+export default async function TemplatesListPage({ propertyId }: { propertyId?: number } = {}) {
+  const pid = propertyId ?? PROPERTY_ID;
   const sb = getSupabaseAdmin();
   const { data } = await sb.from('v_newsletter_templates')
-    .select('*').eq('property_id', PROPERTY_ID)
+    .select('*').eq('property_id', pid)
     .order('category').order('label');
   const templates: TemplateRow[] = (data as TemplateRow[]) ?? [];
 
@@ -81,7 +82,7 @@ export default async function TemplatesListPage() {
             </TenantLink>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <AiProposeTemplateButton propertyId={PROPERTY_ID} />
+            <AiProposeTemplateButton propertyId={pid} />
             <TenantLink href="/guest/newsletters/templates/new" style={{
               padding:'6px 14px', fontSize:12, fontWeight:600,
               background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none',

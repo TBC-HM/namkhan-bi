@@ -68,8 +68,8 @@ function audienceFallbackSlug(audience_type: string | null | undefined): string 
   return null;
 }
 
-export default async function BroadcastsPage() {
-  const pid = PROPERTY_ID;
+export default async function BroadcastsPage({ propertyId }: { propertyId?: number } = {}) {
+  const pid = propertyId ?? PROPERTY_ID;
 
   const [campaignsRes, groupsRes, slotsRes] = await Promise.all([
     supabase.from('v_guest_campaigns').select('*').eq('property_id', pid).is('archived_at', null)
