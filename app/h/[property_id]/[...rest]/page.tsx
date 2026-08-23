@@ -72,7 +72,7 @@ export default function CatchAllPropertyPage({ params, searchParams }: Props) {
   // If the first segment isn't a recognised dept, render a generic stub.
   if (!deptSlug || !KNOWN_DEPTS.has(deptSlug)) {
     return (
-      <DashboardPage title={<>Page not yet wired · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{propertyLabel}</em></>}>
+      <DashboardPage title="Page not yet wired">
         <div style={{ padding: 18, fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', maxWidth: 720, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8 }}>
           <p style={{ marginTop: 0 }}>
             This URL is in the property-scoped tree but doesn&apos;t have a per-property
@@ -94,7 +94,7 @@ export default function CatchAllPropertyPage({ params, searchParams }: Props) {
     : deptLabel;
 
   return (
-    <DashboardPage title={<>{routeLabel} · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{propertyLabel}</em></>}>
+    <DashboardPage title={routeLabel}>
       <div style={{ padding: 18, fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', maxWidth: 760, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, gridColumn: '1 / -1' }}>
         <p style={{ marginTop: 0 }}>
           This {deptLabel.toLowerCase()} page is part of {propertyLabel}&apos;s navigation but

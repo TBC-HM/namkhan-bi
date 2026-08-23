@@ -142,7 +142,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
   // (PBS rule 2026-05-15 — sales inbox stays sales-only).
   if (STUB_PROPERTIES.has(propertyId)) {
     return (
-      <DashboardPage title={<>Inbox · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{propertyLabel}</em></>}>
+      <DashboardPage title={}>
         <div
           style={{
             marginTop: 24,
@@ -280,7 +280,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
   );
 
   return (
-    <DashboardPage title={<>Inbox · all <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>mail</em></>} action={topRight}>
+    <DashboardPage title="Inbox" action={topRight}>
       {/* ANALYTICS STRIP */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8,
