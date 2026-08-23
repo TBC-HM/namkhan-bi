@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/check-it2-orphans.mjs",
+    "prebuild": "node scripts/check-it2-orphans.mjs && node scripts/check-routes.mjs --check",
     "build": "rm -rf .next && next build",
     "start": "next start",
     "lint": "next lint",
