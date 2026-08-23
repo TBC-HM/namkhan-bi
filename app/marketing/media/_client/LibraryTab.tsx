@@ -167,9 +167,11 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
 
   useEffect(() => {
     let cancelled = false;
+    // PBS 2026-08-23: pass propertyId to all API calls so Donna sees Donna's
+    // data — before this, all three fetches defaulted to Namkhan (260955).
     (async () => {
       try {
-        const res = await fetch('/api/marketing/media/area-facets', { cache: 'no-store' });
+        const res = await fetch(`/api/marketing/media/area-facets?property_id=${propertyId}`, { cache: 'no-store' });
         if (!res.ok) return;
         const j = await res.json();
         if (cancelled) return;
@@ -180,7 +182,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
     // the server-side prop wasn't provided, or to refresh after a slow update.
     (async () => {
       try {
-        const res = await fetch('/api/marketing/media/library-counts', { cache: 'no-store' });
+        const res = await fetch(`/api/marketing/media/library-counts?propertyId=${propertyId}`, { cache: 'no-store' });
         if (!res.ok) return;
         const j = await res.json();
         if (cancelled) return;
@@ -198,7 +200,7 @@ export default function LibraryTab({ propertyId, byTier, mediaPage, channelSpecs
       } catch { /* silent — panel simply stays empty */ }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [propertyId]);
 
   const isFullyTagged = (r: MediaRow) => {
     if (!r.primary_tier) return false;
