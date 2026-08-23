@@ -12,7 +12,7 @@
 
 import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
-import Page from '@/components/page/Page';
+import DashboardPage from '@/app/(cockpit)/_design/layout/DashboardPage';
 import Panel from '@/components/page/Panel';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import {
@@ -142,11 +142,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
   // (PBS rule 2026-05-15 — sales inbox stays sales-only).
   if (STUB_PROPERTIES.has(propertyId)) {
     return (
-      <Page
-        eyebrow={`Operations · Inbox · ${propertyLabel}`}
-        title={<>Inbox · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{propertyLabel}</em></>}
-        subPages={inboxSubpages(propertyId)}
-      >
+      <DashboardPage title={<>Inbox · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{propertyLabel}</em></>}>
         <div
           style={{
             marginTop: 24,
@@ -192,7 +188,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
             </span>.
           </div>
         </div>
-      </Page>
+      </DashboardPage>
     );
   }
 
@@ -284,12 +280,7 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
   );
 
   return (
-    <Page
-      eyebrow={`Operations · Inbox · ${propertyLabel}`}
-      title={<>Inbox · all <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>mail</em></>}
-      subPages={inboxSubpages(propertyId)}
-      topRight={topRight}
-    >
+    <DashboardPage title={<>Inbox · all <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>mail</em></>} action={topRight}>
       {/* ANALYTICS STRIP */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8,
@@ -657,6 +648,6 @@ export default async function InboxPage({ params, searchParams }: InboxPageProps
           )}
         </article>
       </div>
-    </Page>
+    </DashboardPage>
   );
 }

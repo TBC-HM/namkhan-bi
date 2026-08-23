@@ -7,7 +7,7 @@
 // Activity + Costs tabs are wired here. Schemas + Knowledge are placeholders.
 
 import { createClient } from '@/lib/supabase/server';
-import Page from '@/components/page/Page';
+import DashboardPage from '@/app/(cockpit)/_design/layout/DashboardPage';
 import CockpitV3Client from '@/components/cockpit/CockpitV3Client';
 import { notFound } from 'next/navigation';
 
@@ -45,22 +45,17 @@ export default async function PropertyCockpitPage({
       .limit(100),
   ]);
 
+  const label = scope === 'namkhan' ? 'Namkhan' : scope === 'donna' ? 'Donna' : 'Holding';
   return (
-    <Page
-      eyebrow="IT · Cockpit"
-      title={
-        <>
-          {scope === 'namkhan' ? 'Namkhan' : scope === 'donna' ? 'Donna' : 'Holding'}{' '}
-          <em style={{ color: 'var(--accent, #a8854a)' }}>cockpit</em>
-        </>
-      }
-    >
-      <CockpitV3Client
-        propertyId={propertyId}
-        scope={scope}
-        roster={(roster ?? []) as any[]}
-        runs={(runs ?? []) as any[]}
-      />
-    </Page>
+    <DashboardPage title={<>{label} <em style={{ color: 'var(--accent, #a8854a)' }}>cockpit</em></>}>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <CockpitV3Client
+          propertyId={propertyId}
+          scope={scope}
+          roster={(roster ?? []) as any[]}
+          runs={(runs ?? []) as any[]}
+        />
+      </div>
+    </DashboardPage>
   );
 }

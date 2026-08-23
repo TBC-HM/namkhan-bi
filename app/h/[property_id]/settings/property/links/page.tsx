@@ -17,6 +17,7 @@
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
+import DashboardPage from '@/app/(cockpit)/_design/layout/DashboardPage';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -94,8 +95,8 @@ export default async function LinkCatalogPage({ params }: { params: { property_i
   const sections = Array.from(new Set(rows.map((r) => r.section).filter(Boolean))) as string[];
 
   return (
-    <div style={{ maxWidth: 1100, color: TOKENS.ink }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 2px' }}>Newsletter link catalog</h1>
+    <DashboardPage title="Link catalog">
+      <div style={{ gridColumn: '1 / -1', color: TOKENS.ink }}>
       <p style={{ fontSize: 12, color: TOKENS.text2, margin: '0 0 18px', maxWidth: 780 }}>
         These are the <strong>only</strong> URLs the newsletter writer may use. It inserts them
         deterministically and is forbidden from inventing links — so a wrong row here becomes a
@@ -217,6 +218,7 @@ export default async function LinkCatalogPage({ params }: { params: { property_i
         finds while grading a campaign — not from a guess. Editing a URL clears its verified
         stamp on purpose, so a changed link is re-checked before it ships.
       </p>
-    </div>
+      </div>
+    </DashboardPage>
   );
 }
