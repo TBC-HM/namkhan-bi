@@ -3049,3 +3049,12 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - Full maintenance surface (`app/h/[property_id]/operations/maintenance/*`, 8 files) rewritten from raw Tailwind to tokens + `_design` primitives: DashboardPage shell, right-side Drawer (§3.4), token status semantics (`--st-bad`/`--st-good`), zero hardcoded hex, zero emoji headings
 - `PmCalendar.tsx`: MonthCalendar atom bound to `public.v_cal_maintenance` (9-col universal feed) + Overdue/Upcoming ListContainer split (commit 0d3505f, push ledger 1691)
 - `styles/globals.css` untouched (protected); nav tab deferred to slice 7
+
+
+### 2026-08-13 — bug-agent · fix #179
+- # Bug #179 — RecommendationList.act() silently ignores res.error  ## Root Cause In `RecommendationList`, the `act()` function calls `post()` but never reads the response — `res.error` is ignored so failures produce no user feedback.
+- touched `app/h/[property_id]/revenue/forecast/ForecastActions.tsx`
+
+### 2026-08-13 — bug-agent · fix #178
+- ## Bug #178 – Preview page lands in Namkhan menu (cockpit layout wraps it)  ### Root cause The preview page lives at `app/legal/docs/preview/[doc_id]/page.tsx`. Without a layout override, Next.js App Router inherits the root cockpit layout and wraps the preview in the full Namkhan menu.
+- touched `app/legal/docs/preview/layout.tsx`

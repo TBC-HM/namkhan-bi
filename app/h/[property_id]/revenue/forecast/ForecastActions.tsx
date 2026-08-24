@@ -66,6 +66,7 @@ export function RecommendationList({ rows }: { rows: RecommendationRow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   if (rows.length === 0) {
     return (
@@ -78,9 +79,11 @@ export function RecommendationList({ rows }: { rows: RecommendationRow[] }) {
 
   const act = (id: number, status: RecommendationRow['status']) => {
     setBusyId(id);
-    void post({ op: 'recommendation', recommendation_id: id, status }).then(() => {
+    setErr(null);
+    void post({ op: 'recommendation', recommendation_id: id, status }).then((res) => {
       setBusyId(null);
-      startTransition(() => router.refresh());
+      if (res.error) setErr(res.error);
+      else startTransition(() => router.refresh());
     });
   };
 
@@ -127,6 +130,7 @@ export function RecommendationList({ rows }: { rows: RecommendationRow[] }) {
           </div>
         </div>
       ))}
+      {err ? <p style={{ margin: 0, fontSize: 12, color: 'var(--terracotta, #B8542A)' }}>{err}</p> : null}
     </div>
   );
 }
@@ -350,3 +354,4 @@ export function FindingButton() {
     </div>
   );
 }
+
