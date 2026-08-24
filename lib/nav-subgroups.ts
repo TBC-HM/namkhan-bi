@@ -255,12 +255,14 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     // PBS 2026-08-24 · Budget + Studio moved under Planning sub-sub-strip;
     //                  Suppliers moved under Costs sub-sub-strip.
     members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/costs', '/finance/planning'],
+    // PBS 2026-08-24: hardcode /h/260955/ prefix so bare-URL navigation never
+    // occurs — prefixTabHref cross-tenant-rewrites for Donna automatically.
     tabs: [
-      { label: 'P&L',          href: '/finance/pnl'          },
-      { label: 'Ledger',       href: '/finance/ledger'       },
-      { label: 'Transactions', href: '/finance/transactions' },
-      { label: 'Costs',        href: '/finance/costs'        },
-      { label: 'Planning',     href: '/finance/planning'     },
+      { label: 'P&L',          href: '/h/260955/finance/pnl'          },
+      { label: 'Ledger',       href: '/h/260955/finance/ledger'       },
+      { label: 'Transactions', href: '/h/260955/finance/transactions' },
+      { label: 'Costs',        href: '/h/260955/finance/costs'        },
+      { label: 'Planning',     href: '/h/260955/finance/planning'     },
     ],
   },
 
@@ -270,8 +272,8 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     parentHref: '/finance/costs',
     members: ['/finance/costs', '/finance/suppliers'],
     tabs: [
-      { label: 'Costs',     href: '/finance/costs'     },
-      { label: 'Suppliers', href: '/finance/suppliers'  },
+      { label: 'Costs',     href: '/h/260955/finance/costs'     },
+      { label: 'Suppliers', href: '/h/260955/finance/suppliers'  },
     ],
   },
 
@@ -281,9 +283,9 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     parentHref: '/finance/planning',
     members: ['/finance/planning', '/finance/budget', '/finance/studio'],
     tabs: [
-      { label: 'Planning', href: '/finance/planning' },
-      { label: 'Budget',   href: '/finance/budget'   },
-      { label: 'Studio',   href: '/finance/studio'   },
+      { label: 'Planning', href: '/h/260955/finance/planning' },
+      { label: 'Budget',   href: '/h/260955/finance/budget'   },
+      { label: 'Studio',   href: '/h/260955/finance/studio'   },
     ],
   },
 
@@ -293,9 +295,9 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     parentHref: '/finance/transactions',
     members: ['/finance/transactions', '/finance/banks', '/finance/pos'],
     tabs: [
-      { label: 'Transactions', href: '/finance/transactions' },
-      { label: 'Banks',        href: '/finance/banks'        },
-      { label: 'POS',          href: '/finance/pos'          },
+      { label: 'Transactions', href: '/h/260955/finance/transactions' },
+      { label: 'Banks',        href: '/h/260955/finance/banks'        },
+      { label: 'POS',          href: '/h/260955/finance/pos'          },
     ],
   },
 
@@ -317,15 +319,15 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/finance/hr/recruitment',
     ],
     tabs: [
-      { label: 'HoD',          href: '/finance/hr'              },
-      { label: 'Schedule',     href: '/finance/hr/schedule'     },
-      { label: 'Attendance',   href: '/finance/hr/attendance'   },
-      { label: 'Holidays',     href: '/finance/hr/holidays'     },
-      { label: 'Lifecycle',    href: '/finance/hr/lifecycle'    },
-      { label: 'Onboarding',   href: '/finance/hr/onboarding'   },
-      { label: 'Offboarding',  href: '/finance/hr/offboarding'  },
-      { label: 'Recruitment',  href: '/finance/hr/recruitment'  },
-      { label: 'Data',         href: '/finance/hr/data'         },
+      { label: 'HoD',          href: '/h/260955/finance/hr'              },
+      { label: 'Schedule',     href: '/h/260955/finance/hr/schedule'     },
+      { label: 'Attendance',   href: '/h/260955/finance/hr/attendance'   },
+      { label: 'Holidays',     href: '/h/260955/finance/hr/holidays'     },
+      { label: 'Lifecycle',    href: '/h/260955/finance/hr/lifecycle'    },
+      { label: 'Onboarding',   href: '/h/260955/finance/hr/onboarding'   },
+      { label: 'Offboarding',  href: '/h/260955/finance/hr/offboarding'  },
+      { label: 'Recruitment',  href: '/h/260955/finance/hr/recruitment'  },
+      { label: 'Data',         href: '/h/260955/finance/hr/data'         },
     ],
   },
   // ─── Revenue HoD sub-strip (Rate Desk + Forecast) ───────────
