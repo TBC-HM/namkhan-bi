@@ -1,6 +1,7 @@
 // app/holding/it2/_lib/groups.ts
 // FINAL PERMANENT NAV — PBS approved 2026-08-02.
 // 2026-08-03 — Settings removed from System subs; gear lives in top bar now.
+// 2026-08-23 — Routes added to System subs (route_canon_registry-v1 D3).
 
 export type It2GroupKey = 'home' | 'knowledge' | 'agents' | 'build' | 'system';
 
@@ -81,6 +82,9 @@ export const GROUPS: GroupSpec[] = [
       // owner-approved autonomous-ops visibility — agent activity, push ledger,
       // brief backlog, open questions. Read-only monitoring surface.
       { href: '/holding/it2/autonomy', label: 'Autonomy' },
+      // Route Canon Dashboard (route_canon_registry-v1 D3, 2026-08-23):
+      // operator decision surface — backlog/quarantine/defects/drift tabs.
+      { href: '/holding/it2/system/routes', label: 'Routes' },
     ],
   },
 ];

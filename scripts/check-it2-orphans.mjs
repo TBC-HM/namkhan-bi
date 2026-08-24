@@ -61,6 +61,10 @@ const ALLOWLIST = new Set([
   // page bd4b433 shipped orphaned and froze main at prebuild — law-659: Knowledge
   // group already at 7 subs, so contextual link, not a nav tab).
   '/holding/it2/fleet/grants',
+  // Runs Cleanup — moved from app/h/it/runs-cleanup to canonical System path
+  // (route_canon_registry-v1 D4, 2026-08-23). Linked contextually from System
+  // health surfaces; not a primary nav tab.
+  '/holding/it2/system/runs-cleanup',
 ]);
 
 function walkPages(dir, out = []) {
