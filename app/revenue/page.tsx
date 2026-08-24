@@ -5,7 +5,7 @@
 
 import TenantLink from '@/components/nav/TenantLink';
 import {
-  DashboardPage, Container, KpiTile,
+  DashboardPage, Container,
   type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
@@ -26,8 +26,9 @@ import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
 import RmMailPanel from './_components/RmMailPanel';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
-import RevenueMtdStripe from '@/app/(cockpit)/_design/RevenueMtdStripe';
-import RevenueYtdStripe from '@/app/(cockpit)/_design/RevenueYtdStripe';
+// PBS 2026-08-24: RevenueMtdStripe + RevenueYtdStripe retired — both folded into
+// RevenueHeadlineMatrix, which owns their queries unchanged.
+import RevenueHeadlineMatrix from '@/app/(cockpit)/_design/RevenueHeadlineMatrix';
 import RoomsInHouseStripe from '@/app/(cockpit)/_design/RoomsInHouseStripe';
 // PBS 2026-07-17: ConclusionBlock removed — Daily Briefing moved to /revenue/briefing.
 // import ConclusionBlock from '@/app/_components/ConclusionBlock';
@@ -614,32 +615,14 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
       tabs={hodTabs}
     >
-      {tiles.length > 0 && (
-        <div style={fullRow}>
-          <Container title="Headline · Today" subtitle={`${todayIso} (${PROPERTY_TZ}) · money tiles NET (excl. 10% VAT + 10% service charge)`} density="compact">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-              {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-            </div>
-          </Container>
-        </div>
-      )}
-
-      {/* PBS 2026-07-15: Yesterday parallel stripe — mirrors the Today stripe exactly (OCC · ADR · RevPAR · Revenue · New bookings · Cancellations · Pickup net). */}
-      {yesterdayTiles.length > 0 && (
-        <div style={fullRow}>
-          <Container title="Headline · Yesterday" subtitle={`${yesterdayIso} (${PROPERTY_TZ}) · money tiles NET (excl. 10% VAT + 10% service charge) · calendar day just closed`} density="compact">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-              {yesterdayTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-            </div>
-          </Container>
-        </div>
-      )}
-
-      {/* PBS 2026-08-21: Month-to-date stripe · self-contained · sits below Yesterday. */}
-      <RevenueMtdStripe propertyId={pid} />
-
-      {/* PBS 2026-08-21: Year-to-date stripe · self-contained · sits below MTD. */}
-      <RevenueYtdStripe propertyId={pid} />
+      {/* PBS 2026-08-24: the four "Headline · <period>" stripes (Today · Yesterday ·
+          MTD · YTD) are now ONE matrix — metrics down, periods across. Each stripe
+          used its own auto-fit grid with 8/7/6/6 tiles, so the columns resolved to
+          different widths and OCC/ADR/RevPAR never lined up between them; long
+          labels truncated and wide LY pills overlapped the footnote. Same 27
+          values, same queries. MTD/YTD are fetched inside the component (as the
+          retired stripes did), so this Promise.all is untouched. */}
+      <RevenueHeadlineMatrix propertyId={pid} todayTiles={tiles} yesterdayTiles={yesterdayTiles} />
 
       {/* PBS 2026-08-21: Rooms in house · 30d trend (migrated from /revenue/pulse) sits below YTD stripe. */}
       <RoomsInHouseStripe propertyId={pid} />
