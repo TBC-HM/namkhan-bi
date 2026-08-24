@@ -18,7 +18,9 @@
 import { redirect, notFound } from 'next/navigation';
 import TenantLink from '@/components/nav/TenantLink';
 import DashboardPage from '@/app/(cockpit)/_design/layout/DashboardPage';
+import type { DashboardTab } from '@/app/(cockpit)/_design/types';
 import { getDeptCfg, NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import type { DeptSlug } from '@/lib/dept-cfg/types';
 
 export const dynamic = 'force-dynamic';
@@ -93,8 +95,22 @@ export default function CatchAllPropertyPage({ params, searchParams }: Props) {
     ? subSlug.charAt(0).toUpperCase() + subSlug.slice(1).replace(/-/g, ' ')
     : deptLabel;
 
+  // Rewrite dept top-strip tabs to tenant-scoped hrefs so the nav stays
+  // visible when drilling into any catch-all sub-page.
+  const subPages = rewriteSubPagesForProperty(
+    (cfg as { subPages?: { label: string; href: string }[] }).subPages ?? [],
+    propertyId
+  );
+  const currentHref = '/h/' + propertyId + pathTail;
+  const tabs: DashboardTab[] = subPages.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href === currentHref,
+  }));
+
   return (
-    <DashboardPage title={routeLabel}>
+    <DashboardPage title={routeLabel} tabs={tabs.length ? tabs : undefined}>
       <div style={{ padding: 18, fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', maxWidth: 760, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, gridColumn: '1 / -1' }}>
         <p style={{ marginTop: 0 }}>
           This {deptLabel.toLowerCase()} page is part of {propertyLabel}&apos;s navigation but
@@ -106,14 +122,14 @@ export default function CatchAllPropertyPage({ params, searchParams }: Props) {
         </p>
         <p style={{ color: 'var(--ink-mute)' }}>
           <strong>HoD:</strong> {deptHod} — chat from{' '}
-          <TenantLink href={`/h/${propertyId}/${deptSlug}`} style={{ color: 'var(--brass)' }}>
+          <TenantLink href={'/h/' + propertyId + '/' + deptSlug} style={{ color: 'var(--brass)' }}>
             /h/{propertyId}/{deptSlug}
           </TenantLink>
           .
         </p>
         <p style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-xs)', marginBottom: 0 }}>
           Wiring this page = the same pattern as{' '}
-          <TenantLink href={`/h/${propertyId}/finance/pnl`} style={{ color: 'var(--brass)' }}>
+          <TenantLink href={'/h/' + propertyId + '/finance/pnl'} style={{ color: 'var(--brass)' }}>
             /h/{propertyId}/finance/pnl
           </TenantLink>{' '}
           (the reference per-property implementation).
