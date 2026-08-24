@@ -69,8 +69,8 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
           padding: '12px 14px',
           fontSize: 'var(--t-sm)',
           color: 'var(--ink-soft)',
-          background: 'var(--paper-warm)',
-          border: '1px solid var(--paper-deep)',
+          background: 'var(--tbl-bg, #FFFFFF)',
+          border: '1px solid var(--tbl-border, #E6DFCC)',
           borderLeft: '3px solid var(--brass)',
           borderRadius: 6,
         }}
@@ -92,7 +92,7 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
             That's the F&amp;B / non-resident bill pattern.
           </li>
         </ul>
-        <div style={{ marginTop: 8, fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
+        <div style={{ marginTop: 8, fontSize: 'var(--t-xs)', color: 'var(--tbl-fg-mute, #5A5A5A)' }}>
           💡 <strong>Drilldown:</strong> PMS doesn&apos;t give us per-account transactions,
           but we <em>do</em> have the matching Poster POS receipts (same calendar day).
           {' '}<strong>{stats.pos_walkins_matched.toLocaleString()}</strong> of
@@ -121,8 +121,8 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
       {/* ─── Filters strip ────────────────────────────────────────── */}
       <div style={{
         display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end',
-        padding: 10, background: 'var(--paper-warm)',
-        border: '1px solid var(--paper-deep)', borderRadius: 6,
+        padding: 10, background: 'var(--tbl-bg, #FFFFFF)',
+        border: '1px solid var(--tbl-border, #E6DFCC)', borderRadius: 6,
       }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <span className="t-eyebrow">Status (named)</span>
@@ -182,29 +182,29 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
                       {a.account_name}
                     </a>
                   </td>
-                  <td style={{ fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.house_account_id}</td>
+                  <td style={{ fontFamily: 'var(--mono)', color: 'var(--tbl-fg-mute, #5A5A5A)' }}>{a.house_account_id}</td>
                   <td>
                     <span style={{
                       padding: '1px 6px', borderRadius: 3,
                       fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                      background: a.status === 'open' ? 'rgba(45,106,79,0.15)' : 'var(--paper-deep)',
-                      color: a.status === 'open' ? 'var(--moss, #2D6A4F)' : 'var(--ink-mute)',
+                      background: a.status === 'open' ? 'rgba(45,106,79,0.15)' : 'var(--tbl-border, #E6DFCC)',
+                      color: a.status === 'open' ? 'var(--moss, #2D6A4F)' : 'var(--tbl-fg-mute, #5A5A5A)',
                     }}>
                       {a.status}
                     </span>
                   </td>
                   <td style={{ fontFamily: 'var(--mono)', color: 'var(--ink-soft)' }}>{a.date_created ?? '—'}</td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
+                  <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--tbl-fg-mute, #5A5A5A)' }}>
                     {a.balance == null ? <span title="Not in ETL yet — see banner">—</span> : a.balance.toFixed(0)}
                   </td>
-                  <td style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--tbl-fg-mute, #5A5A5A)' }}>
                     <span title="Will populate when bank.transactions is wired">pending bank join</span>
                   </td>
                 </tr>
               ))}
               {filteredNamed.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 18, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
+                  <td colSpan={6} style={{ padding: 18, color: 'var(--tbl-fg-mute, #5A5A5A)', fontStyle: 'italic', textAlign: 'center' }}>
                     No named accounts match the current filter.
                   </td>
                 </tr>
@@ -282,10 +282,10 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
                         target="_blank" rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         title="Open in PMS"
-                        style={{ marginLeft: 8, color: 'var(--ink-mute)', textDecoration: 'none' }}
+                        style={{ marginLeft: 8, color: 'var(--tbl-fg-mute, #5A5A5A)', textDecoration: 'none' }}
                       >↗</a>
                     </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', color: hasPos ? 'var(--ink)' : 'var(--ink-mute)' }}>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', color: hasPos ? 'var(--tbl-fg, #1B1B1B)' : 'var(--tbl-fg-mute, #5A5A5A)' }}>
                       {pos?.receipts_n ?? 0}
                     </td>
                     <td style={{ textAlign: 'right', fontFamily: 'var(--mono)' }}>
@@ -300,7 +300,7 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
                     <td style={{ color: 'var(--ink-soft)', fontSize: 'var(--t-xs)' }}>
                       {pos?.top_method ?? '—'}
                     </td>
-                    <td style={{ color: a.status === 'open' ? 'var(--moss, #2D6A4F)' : 'var(--ink-mute)' }}>
+                    <td style={{ color: a.status === 'open' ? 'var(--moss, #2D6A4F)' : 'var(--tbl-fg-mute, #5A5A5A)' }}>
                       {a.status}
                     </td>
                   </tr>
@@ -308,7 +308,7 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
               })}
               {filteredWalkin.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ padding: 18, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
+                  <td colSpan={8} style={{ padding: 18, color: 'var(--tbl-fg-mute, #5A5A5A)', fontStyle: 'italic', textAlign: 'center' }}>
                     No walk-in accounts match the current search.
                   </td>
                 </tr>
@@ -323,7 +323,7 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
               style={{
                 padding: '6px 14px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
                 letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-                background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)',
+                background: 'var(--tbl-bg, #FFFFFF)', border: '1px solid var(--tbl-border, #E6DFCC)',
                 borderRadius: 4, cursor: 'pointer',
               }}
             >
@@ -339,10 +339,10 @@ export default function HouseAccountsSection({ named, walkin, stats, posByHa, pr
         fontSize: 'var(--t-xs)',
         color: 'var(--ink-soft)',
         background: 'var(--paper)',
-        border: '1px dashed var(--paper-deep)',
+        border: '1px dashed var(--tbl-border, #E6DFCC)',
         borderRadius: 6,
       }}>
-        <strong style={{ color: 'var(--ink)' }}>What we need before bank reconciliation works —</strong>
+        <strong style={{ color: 'var(--tbl-fg, #1B1B1B)' }}>What we need before bank reconciliation works —</strong>
         <ol style={{ margin: '6px 0 0 18px', padding: 0 }}>
           <li>
             <strong>ETL extension:</strong> call PMS <code>getHouseAccount(accountID)</code> per
@@ -387,8 +387,8 @@ function Kpi({ value, label, hint, warn, tone }: {
       title={hint}
       style={{
         padding: 12,
-        background: 'var(--paper-warm)',
-        border: '1px solid var(--paper-deep)',
+        background: 'var(--tbl-bg, #FFFFFF)',
+        border: '1px solid var(--tbl-border, #E6DFCC)',
         borderLeft: `3px solid ${accent}`,
         borderRadius: 6,
       }}
@@ -396,12 +396,12 @@ function Kpi({ value, label, hint, warn, tone }: {
       <div style={{
         fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
         letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-        color: 'var(--ink-mute)',
+        color: 'var(--tbl-fg-mute, #5A5A5A)',
       }}>{label}</div>
       <div style={{
         marginTop: 4,
         fontSize: 'var(--t-lg)', fontWeight: 600,
-        color: warn ? 'var(--ink-mute)' : tone === 'brass' ? 'var(--brass)' : 'var(--ink)',
+        color: warn ? 'var(--tbl-fg-mute, #5A5A5A)' : tone === 'brass' ? 'var(--brass)' : 'var(--tbl-fg, #1B1B1B)',
         fontVariantNumeric: 'tabular-nums',
       }}>{value}</div>
     </div>
