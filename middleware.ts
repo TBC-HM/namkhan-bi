@@ -55,6 +55,12 @@ export async function middleware(req: NextRequest) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'auth required' }, { status: 401 })
     }
+    // Let public surfaces through without redirecting — PUBLIC_PATHS was defined
+    // but never checked, causing /login → /login?next=/login infinite loops when
+    // session cookies are invalid. Fixed 2026-08-24.
+    if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p))) {
+      return res
+    }
     const url = req.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('next', pathname)
@@ -110,4 +116,5 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
+
 

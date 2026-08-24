@@ -251,18 +251,39 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // so P&L/Ledger/Transactions/Budget are visible even before you click Finance.
   {
     parentHref: '/finance/pnl',
-    // PBS 2026-08-22 · Banks + POS moved to /finance/transactions sub-sub-strip;
-    // Costs + Suppliers + Planning inserted between Transactions and Budget.
-    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/costs', '/finance/suppliers', '/finance/planning', '/finance/budget', '/finance/studio'],
+    // PBS 2026-08-22 · Banks + POS moved to /finance/transactions sub-sub-strip.
+    // PBS 2026-08-24 · Budget + Studio moved under Planning sub-sub-strip;
+    //                  Suppliers moved under Costs sub-sub-strip.
+    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/costs', '/finance/planning'],
     tabs: [
       { label: 'P&L',          href: '/finance/pnl'          },
       { label: 'Ledger',       href: '/finance/ledger'       },
       { label: 'Transactions', href: '/finance/transactions' },
       { label: 'Costs',        href: '/finance/costs'        },
-      { label: 'Suppliers',    href: '/finance/suppliers'    },
       { label: 'Planning',     href: '/finance/planning'     },
-      { label: 'Budget',       href: '/finance/budget'       },
-      { label: 'Studio',       href: '/finance/studio'       },
+    ],
+  },
+
+  // ─── Finance · Costs sub-sub-strip · PBS 2026-08-24 ─────────
+  // Suppliers surfaces as a child of Costs, mirroring Transactions → Banks/POS.
+  {
+    parentHref: '/finance/costs',
+    members: ['/finance/costs', '/finance/suppliers'],
+    tabs: [
+      { label: 'Costs',     href: '/finance/costs'     },
+      { label: 'Suppliers', href: '/finance/suppliers'  },
+    ],
+  },
+
+  // ─── Finance · Planning sub-sub-strip · PBS 2026-08-24 ──────
+  // Budget + Studio live under Planning so the top strip stays clean.
+  {
+    parentHref: '/finance/planning',
+    members: ['/finance/planning', '/finance/budget', '/finance/studio'],
+    tabs: [
+      { label: 'Planning', href: '/finance/planning' },
+      { label: 'Budget',   href: '/finance/budget'   },
+      { label: 'Studio',   href: '/finance/studio'   },
     ],
   },
 
@@ -439,3 +460,4 @@ export function prefixTabHref(pathname: string, href: string): string {
   if (href.startsWith('/'))  return tenantPrefix + href;
   return href;
 }
+
