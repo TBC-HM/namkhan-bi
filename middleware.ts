@@ -37,6 +37,37 @@ function decodeJwtPayload(token: string): Record<string, unknown> {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  // ADR-306/307 restore (2026-08-24): this exemption block was destroyed as
+  // collateral damage by 439979a5 (2026-08-22 emergency redirect revert), which
+  // left every /api/* route 401'd before it could present its own secret —
+  // freezing deploy.deployments at 2026-08-22 11:39 and killing the gmail,
+  // newsletter and health-sweep crons. Restored verbatim from 63a12396 (last
+  // known-good), plus /api/health which ADR-306 named explicitly.
+  // Each route below enforces its OWN secret internally; middleware must not
+  // pre-empt that. Keep this block ABOVE the Supabase client construction.
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api/cron') ||
+    pathname.startsWith('/api/cockpit/webhooks') ||
+    pathname.startsWith('/api/cockpit/docs/backup') || // CI pre-deploy backup
+    pathname.startsWith('/api/cockpit/health-sweep') || // bug #157 2026-08-03: cron job 188 — internal Bearer gate lives inside the route
+    pathname === '/api/health' || // ADR-306: deploy-health probe, both hostnames
+    pathname.startsWith('/api/auth/') || // login / request-access / callback exchange
+    pathname.startsWith('/api/marketing/media/preview') || // PBS 2026-07-14
+    pathname.startsWith('/api/marketing/contacts/extract') || // PBS 2026-07-16 · cron+admin gate lives inside the route
+    pathname.startsWith('/api/marketing/gmail/scan-replies') ||
+    pathname.startsWith('/api/newsletter/refire-broadcasts') || // job 153 was middleware-401-dead; x-cron-secret gate lives inside the route
+    pathname.startsWith('/api/marketing/gmail/extract-shared/') || // job 152 was middleware-401-dead; internal gate lives inside the route
+    pathname.startsWith('/api/public/') || // PBS 2026-07-16 (Feature B): public guest confirmation POST
+    pathname.startsWith('/api/sales/leads/webhook') || // sales brief A7 2026-07-30: vendor webhook — x-webhook-secret gate inside route
+    pathname.startsWith('/api/sales/prospects/import') || // sales brief A7 2026-07-30: server-to-server import — secret gate inside route
+    pathname.startsWith('/api/p/') || // PBS 2026-07-16: guest-side /p/[token] view + block tracking
+    pathname.startsWith('/api/room/') || // dataroom-module-v1: guest item view/download (token-gated in route)
+    pathname === '/api/website/sitemap.xml' || // website-module-v1-slice-cms4-seo: public crawler access (protected_path_decisions id=7)
+    pathname === '/api/website/robots.txt' || // website-module-v1-slice-cms4-seo: public crawler access (protected_path_decisions id=7)
+    PUBLIC_PATHS.some(p => pathname.startsWith(p))
+  ) return NextResponse.next()
+
   let res = NextResponse.next({ request: { headers: req.headers } })
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -116,5 +147,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
-
-
