@@ -65,8 +65,21 @@ It also says "PostgREST exposes only public" — 24 schemas are exposed
     Check which identity pushed: git log --format='%ae'.
   · pg_cron — reports succeeded 1440/1440 while doing nothing.
   · fn_loop_doctor() — says "queue ok" when the queue was emptied FALSELY.
-  · ai_token_meter — no rows since 2026-08-20 while builders still run.
-    You cannot currently see a spend runaway coming.
+  · ai_token_meter — works, but on an HOURLY LAG. costs-ingest-hourly (cron
+    176, ":25 past the hour") backfills rows stamped with the real call time,
+    so a snapshot taken between ingests looks empty. Do not call it dead
+    without checking cron 176's last run. NOTE: there is a genuine hole for
+    2026-08-21..23 (no rows at all) that is still unexplained.
+  · CI green != typechecks. next.config.js sets ignoreBuildErrors:true and
+    ignoreDuringBuilds:true, so `next build` SUCCEEDS on type errors. Only
+    the separate `npx tsc --noEmit` step is honest.
+
+  BEFORE PROMOTING TO PRODUCTION (deployment doc v23 §15): productionBranch
+  is `production`; pushes to main are PREVIEWS only. Promote by PATCHing
+  /repos/{owner}/{repo}/git/refs/heads/production with the FULL 40-char SHA.
+  First verify: detached worktrees at origin/main AND origin/production, run
+  both prebuild guards + `npx tsc --noEmit` in each, and COMPARE. Never
+  promote a main that is redder than production.
 
   PBS standing order (memory 882): CHECK THE LIVE DEPLOYMENT BEFORE EVERY
   CHANGE, AND NEVER DESTROY. Create forward — new function + cron.alter_job
