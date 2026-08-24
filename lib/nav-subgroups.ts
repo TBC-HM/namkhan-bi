@@ -40,10 +40,10 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     members: ['/revenue/rooms', '/revenue/channels', '/revenue/rateplans', '/revenue/markets'],
     // PBS 2026-07-09 pm: Performance order — Channels · Rate Plans · Markets · Rooms.
     tabs: [
-      { label: 'Channels',   href: '/revenue/channels'  },
-      { label: 'Rate Plans', href: '/revenue/rateplans' },
-      { label: 'Markets',    href: '/revenue/markets'   },
-      { label: 'Rooms',      href: '/revenue/rooms'     },
+      { label: 'Channels',   href: '/h/260955/revenue/channels'  },
+      { label: 'Rate Plans', href: '/h/260955/revenue/rateplans' },
+      { label: 'Markets',    href: '/h/260955/revenue/markets'   },
+      { label: 'Rooms',      href: '/h/260955/revenue/rooms'     },
     ],
   },
   {
@@ -57,10 +57,10 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     // PBS 2026-07-09 pm (reverted): Strategy pulled BACK OUT of Market & Control.
     // Belongs only under /holding/ceo subPages.
     tabs: [
-      { label: 'Comp Set',   href: '/revenue/compset'              },
-      { label: 'Comp Rates', href: '/revenue/lighthouse/overview'  },
-      { label: 'Parity',     href: '/revenue/parity'               },
-      { label: 'Leakage',    href: '/revenue/leakage'              },
+      { label: 'Comp Set',   href: '/h/260955/revenue/compset'              },
+      { label: 'Comp Rates', href: '/h/260955/revenue/lighthouse/overview'  },
+      { label: 'Parity',     href: '/h/260955/revenue/parity'               },
+      { label: 'Leakage',    href: '/h/260955/revenue/leakage'              },
     ],
   },
 
@@ -70,8 +70,8 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     parentHref: '/revenue/forecast',
     members: ['/revenue/forecast', '/revenue/forecast/scenarios'],
     tabs: [
-      { label: 'Forecast',  href: '/revenue/forecast'           },
-      { label: 'Scenarios', href: '/revenue/forecast/scenarios' },
+      { label: 'Forecast',  href: '/h/260955/revenue/forecast'           },
+      { label: 'Scenarios', href: '/h/260955/revenue/forecast/scenarios' },
     ],
   },
 
@@ -124,7 +124,22 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Menus',      href: '/h/260955/operations/menus'      },
     ],
   },
-  // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
+  // ─── Operations · Inventory · Orders sub-strip · PBS 2026-08-24 ──
+  // Requests + Shop moved under Orders (were top-level inventory tabs).
+  {
+    parentHref: '/operations/inventory/orders',
+    members: [
+      '/operations/inventory/orders',
+      '/operations/inventory/requests',
+      '/operations/inventory/shop',
+    ],
+    tabs: [
+      { label: 'Orders',   href: '/h/260955/operations/inventory/orders'   },
+      { label: 'Requests', href: '/h/260955/operations/inventory/requests' },
+      { label: 'Shop',     href: '/h/260955/operations/inventory/shop'     },
+    ],
+  },
+    // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
   // 2026-07-30: + Dishes + Spa (PBS 2026-07-24 pages, registered per inventory
   // completion brief A7 — were direct-URL only).
   {
@@ -139,8 +154,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/inventory/items',
       '/operations/inventory/orders',
       '/operations/inventory/par',
-      '/operations/inventory/requests',
-      '/operations/inventory/shop',
       '/operations/inventory/stock',
       '/operations/inventory/suppliers',
           '/operations/suppliers',
@@ -155,8 +168,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Items',     href: '/h/260955/operations/inventory/items'     },
       { label: 'Orders',    href: '/h/260955/operations/inventory/orders'    },
       { label: 'Par',       href: '/h/260955/operations/inventory/par'       },
-      { label: 'Requests',  href: '/h/260955/operations/inventory/requests'  },
-      { label: 'Shop',      href: '/h/260955/operations/inventory/shop'      },
       { label: 'Stock',     href: '/h/260955/operations/inventory/stock'     },
       { label: 'Suppliers', href: '/h/260955/operations/suppliers' },
     ],
@@ -193,10 +204,10 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/marketing/media',
     ],
     tabs: [
-      { label: 'Compiler',          href: '/marketing/compiler'             },
-      { label: 'Campaigns',         href: '/marketing/campaigns'            },
-      { label: 'Newsletter',        href: '/marketing/content/newsletters'  },
-      { label: 'Media',             href: '/marketing/media'                },
+      { label: 'Compiler',          href: '/h/260955/marketing/compiler'             },
+      { label: 'Campaigns',         href: '/h/260955/marketing/campaigns'            },
+      { label: 'Newsletter',        href: '/h/260955/marketing/content/newsletters'  },
+      { label: 'Media',             href: '/h/260955/marketing/media'                },
     ],
   },
   // PBS 2026-07-21 · Digital sub-strip · YouTube moved here from Channels · SEO restored as 4th tab per PBS
@@ -212,10 +223,10 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
     tabs: [
       // PBS 2026-08-22: "Web" tab renamed to "Analytics"; YouTube moved to Socials sub-strip.
-      { label: 'Analytics', href: '/marketing/digital/web'     },
-      { label: 'Funnels',   href: '/marketing/funnels'         },
-      { label: 'SEO',       href: '/marketing/seo'             },
-      { label: 'Website',   href: '/marketing/website'         },
+      { label: 'Analytics', href: '/h/260955/marketing/digital/web'     },
+      { label: 'Funnels',   href: '/h/260955/marketing/funnels'         },
+      { label: 'SEO',       href: '/h/260955/marketing/seo'             },
+      { label: 'Website',   href: '/h/260955/marketing/website'         },
     ],
   },
   // PBS 2026-07-21 · Channels subgroup deleted — Socials + Digital are now top-strip peers.
@@ -231,8 +242,8 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     parentHref: '/marketing/gallery',
     members: ['/marketing/gallery', '/marketing/docs'],
     tabs: [
-      { label: 'Gallery', href: '/marketing/gallery' },
-      { label: 'Docs',    href: '/marketing/docs'    },
+      { label: 'Gallery', href: '/h/260955/marketing/gallery' },
+      { label: 'Docs',    href: '/h/260955/marketing/docs'    },
     ],
   },
   {
@@ -242,9 +253,9 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     // Kept acquisition landing itself + prospects references.
     members: ['/marketing/acquisition', '/marketing/prospects', '/guest/prospects'],
     tabs: [
-      { label: 'Campaigns', href: '/marketing/campaigns' },
-      { label: 'Funnels',   href: '/marketing/funnels'   },
-      { label: 'Prospects', href: '/guest/prospects'     },
+      { label: 'Campaigns', href: '/h/260955/marketing/campaigns' },
+      { label: 'Funnels',   href: '/h/260955/marketing/funnels'   },
+      { label: 'Prospects', href: '/h/260955/guest/prospects'     },
     ],
   },
   // PBS 2026-07-21: standalone /marketing/offers subgroup removed — its only
