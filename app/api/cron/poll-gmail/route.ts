@@ -177,7 +177,9 @@ export async function GET(request: Request) {
   const sb = getSupabaseAdmin();
   // Fetch active connections
   let query = sb.schema('marketing').from('user_gmail_connections').select('*');
-  if (forceEmail) query = query.eq('email', forceEmail);
+  // Column is gmail_address (NOT email) — conn.email was always undefined,
+  // which silently broke force_email filtering + last_synced_at updates.
+  if (forceEmail) query = query.eq('gmail_address', forceEmail);
   const { data: connections, error: fetchError } = await query;
   if (fetchError) {
     return NextResponse.json({ error: `Failed to fetch connections: ${fetchError.message}` }, { status: 500 });
@@ -188,8 +190,9 @@ export async function GET(request: Request) {
 
   const results: Array<{ email: string; ingested: number; error?: string }> = [];
   for (const conn of connections) {
+    const connEmail: string = conn.gmail_address ?? conn.email ?? '';
     if (conn.paused && !forceEmail) {
-      results.push({ email: conn.email, ingested: 0, error: 'paused' });
+      results.push({ email: connEmail, ingested: 0, error: 'paused' });
       continue;
     }
     // Refresh access token
@@ -199,7 +202,7 @@ export async function GET(request: Request) {
       accessToken = tokens.access_token;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      results.push({ email: conn.email, ingested: 0, error: `Refresh failed: ${msg}` });
+      results.push({ email: connEmail, ingested: 0, error: `Refresh failed: ${msg}` });
       continue;
     }
     // Construct Gmail query
@@ -211,17 +214,17 @@ export async function GET(request: Request) {
       let ingested = 0;
       for (const m of (messageList.messages ?? []).slice(0, 100)) { // cap to 100 messages per run
         const full = await getGmailMessage(accessToken, m.id);
-        const res = await ingestOne(full, conn.email);
+        const res = await ingestOne(full, connEmail);
         if (res.kind === 'inserted') ingested++;
       }
-      // Update last_synced_at
+      // Update last_synced_at (keyed by id — the table has no `email` column)
       await sb.schema('marketing').from('user_gmail_connections').update({
         last_synced_at: new Date().toISOString(),
-      }).eq('email', conn.email);
-      results.push({ email: conn.email, ingested });
+      }).eq('id', conn.id);
+      results.push({ email: connEmail, ingested });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      results.push({ email: conn.email, ingested: 0, error: msg });
+      results.push({ email: connEmail, ingested: 0, error: msg });
     }
   }
 
