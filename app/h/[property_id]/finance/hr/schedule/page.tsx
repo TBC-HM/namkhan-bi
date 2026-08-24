@@ -41,7 +41,7 @@ export default async function PropertyHrSchedulePage({ params, searchParams }: P
     <DashboardPage
       title="HR · Schedule"
       subtitle="Staff scheduling · generate · review · publish"
-      tabs={subPages}
+      tabs={subPages.map((sp) => ({ key: sp.href, label: sp.label, href: sp.href }))}
     >
       {content}
     </DashboardPage>
