@@ -246,28 +246,46 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // (The old /marketing/library standalone subgroup is now merged into Overview
   //  above — Library + Docs live directly under Overview.)
 
-  // ─── Administration (Finance) ─────────────────────────────
-  // PBS 2026-07-07 night: sub-tabs also show on /finance HoD + /finance/overview
-  // so P&L/Ledger/Transactions/Budget are visible even before you click Finance.
+  // ─── Finance landing strip · PBS 2026-08-24 ─────────────────
+  // Shows on the finance HoD + overview landing pages. Three top-level areas:
+  // Acc (accounting) · Costs · Planning. Drilling into any area replaces this
+  // strip with that area's own sub-strip (matched first by findSubGroup).
+  {
+    parentHref: '/finance',
+    members: ['/finance', '/finance/overview'],
+    tabs: [
+      { label: 'Acc',      href: '/h/260955/finance/pnl'      },
+      { label: 'Costs',    href: '/h/260955/finance/costs'    },
+      { label: 'Planning', href: '/h/260955/finance/planning' },
+    ],
+  },
+
+  // ─── Finance · Acc (Accounting) sub-strip · PBS 2026-08-24 ──
+  // P&L · Ledger · Transactions live here. Banks + POS nest one level deeper
+  // via the Transactions sub-sub-strip below.
   {
     parentHref: '/finance/pnl',
-    // PBS 2026-08-22 · Banks + POS moved to /finance/transactions sub-sub-strip.
-    // PBS 2026-08-24 · Budget + Studio moved under Planning sub-sub-strip;
-    //                  Suppliers moved under Costs sub-sub-strip.
-    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/costs', '/finance/planning'],
-    // PBS 2026-08-24: hardcode /h/260955/ prefix so bare-URL navigation never
-    // occurs — prefixTabHref cross-tenant-rewrites for Donna automatically.
+    members: ['/finance/pnl', '/finance/ledger', '/finance/transactions'],
     tabs: [
       { label: 'P&L',          href: '/h/260955/finance/pnl'          },
       { label: 'Ledger',       href: '/h/260955/finance/ledger'       },
       { label: 'Transactions', href: '/h/260955/finance/transactions' },
-      { label: 'Costs',        href: '/h/260955/finance/costs'        },
-      { label: 'Planning',     href: '/h/260955/finance/planning'     },
     ],
   },
 
-  // ─── Finance · Costs sub-sub-strip · PBS 2026-08-24 ─────────
-  // Suppliers surfaces as a child of Costs, mirroring Transactions → Banks/POS.
+  // ─── Finance · Transactions sub-strip · PBS 2026-08-22 ──────
+  // Banks + POS are children of Transactions.
+  {
+    parentHref: '/finance/transactions',
+    members: ['/finance/transactions', '/finance/banks', '/finance/pos'],
+    tabs: [
+      { label: 'Transactions', href: '/h/260955/finance/transactions' },
+      { label: 'Banks',        href: '/h/260955/finance/banks'        },
+      { label: 'POS',          href: '/h/260955/finance/pos'          },
+    ],
+  },
+
+  // ─── Finance · Costs sub-strip · PBS 2026-08-24 ─────────────
   {
     parentHref: '/finance/costs',
     members: ['/finance/costs', '/finance/suppliers'],
@@ -277,8 +295,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
 
-  // ─── Finance · Planning sub-sub-strip · PBS 2026-08-24 ──────
-  // Budget + Studio live under Planning so the top strip stays clean.
+  // ─── Finance · Planning sub-strip · PBS 2026-08-24 ──────────
   {
     parentHref: '/finance/planning',
     members: ['/finance/planning', '/finance/budget', '/finance/studio'],
@@ -286,18 +303,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Planning', href: '/h/260955/finance/planning' },
       { label: 'Budget',   href: '/h/260955/finance/budget'   },
       { label: 'Studio',   href: '/h/260955/finance/studio'   },
-    ],
-  },
-
-  // ─── Administration · Transactions sub-sub-strip ───────────
-  // PBS 2026-08-22 · Banks + POS live here as children of Transactions.
-  {
-    parentHref: '/finance/transactions',
-    members: ['/finance/transactions', '/finance/banks', '/finance/pos'],
-    tabs: [
-      { label: 'Transactions', href: '/h/260955/finance/transactions' },
-      { label: 'Banks',        href: '/h/260955/finance/banks'        },
-      { label: 'POS',          href: '/h/260955/finance/pos'          },
     ],
   },
 
