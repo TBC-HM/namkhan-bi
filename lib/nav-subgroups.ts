@@ -141,7 +141,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/inventory/par',
       '/operations/inventory/requests',
       '/operations/inventory/shop',
-      '/operations/inventory/spa',
       '/operations/inventory/stock',
       '/operations/inventory/suppliers',
           '/operations/suppliers',
@@ -158,9 +157,18 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Par',       href: '/h/260955/operations/inventory/par'       },
       { label: 'Requests',  href: '/h/260955/operations/inventory/requests'  },
       { label: 'Shop',      href: '/h/260955/operations/inventory/shop'      },
-      { label: 'Spa',       href: '/h/260955/operations/inventory/spa'       },
       { label: 'Stock',     href: '/h/260955/operations/inventory/stock'     },
       { label: 'Suppliers', href: '/h/260955/operations/suppliers' },
+    ],
+  },
+
+  // ─── Operations · Spa department sub-strip · PBS 2026-08-24 ──
+  // Analytics tab moved here from inventory strip; accessible from Spa dept page.
+  {
+    parentHref: '/operations/spa',
+    members: ['/operations/spa', '/operations/inventory/spa'],
+    tabs: [
+      { label: 'Analytics', href: '/h/260955/operations/inventory/spa' },
     ],
   },
 
