@@ -32,7 +32,7 @@ import HodTasksList  from '@/app/revenue/_components/HodTasksList';
 import ShortcutsPanel, { type Shortcut } from '@/app/revenue/_components/ShortcutsPanel';
 import ExternalLinksPanel, { type ExternalLink } from '@/app/revenue/_components/ExternalLinksPanel';
 import {
-  ScheduledReportsTable, SendLogTable,
+  ScheduledReportsTable,
   type ScheduledRow, type SendLogRow,
 } from '@/app/revenue/_components/RevenueReportsTables';
 import ConclusionBlock, { type Insight } from '@/app/_components/ConclusionBlock';
@@ -83,7 +83,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   const allowedTemplateKeys = reportOptions.map((o) => o.value);
   const templateFilter = allowedTemplateKeys.length > 0 ? allowedTemplateKeys : ['__none__'];
 
-  const [dueTasksRes, scheduledRes, sendsRes, myReportsRes, shortcutsRes] = await Promise.all([
+  const [dueTasksRes, scheduledRes, myReportsRes, shortcutsRes] = await Promise.all([
     supabase
       .from('v_hod_tasks_due')
       .select('id', { count: 'exact', head: true })
@@ -97,11 +97,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       .order('next_fire_at', { ascending: true }).limit(500),
     supabase.from('v_revenue_report_sends')
       .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
-      .eq('property_id', pid)
-      .in('template_key', templateFilter)
-      .limit(200),
-    supabase.from('v_revenue_report_sends')
-      .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
       .eq('property_id', pid).eq('recipient_email', DEFAULT_USER_EMAIL)
       .in('template_key', templateFilter)
       .order('sent_at', { ascending: false }).limit(20),
@@ -113,7 +108,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
 
   const dueTasksCount = dueTasksRes.count ?? 0;
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
-  const sendLogRows   = (sendsRes.data   ?? []) as SendLogRow[];
   const myReportRows  = (myReportsRes.data ?? []) as SendLogRow[];
   const allShortcuts  = (shortcutsRes.data ?? []) as Array<Shortcut & { kind?: string }>;
   const shortcuts     = allShortcuts.filter((s) => (s.kind ?? 'internal') === 'internal');
@@ -228,13 +222,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </Container>
       </div>
 
-      <div style={fullRow}>
-        <Container title="Reports · send log"
-                   subtitle="Every report ever sent · sort any column · bulk-delete with checkboxes"
-                   density="compact">
-          <SendLogTable rows={sendLogRows} />
-        </Container>
-      </div>
     </DashboardPage>
   );
 }
