@@ -149,15 +149,25 @@ async function ingestOne(msg: GmailMessageFull, fallbackMailbox: string): Promis
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  // Auth — accepts BOTH contracts (sales_module round 3, 2026-08-24):
+  //  - Vercel-cron style: ?key=CRON_SECRET or Authorization: Bearer CRON_SECRET
+  //  - pg_cron platform style: x-cron-secret header (or ?secret=) matching
+  //    CRON_SHARED_SECRET (CRON_SECRET fallback) — same gate as every other
+  //    /api/cron/* shim. The pg_cron job sales-gmail-poll-15min sends
+  //    x-cron-secret with the vault CRON_SHARED_SECRET; the previous
+  //    Bearer-only gate 401'd it and killed the mail spine.
   const key = url.searchParams.get('key');
   const authHeader = request.headers.get('authorization');
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
+  const secret = process.env.CRON_SECRET ?? '';
+  const sharedSecret = process.env.CRON_SHARED_SECRET ?? process.env.CRON_SECRET ?? '';
+  const cronHeader = request.headers.get('x-cron-secret') ?? url.searchParams.get('secret');
+  if (!secret && !sharedSecret) {
     return NextResponse.json({ error: 'CRON_SECRET not set' }, { status: 500 });
   }
-  const keyMatch = key === secret;
-  const bearerMatch = authHeader?.startsWith('Bearer ') && authHeader.slice(7) === secret;
-  if (!keyMatch && !bearerMatch) {
+  const keyMatch = !!secret && key === secret;
+  const bearerMatch = !!secret && !!authHeader && authHeader.startsWith('Bearer ') && authHeader.slice(7) === secret;
+  const sharedMatch = !!sharedSecret && cronHeader === sharedSecret;
+  if (!keyMatch && !bearerMatch && !sharedMatch) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
