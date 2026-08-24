@@ -139,6 +139,16 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Shop',     href: '/h/260955/operations/inventory/shop'     },
     ],
   },
+  // ─── Operations · Restaurant dept sub-strip · PBS 2026-08-24 ──
+  // Dishes analytics page surfaces under Departments / Restaurant.
+  {
+    parentHref: '/operations/restaurant',
+    members: ['/operations/restaurant', '/operations/inventory/dishes'],
+    tabs: [
+      { label: 'Analytics', href: '/h/260955/operations/inventory/dishes' },
+    ],
+  },
+
     // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
   // 2026-07-30: + Dishes + Spa (PBS 2026-07-24 pages, registered per inventory
   // completion brief A7 — were direct-URL only).
@@ -150,7 +160,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/inventory/capex',
       '/operations/inventory/catalog',
       '/operations/inventory/counts',
-      '/operations/inventory/dishes',
       '/operations/inventory/items',
       '/operations/inventory/orders',
       '/operations/inventory/par',
@@ -164,7 +173,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Capex',     href: '/h/260955/operations/inventory/capex'     },
       { label: 'Catalog',   href: '/h/260955/operations/inventory/catalog'   },
       { label: 'Counts',    href: '/h/260955/operations/inventory/counts'    },
-      { label: 'Dishes',    href: '/h/260955/operations/inventory/dishes'    },
       { label: 'Items',     href: '/h/260955/operations/inventory/items'     },
       { label: 'Orders',    href: '/h/260955/operations/inventory/orders'    },
       { label: 'Par',       href: '/h/260955/operations/inventory/par'       },
@@ -284,11 +292,13 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // via the Transactions sub-sub-strip below.
   {
     parentHref: '/finance/pnl',
-    members: ['/finance/pnl', '/finance/ledger', '/finance/transactions'],
+    members: ['/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/banks', '/finance/pos'],
     tabs: [
       { label: 'P&L',          href: '/h/260955/finance/pnl'          },
       { label: 'Ledger',       href: '/h/260955/finance/ledger'       },
       { label: 'Transactions', href: '/h/260955/finance/transactions' },
+      { label: 'Banks',        href: '/h/260955/finance/banks'        },
+      { label: 'POS',          href: '/h/260955/finance/pos'          },
     ],
   },
 
@@ -325,6 +335,34 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
 
+  // ─── Finance · HR · Schedule sub-sub-strip · PBS 2026-08-24 ──
+  {
+    parentHref: '/finance/hr/schedule',
+    members: ['/finance/hr/schedule', '/finance/hr/schedule/planer', '/finance/hr/schedule/dayview'],
+    tabs: [
+      { label: 'Planer',  href: '/h/260955/finance/hr/schedule/planer'  },
+      { label: 'Dayview', href: '/h/260955/finance/hr/schedule/dayview' },
+    ],
+  },
+
+  // ─── Finance · HR · Lifecycle sub-sub-strip · PBS 2026-08-24 ──
+  {
+    parentHref: '/finance/hr/lifecycle',
+    members: [
+      '/finance/hr/lifecycle',
+      '/finance/hr/recruitment',
+      '/finance/hr/onboarding',
+      '/finance/hr/offboarding',
+      '/finance/hr/warning',
+    ],
+    tabs: [
+      { label: 'Recruitment', href: '/h/260955/finance/hr/recruitment' },
+      { label: 'Onboarding',  href: '/h/260955/finance/hr/onboarding'  },
+      { label: 'Offboarding', href: '/h/260955/finance/hr/offboarding' },
+      { label: 'Warning',     href: '/h/260955/finance/hr/warning'     },
+    ],
+  },
+
   // ─── Finance · HR sub-strip ─────────────────────────────────
   // PBS 2026-07-09 pm: HR area sub-menu — was missing entirely for both
   // properties. Donna Finance HR is Factorial-fed and much richer than
@@ -333,25 +371,21 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     parentHref: '/finance/hr',
     members: [
       '/finance/hr',
+      '/finance/hr/register',
       '/finance/hr/attendance',
       '/finance/hr/data',
       '/finance/hr/holidays',
       '/finance/hr/lifecycle',
-      '/finance/hr/onboarding',
-      '/finance/hr/offboarding',
       '/finance/hr/schedule',
-      '/finance/hr/recruitment',
     ],
     tabs: [
-      { label: 'HoD',          href: '/h/260955/finance/hr'              },
-      { label: 'Schedule',     href: '/h/260955/finance/hr/schedule'     },
-      { label: 'Attendance',   href: '/h/260955/finance/hr/attendance'   },
-      { label: 'Holidays',     href: '/h/260955/finance/hr/holidays'     },
-      { label: 'Lifecycle',    href: '/h/260955/finance/hr/lifecycle'    },
-      { label: 'Onboarding',   href: '/h/260955/finance/hr/onboarding'   },
-      { label: 'Offboarding',  href: '/h/260955/finance/hr/offboarding'  },
-      { label: 'Recruitment',  href: '/h/260955/finance/hr/recruitment'  },
-      { label: 'Data',         href: '/h/260955/finance/hr/data'         },
+      { label: 'HoD',        href: '/h/260955/finance/hr'            },
+      { label: 'Register',   href: '/h/260955/finance/hr/register'   },
+      { label: 'Schedule',   href: '/h/260955/finance/hr/schedule'   },
+      { label: 'Attendance', href: '/h/260955/finance/hr/attendance' },
+      { label: 'Holidays',   href: '/h/260955/finance/hr/holidays'   },
+      { label: 'Lifecycle',  href: '/h/260955/finance/hr/lifecycle'  },
+      { label: 'Data',       href: '/h/260955/finance/hr/data'       },
     ],
   },
   // ─── Revenue HoD sub-strip (Rate Desk + Forecast) ───────────
