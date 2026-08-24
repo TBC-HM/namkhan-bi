@@ -72,7 +72,7 @@ async function signUpload(file: File): Promise<{ ok: boolean; staging_bucket?: s
   return j;
 }
 
-async function ingest(payload: { staging_bucket: string; staging_path: string; file_name: string; mime: string; title?: string; doc_type?: string; doc_subtype?: string }): Promise<{ ok: boolean; doc_id?: string; error?: string }> {
+async function ingest(payload: { staging_bucket: string; staging_path: string; file_name: string; mime: string; title?: string; doc_type?: string; doc_subtype?: string; property_id?: number }): Promise<{ ok: boolean; doc_id?: string; error?: string }> {
   const r = await fetch('/api/docs/ingest', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -83,7 +83,7 @@ async function ingest(payload: { staging_bucket: string; staging_path: string; f
   return { ok: true, doc_id: j.doc?.doc_id ?? j.doc_id };
 }
 
-async function uploadOne(file: File, extra: { title?: string; doc_type?: string; doc_subtype?: string; onStatus?: (s: RowStatus) => void }): Promise<{ ok: boolean; doc_id?: string; error?: string }> {
+async function uploadOne(file: File, extra: { title?: string; doc_type?: string; doc_subtype?: string; propertyId?: number; onStatus?: (s: RowStatus) => void }): Promise<{ ok: boolean; doc_id?: string; error?: string }> {
   extra.onStatus?.('signing');
   const sign = await signUpload(file);
   if (!sign.ok || !sign.signed_url || !sign.staging_bucket || !sign.staging_path) {
@@ -101,6 +101,8 @@ async function uploadOne(file: File, extra: { title?: string; doc_type?: string;
     title: extra.title,
     doc_type: extra.doc_type,
     doc_subtype: extra.doc_subtype,
+    // ADR-241: without this the route hard-files every doc to 260955 (Namkhan)
+    property_id: extra.propertyId,
   });
   return ing;
 }
@@ -109,7 +111,7 @@ async function uploadOne(file: File, extra: { title?: string; doc_type?: string;
 //  Multi-upload modal
 // -------------------------------------------------------------------------
 
-function MultiUploadModal({ onClose, onDone, initialFiles }: { onClose: () => void; onDone: (results: { ok: number; failed: number }) => void; initialFiles?: File[] }) {
+function MultiUploadModal({ onClose, onDone, initialFiles, propertyId }: { onClose: () => void; onDone: (results: { ok: number; failed: number }) => void; initialFiles?: File[]; propertyId: number }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<UploadRow[]>([]);
   // Pre-populate from drag-and-drop on the tile
@@ -151,6 +153,7 @@ function MultiUploadModal({ onClose, onDone, initialFiles }: { onClose: () => vo
           title: row.title,
           doc_type: row.doc_type,
           doc_subtype: row.doc_subtype || undefined,
+          propertyId,
           onStatus: (s) => updateRow(row.id, { status: s }),
         });
         if (res.ok) {
@@ -304,7 +307,7 @@ function MultiUploadModal({ onClose, onDone, initialFiles }: { onClose: () => vo
 //  Main component
 // -------------------------------------------------------------------------
 
-export default function LegalQuickActions() {
+export default function LegalQuickActions({ propertyId }: { propertyId: number }) {
   const translateInput = useRef<HTMLInputElement>(null);
   const summarizeInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<ActionMode | null>(null);
@@ -317,7 +320,7 @@ export default function LegalQuickActions() {
     setBusy(mode);
     setResult(null);
     try {
-      const up = await uploadOne(file, { doc_type: 'legal', title: file.name.replace(/\.[^.]+$/, '') });
+      const up = await uploadOne(file, { doc_type: 'legal', title: file.name.replace(/\.[^.]+$/, ''), propertyId });
       if (!up.ok || !up.doc_id) { setResult({ mode, ok: false, error: up.error }); return; }
       const endpoint = mode === 'translate' ? '/api/legal/docs/translate' : '/api/legal/docs/summarize';
       const body = mode === 'translate' ? { doc_id: up.doc_id, to: 'en' } : { doc_id: up.doc_id };
@@ -478,6 +481,7 @@ export default function LegalQuickActions() {
 
       {uploadOpen && (
         <MultiUploadModal
+          propertyId={propertyId}
           onClose={() => { setUploadOpen(false); setTileDragFiles([]); }}
           onDone={(res) => {
             setUploadOpen(false);
