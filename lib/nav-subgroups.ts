@@ -338,10 +338,10 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // ─── Finance · HR · Schedule sub-sub-strip · PBS 2026-08-24 ──
   {
     parentHref: '/finance/hr/schedule',
-    members: ['/finance/hr/schedule', '/finance/hr/schedule/planer', '/finance/hr/schedule/dayview'],
+    members: ['/finance/hr/schedule'],
     tabs: [
-      { label: 'Planer',  href: '/h/260955/finance/hr/schedule/planer'  },
-      { label: 'Dayview', href: '/h/260955/finance/hr/schedule/dayview' },
+      { label: 'Planer',  href: '/h/260955/finance/hr/schedule?tab=planer'  },
+      { label: 'Dayview', href: '/h/260955/finance/hr/schedule?tab=dayview' },
     ],
   },
 
