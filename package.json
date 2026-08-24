@@ -1,10 +1,10 @@
-{
+among{
   "name": "namkhan-bi",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/check-it2-orphans.mjs",
+    "prebuild": "node scripts/check-it2-orphans.mjs && node scripts/guard-invariants.mjs",
     "build": "rm -rf .next && next build",
     "start": "next start",
     "lint": "next lint",
