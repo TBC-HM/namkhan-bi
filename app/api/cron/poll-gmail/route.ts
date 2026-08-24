@@ -122,24 +122,29 @@ async function ingestOne(msg: GmailMessageFull, fallbackMailbox: string): Promis
   const language = detectLanguage(text);
   const source = direction === 'inbound' ? sourceFromMailbox(intendedMailbox) : 'Internal';
 
+  // Insert matches the REAL sales.email_messages schema (mailbox NOT NULL,
+  // from_email/from_name/to_emails/cc_emails/gmail_msg_id) — the previous
+  // rewrite inserted sender_email/triaged_kind/language/source/tags columns
+  // that do not exist, so every ingest errored silently (ingested always 0).
+  void triageResult; void language; void source; // computed for future triage step; not stored here
   const { error } = await sb.schema('sales').from('email_messages').insert({
     property_id: PROPERTY_ID,
     message_id: messageIdHdr,
     thread_id: msg.threadId,
-    sender_email: sender.email,
-    sender_name: sender.name,
-    intended_mailbox: intendedMailbox,
+    in_reply_to: inReplyTo,
     direction,
+    mailbox: intendedMailbox,
+    from_email: sender.email,
+    from_name: sender.name,
+    to_emails: toList,
+    cc_emails: ccList,
     subject,
     body_text: text || null,
     body_html: html || null,
-    triaged_kind: triageResult.kind,
-    triaged_confidence: triageResult.conf,
-    language,
-    source,
     received_at: receivedAt,
-    in_reply_to: inReplyTo,
-    tags: [],
+    gmail_msg_id: msg.id,
+    intended_mailbox: intendedMailbox,
+    ingest_source: 'cron.poll-gmail',
   });
   if (error) return { kind: 'error', error: error.message };
   return { kind: 'inserted' };
@@ -188,7 +193,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ note: 'No gmail connections to poll', processed: [] });
   }
 
-  const results: Array<{ email: string; ingested: number; error?: string }> = [];
+  const results: Array<{ email: string; ingested: number; skipped?: number; errored?: number; error?: string }> = [];
   for (const conn of connections) {
     const connEmail: string = conn.gmail_address ?? conn.email ?? '';
     if (conn.paused && !forceEmail) {
@@ -211,17 +216,20 @@ export async function GET(request: Request) {
     const query = `after:${date}`;
     try {
       const messageList = await listMessages(accessToken, query);
-      let ingested = 0;
+      let ingested = 0, skipped = 0, errored = 0;
+      let firstError: string | undefined;
       for (const m of (messageList.messages ?? []).slice(0, 100)) { // cap to 100 messages per run
         const full = await getGmailMessage(accessToken, m.id);
         const res = await ingestOne(full, connEmail);
         if (res.kind === 'inserted') ingested++;
+        else if (res.kind === 'duplicate') skipped++;
+        else { errored++; if (!firstError) firstError = res.error; }
       }
       // Update last_synced_at (keyed by id — the table has no `email` column)
       await sb.schema('marketing').from('user_gmail_connections').update({
         last_synced_at: new Date().toISOString(),
       }).eq('id', conn.id);
-      results.push({ email: connEmail, ingested });
+      results.push({ email: connEmail, ingested, skipped, errored, ...(firstError ? { error: `first ingest error: ${firstError}` } : {}) });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       results.push({ email: connEmail, ingested: 0, error: msg });
