@@ -119,276 +119,183 @@ function MultiUploadModal({ onClose, onDone, initialFiles }: { onClose: () => vo
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const addFiles = (files: FileList | File[]) => {
-    const arr = Array.from(files);
-    setRows(prev => [
-      ...prev,
-      ...arr.map<UploadRow>(f => ({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        file: f,
-        title: f.name.replace(/\.[^.]+$/, ''),
-        doc_type: DOC_TYPES[0].value,
-        doc_subtype: '',
-        status: 'queued',
-      })),
-    ]);
-  };
+  function addFiles(files: File[]) {
+    const newRows: UploadRow[] = files.map(f => ({
+      id: Math.random().toString(36).slice(2),
+      file: f,
+      title: f.name.replace(/\.[^.]+$/, ''),
+      doc_type: DOC_TYPES[0].value, // default = legal
+      doc_subtype: '',
+      status: 'queued',
+    }));
+    setRows(prev => [...prev, ...newRows]);
+  }
 
-  const patch = (id: string, p: Partial<UploadRow>) => setRows(prev => prev.map(r => r.id === id ? { ...r, ...p } : r));
-  const remove = (id: string) => setRows(prev => prev.filter(r => r.id !== id));
+  function updateRow(id: string, patch: Partial<UploadRow>) {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+  }
 
-  const uploadAll = async () => {
-    if (rows.length === 0 || busy) return;
+  function removeRow(id: string) {
+    setRows(prev => prev.filter(r => r.id !== id));
+  }
+
+  async function doUpload() {
+    if (busy) return;
     setBusy(true);
-    let ok = 0, failed = 0;
+    let ok = 0; let failed = 0;
     for (const row of rows) {
-      if (row.status === 'done') continue;
-      const result = await uploadOne(row.file, {
-        title: row.title.trim() || undefined,
-        doc_type: row.doc_type,
-        doc_subtype: row.doc_subtype.trim() || undefined,
-        onStatus: (s) => patch(row.id, { status: s }),
-      });
-      if (result.ok) {
-        patch(row.id, { status: 'done', doc_id: result.doc_id });
-        ok++;
-      } else {
-        patch(row.id, { status: 'error', error: result.error });
+      if (row.status === 'done' || row.status === 'error') continue;
+      try {
+        updateRow(row.id, { status: 'signing' });
+        const res = await uploadOne(row.file, {
+          title: row.title,
+          doc_type: row.doc_type,
+          doc_subtype: row.doc_subtype || undefined,
+          onStatus: (s) => updateRow(row.id, { status: s }),
+        });
+        if (res.ok) {
+          updateRow(row.id, { status: 'done', doc_id: res.doc_id });
+          ok++;
+        } else {
+          updateRow(row.id, { status: 'error', error: res.error });
+          failed++;
+        }
+      } catch (e: any) {
+        updateRow(row.id, { status: 'error', error: e?.message ?? 'unknown error' });
         failed++;
       }
     }
     setBusy(false);
     onDone({ ok, failed });
-  };
+  }
+
+  const allDone = rows.length > 0 && rows.every(r => r.status === 'done' || r.status === 'error');
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-      }}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 'min(880px, 96vw)', maxHeight: '90vh', background: '#FFFFFF',
-          border: '1px solid #E6DFCC', borderRadius: 10, display: 'flex', flexDirection: 'column',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.4)', overflow: 'hidden',
-        }}>
-        <header style={{ padding: '12px 18px', borderBottom: '1px solid #E6DFCC', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>Bulk upload → doc registry</div>
-            <div style={{ fontSize: 15, color: '#1B1B1B', fontWeight: 600 }}>Drop files, tag them, upload all</div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ padding: '6px 12px', fontSize: 12, background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 4, cursor: 'pointer' }}
-          >Close ✕</button>
-        </header>
-
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files); }}
-          style={{
-            margin: 14, padding: 24,
-            border: `2px dashed ${dragOver ? '#1B1B1B' : '#B8B8B8'}`,
-            borderRadius: 6, background: dragOver ? '#FCFBF5' : '#FAFAF7',
-            textAlign: 'center', color: '#1B1B1B',
-          }}>
-          <div style={{ fontSize: 24, lineHeight: 1, marginBottom: 8 }}>📥</div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Drop files here</div>
-          <div style={{ fontSize: 11, color: '#5A5A5A', marginBottom: 10 }}>PDF · DOCX · XLSX · images · anything up to 50 MB each</div>
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            style={{ display: 'none' }}
-            onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ''; }}
-          />
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            style={{ padding: '8px 18px', fontSize: 12, fontWeight: 600, background: '#084838', color: '#FFFFFF', border: '1px solid #084838', borderRadius: 4, cursor: 'pointer' }}
-          >Choose files…</button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+      <div style={{ background: '#FFF', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', maxWidth: 900, width: '90%', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <div style={{ borderBottom: '1px solid #E0E0E0', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#1B1B1B' }}>Upload documents</div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', color: '#5A5A5A' }}>×</button>
         </div>
 
-        <div style={{ flex: 1, overflow: 'auto', padding: '0 14px' }}>
-          {rows.length === 0 && (
-            <div style={{ padding: 24, textAlign: 'center', fontSize: 12, color: '#8A8A8A' }}>
-              No files yet — drop or choose above.
+        {/* Body: dropzone + table */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
+          {/* Dropzone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(Array.from(e.dataTransfer.files)); }}
+            onClick={() => inputRef.current?.click()}
+            style={{
+              border: `2px dashed ${dragOver ? '#084838' : '#E6DFCC'}`,
+              borderRadius: 6,
+              padding: '20px 16px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              background: dragOver ? '#E8F1EE' : '#F4EFE2',
+              marginBottom: 16,
+              transition: 'all .15s',
+            }}
+          >
+            <div style={{ fontSize: 24, marginBottom: 4 }}>📄</div>
+            <div style={{ fontSize: 12, color: '#1B1B1B' }}>Drag & drop files here, or click to browse</div>
+            <div style={{ fontSize: 10, color: '#5A5A5A', marginTop: 2 }}>PDF · DOCX · XLSX · TXT · and more</div>
+            <input ref={inputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.ods" multiple style={{ display: 'none' }}
+              onChange={(e) => addFiles(Array.from(e.target.files ?? []))} />
+          </div>
+
+          {/* Table */}
+          {rows.length > 0 && (
+            <div style={{ border: '1px solid #E0E0E0', borderRadius: 6, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#F4EFE2', borderBottom: '1px solid #E0E0E0' }}>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>File</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Title</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Doc type</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Subtype</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, width: 50 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.id} style={{ borderBottom: '1px solid #E0E0E0' }}>
+                      <td style={{ padding: '8px 10px', fontSize: 11, color: '#5A5A5A', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.file.name}>{r.file.name}</td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <input
+                          type="text"
+                          value={r.title}
+                          onChange={(e) => updateRow(r.id, { title: e.target.value })}
+                          disabled={r.status !== 'queued'}
+                          style={{ width: '100%', border: '1px solid #E0E0E0', borderRadius: 3, padding: '4px 6px', fontSize: 12 }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <select
+                          value={r.doc_type}
+                          onChange={(e) => updateRow(r.id, { doc_type: e.target.value })}
+                          disabled={r.status !== 'queued'}
+                          style={{ width: '100%', border: '1px solid #E0E0E0', borderRadius: 3, padding: '4px 6px', fontSize: 11 }}
+                        >
+                          {DOC_TYPES.map(dt => <option key={dt.value} value={dt.value}>{dt.label}</option>)}
+                        </select>
+                      </td>
+                      <td style={{ padding: '8px 10px' }}>
+                        <input
+                          type="text"
+                          value={r.doc_subtype}
+                          onChange={(e) => updateRow(r.id, { doc_subtype: e.target.value })}
+                          disabled={r.status !== 'queued'}
+                          placeholder="(optional)"
+                          style={{ width: '100%', border: '1px solid #E0E0E0', borderRadius: 3, padding: '4px 6px', fontSize: 12 }}
+                        />
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'center', fontSize: 11 }}>
+                        {r.status === 'queued' && '⏳'}
+                        {r.status === 'signing' && '🔑'}
+                        {r.status === 'uploading' && '⬆️'}
+                        {r.status === 'ingesting' && '🧠'}
+                        {r.status === 'done' && <span style={{ color: '#0E7A4B' }}>✓</span>}
+                        {r.status === 'error' && <span style={{ color: '#B03826', fontSize: 9 }} title={r.error}>✗ {r.error}</span>}
+                      </td>
+                      <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                        {r.status === 'queued' && (
+                          <button onClick={() => removeRow(r.id)} style={{ border: 'none', background: 'transparent', fontSize: 14, cursor: 'pointer', color: '#B03826' }}>×</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-          {rows.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: '#F5F0E1', color: '#5A5A5A' }}>
-                  <th style={th}>File</th>
-                  <th style={th}>Title</th>
-                  <th style={th}>Folder (doc_type)</th>
-                  <th style={th}>Subtype</th>
-                  <th style={{ ...th, width: 90 }}>Status</th>
-                  <th style={{ ...th, width: 32 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => (
-                  <tr key={r.id} style={{ borderTop: '1px solid #E6DFCC' }}>
-                    <td style={td}>
-                      <div style={{ fontWeight: 500, color: '#1B1B1B', wordBreak: 'break-all' }}>{r.file.name}</div>
-                      <div style={{ fontSize: 10, color: '#8A8A8A', marginTop: 2 }}>{(r.file.size / 1024).toFixed(0)} KB · {r.file.type || 'unknown'}</div>
-                    </td>
-                    <td style={td}>
-                      <input
-                        value={r.title}
-                        onChange={(e) => patch(r.id, { title: e.target.value })}
-                        disabled={busy}
-                        style={inp}
-                      />
-                    </td>
-                    <td style={td}>
-                      <select
-                        value={r.doc_type}
-                        onChange={(e) => patch(r.id, { doc_type: e.target.value })}
-                        disabled={busy}
-                        style={inp}
-                      >
-                        {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                      </select>
-                    </td>
-                    <td style={td}>
-                      <input
-                        value={r.doc_subtype}
-                        onChange={(e) => patch(r.id, { doc_subtype: e.target.value })}
-                        placeholder="(optional)"
-                        disabled={busy}
-                        style={inp}
-                      />
-                    </td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      <StatusPill status={r.status} error={r.error} docId={r.doc_id} />
-                    </td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {!busy && r.status !== 'done' && (
-                        <button
-                          type="button"
-                          onClick={() => remove(r.id)}
-                          title="Remove from queue"
-                          style={{ background: 'transparent', border: 'none', color: '#B23A2E', cursor: 'pointer', fontSize: 14 }}
-                        >×</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </div>
 
-        <footer style={{ padding: '12px 18px', borderTop: '1px solid #E6DFCC', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FAFAF7' }}>
+        {/* Footer */}
+        <div style={{ borderTop: '1px solid #E0E0E0', padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 11, color: '#5A5A5A' }}>
-            {rows.length} file{rows.length === 1 ? '' : 's'} queued
-            {rows.filter(r => r.status === 'done').length > 0 && ` · ${rows.filter(r => r.status === 'done').length} done`}
-            {rows.filter(r => r.status === 'error').length > 0 && ` · ${rows.filter(r => r.status === 'error').length} failed`}
+            {rows.length === 0 && 'No files yet — drop or browse to add'}
+            {rows.length > 0 && !allDone && `${rows.length} file${rows.length === 1 ? '' : 's'} queued`}
+            {allDone && `${rows.filter(r => r.status === 'done').length} uploaded · ${rows.filter(r => r.status === 'error').length} failed`}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={busy}
-              style={{ padding: '8px 16px', fontSize: 12, background: '#FFFFFF', color: '#5A5A5A', border: '1px solid #E6DFCC', borderRadius: 4, cursor: busy ? 'wait' : 'pointer' }}
-            >{rows.some(r => r.status === 'done') ? 'Close' : 'Cancel'}</button>
-            <button
-              type="button"
-              onClick={uploadAll}
-              disabled={busy || rows.length === 0 || rows.every(r => r.status === 'done')}
-              style={{
-                padding: '8px 20px', fontSize: 12, fontWeight: 600,
-                background: busy || rows.length === 0 ? '#C8C0A6' : '#084838',
-                color: '#FFFFFF',
-                border: `1px solid ${busy || rows.length === 0 ? '#C8C0A6' : '#084838'}`,
-                borderRadius: 4,
-                cursor: busy || rows.length === 0 ? 'wait' : 'pointer',
-              }}
-            >{busy ? 'Uploading…' : `Upload all (${rows.filter(r => r.status !== 'done').length})`}</button>
+            {!allDone && (
+              <>
+                <button onClick={onClose} disabled={busy} style={{ padding: '6px 12px', fontSize: 12, border: '1px solid #E0E0E0', borderRadius: 4, background: '#FFF', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1 }}>Cancel</button>
+                <button onClick={doUpload} disabled={busy || rows.length === 0} style={{ padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 4, background: '#084838', color: '#FFF', cursor: (busy || rows.length === 0) ? 'not-allowed' : 'pointer', opacity: (busy || rows.length === 0) ? 0.5 : 1 }}>
+                  {busy ? 'Uploading…' : 'Upload all'}
+                </button>
+              </>
+            )}
+            {allDone && (
+              <button onClick={onClose} style={{ padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 4, background: '#084838', color: '#FFF', cursor: 'pointer' }}>Done</button>
+            )}
           </div>
-        </footer>
+        </div>
       </div>
-    </div>
-  );
-}
-
-function StatusPill({ status, error, docId }: { status: RowStatus; error?: string; docId?: string }) {
-  const label = ({
-    queued: 'Queued',
-    signing: 'Signing…',
-    uploading: 'Uploading…',
-    ingesting: 'Classifying…',
-    done: '✓ Done',
-    error: '✗ Failed',
-  })[status];
-  const bg = ({
-    queued: '#F5F0E1', signing: '#FBEFD9', uploading: '#FBEFD9', ingesting: '#FBEFD9',
-    done: '#EBF1EE', error: '#FBE8E4',
-  })[status];
-  const fg = ({
-    queued: '#5A5A5A', signing: '#B87F26', uploading: '#B87F26', ingesting: '#B87F26',
-    done: '#1F5C2C', error: '#B23A2E',
-  })[status];
-  return (
-    <span title={error || (docId ? `doc_id ${docId}` : undefined)}
-      style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 99, background: bg, color: fg, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>
-      {label}
-    </span>
-  );
-}
-
-// -------------------------------------------------------------------------
-//  Single-file tile (translate + summarize) — bulletproof click handlers
-// -------------------------------------------------------------------------
-
-function ActionTile({ mode, icon, title, hint, onFile, busy, dragOver, setDragOver, clearDragOver }: {
-  mode: ActionMode;
-  icon: string; title: string; hint: string;
-  onFile: (file: File) => void;
-  busy: boolean; dragOver: boolean;
-  setDragOver: () => void; clearDragOver: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setDragOver(); }}
-      onDragLeave={clearDragOver}
-      onDrop={(e) => {
-        e.preventDefault();
-        clearDragOver();
-        const f = e.dataTransfer.files?.[0];
-        if (f) onFile(f);
-      }}
-      onClick={() => { if (!busy) inputRef.current?.click(); }}
-      style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        gap: 4, padding: 12, minHeight: 84,
-        border: `2px dashed ${dragOver ? '#1B1B1B' : '#B8B8B8'}`,
-        borderRadius: 6, cursor: busy ? 'wait' : 'pointer',
-        background: dragOver ? '#FCFBF5' : '#FFFFFF', color: '#1B1B1B',
-        userSelect: 'none',
-      }}>
-      <input
-        ref={inputRef}
-        type="file"
-        style={{ display: 'none' }}
-        disabled={busy}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) onFile(f);
-          e.target.value = '';
-        }}
-      />
-      <div style={{ fontSize: 22, lineHeight: 1 }}>{busy ? '⏳' : icon}</div>
-      <div style={{ fontWeight: 600, fontSize: 12 }}>{busy ? 'Working…' : title}</div>
-      <div style={{ fontSize: 10, color: '#5A5A5A' }}>{hint} · click or drop</div>
     </div>
   );
 }
@@ -397,20 +304,20 @@ function ActionTile({ mode, icon, title, hint, onFile, busy, dragOver, setDragOv
 //  Main component
 // -------------------------------------------------------------------------
 
-export default function LegalQuickActions({ propertyId }: { propertyId: number }) {
+export default function LegalQuickActions() {
+  const translateInput = useRef<HTMLInputElement>(null);
+  const summarizeInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<ActionMode | null>(null);
-  const [dragOver, setDragOver] = useState<ActionMode | null>(null);
-  const [result, setResult] = useState<{ mode: ActionMode; ok: boolean; text?: string; doc_id?: string; error?: string } | null>(null);
+  const [result, setResult] = useState<{ mode: ActionMode; ok: boolean; doc_id?: string; text?: string; error?: string } | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [batchToast, setBatchToast] = useState<{ ok: number; failed: number } | null>(null);
   const [tileDragOver, setTileDragOver] = useState(false);
-  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+  const [tileDragFiles, setTileDragFiles] = useState<File[]>([]);
 
   async function handleSingle(mode: 'translate' | 'summarize', file: File) {
     setBusy(mode);
     setResult(null);
     try {
-      const up = await uploadOne(file, {});
+      const up = await uploadOne(file, { doc_type: 'legal', title: file.name.replace(/\.[^.]+$/, '') });
       if (!up.ok || !up.doc_id) { setResult({ mode, ok: false, error: up.error }); return; }
       const endpoint = mode === 'translate' ? '/api/legal/docs/translate' : '/api/legal/docs/summarize';
       const body = mode === 'translate' ? { doc_id: up.doc_id, to: 'en' } : { doc_id: up.doc_id };
@@ -437,99 +344,149 @@ export default function LegalQuickActions({ propertyId }: { propertyId: number }
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setUploadOpen(true); } }}
           onDragOver={(e) => { e.preventDefault(); setTileDragOver(true); }}
           onDragLeave={() => setTileDragOver(false)}
-          onDrop={(e) => { e.preventDefault(); setTileDragOver(false); const files = Array.from(e.dataTransfer.files); if (files.length) { setDroppedFiles(files); setUploadOpen(true); } }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setTileDragOver(false);
+            const files = Array.from(e.dataTransfer.files);
+            setTileDragFiles(files);
+            setUploadOpen(true);
+          }}
           style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            gap: 4, padding: 12, minHeight: 84,
-            border: `2px dashed ${tileDragOver ? '#084838' : '#B8B8B8'}`, borderRadius: 6, cursor: 'pointer',
-            background: tileDragOver ? '#F0FAF6' : '#FFFFFF', color: '#1B1B1B', userSelect: 'none',
-          }}>
-          <div style={{ fontSize: 22, lineHeight: 1 }}>📤</div>
-          <div style={{ fontWeight: 600, fontSize: 12 }}>Upload doc</div>
-          <div style={{ fontSize: 10, color: '#5A5A5A' }}>Multi-file · pick folder each · click to open</div>
+            border: `2px solid ${tileDragOver ? '#084838' : '#E6DFCC'}`,
+            borderRadius: 6,
+            padding: 16,
+            background: tileDragOver ? '#E8F1EE' : '#FFFFFF',
+            cursor: 'pointer',
+            transition: 'all .15s',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            minHeight: 120,
+          }}
+        >
+          <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1B1B1B', marginBottom: 4 }}>Upload doc</div>
+          <div style={{ fontSize: 11, color: '#5A5A5A' }}>Multi-file upload with doc-type mapping</div>
         </div>
 
-        <ActionTile
-          mode="translate"
-          icon="🌐"
-          title="Translate to English"
-          hint="Drop Lao / Thai / fr / es"
-          busy={busy === 'translate'}
-          dragOver={dragOver === 'translate'}
-          onFile={(f) => handleSingle('translate', f)}
-          setDragOver={() => setDragOver('translate')}
-          clearDragOver={() => setDragOver(null)}
-        />
-        <ActionTile
-          mode="summarize"
-          icon="✍️"
-          title="Summarize"
-          hint="4–6 line counsel brief"
-          busy={busy === 'summarize'}
-          dragOver={dragOver === 'summarize'}
-          onFile={(f) => handleSingle('summarize', f)}
-          setDragOver={() => setDragOver('summarize')}
-          clearDragOver={() => setDragOver(null)}
-        />
-        <a href={`/h/${propertyId}/it/cockpit/chat/legal_specialist`} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          padding: 12, border: '1px solid #1B1B1B', borderRadius: 6,
-          background: '#1B1B1B', color: '#FFFFFF', textDecoration: 'none', fontSize: 12,
-        }}>
-          💬 Chat with John (Lao counsel)
-        </a>
+        {/* Translate doc */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => translateInput.current?.click()}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); translateInput.current?.click(); } }}
+          style={{
+            border: '2px solid #E6DFCC',
+            borderRadius: 6,
+            padding: 16,
+            background: '#FFFFFF',
+            cursor: busy === 'translate' ? 'not-allowed' : 'pointer',
+            opacity: busy === 'translate' ? 0.6 : 1,
+            transition: 'all .15s',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            minHeight: 120,
+          }}
+        >
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🌐</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1B1B1B', marginBottom: 4 }}>Translate</div>
+          <div style={{ fontSize: 11, color: '#5A5A5A' }}>Lao → EN with Claude</div>
+          <input
+            ref={translateInput}
+            type="file"
+            accept=".pdf,.doc,.docx"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleSingle('translate', file);
+              e.target.value = '';
+            }}
+          />
+        </div>
+
+        {/* Summarize doc */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => summarizeInput.current?.click()}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); summarizeInput.current?.click(); } }}
+          style={{
+            border: '2px solid #E6DFCC',
+            borderRadius: 6,
+            padding: 16,
+            background: '#FFFFFF',
+            cursor: busy === 'summarize' ? 'not-allowed' : 'pointer',
+            opacity: busy === 'summarize' ? 0.6 : 1,
+            transition: 'all .15s',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            minHeight: 120,
+          }}
+        >
+          <div style={{ fontSize: 32, marginBottom: 8 }}>📝</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1B1B1B', marginBottom: 4 }}>Summarize</div>
+          <div style={{ fontSize: 11, color: '#5A5A5A' }}>4-6 line summary with Claude</div>
+          <input
+            ref={summarizeInput}
+            type="file"
+            accept=".pdf,.doc,.docx"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleSingle('summarize', file);
+              e.target.value = '';
+            }}
+          />
+        </div>
       </div>
 
-      {batchToast && (
-        <div style={{
-          marginTop: 10, padding: 10,
-          background: batchToast.failed === 0 ? '#EBF1EE' : '#FBEFD9',
-          color: batchToast.failed === 0 ? '#1F5C2C' : '#B87F26',
-          border: '1px solid ' + (batchToast.failed === 0 ? '#B9E0C7' : '#F0DEB0'),
-          borderRadius: 4, fontSize: 12,
-        }}>
-          Batch upload: <strong>{batchToast.ok} succeeded</strong>
-          {batchToast.failed > 0 && <> · <strong style={{ color: '#B23A2E' }}>{batchToast.failed} failed</strong></>}
-          {' '}· <a href="/finance/legal/docs" style={{ color: '#084838', fontWeight: 600 }}>open doc register →</a>
-          <button type="button" onClick={() => setBatchToast(null)} style={{ marginLeft: 10, background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 11 }}>dismiss</button>
-        </div>
-      )}
-
+      {/* Result banner */}
       {result && (
         <div style={{
-          marginTop: 10, padding: 12,
-          border: `1px solid ${result.ok ? '#1B1B1B' : '#C62828'}`,
-          background: result.ok ? '#FCFBF5' : '#FDECEC',
-          borderRadius: 4, fontSize: 12, color: '#1B1B1B',
+          marginTop: 16,
+          padding: 12,
+          borderRadius: 6,
+          background: result.ok ? '#E8F1EE' : '#F8E8E6',
+          border: `1px solid ${result.ok ? '#0E7A4B' : '#B03826'}`,
         }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>
-            {result.ok ? '✓ done' : '✗ failed'} · {result.mode}
-            {result.doc_id && (
-              <a href={`/legal/docs/preview/${encodeURIComponent(result.doc_id)}`}
-                 target="_blank" rel="noopener noreferrer"
-                 style={{ marginLeft: 10, color: '#1B1B1B', fontSize: 11 }}>
-                open doc →
-              </a>
-            )}
+          <div style={{ fontSize: 12, fontWeight: 600, color: result.ok ? '#0E7A4B' : '#B03826', marginBottom: 4 }}>
+            {result.ok ? `${result.mode === 'translate' ? 'Translation' : 'Summary'} complete` : 'Error'}
           </div>
-          {result.error && <pre style={{ color: '#C62828', whiteSpace: 'pre-wrap', margin: 0, fontSize: 11 }}>{result.error}</pre>}
-          {result.text && (
-            <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', fontSize: 12, lineHeight: 1.4, maxHeight: 320, overflow: 'auto' }}>{result.text}</pre>
+          {result.ok && result.text && (
+            <div style={{ fontSize: 11, color: '#1B1B1B', lineHeight: 1.5, maxHeight: 120, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+              {result.text}
+            </div>
+          )}
+          {!result.ok && result.error && (
+            <div style={{ fontSize: 11, color: '#5A5A5A' }}>{result.error}</div>
+          )}
+          {result.doc_id && (
+            <div style={{ fontSize: 10, color: '#5A5A5A', marginTop: 6 }}>
+              Doc ID: <code style={{ background: '#FFF', padding: '1px 4px', borderRadius: 2 }}>{result.doc_id}</code>
+            </div>
           )}
         </div>
       )}
 
       {uploadOpen && (
         <MultiUploadModal
-          onClose={() => { setUploadOpen(false); setDroppedFiles([]); }}
-          onDone={(res) => { setBatchToast(res); }}
-          initialFiles={droppedFiles}
+          onClose={() => { setUploadOpen(false); setTileDragFiles([]); }}
+          onDone={(res) => {
+            setUploadOpen(false);
+            setTileDragFiles([]);
+            // Optionally show a toast here
+          }}
+          initialFiles={tileDragFiles.length > 0 ? tileDragFiles : undefined}
         />
       )}
     </div>
   );
 }
-
-const th: React.CSSProperties = { padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase' };
-const td: React.CSSProperties = { padding: '8px 6px', verticalAlign: 'top' };
-const inp: React.CSSProperties = { width: '100%', padding: '6px 8px', fontSize: 12, background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 3, color: '#1B1B1B' };
