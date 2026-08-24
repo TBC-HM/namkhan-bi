@@ -552,6 +552,7 @@ const MARKETING_CFG: DeptCfg = {
     // to top-strip peers. YouTube moved under Digital sub-strip. SEO dropped from
     // nav (URL /marketing/seo still resolves — just no longer surfaced). Socials
     // label with singular /marketing/social href preserves existing page path.
+    { label: 'HoD',      href: '/h/260955/marketing'          },
     { label: 'Overview', href: '/h/260955/marketing/overview' },
     { label: 'Audience', href: '/h/260955/marketing/audience' },
     { label: 'Content',  href: '/h/260955/marketing/content'  },
@@ -697,9 +698,7 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Guests',      href: '/h/260955/guest/directory'      },
     { label: 'Reputation',  href: '/h/260955/guest/reputation'     },
     { label: 'Behaviour',   href: '/h/260955/guest/behaviour'      },
-    // PBS 2026-07-21 night · Contacts removed — folded into Subscribers as
-    // the "Candidates pool" tab. URL still resolves for bookmarks.
-    { label: 'Newsletters', href: '/h/260955/guest/newsletters'    },
+
   ],
   quickChips: [
     { label: 'Guests',      href: '/h/260955/guest/directory'      },
