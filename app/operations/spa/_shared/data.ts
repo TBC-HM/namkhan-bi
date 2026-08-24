@@ -77,10 +77,52 @@ export const getSpaBookingsForDay = async (pid: number, iso: string) => {
 export const getSpaTherapists = (pid: number) => bridge<SpaTherapistRow>('v_spa_therapists', q => q.select('*').eq('property_id', pid).eq('is_active', true).order('display_name'));
 export const getSpaRooms = (pid: number) => bridge<SpaRoomRow>('v_spa_rooms', q => q.select('*').eq('property_id', pid).eq('is_active', true).order('name'));
 export const getSpaCatalogue = (pid: number) => bridge<CatalogueRow>('v_property_spa_treatments', q => q.select('*').eq('property_id', pid).eq('is_active', true).order('display_order'));
-export const getSpaBookableGuests = async (pid: number, iso: string) => {
-  const { data, error } = await sb().rpc('fn_spa_bookable_guests', { p_property_id: pid, p_day_iso: iso });
-  if (error?.code === '42883') return { rows: [], bridgeMissing: true };
-  return { rows: data ?? [], bridgeMissing: false };
+export interface BookableGuest {
+  reservation_id: string;
+  guest_name: string;
+  guest_email: string | null;
+  room_type_name: string | null;
+  check_in_date: string;
+  check_out_date: string;
+  is_in_house: boolean;
+}
+export const getSpaBookableGuests = async (pid: number, iso: string): Promise<{ rows: BookableGuest[]; bridgeMissing: boolean }> => {
+  // Compute today + 30d window for upcoming bookings
+  const today = iso; // dayIso from caller is always the property's today
+  const future = (() => {
+    const d = new Date(iso + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 30);
+    return d.toISOString().slice(0, 10);
+  })();
+  const { data, error } = await sb()
+    .from('v_reservations_full')
+    .select('reservation_id, guest_name, room_type_name, check_in_date, check_out_date')
+    .eq('property_id', pid)
+    .lte('check_in_date', future)
+    .gt('check_out_date', today)
+    .not('status', 'in', '(cancelled,no_show)')
+    .order('check_in_date');
+  if (error?.code === '42P01' || error?.code === '42883') return { rows: [], bridgeMissing: true };
+  if (error) return { rows: [], bridgeMissing: false };
+  const rows: BookableGuest[] = ((data ?? []) as Array<{
+    reservation_id: string; guest_name: string | null;
+    room_type_name: string | null; check_in_date: string; check_out_date: string;
+  }>).map((r) => ({
+    reservation_id: r.reservation_id,
+    guest_name: r.guest_name ?? 'Guest',
+    guest_email: null,
+    room_type_name: r.room_type_name ?? null,
+    check_in_date: String(r.check_in_date).slice(0, 10),
+    check_out_date: String(r.check_out_date).slice(0, 10),
+    // In-house = already checked in (check_in_date <= today)
+    is_in_house: String(r.check_in_date).slice(0, 10) <= today,
+  }));
+  // In-house first, then upcoming sorted by arrival
+  rows.sort((a, b) => {
+    if (a.is_in_house !== b.is_in_house) return a.is_in_house ? -1 : 1;
+    return a.check_in_date.localeCompare(b.check_in_date);
+  });
+  return { rows, bridgeMissing: false };
 };
 export const getFolioSpaSellers = (pid: number) => bridge<any>('v_dept_top_seller_trend', q => q.select('*').eq('property_id', pid).eq('dept', 'spa').limit(5));
 export const getFolioSpaTransactions = (pid: number, lim = 50) => bridge<any>('v_cloudbeds_folio_transactions', q => q.select('*').eq('property_id', pid).eq('category', 'spa').order('transaction_date', { ascending: false }).limit(lim));

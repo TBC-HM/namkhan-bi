@@ -22,6 +22,7 @@ import {
 } from '@/app/(cockpit)/_design';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase } from '@/lib/supabase';
+import OtbDensityCalendar, { type OtbDayData } from './_components/OtbDensityCalendar';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -232,12 +233,49 @@ export default async function PricingPage({ searchParams, propertyId }: { search
                 )}
               </span>
             </div>
-            <OtbDensityMonth
-              year={year}
-              month={month}
-              byDay={byDay}
-              currencySym={currencySym}
-            />
+            {(() => {
+                  const firstDow = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7;
+                  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+                  const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7 + 7; // +7 for header row
+                  const nowUtc2 = new Date();
+                  const todayIsoStr = `${nowUtc2.getUTCFullYear()}-${String(nowUtc2.getUTCMonth()+1).padStart(2,'0')}-${String(nowUtc2.getUTCDate()).padStart(2,'0')}`;
+                  const bucketFor = (occ: number | null): OtbDayData['bucket'] => {
+                    if (occ == null) return 'empty';
+                    if (occ >= 85) return 'green';
+                    if (occ >= 60) return 'amber';
+                    return 'grey';
+                  };
+                  const serializedDays: OtbDayData[] = Array.from({ length: daysInMonth }, (_, i) => {
+                    const dayNum = i + 1;
+                    const iso = `${year}-${String(month).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                    const row = byDay.get(iso) ?? null;
+                    const rs = row?.rooms_sold != null ? Number(row.rooms_sold) : null;
+                    const ra = row?.rooms_available != null ? Number(row.rooms_available) : null;
+                    const occ = row?.occupancy_pct != null ? Number(row.occupancy_pct) : null;
+                    const rv = row?.rooms_revenue != null ? Number(row.rooms_revenue) : null;
+                    const adr2 = row?.adr != null ? Number(row.adr) : (rs != null && rs > 0 && rv != null ? rv / rs : null);
+                    const bucket = bucketFor(occ);
+                    const tooltip = [
+                      iso,
+                      rs != null ? `Rooms sold: ${rs}${ra != null ? ` / ${ra}` : ''}` : 'Rooms sold: —',
+                      occ != null ? `Occupancy: ${occ.toFixed(1)}%` : 'Occupancy: —',
+                      rv != null ? `Revenue: ${currencySym}${Math.round(rv).toLocaleString('en-US')}` : 'Revenue: —',
+                      adr2 != null ? `ADR: ${currencySym}${Math.round(adr2)}` : 'ADR: —',
+                    ].join(' · ');
+                    return { iso, dayNum, rooms_sold: rs, rooms_available: ra, occupancy_pct: occ, rooms_revenue: rv, adr: adr2, bucket, isToday: iso === todayIsoStr, tooltip };
+                  });
+                  return (
+                    <OtbDensityCalendar
+                      year={year}
+                      month={month}
+                      days={serializedDays}
+                      currencySym={currencySym}
+                      propertyId={pid}
+                      firstDow={firstDow}
+                      totalCells={totalCells}
+                    />
+                  );
+                })()}
             {/* Legend */}
             <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 12, fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
