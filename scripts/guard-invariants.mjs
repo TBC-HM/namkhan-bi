@@ -41,6 +41,8 @@ const REQUIRED_EXEMPTIONS = [
   '/api/cockpit/health-sweep',
   '/api/health',
   '/api/auth/',
+  '/api/marketing/media/preview',
+  '/api/marketing/contacts/extract',
   '/api/marketing/gmail/scan-replies',
   '/api/marketing/gmail/extract-shared/',
   '/api/newsletter/refire-broadcasts',
@@ -91,22 +93,23 @@ if (!existsSync(MW)) {
 // unscoped read return Namkhan's data. L22 says scope resolution must fail
 // CLOSED; memory 873 says never write COALESCE(p_property_id, 260955) or
 // DEFAULT 260955. ADR-300/302 removed 28 of these from SQL — the TypeScript
-// side was never swept and still carries 84 across 63 files.
+// side was never swept and still carries 49 across 47 files.
 //
-// Fixing all 84 in one pass is exactly how tenant isolation gets broken:
+// The lookbehind matters: `if (pid === 260955)` is a legitimate COMPARISON
+// (e.g. the property->timezone map), not a default. An earlier version of this
+// regex matched the tail of `=== 260955)` and would have failed the build on
+// correct code. Comparisons are allowed; defaults are not.
+//
+// Fixing all 49 in one pass is exactly how tenant isolation gets broken:
 // L6 warns the legacy unprefixed trees are still the LIVE implementations, so
 // a wrong edit makes Donna render Namkhan's data. So this is a RATCHET, not a
 // ban: today's count per file is frozen. Any file that gains one fails the
 // build. Retire the baseline in small verified batches and lower the numbers.
 // ---------------------------------------------------------------------------
-const TENANT_DEFAULT_RE = /\?\?\s*(260955|1000001)\b|:\s*number\s*=\s*(260955|1000001)\b|=\s*(260955|1000001)\s*\)/;
+const TENANT_DEFAULT_RE = /\?\?\s*(260955|1000001)\b|:\s*number\s*=\s*(260955|1000001)\b|(?<![=!<>])=\s*(260955|1000001)\s*\)/;
 
 // Frozen 2026-08-24. LOWER these numbers as files are fixed; never raise one.
 const BASELINE = {
-  "app/(cockpit)/_design/BookingActivity.tsx": 2,
-  "app/(cockpit)/_design/RevenueMtdStripe.tsx": 4,
-  "app/(cockpit)/_design/RevenueYtdStripe.tsx": 4,
-  "app/account/_components/ProfileForm.tsx": 2,
   "app/api/cron/studio-exports/route.ts": 1,
   "app/api/google/reply/route.ts": 1,
   "app/api/marketing/email/refine-block/route.ts": 1,
@@ -123,7 +126,6 @@ const BASELINE = {
   "app/api/marketing/youtube/disconnect/route.ts": 1,
   "app/api/marketing/youtube/oauth-callback/route.ts": 1,
   "app/api/marketing/youtube/request-video/route.ts": 1,
-  "app/api/recruitment/draft-ad/route.ts": 2,
   "app/api/reputation/scrape-reviews/route.ts": 1,
   "app/api/sales/proposals/[id]/blocks/fill/route.ts": 1,
   "app/api/sop/proposals/generate-one/route.ts": 1,
@@ -132,8 +134,6 @@ const BASELINE = {
   "app/h/[property_id]/_components/CeoEntry.tsx": 1,
   "app/h/[property_id]/finance/pnl/_data.ts": 1,
   "app/h/[property_id]/finance/pnl/page.tsx": 2,
-  "app/h/[property_id]/reports/page.tsx": 1,
-  "app/h/[property_id]/revenue/reservations/page.tsx": 2,
   "app/holding/it2/system/data-quality/DqClient.tsx": 1,
   "app/marketing/media/_client/AssetEditDrawer.tsx": 1,
   "app/operations/activities/page.tsx": 1,
@@ -144,11 +144,8 @@ const BASELINE = {
   "app/operations/rooms/page.tsx": 1,
   "app/operations/sops/[sop_code]/edit/_components/SopEditForm.tsx": 1,
   "app/operations/spa/page.tsx": 1,
-  "app/operations/staff/_components/DataTabContent.tsx": 5,
-  "app/operations/staff/_components/StaffDrawer.tsx": 2,
-  "app/operations/staff/_components/school-holidays-data.ts": 1,
   "app/operations/transport/page.tsx": 1,
-  "app/revenue/channels/page.tsx": 2,
+  "app/revenue/channels/page.tsx": 1,
   "app/revenue/compset/[comp_id]/page.tsx": 1,
   "app/revenue/lighthouse/_shared/LighthouseShell.tsx": 1,
   "app/revenue/lighthouse/overview/page.tsx": 1,
@@ -156,16 +153,10 @@ const BASELINE = {
   "app/revenue/lighthouse/vs-3d/page.tsx": 1,
   "app/revenue/lighthouse/vs-7d/page.tsx": 1,
   "app/revenue/lighthouse/vs-yesterday/page.tsx": 1,
-  "app/settings/users/[user_id]/page.tsx": 2,
-  "components/PropertySwitcher.tsx": 1,
-  "components/chat/FloatingHOSPanel.tsx": 2,
-  "components/page/TopDeptStrip.tsx": 1,
   "lib/cockpit-tools.ts": 1,
   "lib/data-banks-cfo.ts": 2,
   "lib/data-donna-mews.ts": 1,
-  "lib/pricingKpis.ts": 1,
-  "lib/propertyContext.ts": 1,
-  "lib/reports/_shared.ts": 2
+  "lib/reports/_shared.ts": 1
 };
 
 const SCAN_DIRS = ['app', 'lib', 'components'];
