@@ -125,18 +125,37 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
   // ─── Operations · Inventory · Orders sub-strip · PBS 2026-08-24 ──
-  // Requests + Shop moved under Orders (were top-level inventory tabs).
+  // Requests + Shop + Suppliers moved under Orders.
   {
     parentHref: '/operations/inventory/orders',
     members: [
       '/operations/inventory/orders',
       '/operations/inventory/requests',
       '/operations/inventory/shop',
+      '/operations/inventory/suppliers',
     ],
     tabs: [
-      { label: 'Orders',   href: '/h/260955/operations/inventory/orders'   },
-      { label: 'Requests', href: '/h/260955/operations/inventory/requests' },
-      { label: 'Shop',     href: '/h/260955/operations/inventory/shop'     },
+      { label: 'Orders',    href: '/h/260955/operations/inventory/orders'    },
+      { label: 'Requests',  href: '/h/260955/operations/inventory/requests'  },
+      { label: 'Shop',      href: '/h/260955/operations/inventory/shop'      },
+      { label: 'Suppliers', href: '/h/260955/operations/inventory/suppliers' },
+    ],
+  },
+  // ─── Operations · Inventory · Stock sub-strip · PBS 2026-08-25 ──
+  // Catalog + Par + Counts nest under Stock.
+  {
+    parentHref: '/operations/inventory/stock',
+    members: [
+      '/operations/inventory/stock',
+      '/operations/inventory/catalog',
+      '/operations/inventory/par',
+      '/operations/inventory/counts',
+    ],
+    tabs: [
+      { label: 'Stock',   href: '/h/260955/operations/inventory/stock'   },
+      { label: 'Catalog', href: '/h/260955/operations/inventory/catalog' },
+      { label: 'Par',     href: '/h/260955/operations/inventory/par'     },
+      { label: 'Counts',  href: '/h/260955/operations/inventory/counts'  },
     ],
   },
   // ─── Operations · Restaurant dept sub-strip · PBS 2026-08-24 ──
@@ -149,35 +168,26 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
 
-    // PBS 2026-07-21 · Inventory hub — full sub-strip so operator sees every child page
-  // 2026-07-30: + Dishes + Spa (PBS 2026-07-24 pages, registered per inventory
-  // completion brief A7 — were direct-URL only).
+  // PBS 2026-07-21 · Inventory hub — top-level entry points.
+  // Catalog/Par/Counts now live under Stock sub-strip.
+  // Suppliers/Requests/Shop now live under Orders sub-strip.
   {
     parentHref: '/operations/inventory',
     members: [
       '/operations/inventory',
       '/operations/inventory/assets',
       '/operations/inventory/capex',
-      '/operations/inventory/catalog',
-      '/operations/inventory/counts',
       '/operations/inventory/items',
-      '/operations/inventory/orders',
-      '/operations/inventory/par',
       '/operations/inventory/stock',
-      '/operations/inventory/suppliers',
-          '/operations/suppliers',
+      '/operations/inventory/orders',
     ],
     tabs: [
-      { label: 'Overview',  href: '/h/260955/operations/inventory'           },
-      { label: 'Assets',    href: '/h/260955/operations/inventory/assets'    },
-      { label: 'Capex',     href: '/h/260955/operations/inventory/capex'     },
-      { label: 'Catalog',   href: '/h/260955/operations/inventory/catalog'   },
-      { label: 'Counts',    href: '/h/260955/operations/inventory/counts'    },
-      { label: 'Items',     href: '/h/260955/operations/inventory/items'     },
-      { label: 'Orders',    href: '/h/260955/operations/inventory/orders'    },
-      { label: 'Par',       href: '/h/260955/operations/inventory/par'       },
-      { label: 'Stock',     href: '/h/260955/operations/inventory/stock'     },
-      { label: 'Suppliers', href: '/h/260955/operations/suppliers' },
+      { label: 'Overview', href: '/h/260955/operations/inventory'        },
+      { label: 'Stock',    href: '/h/260955/operations/inventory/stock'  },
+      { label: 'Orders',   href: '/h/260955/operations/inventory/orders' },
+      { label: 'Items',    href: '/h/260955/operations/inventory/items'  },
+      { label: 'Assets',   href: '/h/260955/operations/inventory/assets' },
+      { label: 'Capex',    href: '/h/260955/operations/inventory/capex'  },
     ],
   },
 
@@ -281,7 +291,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     members: ['/finance', '/finance/overview'],
     tabs: [
       { label: 'HoD',      href: '/h/260955/finance'          },
-      { label: 'Acc',      href: '/h/260955/finance/costs'    },
       { label: 'Planning', href: '/h/260955/finance/planning' },
       { label: 'Budget',   href: '/h/260955/finance/budget'   },
       { label: 'Studio',   href: '/h/260955/finance/studio'   },
@@ -290,9 +299,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
 
   // ─── Finance · Acc sub-strip · PBS 2026-08-25 ──
   // Acc groups: Costs · Suppliers · Transactions · Ledger.
+  // Transactions/Banks/POS excluded from members — they have their own sub-strip
+  // below; if included here they shadow it (first-match-wins).
   {
     parentHref: '/finance/costs',
-    members: ['/finance/costs', '/finance/suppliers', '/finance/transactions', '/finance/ledger'],
+    members: ['/finance/costs', '/finance/suppliers', '/finance/ledger'],
     tabs: [
       { label: 'Costs',        href: '/h/260955/finance/costs'        },
       { label: 'Suppliers',    href: '/h/260955/finance/suppliers'    },

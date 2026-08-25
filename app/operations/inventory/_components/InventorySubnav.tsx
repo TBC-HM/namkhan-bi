@@ -2,12 +2,11 @@
 
 // app/operations/inventory/_components/InventorySubnav.tsx
 //
-// Inventory & Procurement internal sub-tab strip.
-// PBS 2026-07-23: expanded from 5 → 12 tabs to expose all built pages.
-// Two groups separated by a visual divider:
-//   Stock side: Snapshot · Stock · Par · Counts · Items
-//   Procurement side: Shop → Requests → Orders
-//   Reference: Catalog · Suppliers · Assets · Capex
+// Inventory & Procurement internal sub-tab strip (bare /operations/inventory/* path).
+// PBS 2026-08-25: slimmed to 3 groups after nav-subgroups restructure.
+//   Stock side: Snapshot · Stock · Items  (Par/Counts/Catalog now sub-tabs of Stock)
+//   Procurement side: Shop · Requests · Orders  (Suppliers now sub-tab of Orders)
+//   Reference: Assets · Capex
 //
 // All routes use TenantLink so /h/[property_id] prefix is injected automatically.
 
@@ -17,24 +16,20 @@ import { usePathname } from 'next/navigation';
 type Tab = { href: string; label: string };
 
 const STOCK_TABS: Tab[] = [
-  { href: '/operations/inventory',              label: 'Snapshot' },
-  { href: '/operations/inventory/stock',        label: 'Stock' },
-  { href: '/operations/inventory/par',          label: 'Par' },
-  { href: '/operations/inventory/counts',       label: 'Counts' },
-  { href: '/operations/inventory/items',        label: 'Items' },
+  { href: '/operations/inventory',       label: 'Snapshot' },
+  { href: '/operations/inventory/stock', label: 'Stock' },
+  { href: '/operations/inventory/items', label: 'Items' },
 ];
 
 const PROCUREMENT_TABS: Tab[] = [
-  { href: '/operations/inventory/shop',         label: 'Shop' },
-  { href: '/operations/inventory/requests',     label: 'Requests' },
-  { href: '/operations/inventory/orders',       label: 'Orders' },
+  { href: '/operations/inventory/shop',     label: 'Shop' },
+  { href: '/operations/inventory/requests', label: 'Requests' },
+  { href: '/operations/inventory/orders',   label: 'Orders' },
 ];
 
 const REFERENCE_TABS: Tab[] = [
-  { href: '/operations/inventory/catalog',      label: 'Catalog' },
-  { href: '/operations/inventory/suppliers',    label: 'Suppliers' },
-  { href: '/operations/inventory/assets',       label: 'Assets' },
-  { href: '/operations/inventory/capex',        label: 'Capex' },
+  { href: '/operations/inventory/assets', label: 'Assets' },
+  { href: '/operations/inventory/capex',  label: 'Capex' },
 ];
 
 function isActive(pathname: string, href: string): boolean {
