@@ -284,7 +284,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'HR',      href: '/h/260955/finance/hr'      },
       { label: 'Acc',     href: '/h/260955/finance/costs'   },
       { label: 'Finance', href: '/h/260955/finance/pnl'     },
-      { label: 'Ledger',   href: '/h/260955/finance/ledger'   },
       { label: 'Planning', href: '/h/260955/finance/planning' },
       { label: 'Budget',   href: '/h/260955/finance/budget'   },
       { label: 'Studio',   href: '/h/260955/finance/studio'   },
