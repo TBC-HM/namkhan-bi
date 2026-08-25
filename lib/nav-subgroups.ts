@@ -284,13 +284,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   //  above — Library + Docs live directly under Overview.)
 
   // ─── Finance landing strip · PBS 2026-08-25 ─────────────────
-  // Main Finance sub-strip: HoD · HR · Acc · Finance · Ledger · Archive.
-  // Acc drills into Costs sub-strip; Finance = P&L; Ledger = direct link.
+  // Finance HoD sub-strip: Planning · Budget · Studio (no HoD — already the current page).
   {
     parentHref: '/finance',
     members: ['/finance', '/finance/overview'],
     tabs: [
-      { label: 'HoD',      href: '/h/260955/finance'          },
       { label: 'Planning', href: '/h/260955/finance/planning' },
       { label: 'Budget',   href: '/h/260955/finance/budget'   },
       { label: 'Studio',   href: '/h/260955/finance/studio'   },
