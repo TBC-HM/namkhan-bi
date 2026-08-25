@@ -1,10 +1,15 @@
 // GET /api/cron/poll-gmail
 // Vercel Cron entrypoint. For each row in marketing.user_gmail_connections (not paused):
-//  1. Mint a fresh access_token via refresh_token
-//  2. List messages matching `q=after:YYYY/MM/DD` since last_synced_at (or 2026-01-01 first run)
-//  3. Page through; for each message, fetch full content
-//  4. Insert into sales.email_messages (dedupe by message_id) — re-uses the
+//  1. Resolve the refresh_token from the Supabase vault (fn_get_gmail_refresh_token
+//     RPC — SECRETS LAW, sales_module round 4) with a legacy column fallback
+//  2. Mint a fresh access_token via that refresh_token
+//  3. List messages matching `q=after:YYYY/MM/DD` since last_synced_at (or 2026-01-01 first run)
+//  4. Page through (bounded pageToken loop, max 5 pages = 500 msgs/mailbox/run);
+//     for each message, fetch full content
+//  5. Insert into sales.email_messages (dedupe by message_id) — re-uses the
 //     same logic as /api/sales/email-ingest by sharing the parser/triager helpers
+//  6. Write one sales.gmail_poll_runs row per mailbox per run (kills the
+//     rule-883 false-green class: health is visible in the DB, not just net._http_response)
 //
 // Auth: query param ?key=<CRON_SECRET> OR Vercel's automatic Authorization
 // header (Vercel cron sends Bearer <CRON_SECRET>).
@@ -29,6 +34,8 @@ export const maxDuration = 300; // 5 min — backfill can take a while
 
 const NAMKHAN_DOMAIN_RE = /@(thenamkhan|namkhan)\.com\s*$/i;
 const ANY_EMAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+const MAX_PAGES_PER_RUN = 5;      // bounded pageToken loop (sales_module round 4)
+const MAX_MSGS_PER_RUN = 500;     // 5 pages x 100 msgs — clears backlog tails without unbounded runs
 
 // ---- helpers (small versions; bigger versions live in /api/sales/email-ingest) ----
 
@@ -150,6 +157,40 @@ async function ingestOne(msg: GmailMessageFull, fallbackMailbox: string): Promis
   return { kind: 'inserted' };
 }
 
+// ---- refresh-token resolution (SECRETS LAW, sales_module round 4) ----
+// The executing path no longer trusts plaintext in marketing.user_gmail_connections:
+// tokens live in the Supabase vault as gmail_refresh_token:<address> secrets and
+// are read through the service-role-only RPC fn_get_gmail_refresh_token. The
+// column now stores the sentinel 'vaulted'; the legacy fallback only fires for
+// a real-looking token (transition safety for a connection not yet vaulted).
+async function resolveRefreshToken(sb: ReturnType<typeof getSupabaseAdmin>, email: string, columnToken: string | null): Promise<string | null> {
+  try {
+    const { data, error } = await sb.rpc('fn_get_gmail_refresh_token', { p_email: email });
+    if (!error && typeof data === 'string' && data.length > 20) return data;
+  } catch { /* fall through to column fallback */ }
+  if (columnToken && columnToken.length > 20 && columnToken !== 'vaulted') return columnToken;
+  return null;
+}
+
+// ---- run logging (kills rule-883 false-greens) ----
+async function logPollRun(sb: ReturnType<typeof getSupabaseAdmin>, row: {
+  email: string; startedAt: string; status: 'success' | 'error';
+  seen: number; inserted: number; skipped: number; error?: string;
+}): Promise<void> {
+  try {
+    await sb.schema('sales').from('gmail_poll_runs').insert({
+      email: row.email,
+      started_at: row.startedAt,
+      finished_at: new Date().toISOString(),
+      status: row.status,
+      messages_seen: row.seen,
+      messages_inserted: row.inserted,
+      messages_skipped: row.skipped,
+      error_message: row.error ?? null,
+    });
+  } catch { /* logging must never break the poll */ }
+}
+
 // ---- GET handler ----
 
 export async function GET(request: Request) {
@@ -193,21 +234,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ note: 'No gmail connections to poll', processed: [] });
   }
 
-  const results: Array<{ email: string; ingested: number; skipped?: number; errored?: number; error?: string }> = [];
+  const results: Array<{ email: string; ingested: number; skipped?: number; errored?: number; pages?: number; error?: string }> = [];
   for (const conn of connections) {
     const connEmail: string = conn.gmail_address ?? conn.email ?? '';
+    const startedAt = new Date().toISOString();
     if (conn.paused && !forceEmail) {
       results.push({ email: connEmail, ingested: 0, error: 'paused' });
       continue;
     }
-    // Refresh access token
+    // Resolve refresh token (vault-first) + mint access token
     let accessToken: string;
     try {
-      const tokens = await refreshAccessToken(conn.refresh_token);
+      const refreshToken = await resolveRefreshToken(sb, connEmail, conn.refresh_token ?? null);
+      if (!refreshToken) throw new Error('no refresh token in vault or column');
+      const tokens = await refreshAccessToken(refreshToken);
       accessToken = tokens.access_token;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       results.push({ email: connEmail, ingested: 0, error: `Refresh failed: ${msg}` });
+      await logPollRun(sb, { email: connEmail, startedAt, status: 'error', seen: 0, inserted: 0, skipped: 0, error: `Refresh failed: ${msg}` });
       continue;
     }
     // Construct Gmail query
@@ -215,24 +260,37 @@ export async function GET(request: Request) {
     const date = since.split('T')[0].replace(/-/g, '/'); // YYYY/MM/DD
     const query = `after:${date}`;
     try {
-      const messageList = await listMessages(accessToken, query);
-      let ingested = 0, skipped = 0, errored = 0;
+      let ingested = 0, skipped = 0, errored = 0, seen = 0, pages = 0;
       let firstError: string | undefined;
-      for (const m of (messageList.messages ?? []).slice(0, 100)) { // cap to 100 messages per run
-        const full = await getGmailMessage(accessToken, m.id);
-        const res = await ingestOne(full, connEmail);
-        if (res.kind === 'inserted') ingested++;
-        else if (res.kind === 'duplicate') skipped++;
-        else { errored++; if (!firstError) firstError = res.error; }
-      }
+      // Bounded pageToken loop (round 4): the previous newest-100-only read
+      // left backlog tails permanently unreachable once last_synced_at advanced.
+      let pageToken: string | undefined;
+      do {
+        const messageList = await listMessages(accessToken, query, pageToken);
+        pages++;
+        for (const m of (messageList.messages ?? []).slice(0, MAX_MSGS_PER_RUN - seen)) {
+          seen++;
+          const full = await getGmailMessage(accessToken, m.id);
+          const res = await ingestOne(full, connEmail);
+          if (res.kind === 'inserted') ingested++;
+          else if (res.kind === 'duplicate') skipped++;
+          else { errored++; if (!firstError) firstError = res.error; }
+        }
+        pageToken = messageList.nextPageToken;
+      } while (pageToken && pages < MAX_PAGES_PER_RUN && seen < MAX_MSGS_PER_RUN);
       // Update last_synced_at (keyed by id — the table has no `email` column)
       await sb.schema('marketing').from('user_gmail_connections').update({
         last_synced_at: new Date().toISOString(),
       }).eq('id', conn.id);
-      results.push({ email: connEmail, ingested, skipped, errored, ...(firstError ? { error: `first ingest error: ${firstError}` } : {}) });
+      results.push({ email: connEmail, ingested, skipped, errored, pages, ...(firstError ? { error: `first ingest error: ${firstError}` } : {}) });
+      await logPollRun(sb, {
+        email: connEmail, startedAt, status: errored > 0 && ingested === 0 && skipped === 0 ? 'error' : 'success',
+        seen, inserted: ingested, skipped, error: firstError,
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       results.push({ email: connEmail, ingested: 0, error: msg });
+      await logPollRun(sb, { email: connEmail, startedAt, status: 'error', seen: 0, inserted: 0, skipped: 0, error: msg });
     }
   }
 
