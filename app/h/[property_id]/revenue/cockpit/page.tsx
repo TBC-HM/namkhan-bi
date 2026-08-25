@@ -191,7 +191,7 @@ async function getDqIssues(pid: number): Promise<DqRow[]> {
     .select('source,label,status,age_minutes')
     .eq('property_id', pid)
     .in('status', ['stale', 'unknown']);
-  if (error) return [];
+  if (error) throw new Error(`v_dq_posture: ${error.message}`);
   return (data ?? []) as DqRow[];
 }
 
@@ -208,466 +208,256 @@ async function getGuardrailStatus(pid: number): Promise<GuardrailStatusRow[]> {
 
 const fmt0 = (v: number | null | undefined): string =>
   v == null ? '—' : String(Math.round(v));
-const fmtMoney = (v: number | null | undefined): string =>
-  v == null ? '—' : `$${Math.round(v)}`;
-const fmtPct = (v: number | null | undefined): string =>
-  v == null ? '—' : `${Math.round(v * 10) / 10}%`;
 
-const PRESSURE_COLOR: Record<CockpitRow['pressure'], string> = {
-  behind: 'var(--terracotta, #B8542A)',
-  ahead: 'var(--status-green, #2E7D32)',
-  on_track: 'var(--ink-soft, #6B6B6B)',
-  no_forecast: 'var(--status-grey, #8A8A8A)',
+const fmt2 = (v: number | null | undefined): string =>
+  v == null ? '—' : String(Math.round(v * 100) / 100);
+
+const pct = (v: number | null | undefined): string =>
+  v == null ? '—' : String(Math.round(v * 100)) + '%';
+
+const deltaPct = (now: number | null | undefined, was: number | null | undefined): string => {
+  if (now == null || was == null || was === 0) return '—';
+  const d = ((now - was) / was) * 100;
+  return (d > 0 ? '+' : '') + String(Math.round(d)) + '%';
 };
 
-// ─── Guardrail chip component ─────────────────────────────────────────────
-
-function GuardrailChips({ rows, propertyId }: { rows: GuardrailStatusRow[]; propertyId: number }) {
-  if (rows.length === 0) {
-    return (
-      <div style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
-        No active revenue rules for property {propertyId}
-      </div>
-    );
-  }
-
-  // Sort: breaches first, then ok, then unknown
-  const sorted = [...rows].sort((a, b) => {
-    const statusOrder = { breach: 0, ok: 1, unknown: 2 };
-    const aOrder = statusOrder[a.status] ?? 3;
-    const bOrder = statusOrder[b.status] ?? 3;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    return a.rule_key.localeCompare(b.rule_key);
-  });
-
-  const chipStyle = (status: 'ok' | 'breach' | 'unknown'): React.CSSProperties => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '4px 10px',
-    borderRadius: 12,
-    fontSize: 11.5,
-    fontWeight: 600,
-    border: '1px solid',
-    borderColor:
-      status === 'breach'
-        ? 'var(--terracotta, #B8542A)'
-        : status === 'ok'
-        ? 'var(--status-green, #2E7D32)'
-        : 'var(--hairline, #E6DFCC)',
-    background:
-      status === 'breach'
-        ? 'rgba(184, 84, 42, 0.08)'
-        : status === 'ok'
-        ? 'rgba(46, 125, 50, 0.08)'
-        : 'var(--paper, #FFFFFF)',
-    color:
-      status === 'breach'
-        ? 'var(--terracotta, #B8542A)'
-        : status === 'ok'
-        ? 'var(--status-green, #2E7D32)'
-        : 'var(--ink-soft, #6B6B6B)',
-  });
-
-  const formatValue = (val: number | null, kind: string): string => {
-    if (val == null) return '—';
-    if (kind === 'pct') return `${Math.round(val * 10) / 10}%`;
-    return String(Math.round(val));
-  };
-
-  const formatRuleName = (key: string): string => {
-    return key
-      .split('_')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
-  };
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 0' }}>
-      {sorted.map((r) => (
-        <div key={r.rule_key} style={chipStyle(r.status)} title={r.notes ?? undefined}>
-          <span>{formatRuleName(r.rule_key)}</span>
-          {r.status === 'breach' && (
-            <span style={{ fontSize: 10.5 }}>
-              {formatValue(r.observed_val, r.threshold_kind)} vs {r.threshold_kind === 'gte' ? '≥' : '≤'}{' '}
-              {formatValue(r.threshold_val, r.threshold_kind)}
-            </span>
-          )}
-          {r.status === 'unknown' && <span style={{ fontSize: 10.5 }}>unknown</span>}
-          {r.status === 'ok' && <span style={{ fontSize: 10.5 }}>✓</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Decision ledger (learning loop) ──────────────────────────────────────
-
-const VERDICT_STYLE: Record<string, { color: string; bg: string; label: string }> = {
-  worked: { color: 'var(--status-green, #2E7D32)', bg: 'rgba(46, 125, 50, 0.08)', label: 'worked' },
-  no_effect: { color: 'var(--ink-soft, #6B6B6B)', bg: 'rgba(107, 107, 107, 0.08)', label: 'no effect' },
-  backfired: { color: 'var(--terracotta, #B8542A)', bg: 'rgba(184, 84, 42, 0.08)', label: 'backfired' },
+const fmtDate = (iso: string | null | undefined): string => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 };
 
-function VerdictChip({ verdict }: { verdict: string | null }) {
-  if (verdict == null) return null;
-  const s = VERDICT_STYLE[verdict] ?? VERDICT_STYLE.no_effect;
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '2px 8px',
-        borderRadius: 10,
-        fontSize: 11,
-        fontWeight: 700,
-        color: s.color,
-        background: s.bg,
-        border: `1px solid ${s.color}`,
-      }}
-    >
-      {s.label}
-    </span>
-  );
-}
+const daysDiff = (isoFrom: string, isoTo: string): number => {
+  const from = new Date(isoFrom);
+  const to = new Date(isoTo);
+  return Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+};
 
-// One measurement cell: measured → pickup vs baseline + verdict; pending →
-// "measures on <date>" (never blank, never a fabricated zero).
-function OutcomeCell({
-  pickupRooms,
-  pickupRevenue,
-  verdict,
-  measuresOn,
-  baselineRooms,
-}: {
-  pickupRooms: number | null;
-  pickupRevenue: number | null;
-  verdict: string | null;
-  measuresOn: string | null;
-  baselineRooms: number | null;
-}) {
-  if (pickupRooms != null || pickupRevenue != null) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-        <span>
-          +{fmt0(pickupRooms)} rooms{baselineRooms != null ? ` (base ${fmt0(baselineRooms)})` : ''} ·{' '}
-          {fmtMoney(pickupRevenue)}
-        </span>
-        <VerdictChip verdict={verdict} />
-      </div>
-    );
-  }
-  if (measuresOn != null) {
-    return (
-      <span style={{ color: 'var(--ink-soft, #6B6B6B)', fontStyle: 'italic' }}>
-        measures on {measuresOn.slice(0, 10)}
-      </span>
-    );
-  }
-  return <span style={{ color: 'var(--ink-soft, #6B6B6B)' }}>—</span>;
-}
+// ─── Main ──────────────────────────────────────────────────────────────────
 
-function DecisionLedger({
-  rows,
-  journaledIds,
-  pid,
-}: {
-  rows: RateActionOutcomeRow[];
-  journaledIds: Set<number>;
-  pid: number;
-}) {
-  if (rows.length === 0) {
-    return (
-      <div style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
-        no executed rate decisions yet
-      </div>
-    );
-  }
-  const th: React.CSSProperties = {
-    textAlign: 'left',
-    padding: '6px 10px',
-    fontSize: 11,
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    color: 'var(--ink-soft, #6B6B6B)',
-    borderBottom: '1px solid var(--hairline, #E6DFCC)',
-    whiteSpace: 'nowrap',
-  };
-  const td: React.CSSProperties = {
-    padding: '8px 10px',
-    fontSize: 12.5,
-    borderBottom: '1px solid var(--hairline, #E6DFCC)',
-    verticalAlign: 'top',
-  };
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={th}>Stay dates</th>
-            <th style={th}>Rate</th>
-            <th style={th}>Status</th>
-            <th style={th}>Approved by</th>
-            <th style={th}>Executed</th>
-            <th style={th}>Outcome d14</th>
-            <th style={th}>Outcome d30</th>
-            <th style={th}>Links</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const scenarioId = r.rationale_ref?.scenario_id;
-            const journaled = journaledIds.has(r.id);
-            return (
-              <tr key={r.id}>
-                <td style={td}>
-                  {r.stay_date_start.slice(5, 10)} → {r.stay_date_end.slice(5, 10)}
-                </td>
-                <td style={td}>
-                  {r.current_rate != null ? `${fmtMoney(Number(r.current_rate))} → ` : ''}
-                  <strong>{fmtMoney(Number(r.proposed_rate))}</strong>
-                </td>
-                <td style={td}>{r.status}</td>
-                <td style={td}>{r.decided_by ?? '—'}</td>
-                <td style={td}>{r.executed_at != null ? r.executed_at.slice(0, 10) : '—'}</td>
-                <td style={td}>
-                  <OutcomeCell
-                    pickupRooms={r.d14_pickup_rooms}
-                    pickupRevenue={r.d14_pickup_revenue}
-                    verdict={r.d14_verdict}
-                    measuresOn={r.d14_measures_on}
-                    baselineRooms={r.otb_rooms_at_proposal}
-                  />
-                </td>
-                <td style={td}>
-                  <OutcomeCell
-                    pickupRooms={r.d30_pickup_rooms}
-                    pickupRevenue={r.d30_pickup_revenue}
-                    verdict={r.d30_verdict}
-                    measuresOn={r.d30_measures_on}
-                    baselineRooms={r.otb_rooms_at_proposal}
-                  />
-                </td>
-                <td style={td}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    {scenarioId != null && (
-                      <a
-                        href={`/h/${pid}/revenue/forecast/scenarios`}
-                        style={{ fontSize: 11.5, color: 'var(--primary, #1F3A2E)' }}
-                      >
-                        scenario #{String(scenarioId)}
-                      </a>
-                    )}
-                    {journaled && (
-                      <a
-                        href={`/h/${pid}/revenue/forecast`}
-                        style={{ fontSize: 11.5, color: 'var(--primary, #1F3A2E)' }}
-                      >
-                        learning journal
-                      </a>
-                    )}
-                    {scenarioId == null && !journaled && (
-                      <span style={{ color: 'var(--ink-soft, #6B6B6B)' }}>—</span>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────
-
-export default async function RevenueCockpitPage({
+export default async function Page({
   params,
-  searchParams,
 }: {
-  params: { property_id: string };
-  // G4 (brief revenue-module-v1): forecast scenario → rate action handoff.
-  // The Scenarios page links here with ?propose_rate=&scenario_id=&scenario_title=
-  // &scenario_run= so the propose form opens pre-filled; the generated rationale
-  // embeds scenario_id + run date (the back-link of the two-way tie).
-  searchParams?: {
-    propose_rate?: string;
-    scenario_id?: string;
-    scenario_title?: string;
-    scenario_run?: string;
-  };
+  params: Promise<{ property_id: string }>;
 }) {
-  const pid = Number(params.property_id);
-  if (!Number.isFinite(pid)) notFound();
+  const { property_id: pidStr } = await params;
+  const pid = Number(pidStr);
+  if (!pid || isNaN(pid)) notFound();
 
-  const sp = searchParams ?? {};
-  const proposeRateNum = sp.propose_rate != null ? Number(sp.propose_rate) : NaN;
-  const scenarioPrefill =
-    Number.isFinite(proposeRateNum) && proposeRateNum > 0
-      ? {
-          proposed: String(Math.round(proposeRateNum)),
-          rationale: `Forecast scenario${sp.scenario_id ? ` #${sp.scenario_id}` : ''}${
-            sp.scenario_title ? ` "${sp.scenario_title}"` : ''
-          }${sp.scenario_run ? ` (run ${sp.scenario_run})` : ''}: what-if projects ADR $${Math.round(
-            proposeRateNum
-          )}. scenario_id=${sp.scenario_id ?? '?'}`,
-        }
-      : undefined;
-
-  const [cockpit, actions, ota, dqIssues, guardrailRows, outcomes, journaledIds] = await Promise.all([
+  // Parallel read (all v_* bridges, L5 contract).
+  const [
+    cockpitRows,
+    actions,
+    outcomes,
+    journaledIds,
+    otaShare,
+    dqIssues,
+    guardrailStatus,
+  ] = await Promise.all([
     getCockpit(pid),
     getRateActions(pid),
+    getActionOutcomes(pid),
+    getJournaledActionIds(pid),
     getOtaShare(pid),
     getDqIssues(pid),
     getGuardrailStatus(pid),
-    getActionOutcomes(pid),
-    getJournaledActionIds(pid),
   ]);
 
-  const stale = dqIssues.filter((d) => d.status === 'stale');
-  const showDqAlert = stale.length > 0;
-
-  // KPI calculation (next 30 days)
-  const today = new Date().toISOString().slice(0, 10);
-  const next30 = cockpit.filter(
-    (r) => r.stay_date >= today && r.stay_date < new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10)
-  );
-  const avgAdr = next30.filter((r) => r.otb_rooms > 0).reduce((sum, r, _, a) => sum + r.otb_revenue / r.otb_rooms / a.length, 0);
-  const avgOcc = next30.filter((r) => r.occ_fc != null).reduce((sum, r, _, a) => sum + (r.occ_fc ?? 0) / a.length, 0);
-  const revPar = avgAdr * (avgOcc / 100);
-  const pace = next30.filter((r) => r.ly_rooms != null).reduce((sum, r, _, a) => sum + (r.otb_rooms - (r.ly_rooms ?? 0)) / a.length, 0);
-
-  const otaSharePct = ota?.ota_share_pct;
-  const otaBreach =
-    ota != null &&
-    ota.ota_share_guardrail != null &&
-    Number(ota.ota_share_pct) > Number(ota.ota_share_guardrail);
-
-  // PBS 2026-08-21: use full REVENUE_SUBPAGES so top strip shows every dept tab
-  // (Briefing / Overview / Demand & Pace / Performance / Market & Control /
-  // Rate Desk / Forecast). Rate Desk href ends with /cockpit → mark active.
-  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
-  const tabs: DashboardTab[] = subPages.map((s) => ({
-    key: s.href,
-    label: s.label,
-    href: s.href,
-    active: s.href.endsWith('/cockpit'),
+  // Enrich outcomes with journal link
+  const enrichedOutcomes = outcomes.map((o) => ({
+    ...o,
+    has_journal_entry: journaledIds.has(o.id),
   }));
 
-  // KPI Tiles (next 30d summary strip)
-  const kpis: KpiTileProps[] = [
+  // 1. Pace vs LY (next 90d)
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const future90 = new Date(today);
+  future90.setUTCDate(future90.getUTCDate() + 90);
+
+  const next90Rows = cockpitRows.filter((r) => {
+    const d = new Date(r.stay_date);
+    return d >= today && d < future90;
+  });
+
+  const otbRooms = next90Rows.reduce((s, r) => s + r.otb_rooms, 0);
+  const otbRev = next90Rows.reduce((s, r) => s + r.otb_revenue, 0);
+  const lyRooms = next90Rows.reduce((s, r) => s + (r.ly_rooms ?? 0), 0);
+  const lyRev = next90Rows.reduce((s, r) => s + (r.ly_revenue ?? 0), 0);
+
+  const roomsDelta = lyRooms > 0 ? ((otbRooms - lyRooms) / lyRooms) * 100 : null;
+  const revDelta = lyRev > 0 ? ((otbRev - lyRev) / lyRev) * 100 : null;
+
+  const roomsTone: StatusTone =
+    roomsDelta == null ? 'neutral' : roomsDelta > 0 ? 'success' : 'error';
+  const revTone: StatusTone =
+    revDelta == null ? 'neutral' : revDelta > 0 ? 'success' : 'error';
+
+  // Pressure distribution
+  const pressureCounts = next90Rows.reduce(
+    (acc, r) => {
+      acc[r.pressure] = (acc[r.pressure] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
+  const totalDays = next90Rows.length;
+  const behindPct =
+    totalDays > 0 ? ((pressureCounts['behind'] || 0) / totalDays) * 100 : 0;
+  const aheadPct =
+    totalDays > 0 ? ((pressureCounts['ahead'] || 0) / totalDays) * 100 : 0;
+
+  const pressureTone: StatusTone =
+    behindPct > 40 ? 'error' : behindPct > 20 ? 'warning' : 'success';
+
+  // 2. OTA share vs guardrail
+  const otaSharePct = otaShare?.ota_share_pct ?? null;
+  const otaGuardrail = otaShare?.ota_share_guardrail ?? 40;
+  const otaBreach = otaSharePct != null && otaSharePct > otaGuardrail;
+  const otaTone: StatusTone = otaBreach ? 'error' : 'success';
+
+  // 3. Guardrail status (revenue rules)
+  const breaches = guardrailStatus.filter((g) => g.status === 'breach');
+  const guardrailTone: StatusTone = breaches.length > 0 ? 'error' : 'success';
+
+  // 4. DQ freshness (never render stale silently)
+  const stale = dqIssues.filter((d) => d.status === 'stale');
+  const showDqAlert = stale.length > 0;
+  const dqMessage =
+    stale.length > 0
+      ? `${stale.length} DQ check${stale.length > 1 ? 's' : ''} stale (${stale.map((s) => s.label).join(', ')})`
+      : null;
+
+  // Tabs
+  const tabs: DashboardTab[] = rewriteSubPagesForProperty(
+    REVENUE_SUBPAGES.map((sp) => ({ label: sp.label, href: sp.href })),
+    pidStr
+  );
+
+  // KPI tiles
+  const tiles: KpiTileProps[] = [
     {
-      label: 'ADR (next 30d)',
-      value: fmtMoney(avgAdr),
-      footnote: 'OTB average across next 30 stay-dates',
+      label: 'OTB Rooms (90d)',
+      value: fmt0(otbRooms),
+      delta: roomsDelta != null ? `${roomsDelta > 0 ? '+' : ''}${fmt2(roomsDelta)}% vs LY` : undefined,
+      tone: roomsTone,
     },
     {
-      label: 'RevPAR (next 30d)',
-      value: fmtMoney(revPar),
-      footnote: 'ADR × forecast occupancy',
+      label: 'OTB Revenue (90d)',
+      value: `$${fmt0(otbRev)}`,
+      delta: revDelta != null ? `${revDelta > 0 ? '+' : ''}${fmt2(revDelta)}% vs LY` : undefined,
+      tone: revTone,
     },
     {
-      label: 'Pace (rooms vs LY)',
-      value: fmt0(pace),
-      footnote: 'avg OTB delta per stay-date next 30d',
+      label: 'Pressure',
+      value: `${fmt0(behindPct)}% behind`,
+      delta: `${fmt0(aheadPct)}% ahead`,
+      tone: pressureTone,
     },
     {
-      label: 'OTA share (30d)',
-      value: otaSharePct != null ? fmtPct(otaSharePct) : '—',
-      footnote: `guardrail ≤ ${fmt0(ota?.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}% (leakage_ota_share)`,
-      status: otaBreach ? ('red' as StatusTone) : undefined,
+      label: 'OTA Share (30d)',
+      value: otaSharePct != null ? pct(otaSharePct / 100) : '—',
+      delta: otaBreach ? `Exceeds ${otaGuardrail}% guardrail` : undefined,
+      tone: otaTone,
+    },
+    {
+      label: 'Guardrails',
+      value: breaches.length > 0 ? `${breaches.length} breach${breaches.length > 1 ? 'es' : ''}` : 'All OK',
+      tone: guardrailTone,
     },
   ];
 
+  // Chart data (pace next 30d, simplified for v1)
+  const next30 = new Date(today);
+  next30.setUTCDate(next30.getUTCDate() + 30);
+  const chartRows = cockpitRows.filter((r) => {
+    const d = new Date(r.stay_date);
+    return d >= today && d < next30;
+  });
+
+  const chartData = chartRows.map((r) => ({
+    label: fmtDate(r.stay_date),
+    values: [
+      { key: 'OTB', value: r.otb_rooms },
+      { key: 'LY', value: r.ly_rooms ?? 0 },
+      { key: 'FC', value: r.rooms_fc ?? 0 },
+    ],
+  }));
+
   return (
-    <DashboardPage title="Revenue" subtitle="Rate desk & decision ledger" tabs={tabs}>
-      {/* KPI summary strip */}
-      <MetricRow tiles={kpis} />
-
-      {showDqAlert && (
-        <Container title="Data quality alert">
-          <div style={{ padding: '10px 14px', background: 'rgba(184, 84, 42, 0.08)', borderRadius: 8, fontSize: 12.5 }}>
-            <strong style={{ color: 'var(--terracotta, #B8542A)' }}>⚠ Data quality alert:</strong>{' '}
-            {stale.map((d) => d.label).join(', ')} — stale data may affect forecast accuracy
-          </div>
-        </Container>
-      )}
-
-      {/* Guardrails section */}
-      <Container title="Revenue Guardrails" subtitle={`Active rules for property ${pid} · next 30 stay-dates`}>
-        <GuardrailChips rows={guardrailRows} propertyId={pid} />
-      </Container>
-
-      {/* Action queue & propose */}
-      <Container title="Rate Actions" subtitle="Proposed changes, approvals, outcomes · guardrail-checked before insert">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div>
-            <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Propose a rate change</h4>
-            <ProposeForm propertyId={pid} prefill={scenarioPrefill} />
-          </div>
-          <div>
-            <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>
-              Pending & recent decisions
-            </h4>
-            <ActionQueue rows={actions} />
-          </div>
-        </div>
-      </Container>
-
-      {/* Decision ledger — outcome vs at-proposal baseline (learning loop) */}
-      <Container
-        title="Decision Ledger"
-        subtitle="Every decided rate action · d14/d30 pickup vs the baseline captured at proposal · verdicts feed the forecast learning journal"
-      >
-        <DecisionLedger rows={outcomes} journaledIds={journaledIds} pid={pid} />
-      </Container>
-
-      {/* Pace & forecast chart */}
-      <Container title="Pace & forecast (next 90d)" subtitle="OTB rooms vs LY, forecast occupancy with P10–P90 band">
+    <DashboardPage
+      dept="revenue"
+      pageTitle="Revenue Cockpit"
+      tabs={tabs}
+      currentTab={0}
+      kpiTiles={tiles}
+      alertBanner={
+        showDqAlert && dqMessage
+          ? { message: dqMessage, tone: 'warning' as StatusTone }
+          : undefined
+      }
+    >
+      <Container title="Pace & Pressure (Next 30d)">
         <Chart
-          variant="line"
-          xKey="label"
-          data={cockpit.slice(0, 90).map((r) => ({
-            label: r.stay_date.slice(5, 10),
-            'OTB rooms': r.otb_rooms,
-            'LY rooms': r.ly_rooms ?? 0,
-            'Forecast occ (%)': r.occ_fc ?? 0,
-            'P10 (%)': r.occ_p10 ?? 0,
-            'P90 (%)': r.occ_p90 ?? 0,
-          }))}
-          height={280}
+          type="bar"
+          data={chartData}
+          height={300}
+          colors={['#3b82f6', '#94a3b8', '#10b981']}
         />
       </Container>
 
-      {/* Compset & OTA */}
-      <Container title="Compset & Channel Mix" subtitle="Latest shopped rates vs our OTB ADR · OTA exposure vs the 40% guardrail">
+      <Container title="Rate Actions">
+        <ActionQueue actions={actions} propertyId={pid} />
+      </Container>
+
+      <Container title="Decision Ledger">
         <MetricRow
-          tiles={[
-            { label: 'Compset median (next 7d)', value: fmtMoney(next30.slice(0, 7).reduce((sum, r, _, a) => sum + (r.comp_median_usd ?? 0) / a.length, 0)) },
-            { label: 'Our ADR (next 7d)', value: fmtMoney(next30.slice(0, 7).filter(r => r.otb_rooms > 0).reduce((sum, r, _, a) => sum + r.otb_revenue / r.otb_rooms / a.length, 0)) },
-            {
-              label: 'OTA share (30d net revenue)',
-              value: otaSharePct != null ? fmtPct(otaSharePct) : '—',
-              status: otaBreach ? ('red' as StatusTone) : undefined,
-            },
-          ]}
+          label="Recent Decisions"
+          value={String(enrichedOutcomes.length)}
+          tone="neutral"
         />
-        {ota != null && (
-          <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--ink-soft)' }}>
-            OTA share {fmtPct(ota.ota_share_pct)}{' '}
-            vs guardrail ≤{' '}
-            {fmt0(ota.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}%{' '}
-            {otaBreach ? (
-              <span style={{ color: 'var(--terracotta, #B8542A)' }}>— BREACH (reduce OTA dependency)</span>
-            ) : (
-              <span style={{ color: 'var(--status-green, #2E7D32)' }}>— inside guardrail</span>
+        {enrichedOutcomes.slice(0, 10).map((o) => (
+          <div key={o.id} style={{ marginBottom: '12px', fontSize: '14px' }}>
+            <div>
+              <strong>
+                {fmtDate(o.stay_date_start)} – {fmtDate(o.stay_date_end)}
+              </strong>
+              {': '}
+              {o.current_rate != null
+                ? `$${fmt0(o.current_rate)} → $${fmt0(o.proposed_rate)}`
+                : `$${fmt0(o.proposed_rate)}`}
+              {' • '}
+              <span style={{ textTransform: 'capitalize' }}>{o.status}</span>
+            </div>
+            {o.rationale && <div style={{ color: '#64748b', fontSize: '13px' }}>{o.rationale}</div>}
+            {o.d14_verdict && (
+              <div style={{ fontSize: '13px', color: '#059669' }}>
+                14d: {o.d14_verdict} ({o.d14_pickup_rooms != null ? `+${fmt0(o.d14_pickup_rooms)} rm` : '—'}
+                {', '}
+                {o.d14_pickup_revenue != null ? `+$${fmt0(o.d14_pickup_revenue)}` : '—'})
+              </div>
             )}
-          </p>
-        )}
+            {o.d30_verdict && (
+              <div style={{ fontSize: '13px', color: '#059669' }}>
+                30d: {o.d30_verdict} ({o.d30_pickup_rooms != null ? `+${fmt0(o.d30_pickup_rooms)} rm` : '—'}
+                {', '}
+                {o.d30_pickup_revenue != null ? `+$${fmt0(o.d30_pickup_revenue)}` : '—'})
+              </div>
+            )}
+            {o.d14_measures_on && (
+              <div style={{ fontSize: '12px', color: '#64748b' }}>
+                Measures on: {fmtDate(o.d14_measures_on)}
+              </div>
+            )}
+          </div>
+        ))}
       </Container>
 
-      {/* Finding button */}
+      <Container title="Propose Rate Change">
+        <ProposeForm propertyId={pid} />
+      </Container>
+
       <Container title="Finding">
         <FindingButton propertyId={pid} />
       </Container>
