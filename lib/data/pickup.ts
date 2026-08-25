@@ -1,8 +1,11 @@
 // lib/data/pickup.ts
 // Server helper -> PickupMatrixData. Sources:
 //   public.fn_pickup_asof(prop)       per-property as-of (Namkhan live=today; Donna stops at last booking)
-//   public.fn_pickup_otb_at(prop,as)  Silver, as-of-cancellation, night-attributed RN, booked-rate REV,
-//                                      + time-correct avail_rn (handles Namkhan 24->30 on 2026-07-01)
+//   public.fn_pickup_otb_at_year(prop,as,yr)  Silver, as-of-cancellation, night-attributed RN,
+//                                      booked-rate REV, + time-correct avail_rn (handles Namkhan
+//                                      24->30 on 2026-07-01). Stay-year window is EXPLICIT — the
+//                                      2-arg fn_pickup_otb_at derives it from p_asof and so can
+//                                      only ever return the as-of year (PBS 2026-08-25).
 //   public.v_pickup_monthly           full-year baseline actuals
 // vsLy now compares against the as-of SDLY (not full-year final actual).
 
@@ -13,7 +16,7 @@ import type {
 
 const NAMKHAN_ID = 260955;
 const DONNA_ID   = 1000001;
-const SYMBOL: Record<number, string> = { [NAMKHAN_ID]: '$', [DONNA_ID]: '\u20AC' };
+const SYMBOL: Record<number, string> = { [NAMKHAN_ID]: '$', [DONNA_ID]: '€' };
 
 interface MonthAgg { rn: number; rev: number; rev_total: number; avail: number }
 type OtbRow = { stay_year: number; stay_month: number; rn: number; rev: number; rev_total: number; avail_rn: number };
@@ -62,7 +65,7 @@ function sumBucket(b: Record<number, MonthAgg>): MonthAgg {
   return t;
 }
 
-export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixData> {
+export async function getPickupMatrix(propertyId: number, requestedStayYear?: number): Promise<PickupMatrixData> {
   const supabase = getSupabaseAdmin();
   const property = propertyId === NAMKHAN_ID ? 'The Namkhan'
     : propertyId === DONNA_ID ? 'Donna Portals' : `Property ${propertyId}`;
@@ -76,7 +79,11 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
   const isStale = asofRes?.is_stale ?? false;
   const daysStale = asofRes?.days_stale ?? 0;
 
-  const stayYear = asOf.getFullYear();
+  // PBS 2026-08-25 — year selector. The matrix was locked to the as-of year because
+  // fn_pickup_otb_at derives its stay-year window from p_asof. fn_pickup_otb_at_year
+  // decouples them: the snapshot date stays real (today), the stay window is explicit.
+  const asOfYear = asOf.getFullYear();
+  const stayYear = requestedStayYear ?? asOfYear;
   const sdlyYear = stayYear - 1;
 
   const yesterday = new Date(asOf); yesterday.setDate(asOf.getDate() - 1);
@@ -87,25 +94,31 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
   const lastMonday = new Date(asOf);
   { const dow = lastMonday.getDay() || 7; lastMonday.setDate(lastMonday.getDate() - (dow - 1) - 7); }
   const monthStart = new Date(asOf.getFullYear(), asOf.getMonth(), 1);
-  const sdly = new Date(asOf); sdly.setFullYear(sdlyYear);
+  // SDLY = same LEAD TIME last year, so shift the SNAPSHOT DATE back one calendar year.
+  // Previously this was setFullYear(sdlyYear), which only coincided with "asOf minus a
+  // year" while stayYear === asOfYear. For the 2027 view it compares "2027 on the books
+  // today" against "2026 on the books on this date last year" — the correct pace read.
+  const sdly = new Date(asOf); sdly.setFullYear(asOfYear - 1);
   const y2 = new Date(stayYear - 2, 11, 31);
   const y3 = new Date(stayYear - 3, 11, 31);
 
-  const snap = (d: Date): Promise<OtbRow[]> =>
+  // snap(date, year) — OTB as of `date`, restricted to stay-year `year`.
+  const snap = (d: Date, year: number): Promise<OtbRow[]> =>
     Promise.resolve(
-      supabase.rpc('fn_pickup_otb_at', { p_property_id: propertyId, p_asof: fmtIso(d) })
-        .then((r) => (r.data ?? []) as OtbRow[]),
+      supabase.rpc('fn_pickup_otb_at_year', {
+        p_property_id: propertyId, p_asof: fmtIso(d), p_stay_year: year,
+      }).then((r) => (r.data ?? []) as OtbRow[]),
     );
 
   const [sToday, sYest, sDby, sMon, sMonth, sSdly, sY2, sY3] = await Promise.all([
-    snap(asOf).catch(() => [] as OtbRow[]),
-    snap(yesterday).catch(() => [] as OtbRow[]),
-    snap(dby).catch(() => [] as OtbRow[]),
-    snap(lastMonday).catch(() => [] as OtbRow[]),
-    snap(monthStart).catch(() => [] as OtbRow[]),
-    snap(sdly).catch(() => [] as OtbRow[]),
-    snap(y2).catch(() => [] as OtbRow[]),
-    snap(y3).catch(() => [] as OtbRow[]),
+    snap(asOf,       stayYear).catch(() => [] as OtbRow[]),
+    snap(yesterday,  stayYear).catch(() => [] as OtbRow[]),
+    snap(dby,        stayYear).catch(() => [] as OtbRow[]),
+    snap(lastMonday, stayYear).catch(() => [] as OtbRow[]),
+    snap(monthStart, stayYear).catch(() => [] as OtbRow[]),
+    snap(sdly,       sdlyYear).catch(() => [] as OtbRow[]),
+    snap(y2,         stayYear - 2).catch(() => [] as OtbRow[]),
+    snap(y3,         stayYear - 3).catch(() => [] as OtbRow[]),
   ]);
 
   const otbToday = bucket(sToday, stayYear);
@@ -257,26 +270,31 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
     };
   }
 
-  const curMonthAvail = otbToday[asOf.getMonth() + 1]?.avail ?? 0;
+  // Capacity = rooms/night. Anchor on the as-of month when showing the as-of year;
+  // for a forward year there is no "current" month, so anchor on January.
+  const capMonth = stayYear === asOfYear ? asOf.getMonth() + 1 : 1;
+  const curMonthAvail = otbToday[capMonth]?.avail ?? 0;
   const capacity = curMonthAvail > 0
-    ? Math.round(curMonthAvail / new Date(stayYear, asOf.getMonth() + 1, 0).getDate()) : 0;
+    ? Math.round(curMonthAvail / new Date(stayYear, capMonth, 0).getDate()) : 0;
 
   const stalenessNote = isStale
-    ? `${property} feed stopped \u2014 data as of ${asofRes?.last_booking ? fmtDmy(new Date(asofRes.last_booking + 'T00:00:00')) : fmtDmy(asOf)} (${daysStale}d ago). Live pickup deltas suppressed; SDLY anchored to ${fmtDmy(sdly)}.`
+    ? `${property} feed stopped — data as of ${asofRes?.last_booking ? fmtDmy(new Date(asofRes.last_booking + 'T00:00:00')) : fmtDmy(asOf)} (${daysStale}d ago). Live pickup deltas suppressed; SDLY anchored to ${fmtDmy(sdly)}.`
     : undefined;
 
   return {
     property,
     capacity,
-    asOfDate: `OTB \u00B7 Pickup \u00B7 Comparison \u00B7 SDLY  \u00B7  as of ${fmtDmy(asOf)}`,
+    asOfDate: `OTB · Pickup · Comparison · SDLY  ·  as of ${fmtDmy(asOf)}`,
     monthlySnapshotLabel: fmtDmy(monthStart),
     mondaySnapshotLabel: fmtDmy(lastMonday),
     yesterdaySnapshotLabel: fmtDmy(yesterday),
     todaySnapshotLabel: fmtDmy(asOf),
     sdlyDate: fmtDmy(sdly),
+    stayYear,
+    baselineYears: [stayYear - 3, stayYear - 2, stayYear - 1],
     months,
     total: METRICS.map(totalRow),
     stalenessNote,
-    currencySymbol: SYMBOL[propertyId] ?? '\u20AC',
+    currencySymbol: SYMBOL[propertyId] ?? '€',
   };
 }
