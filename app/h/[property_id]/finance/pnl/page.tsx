@@ -257,6 +257,15 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
   const annualGop      = pickAmount(rows, 'utilities__gross_operating_profit_gop');
   const annualNet      = pickAmount(rows, 'utilities__net_income');
 
+  // ── Annual totals (closed prior year) ────────────────────────────────
+  // PBS 2026-08-25: Donna was missing the "closed prior year" rollup that
+  // Namkhan gets on /finance/pnl. priorYearRows is ALREADY fetched above for
+  // the MoM-across-January math — this reuses it, so no extra round-trip.
+  const hasPriorYear       = priorYearRows.length > 0;
+  const priorHotelRev      = pickAmount(priorYearRows, 'hotel__hotel_revenue');
+  const priorGop           = pickAmount(priorYearRows, 'utilities__gross_operating_profit_gop');
+  const priorNet           = pickAmount(priorYearRows, 'utilities__net_income');
+
   // ── Empty-state for years with no data ────────────────────────────────
   const noData = rows.length === 0;
 
@@ -618,6 +627,31 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
             }
           >
             <AnnualTable rows={rows} year={year} currency={currency} />
+          </Container>
+        </>
+      )}
+
+      {/* ── 12-month rollup · closed prior year ──────────────────────────
+          Mirrors the "12-month rollup · FY2025 / actual · closed prior year"
+          container on Namkhan's /finance/pnl. Rendered OUTSIDE the !noData
+          gate on purpose: when the selected year has no USALI-mapped rows
+          (Donna FY2026 is a Spanish-PGC load with no usali_line_code yet),
+          the closed prior year is the only readable P&L on the page and
+          must still show. */}
+      {hasPriorYear && (
+        <>
+          <div style={{ height: 12 }} />
+          <Container
+            title={`12-month rollup · FY${priorYearStr}`}
+            subtitle={`actual · closed prior year · live from finance.gl_pl_monthly`}
+            action={
+              <span style={{ fontSize: 'var(--t-xs)', color: 'var(--tbl-fg-mute, rgba(26, 26, 26, 0.6))' }}>
+                FY {priorYearStr} · {fmtCurrency(priorHotelRev, currency)} rev · {fmtCurrency(priorNet, currency)} net
+                {priorHotelRev !== 0 && priorGop !== 0 ? ` · GOP ${fmtPct((priorGop / priorHotelRev) * 100, 1)}` : ''}
+              </span>
+            }
+          >
+            <AnnualTable rows={priorYearRows} year={priorYearStr} currency={currency} />
           </Container>
         </>
       )}
