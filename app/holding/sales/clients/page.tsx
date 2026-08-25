@@ -3,6 +3,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import Link from 'next/link';
+import StartOnboardingButton from './StartOnboardingButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -170,7 +171,7 @@ export default async function SaaSClientsPage() {
                               >
                                 {String(ct.status)}
                               </div>
-                              {hasOnboarding ? (
+                              {hasOnboarding && (
                                 <Link
                                   href="/holding/sales/onboarding"
                                   style={{
@@ -185,22 +186,13 @@ export default async function SaaSClientsPage() {
                                 >
                                   View Onboarding
                                 </Link>
-                              ) : (
-                                <div
-                                  style={{
-                                    padding: '6px 14px',
-                                    borderRadius: 4,
-                                    background: FOREST + '30',
-                                    color: FOREST,
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    border: `1px solid ${FOREST}`,
-                                  }}
-                                  title={`Use: SELECT fn_onboarding_start_from_contract('${ct.contract_id}')`}
-                                >
-                                  ⚙️ Start via SQL
-                                </div>
                               )}
+                              {/* Finding #41: real start button (idempotent) +
+                                  portal-link surfacing — replaces Start-via-SQL tile */}
+                              <StartOnboardingButton
+                                contractId={String(ct.contract_id)}
+                                hasOnboarding={Boolean(hasOnboarding)}
+                              />
                             </div>
                           </div>
                         </div>
