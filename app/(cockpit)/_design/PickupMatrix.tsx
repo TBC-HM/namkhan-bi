@@ -55,6 +55,10 @@ export interface PickupMatrixData {
   yesterdaySnapshotLabel: string;
   todaySnapshotLabel: string;
   sdlyDate: string;
+  /** Stay year this matrix covers (PBS 2026-08-25 year selector). Legacy callers omit -> 2026 labels. */
+  stayYear?: number;
+  /** [stayYear-3, stayYear-2, stayYear-1] — labels for the three baseline columns. */
+  baselineYears?: [number, number, number];
   months: PickupMatrixMonth[];
   total: PickupMatrixRow[];
   stalenessNote?: string;
@@ -102,6 +106,10 @@ function deltaCell(d: PickupDelta | undefined, metric: PickupMetric, kind: 'abs'
 
 export default function PickupMatrix({ data }: Props) {
   CURRENCY_SYMBOL = data.currencySymbol ?? '€';
+  // PBS 2026-08-25: these were hardcoded 2023/2024/2025/2026. With the year
+  // selector the same grid renders 2027, so every year label is derived.
+  const stayYear = data.stayYear ?? 2026;
+  const [b3, b2, b1] = data.baselineYears ?? [stayYear - 3, stayYear - 2, stayYear - 1];
   return (
     <div style={S.scroll}>
       <table className="data-table" style={S.table}>
@@ -121,11 +129,11 @@ export default function PickupMatrix({ data }: Props) {
           </tr>
           <tr>
             <th style={{ ...S.headerTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>Period</th>
-            <th style={S.headerTh}>2023</th>
-            <th style={S.headerTh}>2024</th>
-            <th style={S.headerTh}>2025</th>
-            <th style={S.headerTh}>Budget 2026</th>
-            <th style={S.headerTh}>2026</th>
+            <th style={S.headerTh}>{b3}</th>
+            <th style={S.headerTh}>{b2}</th>
+            <th style={S.headerTh}>{b1}</th>
+            <th style={S.headerTh}>Budget {stayYear}</th>
+            <th style={S.headerTh}>{stayYear}</th>
             <th style={S.headerTh}>Monthly<div style={S.headerSub}>{data.monthlySnapshotLabel}</div></th>
             <th style={S.headerTh}>Monday<div style={S.headerSub}>{data.mondaySnapshotLabel}</div></th>
             <th style={S.headerTh}>Yesterday<div style={S.headerSub}>{data.yesterdaySnapshotLabel}</div></th>
@@ -143,7 +151,7 @@ export default function PickupMatrix({ data }: Props) {
           {data.months.map((m, monthIdx) => (
             <MonthBlock key={m.monthKey} month={m} isAlt={monthIdx % 2 === 1} />
           ))}
-          <MonthBlock month={{ monthKey: 'TOTAL', monthLabel: 'TOTAL 2026', rows: data.total }} isAlt={false} isTotal />
+          <MonthBlock month={{ monthKey: 'TOTAL', monthLabel: `TOTAL ${stayYear}`, rows: data.total }} isAlt={false} isTotal />
         </tbody>
       </table>
     </div>
