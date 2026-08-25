@@ -273,32 +273,32 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // (The old /marketing/library standalone subgroup is now merged into Overview
   //  above — Library + Docs live directly under Overview.)
 
-  // ─── Finance landing strip · PBS 2026-08-24 ─────────────────
-  // Shows on the finance HoD + overview landing pages. Three top-level areas:
-  // Acc (accounting) · Costs · Planning. Drilling into any area replaces this
-  // strip with that area's own sub-strip (matched first by findSubGroup).
+  // ─── Finance landing strip · PBS 2026-08-25 ─────────────────
+  // Main Finance sub-strip: HoD · HR · Acc · Finance · Ledger · Archive.
+  // Acc drills into Costs sub-strip; Finance = P&L; Ledger = direct link.
   {
     parentHref: '/finance',
     members: ['/finance', '/finance/overview'],
     tabs: [
-      { label: 'Acc',      href: '/h/260955/finance/pnl'      },
-      { label: 'Costs',    href: '/h/260955/finance/costs'    },
-      { label: 'Planning', href: '/h/260955/finance/planning' },
+      { label: 'HoD',     href: '/h/260955/finance'         },
+      { label: 'HR',      href: '/h/260955/finance/hr'      },
+      { label: 'Acc',     href: '/h/260955/finance/costs'   },
+      { label: 'Finance', href: '/h/260955/finance/pnl'     },
+      { label: 'Ledger',  href: '/h/260955/finance/ledger'  },
+      { label: 'Archive', href: '/h/260955/finance/archive' },
     ],
   },
 
-  // ─── Finance · Acc (Accounting) sub-strip · PBS 2026-08-24 ──
-  // P&L · Ledger · Transactions live here. Banks + POS nest one level deeper
-  // via the Transactions sub-sub-strip below.
+  // ─── Finance · Acc sub-strip · PBS 2026-08-25 ──
+  // Acc groups: Costs · Suppliers · Transactions · Ledger.
   {
-    parentHref: '/finance/pnl',
-    members: ['/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/banks', '/finance/pos'],
+    parentHref: '/finance/costs',
+    members: ['/finance/costs', '/finance/suppliers', '/finance/transactions', '/finance/ledger'],
     tabs: [
-      { label: 'P&L',          href: '/h/260955/finance/pnl'          },
-      { label: 'Ledger',       href: '/h/260955/finance/ledger'       },
+      { label: 'Costs',        href: '/h/260955/finance/costs'        },
+      { label: 'Suppliers',    href: '/h/260955/finance/suppliers'    },
       { label: 'Transactions', href: '/h/260955/finance/transactions' },
-      { label: 'Banks',        href: '/h/260955/finance/banks'        },
-      { label: 'POS',          href: '/h/260955/finance/pos'          },
+      { label: 'Ledger',       href: '/h/260955/finance/ledger'       },
     ],
   },
 
@@ -314,15 +314,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
 
-  // ─── Finance · Costs sub-strip · PBS 2026-08-24 ─────────────
-  {
-    parentHref: '/finance/costs',
-    members: ['/finance/costs', '/finance/suppliers'],
-    tabs: [
-      { label: 'Costs',     href: '/h/260955/finance/costs'     },
-      { label: 'Suppliers', href: '/h/260955/finance/suppliers'  },
-    ],
-  },
 
   // ─── Finance · Planning sub-strip · PBS 2026-08-24 ──────────
   {
