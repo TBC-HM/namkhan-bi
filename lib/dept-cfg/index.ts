@@ -761,6 +761,7 @@ const FINANCE_CFG: DeptCfg = {
     // child page — see nav-subgroups /finance/pnl group).
     { label: 'HoD',             href: '/h/260955/finance'                          },
     { label: 'HR',              href: '/h/260955/finance/hr'                       },
+    { label: 'Acc',             href: '/h/260955/finance/costs'                    },
     { label: 'Finance',         href: '/h/260955/finance/pnl'                      },
     // FP&C module 2026-07-28: budget vs actual by class + 13-week cash forward
     // (brief module-financial-planning-control-v1, completion gap #2).
