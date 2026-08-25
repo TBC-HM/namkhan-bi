@@ -284,8 +284,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'HR',      href: '/h/260955/finance/hr'      },
       { label: 'Acc',     href: '/h/260955/finance/costs'   },
       { label: 'Finance', href: '/h/260955/finance/pnl'     },
-      { label: 'Ledger',  href: '/h/260955/finance/ledger'  },
-      { label: 'Archive', href: '/h/260955/finance/archive' },
+      { label: 'Ledger',   href: '/h/260955/finance/ledger'   },
+      { label: 'Planning', href: '/h/260955/finance/planning' },
+      { label: 'Budget',   href: '/h/260955/finance/budget'   },
+      { label: 'Studio',   href: '/h/260955/finance/studio'   },
+      { label: 'Archive',  href: '/h/260955/finance/archive'  },
     ],
   },
 
@@ -315,16 +318,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
 
-  // ─── Finance · Planning sub-strip · PBS 2026-08-24 ──────────
-  {
-    parentHref: '/finance/planning',
-    members: ['/finance/planning', '/finance/budget', '/finance/studio'],
-    tabs: [
-      { label: 'Planning', href: '/h/260955/finance/planning' },
-      { label: 'Budget',   href: '/h/260955/finance/budget'   },
-      { label: 'Studio',   href: '/h/260955/finance/studio'   },
-    ],
-  },
 
   // ─── Finance · HR · Schedule sub-sub-strip · PBS 2026-08-24 ──
   {
