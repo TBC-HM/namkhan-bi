@@ -8,6 +8,7 @@ import {
 } from '@/app/(cockpit)/_design';
 import PickupMatrix from '@/app/(cockpit)/_design/PickupMatrix';
 import PickupActions from './_components/PickupActions';
+import MatrixYearDropdown from './_components/MatrixYearDropdown';
 import { getPickupMatrix } from '@/lib/data/pickup';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
@@ -18,9 +19,16 @@ export const revalidate = 60;
 
 const PROPERTY_ID_DONNA = 1000001;
 
-interface Props { propertyId?: number }
+// This file is BOTH the legacy route /revenue/pickup (Next passes searchParams)
+// and the body imported by /h/[property_id]/revenue/pickup (the wrapper passes
+// matrixYear explicitly). Accept both so the year selector works on either URL.
+interface Props {
+  propertyId?: number;
+  matrixYear?: number;
+  searchParams?: Record<string, string | string[] | undefined>;
+}
 
-export default async function PickupPage({ propertyId }: Props = {}) {
+export default async function PickupPage({ propertyId, matrixYear, searchParams }: Props = {}) {
   const pid  = propertyId ?? PROPERTY_ID;
   const sym  = pid === PROPERTY_ID_DONNA ? '€' : '$';
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
@@ -33,9 +41,19 @@ export default async function PickupPage({ propertyId }: Props = {}) {
   const ytdStart = `${today.getUTCFullYear()}-01-01`;
   const monthStartIso = todayIso.slice(0, 8) + '01';
 
+  // PBS 2026-08-25 — matrix stay-year selector. Current year + next; the matrix
+  // is the only element that follows it (KPI strip and charts stay forward-looking).
+  const asOfYear = today.getUTCFullYear();
+  const MATRIX_YEARS = [asOfYear, asOfYear + 1];
+  const rawYear = searchParams?.matrixYear;
+  const requestedYear = matrixYear ?? Number(Array.isArray(rawYear) ? rawYear[0] : rawYear);
+  const selectedMatrixYear = MATRIX_YEARS.includes(Number(requestedYear))
+    ? Number(requestedYear)
+    : asOfYear;
+
   // Parallel fan-out
   const [matrix, otbPace, pickup30d, velocity28d, paceComparison, paceByMonth, paceCurve, pickupMonthly] = await Promise.all([
-    getPickupMatrix(pid).catch(() => null),
+    getPickupMatrix(pid, selectedMatrixYear).catch(() => null),
     supabase.from('v_otb_pace')
       .select('night_date, confirmed_rooms, confirmed_revenue, cancelled_rooms')
       .eq('property_id', pid)
@@ -302,12 +320,13 @@ export default async function PickupPage({ propertyId }: Props = {}) {
           title="OTB · Pickup · Comparison · SDLY"
           subtitle={matrix ? `as of ${matrix.asOfDate}` : 'data fetch failed'}
           density="compact"
+          action={<MatrixYearDropdown current={selectedMatrixYear} years={MATRIX_YEARS} />}
         >
           {matrix ? (
             <PickupMatrix data={matrix} />
           ) : (
             <div style={{ padding: 20, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
-              Could not build the matrix · check server logs.
+              Could not build the matrix for {selectedMatrixYear} · check server logs.
             </div>
           )}
         </Container>
