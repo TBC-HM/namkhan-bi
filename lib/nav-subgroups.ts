@@ -280,14 +280,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     parentHref: '/finance',
     members: ['/finance', '/finance/overview'],
     tabs: [
-      { label: 'HoD',     href: '/h/260955/finance'         },
-      { label: 'HR',      href: '/h/260955/finance/hr'      },
-      { label: 'Acc',     href: '/h/260955/finance/costs'   },
-      { label: 'Finance', href: '/h/260955/finance/pnl'     },
+      { label: 'HoD',      href: '/h/260955/finance'          },
+      { label: 'Acc',      href: '/h/260955/finance/costs'    },
       { label: 'Planning', href: '/h/260955/finance/planning' },
       { label: 'Budget',   href: '/h/260955/finance/budget'   },
       { label: 'Studio',   href: '/h/260955/finance/studio'   },
-      { label: 'Archive',  href: '/h/260955/finance/archive'  },
     ],
   },
 
