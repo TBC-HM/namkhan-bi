@@ -141,10 +141,12 @@ export default async function SpaPage({ searchParams, propertyId }: Props) {
       subtitle="Operations · Spa · live from QB GL + Cloudbeds folio · USALI rollup"
       tabs={tabs}
     >
-      <OutletCaptureCockpit deptKey="spa" propertyId={pid} searchParams={searchParams} />
-
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* PBS 2026-08-26: SpaSubnav stays FIRST. The cockpit sits inside the
+            Overview tab, below the strip — it must never push the module's own
+            navigation down the page. */}
         <SpaSubnav active="overview" />
+        <OutletCaptureCockpit deptKey="spa" propertyId={pid} searchParams={searchParams} />
         <Container title="Operating snapshot" subtitle={`Cloudbeds folio · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
