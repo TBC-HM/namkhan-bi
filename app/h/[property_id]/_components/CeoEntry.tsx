@@ -61,12 +61,29 @@ export default async function CeoEntry({
   // CeoHeartbeat, which fetches its own windows (YTD, SDLY, forward months,
   // profitability, capture) — this component no longer pulls v_kpi_daily_property.
   const bugsRes = await Promise.resolve(
+    // PBS 2026-08-26: was unscoped — Namkhan's page listed the newest bugs from
+    // the whole platform, Donna's included.
     supabase.from('cockpit_bugs')
       .select('id,body,status,created_at,fix_link,fix_label')
+      .eq('property_id', cfg.propertyId)
       .neq('status', 'archived').order('created_at', { ascending: false }).limit(10),
   ).then((r) => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]);
 
-  const docsRes: Array<{ id: string; label: string; href: string | null; uploaded_at: string }> = [];
+  // PBS 2026-08-26: this was `= []` — the container rendered "Docs · 0" forever
+  // while public.v_doc_register held 6,475 rows for this property.
+  const docsRes = await Promise.resolve(
+    supabase.from('v_doc_register')
+      .select('doc_id, title, file_name, doc_type, uploaded_at')
+      .eq('property_id', cfg.propertyId)
+      .eq('is_archived', false)
+      .order('uploaded_at', { ascending: false })
+      .limit(8),
+  ).then((r) => (r.data ?? []).map((d: Record<string, unknown>) => ({
+    id: String(d.doc_id),
+    label: String(d.title ?? d.file_name ?? 'Untitled'),
+    href: `/h/${cfg.propertyId}/finance/legal/docs?doc=${encodeURIComponent(String(d.doc_id))}`,
+    uploaded_at: String(d.uploaded_at ?? ''),
+  }))).catch(() => [] as Array<{ id: string; label: string; href: string | null; uploaded_at: string }>);
 
   const currencyCode: Currency = cfg.baseCurrency ?? fallbackCurrency(cfg.propertyId);
 

@@ -111,8 +111,10 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
       sb.from('v_cpor_monthly').select('period_month, cpor')
         .eq('property_id', pid).gte('period_month', `${year}-01-01`).order('period_month')
         .then((r) => r.data ?? [], () => []),
+      // PBS 2026-08-26: .order('severity') is alphabetical — it rendered
+      // high -> low -> medium, sinking the mediums below the lows. Ranked below.
       sb.from('v_attention_flags').select('id, dept_slug, label, severity')
-        .eq('property_id', pid).order('severity')
+        .eq('property_id', pid)
         .then((r) => r.data ?? [], () => []),
       Promise.all((['spa','activity','retail','transport'] as const).map((d) =>
         sb.from(`v_${d}_capture_monthly`).select('period_yyyymm, res_in_house, res_with_purchase, capture_pct')
@@ -172,9 +174,15 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
   const gopBy   = index(gopRes as Array<Record<string, unknown>>, 'period_yyyymm', (k) => String(k).slice(5, 7));
   const labBy   = index(labRes as Array<Record<string, unknown>>, 'period_month', (k) => String(k).slice(5, 7));
   const cporBy  = index(cporRes as Array<Record<string, unknown>>, 'period_month', (k) => String(k).slice(5, 7));
-  const monthCols = Array.from({ length: Math.max(1, monthIdx - 1) }, (_, i) => ({
+  // PBS 2026-08-26: only months that actually carry a figure. v_goppar_monthly
+  // stops at 2026-05 for Namkhan while labour/CPOR run to June, so asking for
+  // months through July painted a fully blank trailing column that read as
+  // breakage rather than as an un-posted ledger.
+  const monthHasData = (m: string) =>
+    gopBy[m] !== undefined || labBy[m] !== undefined || cporBy[m] !== undefined;
+  const monthCols = Array.from({ length: Math.max(1, monthIdx) }, (_, i) => ({
     key: String(i + 1).padStart(2, '0'), label: MONTHS[i],
-  })).slice(-6);
+  })).filter((c) => monthHasData(c.key)).slice(-6);
 
   const profitRows: MatrixRow[] = [
     monthRow('rev', 'GL revenue', 'from the ledger', monthCols, (m) => {
@@ -256,7 +264,10 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
     });
   }
 
-  const flags = attnRes as Array<{ id: string; dept_slug: string; label: string; severity: string }>;
+  const SEVERITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  const flags = (attnRes as Array<{ id: string; dept_slug: string; label: string; severity: string }>)
+    .slice()
+    .sort((a, b) => (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9));
   const highCount = flags.filter((f) => f.severity === 'high').length;
 
   return (
