@@ -17,8 +17,11 @@
 //     no more hardcoded 'USD' in KpiTile props.
 //   - all internal Links now use TenantLink so /h/{property_id} sticks on nav.
 
-import TenantLink from '@/components/nav/TenantLink';
-import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps, type KpiComparison, type Currency } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, type DashboardTab, type Currency } from '@/app/(cockpit)/_design';
+// PBS 2026-08-26: the four trailing KPI tiles + the empty Attention container
+// are replaced by CeoHeartbeat — score vs SDLY/Budget, profitability, forward
+// outlook, ancillary capture, and the live attention feed (was hardcoded []).
+import CeoHeartbeat from '@/app/(cockpit)/_design/CeoHeartbeat';
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
 import HodTasksList from '@/app/revenue/_components/HodTasksList';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -37,56 +40,12 @@ export interface CeoConfig {
 const NAMKHAN_ID = 260955;
 const DONNA_ID   = 1000001;
 
-interface KpiRow {
-  night_date: string;
-  base_currency: string;
-  rooms_available: number;
-  rooms_sold: number;
-  rooms_revenue: number;
-  total_revenue: number;
-}
-
 interface BugRow  { id: number; body: string; status: string; created_at: string; fix_link: string | null; fix_label: string | null }
 
-function agg(rows: KpiRow[]) {
-  const roomsAvail = rows.reduce((s, r) => s + Number(r.rooms_available ?? 0), 0);
-  const roomsSold  = rows.reduce((s, r) => s + Number(r.rooms_sold ?? 0), 0);
-  const roomsRev   = rows.reduce((s, r) => s + Number(r.rooms_revenue ?? 0), 0);
-  const totalRev   = rows.reduce((s, r) => s + Number(r.total_revenue ?? 0), 0);
-  return {
-    occ:    roomsAvail > 0 ? (roomsSold / roomsAvail) * 100 : 0,
-    adr:    roomsSold  > 0 ? roomsRev / roomsSold : 0,
-    revpar: roomsAvail > 0 ? roomsRev / roomsAvail : 0,
-    rev:    roomsRev,
-    totalRev,
-  };
-}
-
-function isoBack(days: number): string {
-  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
-}
-
-// PBS 2026-07-08: hardcoded fallback so Donna doesn't show $ if the view is
-// missing base_currency for some reason. Currency union kept in sync with
-// _design/types.ts (Currency = 'EUR' | 'USD' | 'LAK').
 function fallbackCurrency(pid: number): Currency {
   if (pid === NAMKHAN_ID) return 'USD';
   if (pid === DONNA_ID)   return 'EUR';
   return 'USD';
-}
-
-function normalizeCurrency(v: string | undefined | null): Currency | null {
-  if (v === 'EUR' || v === 'USD' || v === 'LAK') return v;
-  return null;
-}
-
-function currencySymbol(code: Currency): string {
-  switch (code) {
-    case 'EUR': return '€';
-    case 'LAK': return '₭';
-    case 'USD':
-    default:    return '$';
-  }
 }
 
 export default async function CeoEntry({
@@ -97,102 +56,21 @@ export default async function CeoEntry({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const supabase = getSupabaseAdmin();
-  const today    = new Date().toISOString().slice(0, 10);
-  const d30      = isoBack(30);
-  const d90      = isoBack(90);
-  const d365     = isoBack(365);
-  const dYtd     = `${new Date().getFullYear()}-01-01`;
-  const yearNow  = new Date().getFullYear();
-  const dSdlyStart = `${yearNow - 1}-01-01`;
-  const dSdlyEnd   = new Date(new Date().setFullYear(yearNow - 1)).toISOString().slice(0, 10);
 
-  // PBS 2026-07-08 v3: multi-tenant view + property_id filter.
-  const kpiSelect = 'night_date,base_currency,rooms_available,rooms_sold,rooms_revenue,total_revenue';
-  const pull = async (from: string, to: string = today): Promise<KpiRow[]> => {
-    try {
-      const { data } = await supabase
-        .from('v_kpi_daily_property')
-        .select(kpiSelect)
-        .eq('property_id', cfg.propertyId)
-        .gte('night_date', from)
-        .lte('night_date', to);
-      return (data ?? []) as KpiRow[];
-    } catch {
-      return [] as KpiRow[];
-    }
-  };
+  // PBS 2026-08-26: the KPI aggregation that used to live here moved into
+  // CeoHeartbeat, which fetches its own windows (YTD, SDLY, forward months,
+  // profitability, capture) — this component no longer pulls v_kpi_daily_property.
+  const bugsRes = await Promise.resolve(
+    supabase.from('cockpit_bugs')
+      .select('id,body,status,created_at,fix_link,fix_label')
+      .neq('status', 'archived').order('created_at', { ascending: false }).limit(10),
+  ).then((r) => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]);
 
-  const [kpi30, kpi90, kpi365, kpiYtd, kpiSdlyYtd, bugsRes] = await Promise.all([
-    pull(d30),
-    pull(d90),
-    pull(d365),
-    pull(dYtd),
-    pull(dSdlyStart, dSdlyEnd),
-    Promise.resolve(supabase.from('cockpit_bugs').select('id,body,status,created_at,fix_link,fix_label').neq('status', 'archived').order('created_at', { ascending: false }).limit(10)).then(r => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]),
-  ]);
-  const attnRes: Array<{ id: string; label: string; severity: 'high'|'medium'|'low'; href: string | null }> = [];
   const docsRes: Array<{ id: string; label: string; href: string | null; uploaded_at: string }> = [];
 
-  const A30       = agg(kpi30);
-  const A90       = agg(kpi90);
-  const A365      = agg(kpi365);
-  const AYtd      = agg(kpiYtd);
-  const ASdlyYtd  = agg(kpiSdlyYtd);
-
-  // PBS 2026-07-08: currency = cfg > view row > property fallback.
-  const currencyCode: Currency = cfg.baseCurrency
-    ?? normalizeCurrency(kpiYtd[0]?.base_currency)
-    ?? normalizeCurrency(kpi365[0]?.base_currency)
-    ?? fallbackCurrency(cfg.propertyId);
-  const cSym = currencySymbol(currencyCode);
-
-  const pctDelta = (now: number, prior: number): { value: number; direction: 'up' | 'down' | 'flat' } => {
-    if (prior <= 0) return { value: 0, direction: 'flat' };
-    const pct = ((now - prior) / prior) * 100;
-    return {
-      value: Math.round(pct * 10) / 10,
-      direction: pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat',
-    };
-  };
-  const dOcc    = pctDelta(AYtd.occ,    ASdlyYtd.occ);
-  const dAdr    = pctDelta(AYtd.adr,    ASdlyYtd.adr);
-  const dRevpar = pctDelta(AYtd.revpar, ASdlyYtd.revpar);
-  const dRev    = pctDelta(AYtd.rev,    ASdlyYtd.rev);
-
-  const cmp = (v30: number, v90: number, v365: number, format: 'absolute'|'currency'|'percent' = 'absolute'): KpiComparison[] => [
-    { label: 'L30d',  value: v30,  format, direction: 'flat' },
-    { label: 'L90d',  value: v90,  format, direction: 'flat' },
-    { label: 'L365d', value: v365, format, direction: 'flat' },
-  ];
-
-  const tiles: KpiTileProps[] = [
-    // PBS 2026-07-17: label "· YTD" everywhere so the CEO tile isn't mistaken for "today".
-    // OCC principle: 2 decimals on every tile.
-    { label: 'Occupancy · YTD',     value: `${AYtd.occ.toFixed(2)}%`,        size: 'md',
-      footnote: `rooms sold / rooms available · YTD ${yearNow} · SDLY ${(ASdlyYtd.occ).toFixed(2)}%`,
-      delta:   { value: dOcc.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dOcc.direction,    isGoodWhenUp: true },
-      compare: cmp(Number(A30.occ.toFixed(2)), Number(A90.occ.toFixed(2)), Number(A365.occ.toFixed(2)), 'percent') },
-    { label: 'ADR · YTD',           value: Math.round(AYtd.adr),    currency: currencyCode, size: 'md',
-      footnote: `rooms revenue / rooms sold · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.adr)}`,
-      delta:   { value: dAdr.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dAdr.direction,    isGoodWhenUp: true },
-      compare: cmp(Math.round(A30.adr), Math.round(A90.adr), Math.round(A365.adr), 'currency') },
-    { label: 'RevPAR · YTD',        value: Math.round(AYtd.revpar), currency: currencyCode, size: 'md',
-      footnote: `rooms revenue / rooms available · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.revpar)}`,
-      delta:   { value: dRevpar.value, period: `vs SDLY YTD ${yearNow - 1}`, direction: dRevpar.direction, isGoodWhenUp: true },
-      compare: cmp(Math.round(A30.revpar), Math.round(A90.revpar), Math.round(A365.revpar), 'currency') },
-    { label: 'Rooms revenue · YTD', value: Math.round(AYtd.rev),    currency: currencyCode, size: 'md',
-      footnote: `rooms-only revenue · consumed nights (excl. cancels / no-shows / F&B / extras) · YTD ${yearNow} · SDLY ${cSym}${Math.round(ASdlyYtd.rev).toLocaleString('en-US')}`,
-      delta:   { value: dRev.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dRev.direction,    isGoodWhenUp: true },
-      compare: cmp(Math.round(A30.rev), Math.round(A90.rev), Math.round(A365.rev), 'currency') },
-  ];
+  const currencyCode: Currency = cfg.baseCurrency ?? fallbackCurrency(cfg.propertyId);
 
   const tabs: DashboardTab[] = [];
-
-  const severityTone: Record<string, string> = {
-    high:   '#B03826',
-    medium: '#B8542A',
-    low:    '#2C5F4F',
-  };
 
   return (
     <DashboardPage
@@ -262,26 +140,9 @@ export default async function CeoEntry({
         </Container>
       </div>
 
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 6 }}>
-        {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-      </div>
+      <CeoHeartbeat propertyId={cfg.propertyId} currency={currencyCode} />
 
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
-        <Container title={`Attention · ${attnRes.length}`} subtitle="leakage · opportunities · watchlist">
-          {attnRes.length === 0 ? (
-            <EmptyBlock>No attention items. {cfg.ceoName} will surface leakage and pickup flags here as they land.</EmptyBlock>
-          ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {attnRes.map((a) => (
-                <li key={a.id} style={{ padding: '8px 10px', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 4, fontSize: 12 }}>
-                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: severityTone[a.severity] ?? '#8A8A8A', marginRight: 8 }} />
-                  {a.href ? <TenantLink href={a.href} style={{ color: '#1B1B1B', textDecoration: 'underline', textDecorationColor: '#C79A6B' }}>{a.label}</TenantLink> : a.label}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Container>
-
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
         <Container title={`Docs · ${docsRes.length}`} subtitle="uploads · reports">
           {docsRes.length === 0 ? (
             <EmptyBlock>Drop docs {cfg.ceoName} should read. Reports will queue here after their scheduled runs.</EmptyBlock>
