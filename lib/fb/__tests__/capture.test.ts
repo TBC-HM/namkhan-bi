@@ -136,3 +136,46 @@ describe('captureSummary', () => {
     });
   });
 });
+
+// ── period windows + SDLY (PBS 2026-08-26) ────────────────────────────────
+import { resolveWindow, shiftWindowYear, type OpPeriod } from '../capture';
+
+describe('resolveWindow', () => {
+  it('resolves yesterday to a single closed day', () => {
+    expect(resolveWindow('yesterday', '2026-08-26')).toEqual({
+      from: '2026-08-25', to: '2026-08-25', label: 'Yesterday', days: 1,
+    });
+  });
+
+  it('resolves the trailing 7 and 30 day windows', () => {
+    expect(resolveWindow('7d', '2026-08-26')).toEqual({
+      from: '2026-08-20', to: '2026-08-26', label: 'Last 7 days', days: 7,
+    });
+    expect(resolveWindow('30d', '2026-08-26').from).toBe('2026-07-28');
+  });
+
+  it('resolves YTD from 1 January', () => {
+    const w = resolveWindow('ytd', '2026-08-26');
+    expect(w.from).toBe('2026-01-01');
+    expect(w.to).toBe('2026-08-26');
+    expect(w.label).toBe('Year to date');
+  });
+
+  it('falls back to 30 days for an unknown or absent period', () => {
+    expect(resolveWindow('nonsense' as OpPeriod, '2026-08-26').label).toBe('Last 30 days');
+    expect(resolveWindow(undefined, '2026-08-26').label).toBe('Last 30 days');
+  });
+});
+
+describe('shiftWindowYear', () => {
+  it('shifts a window back one year for the SDLY comparison', () => {
+    expect(shiftWindowYear({ from: '2026-07-28', to: '2026-08-26', label: 'Last 30 days', days: 30 }))
+      .toEqual({ from: '2025-07-28', to: '2025-08-26', label: 'Last 30 days', days: 30 });
+  });
+
+  it('keeps 29 February intact rather than producing an invalid date', () => {
+    // 2024 was a leap year; 2023 was not. Shifting must not yield 2023-02-29.
+    expect(shiftWindowYear({ from: '2024-02-29', to: '2024-02-29', label: 'x', days: 1 }).from)
+      .toBe('2023-02-28');
+  });
+});

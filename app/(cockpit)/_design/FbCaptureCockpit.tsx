@@ -7,13 +7,17 @@
 // already sleeping here ate with us, which ones did not, and where that is
 // heading. The ledger work below it is untouched.
 //
+// Drills on the SAME `op_period` pills the Operating snapshot already uses
+// (yesterday | 7d | 30d | ytd) rather than introducing a second control, and
+// every tile carries its SDLY pill — the same window one year earlier — per
+// the design_system KpiTile house standard (size sm + stly wherever LY exists).
+//
 // Capture is BY RESERVATION, deliberately stricter than the reservation-day
 // figure in the Operating snapshot: one guest ordering on four of five nights
 // counts once here. That is the number that names a guest who bought nothing.
 //
 // Composed from existing atoms — Container, KpiTile, Chart, MetricMatrix.
-// Data: public.v_fb_capture_trend + public.v_fb_reservation_spend (gold views
-// kpi.v_fb_capture_monthly_property / kpi.v_fb_reservation_spend, 2026-08-26).
+// Data: public.v_fb_capture_trend + public.v_fb_reservation_spend.
 
 import Container from './layout/Container';
 import KpiTile from './tile/KpiTile';
@@ -23,90 +27,131 @@ import type { KpiTileProps, Currency } from './types';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import {
   captureTrend, neverSpentBySource, splitStaff, captureSummary,
-  type CaptureRow, type SpendRow,
+  resolveWindow, shiftWindowYear, OP_PERIODS,
+  type CaptureRow, type SpendRow, type OpPeriod, type Window,
 } from '@/lib/fb/capture';
-import { tzForProperty, propertySymbol, localTodayIso, addDays } from '@/lib/revenue/headline-matrix';
+import { tzForProperty, propertySymbol, localTodayIso } from '@/lib/revenue/headline-matrix';
 
 interface Props {
   propertyId: number;
   currency?: Currency;
-  /** Trailing window for the capture cohort. Default 30 days. */
-  windowDays?: number;
+  searchParams?: Record<string, string | string[] | undefined>;
 }
 
-export default async function FbCaptureCockpit({
-  propertyId: pid, currency, windowDays = 30,
-}: Props) {
+const PILL_LABEL: Record<OpPeriod, string> = {
+  yesterday: 'Yesterday', '7d': 'Last 7d', '30d': 'Last 30d', ytd: 'YTD',
+};
+
+export default async function FbCaptureCockpit({ propertyId: pid, currency, searchParams }: Props) {
   const sb  = getSupabaseAdmin();
   const tz  = tzForProperty(pid);
   const sym = currency ? ({ EUR: '€', USD: '$', LAK: '₭' } as const)[currency] : propertySymbol(pid);
   const today = localTodayIso(tz);
-  const from  = addDays(today, -windowDays);
 
-  const [trendRes, spendRes] = await Promise.all([
+  const rawPeriod = String((searchParams ?? {}).op_period ?? '30d');
+  const period = (OP_PERIODS as string[]).includes(rawPeriod) ? (rawPeriod as OpPeriod) : '30d';
+  const win = resolveWindow(period, today);
+  const ly  = shiftWindowYear(win);
+
+  const spendIn = (w: Window) => sb
+    .from('v_fb_reservation_spend')
+    .select('source_name, is_staff, has_fb_spend, fb_spend, nights')
+    .eq('property_id', pid)
+    .gte('check_out_date', w.from)
+    .lte('check_in_date', w.to)
+    .then((r) => (r.data ?? []) as SpendRow[], () => [] as SpendRow[]);
+
+  const [trendRes, tyRows, lyRows] = await Promise.all([
     sb.from('v_fb_capture_trend')
       .select('stay_month, reservations, reservations_with_fb, capture_pct, room_nights, room_nights_no_fb, fb_spend')
       .eq('property_id', pid)
       .gte('stay_month', `${Number(today.slice(0, 4)) - 1}-01-01`)
       .order('stay_month')
       .then((r) => (r.data ?? []) as CaptureRow[], () => [] as CaptureRow[]),
-    sb.from('v_fb_reservation_spend')
-      .select('source_name, is_staff, has_fb_spend, fb_spend, nights, check_in_date, check_out_date')
-      .eq('property_id', pid)
-      .gte('check_out_date', from)
-      .lte('check_in_date', today)
-      .then((r) => (r.data ?? []) as SpendRow[], () => [] as SpendRow[]),
+    spendIn(win),
+    spendIn(ly),
   ]);
 
-  const trend   = captureTrend(trendRes, today);
-  const summary = captureSummary(spendRes);
-  const staff   = splitStaff(spendRes);
-  const bySource = neverSpentBySource(spendRes);
+  const trend    = captureTrend(trendRes, today);
+  const summary  = captureSummary(tyRows);
+  const staff    = splitStaff(tyRows);
+  const bySource = neverSpentBySource(tyRows);
+  const lySummary = captureSummary(lyRows);
+  const lyStaff   = splitStaff(lyRows);
 
-  // Nothing has been instrumented for this property yet — render the shell so
-  // the surface is visible and lights up when the feed lands, rather than
-  // disappearing and looking like it was never built.
+  // No F&B charges linked to reservations for this property yet — render the
+  // shell dormant so the surface stays visible and lights up when the feed
+  // lands, rather than vanishing and looking like it was never built.
   const dormant = summary.reservations === 0 && trend.length === 0;
+  const hasLy = lySummary.reservations > 0;
 
+  const money = (n: number) => `${sym}${Math.round(n).toLocaleString('en-US')}`;
   const first = trend[0];
   const last  = trend.at(-1);
   const captureDelta = first && last ? Math.round((last.capturePct - first.capturePct) * 10) / 10 : null;
 
-  const money = (n: number) => `${sym}${Math.round(n).toLocaleString('en-US')}`;
-
   const tiles: KpiTileProps[] = [
     {
-      label: `Capture · last ${windowDays}d`,
+      label: `Capture · ${win.label.toLowerCase()}`,
       value: dormant ? '—' : `${summary.capturePct}%`,
       size: 'sm',
-      footnote: `${summary.withSpend} of ${summary.reservations} reservations bought food or drink · by reservation, not by night`,
+      footnote: `${summary.withSpend} of ${summary.reservations} reservations bought food or drink · by reservation, not by night · ${win.label}`,
       status: dormant ? 'grey' : summary.capturePct >= 75 ? 'green' : summary.capturePct >= 60 ? 'amber' : 'red',
-      stly: first ? `LY —` : undefined,
+      stly: hasLy ? `LY ${lySummary.capturePct}%` : 'LY —',
     },
     {
       label: 'Never spent',
       value: dormant ? '—' : summary.neverSpent,
       size: 'sm',
-      footnote: `${summary.roomNightsLost} room nights in house with no F&B charge at all`,
+      footnote: `${summary.roomNightsLost} room nights in house with no F&B charge at all · ${win.label}`,
       status: dormant ? 'grey' : summary.neverSpent === 0 ? 'green' : 'red',
+      stly: hasLy ? `LY ${lySummary.neverSpent}` : 'LY —',
     },
     {
       label: 'Opportunity',
       value: dormant ? '—' : money(summary.opportunity),
       size: 'sm',
-      footnote: 'the misses valued at what a spending guest actually spends here — not a target',
+      footnote: `the misses valued at what a spending guest actually spends here — not a target · ${win.label}`,
       status: dormant ? 'grey' : 'amber',
+      stly: hasLy ? `LY ${money(lySummary.opportunity)}` : 'LY —',
     },
     {
       label: 'Guest F&B revenue',
       value: dormant ? '—' : money(staff.guestSpend),
       size: 'sm',
       footnote: staff.staffSpend > 0
-        ? `staff meals ${money(staff.staffSpend)} (${staff.staffSharePct}%) excluded — they post like guest checks`
-        : 'no staff-usage charges in this window',
+        ? `staff meals ${money(staff.staffSpend)} (${staff.staffSharePct}%) excluded — they post like guest checks · ${win.label}`
+        : `no staff-usage charges in this window · ${win.label}`,
       status: dormant ? 'grey' : 'green',
+      stly: hasLy ? `LY ${money(lyStaff.guestSpend)}` : 'LY —',
     },
   ];
+
+  // Period pills — same control and same query key as the Operating snapshot
+  // below, so switching period drills the whole page, not half of it.
+  const pills = (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {OP_PERIODS.map((p) => {
+        const active = p === period;
+        const qs = new URLSearchParams(
+          Object.entries(searchParams ?? {}).flatMap(([k, v]) =>
+            v == null || k === 'op_period' ? [] : [[k, Array.isArray(v) ? v[0] : v] as [string, string]],
+          ),
+        );
+        qs.set('op_period', p);
+        return (
+          <a key={p} href={`?${qs.toString()}`} style={{
+            padding: '3px 10px', fontSize: 10, borderRadius: 3,
+            border: active ? '1px solid var(--ink, #1B1B1B)' : '1px solid var(--hairline, #E6DFCC)',
+            background: active ? 'var(--ink, #1B1B1B)' : 'var(--paper, #FFFFFF)',
+            color: active ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+            textDecoration: 'none', fontWeight: active ? 600 : 500,
+            letterSpacing: '0.04em', textTransform: 'uppercase',
+          }}>{PILL_LABEL[p]}</a>
+        );
+      })}
+    </div>
+  );
 
   const sourceRows: MatrixRow[] = bySource.slice(0, 8).map((s) => ({
     key: s.source,
@@ -120,16 +165,23 @@ export default async function FbCaptureCockpit({
         tone: s.capturePct >= 75 ? 'pos' : s.capturePct >= 50 ? 'warn' : 'neg',
         bar: s.capturePct,
       },
-      spend: s.spendPerCapturing > 0
-        ? { value: money(s.spendPerCapturing), tone: 'mute' }
-        : undefined,
+      spend: s.spendPerCapturing > 0 ? { value: money(s.spendPerCapturing), tone: 'mute' } : undefined,
     },
   }));
 
   return (
     <>
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
-        {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title="Capture snapshot"
+          subtitle={`who is eating with us · by reservation · ${win.label}${hasLy ? ' · LY pill = same window last year' : ' · no last-year data for this window'}`}
+          density="compact"
+          action={pills}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
       </div>
 
       <div style={{ gridColumn: '1 / -1' }}>
@@ -139,9 +191,7 @@ export default async function FbCaptureCockpit({
             dormant
               ? 'no F&B charges linked to reservations for this property yet — lights up when the feed lands'
               : `share of reservations buying food or drink, by stay month${
-                  captureDelta !== null
-                    ? ` · ${captureDelta >= 0 ? '+' : ''}${captureDelta} pts since ${first!.label}`
-                    : ''
+                  captureDelta !== null ? ` · ${captureDelta >= 0 ? '+' : ''}${captureDelta} pts since ${first!.label}` : ''
                 } · future stay months excluded, nobody has arrived yet`
           }
           density="compact"
@@ -180,9 +230,10 @@ export default async function FbCaptureCockpit({
       {sourceRows.length > 0 && (
         <div style={{ gridColumn: '1 / -1' }}>
           <Container
-            title={`Who is not spending · last ${windowDays} days`}
+            title={`Who is not spending · ${win.label.toLowerCase()}`}
             subtitle="booking source sits on every POS line and nothing aggregated it — ordered by room nights lost, because that is the size of the prize"
             density="compact"
+            action={pills}
           >
             <MetricMatrix
               caption="Reservations that bought no food or beverage, by booking source."

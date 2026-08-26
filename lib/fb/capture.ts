@@ -160,3 +160,54 @@ export function captureSummary(rows: SpendRow[]): CaptureSummary {
     opportunity: Math.round(perCapturing * never.length),
   };
 }
+
+// ─── Period windows + SDLY ─────────────────────────────────────────────────
+// PBS 2026-08-26. Mirrors the `op_period` pills already on the F&B page
+// (yesterday | 7d | 30d | ytd, default 30d) so the cockpit drills on the same
+// control rather than introducing a second, differently-behaved one.
+
+export type OpPeriod = 'yesterday' | '7d' | '30d' | 'ytd';
+
+export const OP_PERIODS: OpPeriod[] = ['yesterday', '7d', '30d', 'ytd'];
+
+export interface Window { from: string; to: string; label: string; days: number }
+
+function addDaysIso(iso: string, delta: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + delta);
+  return dt.toISOString().slice(0, 10);
+}
+
+export function resolveWindow(period: OpPeriod | string | undefined, todayIso: string): Window {
+  switch (period) {
+    case 'yesterday': {
+      const d = addDaysIso(todayIso, -1);
+      return { from: d, to: d, label: 'Yesterday', days: 1 };
+    }
+    case '7d':
+      return { from: addDaysIso(todayIso, -6), to: todayIso, label: 'Last 7 days', days: 7 };
+    case 'ytd':
+      return { from: `${todayIso.slice(0, 4)}-01-01`, to: todayIso, label: 'Year to date',
+               days: Math.round((Date.parse(todayIso) - Date.parse(`${todayIso.slice(0, 4)}-01-01`)) / 86400000) + 1 };
+    case '30d':
+    default:
+      return { from: addDaysIso(todayIso, -29), to: todayIso, label: 'Last 30 days', days: 30 };
+  }
+}
+
+/**
+ * Same window, one year earlier — the SDLY basis for the KpiTile `stly` pill.
+ *
+ * Clamps 29 February back to the 28th rather than rolling into 1 March, which
+ * is what naive year arithmetic does and would silently shift the window.
+ */
+export function shiftWindowYear(w: Window): Window {
+  const back = (iso: string): string => {
+    const [y, m, d] = iso.split('-').map(Number);
+    const yy = y - 1;
+    const lastDay = new Date(Date.UTC(yy, m, 0)).getUTCDate();
+    return `${yy}-${String(m).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`;
+  };
+  return { ...w, from: back(w.from), to: back(w.to) };
+}

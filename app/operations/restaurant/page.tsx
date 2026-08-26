@@ -317,7 +317,7 @@ export default async function FnbPage({ searchParams, propertyId }: Props) {
       subtitle="Operations · F&B · live from QB GL + PMS · USALI rollup"
       tabs={tabs}
     >
-      <FbCaptureCockpit propertyId={pid} />
+      <FbCaptureCockpit propertyId={pid} searchParams={searchParams} />
 
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Container title="Operating snapshot" subtitle={`PMS / Cloudbeds POS · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
