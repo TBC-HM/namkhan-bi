@@ -4,6 +4,9 @@
 // fall back to bronze-derived numbers.
 
 import TenantLink from '@/components/nav/TenantLink';
+// PBS 2026-08-26: department cockpit. Additive — sits ABOVE the existing
+// containers so every tab and sub-menu below stays exactly where it was.
+import OutletCaptureCockpit from '@/app/(cockpit)/_design/OutletCaptureCockpit';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
@@ -103,6 +106,8 @@ export default async function TransportPage({ searchParams, propertyId }: Props)
 
   return (
     <DashboardPage title="Transport" subtitle="Operations · Transportation · live from Cloudbeds folio (GL lumped under Other Operated)" tabs={tabs}>
+      <OutletCaptureCockpit deptKey="transport" propertyId={pid} searchParams={searchParams} />
+
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Container title="Operating snapshot" subtitle={`Cloudbeds folio · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>

@@ -6,8 +6,10 @@
 // PBS 2026-08-26: Restaurant Pass — the manager's block goes ABOVE the USALI /
 // QB GL work. That content is the controller's and stays exactly as it was,
 // just no longer first on the page.
-import FbCaptureCockpit from '@/app/(cockpit)/_design/FbCaptureCockpit';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
+// PBS 2026-08-26: department cockpit. Additive — sits ABOVE the existing
+// containers so every tab and sub-menu below stays exactly where it was.
+import OutletCaptureCockpit from '@/app/(cockpit)/_design/OutletCaptureCockpit';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import PnlGrid from '@/components/pl/PnlGrid';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
@@ -317,7 +319,8 @@ export default async function FnbPage({ searchParams, propertyId }: Props) {
       subtitle="Operations · F&B · live from QB GL + PMS · USALI rollup"
       tabs={tabs}
     >
-      <FbCaptureCockpit propertyId={pid} searchParams={searchParams} />
+      <OutletCaptureCockpit deptKey="fb" propertyId={pid} searchParams={searchParams} />
+
 
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Container title="Operating snapshot" subtitle={`PMS / Cloudbeds POS · revenue + capture · ${opLabel}`} density="compact" action={opPills}>

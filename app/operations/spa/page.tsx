@@ -4,6 +4,9 @@
 // matching the F&B page anatomy.
 
 import TenantLink from '@/components/nav/TenantLink';
+// PBS 2026-08-26: department cockpit. Additive — sits ABOVE the existing
+// containers so every tab and sub-menu below stays exactly where it was.
+import OutletCaptureCockpit from '@/app/(cockpit)/_design/OutletCaptureCockpit';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
@@ -138,6 +141,8 @@ export default async function SpaPage({ searchParams, propertyId }: Props) {
       subtitle="Operations · Spa · live from QB GL + Cloudbeds folio · USALI rollup"
       tabs={tabs}
     >
+      <OutletCaptureCockpit deptKey="spa" propertyId={pid} searchParams={searchParams} />
+
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <SpaSubnav active="overview" />
         <Container title="Operating snapshot" subtitle={`Cloudbeds folio · revenue + capture · ${opLabel}`} density="compact" action={opPills}>

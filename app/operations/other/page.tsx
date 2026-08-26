@@ -4,6 +4,9 @@
 // public.v_other_dept_monthly (per-bucket monthly aggregate).
 
 import TenantLink from '@/components/nav/TenantLink';
+// PBS 2026-08-26: department cockpit. Additive — sits ABOVE the existing
+// containers so every tab and sub-menu below stays exactly where it was.
+import OutletCaptureCockpit from '@/app/(cockpit)/_design/OutletCaptureCockpit';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import { FbCategoryChart, FbAvgTicketChart } from '@/components/pl/FbMiniCharts';
@@ -126,6 +129,8 @@ export default async function OtherPage({ searchParams, propertyId }: Props) {
 
   return (
     <DashboardPage title="Other ops" subtitle="Operations · everything without a home (Fee · Tax · Adjustment · Addon · Front Office · Unclassified)" tabs={tabs}>
+      <OutletCaptureCockpit deptKey="other" propertyId={pid} searchParams={searchParams} />
+
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* PBS 2026-06-12 #213 — voucher sales · GL-only revenue (no Cloudbeds folio) */}
         <Container title="Voucher sales · Services" subtitle="QB GL · non-refundable voucher revenue · not included in Cloudbeds folio">

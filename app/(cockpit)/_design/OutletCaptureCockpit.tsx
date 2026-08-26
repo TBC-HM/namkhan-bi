@@ -1,11 +1,17 @@
-// app/(cockpit)/_design/FbCaptureCockpit.tsx
-// PBS 2026-08-26 · Restaurant Pass — the manager's half of the F&B page.
+// app/(cockpit)/_design/OutletCaptureCockpit.tsx
+// PBS 2026-08-26 · The manager's block for every Operations department page.
 //
-// The F&B sub-tab opened on a USALI rollup and a QuickBooks reconciliation:
-// a controller's page. This block goes above all of that and answers what a
-// restaurant manager actually asks before service — how many of the guests
-// already sleeping here ate with us, which ones did not, and where that is
-// heading. The ledger work below it is untouched.
+// Started as the F&B "Restaurant Pass" and generalised to all seven: Rooms,
+// F&B, Spa, Activities, Retail, Transport, Other. Every one of those pages
+// opened on ledger and reconciliation content — a controller's view. This
+// block goes ABOVE all of it, additively: no existing container, tab or
+// sub-menu is moved or removed, which is what keeps the Spa sub-pages
+// (Overview / Schedule / Catalogue / Passes / Delivery) reachable untouched.
+//
+// One implementation, seven pages. The USALI taxonomy does not match the strip
+// one-to-one — there is no Spa, Activities or Transport department, and Retail
+// is booked under two different codes across the estate — so the mapping is
+// resolved once in public.fn_outlet_dept_key rather than seven times here.
 //
 // Drills on the SAME `op_period` pills the Operating snapshot already uses
 // (yesterday | 7d | 30d | ytd) rather than introducing a second control, and
@@ -17,7 +23,7 @@
 // counts once here. That is the number that names a guest who bought nothing.
 //
 // Composed from existing atoms — Container, KpiTile, Chart, MetricMatrix.
-// Data: public.v_fb_capture_trend + public.v_fb_reservation_spend.
+// Data: public.v_outlet_capture_trend + public.v_outlet_reservation_spend.
 
 import Container from './layout/Container';
 import KpiTile from './tile/KpiTile';
@@ -29,10 +35,13 @@ import {
   captureTrend, neverSpentBySource, splitStaff, captureSummary,
   resolveWindow, shiftWindowYear, OP_PERIODS,
   type CaptureRow, type SpendRow, type OpPeriod, type Window,
-} from '@/lib/fb/capture';
+} from '@/lib/outlets/capture';
+import { deptSpec, captureTone, type DeptKey } from '@/lib/outlets/departments';
 import { tzForProperty, propertySymbol, localTodayIso } from '@/lib/revenue/headline-matrix';
 
 interface Props {
+  /** Which department page this block is mounted on. */
+  deptKey: DeptKey;
   propertyId: number;
   currency?: Currency;
   searchParams?: Record<string, string | string[] | undefined>;
@@ -42,7 +51,8 @@ const PILL_LABEL: Record<OpPeriod, string> = {
   yesterday: 'Yesterday', '7d': 'Last 7d', '30d': 'Last 30d', ytd: 'YTD',
 };
 
-export default async function FbCaptureCockpit({ propertyId: pid, currency, searchParams }: Props) {
+export default async function OutletCaptureCockpit({ deptKey, propertyId: pid, currency, searchParams }: Props) {
+  const dept = deptSpec(deptKey);
   const sb  = getSupabaseAdmin();
   const tz  = tzForProperty(pid);
   const sym = currency ? ({ EUR: '€', USD: '$', LAK: '₭' } as const)[currency] : propertySymbol(pid);
@@ -54,17 +64,19 @@ export default async function FbCaptureCockpit({ propertyId: pid, currency, sear
   const ly  = shiftWindowYear(win);
 
   const spendIn = (w: Window) => sb
-    .from('v_fb_reservation_spend')
-    .select('source_name, is_staff, has_fb_spend, fb_spend, nights')
+    .from('v_outlet_reservation_spend')
+    .select('source_name, is_staff, has_spend, outlet_spend, nights')
     .eq('property_id', pid)
+    .eq('dept_key', deptKey)
     .gte('check_out_date', w.from)
     .lte('check_in_date', w.to)
     .then((r) => (r.data ?? []) as SpendRow[], () => [] as SpendRow[]);
 
   const [trendRes, tyRows, lyRows] = await Promise.all([
-    sb.from('v_fb_capture_trend')
-      .select('stay_month, reservations, reservations_with_fb, capture_pct, room_nights, room_nights_no_fb, fb_spend')
+    sb.from('v_outlet_capture_trend')
+      .select('stay_month, reservations, reservations_with_spend, capture_pct, room_nights, room_nights_no_spend, outlet_spend')
       .eq('property_id', pid)
+      .eq('dept_key', deptKey)
       .gte('stay_month', `${Number(today.slice(0, 4)) - 1}-01-01`)
       .order('stay_month')
       .then((r) => (r.data ?? []) as CaptureRow[], () => [] as CaptureRow[]),
@@ -95,15 +107,17 @@ export default async function FbCaptureCockpit({ propertyId: pid, currency, sear
       label: `Capture · ${win.label.toLowerCase()}`,
       value: dormant ? '—' : `${summary.capturePct}%`,
       size: 'sm',
-      footnote: `${summary.withSpend} of ${summary.reservations} reservations bought food or drink · by reservation, not by night · ${win.label}`,
-      status: dormant ? 'grey' : summary.capturePct >= 75 ? 'green' : summary.capturePct >= 60 ? 'amber' : 'red',
+      footnote: `${summary.withSpend} of ${summary.reservations} reservations ${dept.verb} · by reservation, not by night · ${win.label}`,
+      // Banded per department: 15% is healthy spa capture and dire F&B capture.
+      // One shared threshold would paint five of seven pages permanently red.
+      status: dormant ? 'grey' : captureTone(deptKey, summary.capturePct),
       stly: hasLy ? `LY ${lySummary.capturePct}%` : 'LY —',
     },
     {
       label: 'Never spent',
       value: dormant ? '—' : summary.neverSpent,
       size: 'sm',
-      footnote: `${summary.roomNightsLost} room nights in house with no F&B charge at all · ${win.label}`,
+      footnote: `${summary.roomNightsLost} room nights in house with no ${dept.label.toLowerCase()} charge at all · ${win.label}`,
       status: dormant ? 'grey' : summary.neverSpent === 0 ? 'green' : 'red',
       stly: hasLy ? `LY ${lySummary.neverSpent}` : 'LY —',
     },
@@ -116,7 +130,7 @@ export default async function FbCaptureCockpit({ propertyId: pid, currency, sear
       stly: hasLy ? `LY ${money(lySummary.opportunity)}` : 'LY —',
     },
     {
-      label: 'Guest F&B revenue',
+      label: `Guest ${dept.label} revenue`,
       value: dormant ? '—' : money(staff.guestSpend),
       size: 'sm',
       footnote: staff.staffSpend > 0
@@ -173,8 +187,8 @@ export default async function FbCaptureCockpit({ propertyId: pid, currency, sear
     <>
       <div style={{ gridColumn: '1 / -1' }}>
         <Container
-          title="Capture snapshot"
-          subtitle={`who is eating with us · by reservation · ${win.label}${hasLy ? ' · LY pill = same window last year' : ' · no last-year data for this window'}`}
+          title={`${dept.label} · capture snapshot`}
+          subtitle={`how many in-house guests ${dept.verb} · by reservation · ${win.label}${hasLy ? ' · LY pill = same window last year' : ' · no last-year data for this window'}`}
           density="compact"
           action={pills}
         >
@@ -189,8 +203,8 @@ export default async function FbCaptureCockpit({ propertyId: pid, currency, sear
           title="Capture · development"
           subtitle={
             dormant
-              ? 'no F&B charges linked to reservations for this property yet — lights up when the feed lands'
-              : `share of reservations buying food or drink, by stay month${
+              ? `no ${dept.label.toLowerCase()} charges linked to reservations for this property yet — lights up when the feed lands`
+              : `share of reservations that ${dept.verb}, by stay month${
                   captureDelta !== null ? ` · ${captureDelta >= 0 ? '+' : ''}${captureDelta} pts since ${first!.label}` : ''
                 } · future stay months excluded, nobody has arrived yet`
           }
@@ -200,7 +214,7 @@ export default async function FbCaptureCockpit({ propertyId: pid, currency, sear
             variant="line"
             data={trend as unknown as Record<string, unknown>[]}
             xKey="label"
-            series={[{ key: 'capturePct', label: 'Capture % of reservations', color: '#1F3A2E' }]}
+            series={[{ key: 'capturePct', label: `${dept.label} capture % of reservations`, color: '#1F3A2E' }]}
             height={200}
             formatY={(v: number) => `${Math.round(v)}%`}
             empty={{ title: 'No capture history yet', hint: 'needs F&B charges linked to reservations' }}
@@ -212,18 +226,24 @@ export default async function FbCaptureCockpit({ propertyId: pid, currency, sear
         <div style={{ gridColumn: '1 / -1' }}>
           <Container
             title="Room nights that bought nothing"
-            subtitle="the same story as a volume — nights in house with no F&B charge, by stay month"
+            subtitle={`the same story as a volume — nights in house with no ${dept.label.toLowerCase()} charge, by stay month`}
             density="compact"
           >
             <Chart
               variant="bar"
               data={trend as unknown as Record<string, unknown>[]}
               xKey="label"
-              series={[{ key: 'roomNightsNoFb', label: 'Room nights with no F&B', color: '#B04A2F' }]}
+              series={[{ key: 'roomNightsNoSpend', label: `Room nights with no ${dept.label}`, color: '#B04A2F' }]}
               height={180}
               empty={{ title: 'No history yet' }}
             />
           </Container>
+        </div>
+      )}
+
+      {dept.note && !dormant && (
+        <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.45, padding: '0 2px' }}>
+          {dept.note}
         </div>
       )}
 
@@ -236,7 +256,7 @@ export default async function FbCaptureCockpit({ propertyId: pid, currency, sear
             action={pills}
           >
             <MetricMatrix
-              caption="Reservations that bought no food or beverage, by booking source."
+              caption={`Reservations that did not use ${dept.label}, by booking source.`}
               columns={[
                 { key: 'never',   label: 'Never spent', sub: 'reservations' },
                 { key: 'nights',  label: 'Nights lost', sub: 'in house, no F&B' },

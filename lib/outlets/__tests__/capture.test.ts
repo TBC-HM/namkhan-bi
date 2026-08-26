@@ -1,4 +1,4 @@
-// lib/fb/__tests__/capture.test.ts
+// lib/outlets/__tests__/capture.test.ts
 // PBS 2026-08-26 · Restaurant Pass capture logic.
 // The traps here are all shape, not arithmetic: future stay months read 0%
 // because the stay has not happened, staff meals post exactly like guest
@@ -15,12 +15,12 @@ import {
 } from '../capture';
 
 const trend: CaptureRow[] = [
-  { stay_month: '2026-06-01', reservations: 35, reservations_with_fb: 30, capture_pct: 85.7, room_nights: 112, room_nights_no_fb: 9,  fb_spend: 4938 },
-  { stay_month: '2026-07-01', reservations: 94, reservations_with_fb: 69, capture_pct: 73.4, room_nights: 246, room_nights_no_fb: 44, fb_spend: 9192 },
-  { stay_month: '2026-08-01', reservations: 77, reservations_with_fb: 46, capture_pct: 59.7, room_nights: 229, room_nights_no_fb: 77, fb_spend: 7212 },
+  { stay_month: '2026-06-01', reservations: 35, reservations_with_spend: 30, capture_pct: 85.7, room_nights: 112, room_nights_no_spend: 9,  outlet_spend: 4938 },
+  { stay_month: '2026-07-01', reservations: 94, reservations_with_spend: 69, capture_pct: 73.4, room_nights: 246, room_nights_no_spend: 44, outlet_spend: 9192 },
+  { stay_month: '2026-08-01', reservations: 77, reservations_with_spend: 46, capture_pct: 59.7, room_nights: 229, room_nights_no_spend: 77, outlet_spend: 7212 },
   // Stays that have not happened yet — every one of these reads 0% capture.
-  { stay_month: '2026-09-01', reservations: 28, reservations_with_fb: 0, capture_pct: 0, room_nights: 76, room_nights_no_fb: 76, fb_spend: 0 },
-  { stay_month: '2026-10-01', reservations: 32, reservations_with_fb: 0, capture_pct: 0, room_nights: 95, room_nights_no_fb: 95, fb_spend: 0 },
+  { stay_month: '2026-09-01', reservations: 28, reservations_with_spend: 0, capture_pct: 0, room_nights: 76, room_nights_no_spend: 76, outlet_spend: 0 },
+  { stay_month: '2026-10-01', reservations: 32, reservations_with_spend: 0, capture_pct: 0, room_nights: 95, room_nights_no_spend: 95, outlet_spend: 0 },
 ];
 
 describe('captureTrend', () => {
@@ -42,7 +42,7 @@ describe('captureTrend', () => {
   it('carries capture and the no-F&B night count through', () => {
     const aug = captureTrend(trend, '2026-08-26').at(-1)!;
     expect(aug.capturePct).toBe(59.7);
-    expect(aug.roomNightsNoFb).toBe(77);
+    expect(aug.roomNightsNoSpend).toBe(77);
   });
 
   it('returns an empty series rather than throwing on no rows', () => {
@@ -56,12 +56,12 @@ describe('captureTrend', () => {
 });
 
 const spend: SpendRow[] = [
-  { source_name: 'Booking.com',  is_staff: false, has_fb_spend: true,  fb_spend: 4910, nights: 3 },
-  { source_name: 'Booking.com',  is_staff: false, has_fb_spend: false, fb_spend: 0,    nights: 3 },
-  { source_name: 'Booking.com',  is_staff: false, has_fb_spend: false, fb_spend: 0,    nights: 2 },
-  { source_name: 'Expedia',      is_staff: false, has_fb_spend: true,  fb_spend: 585,  nights: 2 },
-  { source_name: 'Expedia',      is_staff: false, has_fb_spend: false, fb_spend: 0,    nights: 4 },
-  { source_name: 'Staff Usage',  is_staff: true,  has_fb_spend: true,  fb_spend: 74,   nights: 1 },
+  { source_name: 'Booking.com',  is_staff: false, has_spend: true,  outlet_spend: 4910, nights: 3 },
+  { source_name: 'Booking.com',  is_staff: false, has_spend: false, outlet_spend: 0,    nights: 3 },
+  { source_name: 'Booking.com',  is_staff: false, has_spend: false, outlet_spend: 0,    nights: 2 },
+  { source_name: 'Expedia',      is_staff: false, has_spend: true,  outlet_spend: 585,  nights: 2 },
+  { source_name: 'Expedia',      is_staff: false, has_spend: false, outlet_spend: 0,    nights: 4 },
+  { source_name: 'Staff Usage',  is_staff: true,  has_spend: true,  outlet_spend: 74,   nights: 1 },
 ];
 
 describe('neverSpentBySource', () => {
@@ -89,7 +89,7 @@ describe('neverSpentBySource', () => {
 
   it('omits sources where everyone spent', () => {
     expect(neverSpentBySource([
-      { source_name: 'Walk-In', is_staff: false, has_fb_spend: true, fb_spend: 137, nights: 1 },
+      { source_name: 'Walk-In', is_staff: false, has_spend: true, outlet_spend: 137, nights: 1 },
     ])).toEqual([]);
   });
 });

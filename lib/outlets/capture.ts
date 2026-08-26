@@ -1,5 +1,5 @@
-// lib/fb/capture.ts
-// PBS 2026-08-26 · Shaping for the Restaurant Pass capture surfaces.
+// lib/outlets/capture.ts
+// PBS 2026-08-26 · Shaping for the department capture cockpits.
 //
 // Reads kpi.v_fb_capture_monthly_property and kpi.v_fb_reservation_spend
 // (bridged as public.v_fb_capture_trend / public.v_fb_reservation_spend).
@@ -15,11 +15,11 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 export interface CaptureRow {
   stay_month: string;
   reservations: number;
-  reservations_with_fb: number;
+  reservations_with_spend: number;
   capture_pct: number | string | null;
   room_nights: number | null;
-  room_nights_no_fb: number | null;
-  fb_spend: number | string | null;
+  room_nights_no_spend: number | null;
+  outlet_spend: number | string | null;
 }
 
 export interface CapturePoint {
@@ -28,8 +28,8 @@ export interface CapturePoint {
   capturePct: number;
   reservations: number;
   withSpend: number;
-  roomNightsNoFb: number;
-  fbSpend: number;
+  roomNightsNoSpend: number;
+  outletSpend: number;
 }
 
 const num = (v: unknown): number => {
@@ -55,17 +55,17 @@ export function captureTrend(rows: CaptureRow[], asOfIso: string): CapturePoint[
       label: MONTHS[Number(r.stay_month.slice(5, 7)) - 1] ?? r.stay_month,
       capturePct: num(r.capture_pct),
       reservations: num(r.reservations),
-      withSpend: num(r.reservations_with_fb),
-      roomNightsNoFb: num(r.room_nights_no_fb),
-      fbSpend: num(r.fb_spend),
+      withSpend: num(r.reservations_with_spend),
+      roomNightsNoSpend: num(r.room_nights_no_spend),
+      outletSpend: num(r.outlet_spend),
     }));
 }
 
 export interface SpendRow {
   source_name: string | null;
   is_staff: boolean | null;
-  has_fb_spend: boolean | null;
-  fb_spend: number | string | null;
+  has_spend: boolean | null;
+  outlet_spend: number | string | null;
   nights: number | null;
 }
 
@@ -91,7 +91,7 @@ export function neverSpentBySource(rows: SpendRow[]): SourceCapture[] {
     if (r.is_staff) continue;
     const key = r.source_name || '(unknown)';
     const a = acc.get(key) ?? { never: 0, did: 0, nights: 0, spend: 0 };
-    if (r.has_fb_spend) { a.did++; a.spend += num(r.fb_spend); }
+    if (r.has_spend) { a.did++; a.spend += num(r.outlet_spend); }
     else { a.never++; a.nights += num(r.nights); }
     acc.set(key, a);
   }
@@ -118,8 +118,8 @@ export interface StaffSplit {
 export function splitStaff(rows: SpendRow[]): StaffSplit {
   let guestSpend = 0, staffSpend = 0;
   for (const r of rows) {
-    if (r.is_staff) staffSpend += num(r.fb_spend);
-    else guestSpend += num(r.fb_spend);
+    if (r.is_staff) staffSpend += num(r.outlet_spend);
+    else guestSpend += num(r.outlet_spend);
   }
   const total = guestSpend + staffSpend;
   return {
@@ -147,9 +147,9 @@ export interface CaptureSummary {
  */
 export function captureSummary(rows: SpendRow[]): CaptureSummary {
   const guests = rows.filter((r) => !r.is_staff);
-  const withSpend = guests.filter((r) => r.has_fb_spend);
-  const never = guests.filter((r) => !r.has_fb_spend);
-  const spend = withSpend.reduce((s, r) => s + num(r.fb_spend), 0);
+  const withSpend = guests.filter((r) => r.has_spend);
+  const never = guests.filter((r) => !r.has_spend);
+  const spend = withSpend.reduce((s, r) => s + num(r.outlet_spend), 0);
   const perCapturing = withSpend.length > 0 ? spend / withSpend.length : 0;
   return {
     reservations: guests.length,

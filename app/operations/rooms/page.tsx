@@ -15,6 +15,9 @@
 //  · Raw txns             → public.v_fnb_raw_txn_enriched (filter usali_dept='Rooms')
 
 import React from 'react';
+// PBS 2026-08-26: department cockpit. Additive — sits ABOVE the existing
+// containers so every tab and sub-menu below stays exactly where it was.
+import OutletCaptureCockpit from '@/app/(cockpit)/_design/OutletCaptureCockpit';
 import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
@@ -202,6 +205,8 @@ export default async function RoomsPage({ searchParams, propertyId }: Props) {
       subtitle={`Ops manager view · live from Cloudbeds folio + QB GL · ${opLabel}`}
       tabs={tabs}
     >
+      <OutletCaptureCockpit deptKey="rooms" propertyId={pid} searchParams={searchParams} />
+
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Operating snapshot */}
         <Container title="Operating snapshot" subtitle={`Rooms KPIs · ${opLabel}`} density="compact" action={opPills}>
