@@ -216,7 +216,6 @@ export default async function OutletCaptureCockpit({ deptKey, propertyId: pid, c
             xKey="label"
             series={[{ key: 'capturePct', label: `${dept.label} capture % of reservations`, color: '#1F3A2E' }]}
             height={200}
-            formatY={(v: number) => `${Math.round(v)}%`}
             empty={{ title: 'No capture history yet', hint: 'needs F&B charges linked to reservations' }}
           />
         </Container>
