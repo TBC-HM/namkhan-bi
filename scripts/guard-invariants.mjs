@@ -139,7 +139,11 @@ const BASELINE = {
   "app/operations/activities/page.tsx": 1,
   "app/operations/other/page.tsx": 1,
   "app/operations/qa/generate/_components/GenerateSopForm.tsx": 1,
-  "app/operations/restaurant/page.tsx": 1,
+  // PBS 2026-08-26: the F&B page was swapped for the cockpit and its previous
+  // body moved verbatim to _cockpit/LegacyFbView.tsx. The one tenant default
+  // travelled with it — this is a RENAME of the baseline entry, not a raise:
+  // page.tsx drops to 0, the legacy view inherits the 1. Still to be fixed.
+  "app/operations/restaurant/_cockpit/LegacyFbView.tsx": 1,
   "app/operations/retail/page.tsx": 1,
   "app/operations/rooms/page.tsx": 1,
   "app/operations/sops/[sop_code]/edit/_components/SopEditForm.tsx": 1,

@@ -11,7 +11,7 @@
 
 import { redirect, notFound } from 'next/navigation';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
-import FbCockpitPage from '@/app/operations/restaurant/cockpit/page';
+import FbCockpitPage from '@/app/operations/restaurant/page';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -31,7 +31,7 @@ export default function PropertyFbCockpitPage({
         v == null ? [] : [[k, Array.isArray(v) ? v[0] : v] as [string, string]],
       ),
     ).toString();
-    redirect(`/operations/restaurant/cockpit${qs ? `?${qs}` : ''}`);
+    redirect(`/operations/restaurant${qs ? `?${qs}` : ''}`);
   }
 
   return <FbCockpitPage searchParams={searchParams} propertyId={propertyId} />;
