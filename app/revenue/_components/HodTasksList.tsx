@@ -45,6 +45,8 @@ export default function HodTasksList({ deptSlug = 'revenue', propertyId, initial
   const [tasks, setTasks] = useState<Task[]>(initial);
   const [draft, setDraft] = useState('');
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // Surfaced rather than swallowed — see the insert handler below.
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -67,10 +69,16 @@ export default function HodTasksList({ deptSlug = 'revenue', propertyId, initial
     const label = draft.trim();
     if (!label) return;
     startTransition(async () => {
-      const { data } = await sb.from('hod_tasks')
+      // PBS 2026-08-26: this destructured only { data }. hod_tasks had RLS on
+      // with no INSERT policy, so every add was denied, the error was dropped
+      // on the floor and the input just cleared — the button looked like it
+      // worked for months while the table stayed empty on every property.
+      const { data, error } = await sb.from('hod_tasks')
         .insert({ dept_slug: deptSlug, property_id: propertyId, label, done: false })
         .select('id, label, done, due_date, remind_before_days, recurring')
         .maybeSingle();
+      if (error) { setSaveError(error.message); return; }
+      setSaveError(null);
       if (data) setTasks((prev) => [data as Task, ...prev]);
       setDraft('');
     });
@@ -117,6 +125,15 @@ export default function HodTasksList({ deptSlug = 'revenue', propertyId, initial
 
   return (
     <div>
+      {saveError && (
+        <div role="alert" style={{
+          marginBottom: 8, padding: '7px 10px', fontSize: 11.5, borderRadius: 4,
+          border: '1px solid var(--status-red, #B04A2F)',
+          background: 'var(--paper, #FFFFFF)', color: 'var(--status-red, #B04A2F)',
+        }}>
+          Could not save: {saveError}
+        </div>
+      )}
       <form onSubmit={(e) => { e.preventDefault(); add(); }}
             style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
         <input

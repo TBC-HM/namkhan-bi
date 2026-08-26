@@ -327,7 +327,7 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
               {flags.map((f) => (
                 <li key={f.id} style={{
                   display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 12.5,
-                  padding: '7px 9px', background: 'var(--paper-soft, #FAFAF7)',
+                  padding: '7px 9px', background: 'var(--paper, #FFFFFF)',
                   border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
                 }}>
                   <span aria-hidden="true" style={{

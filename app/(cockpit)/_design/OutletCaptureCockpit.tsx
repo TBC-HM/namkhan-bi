@@ -232,7 +232,7 @@ export default async function OutletCaptureCockpit({ deptKey, propertyId: pid, c
               variant="bar"
               data={trend as unknown as Record<string, unknown>[]}
               xKey="label"
-              series={[{ key: 'roomNightsNoSpend', label: `Room nights with no ${dept.label}`, color: '#B04A2F' }]}
+              series={[{ key: 'roomNightsNoSpend', label: `Room nights with no ${dept.label}`, color: '#8A8A8A' }]}
               height={180}
               empty={{ title: 'No history yet' }}
             />

@@ -161,7 +161,9 @@ const S: Record<string, CSSProperties> = {
   empty: { color: INK_SOFT, fontSize: 13, opacity: 0.7 },
   sub: { display: 'block', fontSize: 10, color: INK_SOFT, marginTop: 1, whiteSpace: 'nowrap' },
   bar: {
-    display: 'block', height: 3, borderRadius: 2, background: HAIRLINE,
+    // PBS 2026-08-26: was the tan hairline, which read brown down a whole
+    // column. Neutral track; the fill still carries the tone.
+    display: 'block', height: 3, borderRadius: 2, background: 'rgba(27,27,27,0.10)',
     marginTop: 4, position: 'relative', overflow: 'hidden',
   },
   barFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 2 },
