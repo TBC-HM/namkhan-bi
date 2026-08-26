@@ -85,6 +85,18 @@ export interface SellerRow {
   last_sold: string | null;
 }
 
+/** Items that have stopped selling — ordered by how long since the last sale. */
+export async function getSleepingItems(limit = 20): Promise<SellerRow[]> {
+  const sb = getSupabaseAdmin();
+  return safe<SellerRow>(
+    sb.from('v_fb_top_seller_trend')
+      .select('description, usali_subdept, total_revenue_usd, total_units, active_months, last_sold')
+      .not('last_sold', 'is', null)
+      .order('last_sold', { ascending: true })
+      .limit(limit),
+  );
+}
+
 export async function getTopSellers(limit = 40): Promise<SellerRow[]> {
   const sb = getSupabaseAdmin();
   return safe<SellerRow>(
@@ -122,8 +134,12 @@ export interface CosRow {
 
 export async function getFoodCost(pid: number): Promise<Record<string, unknown>[]> {
   const sb = getSupabaseAdmin();
+  // ORDER BY is not optional here: the view spans 2019-01 → 2027-11 and an
+  // unordered limit returns the OLDEST rows, so every downstream year filter
+  // came back empty.
   return safe<Record<string, unknown>>(
-    sb.from('v_fnb_cos_monthly').select('*').limit(36),
+    sb.from('v_fnb_cos_monthly').select('*')
+      .order('period_yyyymm', { ascending: false }).limit(36),
   ).then((rows) => rows.filter((r) => {
     const p = (r as Record<string, unknown>).property_id;
     return p === undefined || p === null || Number(p) === pid;
@@ -144,6 +160,7 @@ export async function getLabour(pid: number, fromMonth: string): Promise<Record<
 export async function getFolioVsGl(): Promise<Record<string, unknown>[]> {
   const sb = getSupabaseAdmin();
   return safe<Record<string, unknown>>(
-    sb.from('v_fnb_folio_vs_gl_monthly').select('*').limit(24),
+    sb.from('v_fnb_folio_vs_gl_monthly').select('*')
+      .order('period_yyyymm', { ascending: false }).limit(24),
   );
 }

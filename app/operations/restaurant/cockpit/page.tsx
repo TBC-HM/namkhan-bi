@@ -17,9 +17,10 @@ import OutletCaptureCockpit from '@/app/(cockpit)/_design/OutletCaptureCockpit';
 import MetricMatrix, { type MatrixRow } from '@/app/(cockpit)/_design/MetricMatrix';
 import FbSubnav, { isFbTab, type FbTab } from '../_cockpit/FbSubnav';
 import {
-  tzFor, todayIn, addDays, getTxns, getTopSellers, getCategoryMix,
+  tzFor, todayIn, addDays, getTxns, getTopSellers, getSleepingItems, getCategoryMix,
   getFoodCost, getLabour, getFolioVsGl,
 } from '../_cockpit/data';
+import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -38,6 +39,40 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const PILL_LABEL: Record<OpPeriod, string> = {
+  yesterday: 'Yesterday', '7d': 'Last 7d', '30d': 'Last 30d', ytd: 'YTD',
+};
+
+/**
+ * Period pills for tabs that are not the capture cockpit.
+ *
+ * Menu, Feed and Cost were hardwired to 30 days, so the drill-down the live
+ * restaurant page has always had disappeared on the new one. Same op_period
+ * key, so switching period holds across every tab and matches the old page.
+ */
+function PeriodPills({ tab, active, extra }: {
+  tab: string; active: OpPeriod; extra?: Record<string, string>;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {OP_PERIODS.map((p) => {
+        const on = p === active;
+        const qs = new URLSearchParams({ tab, ...(extra ?? {}), op_period: p }).toString();
+        return (
+          <a key={p} href={`?${qs}`} style={{
+            padding: '3px 10px', fontSize: 10, borderRadius: 3,
+            border: on ? '1px solid var(--ink, #1B1B1B)' : '1px solid var(--hairline, #E6DFCC)',
+            background: on ? 'var(--ink, #1B1B1B)' : 'var(--paper, #FFFFFF)',
+            color: on ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+            textDecoration: 'none', fontWeight: on ? 600 : 500,
+            letterSpacing: '0.04em', textTransform: 'uppercase',
+          }}>{PILL_LABEL[p]}</a>
+        );
+      })}
+    </div>
+  );
+}
+
 export default async function FbCockpitPage({ searchParams, propertyId }: Props) {
   // L6: the unprefixed /operations tree IS the Namkhan implementation; the /h
   // wrapper passes an explicit propertyId for Donna. The named constant states
@@ -52,7 +87,10 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
 
   const rawTab = one(searchParams?.tab);
   const tab: FbTab = isFbTab(rawTab) ? rawTab : 'tonight';
-  const opPeriod = one(searchParams?.op_period);
+  const rawPeriod = one(searchParams?.op_period);
+  const opPeriod: OpPeriod = (OP_PERIODS as string[]).includes(rawPeriod ?? '')
+    ? (rawPeriod as OpPeriod) : '30d';
+  const win = resolveWindow(opPeriod, today);
   const q = one(searchParams?.q) ?? '';
 
   const money = (n: number) => `${sym}${Math.round(n).toLocaleString('en-US')}`;
@@ -73,8 +111,8 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
         <FbSubnav active={tab} basePath={BASE} opPeriod={opPeriod} />
 
         {tab === 'tonight'  && <TonightTab pid={pid} tz={tz} today={today} sym={sym} searchParams={searchParams} />}
-        {tab === 'feed'     && <FeedTab    pid={pid} today={today} q={q} money={money} />}
-        {tab === 'menu'     && <MenuTab    pid={pid} today={today} money={money} />}
+        {tab === 'feed'     && <FeedTab    pid={pid} win={win} period={opPeriod} q={q} money={money} />}
+        {tab === 'menu'     && <MenuTab    pid={pid} today={today} win={win} period={opPeriod} money={money} />}
         {tab === 'guests'   && <OutletCaptureCockpit deptKey="fb" propertyId={pid} searchParams={searchParams} />}
         {tab === 'cost'     && <CostTab    pid={pid} today={today} money={money} />}
         {tab === 'ledger'   && <LedgerTab  pid={pid} money={money} />}
@@ -124,19 +162,21 @@ async function TonightTab({ pid, today, sym, searchParams }: {
 
 // ─── Feed ──────────────────────────────────────────────────────────────────
 
-async function FeedTab({ pid, today, q, money }: {
-  pid: number; today: string; q: string; money: (n: number) => string;
+async function FeedTab({ pid, win, period, q, money }: {
+  pid: number; win: { from: string; to: string; label: string };
+  period: OpPeriod; q: string; money: (n: number) => string;
 }) {
-  const from = addDays(today, -30);
-  const txns = await getTxns(pid, from, today, q, 300);
+  const txns = await getTxns(pid, win.from, win.to, q, 300);
   const total = txns.reduce((s, t) => s + num(t.amount), 0);
 
   return (
     <Container
       title="Feed · what actually happened"
-      subtitle={`every F&B posting, last 30 days${q ? ` · filtered on "${q}"` : ''} · ${txns.length} shown · ${money(total)}`}
+      subtitle={`every F&B posting · ${win.label.toLowerCase()}${q ? ` · filtered on "${q}"` : ''} · ${txns.length} shown · ${money(total)}`}
       density="compact"
       action={
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <PeriodPills tab="feed" active={period} extra={q ? { q } : undefined} />
         <form method="GET" action={BASE} style={{ display: 'flex', gap: 6 }}>
           <input type="hidden" name="tab" value="feed" />
           <input
@@ -153,11 +193,13 @@ async function FeedTab({ pid, today, q, money }: {
             border: '1px solid var(--ink, #1B1B1B)', borderRadius: 4,
             background: 'var(--ink, #1B1B1B)', color: 'var(--paper, #FFFFFF)', cursor: 'pointer',
           }}>Search</button>
+          <input type="hidden" name="op_period" value={period} />
         </form>
+        </div>
       }
     >
       {txns.length === 0 ? (
-        <Empty>{q ? `Nothing matches “${q}” in the last 30 days.` : 'No postings in the last 30 days.'}</Empty>
+        <Empty>{q ? `Nothing matches “${q}” in ${win.label.toLowerCase()}.` : `No postings in ${win.label.toLowerCase()}.`}</Empty>
       ) : (
         <FeedList rows={txns} sym={money(0).charAt(0)} />
       )}
@@ -167,11 +209,13 @@ async function FeedTab({ pid, today, q, money }: {
 
 // ─── Menu ──────────────────────────────────────────────────────────────────
 
-async function MenuTab({ pid, today, money }: {
-  pid: number; today: string; money: (n: number) => string;
+async function MenuTab({ pid, today, win, period, money }: {
+  pid: number; today: string; win: { from: string; to: string; label: string };
+  period: OpPeriod; money: (n: number) => string;
 }) {
-  const from = addDays(today, -30);
-  const [sellers, cats] = await Promise.all([getTopSellers(25), getCategoryMix(pid, from, today)]);
+  const [sellers, sleeping, cats] = await Promise.all([
+    getTopSellers(25), getSleepingItems(18), getCategoryMix(pid, win.from, win.to),
+  ]);
 
   const byCat = new Map<string, { rev: number; tx: number }>();
   for (const c of cats) {
@@ -224,8 +268,41 @@ async function MenuTab({ pid, today, money }: {
         )}
       </Container>
 
-      <Container title="Category mix · last 30 days" subtitle="where the money came from" density="compact">
-        {catRows.length === 0 ? <Empty>No postings in the last 30 days.</Empty> : (
+      <Container
+        title="Not selling"
+        subtitle="items with the oldest last-sale — the other half of a menu decision, and not on the live page at all"
+        density="compact"
+      >
+        {sleeping.length === 0 ? <Empty>Every tracked item has sold recently.</Empty> : (
+          <MetricMatrix
+            caption="Items ordered by how long since their last sale."
+            columns={[
+              { key: 'last', label: 'Last sold' }, { key: 'rev', label: 'Lifetime rev' },
+              { key: 'units', label: 'Units' }, { key: 'months', label: 'Months active' },
+            ]}
+            rows={sleeping.map((s) => ({
+              key: `sleep-${s.description}`,
+              label: String(s.description ?? '—'),
+              unit: String(s.usali_subdept ?? ''),
+              cells: {
+                last:  { value: String(s.last_sold ?? '—'), tone: 'neg' },
+                rev:   { value: money(num(s.total_revenue_usd)), tone: 'mute' },
+                units: { value: num(s.total_units).toLocaleString('en-US'), tone: 'mute' },
+                months:{ value: String(s.active_months ?? '—'), tone: 'mute' },
+              },
+            }))}
+            labelWidth={220} minWidth={520}
+          />
+        )}
+      </Container>
+
+      <Container
+        title={`Category mix · ${win.label.toLowerCase()}`}
+        subtitle="where the money came from"
+        density="compact"
+        action={<PeriodPills tab="menu" active={period} />}
+      >
+        {catRows.length === 0 ? <Empty>No postings in {win.label.toLowerCase()}.</Empty> : (
           <MetricMatrix
             caption="Revenue by category, last 30 days."
             columns={[{ key: 'rev', label: 'Revenue' }, { key: 'share', label: 'Share' }, { key: 'line', label: 'Avg line' }]}
