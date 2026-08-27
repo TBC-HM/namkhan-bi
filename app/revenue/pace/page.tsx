@@ -56,6 +56,14 @@ function parseGran(raw: string | undefined): 'day' | 'week' | 'month' {
   return 'month';
 }
 
+// When grouping by month, extend the query to the last day of the window's month
+// so the final bucket isn't silently truncated (e.g. next90 ends Nov 24, missing Nov 25-30).
+function endOfMonth(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCMonth(d.getUTCMonth() + 1, 0);
+  return d.toISOString().slice(0, 10);
+}
+
 async function getPace(fromDate: string, toDate: string, pid: number): Promise<PaceRow[]> {
   const { data, error } = await supabase
     .from('v_otb_pace')
@@ -178,8 +186,9 @@ export default async function PacePage({
   const toIso = period.to;
 
   // PBS #200: pull totals from the same source /demand uses (mv_pace_otb via getPaceOtb) so the KPI tile MATCHES /demand's "OTB Revenue".
+  const paceToIso = gran === 'month' ? endOfMonth(toIso) : toIso;
   const [rows, stlyMap, paceCurveRaw, demandRows] = await Promise.all([
-    getPace(fromIso, toIso, pid),
+    getPace(fromIso, paceToIso, pid),
     getStlyActuals(fromIso, toIso, pid),
     getPaceCurve(30, 30, pid).catch(() => []),
     getPaceOtb(period, pid).catch(() => [] as Array<Record<string, unknown>>),
