@@ -522,22 +522,23 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       status: netRevenueTonight > 0 ? 'green' : 'grey',
       stly: fmtSlyMoney(lyTodayKpi?.rooms_revenue, symToday, TAX_SERVICE_LY) },
     // PBS 2026-07-15: CLOUDBEDS-ALIGNED — gross bookings incl. cancelled-today, cancels with original_amount, pickup = snapshot delta (matches pickup matrix).
+    // Big number = RN · small line = count + revenue · LY in hover footnote.
     { label: 'New bookings today · room nights', value: grossBkRn, size: 'sm',
-      footnote: grossBkCount === 0
-        ? 'no new bookings today'
-        : `${grossBkCount} ${grossBkCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(grossBkRev).toLocaleString('en-US')} · gross booked today`,
+      footnote: `${grossBkCount} ${grossBkCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(grossBkRev).toLocaleString('en-US')} gross · LY ${Number(hodActLyT?.gross_bookings_rn ?? 0)} RN`,
       status: grossBkRn > 0 ? 'green' : 'grey',
-      stly: fmtSlyRn(Number(hodActLyT?.gross_bookings_rn ?? 0)) },
+      stly: grossBkCount > 0
+        ? `${grossBkCount} res · ${symToday}${Math.round(grossBkRev).toLocaleString('en-US')}`
+        : '0 res' },
     { label: 'Cancellations today · room nights', value: cancelBkRn, size: 'sm',
-      footnote: cancelBkCount === 0
-        ? 'no cancellations today'
-        : `${cancelBkCount} ${cancelBkCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelBkRev).toLocaleString('en-US')} · value lost today`,
+      footnote: `${cancelBkCount} ${cancelBkCount === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelBkRev).toLocaleString('en-US')} value lost · LY ${Number(hodActLyT?.cancellations_rn ?? 0)} RN`,
       status: cancelBkCount === 0 ? 'green' : 'amber',
-      stly: fmtSlyRn(Number(hodActLyT?.cancellations_rn ?? 0)) },
+      stly: cancelBkCount > 0
+        ? `${cancelBkCount} res · ${symToday}${Math.round(cancelBkRev).toLocaleString('en-US')}`
+        : '0 res' },
     { label: 'Pickup today · net RN', value: pickupNetRn, size: 'sm',
-      footnote: `${grossBkRn} booked − ${cancelBkRn} lost · ${symToday}${Math.round(pickupNetRev).toLocaleString('en-US')} net · matches pickup matrix`,
+      footnote: `${grossBkRn} RN booked − ${cancelBkRn} RN lost · LY ${Number(hodActLyT?.pickup_net_rn ?? 0)} RN net`,
       status: pickupNetRn > 0 ? 'green' : pickupNetRn < 0 ? 'amber' : 'grey',
-      stly: fmtSlyRn(Number(hodActLyT?.pickup_net_rn ?? 0)) },
+      stly: `${symToday}${Math.round(pickupNetRev).toLocaleString('en-US')} net` },
   ];
 
   // PBS 2026-07-15: yesterday mirror stripe — sourced from actualized v_kpi_daily_property.
@@ -560,21 +561,21 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       status: netRevenueYesterday > 0 ? 'green' : 'grey',
       stly: fmtSlyMoney(lyYestKpi?.rooms_revenue, symToday, TAX_SERVICE_LY) },
     { label: 'New bookings yesterday · room nights', value: grossBkRnY, size: 'sm',
-      footnote: grossBkCountY === 0
-        ? 'no new bookings yesterday'
-        : `${grossBkCountY} ${grossBkCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(grossBkRevY).toLocaleString('en-US')} · gross booked yesterday`,
+      footnote: `${grossBkCountY} ${grossBkCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(grossBkRevY).toLocaleString('en-US')} gross · LY ${Number(hodActLyY?.gross_bookings_rn ?? 0)} RN`,
       status: grossBkRnY > 0 ? 'green' : 'grey',
-      stly: fmtSlyRn(Number(hodActLyY?.gross_bookings_rn ?? 0)) },
+      stly: grossBkCountY > 0
+        ? `${grossBkCountY} res · ${symToday}${Math.round(grossBkRevY).toLocaleString('en-US')}`
+        : '0 res' },
     { label: 'Cancellations yesterday · room nights', value: cancelBkRnY, size: 'sm',
-      footnote: cancelBkCountY === 0
-        ? 'no cancellations yesterday'
-        : `${cancelBkCountY} ${cancelBkCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelBkRevY).toLocaleString('en-US')} · value lost yesterday`,
+      footnote: `${cancelBkCountY} ${cancelBkCountY === 1 ? 'reservation' : 'reservations'} · ${symToday}${Math.round(cancelBkRevY).toLocaleString('en-US')} value lost · LY ${Number(hodActLyY?.cancellations_rn ?? 0)} RN`,
       status: cancelBkCountY === 0 ? 'green' : 'amber',
-      stly: fmtSlyRn(Number(hodActLyY?.cancellations_rn ?? 0)) },
+      stly: cancelBkCountY > 0
+        ? `${cancelBkCountY} res · ${symToday}${Math.round(cancelBkRevY).toLocaleString('en-US')}`
+        : '0 res' },
     { label: 'Pickup yesterday · net RN', value: pickupNetRnY, size: 'sm',
-      footnote: `${grossBkRnY} booked − ${cancelBkRnY} lost · ${symToday}${Math.round(pickupNetRevY).toLocaleString('en-US')} net · matches pickup matrix`,
+      footnote: `${grossBkRnY} RN booked − ${cancelBkRnY} RN lost · LY ${Number(hodActLyY?.pickup_net_rn ?? 0)} RN net`,
       status: pickupNetRnY > 0 ? 'green' : pickupNetRnY < 0 ? 'amber' : 'grey',
-      stly: fmtSlyRn(Number(hodActLyY?.pickup_net_rn ?? 0)) },
+      stly: `${symToday}${Math.round(pickupNetRevY).toLocaleString('en-US')} net` },
   ];
 
   // PBS 2026-07-08 #204/attention — DB rows first, seed fallback for dev only.
