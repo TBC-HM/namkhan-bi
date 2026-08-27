@@ -10,7 +10,7 @@
 // 2026-08-24: Added Booking ID as first column + row click → right-side
 // detail drawer with full field list.
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 interface Row {
   reservation_id: string;
@@ -37,6 +37,7 @@ interface Props {
   rows: Row[];
   sym: string;
   tz: string;
+  propertyId: number;
   collapsedRows?: number;
 }
 
@@ -77,14 +78,41 @@ function valueFor(r: Row, col: SortCol): string | number {
 
 // ── Detail Drawer ──────────────────────────────────────────────────────────
 
+interface GroupRoom {
+  guestName: string | null;
+  roomName: string | null;
+  roomTypeName: string | null;
+  checkIn: string | null;
+  checkOut: string | null;
+  adults: number | null;
+  subReservationId: string | null;
+}
+
 interface DrawerProps {
   row: Row | null;
   sym: string;
   tz: string;
+  propertyId: number;
   onClose: () => void;
 }
 
-function DetailDrawer({ row, sym, tz, onClose }: DrawerProps) {
+function DetailDrawer({ row, sym, tz, propertyId, onClose }: DrawerProps) {
+  const [rooms, setRooms] = useState<GroupRoom[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!row) { setRooms([]); return; }
+    setRoomsLoading(true);
+    fetch(
+      `/api/reservation-rooms?property_id=${propertyId}&reservation_id=${encodeURIComponent(row.reservation_id)}`,
+      { credentials: 'include' },
+    )
+      .then((r) => r.json())
+      .then((d: { rooms?: GroupRoom[] }) => setRooms(d.rooms ?? []))
+      .catch(() => setRooms([]))
+      .finally(() => setRoomsLoading(false));
+  }, [row?.reservation_id, propertyId]);
+
   if (!row) return null;
 
   const nights   = Number(row.nights ?? 0);
@@ -205,6 +233,52 @@ function DetailDrawer({ row, sym, tz, onClose }: DrawerProps) {
               </span>
             </div>
           ))}
+
+          {/* Group accommodations sub-table — shown when the reservation has > 1 room */}
+          {roomsLoading && (
+            <div style={{ paddingTop: 16, fontSize: 11, color: 'var(--ink-soft, #5A5A5A)' }}>
+              Loading accommodations…
+            </div>
+          )}
+          {!roomsLoading && rooms.length > 1 && (
+            <div style={{ paddingTop: 16 }}>
+              <div style={{
+                fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+                letterSpacing: '0.06em', color: 'var(--ink-soft, #5A5A5A)',
+                marginBottom: 8,
+              }}>
+                Group · {rooms.length} accommodations
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      {['Guest', 'Room', 'Type', 'Check-in', 'Check-out'].map((h) => (
+                        <th key={h} style={{
+                          textAlign: 'left', padding: '4px 6px',
+                          borderBottom: '1px solid var(--hairline, #E6DFCC)',
+                          fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+                          letterSpacing: '0.05em', color: 'var(--ink-soft, #5A5A5A)',
+                          whiteSpace: 'nowrap',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rooms.map((room, i) => (
+                      <tr key={room.subReservationId ?? i} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+                        <td style={{ padding: '5px 6px', fontSize: 11, color: 'var(--ink, #1B1B1B)', whiteSpace: 'nowrap' }}>{room.guestName ?? '—'}</td>
+                        <td style={{ padding: '5px 6px', fontSize: 11, color: 'var(--ink, #1B1B1B)', whiteSpace: 'nowrap' }}>{room.roomName ?? '—'}</td>
+                        <td style={{ padding: '5px 6px', fontSize: 11, color: 'var(--ink, #1B1B1B)', whiteSpace: 'nowrap' }}>{room.roomTypeName ?? '—'}</td>
+                        <td style={{ padding: '5px 6px', fontSize: 11, color: 'var(--ink, #1B1B1B)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{room.checkIn ?? '—'}</td>
+                        <td style={{ padding: '5px 6px', fontSize: 11, color: 'var(--ink, #1B1B1B)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{room.checkOut ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -214,7 +288,7 @@ function DetailDrawer({ row, sym, tz, onClose }: DrawerProps) {
 // ── Main Table ─────────────────────────────────────────────────────────────
 
 export default function BookingFeedTable({
-  rows, sym, tz, collapsedRows = DEFAULT_COLLAPSED,
+  rows, sym, tz, propertyId, collapsedRows = DEFAULT_COLLAPSED,
 }: Props) {
   const [expanded, setExpanded]       = useState(false);
   const [sortCol, setSortCol]         = useState<SortCol>(null);
@@ -260,6 +334,7 @@ export default function BookingFeedTable({
         row={selectedRow}
         sym={sym}
         tz={tz}
+        propertyId={propertyId}
         onClose={() => setSelectedRow(null)}
       />
 

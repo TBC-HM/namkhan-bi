@@ -67,7 +67,7 @@ export default async function BookingActivity({ propertyId }: Props) {
       subtitle={subtitle}
       density="compact"
     >
-      <BookingFeedTable rows={rows} sym={sym} tz={tz} />
+      <BookingFeedTable rows={rows} sym={sym} tz={tz} propertyId={propertyId} />
     </Container>
   );
 }
