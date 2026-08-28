@@ -20,7 +20,7 @@ import LegacyFbView from './_cockpit/LegacyFbView';
 import FbSubnav, { isFbTab, type FbTab } from './_cockpit/FbSubnav';
 import {
   tzFor, todayIn, addDays, getTxns, getTopSellers, getSleepingItems, getCategoryMix,
-  getFoodCost, getLabour, getFolioVsGl,
+  getFoodCost, getFbLabour, getFolioVsGl,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
 
@@ -322,10 +322,20 @@ async function CostTab({ pid, today, money }: {
   pid: number; today: string; money: (n: number) => string;
 }) {
   const year = today.slice(0, 4);
-  const [cos, labour] = await Promise.all([getFoodCost(pid), getLabour(pid, `${year}-01-01`)]);
+  const [cos, labour] = await Promise.all([
+    getFoodCost(pid), getFbLabour(pid, NAMKHAN_PROPERTY_ID, `${year}-01-01`),
+  ]);
+  const thisMonth = today.slice(0, 7);
 
   const cosRows: MatrixRow[] = cos
-    .filter((r) => String(r.period_yyyymm ?? '').startsWith(year))
+    // Months that have not happened, or have nothing posted, are not "zero
+    // cost" — they are not yet news. 2026-11 and 2026-12 were rendering $0
+    // rows against a future revenue figure, which reads as a broken page.
+    .filter((r) => {
+      const m = String(r.period_yyyymm ?? '');
+      return m.startsWith(year) && m <= thisMonth
+        && (num(r.food_cost) > 0 || num(r.effective_rev) > 0);
+    })
     .sort((a, b) => String(a.period_yyyymm).localeCompare(String(b.period_yyyymm)))
     .map((r) => {
       const pct = num(r.food_cost_pct);
@@ -343,20 +353,20 @@ async function CostTab({ pid, today, money }: {
       };
     });
 
-  const labRows: MatrixRow[] = labour.map((r) => {
-    const pct = num(r.labour_cost_ratio_pct);
-    return {
-      key: String(r.period_month),
-      label: String(r.period_month).slice(0, 7),
-      unit: 'labour ÷ rooms revenue',
-      cells: {
-        cost: { value: money(num(r.labour_cost)) },
-        pct:  { value: `${pct.toFixed(1)}%`,
-                tone: pct <= 35 ? 'pos' : pct <= 60 ? 'warn' : 'neg',
-                bar: Math.min(100, pct) },
-      },
-    };
-  });
+  const labRows: MatrixRow[] = labour.map((r) => ({
+    key: r.month,
+    label: r.month,
+    unit: r.headcount != null ? `${r.headcount} in the kitchen` : 'kitchen',
+    cells: {
+      cost: { value: money(r.kitchenCost) },
+      rev:  { value: money(r.fbRevenue), tone: 'mute' },
+      pct:  r.ratioPct == null
+        ? undefined
+        : { value: `${r.ratioPct.toFixed(1)}%`,
+            tone: r.ratioPct <= 35 ? 'pos' : r.ratioPct <= 60 ? 'warn' : 'neg',
+            bar: Math.min(100, r.ratioPct) },
+    },
+  }));
 
   return (
     <>
@@ -368,11 +378,25 @@ async function CostTab({ pid, today, money }: {
         )}
       </Container>
 
-      <Container title="Labour" subtitle="kitchen payroll against rooms revenue · healthy 25–35%" density="compact">
-        {labRows.length === 0 ? <Empty>No payroll posted for {year}.</Empty> : (
-          <MetricMatrix caption="Labour cost ratio by month."
-            columns={[{ key: 'cost', label: 'Payroll' }, { key: 'pct', label: '% of revenue' }]}
-            rows={labRows} labelWidth={150} minWidth={340} />
+      <Container
+        title="Kitchen labour"
+        subtitle="Restaurant Kitchen payroll against F&B revenue · healthy 25–35%"
+        density="compact"
+      >
+        {labRows.length === 0 ? (
+          <Empty>
+            Kitchen payroll is only broken out per department for The Namkhan —
+            v_payroll_dept_monthly carries no property_id, so it is not shown here
+            rather than showing another property&apos;s figures.
+          </Empty>
+        ) : (
+          <MetricMatrix caption="Kitchen payroll against F&B revenue by month."
+            columns={[
+              { key: 'cost', label: 'Kitchen payroll' },
+              { key: 'rev', label: 'F&B revenue' },
+              { key: 'pct', label: '% of F&B revenue' },
+            ]}
+            rows={labRows} labelWidth={150} minWidth={420} />
         )}
       </Container>
     </>

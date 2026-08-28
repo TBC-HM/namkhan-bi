@@ -146,14 +146,10 @@ export async function getFoodCost(pid: number): Promise<Record<string, unknown>[
   }));
 }
 
-export async function getLabour(pid: number, fromMonth: string): Promise<Record<string, unknown>[]> {
-  const sb = getSupabaseAdmin();
-  return safe<Record<string, unknown>>(
-    sb.from('v_labour_cost_ratio_monthly')
-      .select('period_month, labour_cost, labour_cost_ratio_pct, currency')
-      .eq('property_id', pid).gte('period_month', fromMonth).order('period_month'),
-  );
-}
+// getLabour() removed 2026-08-27. It read v_labour_cost_ratio_monthly, which is
+// WHOLE-HOTEL payroll divided by ROOMS revenue — a hotel metric that has no
+// meaning on an F&B page. Use getFbLabour() below: Restaurant Kitchen payroll
+// against F&B revenue.
 
 // ─── Ledger ────────────────────────────────────────────────────────────────
 
@@ -163,4 +159,69 @@ export async function getFolioVsGl(): Promise<Record<string, unknown>[]> {
     sb.from('v_fnb_folio_vs_gl_monthly').select('*')
       .order('period_yyyymm', { ascending: false }).limit(24),
   );
+}
+
+// ─── F&B labour (the honest one) ───────────────────────────────────────────
+// PBS 2026-08-27. The Cost tab previously read v_labour_cost_ratio_monthly,
+// which is WHOLE-HOTEL payroll ÷ ROOMS revenue — neither kitchen nor F&B. On
+// the F&B page it overstated kitchen payroll by 7-12x and divided by the wrong
+// denominator, so June read 108.5% when the kitchen was actually at 75.2% and
+// August read 66.9% when it had improved to 27.6%. It told the opposite story.
+//
+// TENANT GUARD: v_payroll_dept_monthly has NO property_id column. Rendering it
+// for any property other than Namkhan would show Namkhan's payroll on another
+// tenant's page. Returns empty for everyone else so the container goes dormant
+// instead of leaking (L22).
+
+export interface FbLabourRow {
+  month: string;
+  kitchenCost: number;
+  headcount: number | null;
+  fbRevenue: number;
+  ratioPct: number | null;
+}
+
+export async function getFbLabour(
+  pid: number, namkhanId: number, fromMonth: string,
+): Promise<FbLabourRow[]> {
+  if (pid !== namkhanId) return [];
+  const sb = getSupabaseAdmin();
+
+  const [payroll, txns] = await Promise.all([
+    safe<Record<string, unknown>>(
+      sb.from('v_payroll_dept_monthly')
+        .select('period_month, headcount, total_canonical_cost_usd')
+        .eq('dept_code', 'kitchen')
+        .gte('period_month', fromMonth)
+        .order('period_month'),
+    ),
+    safe<{ transaction_date: string | null; amount: number | string | null }>(
+      sb.from('v_fnb_raw_txn_enriched')
+        .select('transaction_date, amount')
+        .eq('property_id', pid)
+        .eq('transaction_type', 'debit')
+        .gte('transaction_date', fromMonth)
+        .limit(50000),
+    ),
+  ]);
+
+  const revByMonth = new Map<string, number>();
+  for (const t of txns) {
+    const m = String(t.transaction_date ?? '').slice(0, 7);
+    if (!m) continue;
+    revByMonth.set(m, (revByMonth.get(m) ?? 0) + Number(t.amount ?? 0));
+  }
+
+  return payroll.map((r) => {
+    const month = String(r.period_month ?? '').slice(0, 7);
+    const kitchenCost = Number(r.total_canonical_cost_usd ?? 0);
+    const fbRevenue = revByMonth.get(month) ?? 0;
+    return {
+      month,
+      kitchenCost,
+      headcount: r.headcount == null ? null : Number(r.headcount),
+      fbRevenue,
+      ratioPct: fbRevenue > 0 ? Math.round((kitchenCost / fbRevenue) * 1000) / 10 : null,
+    };
+  }).filter((r) => r.month);
 }
