@@ -221,26 +221,23 @@ const PRESSURE_COLOR: Record<CockpitRow['pressure'], string> = {
 };
 
 // ─── Guardrail chip component ─────────────────────────────────────────────
+// Unknown = data not yet evaluated; collapse to a count to avoid noise.
 
 function GuardrailChips({ rows, propertyId }: { rows: GuardrailStatusRow[]; propertyId: number }) {
   if (rows.length === 0) {
     return (
-      <div style={{ padding: '12px 16px', fontSize: 12.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
+      <div style={{ padding: '8px 0', fontSize: 12.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
         No active revenue rules for property {propertyId}
       </div>
     );
   }
 
-  // Sort: breaches first, then ok, then unknown
-  const sorted = [...rows].sort((a, b) => {
-    const statusOrder = { breach: 0, ok: 1, unknown: 2 };
-    const aOrder = statusOrder[a.status] ?? 3;
-    const bOrder = statusOrder[b.status] ?? 3;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    return a.rule_key.localeCompare(b.rule_key);
-  });
+  const breaches = rows.filter((r) => r.status === 'breach');
+  const oks = rows.filter((r) => r.status === 'ok');
+  const unknownCount = rows.filter((r) => r.status === 'unknown').length;
+  const visible = [...breaches, ...oks];
 
-  const chipStyle = (status: 'ok' | 'breach' | 'unknown'): React.CSSProperties => ({
+  const chipStyle = (status: 'ok' | 'breach'): React.CSSProperties => ({
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
@@ -249,24 +246,9 @@ function GuardrailChips({ rows, propertyId }: { rows: GuardrailStatusRow[]; prop
     fontSize: 11.5,
     fontWeight: 600,
     border: '1px solid',
-    borderColor:
-      status === 'breach'
-        ? 'var(--terracotta, #B8542A)'
-        : status === 'ok'
-        ? 'var(--status-green, #2E7D32)'
-        : 'var(--hairline, #E6DFCC)',
-    background:
-      status === 'breach'
-        ? 'rgba(184, 84, 42, 0.08)'
-        : status === 'ok'
-        ? 'rgba(46, 125, 50, 0.08)'
-        : 'var(--paper, #FFFFFF)',
-    color:
-      status === 'breach'
-        ? 'var(--terracotta, #B8542A)'
-        : status === 'ok'
-        ? 'var(--status-green, #2E7D32)'
-        : 'var(--ink-soft, #6B6B6B)',
+    borderColor: status === 'breach' ? 'var(--terracotta, #B8542A)' : 'var(--status-green, #2E7D32)',
+    background: status === 'breach' ? 'rgba(184, 84, 42, 0.08)' : 'rgba(46, 125, 50, 0.08)',
+    color: status === 'breach' ? 'var(--terracotta, #B8542A)' : 'var(--status-green, #2E7D32)',
   });
 
   const formatValue = (val: number | null, kind: string): string => {
@@ -275,26 +257,70 @@ function GuardrailChips({ rows, propertyId }: { rows: GuardrailStatusRow[]; prop
     return String(Math.round(val));
   };
 
-  const formatRuleName = (key: string): string => {
-    return key
-      .split('_')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
-  };
+  const formatRuleName = (key: string): string =>
+    key.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 0' }}>
-      {sorted.map((r) => (
-        <div key={r.rule_key} style={chipStyle(r.status)} title={r.notes ?? undefined}>
-          <span>{formatRuleName(r.rule_key)}</span>
-          {r.status === 'breach' && (
-            <span style={{ fontSize: 10.5 }}>
-              {formatValue(r.observed_val, r.threshold_kind)} vs {r.threshold_kind === 'gte' ? '≥' : '≤'}{' '}
-              {formatValue(r.threshold_val, r.threshold_kind)}
-            </span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '6px 0' }}>
+      {visible.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: 'var(--status-green, #2E7D32)', fontWeight: 600 }}>
+          ✓ No breaches — all evaluated rules within guardrails
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {visible.map((r) => (
+            <div key={r.rule_key} style={chipStyle(r.status as 'ok' | 'breach')} title={r.notes ?? undefined}>
+              <span>{formatRuleName(r.rule_key)}</span>
+              {r.status === 'breach' && (
+                <span style={{ fontSize: 10.5 }}>
+                  {formatValue(r.observed_val, r.threshold_kind)} vs {r.threshold_kind === 'gte' ? '≥' : '≤'}{' '}
+                  {formatValue(r.threshold_val, r.threshold_kind)}
+                </span>
+              )}
+              {r.status === 'ok' && <span style={{ fontSize: 10.5 }}>✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {unknownCount > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--ink-soft, #6B6B6B)' }}>
+          {unknownCount} rule{unknownCount === 1 ? '' : 's'} not yet evaluated — data pending
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Workflow steps — visible human flow ──────────────────────────────────
+
+function WorkflowSteps() {
+  const steps: Array<{ n: number; label: string; note: string; alert?: boolean }> = [
+    { n: 1, label: 'Propose', note: 'agent or you' },
+    { n: 2, label: 'Approve / Reject', note: 'you decide' },
+    { n: 3, label: 'Execute in Cloudbeds', note: 'manual — you do this', alert: true },
+    { n: 4, label: 'Measured at d+14', note: 'pickup vs baseline' },
+    { n: 5, label: 'Verdict at d+30', note: 'worked · no effect · backfired' },
+  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', overflowX: 'auto', padding: '10px 0 14px' }}>
+      {steps.map((s, i) => (
+        <div key={s.n} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 108 }}>
+            <div style={{
+              width: 26, height: 26, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11.5, fontWeight: 700,
+              background: s.alert ? 'rgba(184,84,42,0.10)' : 'var(--paper,#FFFFFF)',
+              border: `2px solid ${s.alert ? 'var(--terracotta,#B8542A)' : 'var(--hairline,#E6DFCC)'}`,
+              color: s.alert ? 'var(--terracotta,#B8542A)' : 'var(--ink-soft,#6B6B6B)',
+            }}>{s.n}</div>
+            <span style={{ fontSize: 11.5, fontWeight: 700, textAlign: 'center', lineHeight: 1.2,
+              color: s.alert ? 'var(--terracotta,#B8542A)' : 'var(--ink,#1B1B1B)' }}>{s.label}</span>
+            <span style={{ fontSize: 10, color: 'var(--ink-soft,#6B6B6B)', textAlign: 'center', lineHeight: 1.3 }}>{s.note}</span>
+          </div>
+          {i < steps.length - 1 && (
+            <div style={{ width: 18, height: 1.5, background: 'var(--hairline,#E6DFCC)', flexShrink: 0, marginBottom: 24 }} />
           )}
-          {r.status === 'unknown' && <span style={{ fontSize: 10.5 }}>unknown</span>}
-          {r.status === 'ok' && <span style={{ fontSize: 10.5 }}>✓</span>}
         </div>
       ))}
     </div>
@@ -585,92 +611,127 @@ export default async function RevenueCockpitPage({
       {/* KPI summary strip */}
       <MetricRow tiles={kpis} />
 
+      {/* DQ alert — inline, no container needed */}
       {showDqAlert && (
-        <Container title="Data quality alert">
-          <div style={{ padding: '10px 14px', background: 'rgba(184, 84, 42, 0.08)', borderRadius: 8, fontSize: 12.5 }}>
-            <strong style={{ color: 'var(--terracotta, #B8542A)' }}>⚠ Data quality alert:</strong>{' '}
-            {stale.map((d) => d.label).join(', ')} — stale data may affect forecast accuracy
-          </div>
-        </Container>
+        <div style={{
+          padding: '8px 14px',
+          background: 'rgba(184, 84, 42, 0.08)',
+          border: '1px solid rgba(184, 84, 42, 0.22)',
+          borderRadius: 8,
+          fontSize: 12.5,
+        }}>
+          <strong style={{ color: 'var(--terracotta, #B8542A)' }}>⚠ Data quality alert:</strong>{' '}
+          {stale.map((d) => d.label).join(', ')} — stale data may affect forecast accuracy
+        </div>
       )}
 
-      {/* Guardrails section */}
-      <Container title="Revenue Guardrails" subtitle={`Active rules for property ${pid} · next 30 stay-dates`}>
-        <GuardrailChips rows={guardrailRows} propertyId={pid} />
-      </Container>
+      {/* Rate Actions + Guardrails — side by side */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: 16, alignItems: 'start' }}>
+        <Container
+          title="Rate Actions"
+          subtitle="Propose → approve → execute manually in Cloudbeds → system measures outcome"
+        >
+          {/* Visible 5-step flow */}
+          <WorkflowSteps />
 
-      {/* Action queue & propose */}
-      <Container title="Rate Actions" subtitle="Proposed changes, approvals, outcomes · guardrail-checked before insert">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Manual execution callout */}
+          <div style={{
+            background: 'rgba(184, 84, 42, 0.06)',
+            border: '1px solid rgba(184, 84, 42, 0.22)',
+            borderRadius: 8,
+            padding: '9px 13px',
+            fontSize: 12.5,
+            lineHeight: 1.55,
+            marginBottom: 16,
+          }}>
+            <strong style={{ color: 'var(--terracotta, #B8542A)' }}>Step 3 is manual and not automated.</strong>{' '}
+            Approving a rate here does <em>not</em> change Cloudbeds. After you approve, go into
+            Cloudbeds and update the rate yourself, then click{' '}
+            <strong>Mark executed</strong> on the action card. The system will then snapshot the
+            current on-the-books baseline and automatically measure pickup at d+14 and d+30 to
+            compute a verdict.
+          </div>
+
           <div>
-            <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>Propose a rate change</h4>
+            <h4 style={{ margin: '0 0 8px', fontSize: 13.5, fontWeight: 700 }}>Propose a rate change</h4>
             <ProposeForm propertyId={pid} prefill={scenarioPrefill} />
           </div>
-          <div>
-            <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, marginBottom: 8 }}>
-              Pending & recent decisions
-            </h4>
+          <div style={{ marginTop: 16 }}>
+            <h4 style={{ margin: '0 0 8px', fontSize: 13.5, fontWeight: 700 }}>Pending & recent decisions</h4>
             <ActionQueue rows={actions} />
           </div>
-        </div>
-      </Container>
+        </Container>
 
-      {/* Decision ledger — outcome vs at-proposal baseline (learning loop) */}
+        <Container
+          title="Revenue Guardrails"
+          subtitle={`Active rules · next 30 stay-dates · ${guardrailRows.filter((r) => r.status === 'breach').length} breach · ${guardrailRows.filter((r) => r.status === 'ok').length} ok`}
+        >
+          <GuardrailChips rows={guardrailRows} propertyId={pid} />
+        </Container>
+      </div>
+
+      {/* Decision ledger — learning loop, human-readable subtitle */}
       <Container
-        title="Decision Ledger"
-        subtitle="Every decided rate action · d14/d30 pickup vs the baseline captured at proposal · verdicts feed the forecast learning journal"
+        title="Decision Ledger — what was decided and what happened"
+        subtitle="14 and 30 days after each executed rate change, actual pickup is compared against the on-the-books baseline captured at proposal time. Verdict: worked · no effect · backfired. Verdicts feed the forecast learning journal."
       >
         <DecisionLedger rows={outcomes} journaledIds={journaledIds} pid={pid} />
       </Container>
 
-      {/* Pace & forecast chart */}
-      <Container title="Pace & forecast (next 90d)" subtitle="OTB rooms vs LY, forecast occupancy with P10–P90 band">
-        <Chart
-          variant="line"
-          xKey="label"
-          data={cockpit.slice(0, 90).map((r) => ({
-            label: r.stay_date.slice(5, 10),
-            'OTB rooms': r.otb_rooms,
-            'LY rooms': r.ly_rooms ?? 0,
-            'Forecast occ (%)': r.occ_fc ?? 0,
-            'P10 (%)': r.occ_p10 ?? 0,
-            'P90 (%)': r.occ_p90 ?? 0,
-          }))}
-          height={280}
-        />
-      </Container>
+      {/* Pace chart + Compset — side by side */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: 16, alignItems: 'start' }}>
+        <Container title="Pace & forecast (next 90d)" subtitle="OTB rooms vs LY, forecast occupancy with P10–P90 band">
+          <Chart
+            variant="line"
+            xKey="label"
+            data={cockpit.slice(0, 90).map((r) => ({
+              label: r.stay_date.slice(5, 10),
+              'OTB rooms': r.otb_rooms,
+              'LY rooms': r.ly_rooms ?? 0,
+              'Forecast occ (%)': r.occ_fc ?? 0,
+              'P10 (%)': r.occ_p10 ?? 0,
+              'P90 (%)': r.occ_p90 ?? 0,
+            }))}
+            height={220}
+          />
+        </Container>
 
-      {/* Compset & OTA */}
-      <Container title="Compset & Channel Mix" subtitle="Latest shopped rates vs our OTB ADR · OTA exposure vs the 40% guardrail">
-        <MetricRow
-          tiles={[
-            { label: 'Compset median (next 7d)', value: fmtMoney(next30.slice(0, 7).reduce((sum, r, _, a) => sum + (r.comp_median_usd ?? 0) / a.length, 0)) },
-            { label: 'Our ADR (next 7d)', value: fmtMoney(next30.slice(0, 7).filter(r => r.otb_rooms > 0).reduce((sum, r, _, a) => sum + r.otb_revenue / r.otb_rooms / a.length, 0)) },
-            {
-              label: 'OTA share (30d net revenue)',
-              value: otaSharePct != null ? fmtPct(otaSharePct) : '—',
-              status: otaBreach ? ('red' as StatusTone) : undefined,
-            },
-          ]}
-        />
-        {ota != null && (
-          <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--ink-soft)' }}>
-            OTA share {fmtPct(ota.ota_share_pct)}{' '}
-            vs guardrail ≤{' '}
-            {fmt0(ota.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}%{' '}
-            {otaBreach ? (
-              <span style={{ color: 'var(--terracotta, #B8542A)' }}>— BREACH (reduce OTA dependency)</span>
-            ) : (
-              <span style={{ color: 'var(--status-green, #2E7D32)' }}>— inside guardrail</span>
-            )}
-          </p>
-        )}
-      </Container>
-
-      {/* Finding button */}
-      <Container title="Finding">
-        <FindingButton propertyId={pid} />
-      </Container>
+        <Container title="Compset & Channel Mix" subtitle="Latest shopped rates vs OTB ADR · OTA exposure vs 40% guardrail">
+          <MetricRow
+            tiles={[
+              {
+                label: 'Compset median (next 7d)',
+                value: fmtMoney(next30.slice(0, 7).reduce((sum, r, _, a) => sum + (r.comp_median_usd ?? 0) / a.length, 0)),
+              },
+              {
+                label: 'Our ADR (next 7d)',
+                value: fmtMoney(
+                  next30.slice(0, 7).filter((r) => r.otb_rooms > 0).reduce((sum, r, _, a) => sum + r.otb_revenue / r.otb_rooms / a.length, 0)
+                ),
+              },
+              {
+                label: 'OTA share (30d net revenue)',
+                value: otaSharePct != null ? fmtPct(otaSharePct) : '—',
+                status: otaBreach ? ('red' as StatusTone) : undefined,
+              },
+            ]}
+          />
+          {ota != null && (
+            <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--ink-soft)' }}>
+              OTA {fmtPct(ota.ota_share_pct)} vs guardrail ≤{' '}
+              {fmt0(ota.ota_share_guardrail != null ? Number(ota.ota_share_guardrail) : null)}%{' '}
+              {otaBreach ? (
+                <span style={{ color: 'var(--terracotta, #B8542A)' }}>— BREACH</span>
+              ) : (
+                <span style={{ color: 'var(--status-green, #2E7D32)' }}>— inside guardrail</span>
+              )}
+            </p>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <FindingButton propertyId={pid} />
+          </div>
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
