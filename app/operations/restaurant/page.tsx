@@ -19,9 +19,10 @@ import MetricMatrix, { type MatrixRow } from '@/app/(cockpit)/_design/MetricMatr
 import LegacyFbView from './_cockpit/LegacyFbView';
 import FbSubnav, { isFbTab, type FbTab } from './_cockpit/FbSubnav';
 import {
-  tzFor, todayIn, addDays, getTxns, getTopSellers, getSleepingItems, getCategoryMix,
+  tzFor, todayIn, addDays, getTopSellers, getSleepingItems, getCategoryMix,
   getFoodCost, getFbLabour, getFolioVsGl, getServiceClock,
-  getFbRevenueByMonth, getClassificationIssues,
+  getFbRevenueByMonth, getClassificationIssues, getFbKpiMatrix, getFeedDetail,
+  type FbPeriodKey,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
 
@@ -89,7 +90,7 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
   const today = todayIn(tz);
 
   const rawTab = one(searchParams?.tab);
-  const tab: FbTab = isFbTab(rawTab) ? rawTab : 'tonight';
+  const tab: FbTab = isFbTab(rawTab) ? rawTab : 'today';
   const rawPeriod = one(searchParams?.op_period);
   const opPeriod: OpPeriod = (OP_PERIODS as string[]).includes(rawPeriod ?? '')
     ? (rawPeriod as OpPeriod) : '30d';
@@ -113,8 +114,8 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
         {/* The module's own strip is ALWAYS first. Nothing pushes it down. */}
         <FbSubnav active={tab} basePath={BASE} opPeriod={opPeriod} />
 
-        {tab === 'tonight'  && <TonightTab pid={pid} tz={tz} today={today} sym={sym} searchParams={searchParams} />}
-        {tab === 'feed'     && <FeedTab    pid={pid} win={win} period={opPeriod} q={q} money={money} />}
+        {tab === 'today'    && <TodayTab   pid={pid} today={today} sym={sym} money={money} searchParams={searchParams} />}
+        {tab === 'feed'     && <FeedTab    pid={pid} win={win} period={opPeriod} q={q} money={money} sym={sym} />}
         {tab === 'menu'     && <MenuTab    pid={pid} today={today} win={win} period={opPeriod} money={money} />}
         {tab === 'guests'   && <OutletCaptureCockpit deptKey="fb" propertyId={pid} searchParams={searchParams} />}
         {tab === 'cost'     && <CostTab    pid={pid} today={today} money={money} />}
@@ -124,38 +125,85 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
   );
 }
 
-// ─── Tonight ───────────────────────────────────────────────────────────────
+// ─── Today ─────────────────────────────────────────────────────────────────
 
-async function TonightTab({ pid, today, sym, searchParams }: {
-  pid: number; tz: string; today: string; sym: string;
+const PERIOD_COLS: Array<{ key: FbPeriodKey; label: string; sub: string }> = [
+  { key: 'today',     label: 'Today',     sub: 'so far' },
+  { key: 'yesterday', label: 'Yesterday', sub: 'closed' },
+  { key: 'last7',     label: 'Last 7d',   sub: 'rolling' },
+  { key: 'last30',    label: 'Last 30d',  sub: 'rolling' },
+];
+
+/**
+ * Every KPI, every timeframe, each against the same window last year.
+ *
+ * Four tiles could not carry this — a tile shows one number for one period, and
+ * the manager asked for all of them with last year beside each. Metrics down,
+ * periods across, LY on its own line in every cell.
+ *
+ * Minibar is a row of its own. It stays inside the F&B total because it is F&B,
+ * but it is in-room self-service: folding it into "restaurant" flatters covers
+ * and hides a quiet floor.
+ */
+async function TodayTab({ pid, today, sym, money, searchParams }: {
+  pid: number; today: string; sym: string; money: (n: number) => string;
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const txns = await getTxns(pid, today, today, undefined, 60);
-  const total = txns.reduce((s, t) => s + num(t.amount), 0);
-  const covers = new Set(txns.map((t) => String(t.reservation_id ?? '')).filter(Boolean)).size;
+  const [kpi, feed] = await Promise.all([
+    getFbKpiMatrix(pid, today),
+    getFeedDetail(pid, today, today, undefined, 40),
+  ]);
 
-  const tiles: KpiTileProps[] = [
-    { label: 'Taken today', value: `${sym}${Math.round(total).toLocaleString('en-US')}`, size: 'sm',
-      footnote: `${txns.length} postings since midnight ${today}`,
-      status: total > 0 ? 'green' : 'grey' },
-    { label: 'Folios touched', value: covers, size: 'sm',
-      footnote: 'distinct reservations with an F&B charge today', status: covers > 0 ? 'green' : 'grey' },
-    { label: 'Average per folio', value: covers > 0 ? `${sym}${Math.round(total / covers)}` : '—', size: 'sm',
-      footnote: 'today · revenue ÷ folios touched', status: 'grey' },
+  const lyLine = (ty: number, ly: number, fmt: (n: number) => string): string => {
+    if (ly <= 0) return 'LY —';
+    const pct = Math.round(((ty - ly) / ly) * 100);
+    return `LY ${fmt(ly)}  ${pct >= 0 ? '+' : ''}${pct}%`;
+  };
+
+  const row = (
+    key: string, label: string, unit: string,
+    pick: (s: Awaited<ReturnType<typeof getFbKpiMatrix>>[FbPeriodKey]['ty']) => number | null,
+    fmt: (n: number) => string,
+  ): MatrixRow => ({
+    key, label, unit,
+    cells: Object.fromEntries(PERIOD_COLS.map((c) => {
+      const cell = kpi[c.key];
+      const ty = pick(cell.ty);
+      const ly = pick(cell.ly);
+      if (ty == null) return [c.key, undefined];
+      return [c.key, {
+        value: fmt(ty),
+        sub: lyLine(ty, ly ?? 0, fmt),
+        tone: ly && ly > 0 ? (ty >= ly ? 'pos' : 'neg') : undefined,
+      }];
+    })),
+  });
+
+  const rows: MatrixRow[] = [
+    row('restaurant', 'Restaurant revenue', 'food + drink on the floor', (s) => s.restaurant, money),
+    row('minibar',    'Minibar',            'in-room, no floor cover',   (s) => s.minibar,    money),
+    row('total',      'Total F&B',          'restaurant + minibar',      (s) => s.total,      money),
+    row('folios',     'Folios touched',     'reservations with a charge',(s) => s.folios,     (n) => String(n)),
+    row('lines',      'Lines posted',       'individual items',          (s) => s.lines,      (n) => String(n)),
+    row('avg',        'Average per folio',  'total ÷ folios',            (s) => s.avgPerFolio, money),
   ];
 
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
-        {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-      </div>
+      <Container
+        title="Today · every KPI, every timeframe"
+        subtitle="LY on each cell is the same window one year earlier · minibar separated because it needs no one on the floor"
+        density="compact"
+      >
+        <MetricMatrix
+          caption="Food and beverage KPIs across today, yesterday, 7 and 30 days, each against last year."
+          columns={PERIOD_COLS.map((c) => ({ key: c.key, label: c.label, sub: c.sub }))}
+          rows={rows} labelWidth={180} minWidth={560}
+        />
+      </Container>
 
       <Container title="Service so far" subtitle={`every posting today, newest first · ${today}`} density="compact">
-        {txns.length === 0 ? (
-          <Empty>Nothing posted yet today.</Empty>
-        ) : (
-          <FeedList rows={txns.slice(0, 25)} sym={sym} />
-        )}
+        {feed.length === 0 ? <Empty>Nothing posted yet today.</Empty> : <FeedList rows={feed} sym={sym} />}
       </Container>
 
       <OutletCaptureCockpit deptKey="fb" propertyId={pid} searchParams={searchParams} />
@@ -165,11 +213,11 @@ async function TonightTab({ pid, today, sym, searchParams }: {
 
 // ─── Feed ──────────────────────────────────────────────────────────────────
 
-async function FeedTab({ pid, win, period, q, money }: {
+async function FeedTab({ pid, win, period, q, money, sym }: {
   pid: number; win: { from: string; to: string; label: string };
-  period: OpPeriod; q: string; money: (n: number) => string;
+  period: OpPeriod; q: string; money: (n: number) => string; sym: string;
 }) {
-  const txns = await getTxns(pid, win.from, win.to, q, 300);
+  const txns = await getFeedDetail(pid, win.from, win.to, q, 300);
   const total = txns.reduce((s, t) => s + num(t.amount), 0);
 
   return (
@@ -184,7 +232,7 @@ async function FeedTab({ pid, win, period, q, money }: {
           <input type="hidden" name="tab" value="feed" />
           <input
             type="search" name="q" defaultValue={q}
-            placeholder="item, category…"
+            placeholder="item, category, room, guest, waiter…"
             style={{
               padding: '5px 9px', fontSize: 11, minWidth: 170,
               border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
@@ -204,7 +252,7 @@ async function FeedTab({ pid, win, period, q, money }: {
       {txns.length === 0 ? (
         <Empty>{q ? `Nothing matches “${q}” in ${win.label.toLowerCase()}.` : `No postings in ${win.label.toLowerCase()}.`}</Empty>
       ) : (
-        <FeedList rows={txns} sym={money(0).charAt(0)} />
+        <FeedList rows={txns} sym={sym} detailed />
       )}
     </Container>
   );
@@ -611,29 +659,49 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FeedList({ rows, sym }: { rows: Awaited<ReturnType<typeof getTxns>>; sym: string }) {
+function FeedList({ rows, sym, detailed }: {
+  rows: Awaited<ReturnType<typeof getFeedDetail>>; sym: string; detailed?: boolean;
+}) {
   return (
     <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
-      {rows.map((t, i) => (
-        <li key={`${t.transaction_id}-${i}`} style={{
-          display: 'grid', gridTemplateColumns: '84px 1fr auto', gap: 10, alignItems: 'baseline',
-          padding: '6px 8px', borderRadius: 3, fontSize: 12,
-          background: i % 2 ? 'var(--paper, #FFFFFF)' : 'transparent',
-        }}>
-          <span style={{ fontFamily: 'var(--mono, monospace)', fontSize: 10.5, color: 'var(--ink-soft, #5A5A5A)' }}>
-            {(t.local_laos_str ?? t.transaction_date ?? '').toString().slice(0, 16).replace('T', ' ')}
-          </span>
-          <span style={{ color: 'var(--ink, #1B1B1B)', minWidth: 0 }}>
-            {t.description ?? '—'}
-            <span style={{ display: 'block', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>
-              {t.item_category_name ?? 'uncategorised'}
+      {rows.map((t, i) => {
+        const isMinibar = t.usali_subdept === 'Minibar';
+        return (
+          <li key={`${t.transaction_id}-${i}`} style={{
+            display: 'grid',
+            gridTemplateColumns: detailed ? '84px 62px 1fr 130px auto' : '84px 1fr auto',
+            gap: 10, alignItems: 'baseline', padding: '6px 8px', borderRadius: 3, fontSize: 12,
+            background: i % 2 ? 'var(--paper, #FFFFFF)' : 'transparent',
+          }}>
+            <span style={{ fontFamily: 'var(--mono, monospace)', fontSize: 10.5, color: 'var(--ink-soft, #5A5A5A)' }}>
+              {(t.local_laos_str ?? t.transaction_date ?? '').toString().slice(0, 16).replace('T', ' ')}
             </span>
-          </span>
-          <span style={{ fontFamily: 'var(--mono, monospace)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-            {sym}{Math.round(num(t.amount)).toLocaleString('en-US')}
-          </span>
-        </li>
-      ))}
+            {detailed && (
+              <span style={{ fontFamily: 'var(--mono, monospace)', fontSize: 10.5, color: 'var(--ink, #1B1B1B)' }}>
+                {t.room_name ?? '—'}
+              </span>
+            )}
+            <span style={{ color: 'var(--ink, #1B1B1B)', minWidth: 0 }}>
+              {t.description ?? '—'}
+              <span style={{ display: 'block', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>
+                {t.item_category_name ?? 'uncategorised'}
+                {isMinibar ? ' · minibar (in-room)' : ''}
+              </span>
+            </span>
+            {detailed && (
+              <span style={{ fontSize: 10.5, color: 'var(--ink-soft, #5A5A5A)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {t.guest_name ?? '—'}
+                <span style={{ display: 'block', fontSize: 9.5 }}>
+                  {t.user_name ? `by ${t.user_name}` : 'no server recorded'}
+                </span>
+              </span>
+            )}
+            <span style={{ fontFamily: 'var(--mono, monospace)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {sym}{Math.round(num(t.amount)).toLocaleString('en-US')}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

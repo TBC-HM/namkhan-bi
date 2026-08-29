@@ -13,7 +13,7 @@ import TenantLink from '@/components/nav/TenantLink';
 import { TOKENS, MONO } from '@/components/cockpit/tokens';
 
 export const FB_TABS = [
-  { key: 'tonight', label: 'Tonight', blurb: 'what is happening right now' },
+  { key: 'today',   label: 'Today',   blurb: 'every KPI, every timeframe, against last year' },
   { key: 'feed',    label: 'Feed',    blurb: 'every posting, searchable' },
   { key: 'menu',    label: 'Menu',    blurb: 'what sells and what stalled' },
   { key: 'guests',  label: 'Guests',  blurb: 'who spends and who never did' },

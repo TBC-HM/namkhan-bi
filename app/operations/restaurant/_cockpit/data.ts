@@ -406,3 +406,119 @@ export async function getClassificationIssues(pid: number, fromIso: string): Pro
 
   return out.sort((x, y) => y.revenue - x.revenue).slice(0, 12);
 }
+
+// ─── Today KPI matrix ──────────────────────────────────────────────────────
+// PBS 2026-08-27. Four tiles could not carry it: the manager wants every KPI
+// across every timeframe with last year beside it. Metrics down, periods
+// across — same shape as the Revenue HoD matrix.
+//
+// Minibar is its own row throughout. It is F&B and stays in the totals, but it
+// is in-room self-service: counting it inside "restaurant" flatters covers and
+// hides that the floor was quiet.
+
+export interface FbPeriodStats {
+  restaurant: number;
+  minibar: number;
+  total: number;
+  folios: number;
+  lines: number;
+  avgPerFolio: number | null;
+}
+
+export interface FbKpiCell { ty: FbPeriodStats; ly: FbPeriodStats }
+
+export type FbPeriodKey = 'today' | 'yesterday' | 'last7' | 'last30';
+
+const EMPTY_STATS: FbPeriodStats = {
+  restaurant: 0, minibar: 0, total: 0, folios: 0, lines: 0, avgPerFolio: null,
+};
+
+function statsFrom(rows: Array<{ amount: number | string | null; usali_subdept: string | null; reservation_id: string | number | null }>): FbPeriodStats {
+  let restaurant = 0, minibar = 0, lines = 0;
+  const folios = new Set<string>();
+  for (const r of rows) {
+    const amt = Number(r.amount ?? 0);
+    if (r.usali_subdept === 'Minibar') minibar += amt; else restaurant += amt;
+    lines += 1;
+    const f = String(r.reservation_id ?? '');
+    if (f) folios.add(f);
+  }
+  const total = restaurant + minibar;
+  return {
+    restaurant: Math.round(restaurant),
+    minibar: Math.round(minibar),
+    total: Math.round(total),
+    folios: folios.size,
+    lines,
+    avgPerFolio: folios.size > 0 ? Math.round(total / folios.size) : null,
+  };
+}
+
+/** Every KPI across today / yesterday / 7d / 30d, each against the same window last year. */
+export async function getFbKpiMatrix(
+  pid: number, todayIso: string,
+): Promise<Record<FbPeriodKey, FbKpiCell>> {
+  const sb = getSupabaseAdmin();
+  const shiftYear = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    const last = new Date(Date.UTC(y - 1, m, 0)).getUTCDate();
+    return `${y - 1}-${String(m).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+  };
+  const windows: Record<FbPeriodKey, [string, string]> = {
+    today:     [todayIso, todayIso],
+    yesterday: [addDays(todayIso, -1), addDays(todayIso, -1)],
+    last7:     [addDays(todayIso, -6), todayIso],
+    last30:    [addDays(todayIso, -29), todayIso],
+  };
+
+  const pull = (from: string, to: string) => safe<{
+    amount: number | string | null; usali_subdept: string | null; reservation_id: string | number | null;
+  }>(
+    sb.from('v_fnb_raw_txn_enriched')
+      .select('amount, usali_subdept, reservation_id')
+      .eq('property_id', pid).eq('transaction_type', 'debit').eq('usali_dept', 'F&B')
+      .gte('transaction_date', from).lte('transaction_date', `${to}T23:59:59`)
+      .limit(20000),
+  );
+
+  const keys = Object.keys(windows) as FbPeriodKey[];
+  const results = await Promise.all(keys.flatMap((k) => {
+    const [f, t] = windows[k];
+    return [pull(f, t), pull(shiftYear(f), shiftYear(t))];
+  }));
+
+  const out = {} as Record<FbPeriodKey, FbKpiCell>;
+  keys.forEach((k, i) => {
+    out[k] = { ty: statsFrom(results[i * 2] ?? []), ly: statsFrom(results[i * 2 + 1] ?? []) };
+  });
+  return out;
+}
+
+/** Feed rows with the detail a manager asks for: which room, who, which waiter. */
+export interface FeedDetailRow extends TxnRow {
+  room_name: string | null;
+  guest_name: string | null;
+  user_name: string | null;
+  usali_subdept: string | null;
+}
+
+export async function getFeedDetail(
+  pid: number, fromIso: string, toIso: string, q?: string, limit = 300,
+): Promise<FeedDetailRow[]> {
+  const sb = getSupabaseAdmin();
+  let query = sb.from('v_fnb_raw_txn_enriched')
+    .select('transaction_id, local_laos_str, transaction_date, description, item_category_name, amount, reservation_id, room_name, guest_name, user_name, usali_subdept')
+    .eq('property_id', pid)
+    .eq('transaction_type', 'debit')
+    .eq('usali_dept', 'F&B')
+    .gte('transaction_date', fromIso)
+    .lte('transaction_date', `${toIso}T23:59:59`)
+    .order('transaction_date', { ascending: false })
+    .limit(limit);
+  const term = (q ?? '').trim();
+  if (term) {
+    const s = term.replace(/[%,()]/g, ' ');
+    query = query.or(`description.ilike.%${s}%,item_category_name.ilike.%${s}%,room_name.ilike.%${s}%,guest_name.ilike.%${s}%,user_name.ilike.%${s}%`);
+  }
+  return safe<FeedDetailRow>(query);
+}
