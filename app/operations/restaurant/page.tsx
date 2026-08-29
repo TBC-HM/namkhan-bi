@@ -21,6 +21,7 @@ import FbSubnav, { isFbTab, type FbTab } from './_cockpit/FbSubnav';
 import {
   tzFor, todayIn, addDays, getTxns, getTopSellers, getSleepingItems, getCategoryMix,
   getFoodCost, getFbLabour, getFolioVsGl, getServiceClock,
+  getFbRevenueByMonth, getClassificationIssues,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
 
@@ -215,8 +216,9 @@ async function MenuTab({ pid, today, win, period, money }: {
   pid: number; today: string; win: { from: string; to: string; label: string };
   period: OpPeriod; money: (n: number) => string;
 }) {
-  const [sellers, sleeping, cats] = await Promise.all([
+  const [sellers, sleeping, cats, issues] = await Promise.all([
     getTopSellers(25), getSleepingItems(18), getCategoryMix(pid, win.from, win.to),
+    getClassificationIssues(pid, `${today.slice(0, 4)}-01-01`),
   ]);
 
   const byCat = new Map<string, { rev: number; tx: number }>();
@@ -270,6 +272,34 @@ async function MenuTab({ pid, today, win, period, money }: {
         )}
       </Container>
 
+      {issues.length > 0 && (
+        <Container
+          title="Filed wrongly"
+          subtitle="categories that are in the wrong department, spelled two ways, or have no menu meaning — a POS vocabulary problem, not fixable from this page, but every report above inherits it"
+          density="compact"
+        >
+          <MetricMatrix
+            caption="Category classification problems this year."
+            columns={[
+              { key: 'kind', label: 'Problem' },
+              { key: 'lines', label: 'Lines' },
+              { key: 'rev', label: 'Revenue' },
+            ]}
+            rows={issues.map((i, ix) => ({
+              key: `${i.kind}-${ix}`,
+              label: i.label,
+              unit: i.note,
+              cells: {
+                kind:  { value: i.kind, tone: 'warn' },
+                lines: { value: i.lines.toLocaleString('en-US'), tone: 'mute' },
+                rev:   { value: money(i.revenue), tone: 'neg' },
+              },
+            }))}
+            labelWidth={230} minWidth={520}
+          />
+        </Container>
+      )}
+
       <Container
         title="Not selling"
         subtitle="items with the oldest last-sale — the other half of a menu decision, and not on the live page at all"
@@ -322,11 +352,13 @@ async function CostTab({ pid, today, money }: {
   pid: number; today: string; money: (n: number) => string;
 }) {
   const year = today.slice(0, 4);
-  const [cos, labour, clock] = await Promise.all([
+  const [cos, labour, clock, folioRev] = await Promise.all([
     getFoodCost(pid),
     getFbLabour(pid, NAMKHAN_PROPERTY_ID, `${year}-01-01`),
     getServiceClock(pid, addDays(today, -90), today),
+    getFbRevenueByMonth(pid, `${year}-01-01`),
   ]);
+  const folioByMonth = new Map(folioRev.map((r) => [r.month, r.folioRevenue]));
   const thisMonth = today.slice(0, 7);
 
   const cosRows: MatrixRow[] = cos
@@ -341,16 +373,28 @@ async function CostTab({ pid, today, money }: {
     .sort((a, b) => String(a.period_yyyymm).localeCompare(String(b.period_yyyymm)))
     .map((r) => {
       const pct = num(r.food_cost_pct);
+      const m = String(r.period_yyyymm);
+      const glRev = num(r.food_rev);
+      const till  = folioByMonth.get(m) ?? 0;
+      // No GL revenue means the month is not posted. effective_rev in those
+      // months is nothing but the breakfast allocation, so a percentage built
+      // on it is arithmetic on a notional number.
+      const posted = glRev > 0;
       return {
-        key: String(r.period_yyyymm),
-        label: String(r.period_yyyymm),
+        key: m,
+        label: m,
         unit: 'food cost of sales',
         cells: {
-          cost: { value: money(num(r.food_cost)) },
-          pct:  { value: pct > 0 ? `${pct.toFixed(1)}%` : '—',
-                  tone: pct === 0 ? undefined : pct <= 30 ? 'pos' : pct <= 40 ? 'warn' : 'neg',
-                  bar: Math.min(100, pct) },
-          rev:  { value: money(num(r.effective_rev)), tone: 'mute' },
+          cost:  { value: money(num(r.food_cost)) },
+          glrev: posted ? { value: money(glRev), tone: 'mute' }
+                        : { value: 'not posted', tone: 'mute' },
+          till:  { value: money(till), tone: 'mute',
+                   title: 'Actual F&B taken through the till, usali_dept = F&B' },
+          pct:   posted
+            ? { value: `${pct.toFixed(1)}%`,
+                tone: pct <= 30 ? 'pos' : pct <= 40 ? 'warn' : 'neg',
+                bar: Math.min(100, pct) }
+            : undefined,
         },
       };
     });
@@ -372,12 +416,28 @@ async function CostTab({ pid, today, money }: {
 
   return (
     <>
-      <Container title={`Food cost · ${year}`} subtitle="target ≤ 30% of effective revenue · blank months are unposted ledger, not zero cost" density="compact">
+      <Container
+        title={`Food cost · ${year}`}
+        subtitle="target ≤ 30% · the percentage is food cost ÷ (GL food revenue + breakfast allocation), the ledger's own basis. The till column is what actually went through the POS — where they diverge, the ledger is behind, not the restaurant."
+        density="compact"
+      >
         {cosRows.length === 0 ? <Empty>No cost of sales posted for {year}.</Empty> : (
-          <MetricMatrix caption="Food cost of sales by month."
-            columns={[{ key: 'cost', label: 'Cost' }, { key: 'pct', label: '% of revenue' }, { key: 'rev', label: 'Effective rev' }]}
-            rows={cosRows} labelWidth={150} minWidth={420} />
+          <MetricMatrix caption="Food cost of sales by month, against ledger and till revenue."
+            columns={[
+              { key: 'cost',  label: 'Food cost' },
+              { key: 'glrev', label: 'GL revenue', sub: 'ledger' },
+              { key: 'till',  label: 'Till revenue', sub: 'actual POS' },
+              { key: 'pct',   label: '% of GL rev' },
+            ]}
+            rows={cosRows} labelWidth={150} minWidth={520} />
         )}
+        <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+          Staff canteen is already out of these figures — EMPLOYEE MEAL sits in Undistributed
+          payroll (~$2,400 a month) and STAFF CANTEEN MATERIALS in Other Operating Expenses,
+          and the cost view excludes both by name. Note the asymmetry though: kitchen payroll
+          below still includes the labour that cooks those staff meals, while the revenue it is
+          measured against does not — so that ratio runs a little hot.
+        </p>
       </Container>
 
       <ServiceClock clock={clock} money={money} />

@@ -298,3 +298,111 @@ export async function getServiceClock(
     }))
     .sort((a, b) => a.hour - b.hour);
 }
+
+// ─── Real F&B revenue, and what is wrong with the classification ───────────
+// PBS 2026-08-27.
+//
+// The Cost tab's percentage came from gl.v_fnb_cos_monthly.food_cost_pct, whose
+// denominator is food_rev + breakfast_alloc — NOT "effective revenue" as the
+// page claimed. Worse, from June the GL carries no F&B revenue at all while the
+// breakfast allocation continues, so effective_rev becomes a pure notional
+// reclass ($1,130 / $2,380 / $2,380) with no sales behind it. Meanwhile the
+// folio recorded $5,810 / $9,294 / $7,881 of actual F&B in those months.
+//
+// So the page now shows both: what the ledger says, and what the till says.
+
+export interface MonthRevenue { month: string; folioRevenue: number }
+
+export async function getFbRevenueByMonth(pid: number, fromMonth: string): Promise<MonthRevenue[]> {
+  const sb = getSupabaseAdmin();
+  const rows = await safe<{ transaction_date: string | null; amount: number | string | null }>(
+    sb.from('v_fnb_raw_txn_enriched')
+      .select('transaction_date, amount')
+      .eq('property_id', pid)
+      .eq('transaction_type', 'debit')
+      .eq('usali_dept', 'F&B')
+      .gte('transaction_date', fromMonth)
+      .limit(50000),
+  );
+  const by = new Map<string, number>();
+  for (const r of rows) {
+    const m = String(r.transaction_date ?? '').slice(0, 7);
+    if (m) by.set(m, (by.get(m) ?? 0) + Number(r.amount ?? 0));
+  }
+  return [...by.entries()].map(([month, folioRevenue]) => ({ month, folioRevenue: Math.round(folioRevenue) }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
+export interface ClassIssue { kind: string; label: string; lines: number; revenue: number; note: string }
+
+/**
+ * Categories that are filed wrongly, or filed twice.
+ *
+ * Not fixable from this page — it is a POS vocabulary problem — but a manager
+ * reading a menu report is entitled to know which rows are lying to them.
+ */
+export async function getClassificationIssues(pid: number, fromIso: string): Promise<ClassIssue[]> {
+  const sb = getSupabaseAdmin();
+  const rows = await safe<{
+    item_category_name: string | null; usali_dept: string | null;
+    usali_subdept: string | null; amount: number | string | null;
+  }>(
+    sb.from('v_fnb_raw_txn_enriched')
+      .select('item_category_name, usali_dept, usali_subdept, amount')
+      .eq('property_id', pid)
+      .eq('transaction_type', 'debit')
+      .gte('transaction_date', fromIso)
+      .limit(50000),
+  );
+
+  const agg = new Map<string, { lines: number; revenue: number; dept: string }>();
+  for (const r of rows) {
+    const name = (r.item_category_name ?? '').trim();
+    if (!name || ['rate', 'tax', 'fee'].includes(name)) continue;
+    const k = `${r.usali_dept ?? '—'}||${name}`;
+    const a = agg.get(k) ?? { lines: 0, revenue: 0, dept: r.usali_dept ?? '—' };
+    a.lines += 1; a.revenue += Number(r.amount ?? 0);
+    agg.set(k, a);
+  }
+
+  const out: ClassIssue[] = [];
+
+  // (a) non-F&B things filed under F&B
+  const NOT_FB = /activity|activities|transport|spa|laundry|excursion|tour/i;
+  for (const [k, a] of agg) {
+    const name = k.split('||')[1];
+    if (a.dept === 'F&B' && NOT_FB.test(name)) {
+      out.push({ kind: 'wrong department', label: name, lines: a.lines, revenue: Math.round(a.revenue),
+                 note: 'filed under F&B but is not food or drink' });
+    }
+  }
+
+  // (b) the same product under two spellings — case/whitespace collisions
+  const byNorm = new Map<string, string[]>();
+  for (const k of agg.keys()) {
+    const name = k.split('||')[1];
+    const norm = name.toLowerCase().replace(/\s+/g, ' ').trim();
+    byNorm.set(norm, [...(byNorm.get(norm) ?? []), name]);
+  }
+  for (const [, names] of byNorm) {
+    const uniq = [...new Set(names)];
+    if (uniq.length > 1) {
+      const lines = uniq.reduce((s, n) => s + ([...agg.entries()].find(([k]) => k.endsWith(`||${n}`))?.[1].lines ?? 0), 0);
+      const revenue = uniq.reduce((s, n) => s + ([...agg.entries()].find(([k]) => k.endsWith(`||${n}`))?.[1].revenue ?? 0), 0);
+      out.push({ kind: 'split by spelling', label: uniq.join('  /  '), lines, revenue: Math.round(revenue),
+                 note: 'one product, two spellings — every report splits it in half' });
+    }
+  }
+
+  // (c) generic buckets carrying real money
+  const GENERIC = /^(product|other products|addon|generic|menus|meals|mains|to eat)$/i;
+  for (const [k, a] of agg) {
+    const name = k.split('||')[1];
+    if (GENERIC.test(name) && a.revenue > 100) {
+      out.push({ kind: 'generic bucket', label: name, lines: a.lines, revenue: Math.round(a.revenue),
+                 note: 'no menu meaning — invisible to any dish-level decision' });
+    }
+  }
+
+  return out.sort((x, y) => y.revenue - x.revenue).slice(0, 12);
+}
