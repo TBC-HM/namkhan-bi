@@ -1,6 +1,9 @@
 // app/api/reservations/bookings/route.ts
 // GET /api/reservations/bookings?pid=&status=&source=&room_types=
-//   &from_booking=&to_booking=&from_checkin=&to_checkin=&from_checkout=&to_checkout=
+//   &from_stay=&to_stay=&from_booking=&to_booking=
+//   &from_checkin=&to_checkin=&from_checkout=&to_checkout=
+//
+// Stay date: overlapping reservations where check_in_date <= to_stay AND check_out_date >= from_stay
 //
 // Returns rows from v_reservations_full filtered by the given params, plus
 // distinct filter-option lists (availableStatuses, availableSources, availableRoomTypes).
@@ -55,12 +58,14 @@ export async function GET(req: NextRequest) {
   const statusList = splitParam(url.searchParams.get('status'));
   const sourceList = splitParam(url.searchParams.get('source'));
   const roomTypeList = splitParam(url.searchParams.get('room_types'));
+  const fromStay    = url.searchParams.get('from_stay');
+  const toStay      = url.searchParams.get('to_stay');
   const fromBooking = url.searchParams.get('from_booking');
-  const toBooking = url.searchParams.get('to_booking');
+  const toBooking   = url.searchParams.get('to_booking');
   const fromCheckin = url.searchParams.get('from_checkin');
-  const toCheckin = url.searchParams.get('to_checkin');
+  const toCheckin   = url.searchParams.get('to_checkin');
   const fromCheckout = url.searchParams.get('from_checkout');
-  const toCheckout = url.searchParams.get('to_checkout');
+  const toCheckout  = url.searchParams.get('to_checkout');
 
   const hasCanceled = statusList.includes('Canceled');
   const otherStatuses = statusList.filter(s => s !== 'Canceled');
@@ -77,7 +82,7 @@ export async function GET(req: NextRequest) {
     )
     .eq('property_id', propertyId)
     .order('booking_date', { ascending: false })
-    .limit(500);
+    .limit(5000);
 
   // Status filter — handles synthetic "Canceled" (→ is_cancelled = true)
   if (statusList.length > 0) {
@@ -90,8 +95,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  if (sourceList.length > 0) q = q.in('source_name', sourceList);
+  if (sourceList.length > 0)   q = q.in('source_name', sourceList);
   if (roomTypeList.length > 0) q = q.in('room_type_name', roomTypeList);
+  // Stay date: reservation overlaps [fromStay, toStay]
+  if (fromStay) q = q.gte('check_out_date', fromStay);
+  if (toStay)   q = q.lte('check_in_date',  toStay);
   if (fromBooking) q = q.gte('booking_date', fromBooking);
   if (toBooking) q = q.lte('booking_date', toBooking);
   if (fromCheckin) q = q.gte('check_in_date', fromCheckin);
