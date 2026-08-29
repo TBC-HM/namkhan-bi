@@ -37,10 +37,13 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
   {
     parentHref: '/revenue/rooms',
-    members: ['/revenue/rooms', '/revenue/channels', '/revenue/rateplans', '/revenue/markets'],
+    // PBS 2026-08-25: Promotions added — the five OTA promotion registers had
+    // no nav entry at all and were reachable only from the per-source action bar.
+    members: ['/revenue/rooms', '/revenue/channels', '/revenue/channels/promotions', '/revenue/rateplans', '/revenue/markets'],
     // PBS 2026-07-09 pm: Performance order — Channels · Rate Plans · Markets · Rooms.
     tabs: [
       { label: 'Channels',   href: '/h/260955/revenue/channels'  },
+      { label: 'Promotions', href: '/h/260955/revenue/channels/promotions' },
       { label: 'Rate Plans', href: '/h/260955/revenue/rateplans' },
       { label: 'Markets',    href: '/h/260955/revenue/markets'   },
       { label: 'Rooms',      href: '/h/260955/revenue/rooms'     },
@@ -296,27 +299,29 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
   // ─── Finance · Acc sub-strip · PBS 2026-08-25 ──
-  // Acc groups: Costs · Suppliers · Transactions · Ledger.
-  // Transactions/Banks/POS excluded from members — they have their own sub-strip
+  // Acc groups: Costs · Suppliers · PMS · Accounting · Ledger.
+  // PMS/Banks/POS excluded from members — they have their own sub-strip
   // below; if included here they shadow it (first-match-wins).
+  // PBS 2026-08-29: Transactions renamed → PMS; Accounting tab added for QB feed.
   {
     parentHref: '/finance/costs',
-    members: ['/finance/costs', '/finance/suppliers', '/finance/ledger'],
+    members: ['/finance/costs', '/finance/suppliers', '/finance/ledger', '/finance/accounting'],
     tabs: [
       { label: 'Costs',        href: '/h/260955/finance/costs'        },
       { label: 'Suppliers',    href: '/h/260955/finance/suppliers'    },
-      { label: 'Transactions', href: '/h/260955/finance/transactions' },
+      { label: 'PMS',          href: '/h/260955/finance/transactions' },
+      { label: 'Accounting',   href: '/h/260955/finance/accounting'   },
       { label: 'Ledger',       href: '/h/260955/finance/ledger'       },
     ],
   },
 
-  // ─── Finance · Transactions sub-strip · PBS 2026-08-22 ──────
-  // Banks + POS are children of Transactions.
+  // ─── Finance · PMS sub-strip · PBS 2026-08-22/29 ──────
+  // Banks + POS are children of PMS (formerly Transactions).
   {
     parentHref: '/finance/transactions',
     members: ['/finance/transactions', '/finance/banks', '/finance/pos'],
     tabs: [
-      { label: 'Transactions', href: '/h/260955/finance/transactions' },
+      { label: 'PMS',          href: '/h/260955/finance/transactions' },
       { label: 'Banks',        href: '/h/260955/finance/banks'        },
       { label: 'POS',          href: '/h/260955/finance/pos'          },
     ],
