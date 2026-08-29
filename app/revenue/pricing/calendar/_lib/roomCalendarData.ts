@@ -32,7 +32,7 @@ export async function fetchRoomCalendar(
   lookahead.setMonth(lookahead.getMonth() + 6);
 
   const [typesRes, allRoomsRes, rrRes] = await Promise.all([
-    sb.schema('pms').from('room_types_cb')
+    sb.from('room_types')
       .select('room_type_id, room_type_name')
       .eq('property_id', propertyId)
       .order('room_type_name'),
@@ -40,14 +40,14 @@ export async function fetchRoomCalendar(
     // Room discovery: ±6 months.  The 12-month window has ~1 800 rows for
     // Namkhan, which exceeds PostgREST's default 1 000-row cap.
     // limit(5000) overrides that cap so we get every room ID.
-    sb.schema('pms').from('reservation_rooms_cb')
+    sb.from('reservation_rooms')
       .select('room_type_id, room_id')
       .eq('property_id', propertyId)
       .gte('night_date', lookback.toISOString().slice(0, 10))
       .lte('night_date', lookahead.toISOString().slice(0, 10))
       .limit(5000),
 
-    sb.schema('pms').from('reservation_rooms_cb')
+    sb.from('reservation_rooms')
       .select('reservation_id, room_id, room_type_id')
       .eq('property_id', propertyId)
       .gte('night_date', from)
@@ -70,7 +70,7 @@ export async function fetchRoomCalendar(
   const bookings: RoomBooking[] = [];
 
   if (reservationIds.length > 0) {
-    const resRes = await sb.schema('pms').from('reservations_cb')
+    const resRes = await sb.from('reservations')
       .select('reservation_id, guest_name, check_in_date, check_out_date, status, source_name')
       .in('reservation_id', reservationIds)
       .not('status', 'eq', 'cancelled');
