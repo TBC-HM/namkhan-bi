@@ -19,10 +19,10 @@ import MetricMatrix, { type MatrixRow } from '@/app/(cockpit)/_design/MetricMatr
 import LegacyFbView from './_cockpit/LegacyFbView';
 import FbSubnav, { isFbTab, type FbTab } from './_cockpit/FbSubnav';
 import {
-  tzFor, todayIn, addDays, getTopSellers, getSleepingItems, getCategoryMix,
+  tzFor, todayIn, addDays, getSleepingItems, getTopSellers, getCategoryMix,
   getFoodCost, getFbLabour, getFolioVsGl, getServiceClock,
   getFbRevenueByMonth, getClassificationIssues, getFbKpiMatrix, getFeedDetail,
-  type FbPeriodKey,
+  getMenuItems, getMenuYears, type FbPeriodKey, type MenuSort,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
 
@@ -116,7 +116,9 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
 
         {tab === 'today'    && <TodayTab   pid={pid} today={today} sym={sym} money={money} searchParams={searchParams} />}
         {tab === 'feed'     && <FeedTab    pid={pid} win={win} period={opPeriod} q={q} money={money} sym={sym} />}
-        {tab === 'menu'     && <MenuTab    pid={pid} today={today} win={win} period={opPeriod} money={money} />}
+        {tab === 'menu'     && <MenuTab    pid={pid} today={today} win={win} period={opPeriod} money={money}
+                                          sort={one(searchParams?.sort)} dir={one(searchParams?.dir)}
+                                          year={one(searchParams?.year)} />}
         {tab === 'guests'   && <OutletCaptureCockpit deptKey="fb" propertyId={pid} searchParams={searchParams} />}
         {tab === 'cost'     && <CostTab    pid={pid} today={today} money={money} />}
         {tab === 'ledger'   && <LedgerTab  pid={pid} money={money} searchParams={searchParams} propertyId={propertyId} />}
@@ -260,12 +262,28 @@ async function FeedTab({ pid, win, period, q, money, sym }: {
 
 // ─── Menu ──────────────────────────────────────────────────────────────────
 
-async function MenuTab({ pid, today, win, period, money }: {
+const MENU_SORTS: Array<{ key: MenuSort; label: string }> = [
+  { key: 'revenue',  label: 'Revenue' },
+  { key: 'units',    label: 'Units' },
+  { key: 'price',    label: 'Avg price' },
+  { key: 'category', label: 'Category' },
+  { key: 'last',     label: 'Last sale' },
+  { key: 'name',     label: 'Name' },
+];
+
+async function MenuTab({ pid, today, win, period, money, sort, dir, year }: {
   pid: number; today: string; win: { from: string; to: string; label: string };
   period: OpPeriod; money: (n: number) => string;
+  sort?: string; dir?: string; year?: string;
 }) {
-  const [sellers, sleeping, cats, issues] = await Promise.all([
-    getTopSellers(25), getSleepingItems(18), getCategoryMix(pid, win.from, win.to),
+  const years = await getMenuYears(pid);
+  const activeYear = year && years.includes(year) ? year : (years[0] ?? today.slice(0, 4));
+  const activeSort = (MENU_SORTS.some((s) => s.key === sort) ? sort : 'revenue') as MenuSort;
+  const activeDir: 'asc' | 'desc' = dir === 'asc' ? 'asc' : 'desc';
+
+  const [items, sleeping, sellers, cats, issues] = await Promise.all([
+    getMenuItems(pid, activeYear, activeSort, activeDir),
+    getSleepingItems(18), getTopSellers(18), getCategoryMix(pid, win.from, win.to),
     getClassificationIssues(pid, `${today.slice(0, 4)}-01-01`),
   ]);
 
@@ -292,30 +310,71 @@ async function MenuTab({ pid, today, win, period, money }: {
     return addDays(today, -45) > last;
   };
 
-  const sellerRows: MatrixRow[] = sellers.slice(0, 18).map((s) => ({
-    key: String(s.description),
-    label: String(s.description ?? '—'),
-    unit: String(s.usali_subdept ?? ''),
-    cells: {
-      rev:   { value: money(num(s.total_revenue_usd)) },
-      units: { value: num(s.total_units).toLocaleString('en-US'), tone: 'mute' },
-      months:{ value: String(s.active_months ?? '—'), tone: 'mute' },
-      last:  { value: String(s.last_sold ?? '—'), tone: stale(s.last_sold) ? 'neg' : undefined,
-               title: stale(s.last_sold) ? 'Not sold in over 45 days' : undefined },
-    },
-  }));
 
   return (
     <>
-      <Container title="What sells" subtitle="every tracked item by lifetime revenue · red last-sold means nothing in 45 days" density="compact">
-        {sellerRows.length === 0 ? <Empty>No item history for this property.</Empty> : (
+      <Container
+        title={`Every F&B product sold · ${activeYear}`}
+        subtitle={`${items.length} products · average price is revenue ÷ units for the year, so a dish repriced mid-year shows what was actually achieved, not what the menu says`}
+        density="compact"
+        action={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {years.slice(0, 4).map((y) => (
+                <a key={y} href={`?tab=menu&year=${y}&sort=${activeSort}&dir=${activeDir}`} style={{
+                  padding: '3px 10px', fontSize: 10, borderRadius: 3, textDecoration: 'none',
+                  border: y === activeYear ? '1px solid var(--ink, #1B1B1B)' : '1px solid var(--hairline, #E6DFCC)',
+                  background: y === activeYear ? 'var(--ink, #1B1B1B)' : 'var(--paper, #FFFFFF)',
+                  color: y === activeYear ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                  fontWeight: y === activeYear ? 600 : 500, letterSpacing: '0.04em',
+                }}>{y}</a>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {MENU_SORTS.map((s) => {
+                const on = s.key === activeSort;
+                const nextDir = on && activeDir === 'desc' ? 'asc' : 'desc';
+                return (
+                  <a key={s.key} href={`?tab=menu&year=${activeYear}&sort=${s.key}&dir=${nextDir}`} style={{
+                    padding: '3px 9px', fontSize: 10, borderRadius: 3, textDecoration: 'none',
+                    border: '1px solid var(--hairline, #E6DFCC)',
+                    background: on ? 'var(--paper-soft, #FAFAF7)' : 'var(--paper, #FFFFFF)',
+                    color: 'var(--ink, #1B1B1B)', fontWeight: on ? 600 : 500,
+                    letterSpacing: '0.04em', textTransform: 'uppercase',
+                  }}>{s.label}{on ? (activeDir === 'desc' ? ' ↓' : ' ↑') : ''}</a>
+                );
+              })}
+            </div>
+          </div>
+        }
+      >
+        {items.length === 0 ? <Empty>Nothing sold in {activeYear}.</Empty> : (
           <MetricMatrix
-            caption="Menu items by lifetime revenue, units, months active and last sold."
+            caption={`Every F&B product sold in ${activeYear}, with units, revenue and average selling price.`}
             columns={[
-              { key: 'rev', label: 'Revenue' }, { key: 'units', label: 'Units' },
-              { key: 'months', label: 'Months' }, { key: 'last', label: 'Last sold' },
+              { key: 'cat',   label: 'Category' },
+              { key: 'units', label: 'Units' },
+              { key: 'rev',   label: 'Revenue' },
+              { key: 'price', label: 'Avg price', sub: 'achieved' },
+              { key: 'last',  label: 'Last sale' },
             ]}
-            rows={sellerRows} labelWidth={220} minWidth={520}
+            rows={items.map((it) => {
+              const stale = !it.lastSold || addDays(today, -45) > it.lastSold;
+              return {
+                key: `it-${it.name}`,
+                label: it.name,
+                unit: `${it.monthsActive} month${it.monthsActive === 1 ? '' : 's'} active`,
+                cells: {
+                  cat:   { value: it.subdept, tone: 'mute' },
+                  units: { value: it.units.toLocaleString('en-US') },
+                  rev:   { value: money(it.revenue) },
+                  price: { value: it.avgPrice == null ? '—' : money(it.avgPrice) },
+                  last:  { value: String(it.lastSold ?? '—'), tone: stale ? 'neg' : undefined,
+                           title: stale ? 'Not sold in over 45 days' : undefined },
+                },
+              };
+            })}
+            labelWidth={230} minWidth={580}
           />
         )}
       </Container>
