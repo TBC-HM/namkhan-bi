@@ -415,7 +415,7 @@ export interface FbPeriodStats {
 
 export interface FbKpiCell { ty: FbPeriodStats; ly: FbPeriodStats }
 
-export type FbPeriodKey = 'today' | 'yesterday' | 'last7' | 'last30';
+export type FbPeriodKey = 'today' | 'yesterday' | 'last7' | 'last30' | 'ytd';
 
 const EMPTY_STATS: FbPeriodStats = {
   restaurant: 0, minibar: 0, total: 0, folios: 0, lines: 0, avgPerFolio: null,
@@ -457,6 +457,7 @@ export async function getFbKpiMatrix(
     yesterday: [addDays(todayIso, -1), addDays(todayIso, -1)],
     last7:     [addDays(todayIso, -6), todayIso],
     last30:    [addDays(todayIso, -29), todayIso],
+    ytd:       [`${todayIso.slice(0, 4)}-01-01`, todayIso],
   };
 
   const pull = (from: string, to: string) => safe<{
@@ -479,6 +480,100 @@ export async function getFbKpiMatrix(
   keys.forEach((k, i) => {
     out[k] = { ty: statsFrom(results[i * 2] ?? []), ly: statsFrom(results[i * 2 + 1] ?? []) };
   });
+  return out;
+}
+
+export interface FbCaptureStats {
+  folioRev: number;
+  coverDays: number;
+  avgCheck: number | null;
+  capturePct: number | null;
+  spendPerOcc: number | null;
+}
+
+/** Folio-based capture metrics by period (v_fb_outlet_daily + v_ancillary_capture_daily). */
+export async function getFbCaptureMatrix(
+  pid: number, todayIso: string,
+): Promise<Record<FbPeriodKey, FbCaptureStats>> {
+  const sb = getSupabaseAdmin();
+  const yr = todayIso.slice(0, 4);
+  const janFirst = `${yr}-01-01`;
+  const windows: Record<FbPeriodKey, [string, string]> = {
+    today:     [todayIso, todayIso],
+    yesterday: [addDays(todayIso, -1), addDays(todayIso, -1)],
+    last7:     [addDays(todayIso, -6), todayIso],
+    last30:    [addDays(todayIso, -29), todayIso],
+    ytd:       [janFirst, todayIso],
+  };
+
+  // Fetch all rows since Jan 1 then filter client-side per window — avoids 10+ round trips.
+  const [outletRows, captureRows] = await Promise.all([
+    safe<{ service_date: string; revenue: number | string | null; reservations: number | null }>(
+      sb.from('v_fb_outlet_daily')
+        .select('service_date, revenue, reservations')
+        .eq('property_id', pid)
+        .gte('service_date', addDays(todayIso, -29))
+        .lte('service_date', todayIso),
+    ),
+    safe<{ night_date: string; occupied_rooms: number | null; fb_capturing_rooms: number | null }>(
+      sb.from('v_ancillary_capture_daily')
+        .select('night_date, occupied_rooms, fb_capturing_rooms')
+        .eq('property_id', pid)
+        .gte('night_date', addDays(todayIso, -29))
+        .lte('night_date', todayIso),
+    ),
+  ]);
+
+  // For YTD we need the full year range, not just last-30 → run a separate pull if ytd starts before last30.
+  const ytdFrom = janFirst;
+  const last30From = addDays(todayIso, -29);
+  const needYtdExtension = ytdFrom < last30From;
+
+  let ytdOutlet: typeof outletRows = outletRows;
+  let ytdCapture: typeof captureRows = captureRows;
+  if (needYtdExtension) {
+    const [yo, yc] = await Promise.all([
+      safe<{ service_date: string; revenue: number | string | null; reservations: number | null }>(
+        sb.from('v_fb_outlet_daily')
+          .select('service_date, revenue, reservations')
+          .eq('property_id', pid)
+          .gte('service_date', ytdFrom)
+          .lt('service_date', last30From),
+      ),
+      safe<{ night_date: string; occupied_rooms: number | null; fb_capturing_rooms: number | null }>(
+        sb.from('v_ancillary_capture_daily')
+          .select('night_date, occupied_rooms, fb_capturing_rooms')
+          .eq('property_id', pid)
+          .gte('night_date', ytdFrom)
+          .lt('night_date', last30From),
+      ),
+    ]);
+    ytdOutlet = [...yo, ...outletRows];
+    ytdCapture = [...yc, ...captureRows];
+  }
+
+  const out = {} as Record<FbPeriodKey, FbCaptureStats>;
+  for (const key of Object.keys(windows) as FbPeriodKey[]) {
+    const [from, to] = windows[key];
+    const src = key === 'ytd' ? ytdOutlet : outletRows;
+    const cap = key === 'ytd' ? ytdCapture : captureRows;
+
+    const outlet = src.filter((r) => r.service_date >= from && r.service_date <= to);
+    const night  = cap.filter((r) => r.night_date >= from && r.night_date <= to);
+
+    const folioRev  = outlet.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
+    const coverDays = outlet.reduce((s, r) => s + Number(r.reservations ?? 0), 0);
+    const occRooms  = night.reduce((s, r) => s + Number(r.occupied_rooms ?? 0), 0);
+    const capRooms  = night.reduce((s, r) => s + Number(r.fb_capturing_rooms ?? 0), 0);
+
+    out[key] = {
+      folioRev:   Math.round(folioRev),
+      coverDays,
+      avgCheck:   coverDays > 0 ? Math.round(folioRev / coverDays) : null,
+      capturePct: occRooms > 0 ? Math.round((capRooms / occRooms) * 1000) / 10 : null,
+      spendPerOcc: occRooms > 0 ? Math.round(folioRev / occRooms) : null,
+    };
+  }
   return out;
 }
 

@@ -21,8 +21,9 @@ import FbSubnav, { isFbTab, type FbTab } from './_cockpit/FbSubnav';
 import {
   tzFor, todayIn, addDays, getSleepingItems, getTopSellers, getCategoryMix,
   getFoodCost, getFbLabour, getServiceClock,
-  getFbRevenueByMonth, getClassificationIssues, getFbKpiMatrix, getFeedDetail,
-  getMenuItems, getMenuYears, type FbPeriodKey, type MenuSort,
+  getFbRevenueByMonth, getClassificationIssues, getFbKpiMatrix, getFbCaptureMatrix,
+  getFeedDetail, getMenuItems, getMenuYears,
+  type FbPeriodKey, type FbCaptureStats, type MenuSort,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
 
@@ -129,11 +130,14 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
 
 // ─── Today ─────────────────────────────────────────────────────────────────
 
+// Defined at module scope — YTD sub-label uses the literal string 'year to date'
+// so this can stay static. If you want e.g. 'Jan–Aug' move it inside TodayTab.
 const PERIOD_COLS: Array<{ key: FbPeriodKey; label: string; sub: string }> = [
   { key: 'today',     label: 'Today',     sub: 'so far' },
   { key: 'yesterday', label: 'Yesterday', sub: 'closed' },
   { key: 'last7',     label: 'Last 7d',   sub: 'rolling' },
   { key: 'last30',    label: 'Last 30d',  sub: 'rolling' },
+  { key: 'ytd',       label: 'YTD',       sub: 'year to date' },
 ];
 
 /**
@@ -151,8 +155,9 @@ async function TodayTab({ pid, today, sym, money, searchParams }: {
   pid: number; today: string; sym: string; money: (n: number) => string;
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const [kpi, feed] = await Promise.all([
+  const [kpi, cap, feed] = await Promise.all([
     getFbKpiMatrix(pid, today),
+    getFbCaptureMatrix(pid, today),
     getFeedDetail(pid, today, today, undefined, 40),
   ]);
 
@@ -190,17 +195,40 @@ async function TodayTab({ pid, today, sym, money, searchParams }: {
     row('avg',        'Average per folio',  'total ÷ folios',            (s) => s.avgPerFolio, money),
   ];
 
+  // Capture rows — sourced from Cloudbeds folio (v_fb_outlet_daily) and room occupancy
+  // (v_ancillary_capture_daily); a different pipeline than the txn rows above.
+  const capRow = (
+    key: string, label: string, unit: string,
+    pick: (s: FbCaptureStats) => number | null,
+    fmt: (n: number) => string,
+  ): MatrixRow => ({
+    key, label, unit,
+    cells: Object.fromEntries(PERIOD_COLS.map((c) => {
+      const v = pick(cap[c.key]);
+      if (v == null) return [c.key, undefined];
+      return [c.key, { value: fmt(v) }];
+    })),
+  });
+
+  const captureRows: MatrixRow[] = [
+    capRow('folioRev',   'Folio revenue',   'Cloudbeds POS (live)',          (s) => s.folioRev,    money),
+    capRow('coverDays',  'Cover-days',       'res with F&B charge',           (s) => s.coverDays,   (n) => String(n)),
+    capRow('avgCheck',   'Avg check',        'folio rev ÷ cover-days',        (s) => s.avgCheck,    money),
+    capRow('capturePct', 'Capture %',        'F&B purchasing ÷ occupied rns', (s) => s.capturePct,  (n) => `${n.toFixed(1)}%`),
+    capRow('spendOcc',   'F&B / Occ RN',    'folio rev ÷ occupied rooms',    (s) => s.spendPerOcc, money),
+  ];
+
   return (
     <>
       <Container
         title="Today · every KPI, every timeframe"
-        subtitle="LY on each cell is the same window one year earlier · minibar separated because it needs no one on the floor"
+        subtitle="LY on each txn-row cell is the same window one year earlier · minibar separated because it needs no one on the floor · capture rows from Cloudbeds folio"
         density="compact"
       >
         <MetricMatrix
-          caption="Food and beverage KPIs across today, yesterday, 7 and 30 days, each against last year."
+          caption="Food and beverage KPIs across today, yesterday, 7 and 30 days, YTD; capture rows are folio-sourced."
           columns={PERIOD_COLS.map((c) => ({ key: c.key, label: c.label, sub: c.sub }))}
-          rows={rows} labelWidth={180} minWidth={560}
+          rows={[...rows, ...captureRows]} labelWidth={180} minWidth={640}
         />
       </Container>
 
