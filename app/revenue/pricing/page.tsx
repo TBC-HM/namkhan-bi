@@ -24,6 +24,7 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase } from '@/lib/supabase';
 import OtbDensityCalendar, { type OtbDayData } from './_components/OtbDensityCalendar';
 import RoomCalendarSurface from './calendar/_components/RoomCalendarSurface';
+import { fetchRoomCalendar } from './calendar/_lib/roomCalendarData';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -81,7 +82,7 @@ function monthBounds(y: number, m: number): { fromIso: string; toIso: string; mo
   return { fromIso, toIso, monthLabel };
 }
 
-interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string; roff?: string; month?: string; sub?: string }
+interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string; roff?: string; month?: string; sub?: string; otb_from?: string }
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
@@ -154,12 +155,38 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     );
 
     if (otbSub === 'by_room') {
+      // Window start: ?otb_from=YYYY-MM-DD, default today − 3 days.
+      const rawOtbFrom = searchParams.otb_from;
+      const defaultFrom = (() => {
+        const d = new Date(); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - 3); return d;
+      })();
+      const fromDate = rawOtbFrom ? new Date(rawOtbFrom + 'T00:00:00Z') : defaultFrom;
+      const fromISO  = fromDate.toISOString().slice(0, 10);
+      const toDate   = new Date(fromDate); toDate.setUTCDate(toDate.getUTCDate() + 27);
+      const toISO    = toDate.toISOString().slice(0, 10);
+
+      // Month-based navigation hrefs.
+      const prevM    = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth() - 1, 1));
+      const nextM    = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth() + 1, 1));
+      const prevHref = `${otbSubBase}&sub=by_room&otb_from=${prevM.toISOString().slice(0, 10)}`;
+      const nextHref = `${otbSubBase}&sub=by_room&otb_from=${nextM.toISOString().slice(0, 10)}`;
+      const todayHref= `${otbSubBase}&sub=by_room`;
+
+      const { roomTypes, bookings } = await fetchRoomCalendar(pid, fromISO, toISO);
+
       return (
         <DashboardPage title="Revenue · Calendar" subtitle="OTB density · by room · 28-day rolling window" tabs={tabs}>
           {stripBlock}
           <div style={fullRow}>
             {otbSubStrip}
-            <RoomCalendarSurface propertyId={pid} />
+            <RoomCalendarSurface
+              roomTypes={roomTypes}
+              bookings={bookings}
+              from={fromISO}
+              prevHref={prevHref}
+              nextHref={nextHref}
+              todayHref={todayHref}
+            />
           </div>
         </DashboardPage>
       );
