@@ -459,13 +459,16 @@ async function CostTab({ pid, today, money }: {
   pid: number; today: string; money: (n: number) => string;
 }) {
   const year = today.slice(0, 4);
-  const [cos, labour, clock, folioRev] = await Promise.all([
+  const fromMonth = `${year}-01-01`;
+  // folioRev must be ready before getFbLabour — it supplies the correct F&B
+  // revenue map (usali_dept='F&B') so the labour ratio uses the right denominator.
+  const [cos, folioRev, clock] = await Promise.all([
     getFoodCost(pid),
-    getFbLabour(pid, NAMKHAN_PROPERTY_ID, `${year}-01-01`),
+    getFbRevenueByMonth(pid, fromMonth),
     getServiceClock(pid, addDays(today, -90), today),
-    getFbRevenueByMonth(pid, `${year}-01-01`),
   ]);
   const folioByMonth = new Map(folioRev.map((r) => [r.month, r.folioRevenue]));
+  const labour = await getFbLabour(pid, NAMKHAN_PROPERTY_ID, fromMonth, folioByMonth);
   const thisMonth = today.slice(0, 7);
 
   const cosRows: MatrixRow[] = cos

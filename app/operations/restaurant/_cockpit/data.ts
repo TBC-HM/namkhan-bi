@@ -186,36 +186,24 @@ export interface FbLabourRow {
   ratioPct: number | null;
 }
 
+// revByMonth: Map<'YYYY-MM', folioRevenue> — callers supply this from
+// getFbRevenueByMonth (usali_dept='F&B' filtered) so we never re-query with
+// the wrong scope. The old inline txn query lacked .eq('usali_dept','F&B')
+// and counted room charges, inflating the denominator.
 export async function getFbLabour(
   pid: number, namkhanId: number, fromMonth: string,
+  revByMonth: Map<string, number>,
 ): Promise<FbLabourRow[]> {
   if (pid !== namkhanId) return [];
   const sb = getSupabaseAdmin();
 
-  const [payroll, txns] = await Promise.all([
-    safe<Record<string, unknown>>(
-      sb.from('v_payroll_dept_monthly')
-        .select('period_month, headcount, total_canonical_cost_usd')
-        .eq('dept_code', 'kitchen')
-        .gte('period_month', fromMonth)
-        .order('period_month'),
-    ),
-    safe<{ transaction_date: string | null; amount: number | string | null }>(
-      sb.from('v_fnb_raw_txn_enriched')
-        .select('transaction_date, amount')
-        .eq('property_id', pid)
-        .eq('transaction_type', 'debit')
-        .gte('transaction_date', fromMonth)
-        .limit(50000),
-    ),
-  ]);
-
-  const revByMonth = new Map<string, number>();
-  for (const t of txns) {
-    const m = String(t.transaction_date ?? '').slice(0, 7);
-    if (!m) continue;
-    revByMonth.set(m, (revByMonth.get(m) ?? 0) + Number(t.amount ?? 0));
-  }
+  const payroll = await safe<Record<string, unknown>>(
+    sb.from('v_payroll_dept_monthly')
+      .select('period_month, headcount, total_canonical_cost_usd')
+      .eq('dept_code', 'kitchen')
+      .gte('period_month', fromMonth)
+      .order('period_month'),
+  );
 
   return payroll.map((r) => {
     const month = String(r.period_month ?? '').slice(0, 7);
