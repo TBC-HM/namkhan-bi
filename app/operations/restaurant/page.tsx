@@ -704,14 +704,31 @@ function Empty({ children }: { children: React.ReactNode }) {
 function FeedList({ rows, sym, detailed }: {
   rows: Awaited<ReturnType<typeof getFeedDetail>>; sym: string; detailed?: boolean;
 }) {
+  // detailed (Feed tab): time | room | item | guest | waiter | amount
+  // compact (Today tab): time | item | amount
+  const cols = detailed ? '82px 58px 1fr 110px 100px auto' : '84px 1fr auto';
   return (
     <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
+      {detailed && (
+        <li style={{
+          display: 'grid', gridTemplateColumns: cols, gap: 10,
+          padding: '4px 8px 6px', borderBottom: '1px solid var(--hairline, #E6DFCC)',
+          fontSize: 9.5, letterSpacing: '0.06em', textTransform: 'uppercase',
+          color: 'var(--ink-soft, #5A5A5A)', fontWeight: 600,
+        }}>
+          <span>Time</span>
+          <span>Room</span>
+          <span>Item</span>
+          <span>Guest</span>
+          <span>Waiter</span>
+          <span style={{ textAlign: 'right' }}>Amt</span>
+        </li>
+      )}
       {rows.map((t, i) => {
         const isMinibar = t.usali_subdept === 'Minibar';
         return (
           <li key={`${t.transaction_id}-${i}`} style={{
-            display: 'grid',
-            gridTemplateColumns: detailed ? '84px 62px 1fr 130px auto' : '84px 1fr auto',
+            display: 'grid', gridTemplateColumns: cols,
             gap: 10, alignItems: 'baseline', padding: '6px 8px', borderRadius: 3, fontSize: 12,
             background: i % 2 ? 'var(--paper, #FFFFFF)' : 'transparent',
           }}>
@@ -719,7 +736,7 @@ function FeedList({ rows, sym, detailed }: {
               {(t.local_laos_str ?? t.transaction_date ?? '').toString().slice(0, 16).replace('T', ' ')}
             </span>
             {detailed && (
-              <span style={{ fontFamily: 'var(--mono, monospace)', fontSize: 10.5, color: 'var(--ink, #1B1B1B)' }}>
+              <span style={{ fontFamily: 'var(--mono, monospace)', fontSize: 10.5, color: 'var(--ink, #1B1B1B)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {t.room_name ?? '—'}
               </span>
             )}
@@ -731,14 +748,16 @@ function FeedList({ rows, sym, detailed }: {
               </span>
             </span>
             {detailed && (
-              <span style={{ fontSize: 10.5, color: 'var(--ink-soft, #5A5A5A)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ fontSize: 10.5, color: 'var(--ink-soft, #5A5A5A)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {t.guest_name ?? '—'}
-                <span style={{ display: 'block', fontSize: 9.5 }}>
-                  {t.user_name ? `by ${t.user_name}` : 'no server recorded'}
-                </span>
               </span>
             )}
-            <span style={{ fontFamily: 'var(--mono, monospace)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {detailed && (
+              <span style={{ fontSize: 10.5, color: 'var(--ink-soft, #5A5A5A)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {t.user_name ?? '—'}
+              </span>
+            )}
+            <span style={{ fontFamily: 'var(--mono, monospace)', fontWeight: 600, whiteSpace: 'nowrap', textAlign: detailed ? 'right' : 'left' }}>
               {sym}{Math.round(num(t.amount)).toLocaleString('en-US')}
             </span>
           </li>
