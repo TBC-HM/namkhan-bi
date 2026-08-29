@@ -1,25 +1,14 @@
 // app/h/[property_id]/finance/pnl/page.tsx
 //
-// Canonical property-scoped P&L page — QuickBooks P&L AS-IS.
+// Canonical property-scoped P&L page — two subtabs:
+//   ?view=month (default) — QuickBooks P&L AS-IS, account-level monthly detail + 12-month rollup
+//   ?view=class           — USALI department breakdown from v_finance_pl_by_class_{dept,house}
 //
-// ADR-159: the QB export is the single source of truth; USALI is a presentation
-// relabel only, never a re-derivation. PBS 2026-08-25 applied that to this page:
-// the USALI structure is out. Accounts are grouped by their own QB type and
-// printed in account-code order, so an upload renders with no mapping step and
-// FY2026 (Spanish PGC, 246 accounts) shows up the moment it lands.
-//
-// Layout:
-//   1) Year + month selectors.
-//   2) KPI band — Income / Costs / Net for the selected month.
-//   3) Monthly P&L — QB-type blocks, every account, for the selected month.
-//   4) 12-month rollup — account x month matrix for the selected year.
-//
-// TOTALS: see totalsModeFor() in ./_data. Files that ship their own subtotal
-// accounts (Donna FY2025) are NOT summed — that file is double-loaded under two
-// prefixes and hierarchical, so summing invents EUR 25.4M of income against
-// EUR 6.43M of real revenue. Flat exports (FY2026+) are summed normally.
+// ADR-159: QB export is single source of truth; USALI is a presentation relabel only.
+// PBS 2026-08-25: QB-as-is retained for 'month' view; 'class' view surfaces the
+// pre-aggregated USALI bridge views.
 
-import { Fragment } from 'react';
+import { Fragment, type CSSProperties } from 'react';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
 import KpiBox from '@/components/kpi/KpiBox';
@@ -28,12 +17,15 @@ import {
   getQbPnlForYear,
   getAvailableYears,
   getPropertyCurrency,
+  getClassPnl,
   totalsFor,
   blocksForPeriods,
   annualByAccount,
   periodsForYear,
   periodsIn,
   type QbPnlRow,
+  type ClassDeptRow,
+  type ClassHouseRow,
 } from './_data';
 import YearDropdown from './YearDropdown';
 import MonthDropdown from './MonthDropdown';
@@ -88,9 +80,15 @@ function monthsFromTo(from: string, to: string): string[] {
   return out;
 }
 
+const DEPT_ORDER = ['Rooms', 'F&B', 'Activities', 'Spa', 'Mekong Cruise', 'Other Operated', 'Undistributed', 'Unclassified'];
+function deptSort(a: string, b: string): number {
+  const ai = DEPT_ORDER.indexOf(a); const bi = DEPT_ORDER.indexOf(b);
+  return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+}
+
 interface Props {
   params: { property_id: string };
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams?: { year?: string; month?: string; view?: string };
 }
 
 export default async function PropertyPnLPage({ params, searchParams }: Props) {
@@ -99,17 +97,25 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
   const availableYears = await getAvailableYears(propertyId);
   const yearsWithData = availableYears.filter((y) => SUPPORTED_YEARS.includes(y));
 
-  const yearParam = (searchParams.year as string | undefined) || '';
+  const yearParam = searchParams?.year ?? '';
   const year = SUPPORTED_YEARS.includes(yearParam)
     ? yearParam
     : (yearsWithData[yearsWithData.length - 1] ?? '2025');
 
-  const [rows, currency] = await Promise.all([
-    getQbPnlForYear(propertyId, year),
+  const viewParam = searchParams?.view;
+  const view: 'month' | 'class' = viewParam === 'class' ? 'class' : 'month';
+
+  const [rows, currency, classResult] = await Promise.all([
+    view === 'month' ? getQbPnlForYear(propertyId, year) : Promise.resolve([] as QbPnlRow[]),
     getPropertyCurrency(propertyId),
+    view === 'class' ? getClassPnl(propertyId, year) : Promise.resolve(null as null),
   ]);
 
-  const periodsWithData = periodsIn(rows);
+  // ── Month selector (used in both views) ───────────────────────────
+  const periodsWithData = view === 'month'
+    ? periodsIn(rows)
+    : [...new Set((classResult?.dept ?? []).map((r) => r.period_yyyymm))].sort();
+
   const latestInYear = periodsWithData[periodsWithData.length - 1];
 
   const latestEver = availableYears
@@ -119,25 +125,25 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
     .pop() ?? `${year}-12`;
   const monthOptions = monthsFromTo(EARLIEST_MONTH, latestEver);
 
-  const monthParam = (searchParams.month as string | undefined) || '';
+  const monthParam = searchParams?.month ?? '';
   const selectedMonth = monthOptions.includes(monthParam)
     ? monthParam
     : (latestInYear ?? monthOptions[monthOptions.length - 1] ?? EARLIEST_MONTH);
 
-  // ── Totals ───────────────────────────────────────────────────────────
+  // ── QB month view totals ───────────────────────────────────────────
   const monthRows = rows.filter((r) => r.period_yyyymm === selectedMonth);
   const monthTotals = totalsFor(monthRows);
   const yearTotals = totalsFor(rows);
 
-  const noData = rows.length === 0;
+  const noData = view === 'month' && rows.length === 0;
   const monthHasData = monthRows.length > 0;
 
-  const eyebrow = [
-    'Finance · P&L',
-    `Year ${year}`,
-    `${rows.length} rows · ${currency}`,
-    'QuickBooks as-is',
-  ].join(' · ');
+  const eyebrow = view === 'month'
+    ? ['Finance · P&L', `Year ${year}`, `${rows.length} rows · ${currency}`, 'QuickBooks as-is'].join(' · ')
+    : ['Finance · P&L', `Year ${year}`, 'USALI class breakdown'].join(' · ');
+
+  // ── Subtab strip hrefs ────────────────────────────────────────────
+  const baseHref = `?year=${year}&month=${selectedMonth}`;
 
   return (
     <DashboardPage
@@ -150,118 +156,212 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
     >
       <div style={{ display: 'flex', flexDirection: 'column' }}>
 
-        {/* ─── 1. SELECTORS ─────────────────────────────────────────── */}
+        {/* ─── SUBTAB STRIP ─────────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+          {(['month', 'class'] as const).map((v) => {
+            const active = view === v;
+            const href = `${baseHref}&view=${v}`;
+            return (
+              <a
+                key={v}
+                href={href}
+                style={{
+                  padding: '5px 16px',
+                  borderRadius: 4,
+                  background: active ? BORDER_STRONG : 'transparent',
+                  border: `1px solid ${active ? BORDER_STRONG : BORDER}`,
+                  color: active ? FG : MUTE,
+                  fontWeight: active ? 700 : 400,
+                  fontSize: 'var(--t-xs)',
+                  textDecoration: 'none',
+                  display: 'inline-block',
+                }}
+              >
+                {v === 'month' ? 'P&L by Month' : 'P&L by Class'}
+              </a>
+            );
+          })}
+        </div>
+
+        {/* ─── SELECTORS ────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <MonthDropdown current={selectedMonth} options={monthOptions} monthsWithData={periodsWithData} />
           <span style={{ fontSize: 'var(--t-xs)', color: MUTE }}>
-            source: finance.gl_pl_monthly · property_id={propertyId} · accounts shown exactly as QuickBooks reports them
+            {view === 'month'
+              ? `source: finance.gl_pl_monthly · property_id=${propertyId} · QuickBooks as-is`
+              : `source: v_finance_pl_by_class_dept + house · property_id=${propertyId} · USALI departments`}
           </span>
         </div>
 
-        {/* ─── 2. KPI BAND ──────────────────────────────────────────── */}
-        {monthHasData && monthTotals.sumsToRows && (
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/*   VIEW: P&L BY MONTH (QB as-is)                           */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {view === 'month' && (
           <>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <KpiBox
-                label={`Income · ${fmtMonthLong(selectedMonth)}`}
-                value={monthTotals.income || null}
-                unit="text"
-                valueText={fmtCurrency(monthTotals.income, currency)}
-                tooltip={`finance.gl_pl_monthly · QB Income accounts · ${selectedMonth}`}
-              />
-              <KpiBox
-                label="Costs"
-                value={monthTotals.cost || null}
-                unit="text"
-                valueText={fmtCurrency(monthTotals.cost, currency)}
-                tooltip={`finance.gl_pl_monthly · QB cost accounts · ${selectedMonth}`}
-              />
-              <KpiBox
-                label="Net result"
-                value={monthTotals.net || null}
-                unit="text"
-                valueText={fmtCurrency(monthTotals.net, currency)}
-                tooltip="Income less costs, summed from the QB detail accounts"
-              />
-              <KpiBox
-                label="Net margin"
-                value={monthTotals.income !== 0 ? (monthTotals.net / monthTotals.income) * 100 : null}
-                unit="pct"
-                dp={1}
-              />
-            </div>
-            <div style={{ height: 12 }} />
+            {/* ─── KPI BAND ─────────────────────────────────────────── */}
+            {monthHasData && monthTotals.sumsToRows && (
+              <>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <KpiBox
+                    label={`Income · ${fmtMonthLong(selectedMonth)}`}
+                    value={monthTotals.income || null}
+                    unit="text"
+                    valueText={fmtCurrency(monthTotals.income, currency)}
+                    tooltip={`finance.gl_pl_monthly · QB Income accounts · ${selectedMonth}`}
+                  />
+                  <KpiBox
+                    label="Costs"
+                    value={monthTotals.cost || null}
+                    unit="text"
+                    valueText={fmtCurrency(monthTotals.cost, currency)}
+                    tooltip={`finance.gl_pl_monthly · QB cost accounts · ${selectedMonth}`}
+                  />
+                  <KpiBox
+                    label="Net result"
+                    value={monthTotals.net || null}
+                    unit="text"
+                    valueText={fmtCurrency(monthTotals.net, currency)}
+                    tooltip="Income less costs, summed from the QB detail accounts"
+                  />
+                  <KpiBox
+                    label="Net margin"
+                    value={monthTotals.income !== 0 ? (monthTotals.net / monthTotals.income) * 100 : null}
+                    unit="pct"
+                    dp={1}
+                  />
+                </div>
+                <div style={{ height: 12 }} />
+              </>
+            )}
+
+            {monthHasData && !monthTotals.sumsToRows && (
+              <>
+                <div style={{ padding: 12, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 'var(--t-xs)', color: MUTE }}>
+                  This source ships its own subtotal accounts — rows are shown as filed but are not summed here.
+                </div>
+                <div style={{ height: 12 }} />
+              </>
+            )}
+
+            {noData && (
+              <Container title={`No data for ${year}`} subtitle="empty" expandable={false}>
+                <div style={{ padding: 16, color: MUTE, fontSize: 'var(--t-sm)' }}>
+                  No rows in <code>finance.gl_pl_monthly</code> for property <code>{propertyId}</code> in {year}.
+                </div>
+              </Container>
+            )}
+
+            {!noData && (
+              <>
+                {/* Monthly detail */}
+                <Container
+                  title={`P&L · ${fmtMonthLong(selectedMonth)}`}
+                  subtitle={`QuickBooks as-is · ${currency} · ${monthRows.length} accounts`}
+                  action={
+                    monthTotals.sumsToRows ? (
+                      <span style={{ fontSize: 'var(--t-xs)', color: MUTE }}>
+                        net {fmtCurrency(monthTotals.net, currency)}
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  {monthHasData
+                    ? <QbTable rows={monthRows} periods={[selectedMonth]} currency={currency} totalsSum={monthTotals.sumsToRows} />
+                    : <div style={{ padding: 16, color: MUTE, fontSize: 'var(--t-sm)' }}>
+                        No accounts filed for {fmtMonthLong(selectedMonth)}.
+                      </div>}
+                </Container>
+
+                <div style={{ height: 12 }} />
+
+                {/* 12-month rollup */}
+                <Container
+                  title={`12-month rollup · FY${year}`}
+                  subtitle={`QuickBooks as-is · ${currency} · ${rows.length} rows`}
+                  action={
+                    yearTotals.sumsToRows ? (
+                      <span style={{ fontSize: 'var(--t-xs)', color: MUTE }}>
+                        FY {year} · {fmtCurrency(yearTotals.income, currency)} income · {fmtCurrency(yearTotals.net, currency)} net
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 'var(--t-xs)', color: MUTE }}>stored subtotals · not summed</span>
+                    )
+                  }
+                >
+                  <AnnualMatrix rows={rows} year={year} currency={currency} totalsSum={yearTotals.sumsToRows} />
+                </Container>
+              </>
+            )}
           </>
         )}
 
-        {/* Stored-subtotal files: say so instead of printing a sum that lies. */}
-        {monthHasData && !monthTotals.sumsToRows && (
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/*   VIEW: P&L BY CLASS (USALI dept breakdown)               */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {view === 'class' && classResult && (
           <>
-            <div style={{ padding: 12, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 'var(--t-xs)', color: MUTE }}>
-              This source ships its own subtotal accounts and repeats several lines under more
-              than one account code, so the rows below are shown as filed but are not added up
-              here — any total would double-count. Read the subtotal lines (marked
-              <em> stored subtotal</em>) for this file&apos;s own figures.
-            </div>
+            {/* House KPI band for selected month */}
+            <ClassHouseKpiBand
+              house={classResult.house}
+              month={selectedMonth}
+              currency={currency}
+            />
+
             <div style={{ height: 12 }} />
-          </>
-        )}
 
-        {/* ─── 3. MONTHLY P&L ───────────────────────────────────────── */}
-        {noData && (
-          <Container title={`No data for ${year}`} subtitle="empty" expandable={false}>
-            <div style={{ padding: 16, color: MUTE, fontSize: 'var(--t-sm)' }}>
-              No rows in <code>finance.gl_pl_monthly</code> for property <code>{propertyId}</code> in {year}.
-            </div>
-          </Container>
-        )}
-
-        {!noData && (
-          <>
+            {/* Dept snapshot for selected month */}
             <Container
-              title={`P&L · ${fmtMonthLong(selectedMonth)}`}
-              subtitle={`QuickBooks as-is · ${currency} · ${monthRows.length} accounts`}
-              action={
-                monthTotals.sumsToRows ? (
-                  <span style={{ fontSize: 'var(--t-xs)', color: MUTE }}>
-                    net {fmtCurrency(monthTotals.net, currency)}
-                  </span>
-                ) : undefined
-              }
+              title={`P&L by class · ${fmtMonthLong(selectedMonth)}`}
+              subtitle={`USALI department schedule · ${currency} · Revenue / COS / Payroll / Other Exp / Dept Profit`}
             >
-              {monthHasData
-                ? <QbTable rows={monthRows} periods={[selectedMonth]} currency={currency} totalsSum={monthTotals.sumsToRows} />
-                : <div style={{ padding: 16, color: MUTE, fontSize: 'var(--t-sm)' }}>
-                    No accounts filed for {fmtMonthLong(selectedMonth)}.
-                  </div>}
+              <ClassDeptSnapshot dept={classResult.dept} month={selectedMonth} currency={currency} />
             </Container>
 
             <div style={{ height: 12 }} />
 
-            {/* ─── 4. 12-MONTH ROLLUP ─────────────────────────────── */}
+            {/* Monthly revenue matrix (all months in year) */}
             <Container
-              title={`12-month rollup · FY${year}`}
-              subtitle={`QuickBooks as-is · ${currency} · ${rows.length} rows`}
-              action={
-                yearTotals.sumsToRows ? (
-                  <span style={{ fontSize: 'var(--t-xs)', color: MUTE }}>
-                    FY {year} · {fmtCurrency(yearTotals.income, currency)} income · {fmtCurrency(yearTotals.net, currency)} net
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 'var(--t-xs)', color: MUTE }}>stored subtotals · not summed</span>
-                )
-              }
+              title={`Revenue by class · FY${year}`}
+              subtitle="USALI departments × months · USD"
             >
-              <AnnualMatrix rows={rows} year={year} currency={currency} totalsSum={yearTotals.sumsToRows} />
+              <ClassMonthlyMatrix
+                dept={classResult.dept}
+                periods={periodsWithData}
+                currency={currency}
+                metric="revenue"
+                metricLabel="Revenue"
+              />
+            </Container>
+
+            <div style={{ height: 12 }} />
+
+            {/* Monthly dept profit matrix */}
+            <Container
+              title={`Departmental profit by class · FY${year}`}
+              subtitle="Revenue − COS − Payroll − Other Exp · USALI departments × months"
+            >
+              <ClassMonthlyMatrix
+                dept={classResult.dept}
+                periods={periodsWithData}
+                currency={currency}
+                metric="departmental_profit"
+                metricLabel="Dept Profit"
+              />
             </Container>
           </>
+        )}
+
+        {view === 'class' && !classResult && (
+          <div style={{ padding: 32, color: MUTE, fontSize: 'var(--t-sm)', textAlign: 'center' }}>
+            No class P&L data for {year}.
+          </div>
         )}
       </div>
     </DashboardPage>
   );
 }
 
-// ───── One-period P&L, grouped by QuickBooks type ──────────────────────
+// ─── QB month view — table grouped by QB type ─────────────────────────────────
 
 function QbTable({
   rows, periods, currency, totalsSum,
@@ -325,7 +425,7 @@ function QbTable({
   );
 }
 
-// ───── Account x month matrix for the year ─────────────────────────────
+// ─── QB 12-month annual matrix ─────────────────────────────────────────────────
 
 function AnnualMatrix({
   rows, year, currency, totalsSum,
@@ -339,8 +439,6 @@ function AnnualMatrix({
   const populated = periods.filter((p) => rows.some((r) => r.period_yyyymm === p));
   const blocks = blocksForPeriods(rows, populated);
   const annual = annualByAccount(rows, populated);
-
-  // One row per account, not per account-period.
   const seen = new Set<string>();
 
   return (
@@ -411,6 +509,172 @@ function AnnualMatrix({
             );
           })}
         </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── CLASS VIEW: house KPI band ────────────────────────────────────────────────
+
+function ClassHouseKpiBand({ house, month, currency }: { house: ClassHouseRow[]; month: string; currency: string }) {
+  const row = house.find((r) => r.period_yyyymm === month);
+  if (!row) return null;
+  const gopPct = row.revenue > 0 ? (row.gop / row.revenue) * 100 : null;
+  const netPct = row.revenue > 0 ? (row.net_income / row.revenue) * 100 : null;
+  return (
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <KpiBox
+        label={`Revenue · ${fmtMonthLong(month)}`}
+        value={row.revenue || null}
+        unit="text"
+        valueText={fmtCurrency(row.revenue, currency)}
+        tooltip="House total revenue · v_finance_pl_by_class_house"
+      />
+      <KpiBox
+        label="GoP"
+        value={row.gop || null}
+        unit="text"
+        valueText={fmtCurrency(row.gop, currency)}
+        tooltip="Gross Operating Profit · Revenue − COS − Payroll − Undistributed"
+      />
+      <KpiBox label="GoP margin" value={gopPct} unit="pct" dp={1} />
+      <KpiBox
+        label="Net income"
+        value={row.net_income || null}
+        unit="text"
+        valueText={fmtCurrency(row.net_income, currency)}
+        tooltip="Net income after depreciation, interest, tax"
+      />
+      <KpiBox label="Net margin" value={netPct} unit="pct" dp={1} />
+    </div>
+  );
+}
+
+// ─── CLASS VIEW: dept snapshot (one month) ─────────────────────────────────────
+
+function ClassDeptSnapshot({ dept, month, currency }: { dept: ClassDeptRow[]; month: string; currency: string }) {
+  const rows = dept.filter((r) => r.period_yyyymm === month);
+  const depts = [...new Set(rows.map((r) => r.usali_department))].sort(deptSort);
+  if (rows.length === 0) {
+    return <div style={{ padding: 16, color: MUTE, fontSize: 'var(--t-sm)' }}>No class data for {fmtMonthLong(month)}.</div>;
+  }
+  const totRev = rows.reduce((s, r) => s + r.revenue, 0);
+  const totCos = rows.reduce((s, r) => s + r.cost_of_sales, 0);
+  const totPay = rows.reduce((s, r) => s + r.payroll, 0);
+  const totOth = rows.reduce((s, r) => s + r.other_op_exp, 0);
+  const totPro = rows.reduce((s, r) => s + r.departmental_profit, 0);
+
+  const th: CSSProperties = { textAlign: 'right', padding: '6px 8px', fontWeight: 600, fontSize: 'var(--t-xs)', borderBottom: `2px solid ${BORDER_STRONG}` };
+  const td: CSSProperties = { textAlign: 'right', padding: '4px 8px', fontVariantNumeric: 'tabular-nums', fontSize: 'var(--t-xs)' };
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', color: FG }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, textAlign: 'left' }}>Department</th>
+            <th style={th}>Revenue</th>
+            <th style={th}>COS</th>
+            <th style={th}>Payroll</th>
+            <th style={th}>Other Exp</th>
+            <th style={{ ...th, color: 'var(--tbl-fg, #1A1A1A)' }}>Dept Profit</th>
+            <th style={{ ...th, color: MUTE }}>Margin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {depts.map((d) => {
+            const r = rows.find((x) => x.usali_department === d);
+            if (!r) return null;
+            const margin = r.revenue > 0 ? (r.departmental_profit / r.revenue) * 100 : null;
+            const profitColor = r.departmental_profit < 0 ? '#C0392B' : r.departmental_profit > 0 ? '#27AE60' : FG;
+            return (
+              <tr key={d} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                <td style={{ padding: '5px 8px', fontSize: 'var(--t-xs)', fontWeight: 500 }}>{d}</td>
+                <td style={td}>{fmtCurrency(r.revenue, currency)}</td>
+                <td style={{ ...td, color: MUTE }}>{r.cost_of_sales ? fmtCurrency(r.cost_of_sales, currency) : '—'}</td>
+                <td style={{ ...td, color: MUTE }}>{r.payroll ? fmtCurrency(r.payroll, currency) : '—'}</td>
+                <td style={{ ...td, color: MUTE }}>{r.other_op_exp ? fmtCurrency(r.other_op_exp, currency) : '—'}</td>
+                <td style={{ ...td, fontWeight: 600, color: profitColor }}>{fmtCurrency(r.departmental_profit, currency)}</td>
+                <td style={{ ...td, color: MUTE }}>{fmtPct(margin)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: `2px solid ${BORDER_STRONG}`, fontWeight: 700 }}>
+            <td style={{ padding: '6px 8px', fontSize: 'var(--t-xs)' }}>Total</td>
+            <td style={td}>{fmtCurrency(totRev, currency)}</td>
+            <td style={{ ...td, color: MUTE }}>{fmtCurrency(totCos, currency)}</td>
+            <td style={{ ...td, color: MUTE }}>{fmtCurrency(totPay, currency)}</td>
+            <td style={{ ...td, color: MUTE }}>{fmtCurrency(totOth, currency)}</td>
+            <td style={{ ...td, color: totPro < 0 ? '#C0392B' : totPro > 0 ? '#27AE60' : FG }}>{fmtCurrency(totPro, currency)}</td>
+            <td style={{ ...td, color: MUTE }}>{fmtPct(totRev > 0 ? (totPro / totRev) * 100 : null)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+// ─── CLASS VIEW: dept × month matrix ──────────────────────────────────────────
+
+function ClassMonthlyMatrix({
+  dept, periods, currency, metric, metricLabel,
+}: {
+  dept: ClassDeptRow[];
+  periods: string[];
+  currency: string;
+  metric: 'revenue' | 'departmental_profit';
+  metricLabel: string;
+}) {
+  const depts = [...new Set(dept.map((r) => r.usali_department))].sort(deptSort);
+  if (depts.length === 0 || periods.length === 0) {
+    return <div style={{ padding: 16, color: MUTE, fontSize: 'var(--t-sm)' }}>No data.</div>;
+  }
+
+  const th: CSSProperties = { textAlign: 'right', padding: '6px 8px', fontWeight: 600, fontSize: 'var(--t-xs)', borderBottom: `2px solid ${BORDER_STRONG}` };
+  const td: CSSProperties = { textAlign: 'right', padding: '4px 8px', fontVariantNumeric: 'tabular-nums', fontSize: 'var(--t-xs)' };
+
+  const lookup = new Map<string, number>();
+  for (const r of dept) lookup.set(`${r.usali_department}|${r.period_yyyymm}`, r[metric]);
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', color: FG }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, textAlign: 'left', position: 'sticky', left: 0, background: 'var(--paper, #fff)' }}>Department</th>
+            {periods.map((p) => <th key={p} style={th}>{fmtMonthShort(p)}</th>)}
+            <th style={{ ...th, fontWeight: 700 }}>YTD</th>
+          </tr>
+        </thead>
+        <tbody>
+          {depts.map((d) => {
+            const vals = periods.map((p) => lookup.get(`${d}|${p}`) ?? 0);
+            const ytd = vals.reduce((s, v) => s + v, 0);
+            const isProfit = metric === 'departmental_profit';
+            return (
+              <tr key={d} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                <td style={{ padding: '5px 8px', fontSize: 'var(--t-xs)', fontWeight: 500, position: 'sticky', left: 0, background: 'var(--paper, #fff)' }}>{d}</td>
+                {vals.map((v, i) => {
+                  const color = isProfit && v < 0 ? '#C0392B' : FG;
+                  return <td key={periods[i]} style={{ ...td, color }}>{v !== 0 ? fmtK(v, currency) : '—'}</td>;
+                })}
+                <td style={{ ...td, fontWeight: 600, color: isProfit && ytd < 0 ? '#C0392B' : FG }}>{fmtCurrency(ytd, currency)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: `2px solid ${BORDER_STRONG}`, fontWeight: 700 }}>
+            <td style={{ padding: '6px 8px', fontSize: 'var(--t-xs)', position: 'sticky', left: 0, background: 'var(--paper, #fff)' }}>Total {metricLabel}</td>
+            {periods.map((p) => {
+              const v = depts.reduce((s, d) => s + (lookup.get(`${d}|${p}`) ?? 0), 0);
+              return <td key={p} style={td}>{fmtK(v, currency)}</td>;
+            })}
+            <td style={td}>{fmtCurrency(depts.reduce((s, d) => s + periods.reduce((ps, p) => ps + (lookup.get(`${d}|${p}`) ?? 0), 0), 0), currency)}</td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

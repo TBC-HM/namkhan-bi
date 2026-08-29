@@ -246,3 +246,81 @@ export function periodsForYear(year: string): string[] {
   for (let m = 1; m <= 12; m += 1) out.push(`${year}-${String(m).padStart(2, '0')}`);
   return out;
 }
+
+// ─── USALI class P&L ─────────────────────────────────────────────────────────
+
+export interface ClassDeptRow {
+  period_yyyymm: string;
+  usali_department: string;
+  usali_section: string;
+  revenue: number;
+  cost_of_sales: number;
+  payroll: number;
+  other_op_exp: number;
+  departmental_profit: number;
+}
+
+export interface ClassHouseRow {
+  period_yyyymm: string;
+  fiscal_year: number;
+  revenue: number;
+  cost_of_sales: number;
+  payroll: number;
+  utilities: number;
+  pom: number;
+  sales_marketing: number;
+  gop: number;
+  ebitda: number;
+  net_income: number;
+}
+
+export async function getClassPnl(
+  propertyId: number,
+  year: string,
+): Promise<{ dept: ClassDeptRow[]; house: ClassHouseRow[] }> {
+  const supabase = createClient();
+  const [deptRes, houseRes] = await Promise.all([
+    supabase
+      .from('v_finance_pl_by_class_dept')
+      .select('period_yyyymm, usali_department, usali_section, revenue, cost_of_sales, payroll, other_op_exp, departmental_profit')
+      .eq('property_id', propertyId)
+      .like('period_yyyymm', `${year}-%`),
+    supabase
+      .from('v_finance_pl_by_class_house')
+      .select('period_yyyymm, fiscal_year, revenue, cost_of_sales, payroll, utilities, pom, sales_marketing, gop, ebitda, net_income')
+      .eq('property_id', propertyId)
+      .like('period_yyyymm', `${year}-%`),
+  ]);
+  if (deptRes.error) console.error('[finance.pnl] getClassPnl dept', deptRes.error);
+  if (houseRes.error) console.error('[finance.pnl] getClassPnl house', houseRes.error);
+
+  type RD = { period_yyyymm: string; usali_department: string | null; usali_section: string | null; revenue: unknown; cost_of_sales: unknown; payroll: unknown; other_op_exp: unknown; departmental_profit: unknown };
+  type RH = { period_yyyymm: string; fiscal_year: unknown; revenue: unknown; cost_of_sales: unknown; payroll: unknown; utilities: unknown; pom: unknown; sales_marketing: unknown; gop: unknown; ebitda: unknown; net_income: unknown };
+
+  const dept: ClassDeptRow[] = ((deptRes.data ?? []) as unknown as RD[]).map((r) => ({
+    period_yyyymm: r.period_yyyymm,
+    usali_department: r.usali_department ?? 'Unknown',
+    usali_section: r.usali_section ?? '',
+    revenue: Number(r.revenue) || 0,
+    cost_of_sales: Number(r.cost_of_sales) || 0,
+    payroll: Number(r.payroll) || 0,
+    other_op_exp: Number(r.other_op_exp) || 0,
+    departmental_profit: Number(r.departmental_profit) || 0,
+  }));
+
+  const house: ClassHouseRow[] = ((houseRes.data ?? []) as unknown as RH[]).map((r) => ({
+    period_yyyymm: r.period_yyyymm,
+    fiscal_year: Number(r.fiscal_year) || 0,
+    revenue: Number(r.revenue) || 0,
+    cost_of_sales: Number(r.cost_of_sales) || 0,
+    payroll: Number(r.payroll) || 0,
+    utilities: Number(r.utilities) || 0,
+    pom: Number(r.pom) || 0,
+    sales_marketing: Number(r.sales_marketing) || 0,
+    gop: Number(r.gop) || 0,
+    ebitda: Number(r.ebitda) || 0,
+    net_income: Number(r.net_income) || 0,
+  }));
+
+  return { dept, house };
+}
