@@ -23,6 +23,7 @@ import {
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase } from '@/lib/supabase';
 import OtbDensityCalendar, { type OtbDayData } from './_components/OtbDensityCalendar';
+import RoomCalendarSurface from './calendar/_components/RoomCalendarSurface';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -80,7 +81,7 @@ function monthBounds(y: number, m: number): { fromIso: string; toIso: string; mo
   return { fromIso, toIso, monthLabel };
 }
 
-interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string; roff?: string; month?: string }
+interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string; roff?: string; month?: string; sub?: string }
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
@@ -129,10 +130,41 @@ export default async function PricingPage({ searchParams, propertyId }: { search
 
   // ─── Tab: OTB Density ─────────────────────────────────────────────────
   // PBS 2026-08-21: rebuilt as a proper month calendar (was legacy heatmap).
-  // One month at a time via ?month=YYYY-MM, arrow buttons for prev/next.
-  // Each cell = day number (top-left), rooms sold (big), revenue (small),
-  // heat background by OCC bucket (grey/amber/green) using L26 tokens.
+  // PBS 2026-08-29: added "By Room" sub-tab (RoomCalendarSurface, 28-day rolling window).
   if (tab === 'otb_density') {
+    const otbSub = searchParams.sub === 'by_room' ? 'by_room' : 'by_day';
+    const otbSubBase = `${basePath}?tab=otb_density`;
+    const otbSubStrip = (
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 0 10px', borderBottom: '1px solid #E6DFCC', marginBottom: 12 }}>
+        {(['by_day', 'by_room'] as const).map((s) => {
+          const isA = s === otbSub;
+          const href = s === 'by_day' ? otbSubBase : `${otbSubBase}&sub=by_room`;
+          return (
+            <a key={s} href={href} style={{
+              padding: '4px 10px', fontSize: 12, fontWeight: isA ? 700 : 500,
+              color: isA ? '#1B1B1B' : '#5A5A5A',
+              textDecoration: 'none',
+              borderBottom: `2px solid ${isA ? '#084838' : 'transparent'}`,
+            }}>
+              {s === 'by_day' ? 'By Day' : 'By Room'}
+            </a>
+          );
+        })}
+      </div>
+    );
+
+    if (otbSub === 'by_room') {
+      return (
+        <DashboardPage title="Revenue · Calendar" subtitle="OTB density · by room · 28-day rolling window" tabs={tabs}>
+          {stripBlock}
+          <div style={fullRow}>
+            {otbSubStrip}
+            <RoomCalendarSurface propertyId={pid} />
+          </div>
+        </DashboardPage>
+      );
+    }
+
     const { year, month } = parseMonth(searchParams.month);
     const { fromIso, toIso, monthLabel } = monthBounds(year, month);
     const prev = shiftMonth(year, month, -1);
@@ -207,6 +239,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       >
         {stripBlock}
         <div style={fullRow}>
+          {otbSubStrip}
           <Container
             title={`OTB density · ${monthLabel}`}
             subtitle="on-the-books rooms sold per night · revenue below · cell colour = occupancy bucket (grey <60% · amber 60-85% · green ≥85%). Source: mv_kpi_daily."
