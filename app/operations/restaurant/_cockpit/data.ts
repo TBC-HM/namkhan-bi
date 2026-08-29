@@ -522,3 +522,164 @@ export async function getFeedDetail(
   }
   return safe<FeedDetailRow>(query);
 }
+
+// ─── Menu items, by year, sortable ─────────────────────────────────────────
+// PBS 2026-08-27. v_dept_top_seller_trend carries property_id, usali_dept and a
+// `monthly` JSONB keyed YYYY-MM with {rev, units} — so per-year revenue, units
+// and average selling price are all derivable without new DDL. Preferred over
+// v_fb_top_seller_trend, which has no property_id and would show Namkhan's menu
+// on any other property.
+
+export type MenuSort = 'revenue' | 'units' | 'price' | 'last' | 'name' | 'category';
+
+export interface MenuItem {
+  name: string;
+  subdept: string;
+  revenue: number;
+  units: number;
+  avgPrice: number | null;
+  lastSold: string | null;
+  monthsActive: number;
+}
+
+interface MonthlyBucket { rev?: number | string; units?: number | string }
+
+export async function getMenuYears(pid: number): Promise<string[]> {
+  const rows = await getMenuRaw(pid);
+  const years = new Set<string>();
+  for (const r of rows) {
+    for (const k of Object.keys(r.monthly ?? {})) years.add(k.slice(0, 4));
+  }
+  return [...years].sort().reverse();
+}
+
+async function getMenuRaw(pid: number): Promise<Array<{
+  description: string | null; usali_subdept: string | null; last_sold: string | null;
+  monthly: Record<string, MonthlyBucket> | null;
+}>> {
+  const sb = getSupabaseAdmin();
+  return safe(
+    sb.from('v_dept_top_seller_trend')
+      .select('description, usali_subdept, last_sold, monthly')
+      .eq('property_id', pid)
+      .eq('usali_dept', 'F&B')
+      .limit(2000),
+  );
+}
+
+/**
+ * Every F&B product sold in the chosen year, with its average selling price.
+ *
+ * Average price is revenue ÷ units for that year only — a dish whose price
+ * changed mid-year shows the blended rate, which is what was actually achieved
+ * rather than what the menu claims.
+ */
+export async function getMenuItems(
+  pid: number, year: string, sort: MenuSort = 'revenue', dir: 'asc' | 'desc' = 'desc',
+): Promise<MenuItem[]> {
+  const raw = await getMenuRaw(pid);
+  const items: MenuItem[] = [];
+
+  for (const r of raw) {
+    const monthly = r.monthly ?? {};
+    let revenue = 0, units = 0, months = 0;
+    for (const [k, v] of Object.entries(monthly)) {
+      if (!k.startsWith(year)) continue;
+      const rev = Number(v?.rev ?? 0);
+      const u = Number(v?.units ?? 0);
+      if (rev === 0 && u === 0) continue;
+      revenue += rev; units += u; months += 1;
+    }
+    if (months === 0) continue; // not sold in this year at all
+    items.push({
+      name: String(r.description ?? '—'),
+      subdept: String(r.usali_subdept ?? '—'),
+      revenue: Math.round(revenue),
+      units,
+      avgPrice: units > 0 ? Math.round((revenue / units) * 100) / 100 : null,
+      lastSold: r.last_sold,
+      monthsActive: months,
+    });
+  }
+
+  const mul = dir === 'asc' ? 1 : -1;
+  items.sort((a, b) => {
+    switch (sort) {
+      case 'units':    return (a.units - b.units) * mul;
+      case 'price':    return ((a.avgPrice ?? 0) - (b.avgPrice ?? 0)) * mul;
+      case 'last':     return String(a.lastSold ?? '').localeCompare(String(b.lastSold ?? '')) * mul;
+      case 'name':     return a.name.localeCompare(b.name) * mul;
+      case 'category': return (a.subdept.localeCompare(b.subdept) || b.revenue - a.revenue) * mul;
+      default:         return (a.revenue - b.revenue) * mul;
+    }
+  });
+  return items;
+}
+
+// ─── Breakfast posted vs pax in house ──────────────────────────────────────
+// PBS 2026-08-27: every rate includes breakfast, so pax-nights in house should
+// equal breakfast covers, at a $12 internal transfer price.
+//
+// CAVEAT THAT LIMITS THIS ENTIRELY: pms.v_reservations.adults stopped being
+// populated around May 2026 — present on 127/127 January reservations but only
+// 9/80 in August. Months after April cannot be compared at all, and saying so
+// is the only honest option; filling the gap with zeros would invent a shortfall.
+
+export interface BreakfastCheck {
+  month: string;
+  paxNights: number | null;
+  reservationsWithPax: number;
+  reservationsTotal: number;
+  expectedUsd: number | null;
+  postedUsd: number;
+  coverage: number;
+}
+
+export async function getBreakfastCheck(
+  pid: number, fromMonth: string, transferPrice = 12,
+): Promise<BreakfastCheck[]> {
+  const sb = getSupabaseAdmin();
+  const [alloc, res] = await Promise.all([
+    safe<{ period_yyyymm: string; alloc_usd: number | string | null }>(
+      sb.from('v_breakfast_allocation_monthly')
+        .select('period_yyyymm, alloc_usd').eq('property_id', pid)
+        .gte('period_yyyymm', fromMonth.slice(0, 7)).order('period_yyyymm'),
+    ),
+    safe<{ check_in_date: string | null; check_out_date: string | null; adults: number | null; children: number | null }>(
+      sb.from('v_reservations_unified')
+        .select('check_in_date, check_out_date, adults, children')
+        .eq('property_id', pid).gte('check_in_date', fromMonth).limit(5000),
+    ),
+  ]);
+
+  const pax = new Map<string, { nights: number; withPax: number; total: number }>();
+  for (const r of res) {
+    const ci = r.check_in_date, co = r.check_out_date;
+    if (!ci || !co) continue;
+    const m = ci.slice(0, 7);
+    const nights = Math.max(0, (Date.parse(co) - Date.parse(ci)) / 86400000);
+    const e = pax.get(m) ?? { nights: 0, withPax: 0, total: 0 };
+    e.total += 1;
+    if (r.adults != null) {
+      e.withPax += 1;
+      e.nights += (Number(r.adults) + Number(r.children ?? 0)) * nights;
+    }
+    pax.set(m, e);
+  }
+
+  return alloc.map((a) => {
+    const m = a.period_yyyymm;
+    const p = pax.get(m);
+    const coverage = p && p.total > 0 ? Math.round((p.withPax / p.total) * 100) : 0;
+    const usable = coverage >= 80;
+    return {
+      month: m,
+      paxNights: usable ? Math.round(p!.nights) : null,
+      reservationsWithPax: p?.withPax ?? 0,
+      reservationsTotal: p?.total ?? 0,
+      expectedUsd: usable ? Math.round(p!.nights * transferPrice) : null,
+      postedUsd: Math.round(Number(a.alloc_usd ?? 0)),
+      coverage,
+    };
+  });
+}
