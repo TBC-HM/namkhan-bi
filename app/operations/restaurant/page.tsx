@@ -20,7 +20,7 @@ import LegacyFbView from './_cockpit/LegacyFbView';
 import FbSubnav, { isFbTab, type FbTab } from './_cockpit/FbSubnav';
 import {
   tzFor, todayIn, addDays, getSleepingItems, getTopSellers, getCategoryMix,
-  getFoodCost, getFbLabour, getFolioVsGl, getServiceClock,
+  getFoodCost, getFbLabour, getServiceClock,
   getFbRevenueByMonth, getClassificationIssues, getFbKpiMatrix, getFeedDetail,
   getMenuItems, getMenuYears, type FbPeriodKey, type MenuSort,
 } from './_cockpit/data';
@@ -121,7 +121,7 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
                                           year={one(searchParams?.year)} />}
         {tab === 'guests'   && <OutletCaptureCockpit deptKey="fb" propertyId={pid} searchParams={searchParams} />}
         {tab === 'cost'     && <CostTab    pid={pid} today={today} money={money} />}
-        {tab === 'ledger'   && <LedgerTab  pid={pid} money={money} searchParams={searchParams} propertyId={propertyId} />}
+        {tab === 'analytics' && <AnalyticsTab searchParams={searchParams} propertyId={propertyId} />}
       </div>
     </DashboardPage>
   );
@@ -652,61 +652,13 @@ function ServiceClock({ clock, money }: {
   );
 }
 
-// ─── Ledger ────────────────────────────────────────────────────────────────
+// ─── Analytics ─────────────────────────────────────────────────────────────
 
-async function LedgerTab({ pid, money, searchParams, propertyId }: {
-  pid: number; money: (n: number) => string;
+function AnalyticsTab({ searchParams, propertyId }: {
   searchParams: Record<string, string | string[] | undefined>;
   propertyId?: number;
 }) {
-  const rows = (await getFolioVsGl()).filter((r) => {
-    const p = r.property_id;
-    return p === undefined || p === null || Number(p) === pid;
-  });
-
-  const matrix: MatrixRow[] = rows
-    .sort((a, b) => String(b.period_yyyymm).localeCompare(String(a.period_yyyymm)))
-    .slice(0, 14)
-    .map((r) => {
-      const pct = num(r.folio_pct_of_gl);
-      return {
-        key: String(r.period_yyyymm),
-        label: String(r.period_yyyymm),
-        unit: 'folio vs general ledger',
-        cells: {
-          folio: { value: money(num(r.folio_total)) },
-          gl:    { value: money(num(r.gl_total)) },
-          delta: { value: money(num(r.delta_total_usd)),
-                   tone: Math.abs(num(r.delta_total_usd)) > 1000 ? 'neg' : 'mute' },
-          pct:   { value: pct > 0 ? `${pct.toFixed(1)}%` : '—',
-                   tone: pct >= 97 && pct <= 103 ? 'pos' : 'warn' },
-        },
-      };
-    });
-
-  return (
-    <>
-      <Container
-      title="Ledger · folio ↔ GL"
-      subtitle="the bookkeeper's reconciliation — kept, but behind its own tab instead of opening the page. Folio is live POS receipts; GL lags about a month."
-      density="compact"
-    >
-      {matrix.length === 0 ? <Empty>No reconciliation rows for this property.</Empty> : (
-        <MetricMatrix caption="Cloudbeds folio against QuickBooks general ledger by month."
-          columns={[
-            { key: 'folio', label: 'Folio' }, { key: 'gl', label: 'GL' },
-            { key: 'delta', label: 'Δ' }, { key: 'pct', label: 'Folio % GL' },
-          ]}
-          rows={matrix} labelWidth={150} minWidth={460} />
-      )}
-      </Container>
-
-      {/* The whole previous F&B page, unchanged. Nothing was dropped in the
-          swap — the USALI rollup, the folio/GL reconciliation, the breakfast
-          reclass and the cost-of-sales grid all live here now. */}
-      <LegacyFbView searchParams={searchParams} propertyId={propertyId} />
-    </>
-  );
+  return <LegacyFbView searchParams={searchParams} propertyId={propertyId} />;
 }
 
 // ─── shared bits ───────────────────────────────────────────────────────────

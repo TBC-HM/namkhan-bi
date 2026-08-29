@@ -19,17 +19,15 @@
 import { Container, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 // PBS 2026-08-26: department cockpit. Additive — sits ABOVE the existing
 // containers so every tab and sub-menu below stays exactly where it was.
-import OutletCaptureCockpit from '@/app/(cockpit)/_design/OutletCaptureCockpit';
 import PnlGrid from '@/components/pl/PnlGrid';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
 import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
-import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
 import { FbCaptureChart, FbAvgTicketChart, FbCategoryChart } from '@/components/pl/FbMiniCharts';
 import {
   getKpiDaily, aggregateDaily, getDeptPl, getFnbCovers,
   getFnbCostsForPeriod, getFnbCaptureForPeriod, getCanteenForPeriod,
-  getFnbGlBreakdown, getFnbTopSellerTrend, getBreakfastAllocation, getFnbRawTransactions,
+  getFnbGlBreakdown, getFnbTopSellerTrend, getBreakfastAllocation,
   getFnbRevenueByCategoryForPeriod,
 } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
@@ -72,7 +70,7 @@ export default async function LegacyFbView({ searchParams, propertyId }: Props) 
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp, fbCaptureResp, fbAvgTicketResp, fbCategoryResp, fbCatByPeriod, reconResp] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp, fbCaptureResp, fbAvgTicketResp, fbCategoryResp, fbCatByPeriod, reconResp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 18).catch(() => []),  // PBS #161 — extend to Jan 2025 onwards (was 12, missed 2025 H1 disaster)
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -80,7 +78,6 @@ export default async function LegacyFbView({ searchParams, propertyId }: Props) 
     getCanteenForPeriod(Q1_FROM, Q1_TO).catch(() => null),
     getFnbGlBreakdown(18).catch(() => ({ periods: [], lines: [] })),
     getFnbTopSellerTrend('2026-01-01', 2000).catch(() => ({ periods: [], items: [] })),
-    getFnbRawTransactions(2000).catch(() => []),
     getBreakfastAllocation(Q1_FROM, Q1_TO).catch(() => null),
     getFnbCovers(period.from, period.to).catch(() => null),
     // PBS 2026-06-09 #140 — live Food/Beverage revenue split from QB GL.
@@ -321,9 +318,6 @@ export default async function LegacyFbView({ searchParams, propertyId }: Props) 
 
   return (
     <>
-      <OutletCaptureCockpit deptKey="fb" propertyId={pid} searchParams={searchParams} />
-
-
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Container title="Operating snapshot" subtitle={`PMS / Cloudbeds POS · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
@@ -480,12 +474,6 @@ export default async function LegacyFbView({ searchParams, propertyId }: Props) 
           </div>
         </details>
 
-        <details>
-          <summary style={summaryStyle}>All POS transactions · search &amp; reconcile <span style={{ fontWeight: 400, color: '#5A5A5A', marginLeft: 6 }}>({rawTxns.length} most recent)</span></summary>
-          <div style={{ marginTop: 10 }}>
-            <FnbRawTransactions data={rawTxns} pageSize={200} />
-          </div>
-        </details>
       </div>
     </>
   );
