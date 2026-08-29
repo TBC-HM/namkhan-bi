@@ -29,7 +29,7 @@ import ReservationsTableClient, {
   type ReservationRow,
 } from './ReservationsTableClient';
 import RangeChips from './RangeChips';
-import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
+import BookingsTableCB from './BookingsTableCB';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -236,7 +236,7 @@ export default async function TenantRevenueReservationsPage({
         </div>
       ) : (
         <div style={{ gridColumn: '1 / -1' }}>
-          <BookingActivity propertyId={pid} />
+          <BookingsTableCB propertyId={pid} sym={sym} />
         </div>
       )}
     </DashboardPage>
