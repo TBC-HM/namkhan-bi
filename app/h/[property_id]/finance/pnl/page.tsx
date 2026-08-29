@@ -8,8 +8,6 @@
 // printed in account-code order, so an upload renders with no mapping step and
 // FY2026 (Spanish PGC, 246 accounts) shows up the moment it lands.
 //
-// Namkhan (260955) redirects to /finance/pnl, its own QB-by-class dashboard.
-//
 // Layout:
 //   1) Year + month selectors.
 //   2) KPI band — Income / Costs / Net for the selected month.
@@ -22,7 +20,6 @@
 // EUR 6.43M of real revenue. Flat exports (FY2026+) are summed normally.
 
 import { Fragment } from 'react';
-import { redirect } from 'next/navigation';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
 import KpiBox from '@/components/kpi/KpiBox';
@@ -40,8 +37,6 @@ import {
 } from './_data';
 import YearDropdown from './YearDropdown';
 import MonthDropdown from './MonthDropdown';
-import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
-
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -100,9 +95,6 @@ interface Props {
 
 export default async function PropertyPnLPage({ params, searchParams }: Props) {
   const propertyId = Number(params.property_id);
-
-  // Namkhan keeps its own QB-by-class dashboard (ADR-159, gl.* schema).
-  if (propertyId === NAMKHAN_PROPERTY_ID) redirect('/finance/pnl');
 
   const availableYears = await getAvailableYears(propertyId);
   const yearsWithData = availableYears.filter((y) => SUPPORTED_YEARS.includes(y));
