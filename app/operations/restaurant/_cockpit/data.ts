@@ -62,6 +62,10 @@ export async function getTxns(
     .select('transaction_id, local_laos_str, transaction_date, description, item_category_name, amount, reservation_id')
     .eq('property_id', pid)
     .eq('transaction_type', 'debit')
+    // v_fnb_raw_txn_enriched is NOT F&B-only despite the name — it carries the
+    // nightly room rate, tax and fee postings plus spa and transport. Without
+    // this filter 76% of what the feed showed was not F&B.
+    .eq('usali_dept', 'F&B')
     .gte('transaction_date', fromIso)
     .lte('transaction_date', `${toIso}T23:59:59`)
     .order('transaction_date', { ascending: false })
@@ -116,6 +120,7 @@ export async function getCategoryMix(pid: number, fromIso: string, toIso: string
       .select('item_category_name, amount')
       .eq('property_id', pid)
       .eq('transaction_type', 'debit')
+      .eq('usali_dept', 'F&B')
       .gte('transaction_date', fromIso)
       .lte('transaction_date', `${toIso}T23:59:59`)
       .limit(5000),
@@ -224,4 +229,72 @@ export async function getFbLabour(
       ratioPct: fbRevenue > 0 ? Math.round((kitchenCost / fbRevenue) * 1000) / 10 : null,
     };
   }).filter((r) => r.month);
+}
+
+// ─── Service clock ─────────────────────────────────────────────────────────
+// PBS 2026-08-27. When is the work actually happening? Every posting carries a
+// local timestamp, so the hour it was billed is a usable proxy for when it was
+// consumed — but ONLY once room rate / tax / fee are excluded. Those post in a
+// nightly batch at 00:00 and, unfiltered, put 1,855 phantom lines and $103k at
+// midnight, which would have read as the busiest hour of the day.
+//
+// Minibar is kept separate deliberately: it is in-room consumption and needs no
+// one on the floor, so counting it as service demand would overstate the
+// morning shift.
+
+export interface ServiceHour {
+  hour: number;
+  lines: number;
+  revenue: number;
+  food: number;
+  beverage: number;
+  minibar: number;
+  linesPerDay: number;
+}
+
+export async function getServiceClock(
+  pid: number, fromIso: string, toIso: string,
+): Promise<ServiceHour[]> {
+  const sb = getSupabaseAdmin();
+  const rows = await safe<{
+    local_laos_dt: string | null; amount: number | string | null;
+    usali_subdept: string | null; transaction_date: string | null;
+  }>(
+    sb.from('v_fnb_raw_txn_enriched')
+      .select('local_laos_dt, amount, usali_subdept, transaction_date')
+      .eq('property_id', pid)
+      .eq('transaction_type', 'debit')
+      .eq('usali_dept', 'F&B')
+      .gte('transaction_date', fromIso)
+      .lte('transaction_date', `${toIso}T23:59:59`)
+      .limit(50000),
+  );
+
+  const byHour = new Map<number, ServiceHour & { days: Set<string> }>();
+  for (const r of rows) {
+    const dt = r.local_laos_dt;
+    if (!dt) continue;
+    const hour = Number(String(dt).slice(11, 13));
+    if (!Number.isFinite(hour)) continue;
+    const day = String(dt).slice(0, 10);
+    const e = byHour.get(hour) ?? {
+      hour, lines: 0, revenue: 0, food: 0, beverage: 0, minibar: 0,
+      linesPerDay: 0, days: new Set<string>(),
+    };
+    e.lines += 1;
+    e.revenue += Number(r.amount ?? 0);
+    if (r.usali_subdept === 'Food') e.food += 1;
+    else if (r.usali_subdept === 'Beverage') e.beverage += 1;
+    else if (r.usali_subdept === 'Minibar') e.minibar += 1;
+    e.days.add(day);
+    byHour.set(hour, e);
+  }
+
+  return [...byHour.values()]
+    .map(({ days, ...h }) => ({
+      ...h,
+      revenue: Math.round(h.revenue),
+      linesPerDay: days.size > 0 ? Math.round((h.lines / days.size) * 10) / 10 : 0,
+    }))
+    .sort((a, b) => a.hour - b.hour);
 }

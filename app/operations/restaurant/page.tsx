@@ -20,7 +20,7 @@ import LegacyFbView from './_cockpit/LegacyFbView';
 import FbSubnav, { isFbTab, type FbTab } from './_cockpit/FbSubnav';
 import {
   tzFor, todayIn, addDays, getTxns, getTopSellers, getSleepingItems, getCategoryMix,
-  getFoodCost, getFbLabour, getFolioVsGl,
+  getFoodCost, getFbLabour, getFolioVsGl, getServiceClock,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
 
@@ -322,8 +322,10 @@ async function CostTab({ pid, today, money }: {
   pid: number; today: string; money: (n: number) => string;
 }) {
   const year = today.slice(0, 4);
-  const [cos, labour] = await Promise.all([
-    getFoodCost(pid), getFbLabour(pid, NAMKHAN_PROPERTY_ID, `${year}-01-01`),
+  const [cos, labour, clock] = await Promise.all([
+    getFoodCost(pid),
+    getFbLabour(pid, NAMKHAN_PROPERTY_ID, `${year}-01-01`),
+    getServiceClock(pid, addDays(today, -90), today),
   ]);
   const thisMonth = today.slice(0, 7);
 
@@ -378,6 +380,8 @@ async function CostTab({ pid, today, money }: {
         )}
       </Container>
 
+      <ServiceClock clock={clock} money={money} />
+
       <Container
         title="Kitchen labour"
         subtitle="Restaurant Kitchen payroll against F&B revenue · healthy 25–35%"
@@ -400,6 +404,81 @@ async function CostTab({ pid, today, money }: {
         )}
       </Container>
     </>
+  );
+}
+
+// ─── Service clock ─────────────────────────────────────────────────────────
+
+/**
+ * When the work actually happens.
+ *
+ * Every posting carries a local timestamp, so the billing hour stands in for
+ * the consumption hour. Minibar is shown but held apart: it is in-room, needs
+ * nobody on the floor, and counting it as service demand would overstate the
+ * morning.
+ */
+function ServiceClock({ clock, money }: {
+  clock: Awaited<ReturnType<typeof getServiceClock>>;
+  money: (n: number) => string;
+}) {
+  const served = clock.filter((h) => h.food + h.beverage > 0);
+  if (served.length === 0) {
+    return (
+      <Container title="When the work happens" subtitle="needs timestamped F&B postings" density="compact">
+        <Empty>No timestamped F&amp;B postings in the last 90 days.</Empty>
+      </Container>
+    );
+  }
+
+  const peak = Math.max(...served.map((h) => h.food + h.beverage));
+  const busiest = served.reduce((a, b) => (b.food + b.beverage > a.food + a.beverage ? b : a));
+  const hh = (n: number) => `${String(n).padStart(2, '0')}:00`;
+
+  const rows: MatrixRow[] = served.map((h) => {
+    const service = h.food + h.beverage;
+    const share = Math.round((service / peak) * 100);
+    return {
+      key: String(h.hour),
+      label: hh(h.hour),
+      unit: `${h.linesPerDay}/day`,
+      cells: {
+        load: {
+          value: String(service),
+          tone: share >= 70 ? 'neg' : share >= 35 ? 'warn' : 'pos',
+          bar: share,
+          title: `${h.food} food · ${h.beverage} drink lines`,
+        },
+        food: { value: String(h.food), tone: 'mute' },
+        bev:  { value: String(h.beverage), tone: 'mute' },
+        room: h.minibar > 0 ? { value: String(h.minibar), tone: 'mute', title: 'In-room — no floor cover needed' } : undefined,
+        rev:  { value: money(h.revenue), tone: 'mute' },
+      },
+    };
+  });
+
+  return (
+    <Container
+      title="When the work happens"
+      subtitle={`F&B postings by hour, last 90 days · busiest is ${hh(busiest.hour)} at ${busiest.linesPerDay} lines a day · room-service and minibar shown separately because they need no floor cover`}
+      density="compact"
+    >
+      <MetricMatrix
+        caption="Food and beverage postings by hour of day, last 90 days."
+        columns={[
+          { key: 'load', label: 'Service load', sub: 'food + drink' },
+          { key: 'food', label: 'Food' },
+          { key: 'bev',  label: 'Drink' },
+          { key: 'room', label: 'In-room', sub: 'minibar' },
+          { key: 'rev',  label: 'Revenue' },
+        ]}
+        rows={rows} labelWidth={110} minWidth={520}
+      />
+      <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+        Billing time, not order time — close enough to plan a roster, not close enough to
+        settle an argument. The nightly room-rate batch posts at 00:00 and is excluded;
+        left in, it would have read as the busiest hour of the day.
+      </p>
+    </Container>
   );
 }
 
