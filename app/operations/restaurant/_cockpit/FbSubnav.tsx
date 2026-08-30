@@ -18,7 +18,8 @@ export const FB_TABS = [
   { key: 'menu',    label: 'Menu',    blurb: 'what sells and what stalled' },
   { key: 'guests',  label: 'Guests',  blurb: 'who spends and who never did' },
   { key: 'cost',    label: 'Cost',    blurb: 'food cost, labour, stock' },
-  { key: 'analytics', label: 'Analytics', blurb: 'GL reconciliation, USALI P&L, trends, top sellers' },
+  { key: 'analytics', label: 'Analytics', blurb: 'growth vs occupancy, where the revenue concentrates, what sells' },
+  { key: 'ledger',  label: 'Ledger',  blurb: 'the previous F&B page — GL reconciliation and USALI P&L, preserved' },
 ] as const;
 
 export type FbTab = (typeof FB_TABS)[number]['key'];

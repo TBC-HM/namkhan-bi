@@ -7,7 +7,7 @@
 // renders behind the Ledger tab. /operations/restaurant/cockpit redirects here
 // so any link made while this was a preview still resolves.
 //
-// Tabs: Tonight · Feed · Menu · Guests · Cost · Ledger.
+// Tabs: Today · Feed · Menu · Guests · Cost · Analytics · Ledger.
 // Feed is its own tab on PBS instruction — the manager wants to see what
 // actually happened, not a summary of it.
 
@@ -15,7 +15,7 @@ import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps
 import { OPERATIONS_SUBPAGES } from '@/app/operations/_subpages';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import OutletCaptureCockpit from '@/app/(cockpit)/_design/OutletCaptureCockpit';
-import MetricMatrix, { type MatrixRow } from '@/app/(cockpit)/_design/MetricMatrix';
+import MetricMatrix, { type MatrixRow, type MatrixTone } from '@/app/(cockpit)/_design/MetricMatrix';
 import LegacyFbView from './_cockpit/LegacyFbView';
 import FbSubnav, { isFbTab, type FbTab } from './_cockpit/FbSubnav';
 import {
@@ -23,6 +23,7 @@ import {
   getFoodCost, getFbLabour, getServiceClock,
   getFbRevenueByMonth, getClassificationIssues, getFbKpiMatrix, getFbCaptureMatrix,
   getFeedDetail, getMenuItems, getMenuYears,
+  getFbPorTrend, getFbConcentration, FB_VOCAB_BREAK,
   type FbPeriodKey, type FbCaptureStats, type MenuSort,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
@@ -122,7 +123,8 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
                                           year={one(searchParams?.year)} />}
         {tab === 'guests'   && <OutletCaptureCockpit deptKey="fb" propertyId={pid} searchParams={searchParams} />}
         {tab === 'cost'     && <CostTab    pid={pid} today={today} money={money} />}
-        {tab === 'analytics' && <AnalyticsTab searchParams={searchParams} propertyId={propertyId} />}
+        {tab === 'analytics' && <AnalyticsTab pid={pid} today={today} money={money} sym={sym} />}
+        {tab === 'ledger' && <LedgerTab searchParams={searchParams} propertyId={propertyId} />}
       </div>
     </DashboardPage>
   );
@@ -669,7 +671,233 @@ function ServiceClock({ clock, money }: {
 
 // ─── Analytics ─────────────────────────────────────────────────────────────
 
-function AnalyticsTab({ searchParams, propertyId }: {
+/**
+ * Analytics used to be the whole previous F&B page rendered verbatim.
+ *
+ * Every container on it already existed elsewhere in the cockpit — the same KPI
+ * tiles as Today, the same cost table as Cost, the same sellers as Menu — which
+ * is why it read as chaos rather than as analysis. The old page is not deleted;
+ * it moved to the Ledger tab, where a controller can still find it.
+ *
+ * What is here instead is the three questions no other tab answers.
+ */
+async function AnalyticsTab({ pid, today, money, sym }: {
+  pid: number; today: string; money: (n: number) => string; sym: string;
+}) {
+  const yearAgo = addDays(today, -365);
+  const [por, conc, mix] = await Promise.all([
+    getFbPorTrend(pid, 13),
+    getFbConcentration(pid, yearAgo),
+    getCategoryMix(pid, yearAgo, today),
+  ]);
+
+  const pct = (ty: number | null, ly: number | null): { txt: string; tone: MatrixTone } | null => {
+    if (ty == null || ly == null || ly === 0) return null;
+    const d = ((ty - ly) / Math.abs(ly)) * 100;
+    return {
+      txt: `${d >= 0 ? '+' : ''}${d.toFixed(0)}%`,
+      tone: d >= 3 ? 'pos' : d <= -3 ? 'neg' : 'mute',
+    };
+  };
+
+  const porRows: MatrixRow[] = por.map((r) => {
+    const dRev = pct(r.revenue, r.lyRevenue);
+    const dOcc = pct(r.occ, r.lyOcc);
+    const dPor = pct(r.por, r.lyPor);
+    const dCap = r.capturePct != null && r.lyCapturePct != null
+      ? r.capturePct - r.lyCapturePct : null;
+    return {
+      key: r.month,
+      label: r.month,
+      cells: {
+        rev: {
+          value: money(r.revenue),
+          sub: dRev ? `LY ${money(r.lyRevenue ?? 0)} · ${dRev.txt}` : 'no LY',
+          tone: dRev?.tone,
+        },
+        occ: {
+          value: String(r.occ),
+          sub: dOcc ? `LY ${r.lyOcc} · ${dOcc.txt}` : 'no LY',
+          tone: dOcc?.tone,
+        },
+        por: r.por == null ? undefined : {
+          value: `${sym}${r.por.toFixed(2)}`,
+          sub: dPor ? `LY ${sym}${(r.lyPor ?? 0).toFixed(2)} · ${dPor.txt}` : 'no LY',
+          tone: dPor?.tone,
+          title: 'F&B revenue ÷ occupied rooms — growth the hotel did not hand you',
+        },
+        cap: r.capturePct == null ? undefined : {
+          value: `${r.capturePct.toFixed(0)}%`,
+          sub: dCap == null ? 'no LY' : `LY ${(r.lyCapturePct ?? 0).toFixed(0)}% · ${dCap >= 0 ? '+' : ''}${dCap.toFixed(1)}pt`,
+          tone: dCap == null ? undefined : dCap >= 1 ? 'pos' : dCap <= -1 ? 'neg' : 'mute',
+          bar: r.capturePct,
+        },
+      },
+    };
+  });
+
+  // The narrative under the first container is DERIVED, never written down.
+  // A sentence like "August took 157% more" is true for one month on one
+  // property and silently becomes a lie everywhere else.
+  const last = por[por.length - 1];
+  const growth = (ty: number | null, ly: number | null): number | null =>
+    ty == null || ly == null || ly === 0 ? null : ((ty - ly) / Math.abs(ly)) * 100;
+  const gRev = last ? growth(last.revenue, last.lyRevenue) : null;
+  const gOcc = last ? growth(last.occ, last.lyOcc) : null;
+  const gPor = last ? growth(last.por, last.lyPor) : null;
+  const gCap = last && last.capturePct != null && last.lyCapturePct != null
+    ? last.capturePct - last.lyCapturePct : null;
+  const sign = (n: number) => `${n >= 0 ? 'up' : 'down'} ${Math.abs(n).toFixed(0)}%`;
+  const latest =
+    last && gRev != null && gOcc != null && gPor != null
+      ? ` ${last.month} took revenue ${sign(gRev)} on last year, which reads as a` +
+        ` ${gRev >= 0 ? 'triumph' : 'collapse'} until you see occupancy was ${sign(gOcc)}.` +
+        ` Per occupied room the restaurant was ${sign(gPor)}` +
+        (gCap != null
+          ? `, and capture ${gCap >= 0 ? 'rose' : 'fell'} ${Math.abs(gCap).toFixed(1)} points.`
+          : '.') +
+        (gPor < 3 && gRev > 10
+          ? ' It served a fuller house and got a smaller share of it.'
+          : '')
+      : '';
+
+  const mixTotal = mix.reduce((s, c) => s + num(c.amount), 0);
+  const mixTop = [...mix]
+    .map((c) => ({ name: c.item_category_name ?? '(uncategorised)', amt: num(c.amount) }))
+    .sort((a, b) => b.amt - a.amt)
+    .slice(0, 12);
+
+  return (
+    <>
+      <Container
+        title="Growth, or just a fuller hotel?"
+        subtitle="Revenue on its own cannot answer that. The column that can is revenue per occupied room — if it is flat while revenue climbs, the hotel grew and the restaurant stood still. Capture % is the share of occupied rooms that bought anything at all."
+        density="compact"
+      >
+        {porRows.length === 0 ? <Empty>No capture data for this property yet.</Empty> : (
+          <MetricMatrix
+            columns={[
+              { key: 'rev', label: 'F&B revenue', sub: 'vs last year' },
+              { key: 'occ', label: 'Occupied rooms', sub: 'vs last year' },
+              { key: 'por', label: 'Per occupied room', sub: 'the real number' },
+              { key: 'cap', label: 'Capture %', sub: 'rooms that spent' },
+            ]}
+            rows={porRows}
+            caption="F&B revenue, occupied rooms, revenue per occupied room and capture rate by month, each against the same month last year"
+            minWidth={640}
+            labelWidth={78}
+          />
+        )}
+        <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+          Read the last two columns, not the first.{latest}{' '}
+          Basis is the estate&rsquo;s own
+          capture bridge, the same one behind the Guests tab, so both sides of every
+          ratio are attributed the same way; its totals sit slightly under the raw till.
+        </p>
+      </Container>
+
+      <Container
+        title="A fifth of the year rides on five days"
+        subtitle="Banquets and set-menu groups, not covers. This is the single most useful fact about this business and no averaged report shows it."
+        density="compact"
+      >
+        {!conc ? <Empty>No F&amp;B postings in the last 12 months.</Empty> : (
+          <>
+            <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+              <KpiTile size="sm" label="Top 5 days" value={`${conc.top5Pct}%`}
+                unit="of 12-month revenue" footnote={`${money(conc.top5)} across 5 of ${conc.tradingDays} trading days`} />
+              <KpiTile size="sm" label="Top 10 days" value={`${conc.top10Pct}%`} unit="of 12-month revenue" />
+              <KpiTile size="sm" label="Median day" value={money(conc.medianDay)}
+                unit="ordinary trading" footnote="half of all days are below this" />
+              <KpiTile size="sm" label="Mean day" value={money(conc.meanDay)}
+                unit="flattered by events" stly={`median ${money(conc.medianDay)}`} />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <MetricMatrix
+                columns={[
+                  { key: 'rev', label: 'Revenue' },
+                  { key: 'lines', label: 'Lines', sub: 'postings' },
+                  { key: 'what', label: 'Biggest line on the day' },
+                ]}
+                rows={conc.topDays.map((d) => ({
+                  key: d.date,
+                  label: d.date,
+                  unit: d.dow,
+                  cells: {
+                    rev: { value: money(d.revenue) },
+                    lines: {
+                      value: String(d.lines),
+                      tone: d.lines < 40 ? 'warn' : 'mute',
+                      title: 'Few lines against a large total means one group bill, not a busy service',
+                    },
+                    what: { value: d.top, tone: 'mute' },
+                  },
+                }))}
+                caption="The six largest F&B trading days of the last 12 months, with posting counts and the largest single line on each"
+                minWidth={560}
+                labelWidth={92}
+              />
+            </div>
+            <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+              Watch the line count. The biggest day above took {money(conc.topDays[0].revenue)}
+              {' '}on {conc.topDays[0].lines} postings — a group set menu, not a busy service. One
+              day like that distorts every weekday average on the page: it is why an
+              average-by-weekday chart here would have told you to roster extra staff on a
+              {' '}{conc.topDays[0].dow}day that is otherwise ordinary. The mean day sits{' '}
+              {conc.medianDay > 0 ? Math.round(((conc.meanDay - conc.medianDay) / conc.medianDay) * 100) : 0}%
+              above the median for the same reason. The lever here is selling more events,
+              not staffing a weekday differently.
+            </p>
+          </>
+        )}
+      </Container>
+
+      <Container
+        title="What actually sells"
+        subtitle="Last 12 months by category, largest first"
+        density="compact"
+      >
+        {mixTop.length === 0 ? <Empty>No categorised sales in the window.</Empty> : (
+          <MetricMatrix
+            columns={[
+              { key: 'rev', label: 'Revenue' },
+              { key: 'share', label: 'Share of F&B' },
+            ]}
+            rows={mixTop.map((c) => ({
+              key: c.name,
+              label: c.name,
+              cells: {
+                rev: { value: money(Math.round(c.amt)) },
+                share: mixTotal > 0 ? {
+                  value: `${((c.amt / mixTotal) * 100).toFixed(1)}%`,
+                  bar: (c.amt / mixTotal) * 100,
+                  tone: /product|uncategor/i.test(c.name) ? 'warn' : undefined,
+                } : undefined,
+              },
+            }))}
+            caption="F&B revenue by POS category over the last 12 months, largest first"
+            minWidth={420}
+            labelWidth={200}
+          />
+        )}
+        <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+          There is deliberately no year-on-year comparison here. The POS vocabulary was
+          rewritten in {FB_VOCAB_BREAK}: &ldquo;Main Dish&rdquo; became &ldquo;Main Courses&rdquo;,
+          &ldquo;Starter&rdquo; became &ldquo;Starters&rdquo;, &ldquo;Wine&amp;Sparkling Wine&rdquo; became
+          &ldquo;Wine &amp; Sparkling&rdquo;, &ldquo;Beer&rdquo; became &ldquo;Laotian Beers&rdquo;. The old
+          names stop dead and the new ones begin, so a category comparison across that line
+          would show every established category collapsing next to a set of brand-new ones —
+          all of it an artefact of renaming. Categories become comparable year-on-year again
+          from November 2026. Rows flagged amber are not real categories: &ldquo;product&rdquo;
+          is the POS default and swallows most group billing. Item-level detail is on the
+          Menu tab; cost against these figures is on Cost.
+        </p>
+      </Container>
+    </>
+  );
+}
+
+function LedgerTab({ searchParams, propertyId }: {
   searchParams: Record<string, string | string[] | undefined>;
   propertyId?: number;
 }) {

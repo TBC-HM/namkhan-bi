@@ -809,3 +809,167 @@ export async function getBreakfastCheck(
     };
   });
 }
+
+// ─── Analytics ─────────────────────────────────────────────────────────────
+//
+// The Analytics tab used to render the whole previous F&B page. Everything on
+// it already existed on another tab — the same KPI tiles as Today, the same
+// cost table as Cost, the same sellers as Menu — so it read as noise.
+//
+// These four reads are the questions no other tab answers: is the restaurant
+// growing or is the hotel just fuller, how concentrated is the revenue, what
+// is actually selling, and do the books agree with the till.
+
+/** F&B revenue per OCCUPIED ROOM — the only honest way to read F&B growth. */
+export interface PorMonth {
+  month: string;
+  occ: number; revenue: number; por: number | null; capturePct: number | null;
+  lyOcc: number | null; lyRevenue: number | null; lyPor: number | null; lyCapturePct: number | null;
+}
+
+/**
+ * Revenue alone cannot tell you whether the restaurant improved.
+ *
+ * August 2026 took 157% more than August 2025 — and occupancy was 150% higher.
+ * Per occupied room the restaurant gained 2.8%, and its capture rate FELL. A
+ * revenue-only chart calls that a triumph; this one calls it flat.
+ *
+ * Basis is v_ancillary_capture_daily, the estate's own capture bridge, so these
+ * figures tie to the Guests tab rather than to a second definition invented
+ * here. It attributes both nights and spend through the reservation, so its
+ * totals sit a little under the raw till — consistently on both sides of the
+ * ratio, which is what a ratio needs.
+ */
+export async function getFbPorTrend(pid: number, months = 13): Promise<PorMonth[]> {
+  const sb = getSupabaseAdmin();
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months + 12) + 1, 1));
+  const rows = await safe<{
+    night_date: string | null; occupied_rooms: number | string | null;
+    fb_revenue: number | string | null; fb_capturing_rooms: number | string | null;
+  }>(
+    sb.from('v_ancillary_capture_daily')
+      .select('night_date, occupied_rooms, fb_revenue, fb_capturing_rooms')
+      .eq('property_id', pid)
+      .gte('night_date', from.toISOString().slice(0, 10))
+      .limit(20000),
+  );
+
+  const by = new Map<string, { occ: number; rev: number; cap: number }>();
+  for (const r of rows) {
+    const m = String(r.night_date ?? '').slice(0, 7);
+    if (!m) continue;
+    const e = by.get(m) ?? { occ: 0, rev: 0, cap: 0 };
+    e.occ += Number(r.occupied_rooms ?? 0);
+    e.rev += Number(r.fb_revenue ?? 0);
+    e.cap += Number(r.fb_capturing_rooms ?? 0);
+    by.set(m, e);
+  }
+
+  const shift = (m: string) => {
+    const [y, mo] = m.split('-').map(Number);
+    return `${y - 1}-${String(mo).padStart(2, '0')}`;
+  };
+  const ratio = (n: number, d: number) => (d > 0 ? n / d : null);
+
+  return [...by.keys()].sort().slice(-months).map((month) => {
+    const t = by.get(month)!;
+    const l = by.get(shift(month));
+    return {
+      month,
+      occ: t.occ,
+      revenue: Math.round(t.rev),
+      por: ratio(t.rev, t.occ),
+      capturePct: ratio(t.cap * 100, t.occ),
+      lyOcc: l ? l.occ : null,
+      lyRevenue: l ? Math.round(l.rev) : null,
+      lyPor: l ? ratio(l.rev, l.occ) : null,
+      lyCapturePct: l ? ratio(l.cap * 100, l.occ) : null,
+    };
+  });
+}
+
+/** How much of the year rides on a handful of banquet days. */
+export interface DayConcentration {
+  tradingDays: number; total: number; meanDay: number; medianDay: number;
+  top5: number; top5Pct: number; top10Pct: number;
+  topDays: { date: string; dow: string; revenue: number; lines: number; top: string }[];
+}
+
+/**
+ * Five days out of 346 are a fifth of the year's F&B revenue.
+ *
+ * This is the finding that changes what the manager does on Monday: the
+ * business is not a restaurant that occasionally caters, it is a caterer with a
+ * restaurant attached. It also explains why a day-of-week average is
+ * meaningless here — 2025-10-26 alone was $18.5k across SIXTEEN lines, and on
+ * its own it made Sunday look like the best trading day of the week. Mean
+ * against median is on the page for exactly that reason.
+ */
+export async function getFbConcentration(pid: number, fromIso: string): Promise<DayConcentration | null> {
+  const sb = getSupabaseAdmin();
+  const rows = await safe<{
+    transaction_date: string | null; amount: number | string | null; description: string | null;
+  }>(
+    sb.from('v_fnb_raw_txn_enriched')
+      .select('transaction_date, amount, description')
+      .eq('property_id', pid)
+      .eq('usali_dept', 'F&B')
+      .gte('transaction_date', fromIso)
+      .limit(50000),
+  );
+  if (!rows.length) return null;
+
+  const by = new Map<string, { rev: number; lines: number; best: { d: string; a: number } }>();
+  for (const r of rows) {
+    const d = String(r.transaction_date ?? '').slice(0, 10);
+    if (!d) continue;
+    const a = Number(r.amount ?? 0);
+    const e = by.get(d) ?? { rev: 0, lines: 0, best: { d: '—', a: -Infinity } };
+    e.rev += a; e.lines += 1;
+    if (a > e.best.a) e.best = { d: r.description ?? '—', a };
+    by.set(d, e);
+  }
+
+  const days = [...by.entries()].map(([date, v]) => ({ date, ...v }));
+  const total = days.reduce((s, d) => s + d.rev, 0);
+  const sorted = [...days].sort((a, b) => b.rev - a.rev);
+  const byRev = days.map((d) => d.rev).sort((a, b) => a - b);
+  const mid = Math.floor(byRev.length / 2);
+  const median = byRev.length % 2 ? byRev[mid] : (byRev[mid - 1] + byRev[mid]) / 2;
+  const share = (n: number) =>
+    total > 0 ? (sorted.slice(0, n).reduce((s, d) => s + d.rev, 0) / total) * 100 : 0;
+  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return {
+    tradingDays: days.length,
+    total: Math.round(total),
+    meanDay: Math.round(total / days.length),
+    medianDay: Math.round(median),
+    top5: Math.round(sorted.slice(0, 5).reduce((s, d) => s + d.rev, 0)),
+    top5Pct: Math.round(share(5) * 10) / 10,
+    top10Pct: Math.round(share(10) * 10) / 10,
+    topDays: sorted.slice(0, 6).map((d) => ({
+      date: d.date,
+      dow: DOW[new Date(`${d.date}T00:00:00Z`).getUTCDay()],
+      revenue: Math.round(d.rev),
+      lines: d.lines,
+      top: d.best.d,
+    })),
+  };
+}
+
+/**
+ * The month the POS vocabulary changed.
+ *
+ * "Main Dish" became "Main Courses", "Starter" became "Starters",
+ * "Wine&Sparkling Wine" became "Wine & Sparkling", "Beer" became "Laotian
+ * Beers". The old labels stop dead and the new ones start in October 2025, so
+ * ANY year-on-year comparison by category is comparing a renamed thing to
+ * itself and will read as a total collapse beside a brand-new category. It
+ * becomes comparable again from November 2026.
+ *
+ * Stated on the page rather than silently worked around: the page cannot fix a
+ * POS vocabulary, but it can refuse to draw a chart it knows is a lie.
+ */
+export const FB_VOCAB_BREAK = '2025-10';
