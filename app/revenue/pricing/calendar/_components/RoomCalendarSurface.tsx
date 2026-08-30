@@ -328,7 +328,7 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
           fontFamily: 'ui-monospace, monospace', fontSize: 10,
           color: C.mute, marginLeft: 'auto',
         }}>
-          Source: pms.reservation_rooms_cb + pms.reservations_cb
+          Source: reservation_rooms + reservations (public views)
         </span>
       </div>
     </div>
