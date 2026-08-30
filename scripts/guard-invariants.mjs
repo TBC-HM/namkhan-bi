@@ -147,7 +147,6 @@ const BASELINE = {
   "app/operations/retail/page.tsx": 1,
   "app/operations/rooms/page.tsx": 1,
   "app/operations/sops/[sop_code]/edit/_components/SopEditForm.tsx": 1,
-  "app/operations/spa/page.tsx": 1,
   "app/operations/transport/page.tsx": 1,
   "app/revenue/channels/page.tsx": 1,
   "app/revenue/compset/[comp_id]/page.tsx": 1,

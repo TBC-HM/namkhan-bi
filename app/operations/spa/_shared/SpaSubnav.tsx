@@ -11,6 +11,7 @@ const ITEMS = [
   { key: 'catalogue', label: 'Catalogue', href: '/operations/spa/catalogue' },
   { key: 'passes',    label: 'Passes',    href: '/operations/spa/passes' },
   { key: 'delivery',  label: 'Delivery',  href: '/operations/spa/delivery' },
+  { key: 'ledger',    label: 'Ledger',    href: '/operations/spa/ledger' },
 ] as const;
 
 export type SpaSubpage = (typeof ITEMS)[number]['key'];
