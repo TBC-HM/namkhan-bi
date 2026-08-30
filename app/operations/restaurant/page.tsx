@@ -24,6 +24,7 @@ import {
   getFbRevenueByMonth, getClassificationIssues, getFbKpiMatrix, getFbCaptureMatrix,
   getFeedDetail, getMenuItems, getMenuYears,
   getFbPorTrend, getFbConcentration, FB_VOCAB_BREAK,
+  getBreakfastMatrix, FB_BREAKFAST_RATES,
   type FbPeriodKey, type FbCaptureStats, type MenuSort,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
@@ -157,10 +158,11 @@ async function TodayTab({ pid, today, sym, money, searchParams }: {
   pid: number; today: string; sym: string; money: (n: number) => string;
   searchParams: Record<string, string | string[] | undefined>;
 }) {
-  const [kpi, cap, feed] = await Promise.all([
+  const [kpi, cap, feed, bfast] = await Promise.all([
     getFbKpiMatrix(pid, today),
     getFbCaptureMatrix(pid, today),
     getFeedDetail(pid, today, today, undefined, 40),
+    getBreakfastMatrix(pid, today),
   ]);
 
   const lyLine = (ty: number, ly: number, fmt: (n: number) => string): string => {
@@ -189,13 +191,59 @@ async function TodayTab({ pid, today, sym, money, searchParams }: {
   });
 
   const rows: MatrixRow[] = [
-    row('restaurant', 'Restaurant revenue', 'food + drink on the floor', (s) => s.restaurant, money),
-    row('minibar',    'Minibar',            'in-room, no floor cover',   (s) => s.minibar,    money),
-    row('total',      'Total F&B',          'restaurant + minibar',      (s) => s.total,      money),
+    // "All outlets", not "Restaurant". The POS carries NO venue dimension —
+    // Roots, the Pool bar, the Bar and Room Service all post into one
+    // undifferentiated stream, so a row called "Restaurant revenue" was
+    // claiming a split the data cannot make. See the note under the matrix.
+    row('restaurant', 'All outlets · sold',  'every venue except minibar', (s) => s.restaurant, money),
+    row('minibar',    'Minibar',             'in-room, no floor cover',    (s) => s.minibar,    money),
+    row('total',      'Total sold',          'all outlets + minibar',      (s) => s.total,      money),
     row('folios',     'Folios touched',     'reservations with a charge',(s) => s.folios,     (n) => String(n)),
     row('lines',      'Lines posted',       'individual items',          (s) => s.lines,      (n) => String(n)),
     row('avg',        'Average per folio',  'total ÷ folios',            (s) => s.avgPerFolio, money),
   ];
+
+  // Breakfast is revenue the restaurant earns and never rings up: the room rate
+  // includes it, so Rooms transfers it across at an agreed price. Leaving it out
+  // understates what the kitchen produced and overstates its cost percentage.
+  const bfastRow = (
+    key: string, label: string, unit: string,
+    pick: (b: (typeof bfast)[FbPeriodKey]['ty']) => number | null,
+    fmt: (n: number) => string,
+  ): MatrixRow => ({
+    key, label, unit,
+    cells: Object.fromEntries(PERIOD_COLS.map((c) => {
+      const ty = pick(bfast[c.key].ty);
+      const ly = pick(bfast[c.key].ly);
+      if (ty == null) return [c.key, undefined];
+      return [c.key, {
+        value: fmt(ty),
+        sub: lyLine(ty, ly ?? 0, fmt),
+        tone: ly && ly > 0 ? (ty >= ly ? 'pos' : 'neg') : undefined,
+        title: `${bfast[c.key].ty.adultNights} adult + ${bfast[c.key].ty.childNights} child nights`
+             + ` · pax known on ${bfast[c.key].ty.coverage}% of nights`,
+      }];
+    })),
+  });
+
+  rows.push(
+    bfastRow('bfast', 'Breakfast · internal', `transferred at ${sym}${FB_BREAKFAST_RATES.adult} adult / ${sym}${FB_BREAKFAST_RATES.child} child`,
+      (b) => b.usd, money),
+    bfastRow('bfastcov', 'Breakfast pax known', 'share of nights with a real count',
+      (b) => b.coverage, (n) => `${Math.round(n)}%`),
+  );
+
+  const totalRow: MatrixRow = {
+    key: 'grand', label: 'Total F&B revenue', unit: 'sold + breakfast transfer',
+    cells: Object.fromEntries(PERIOD_COLS.map((c) => {
+      const ty = (kpi[c.key].ty.total ?? 0) + bfast[c.key].ty.usd;
+      const ly = (kpi[c.key].ly.total ?? 0) + bfast[c.key].ly.usd;
+      if (!ty && !ly) return [c.key, undefined];
+      return [c.key, { value: money(ty), sub: lyLine(ty, ly, money),
+                       tone: ly > 0 ? (ty >= ly ? 'pos' : 'neg') : undefined }];
+    })),
+  };
+  rows.push(totalRow);
 
   // Capture rows — sourced from Cloudbeds folio (v_fb_outlet_daily) and room occupancy
   // (v_ancillary_capture_daily); a different pipeline than the txn rows above.
@@ -232,6 +280,27 @@ async function TodayTab({ pid, today, sym, money, searchParams }: {
           columns={PERIOD_COLS.map((c) => ({ key: c.key, label: c.label, sub: c.sub }))}
           rows={[...rows, ...captureRows]} labelWidth={180} minWidth={640}
         />
+        <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+          <strong>No venue split is possible.</strong> The Pool bar, the Bar, Roots and Room
+          Service all post into one undifferentiated stream: Cloudbeds sends no outlet or
+          revenue-centre tag, 97% of lines arrive as &ldquo;custom_item&rdquo;, and the
+          fb.outlets registry — which lists Roots, Breakfast, Bar and Room Service, and has
+          no Pool bar at all — was seeded in April and never wired to a transaction. So
+          &ldquo;All outlets&rdquo; means exactly that. Splitting the Pool bar out needs a
+          revenue centre per till in the POS; it cannot be recovered from what is stored.
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+          <strong>Breakfast is where the missing consumption is.</strong> Every room is sold
+          with breakfast included, so it never rings through the till — the folio only shows
+          what guests bought on top. It is transferred in here at{' '}
+          {`${sym}${FB_BREAKFAST_RATES.adult}`} an adult and {`${sym}${FB_BREAKFAST_RATES.child}`} a
+          child, the same rate the ledger&rsquo;s own breakfast allocation uses. That rate is
+          not settled — PBS believes it is {sym}12 — and it moves both F&amp;B revenue and the
+          cost percentage, so it is printed here rather than buried. The pax-known row is the
+          honesty check on it: pax was recorded on every night from January to April, and on
+          barely a tenth of nights since June, and a night with no count is charged as one
+          adult. Where that row is low, breakfast is understated.
+        </p>
       </Container>
 
       <Container title="Service so far" subtitle={`every posting today, newest first · ${today}`} density="compact">

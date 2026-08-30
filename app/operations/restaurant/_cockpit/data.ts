@@ -36,6 +36,38 @@ async function safe<T>(p: PromiseLike<{ data: T[] | null }>): Promise<T[]> {
   try { const r = await p; return (r.data ?? []) as T[]; } catch { return []; }
 }
 
+
+/**
+ * Page through a PostgREST result instead of trusting .limit().
+ *
+ * THE BUG THIS FIXES: this project's PostgREST caps every response at 1000 rows
+ * server-side. `.range(_f, _t)` does not raise that cap — it is silently ignored,
+ * the client gets the first 1000 rows in physical order, and any SUM built from
+ * them is wrong with no error raised anywhere.
+ *
+ * It showed on the Today tab as "LINES POSTED · YTD 1000 · LY 1000 · +0%" — two
+ * independent windows landing on the same round number — while YTD F&B revenue
+ * read $10,343 against a folio revenue of $74,459 on the same screen. YTD 2026
+ * is ~6,800 F&B lines, so six sevenths of the year was silently missing.
+ *
+ * Anything that aggregates over more than 1000 rows MUST go through here. A
+ * bare .limit() is only safe for a deliberate top-N that is already under 1000.
+ */
+const PAGE_ROWS = 1000;
+
+async function pullAll<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
+  cap = 200000,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let off = 0; off < cap; off += PAGE_ROWS) {
+    const page = await safe<T>(build(off, off + PAGE_ROWS - 1));
+    out.push(...page);
+    if (page.length < PAGE_ROWS) break;
+  }
+  return out;
+}
+
 // ─── Feed / Tonight ────────────────────────────────────────────────────────
 
 export interface TxnRow {
@@ -115,7 +147,7 @@ export interface CategoryRow { item_category_name: string | null; amount: number
 
 export async function getCategoryMix(pid: number, fromIso: string, toIso: string): Promise<CategoryRow[]> {
   const sb = getSupabaseAdmin();
-  return safe<CategoryRow>(
+  return pullAll<CategoryRow>((_f, _t) =>
     sb.from('v_fnb_raw_txn_enriched')
       .select('item_category_name, amount')
       .eq('property_id', pid)
@@ -123,7 +155,7 @@ export async function getCategoryMix(pid: number, fromIso: string, toIso: string
       .eq('usali_dept', 'F&B')
       .gte('transaction_date', fromIso)
       .lte('transaction_date', `${toIso}T23:59:59`)
-      .limit(5000),
+      .range(_f, _t),
   );
 }
 
@@ -159,15 +191,15 @@ export interface FbPnlRow {
  */
 export async function getFoodCost(pid: number, year: string): Promise<FbPnlRow[]> {
   const sb = getSupabaseAdmin();
-  const rows = await safe<{
+  const rows = await pullAll<{
     period_yyyymm: string | null; usali_subcategory: string | null;
     usali_line_label: string | null; amount_usd: number | string | null;
-  }>(
+  }>((_f, _t) =>
     sb.from('v_pl_monthly_by_property')
       .select('period_yyyymm, usali_subcategory, usali_line_label, amount_usd')
       .eq('property_id', pid)
       .like('period_yyyymm', `${year}%`)
-      .limit(5000),
+      .range(_f, _t),
   );
 
   const by = new Map<string, { rev: number; cost: number }>();
@@ -287,10 +319,10 @@ export async function getServiceClock(
   pid: number, fromIso: string, toIso: string,
 ): Promise<ServiceHour[]> {
   const sb = getSupabaseAdmin();
-  const rows = await safe<{
+  const rows = await pullAll<{
     local_laos_dt: string | null; amount: number | string | null;
     usali_subdept: string | null; transaction_date: string | null;
-  }>(
+  }>((_f, _t) =>
     sb.from('v_fnb_raw_txn_enriched')
       .select('local_laos_dt, amount, usali_subdept, transaction_date')
       .eq('property_id', pid)
@@ -298,7 +330,7 @@ export async function getServiceClock(
       .eq('usali_dept', 'F&B')
       .gte('transaction_date', fromIso)
       .lte('transaction_date', `${toIso}T23:59:59`)
-      .limit(50000),
+      .range(_f, _t),
   );
 
   const byHour = new Map<number, ServiceHour & { days: Set<string> }>();
@@ -346,14 +378,14 @@ export interface MonthRevenue { month: string; folioRevenue: number }
 
 export async function getFbRevenueByMonth(pid: number, fromMonth: string): Promise<MonthRevenue[]> {
   const sb = getSupabaseAdmin();
-  const rows = await safe<{ transaction_date: string | null; amount: number | string | null }>(
+  const rows = await pullAll<{ transaction_date: string | null; amount: number | string | null }>((_f, _t) =>
     sb.from('v_fnb_raw_txn_enriched')
       .select('transaction_date, amount')
       .eq('property_id', pid)
       .eq('transaction_type', 'debit')
       .eq('usali_dept', 'F&B')
       .gte('transaction_date', fromMonth)
-      .limit(50000),
+      .range(_f, _t),
   );
   const by = new Map<string, number>();
   for (const r of rows) {
@@ -374,16 +406,16 @@ export interface ClassIssue { kind: string; label: string; lines: number; revenu
  */
 export async function getClassificationIssues(pid: number, fromIso: string): Promise<ClassIssue[]> {
   const sb = getSupabaseAdmin();
-  const rows = await safe<{
+  const rows = await pullAll<{
     item_category_name: string | null; usali_dept: string | null;
     usali_subdept: string | null; amount: number | string | null;
-  }>(
+  }>((_f, _t) =>
     sb.from('v_fnb_raw_txn_enriched')
       .select('item_category_name, usali_dept, usali_subdept, amount')
       .eq('property_id', pid)
       .eq('transaction_type', 'debit')
       .gte('transaction_date', fromIso)
-      .limit(50000),
+      .range(_f, _t),
   );
 
   const agg = new Map<string, { lines: number; revenue: number; dept: string }>();
@@ -503,14 +535,14 @@ export async function getFbKpiMatrix(
     ytd:       [`${todayIso.slice(0, 4)}-01-01`, todayIso],
   };
 
-  const pull = (from: string, to: string) => safe<{
+  const pull = (from: string, to: string) => pullAll<{
     amount: number | string | null; usali_subdept: string | null; reservation_id: string | number | null;
-  }>(
+  }>((_f, _t) =>
     sb.from('v_fnb_raw_txn_enriched')
       .select('amount, usali_subdept, reservation_id')
       .eq('property_id', pid).eq('transaction_type', 'debit').eq('usali_dept', 'F&B')
       .gte('transaction_date', from).lte('transaction_date', `${to}T23:59:59`)
-      .limit(20000),
+      .range(_f, _t),
   );
 
   const keys = Object.keys(windows) as FbPeriodKey[];
@@ -646,6 +678,8 @@ export async function getFeedDetail(
     const s = term.replace(/[%,()]/g, ' ');
     query = query.or(`description.ilike.%${s}%,item_category_name.ilike.%${s}%,room_name.ilike.%${s}%,guest_name.ilike.%${s}%,user_name.ilike.%${s}%`);
   }
+  // Deliberate ordered top-N (limit rows, newest first) — well under the
+  // 1000-row cap, so a single page is correct here.
   return safe<FeedDetailRow>(query);
 }
 
@@ -684,12 +718,15 @@ async function getMenuRaw(pid: number): Promise<Array<{
   monthly: Record<string, MonthlyBucket> | null;
 }>> {
   const sb = getSupabaseAdmin();
-  return safe(
+  return pullAll<{
+    description: string | null; usali_subdept: string | null; last_sold: string | null;
+    monthly: Record<string, MonthlyBucket> | null;
+  }>((_f, _t) =>
     sb.from('v_dept_top_seller_trend')
       .select('description, usali_subdept, last_sold, monthly')
       .eq('property_id', pid)
       .eq('usali_dept', 'F&B')
-      .limit(2000),
+      .range(_f, _t),
   );
 }
 
@@ -771,10 +808,10 @@ export async function getBreakfastCheck(
         .select('period_yyyymm, alloc_usd').eq('property_id', pid)
         .gte('period_yyyymm', fromMonth.slice(0, 7)).order('period_yyyymm'),
     ),
-    safe<{ check_in_date: string | null; check_out_date: string | null; adults: number | null; children: number | null }>(
+    pullAll<{ check_in_date: string | null; check_out_date: string | null; adults: number | null; children: number | null }>((_f, _t) =>
       sb.from('v_reservations_unified')
         .select('check_in_date, check_out_date, adults, children')
-        .eq('property_id', pid).gte('check_in_date', fromMonth).limit(5000),
+        .eq('property_id', pid).gte('check_in_date', fromMonth).range(_f, _t),
     ),
   ]);
 
@@ -844,15 +881,15 @@ export async function getFbPorTrend(pid: number, months = 13): Promise<PorMonth[
   const sb = getSupabaseAdmin();
   const now = new Date();
   const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months + 12) + 1, 1));
-  const rows = await safe<{
+  const rows = await pullAll<{
     night_date: string | null; occupied_rooms: number | string | null;
     fb_revenue: number | string | null; fb_capturing_rooms: number | string | null;
-  }>(
+  }>((_f, _t) =>
     sb.from('v_ancillary_capture_daily')
       .select('night_date, occupied_rooms, fb_revenue, fb_capturing_rooms')
       .eq('property_id', pid)
       .gte('night_date', from.toISOString().slice(0, 10))
-      .limit(20000),
+      .range(_f, _t),
   );
 
   const by = new Map<string, { occ: number; rev: number; cap: number }>();
@@ -908,15 +945,15 @@ export interface DayConcentration {
  */
 export async function getFbConcentration(pid: number, fromIso: string): Promise<DayConcentration | null> {
   const sb = getSupabaseAdmin();
-  const rows = await safe<{
+  const rows = await pullAll<{
     transaction_date: string | null; amount: number | string | null; description: string | null;
-  }>(
+  }>((_f, _t) =>
     sb.from('v_fnb_raw_txn_enriched')
       .select('transaction_date, amount, description')
       .eq('property_id', pid)
       .eq('usali_dept', 'F&B')
       .gte('transaction_date', fromIso)
-      .limit(50000),
+      .range(_f, _t),
   );
   if (!rows.length) return null;
 
@@ -973,3 +1010,118 @@ export async function getFbConcentration(pid: number, fromIso: string): Promise<
  * POS vocabulary, but it can refuse to draw a chart it knows is a lie.
  */
 export const FB_VOCAB_BREAK = '2025-10';
+
+// ─── Breakfast · internal transfer ─────────────────────────────────────────
+
+/**
+ * The rate Rooms transfers to F&B for a breakfast it does not cook.
+ *
+ * DISPUTED — do not treat as settled. Every breakfast object already in the
+ * estate (public.v_breakfast_allocation_q1_2026, and the monthly view feeding
+ * gl.v_fnb_cos_monthly) hardcodes $10 per adult and $5 per child. PBS believes
+ * the transfer price is $12. Both cannot be right, and the number moves F&B
+ * revenue AND F&B cost percentage, so it is an owner decision, not a developer
+ * default. Until PBS rules, the page uses the estate's own $10/$5 so it agrees
+ * with the ledger, and PRINTS the rate beside the figure so the assumption is
+ * never invisible. Change these two numbers and every surface follows.
+ */
+export const FB_BREAKFAST_RATES = { adult: 10, child: 5 } as const;
+
+export interface BreakfastPeriod {
+  adultNights: number; childNights: number; usd: number;
+  coverage: number;      // % of reservation-nights whose pax count is real
+  assumedNights: number; // nights that fell back to 1 adult, 0 children
+}
+
+/**
+ * Breakfast as internal revenue, per period, with last year beside it.
+ *
+ * WHY THIS IS NOT A SIMPLE SUM. The obvious query — join reservations to room
+ * nights and sum `adults` — is wrong twice over, and the estate's own
+ * v_breakfast_allocation_monthly makes both mistakes:
+ *
+ *  1. `adults` is per RESERVATION, not per room. Joining it to room-nights
+ *     repeats it for every room on the booking. On Feb 2026 that produces 2,507
+ *     adult-nights against 394 room-nights — 6.4 adults per room.
+ *  2. Attributing a whole stay to its check-in month moves a 28 Feb arrival's
+ *     March breakfasts into February.
+ *
+ * So a reservation is expanded night by night, exactly as
+ * v_breakfast_allocation_q1_2026 does, and each night is counted in the period
+ * it actually falls in.
+ *
+ * THE PAX HOLE. `adults` is populated on 100% of reservation-nights Jan-Apr
+ * 2026, 93.8% in May, then collapses: 31.9% in June, 13.4% in July, 11.6% in
+ * August. A missing count falls back to one adult — the same assumption the Q1
+ * view makes — which UNDERSTATES rather than invents. Coverage is returned with
+ * every period so the page can say how much of the figure is measured and how
+ * much is assumed, instead of presenting a guess as a fact.
+ */
+export async function getBreakfastMatrix(
+  pid: number, todayIso: string,
+): Promise<Record<FbPeriodKey, { ty: BreakfastPeriod; ly: BreakfastPeriod }>> {
+  const sb = getSupabaseAdmin();
+  const year = Number(todayIso.slice(0, 4));
+
+  const rows = await pullAll<{
+    check_in_date: string | null; check_out_date: string | null;
+    adults: number | null; children: number | null; is_cancelled: boolean | null;
+  }>((_f, _t) =>
+    sb.from('v_reservations_unified')
+      .select('check_in_date, check_out_date, adults, children, is_cancelled')
+      .eq('property_id', pid)
+      .gte('check_out_date', `${year - 1}-01-01`)
+      .range(_f, _t),
+  );
+
+  // night -> pax, built once and then sliced per window.
+  const byNight = new Map<string, { a: number; c: number; nights: number; assumed: number }>();
+  for (const r of rows) {
+    if (r.is_cancelled) continue;
+    const ci = r.check_in_date, co = r.check_out_date;
+    if (!ci || !co) continue;
+    const known = r.adults != null;
+    const a = Math.max(Number(r.adults ?? 1) || 1, 1);
+    const c = Number(r.children ?? 0) || 0;
+    for (let d = ci; d < co; d = addDays(d, 1)) {
+      const e = byNight.get(d) ?? { a: 0, c: 0, nights: 0, assumed: 0 };
+      e.a += a; e.c += c; e.nights += 1;
+      if (!known) e.assumed += 1;
+      byNight.set(d, e);
+    }
+  }
+
+  const sum = (from: string, to: string): BreakfastPeriod => {
+    let a = 0, c = 0, n = 0, assumed = 0;
+    for (const [night, v] of byNight) {
+      if (night < from || night > to) continue;
+      a += v.a; c += v.c; n += v.nights; assumed += v.assumed;
+    }
+    return {
+      adultNights: a, childNights: c,
+      usd: Math.round(a * FB_BREAKFAST_RATES.adult + c * FB_BREAKFAST_RATES.child),
+      coverage: n > 0 ? Math.round(((n - assumed) / n) * 100) : 0,
+      assumedNights: assumed,
+    };
+  };
+
+  const shiftYear = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    const last = new Date(Date.UTC(y - 1, m, 0)).getUTCDate();
+    return `${y - 1}-${String(m).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+  };
+  const windows: Record<FbPeriodKey, [string, string]> = {
+    today:     [todayIso, todayIso],
+    yesterday: [addDays(todayIso, -1), addDays(todayIso, -1)],
+    last7:     [addDays(todayIso, -6), todayIso],
+    last30:    [addDays(todayIso, -29), todayIso],
+    ytd:       [`${todayIso.slice(0, 4)}-01-01`, todayIso],
+  };
+
+  const out = {} as Record<FbPeriodKey, { ty: BreakfastPeriod; ly: BreakfastPeriod }>;
+  (Object.keys(windows) as FbPeriodKey[]).forEach((k) => {
+    const [f, t2] = windows[k];
+    out[k] = { ty: sum(f, t2), ly: sum(shiftYear(f), shiftYear(t2)) };
+  });
+  return out;
+}
