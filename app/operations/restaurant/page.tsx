@@ -491,7 +491,7 @@ async function CostTab({ pid, today, money }: {
   // folioRev must be ready before getFbLabour — it supplies the correct F&B
   // revenue map (usali_dept='F&B') so the labour ratio uses the right denominator.
   const [cos, folioRev, clock] = await Promise.all([
-    getFoodCost(pid),
+    getFoodCost(pid, year),
     getFbRevenueByMonth(pid, fromMonth),
     getServiceClock(pid, addDays(today, -90), today),
   ]);
@@ -500,39 +500,24 @@ async function CostTab({ pid, today, money }: {
   const thisMonth = today.slice(0, 7);
 
   const cosRows: MatrixRow[] = cos
-    // Months that have not happened, or have nothing posted, are not "zero
-    // cost" — they are not yet news. 2026-11 and 2026-12 were rendering $0
-    // rows against a future revenue figure, which reads as a broken page.
-    .filter((r) => {
-      const m = String(r.period_yyyymm ?? '');
-      return m.startsWith(year) && m <= thisMonth
-        && (num(r.food_cost) > 0 || num(r.effective_rev) > 0);
-    })
-    .sort((a, b) => String(a.period_yyyymm).localeCompare(String(b.period_yyyymm)))
+    .filter((r) => r.month <= thisMonth)
     .map((r) => {
-      const pct = num(r.food_cost_pct);
-      const m = String(r.period_yyyymm);
-      const glRev = num(r.food_rev);
-      const till  = folioByMonth.get(m) ?? 0;
-      // No GL revenue means the month is not posted. effective_rev in those
-      // months is nothing but the breakfast allocation, so a percentage built
-      // on it is arithmetic on a notional number.
-      const posted = glRev > 0;
+      const till = folioByMonth.get(r.month) ?? 0;
+      const pct = r.costPct;
       return {
-        key: m,
-        label: m,
-        unit: 'food cost of sales',
+        key: r.month,
+        label: r.month,
+        unit: 'food + beverage',
         cells: {
-          cost:  { value: money(num(r.food_cost)) },
-          glrev: posted ? { value: money(glRev), tone: 'mute' }
-                        : { value: 'not posted', tone: 'mute' },
+          cost:  { value: money(r.glCost) },
+          glrev: { value: money(r.glRevenue), tone: 'mute' },
           till:  { value: money(till), tone: 'mute',
-                   title: 'Actual F&B taken through the till, usali_dept = F&B' },
-          pct:   posted
-            ? { value: `${pct.toFixed(1)}%`,
-                tone: pct <= 30 ? 'pos' : pct <= 40 ? 'warn' : 'neg',
-                bar: Math.min(100, pct) }
-            : undefined,
+                   title: 'Taken through the till, usali_dept = F&B' },
+          pct:   pct == null
+            ? undefined
+            : { value: `${pct.toFixed(1)}%`,
+                tone: pct <= 35 ? 'pos' : pct <= 50 ? 'warn' : 'neg',
+                bar: Math.min(100, pct) },
         },
       };
     });
@@ -556,25 +541,27 @@ async function CostTab({ pid, today, money }: {
     <>
       <Container
         title={`Food cost · ${year}`}
-        subtitle="target ≤ 30% · the percentage is food cost ÷ (GL food revenue + breakfast allocation), the ledger's own basis. The till column is what actually went through the POS — where they diverge, the ledger is behind, not the restaurant."
+        subtitle="food + beverage cost against F&B revenue, both straight from the live P&L. Target ≤ 35%. The till column is what went through the POS — a gap either way is a posting-timing difference, not a different restaurant."
         density="compact"
       >
         {cosRows.length === 0 ? <Empty>No cost of sales posted for {year}.</Empty> : (
           <MetricMatrix caption="Food cost of sales by month, against ledger and till revenue."
             columns={[
-              { key: 'cost',  label: 'Food cost' },
+              { key: 'cost',  label: 'Cost of sales', sub: 'food + bev' },
               { key: 'glrev', label: 'GL revenue', sub: 'ledger' },
               { key: 'till',  label: 'Till revenue', sub: 'actual POS' },
-              { key: 'pct',   label: '% of GL rev' },
+              { key: 'pct',   label: 'Cost %' },
             ]}
             rows={cosRows} labelWidth={150} minWidth={520} />
         )}
         <p style={{ margin: '10px 0 0', fontSize: 11.5, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
-          Staff canteen is already out of these figures — EMPLOYEE MEAL sits in Undistributed
-          payroll (~$2,400 a month) and STAFF CANTEEN MATERIALS in Other Operating Expenses,
-          and the cost view excludes both by name. Note the asymmetry though: kitchen payroll
-          below still includes the labour that cooks those staff meals, while the revenue it is
-          measured against does not — so that ratio runs a little hot.
+          Read from the live P&amp;L, not the USALI materialized view — that matview stops at
+          2026-06 and was reporting June cost as $61 against a real $3,686, with July and
+          August shown as unposted when both are posted. Staff canteen is not in these
+          figures: EMPLOYEE MEAL sits in Undistributed payroll (~$2,400 a month) and STAFF
+          CANTEEN MATERIALS in Other Operating Expenses. Kitchen payroll below still includes
+          the labour that cooks those staff meals while the revenue it is divided by does not,
+          so that ratio runs a little hot.
         </p>
       </Container>
 

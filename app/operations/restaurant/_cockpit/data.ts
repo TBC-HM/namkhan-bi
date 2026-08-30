@@ -137,18 +137,61 @@ export interface CosRow {
   revenue?: number | string | null;
 }
 
-export async function getFoodCost(pid: number): Promise<Record<string, unknown>[]> {
+export interface FbPnlRow {
+  month: string;
+  glRevenue: number;
+  glCost: number;
+  costPct: number | null;
+}
+
+/**
+ * F&B revenue and cost of sales straight from the live P&L.
+ *
+ * WAS gl.v_fnb_cos_monthly, which reads the gl.mv_usali_pl_monthly MATERIALIZED
+ * view. That matview is stale — it stops at 2026-06 with 14 rows, while
+ * public.v_pl_monthly_by_property carries 1,791 rows through 2026-08. The page
+ * therefore reported June cost as $61 when the ledger says $3,686, and printed
+ * "not posted" for July and August when both are posted. A stale matview and an
+ * unposted month look identical from the outside; only one of them is true.
+ *
+ * Food AND beverage together: a restaurant buys both, and splitting them here
+ * only invited the same mistake twice.
+ */
+export async function getFoodCost(pid: number, year: string): Promise<FbPnlRow[]> {
   const sb = getSupabaseAdmin();
-  // ORDER BY is not optional here: the view spans 2019-01 → 2027-11 and an
-  // unordered limit returns the OLDEST rows, so every downstream year filter
-  // came back empty.
-  return safe<Record<string, unknown>>(
-    sb.from('v_fnb_cos_monthly').select('*')
-      .order('period_yyyymm', { ascending: false }).limit(36),
-  ).then((rows) => rows.filter((r) => {
-    const p = (r as Record<string, unknown>).property_id;
-    return p === undefined || p === null || Number(p) === pid;
-  }));
+  const rows = await safe<{
+    period_yyyymm: string | null; usali_subcategory: string | null;
+    usali_line_label: string | null; amount_usd: number | string | null;
+  }>(
+    sb.from('v_pl_monthly_by_property')
+      .select('period_yyyymm, usali_subcategory, usali_line_label, amount_usd')
+      .eq('property_id', pid)
+      .like('period_yyyymm', `${year}%`)
+      .limit(5000),
+  );
+
+  const by = new Map<string, { rev: number; cost: number }>();
+  for (const r of rows) {
+    const label = String(r.usali_line_label ?? '');
+    if (!/food|beverage/i.test(label)) continue;
+    const m = String(r.period_yyyymm ?? '');
+    if (!m) continue;
+    const e = by.get(m) ?? { rev: 0, cost: 0 };
+    const amt = Number(r.amount_usd ?? 0);
+    if (r.usali_subcategory === 'Revenue') e.rev += amt;
+    else if (r.usali_subcategory === 'Cost of Sales') e.cost += amt;
+    by.set(m, e);
+  }
+
+  return [...by.entries()]
+    .map(([month, v]) => ({
+      month,
+      glRevenue: Math.round(v.rev),
+      glCost: Math.round(v.cost),
+      costPct: v.rev > 0 ? Math.round((v.cost / v.rev) * 1000) / 10 : null,
+    }))
+    .filter((r) => r.glRevenue !== 0 || r.glCost !== 0)
+    .sort((a, b) => a.month.localeCompare(b.month));
 }
 
 // getLabour() removed 2026-08-27. It read v_labour_cost_ratio_monthly, which is
