@@ -13,17 +13,19 @@ const LEFT_W = 200;
 const HDR_H  = 54;
 const DAYS   = 28;
 
-// ─── warm dark palette ─────────────────────────────────────────────────────
+// ─── palette — CSS token references so the calendar inherits the property theme
+// Namkhan:  --tbl-bg = #15110c (dark warm), --tbl-fg = #e9e1ce (cream)
+// Donna:    --tbl-bg = #FFFFFF,             --tbl-fg = #002428
 const C = {
-  bg:           '#18130e',
-  bgElev:       '#221b13',
-  bgToday:      'rgba(168,133,74,0.10)',
-  bgWeekend:    'rgba(255,255,255,0.02)',
-  border:       'rgba(168,133,74,0.18)',
-  borderStrong: 'rgba(168,133,74,0.40)',
-  txt:          '#EDE7D4',
-  mute:         'rgba(237,231,212,0.48)',
-  brass:        '#A8854A',
+  bg:           'var(--tbl-bg, #15110c)',
+  bgElev:       'var(--tbl-bg-elev, #1f1a13)',
+  bgToday:      'rgba(8, 72, 56, 0.18)',        // brand forest-green tint
+  bgWeekend:    'rgba(128,128,128,0.04)',
+  border:       'var(--tbl-border, rgba(232,225,206,0.10))',
+  borderStrong: 'var(--tbl-border-strong, rgba(232,225,206,0.18))',
+  txt:          'var(--tbl-fg, #e9e1ce)',
+  mute:         'var(--tbl-fg-mute, #a59a82)',
+  accent:       'var(--color-brand-green, #084838)',
 };
 
 // ─── helpers ───────────────────────────────────────────────────────────────
@@ -51,7 +53,7 @@ function statusColor(status: string): { bg: string; text: string } {
   if (status === 'checked_in')  return { bg: 'rgba(107,147,121,0.28)', text: '#7EC898' };
   if (status === 'confirmed')   return { bg: 'rgba(90,131,168,0.28)',  text: '#7BB5E0' };
   if (status === 'checked_out') return { bg: 'rgba(90,80,60,0.22)',    text: 'rgba(237,231,212,0.38)' };
-  return { bg: 'rgba(168,133,74,0.22)', text: C.brass };
+  return { bg: 'rgba(8,72,56,0.22)', text: C.accent };
 }
 
 function sourceTag(src: string | null): string {
@@ -102,7 +104,7 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
         flexWrap: 'wrap',
       }}>
         <a href={todayHref} style={{
-          padding: '5px 12px', background: C.brass, color: '#0a0a0a',
+          padding: '5px 12px', background: C.accent, color: 'var(--tbl-fg, #e9e1ce)',
           borderRadius: 4, fontFamily: 'ui-monospace, monospace',
           fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
           textTransform: 'uppercase', textDecoration: 'none', display: 'inline-block',
@@ -113,7 +115,7 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
           fontFamily: 'ui-monospace, monospace', fontSize: 11,
           textDecoration: 'none', display: 'inline-block',
         }}>←</a>
-        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, color: C.brass, fontWeight: 700 }}>
+        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13, color: C.accent, fontWeight: 700 }}>
           {navLabel}
         </span>
         <a href={nextHref} style={{
@@ -173,14 +175,14 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
                 }}>
                   <span style={{
                     fontFamily: 'ui-monospace, monospace', fontSize: 9,
-                    color: isToday ? C.brass : C.mute,
+                    color: isToday ? C.accent : C.mute,
                     textTransform: 'uppercase', letterSpacing: '0.10em',
                   }}>{dow}</span>
                   <span style={{
                     fontFamily: 'ui-monospace, monospace',
                     fontSize: isFirst ? 9 : 13,
                     fontWeight: isToday ? 800 : 500,
-                    color: isToday ? C.brass : C.txt,
+                    color: isToday ? C.accent : C.txt,
                     lineHeight: 1,
                   }}>
                     {isFirst
@@ -211,7 +213,7 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
                 }}>
                   <span style={{
                     fontFamily: 'ui-monospace, monospace', fontSize: 10,
-                    fontWeight: 700, color: C.brass, letterSpacing: '0.06em',
+                    fontWeight: 700, color: C.accent, letterSpacing: '0.06em',
                     textTransform: 'uppercase',
                   }}>{type.name}</span>
                   <span style={{
@@ -248,7 +250,7 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
                           position: 'absolute', left: i * DAY_W, top: 0,
                           width: DAY_W, height: ROW_H,
                           borderRight: `1px solid ${C.border}`,
-                          background: iso === today ? 'rgba(168,133,74,0.06)' : 'transparent',
+                          background: iso === today ? 'rgba(8,72,56,0.10)' : 'transparent',
                           pointerEvents: 'none',
                         }} />
                       ))}
