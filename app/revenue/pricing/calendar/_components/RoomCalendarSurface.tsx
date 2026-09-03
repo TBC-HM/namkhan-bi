@@ -3,14 +3,14 @@
 // PostgREST 1 000-row truncation bugs). Navigation uses ?otb_from= URL param.
 // Design: warm dark palette matching the rest of the OTB Density page.
 
-import type { RoomType, RoomBooking } from '../_lib/roomCalendarData';
+import type { RoomType, RoomBooking, DailyKpi } from '../_lib/roomCalendarData';
 
 // ─── layout constants ──────────────────────────────────────────────────────
 const DAY_W  = 46;
 const ROW_H  = 40;
 const TYPE_H = 30;
 const LEFT_W = 200;
-const HDR_H  = 54;
+const HDR_H  = 72;
 const DAYS   = 28;
 
 // ─── palette — explicit light values so the calendar renders white everywhere.
@@ -73,9 +73,10 @@ interface Props {
   prevHref:  string;
   nextHref:  string;
   todayHref: string;
+  dailyKpi:  Record<string, DailyKpi>;
 }
 
-export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHref, nextHref, todayHref }: Props) {
+export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHref, nextHref, todayHref, dailyKpi }: Props) {
   const today     = new Date().toISOString().slice(0, 10);
   const dates     = Array.from({ length: DAYS }, (_, i) => addDays(from, i));
   const totalW    = LEFT_W + DAYS * DAY_W;
@@ -160,13 +161,14 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
               const dayNum    = d.getUTCDate();
               const isFirst   = dayNum === 1;
               const isWeekend = d.getUTCDay() === 0 || d.getUTCDay() === 6;
+              const kpi       = dailyKpi[iso];
               return (
                 <div key={iso} style={{
                   width: DAY_W, flexShrink: 0, height: HDR_H,
                   borderRight: `1px solid ${C.border}`,
                   background: isToday ? C.bgToday : isWeekend ? C.bgWeekend : 'transparent',
                   display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center', gap: 3,
+                  alignItems: 'center', justifyContent: 'center', gap: 2,
                 }}>
                   <span style={{
                     fontFamily: 'ui-monospace, monospace', fontSize: 9,
@@ -190,6 +192,19 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
                       fontWeight: 500, color: C.txt, lineHeight: 1,
                     }}>{dayNum}</span>
                   )}
+                  <span style={{
+                    fontFamily: 'ui-monospace, monospace', fontSize: 8,
+                    color: isToday ? C.accent : C.mute,
+                    letterSpacing: '0.03em', lineHeight: 1, minHeight: 10,
+                  }}>
+                    {kpi?.occ_pct != null ? `${Math.round(kpi.occ_pct)}%` : ''}
+                  </span>
+                  <span style={{
+                    fontFamily: 'ui-monospace, monospace', fontSize: 8,
+                    color: C.mute, letterSpacing: '0.03em', lineHeight: 1, minHeight: 10,
+                  }}>
+                    {kpi?.adr != null ? `$${Math.round(kpi.adr)}` : ''}
+                  </span>
                 </div>
               );
             })}

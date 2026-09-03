@@ -18,61 +18,59 @@ export interface RoomBooking {
   source_name:    string | null;
 }
 
+export interface DailyKpi {
+  occ_pct:  number | null;
+  adr:      number | null;
+  rooms_sold: number | null;
+}
+
 export async function fetchRoomCalendar(
   propertyId: number,
   from: string,
   to: string,
-): Promise<{ roomTypes: RoomType[]; bookings: RoomBooking[] }> {
+): Promise<{ roomTypes: RoomType[]; bookings: RoomBooking[]; dailyKpi: Record<string, DailyKpi> }> {
   const sb = getSupabaseAdmin();
-  const today = new Date();
 
-  const lookback = new Date(today);
-  lookback.setMonth(lookback.getMonth() - 6);
-  const lookahead = new Date(today);
-  lookahead.setMonth(lookahead.getMonth() + 6);
-
-  const [typesRes, roomNamesRes, allRoomsRes, rrRes] = await Promise.all([
+  const [typesRes, roomsRes, rrRes, kpiRes] = await Promise.all([
     sb.from('room_types')
       .select('room_type_id, room_type_name')
       .eq('property_id', propertyId)
       .order('room_type_name'),
 
-    // Fetch canonical room names from public.rooms (room_id → room_name).
+    // public.rooms is the authoritative room list — has real room names like
+    // "Tent 11", "Suite 9". Sorted by room_name so groups render in name order.
     sb.from('rooms')
-      .select('room_id, room_name')
+      .select('room_id, room_type_id, room_name')
       .eq('property_id', propertyId)
+      .eq('is_active', true)
+      .order('room_name')
       .limit(500),
 
-    // Room discovery: ±6 months.  The 12-month window has ~1 800 rows for
-    // Namkhan, which exceeds PostgREST's default 1 000-row cap.
-    // limit(5000) overrides that cap so we get every room ID.
-    sb.from('reservation_rooms')
-      .select('room_type_id, room_id')
-      .eq('property_id', propertyId)
-      .gte('night_date', lookback.toISOString().slice(0, 10))
-      .lte('night_date', lookahead.toISOString().slice(0, 10))
-      .limit(5000),
-
+    // Booking window: one row per night per room for reservations in range.
     sb.from('reservation_rooms')
       .select('reservation_id, room_id, room_type_id')
+      .eq('property_id', propertyId)
+      .gte('night_date', from)
+      .lte('night_date', to)
+      .limit(5000),
+
+    // Daily KPI for date-header OCC/ADR display.
+    sb.from('mv_kpi_daily')
+      .select('night_date, occupancy_pct, adr, rooms_sold')
       .eq('property_id', propertyId)
       .gte('night_date', from)
       .lte('night_date', to),
   ]);
 
-  // Build room_id → canonical name map from public.rooms.
-  const roomNameMap = new Map<string, string>();
-  for (const r of roomNamesRes.data ?? []) {
-    if (r.room_name) roomNameMap.set(r.room_id as string, r.room_name as string);
-  }
-
-  // Build room_type_id → unique room_ids map.
-  const typeRooms = new Map<number, Set<string>>();
-  for (const r of allRoomsRes.data ?? []) {
-    if ((r.room_id as string).startsWith('unassigned:')) continue;
+  // Build room_type_id → rooms list from public.rooms (canonical source).
+  const typeRooms = new Map<number, Array<{ id: string; name: string }>>();
+  for (const r of roomsRes.data ?? []) {
     const tid = Number(r.room_type_id);
-    if (!typeRooms.has(tid)) typeRooms.set(tid, new Set());
-    typeRooms.get(tid)!.add(r.room_id as string);
+    if (!typeRooms.has(tid)) typeRooms.set(tid, []);
+    typeRooms.get(tid)!.push({
+      id:   r.room_id as string,
+      name: (r.room_name as string) ?? (r.room_id as string),
+    });
   }
 
   // Fetch reservation details for every booking overlapping the window.
@@ -114,13 +112,22 @@ export async function fetchRoomCalendar(
 
   const roomTypes: RoomType[] = (typesRes.data ?? [])
     .map((t) => ({
-      id:   Number(t.room_type_id),
-      name: t.room_type_name as string,
-      rooms: [...(typeRooms.get(Number(t.room_type_id)) ?? [])]
-        .sort()
-        .map((id) => ({ id, name: roomNameMap.get(id) ?? id })),
+      id:    Number(t.room_type_id),
+      name:  t.room_type_name as string,
+      rooms: typeRooms.get(Number(t.room_type_id)) ?? [],
     }))
     .filter((t) => t.rooms.length > 0);
 
-  return { roomTypes, bookings };
+  // Build daily KPI map: iso date → { occ_pct, adr, rooms_sold }
+  const dailyKpi: Record<string, DailyKpi> = {};
+  for (const r of kpiRes.data ?? []) {
+    const iso = String(r.night_date).slice(0, 10);
+    dailyKpi[iso] = {
+      occ_pct:    r.occupancy_pct != null ? Number(r.occupancy_pct) : null,
+      adr:        r.adr           != null ? Number(r.adr)           : null,
+      rooms_sold: r.rooms_sold    != null ? Number(r.rooms_sold)    : null,
+    };
+  }
+
+  return { roomTypes, bookings, dailyKpi };
 }

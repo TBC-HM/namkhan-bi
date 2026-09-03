@@ -172,7 +172,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       const nextHref = `${otbSubBase}&sub=by_room&otb_from=${next28.toISOString().slice(0, 10)}`;
       const todayHref= `${otbSubBase}&sub=by_room`;
 
-      const { roomTypes, bookings } = await fetchRoomCalendar(pid, fromISO, toISO);
+      const { roomTypes, bookings, dailyKpi } = await fetchRoomCalendar(pid, fromISO, toISO);
 
       return (
         <DashboardPage title="Revenue · Calendar" subtitle="OTB density · by room · 28-day rolling window" tabs={tabs}>
@@ -186,6 +186,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
               prevHref={prevHref}
               nextHref={nextHref}
               todayHref={todayHref}
+              dailyKpi={dailyKpi}
             />
           </div>
         </DashboardPage>

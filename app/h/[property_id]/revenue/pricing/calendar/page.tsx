@@ -31,13 +31,13 @@ export default async function PropertyRoomCalendarPage({ params, searchParams }:
   const toISO    = toDate.toISOString().slice(0, 10);
 
   const base     = `/h/${propertyId}/revenue/pricing/calendar`;
-  const prevM    = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth() - 1, 1));
-  const nextM    = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth() + 1, 1));
-  const prevHref = `${base}?otb_from=${prevM.toISOString().slice(0, 10)}`;
-  const nextHref = `${base}?otb_from=${nextM.toISOString().slice(0, 10)}`;
+  const prev28   = new Date(fromDate); prev28.setUTCDate(prev28.getUTCDate() - 28);
+  const next28   = new Date(fromDate); next28.setUTCDate(next28.getUTCDate() + 28);
+  const prevHref = `${base}?otb_from=${prev28.toISOString().slice(0, 10)}`;
+  const nextHref = `${base}?otb_from=${next28.toISOString().slice(0, 10)}`;
   const todayHref= base;
 
-  const { roomTypes, bookings } = await fetchRoomCalendar(propertyId, fromISO, toISO);
+  const { roomTypes, bookings, dailyKpi } = await fetchRoomCalendar(propertyId, fromISO, toISO);
 
   return (
     <Page
@@ -56,6 +56,7 @@ export default async function PropertyRoomCalendarPage({ params, searchParams }:
           prevHref={prevHref}
           nextHref={nextHref}
           todayHref={todayHref}
+          dailyKpi={dailyKpi}
         />
       </Panel>
     </Page>
