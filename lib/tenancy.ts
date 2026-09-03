@@ -3,13 +3,21 @@
 // Resolves the user session, reads property_ids from workspace_users claims,
 // and rejects (403) if the requested property_id is not granted.
 //
+// Session resolution (in order):
+//   1. workspace_session HMAC cookie (fast path, set by /api/auth/callback)
+//   2. Supabase JWT — for users whose Supabase session pre-dates the cookie
+//      or who authenticated via a path that does not call /api/auth/callback.
+//      getUser() validates the JWT against Supabase, so this is not weaker.
+//
 // Usage in API routes:
 //   const propertyId = await requirePropertyAccess(req, rawPropertyId);
 //
 // Author: gha-brief-builder (tenancy-api-authorization-v1) · 2026-08-12.
+// 2026-09-03: add Supabase JWT fallback (PBS had no workspace_session).
 
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 import { verifyWorkspaceCookie } from '@/lib/workspace-cookie';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -36,16 +44,34 @@ export async function requirePropertyAccess(
     );
   }
 
-  // Step 2: resolve session from workspace_session cookie
+  // Step 2: resolve email — workspace_session cookie first, then Supabase JWT
   const cookieStore = cookies();
-  const raw = cookieStore.get('workspace_session')?.value;
-  const ws = raw ? await verifyWorkspaceCookie(raw) : null;
+  const rawCookie = cookieStore.get('workspace_session')?.value;
+  const ws = rawCookie ? await verifyWorkspaceCookie(rawCookie) : null;
 
-  if (!ws?.email) {
-    throw new Response(
-      JSON.stringify({ error: 'unauthorized' }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } },
+  let email: string;
+  if (ws?.email) {
+    email = ws.email;
+  } else {
+    // Fall back to Supabase JWT (getUser() validates against Supabase — not weaker)
+    const sbClient = createServerClient(
+      SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: () => {}, // read-only here
+        },
+      },
     );
+    const { data: { user } } = await sbClient.auth.getUser();
+    if (!user?.email) {
+      throw new Response(
+        JSON.stringify({ error: 'unauthorized' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    email = user.email.toLowerCase().trim();
   }
 
   // Step 3: read workspace_users claims (property_ids, role_level, is_owner)
@@ -54,7 +80,7 @@ export async function requirePropertyAccess(
     const { data, error } = await admin
       .from('workspace_users')
       .select('role_level, property_ids, is_owner, active')
-      .eq('email', ws.email)
+      .eq('email', email)
       .maybeSingle();
 
     if (error) {
