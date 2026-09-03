@@ -91,6 +91,17 @@ interface PlatformSpec {
   notes: string | null;
 }
 
+interface MediaAsset {
+  asset_id: string;
+  asset_type: string;
+  filename: string;
+  caption: string | null;
+  alt_text: string | null;
+  property_area: string | null;
+  thumbnail_url: string | null;
+  full_url: string | null;
+}
+
 interface QuickPostState {
   platform: string;
   caption: string;
@@ -134,6 +145,9 @@ export default function ChannelsManager({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [quickPost, setQuickPost] = useState<QuickPostState | null>(null);
+  const [mediaPicker, setMediaPicker] = useState(false);
+  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
 
   const ruleByPlatform = new Map(rules.map((r) => [r.platform, r]));
   const programsByPlatform = new Map<string, SocialProgram[]>();
@@ -208,6 +222,20 @@ export default function ChannelsManager({
       linkedin_description: '', linkedin_document_url: '',
       aiBusy: false, busy: false, msg: null,
     });
+  }
+
+  async function openMediaPicker() {
+    if (!quickPost) return;
+    setMediaPicker(true);
+    if (mediaAssets.length > 0) return; // already loaded
+    setMediaLoading(true);
+    try {
+      const res = await fetch(`/api/marketing/social/media-library?property_id=${propertyId}&limit=24`);
+      const j = await res.json();
+      if (j.ok) setMediaAssets(j.assets ?? []);
+    } catch { /* silent */ } finally {
+      setMediaLoading(false);
+    }
   }
 
   async function aiRecon() {
@@ -455,7 +483,7 @@ export default function ChannelsManager({
         const overLimit = maxChars != null && quickPost.caption.length > maxChars;
         return (
           <div style={overlaySt} onClick={() => !quickPost.busy && setQuickPost(null)}>
-            <div style={{ ...modalSt, width: 620, maxWidth: '90vw' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...modalSt, width: 620, maxWidth: '90vw', position: 'relative' as const }} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>
                   ▶ Post to {prettyPlatform(quickPost.platform)}
@@ -471,7 +499,7 @@ export default function ChannelsManager({
                 {/* Destination picker (if platform requires) */}
                 {spec?.requires_dest_pick && (
                   <Field label={`${spec.dest_type_label?.toUpperCase() ?? 'DESTINATION'} · required`}
-                         hint={dests.length === 0 ? 'No destinations synced yet — click Sync destinations on the channel card' : `${dests.length} available`}>
+                         hint={dests.length === 0 ? 'No destinations configured for this channel yet' : `${dests.length} available`}>
                     <select style={inputSt} value={quickPost.dest_id} required
                             onChange={(e) => setQuickPost({ ...quickPost, dest_id: e.target.value })}>
                       <option value="">Pick a {spec.dest_type_label ?? 'destination'}…</option>
@@ -500,10 +528,18 @@ export default function ChannelsManager({
                   </Field>
                 )}
 
-                <Field label="Media URL (optional · https://…)">
-                  <input type="url" style={inputSt}
-                         value={quickPost.media_url}
-                         onChange={(e) => setQuickPost({ ...quickPost, media_url: e.target.value })} />
+                <Field label="Media (optional)">
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {quickPost.media_url ? (
+                      <>
+                        <img src={quickPost.media_url} alt="selected" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 4, border: `1px solid ${HAIR}` }} />
+                        <button type="button" style={btnSecondary} onClick={openMediaPicker}>Change</button>
+                        <button type="button" style={{ ...btnSecondary, color: RED }} onClick={() => setQuickPost({ ...quickPost, media_url: '' })}>Remove</button>
+                      </>
+                    ) : (
+                      <button type="button" style={btnSecondary} onClick={openMediaPicker}>🖼 Pick from library</button>
+                    )}
+                  </div>
                 </Field>
 
                 {/* Platform-specific extras */}
@@ -628,6 +664,39 @@ export default function ChannelsManager({
                   </button>
                 </div>
               </form>
+
+              {/* Media library sub-overlay */}
+              {mediaPicker && (
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(27,27,27,0.88)', zIndex: 10, borderRadius: 6, display: 'flex', flexDirection: 'column', padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: WHITE }}>Pick from media library</span>
+                    <button type="button" onClick={() => setMediaPicker(false)} style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: WHITE }}>×</button>
+                  </div>
+                  {mediaLoading ? (
+                    <div style={{ textAlign: 'center', color: HAIR, padding: 32 }}>Loading…</div>
+                  ) : mediaAssets.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: HAIR, padding: 32 }}>No media found in library</div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, overflowY: 'auto' as const, flex: 1 }}>
+                      {mediaAssets.map((a) => (
+                        <button key={a.asset_id} type="button"
+                          title={a.caption ?? a.filename}
+                          style={{ border: '2px solid transparent', borderRadius: 4, background: 'none', cursor: 'pointer', padding: 0, overflow: 'hidden' }}
+                          onClick={() => { setQuickPost({ ...quickPost!, media_url: a.full_url ?? '' }); setMediaPicker(false); }}>
+                          {a.thumbnail_url ? (
+                            <img src={a.thumbnail_url} alt={a.alt_text ?? a.filename}
+                                 style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+                          ) : (
+                            <div style={{ width: '100%', aspectRatio: '1', background: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: INK_M }}>
+                              {a.asset_type}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         );

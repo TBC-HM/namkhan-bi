@@ -254,8 +254,7 @@ export default async function SocialPage({ searchParams }: Props) {
         {view === 'boost' && <BoostView />}
         {view === 'inbox' && <SocialInbox posts={posts} rules={rules} />}
 
-        {/* Publish block REMOVED (2026-08-20) — merged into ChannelsManager v2
-           per-card ▶ Quick post button + ✓ CONNECTED badge. See ChannelsManager. */}
+        {/* Publish block removed 2026-08-20 (merged into ChannelsManager per-card quick post). */}
         {false && (
           <div style={{ gridColumn: '1 / -1' }}>
             {/* Connected accounts */}
@@ -442,25 +441,28 @@ export default async function SocialPage({ searchParams }: Props) {
           </div>
         )}
 
-        {/* ── Upload Post: Queue ──────────────────────────────────────── */}
+        {/* ── Scheduled queue ─────────────────────────────────────────── */}
         {view === 'queue' && (
           <div style={{ gridColumn: '1 / -1' }}>
-            <div style={{ padding: '32px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 10 }}>⏳</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 6 }}>Scheduled queue</div>
-              <div style={{ fontSize: 12, color: INK_M, marginBottom: 12 }}>
-                Shows posts scheduled inside Upload Post (not yet published). Live data from <code>listScheduled()</code>.
+            <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>Scheduled queue</div>
+                <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
+                  auto-push runs every 5 min · approve the cron in db/proposed/social-push-cron-v1
+                </div>
               </div>
-              {posts.filter((p: any) => p.status === 'scheduled' && p.up_request_id).length === 0 ? (
-                <div style={{ fontSize: 12, color: INK_M }}>No posts in the Upload Post queue yet. Push a Ready post from the Publish tab.</div>
+              {posts.filter((p: any) => p.status === 'scheduled').length === 0 ? (
+                <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: INK_M }}>
+                  No scheduled posts yet. Approve a draft in Channel Inbox, then set a publish time.
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' as const, maxWidth: 700, margin: '0 auto' }}>
-                  {posts.filter((p: any) => p.status === 'scheduled' && p.up_request_id).map((p: any) => (
-                    <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, fontSize: 12 }}>
-                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: '#C28F2C', minWidth: 50 }}>scheduled</span>
-                      <span style={{ flex: 1, color: INK, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.caption?.slice(0, 80) ?? '—'}</span>
-                      <span style={{ color: INK_M, fontSize: 10, fontFamily: 'ui-monospace,monospace' }}>{p.platform}</span>
-                      <span style={{ color: INK_M, fontSize: 10 }}>{p.scheduled_at ? new Date(p.scheduled_at).toISOString().slice(0, 16).replace('T', ' ') : '—'}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {posts.filter((p: any) => p.status === 'scheduled').map((p: any) => (
+                    <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#FAFAF7', border: `1px solid ${HAIR}`, borderRadius: 4, fontSize: 12 }}>
+                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: '#C28F2C', minWidth: 24 }}>{p.platform?.slice(0,2).toUpperCase()}</span>
+                      <span style={{ flex: 1, color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title ?? p.caption?.slice(0, 80) ?? '—'}</span>
+                      <span style={{ color: INK_M, fontSize: 10, whiteSpace: 'nowrap' as const }}>{p.scheduled_at ? new Date(p.scheduled_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '—'}</span>
+                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 9, color: p.up_request_id ? '#5DA46B' : '#C28F2C' }}>{p.up_request_id ? 'in UP' : 'pending'}</span>
                     </div>
                   ))}
                 </div>
@@ -469,30 +471,30 @@ export default async function SocialPage({ searchParams }: Props) {
           </div>
         )}
 
-        {/* ── Upload Post: Comments ───────────────────────────────────── */}
+        {/* ── Comments ────────────────────────────────────────────────── */}
         {view === 'comments' && (
           <div style={{ gridColumn: '1 / -1' }}>
-            <div style={{ padding: '32px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 10 }}>💬</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 6 }}>Comment engagement</div>
-              <div style={{ fontSize: 12, color: INK_M, marginBottom: 12 }}>
-                Reply to comments on your posts across all connected platforms via Upload Post SDK <code>getPostComments()</code> + <code>replyToComment()</code>.
+            <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>Comment engagement</div>
+                <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
+                  planned · requires Upload Post comments API integration
+                </div>
               </div>
               {posts.filter((p: any) => p.up_request_id && p.up_status === 'published').length === 0 ? (
-                <div style={{ fontSize: 12, color: INK_M }}>No published posts with Upload Post tracking yet.</div>
+                <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: INK_M }}>
+                  No published posts tracked via Upload Post yet. Push scheduled posts to activate.
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left' as const, maxWidth: 700, margin: '0 auto' }}>
-                  {posts.filter((p: any) => p.up_request_id && p.up_status === 'published').slice(0, 8).map((p: any) => (
-                    <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, fontSize: 12 }}>
-                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: '#0E7A4B', minWidth: 50 }}>published</span>
-                      <span style={{ flex: 1, color: INK, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.caption?.slice(0, 70) ?? '—'}</span>
-                      <span style={{ color: INK_M, fontSize: 10, fontFamily: 'ui-monospace,monospace' }}>{p.platform}</span>
-                      <span style={{ color: INK_M, fontSize: 10 }}>{p.up_request_id?.slice(0, 8)}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {posts.filter((p: any) => p.up_request_id && p.up_status === 'published').slice(0, 10).map((p: any) => (
+                    <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#FAFAF7', border: `1px solid ${HAIR}`, borderRadius: 4, fontSize: 12 }}>
+                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: '#5DA46B', minWidth: 24 }}>{p.platform?.slice(0,2).toUpperCase()}</span>
+                      <span style={{ flex: 1, color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title ?? p.caption?.slice(0, 70) ?? '—'}</span>
+                      <span style={{ color: INK_M, fontSize: 10 }}>{p.up_request_id?.slice(0, 12)}</span>
+                      <span style={{ fontSize: 10, color: INK_M, fontStyle: 'italic' }}>comment fetch · planned</span>
                     </div>
                   ))}
-                  <div style={{ padding: '8px 14px', fontSize: 11, color: INK_M, fontStyle: 'italic' }}>
-                    Comments API: call /api/marketing/social-push with mode=comments&request_id=... to fetch and reply inline.
-                  </div>
                 </div>
               )}
             </div>
