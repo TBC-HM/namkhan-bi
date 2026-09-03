@@ -18,7 +18,7 @@
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
-import { verifyWorkspaceCookie } from '@/lib/workspace-cookie';
+import { verifyWorkspaceCookie, signWorkspaceCookie } from '@/lib/workspace-cookie';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -74,12 +74,12 @@ export async function requirePropertyAccess(
     email = user.email.toLowerCase().trim();
   }
 
-  // Step 3: read workspace_users claims (property_ids, role_level, is_owner)
+  // Step 3: read workspace_users claims (property_ids, role_level, is_owner + access flags)
   try {
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const { data, error } = await admin
       .from('workspace_users')
-      .select('role_level, property_ids, is_owner, active')
+      .select('role_level, property_ids, is_owner, active, access_revenue, access_sales, access_marketing, access_operations, access_finance')
       .eq('email', email)
       .maybeSingle();
 
@@ -103,24 +103,45 @@ export async function requirePropertyAccess(
     // Step 4: check grants
     // Holding-level users (role_level='holding' OR is_owner) get all properties
     const isHolding = data.role_level === 'holding' || data.is_owner === true;
-    if (isHolding) {
-      return propertyId; // granted
-    }
-
-    // Property-level users: check property_ids array
     const propertyIds = Array.isArray(data.property_ids)
       ? data.property_ids.map(Number)
       : [];
-    
-    if (propertyIds.includes(propertyId)) {
-      return propertyId; // granted
+    const granted = isHolding || propertyIds.includes(propertyId);
+
+    if (!granted) {
+      throw new Response(
+        JSON.stringify({ error: 'property_access_denied', property_id: propertyId }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      );
     }
 
-    // No grant → deny
-    throw new Response(
-      JSON.stringify({ error: 'property_access_denied', property_id: propertyId }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } },
-    );
+    // If we resolved via JWT fallback, cache a workspace_session cookie so the
+    // next request uses the fast HMAC path (~0 ms) instead of getUser() (~300 ms).
+    if (!ws?.email) {
+      try {
+        const signed = await signWorkspaceCookie({
+          email,
+          is_owner: data.is_owner ?? false,
+          access_revenue: data.access_revenue ?? false,
+          access_sales: data.access_sales ?? false,
+          access_marketing: data.access_marketing ?? false,
+          access_operations: data.access_operations ?? false,
+          access_finance: data.access_finance ?? false,
+          iat: Math.floor(Date.now() / 1000),
+        });
+        cookieStore.set('workspace_session', signed, {
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax',
+          maxAge: 30 * 24 * 60 * 60, // 30 days
+          path: '/',
+        });
+      } catch {
+        // Cookie-setting is best-effort — auth already succeeded, don't fail the request
+      }
+    }
+
+    return propertyId;
   } catch (err) {
     // If it's already a Response (our 403s), re-throw
     if (err instanceof Response) {
