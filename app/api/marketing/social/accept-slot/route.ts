@@ -120,7 +120,7 @@ Return ONLY: {"caption":"...","hashtags":["#tag",...]}`;
 
   // 6. Call AI
   const aiResult = await callAnthropic({
-    model: 'claude-sonnet-4-5-20250929',
+    model: 'claude-sonnet-4-6',
     maxTokens: 600,
     systemPrompt: SYSTEM_PROMPT,
     userPrompt,

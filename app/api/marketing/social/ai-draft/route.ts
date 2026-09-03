@@ -76,7 +76,7 @@ Respond in EXACTLY this JSON format, no prose:
 The hashtags field is a space-separated string (with # prefix) or an empty string if no hashtags allowed.`;
 
   const r = await callAnthropic({
-    model: 'claude-sonnet-4-5-20250929',
+    model: 'claude-sonnet-4-6',
     maxTokens: 400,
     systemPrompt,
     userPrompt,
