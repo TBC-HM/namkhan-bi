@@ -111,10 +111,11 @@ const chipActive: CSSProperties = {
 
 const panel: CSSProperties = {
   position: 'absolute', top: 'calc(100% + 6px)', left: 0,
-  background: 'var(--tbl-bg-elev)',
-  border: '1px solid var(--tbl-border)',
+  background: '#fff',
+  border: '1px solid #E0E0E0',
   borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.14)',
   zIndex: 400, minWidth: 220,
+  color: '#1B1B1B',
 };
 
 const thBase: CSSProperties = {
@@ -195,7 +196,7 @@ function CalendarPicker({ from, to, onApply, onClose }: CalPickerProps) {
 
   const btnBase: CSSProperties = {
     background: 'none', border: 'none', cursor: 'pointer',
-    fontSize: 16, color: 'var(--tbl-fg)', padding: '2px 8px', lineHeight: 1,
+    fontSize: 16, color: '#1B1B1B', padding: '2px 8px', lineHeight: 1,
   };
 
   return (
@@ -205,16 +206,16 @@ function CalendarPicker({ from, to, onApply, onClose }: CalPickerProps) {
         <button style={btnBase} onClick={navPrev}>‹</button>
         <div style={{ display: 'flex', gap: 4 }}>
           <select value={vm} onChange={e => setVm(+e.target.value)} style={{
-            border: '1px solid var(--tbl-border)', borderRadius: 4,
+            border: '1px solid #E0E0E0', borderRadius: 4,
             padding: '2px 4px', fontSize: 12,
-            background: 'var(--tbl-bg)', color: 'var(--tbl-fg)', fontFamily: 'inherit',
+            background: '#fff', color: '#1B1B1B', fontFamily: 'inherit',
           }}>
             {MONTHS.map((mn, i) => <option key={mn} value={i}>{mn}</option>)}
           </select>
           <select value={vy} onChange={e => setVy(+e.target.value)} style={{
-            border: '1px solid var(--tbl-border)', borderRadius: 4,
+            border: '1px solid #E0E0E0', borderRadius: 4,
             padding: '2px 4px', fontSize: 12,
-            background: 'var(--tbl-bg)', color: 'var(--tbl-fg)', fontFamily: 'inherit',
+            background: '#fff', color: '#1B1B1B', fontFamily: 'inherit',
           }}>
             {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
@@ -227,7 +228,7 @@ function CalendarPicker({ from, to, onApply, onClose }: CalPickerProps) {
         {DOW.map(d => (
           <div key={d} style={{
             fontSize: 10, textAlign: 'center',
-            color: 'var(--tbl-fg-mute)', fontWeight: 700, padding: '2px 0',
+            color: '#888', fontWeight: 700, padding: '2px 0',
           }}>{d}</div>
         ))}
       </div>
@@ -244,7 +245,7 @@ function CalendarPicker({ from, to, onApply, onClose }: CalPickerProps) {
               background: st === 'start' || st === 'end'
                 ? 'var(--brass)'
                 : st === 'range' ? 'rgba(154,123,59,0.18)' : 'transparent',
-              color: st === 'start' || st === 'end' ? 'var(--tbl-bg)' : 'var(--tbl-fg)',
+              color: st === 'start' || st === 'end' ? '#fff' : '#1B1B1B',
               fontWeight: st === 'start' || st === 'end' ? 700 : 400,
             }}>{d}</button>
           );
@@ -252,7 +253,7 @@ function CalendarPicker({ from, to, onApply, onClose }: CalPickerProps) {
       </div>
 
       {/* Hint */}
-      <div style={{ fontSize: 10, color: 'var(--tbl-fg-mute)', textAlign: 'center', marginTop: 8 }}>
+      <div style={{ fontSize: 10, color: '#888', textAlign: 'center', marginTop: 8 }}>
         {!selFrom
           ? 'Click to select start date'
           : !selTo
@@ -264,13 +265,13 @@ function CalendarPicker({ from, to, onApply, onClose }: CalPickerProps) {
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
         <button onClick={() => { setSelFrom(''); setSelTo(''); setStep('from'); }} style={{
           padding: '5px 14px', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
-          border: '1px solid var(--tbl-border)', borderRadius: 6,
-          background: 'var(--tbl-bg)', color: 'var(--tbl-fg)',
+          border: '1px solid #E0E0E0', borderRadius: 6,
+          background: '#fff', color: '#1B1B1B',
         }}>Clear</button>
         <button onClick={() => { onApply(selFrom, selTo); onClose(); }} style={{
           padding: '5px 14px', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
           border: 'none', borderRadius: 6,
-          background: 'var(--brass)', color: 'var(--tbl-bg)', fontWeight: 700,
+          background: 'var(--brass)', color: '#fff', fontWeight: 700,
         }}>Apply</button>
       </div>
     </div>
@@ -348,7 +349,7 @@ function MultiSelectChip({ label, options, selected, onToggle, onClear, isOpen, 
       {isOpen && (
         <div style={{ ...panel, maxHeight: 340, display: 'flex', flexDirection: 'column' }}>
           {/* Search */}
-          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--tbl-border)', flexShrink: 0 }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid #E0E0E0', flexShrink: 0 }}>
             <input
               autoFocus
               type="text"
@@ -357,8 +358,8 @@ function MultiSelectChip({ label, options, selected, onToggle, onClear, isOpen, 
               onChange={e => setQ(e.target.value)}
               style={{
                 width: '100%', padding: '4px 8px', fontSize: 12,
-                border: '1px solid var(--tbl-border)', borderRadius: 4,
-                background: 'var(--tbl-bg)', color: 'var(--tbl-fg)',
+                border: '1px solid #E0E0E0', borderRadius: 4,
+                background: '#fff', color: '#1B1B1B',
                 fontFamily: 'inherit', boxSizing: 'border-box',
               }}
             />
@@ -367,8 +368,8 @@ function MultiSelectChip({ label, options, selected, onToggle, onClear, isOpen, 
           <label style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '6px 10px', cursor: 'pointer', flexShrink: 0,
-            borderBottom: '1px solid var(--tbl-border)',
-            fontSize: 12, fontWeight: 600, color: 'var(--tbl-fg)',
+            borderBottom: '1px solid #E0E0E0',
+            fontSize: 12, fontWeight: 600, color: '#1B1B1B',
           }}>
             <input
               type="checkbox"
@@ -381,12 +382,12 @@ function MultiSelectChip({ label, options, selected, onToggle, onClear, isOpen, 
           {/* Options */}
           <div style={{ overflowY: 'auto', flexGrow: 1, padding: '4px 0' }}>
             {shown.length === 0
-              ? <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--tbl-fg-mute)' }}>No results</div>
+              ? <div style={{ padding: '8px 10px', fontSize: 12, color: '#888' }}>No results</div>
               : shown.map(opt => (
                 <label key={opt} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '5px 10px', cursor: 'pointer',
-                  fontSize: 12, color: 'var(--tbl-fg)',
+                  fontSize: 12, color: '#1B1B1B',
                 }}>
                   <input
                     type="checkbox"

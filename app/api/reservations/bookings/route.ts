@@ -116,24 +116,23 @@ export async function GET(req: NextRequest) {
     { data: stRows },
   ] = await Promise.all([
     q as Promise<{ data: BookingRow[] | null; error: { message: string } | null }>,
+    // No .order() — physical row order gives a diverse sample so uniq() captures
+    // all distinct values. .order('col') concentrates first 1000 rows on one value.
     sb.from('v_reservations_full')
       .select('source_name')
       .eq('property_id', propertyId)
       .not('source_name', 'is', null)
-      .order('source_name')
-      .limit(200),
+      .limit(1000),
     sb.from('v_reservations_full')
       .select('room_type_name')
       .eq('property_id', propertyId)
       .not('room_type_name', 'is', null)
-      .order('room_type_name')
-      .limit(200),
+      .limit(1000),
     sb.from('v_reservations_full')
       .select('status')
       .eq('property_id', propertyId)
       .not('status', 'is', null)
-      .order('status')
-      .limit(200),
+      .limit(1000),
   ]);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
