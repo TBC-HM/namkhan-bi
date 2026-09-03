@@ -7,7 +7,7 @@
 // through SECURITY DEFINER RPCs (fn_social_slot_upsert / accept / reject +
 // fn_social_post_set_status) — PostgREST exposes only public (claude_md §0.5).
 
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export type SocialSlotStatus = 'proposed' | 'accepted' | 'rejected' | 'drafted' | 'scheduled' | 'published';
 
@@ -57,7 +57,7 @@ export interface SocialPostRow {
 
 /** Calendar slots for one property in [fromIso, toIso). Rejected slots included — callers filter. */
 export async function getSocialCalendarSlots(propertyId: number, fromIso: string, toIso: string): Promise<SocialCalendarSlot[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseAdmin()
     .from('v_social_calendar_slots')
     .select('*')
     .eq('property_id', propertyId)
@@ -73,7 +73,7 @@ export async function getSocialCalendarSlots(propertyId: number, fromIso: string
 
 /** All posts for one property (draft queue + scheduled + pushed history). */
 export async function getSocialPostsForProperty(propertyId: number): Promise<SocialPostRow[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseAdmin()
     .from('v_social_posts')
     .select('*')
     .eq('property_id', propertyId)

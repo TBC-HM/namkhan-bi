@@ -18,7 +18,7 @@ import { notFound } from 'next/navigation';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSocialAccounts, getSocialChannelRules, getSocialPrograms } from '@/lib/marketing';
 import { getSocialPostsForProperty } from '@/lib/marketing-social';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 
 // Legacy /marketing/social/* surface is Namkhan-scoped by contract (§0.7);
@@ -73,19 +73,19 @@ export default async function SocialPlatformPage({ params }: Props) {
     getSocialPrograms(NAMKHAN_PID),
     getSocialPostsForProperty(NAMKHAN_PID),
     // PBS 2026-08-21 · Upload Post analytics snapshot per platform.
-    supabase
+    getSupabaseAdmin()
       .from('v_upload_post_analytics_latest')
       .select('impressions, likes, comments, shares, reach, views, snapshot_date, raw')
       .eq('property_id', NAMKHAN_PID)
       .eq('platform', platform)
       .maybeSingle(),
     // PBS 2026-08-22 · Pinterest boards (via v_social_post_boards) — LIVE 11 boards.
-    supabase.from('v_social_post_boards')
+    getSupabaseAdmin().from('v_social_post_boards')
       .select('board_id, board_name, pin_count')
       .eq('property_id', NAMKHAN_PID).eq('platform', platform)
       .order('board_name'),
     // PBS 2026-08-22 · Per-post metrics from Upload Post (getMedia + getCachedPostAnalytics).
-    supabase.from('v_social_posts_latest')
+    getSupabaseAdmin().from('v_social_posts_latest')
       .select('external_post_id, post_url, media_type, caption, posted_at, impressions, reach, views, likes, comments, shares, saves, pin_clicks, outbound_clicks, engagement_rate, raw')
       .eq('property_id', NAMKHAN_PID).eq('platform', platform)
       .order('posted_at', { ascending: false, nullsFirst: false })
