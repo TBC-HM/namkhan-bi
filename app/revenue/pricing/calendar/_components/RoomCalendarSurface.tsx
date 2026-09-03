@@ -13,19 +13,19 @@ const LEFT_W = 200;
 const HDR_H  = 54;
 const DAYS   = 28;
 
-// ─── palette — CSS token references so the calendar inherits the property theme
-// Namkhan:  --tbl-bg = #15110c (dark warm), --tbl-fg = #e9e1ce (cream)
-// Donna:    --tbl-bg = #FFFFFF,             --tbl-fg = #002428
+// ─── palette — explicit light values so the calendar renders white everywhere.
+// Never inherit --tbl-* here: those tokens resolve dark on Namkhan's property
+// shell theme and this surface is also used under the bare /revenue page.
 const C = {
-  bg:           'var(--tbl-bg, #15110c)',
-  bgElev:       'var(--tbl-bg-elev, #1f1a13)',
-  bgToday:      'rgba(8, 72, 56, 0.18)',        // brand forest-green tint
-  bgWeekend:    'rgba(128,128,128,0.04)',
-  border:       'var(--tbl-border, rgba(232,225,206,0.10))',
-  borderStrong: 'var(--tbl-border-strong, rgba(232,225,206,0.18))',
-  txt:          'var(--tbl-fg, #e9e1ce)',
-  mute:         'var(--tbl-fg-mute, #a59a82)',
-  accent:       'var(--color-brand-green, #084838)',
+  bg:           '#FAFAF7',
+  bgElev:       '#F3F0EC',
+  bgToday:      'rgba(8, 72, 56, 0.07)',
+  bgWeekend:    'rgba(0,0,0,0.015)',
+  border:       '#E6DFCC',
+  borderStrong: '#C0B8A0',
+  txt:          '#1B1B1B',
+  mute:         '#6B6152',
+  accent:       '#084838',
 };
 
 // ─── helpers ───────────────────────────────────────────────────────────────
@@ -50,10 +50,10 @@ function blockGeo(
 }
 
 function statusColor(status: string): { bg: string; text: string } {
-  if (status === 'checked_in')  return { bg: 'rgba(107,147,121,0.28)', text: '#7EC898' };
-  if (status === 'confirmed')   return { bg: 'rgba(90,131,168,0.28)',  text: '#7BB5E0' };
-  if (status === 'checked_out') return { bg: 'rgba(90,80,60,0.22)',    text: 'rgba(237,231,212,0.38)' };
-  return { bg: 'rgba(8,72,56,0.22)', text: C.accent };
+  if (status === 'checked_in')  return { bg: 'rgba(31,122,91,0.16)',  text: '#1A6B4A' };
+  if (status === 'confirmed')   return { bg: 'rgba(59,107,162,0.16)', text: '#2B5F99' };
+  if (status === 'checked_out') return { bg: 'rgba(0,0,0,0.07)',      text: '#6B5A44' };
+  return { bg: 'rgba(8,72,56,0.12)', text: '#084838' };
 }
 
 function sourceTag(src: string | null): string {
@@ -63,12 +63,6 @@ function sourceTag(src: string | null): string {
   if (s.includes('expedia')) return ' · Exp';
   if (s.includes('direct'))  return ' · Dir';
   return '';
-}
-
-function roomLabel(roomId: string, typeId: number): string {
-  const suffix = roomId.replace(`${typeId}-`, '');
-  const n = parseInt(suffix, 10);
-  return isNaN(n) ? roomId.slice(-4) : `Room ${n + 1}`;
 }
 
 // ─── component ─────────────────────────────────────────────────────────────
@@ -91,8 +85,9 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
 
   const bookingsByRoom = new Map<string, RoomBooking[]>();
   for (const b of bookings) {
-    if (!bookingsByRoom.has(b.room_id)) bookingsByRoom.set(b.room_id, []);
-    bookingsByRoom.get(b.room_id)!.push(b);
+    const key = b.room_id;
+    if (!bookingsByRoom.has(key)) bookingsByRoom.set(key, []);
+    bookingsByRoom.get(key)!.push(b);
   }
 
   return (
@@ -225,7 +220,7 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
               </div>
 
               {/* individual room rows */}
-              {type.rooms.map((roomId) => {
+              {type.rooms.map(({ id: roomId, name: roomName }) => {
                 const roomBookings = bookingsByRoom.get(roomId) ?? [];
                 return (
                   <div key={roomId} style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
@@ -238,7 +233,7 @@ export default function RoomCalendarSurface({ roomTypes, bookings, from, prevHre
                     }}>
                       <span style={{ width: 5, height: 5, borderRadius: '50%', background: C.border, flexShrink: 0 }} />
                       <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: C.mute }}>
-                        {roomLabel(roomId, type.id)}
+                        {roomName}
                       </span>
                     </div>
 

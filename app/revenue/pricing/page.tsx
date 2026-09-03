@@ -165,11 +165,11 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       const toDate   = new Date(fromDate); toDate.setUTCDate(toDate.getUTCDate() + 27);
       const toISO    = toDate.toISOString().slice(0, 10);
 
-      // Month-based navigation hrefs.
-      const prevM    = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth() - 1, 1));
-      const nextM    = new Date(Date.UTC(fromDate.getUTCFullYear(), fromDate.getUTCMonth() + 1, 1));
-      const prevHref = `${otbSubBase}&sub=by_room&otb_from=${prevM.toISOString().slice(0, 10)}`;
-      const nextHref = `${otbSubBase}&sub=by_room&otb_from=${nextM.toISOString().slice(0, 10)}`;
+      // 28-day window navigation (matches the calendar's DAYS constant).
+      const prev28   = new Date(fromDate); prev28.setUTCDate(prev28.getUTCDate() - 28);
+      const next28   = new Date(fromDate); next28.setUTCDate(next28.getUTCDate() + 28);
+      const prevHref = `${otbSubBase}&sub=by_room&otb_from=${prev28.toISOString().slice(0, 10)}`;
+      const nextHref = `${otbSubBase}&sub=by_room&otb_from=${next28.toISOString().slice(0, 10)}`;
       const todayHref= `${otbSubBase}&sub=by_room`;
 
       const { roomTypes, bookings } = await fetchRoomCalendar(pid, fromISO, toISO);

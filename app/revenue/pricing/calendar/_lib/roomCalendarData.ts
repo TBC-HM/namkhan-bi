@@ -5,7 +5,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-export interface RoomType { id: number; name: string; rooms: string[] }
+export interface RoomType { id: number; name: string; rooms: Array<{ id: string; name: string }> }
 
 export interface RoomBooking {
   reservation_id: string;
@@ -31,11 +31,17 @@ export async function fetchRoomCalendar(
   const lookahead = new Date(today);
   lookahead.setMonth(lookahead.getMonth() + 6);
 
-  const [typesRes, allRoomsRes, rrRes] = await Promise.all([
+  const [typesRes, roomNamesRes, allRoomsRes, rrRes] = await Promise.all([
     sb.from('room_types')
       .select('room_type_id, room_type_name')
       .eq('property_id', propertyId)
       .order('room_type_name'),
+
+    // Fetch canonical room names from public.rooms (room_id → room_name).
+    sb.from('rooms')
+      .select('room_id, room_name')
+      .eq('property_id', propertyId)
+      .limit(500),
 
     // Room discovery: ±6 months.  The 12-month window has ~1 800 rows for
     // Namkhan, which exceeds PostgREST's default 1 000-row cap.
@@ -53,6 +59,12 @@ export async function fetchRoomCalendar(
       .gte('night_date', from)
       .lte('night_date', to),
   ]);
+
+  // Build room_id → canonical name map from public.rooms.
+  const roomNameMap = new Map<string, string>();
+  for (const r of roomNamesRes.data ?? []) {
+    if (r.room_name) roomNameMap.set(r.room_id as string, r.room_name as string);
+  }
 
   // Build room_type_id → unique room_ids map.
   const typeRooms = new Map<number, Set<string>>();
@@ -102,9 +114,11 @@ export async function fetchRoomCalendar(
 
   const roomTypes: RoomType[] = (typesRes.data ?? [])
     .map((t) => ({
-      id:    Number(t.room_type_id),
-      name:  t.room_type_name as string,
-      rooms: [...(typeRooms.get(Number(t.room_type_id)) ?? [])].sort(),
+      id:   Number(t.room_type_id),
+      name: t.room_type_name as string,
+      rooms: [...(typeRooms.get(Number(t.room_type_id)) ?? [])]
+        .sort()
+        .map((id) => ({ id, name: roomNameMap.get(id) ?? id })),
     }))
     .filter((t) => t.rooms.length > 0);
 
