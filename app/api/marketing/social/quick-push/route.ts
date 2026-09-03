@@ -29,12 +29,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-const DEFAULT_PID = 260955;
+const DEFAULT_PID = 260955; // Namkhan-only iteration (brief §7) — used as fallback only
 
 // Platforms that require a destination pick (fail with a clear error if missing)
 const DEST_REQUIRED_MAP: Record<string, string> = {
@@ -134,6 +135,9 @@ export async function POST(req: NextRequest) {
   if (!caption.trim() && !title.trim()) return NextResponse.json({ ok: false, error: 'caption required' }, { status: 400 });
   if (!title.trim()) title = caption.slice(0, 60);
   if (platforms.length === 0) return NextResponse.json({ ok: false, error: 'select at least one platform' }, { status: 400 });
+
+  // Verify caller has access to this property (throws Response on 400/401/403)
+  property_id = await requirePropertyAccess(req, property_id);
 
   const sb = getSupabaseAdmin();
   const results: Array<{ platform: string; ok: boolean; post_id?: string; error?: string }> = [];
