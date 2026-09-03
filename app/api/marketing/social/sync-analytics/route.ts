@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,9 @@ export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as { property_id?: number };
-  return invoke(body.property_id ? Number(body.property_id) : null);
+  if (!body.property_id) return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
+  const propertyId = await requirePropertyAccess(req, body.property_id);
+  return invoke(propertyId);
 }
 
 export async function GET() {

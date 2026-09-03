@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 import { callAnthropic, isLlmOk } from '@/lib/youtube/skills-common';
 
 export const runtime = 'nodejs';
@@ -21,9 +22,10 @@ export async function POST(req: NextRequest) {
   let b: { platform?: string; property_id?: number; hint?: string | null };
   try { b = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'invalid_json' }, { status: 400 }); }
   const platform = String(b.platform || '');
-  const property_id = Number(b.property_id) || 260955;
-  const hint = (b.hint ?? '').toString().trim();
   if (!platform) return NextResponse.json({ ok: false, error: 'platform required' }, { status: 400 });
+  if (!b.property_id) return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
+  const property_id = await requirePropertyAccess(req, b.property_id);
+  const hint = (b.hint ?? '').toString().trim();
 
   const sb = getSupabaseAdmin();
 

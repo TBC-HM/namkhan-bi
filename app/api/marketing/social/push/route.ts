@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -39,10 +40,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (!post_id) return NextResponse.json({ error: 'post_id required' }, { status: 400 });
+  if (property_id == null) return NextResponse.json({ error: 'property_id required' }, { status: 400 });
+
+  // Verify caller has access to this property before invoking the edge fn
+  const verifiedPropertyId = await requirePropertyAccess(req, property_id);
 
   const sb = getSupabaseAdmin();
   const { data, error } = await sb.functions.invoke('social-push', {
-    body: { mode: 'push', post_id, property_id },
+    body: { mode: 'push', post_id, property_id: verifiedPropertyId },
   });
 
   // Form submissions get redirected back with a status flag; JSON callers get JSON

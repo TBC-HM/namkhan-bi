@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'no updatable fields provided' }, { status: 400 });
   }
 
-  // Guard: only draft or ready posts
+  // Look up post to get its property_id (gate opens only if caller has access)
   const sb = getSupabaseAdmin();
   const { data: existing } = await sb.from('v_social_posts')
     .select('status,property_id')
@@ -41,6 +42,10 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (!existing) return NextResponse.json({ ok: false, error: 'post not found' }, { status: 404 });
+
+  // Verify caller has access to this post's property — throws Response on 400/401/403
+  await requirePropertyAccess(req, existing.property_id);
+
   if (!['draft', 'ready'].includes(existing.status)) {
     return NextResponse.json({ ok: false, error: `cannot edit ${existing.status} post` }, { status: 409 });
   }
