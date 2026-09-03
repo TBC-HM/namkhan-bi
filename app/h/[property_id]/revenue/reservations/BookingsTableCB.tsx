@@ -67,8 +67,8 @@ function daysInMonth(y: number, m: number): number {
 const chipBase: CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5,
   padding: '5px 12px', fontSize: 12, borderRadius: 20,
-  border: '1px solid var(--tbl-border)', background: 'var(--tbl-bg)',
-  color: 'var(--tbl-fg)', cursor: 'pointer', whiteSpace: 'nowrap',
+  border: '1px solid var(--tbl-border)', background: '#fff',
+  color: '#1B1B1B', cursor: 'pointer', whiteSpace: 'nowrap',
   fontFamily: 'inherit', lineHeight: 1.4, userSelect: 'none',
   transition: 'border-color 0.15s',
 };
@@ -529,8 +529,8 @@ export default function BookingsTableCB({ propertyId }: Props) {
           style={{
             width: '100%', padding: '8px 12px 8px 34px',
             fontSize: 13, border: '1px solid var(--tbl-border)',
-            borderRadius: 6, background: 'var(--tbl-bg)',
-            color: 'var(--tbl-fg)', fontFamily: 'inherit',
+            borderRadius: 6, background: '#fff',
+            color: '#1B1B1B', fontFamily: 'inherit',
             boxSizing: 'border-box',
           }}
         />
