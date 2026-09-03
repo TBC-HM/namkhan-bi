@@ -13,10 +13,12 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BookingRow {
-  reservation_id: string;
+  reservation_id:  string;
   guest_first_name: string | null;
   guest_last_name:  string | null;
   booking_date:     string | null;
+  check_in_date:    string | null;
+  check_out_date:   string | null;
   room_numbers:     string | null;
   room_type_name:   string | null;
   status:           string | null;
@@ -60,6 +62,32 @@ function fmtIsoShort(iso: string): string {
 
 function daysInMonth(y: number, m: number): number {
   return new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+}
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
+
+function statusBadge(status: string | null, isCancelled: boolean | null): { label: string; style: CSSProperties } {
+  if (isCancelled) return {
+    label: 'CANCELLED',
+    style: { background: '#FEE2E2', color: '#991B1B', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' },
+  };
+  const s = (status ?? '').toLowerCase();
+  if (s === 'checked in') return {
+    label: 'CHECKED IN',
+    style: { background: '#D1FAE5', color: '#065F46', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' },
+  };
+  if (s === 'checked out') return {
+    label: 'CHECKED OUT',
+    style: { background: '#F3F4F6', color: '#374151', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' },
+  };
+  if (s === 'confirmed') return {
+    label: 'CONFIRMED',
+    style: { background: '#DCFCE7', color: '#166534', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' },
+  };
+  return {
+    label: (status ?? '—').toUpperCase(),
+    style: { background: '#F3F4F6', color: '#374151', padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' },
+  };
 }
 
 // ─── Token-based style constants (module scope) ───────────────────────────────
@@ -673,8 +701,12 @@ export default function BookingsTableCB({ propertyId }: Props) {
                   <th style={thSort} onClick={() => toggleSort('booking_date')}>
                     Date Booked{sortArrow('booking_date')}
                   </th>
-                  <th style={thBase}>Room Number(S)</th>
+                  <th style={thBase}>Room#(S)</th>
                   <th style={thBase}>Room Type</th>
+                  <th style={thBase}>Check In</th>
+                  <th style={thBase}>Check Out</th>
+                  <th style={thBase}>Status</th>
+                  <th style={thBase}>Source</th>
                 </tr>
               </thead>
               <tbody>
@@ -689,8 +721,16 @@ export default function BookingsTableCB({ propertyId }: Props) {
                     <td style={{ ...td, fontWeight: 500 }}>{r.guest_last_name ?? EM}</td>
                     <td style={td}>{fmtDate(r.booking_date)}</td>
                     <td style={td}>{r.room_numbers ?? EM}</td>
-                    <td style={{ ...td, color: 'var(--tbl-fg-mute)', maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <td style={{ ...td, color: 'var(--tbl-fg-mute)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {r.room_type_name ?? EM}
+                    </td>
+                    <td style={td}>{fmtDate(r.check_in_date)}</td>
+                    <td style={td}>{fmtDate(r.check_out_date)}</td>
+                    <td style={{ ...td, padding: '6px 14px' }}>
+                      {(() => { const b = statusBadge(r.status, r.is_cancelled); return <span style={b.style}>{b.label}</span>; })()}
+                    </td>
+                    <td style={{ ...td, color: 'var(--tbl-fg-mute)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {r.source_name ?? EM}
                     </td>
                   </tr>
                 ))}
