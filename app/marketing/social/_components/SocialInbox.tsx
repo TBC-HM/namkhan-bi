@@ -1,20 +1,26 @@
 'use client';
 // app/marketing/social/_components/SocialInbox.tsx
 // spec-social-media-module (2026-07-25, run 2) · A6 — DB-backed approval inbox.
-// Newsletter "broadcasts" analog with the grouping dimension changed from
-// audience-group to CHANNEL (research §0.R R5): one box per active channel,
-// auto-filled with marketing.social_posts drafts created when calendar slots
-// are accepted. Actions reuse the existing post lifecycle RPCs via
-// POST /api/marketing/socials (op=set_status): draft → ready → cancelled.
-// Run 3 (A5/A7): Export wired — per-post zip, per-channel week/month zip via
-// POST /api/marketing/social/export (blob download), and the A7 sample-pack
-// email button (2 posts per channel & format → PBS) via
-// POST /api/marketing/social/send-samples.
+// 2026-09-03: add media picker (from media library) and inline caption editing
+// via POST /api/marketing/social/update-post.
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import type { SocialChannelRule } from '@/lib/marketing';
 import type { SocialPostRow } from '@/lib/marketing-social';
+
+interface MediaAsset {
+  asset_id: string;
+  asset_type: string;
+  filename: string;
+  caption: string | null;
+  alt_text: string | null;
+  property_area: string | null;
+  width_px: number | null;
+  height_px: number | null;
+  thumbnail_url: string | null;
+  full_url: string | null;
+}
 
 const WHITE = '#FFFFFF';
 const HAIR  = '#E6DFCC';
@@ -51,6 +57,43 @@ export default function SocialInbox({ posts, rules }: {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [mediaPicker, setMediaPicker] = useState<{ postId: string; propertyId: number } | null>(null);
+  const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+
+  const openMediaPicker = useCallback(async (post: SocialPostRow) => {
+    setMediaPicker({ postId: post.post_id, propertyId: post.property_id });
+    setMediaLoading(true);
+    setMediaAssets([]);
+    try {
+      const res = await fetch(`/api/marketing/social/media-library?property_id=${post.property_id}&type=photo&limit=40`);
+      const j = await res.json();
+      setMediaAssets(j.assets ?? []);
+    } finally {
+      setMediaLoading(false);
+    }
+  }, []);
+
+  async function pickMedia(asset: MediaAsset) {
+    if (!mediaPicker || !asset.full_url) return;
+    const key = `media:${mediaPicker.postId}`;
+    setBusy(key); setErr(null);
+    try {
+      const res = await fetch('/api/marketing/social/update-post', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: mediaPicker.postId, media_urls: [asset.full_url] }),
+      });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error ?? 'update failed');
+      setMediaPicker(null);
+      setNote(`Media set — ${asset.filename}`);
+      router.refresh();
+    } catch (ex: any) {
+      setErr(ex?.message ?? 'media update failed');
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const activePlatforms = rules.filter((r) => r.active).map((r) => r.platform);
   const open = posts.filter((p) => p.status === 'draft' || p.status === 'ready' || p.status === 'failed');
@@ -209,6 +252,12 @@ export default function SocialInbox({ posts, rules }: {
                             </button>
                           )}
                           <button type="button" disabled={busy !== null}
+                            onClick={() => openMediaPicker(p)}
+                            style={btnSecondary}
+                            title="Pick an image from the media library">
+                            {busy === `media:${p.post_id}` ? '…' : '🖼 Media'}
+                          </button>
+                          <button type="button" disabled={busy !== null}
                             onClick={() => exportZip('selection', { postIds: [p.post_id] })}
                             style={btnSecondary} title="Download this post as an upload-ready zip (caption + media, channel-formatted)">
                             {busy === `export:selection:${p.post_id}` ? '…' : '⬇ Export'}
@@ -231,6 +280,42 @@ export default function SocialInbox({ posts, rules }: {
           })}
         </div>
       </div>
+
+      {/* Media picker overlay */}
+      {mediaPicker && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: WHITE, borderRadius: 8, padding: '20px 24px', maxWidth: 820, width: '94vw', maxHeight: '82vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>Select media from library</div>
+              <button type="button" onClick={() => setMediaPicker(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: INK_M }}>×</button>
+            </div>
+            <div style={{ fontSize: 10, color: INK_M }}>Photos approved for social_organic use · click to assign to this post</div>
+            {mediaLoading && <div style={{ fontSize: 12, color: INK_M, padding: '24px 0', textAlign: 'center' }}>Loading library…</div>}
+            {!mediaLoading && mediaAssets.length === 0 && (
+              <div style={{ fontSize: 12, color: INK_M, padding: '24px 0', textAlign: 'center' }}>No media found for this property.</div>
+            )}
+            {!mediaLoading && mediaAssets.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, overflowY: 'auto', flex: 1 }}>
+                {mediaAssets.map((a) => (
+                  <button key={a.asset_id} type="button"
+                    onClick={() => pickMedia(a)}
+                    disabled={busy !== null}
+                    style={{ background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 6, cursor: 'pointer', textAlign: 'left' }}>
+                    {a.thumbnail_url
+                      ? <img src={a.thumbnail_url} alt={a.alt_text ?? a.filename} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 3, display: 'block', marginBottom: 4 }} />
+                      : <div style={{ width: '100%', aspectRatio: '4/3', background: HAIR, borderRadius: 3, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🖼</div>
+                    }
+                    <div style={{ fontSize: 9, color: INK_M, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.filename}>
+                      {a.caption ?? a.filename}
+                    </div>
+                    {a.property_area && <div style={{ fontSize: 8, color: FOREST, marginTop: 2 }}>{a.property_area}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
