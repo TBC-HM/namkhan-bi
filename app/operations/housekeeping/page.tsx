@@ -11,6 +11,8 @@ import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
 import Page from '@/components/page/Page';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { PROPERTY_ID } from '@/lib/supabase';
 
 import RoomBoard from './_components/RoomBoard';
 import LadderTable from './_components/LadderTable';
@@ -34,14 +36,109 @@ import { dndGuardian } from '@/lib/agents/hk/dndGuardian';
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
+// ─── Housekeeping Status Table ─────────────────────────────────────────────
+// Defined at module scope — never inside an async RSC (runtime Digest crash).
+
+interface HkStatusRow {
+  room_id: string;
+  status: string | null;
+  is_clean: boolean | null;
+  is_inspected: boolean | null;
+  is_occupied: boolean | null;
+  last_cleaned_by: string | null;
+  last_cleaned_at: string | null;
+  snapshot_date: string | null;
+}
+
+function HkStatusBadge({ clean, inspected }: { clean: boolean | null; inspected: boolean | null }) {
+  if (clean && inspected) {
+    return (
+      <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'var(--st-good, #22c55e)', marginRight: 6 }} />
+    );
+  }
+  if (clean && !inspected) {
+    return (
+      <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'var(--brass, #d97706)', marginRight: 6 }} />
+    );
+  }
+  return (
+    <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: 'var(--st-bad, #ef4444)', marginRight: 6 }} />
+  );
+}
+
+function HkStatusTable({ rows }: { rows: HkStatusRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <p style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-sm)', marginTop: 8 }}>
+        No housekeeping status rows for this property.
+      </p>
+    );
+  }
+  return (
+    <div style={{ overflowX: 'auto', marginTop: 8 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--t-sm)' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--tbl-border, var(--paper-deep))' }}>
+            {['Room', 'Status', 'Clean?', 'Inspected?', 'Occupied?', 'Last Cleaned By', 'Last Cleaned At', 'Snapshot Date'].map((h) => (
+              <th
+                key={h}
+                style={{
+                  textAlign: 'left',
+                  padding: '6px 10px',
+                  fontWeight: 600,
+                  color: 'var(--ink-mute)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr
+              key={r.room_id}
+              style={{ borderBottom: '1px solid var(--tbl-border, var(--paper-deep))' }}
+            >
+              <td style={{ padding: '6px 10px', fontWeight: 600 }}>{r.room_id}</td>
+              <td style={{ padding: '6px 10px' }}>{r.status ?? '—'}</td>
+              <td style={{ padding: '6px 10px' }}>
+                <HkStatusBadge clean={r.is_clean} inspected={r.is_inspected} />
+                {r.is_clean ? 'Yes' : 'No'}
+              </td>
+              <td style={{ padding: '6px 10px' }}>{r.is_inspected ? 'Yes' : 'No'}</td>
+              <td style={{ padding: '6px 10px' }}>{r.is_occupied ? 'Yes' : 'No'}</td>
+              <td style={{ padding: '6px 10px' }}>{r.last_cleaned_by ?? '—'}</td>
+              <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>
+                {r.last_cleaned_at ? new Date(r.last_cleaned_at).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+              </td>
+              <td style={{ padding: '6px 10px' }}>{r.snapshot_date ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default async function HousekeepingPage() {
-  const [rooms, ladder, linen, amenities, lf, dnd] = await Promise.all([
+  const supabaseAdmin = getSupabaseAdmin();
+
+  const [rooms, ladder, linen, amenities, lf, dnd, hkStatus] = await Promise.all([
     fetchRoomStatus().catch(() => null),
     fetchHkAssignments().catch(() => null),
     fetchLinenPars().catch(() => null),
     fetchAmenityQueue().catch(() => null),
     fetchLostFound().catch(() => null),
     fetchDndStreaks().catch(() => null),
+    Promise.resolve(
+      supabaseAdmin
+        .from('v_housekeeping_status' as never)
+        .select('room_id, status, is_clean, is_inspected, is_occupied, last_cleaned_by, last_cleaned_at, snapshot_date')
+        .eq('property_id', PROPERTY_ID)
+        .order('room_id', { ascending: true })
+    ).then((r) => ((r as { data: HkStatusRow[] | null }).data ?? []) as HkStatusRow[]).catch(() => [] as HkStatusRow[]),
   ]);
 
   // Decision queue rows — populated when ops.maintenance/agent decisions table ships.
@@ -242,6 +339,30 @@ export default async function HousekeepingPage() {
       </div>
 
       <DndTracker rows={dnd} />
+
+      {/* BLOCK 8b: Housekeeping Status — sourced from pms.housekeeping_status_cb via v_housekeeping_status */}
+      <section
+        style={{
+          marginTop: 14,
+          padding: '14px 16px',
+          background: 'var(--paper-warm)',
+          border: '1px solid var(--paper-deep)',
+          borderRadius: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+          <h2 style={{ margin: 0, fontSize: 'var(--t-base)', fontWeight: 700 }}>Room Housekeeping Status</h2>
+          <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
+            {hkStatus.length} rooms · from Cloudbeds sync
+          </span>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
+            <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--st-good, #22c55e)', marginRight: 4 }} />Clean + inspected</span>
+            <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--brass, #d97706)', marginRight: 4 }} />Clean, not inspected</span>
+            <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--st-bad, #ef4444)', marginRight: 4 }} />Not clean</span>
+          </div>
+        </div>
+        <HkStatusTable rows={hkStatus} />
+      </section>
 
       {/* BLOCK 9: Guardrails banner */}
       <GuardrailsBanner>

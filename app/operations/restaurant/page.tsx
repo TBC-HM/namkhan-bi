@@ -28,6 +28,7 @@ import {
   type FbPeriodKey, type FbCaptureStats, type MenuSort,
 } from './_cockpit/data';
 import { resolveWindow, OP_PERIODS, type OpPeriod } from '@/lib/outlets/capture';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -126,6 +127,9 @@ export default async function FbCockpitPage({ searchParams, propertyId }: Props)
         {tab === 'cost'     && <CostTab    pid={pid} today={today} money={money} />}
         {tab === 'analytics' && <AnalyticsTab pid={pid} today={today} money={money} sym={sym} />}
         {tab === 'ledger' && <LedgerTab searchParams={searchParams} propertyId={propertyId} />}
+
+        <OutletRevenueSection pid={pid} money={money} />
+        <MenuItemSalesSection money={money} />
       </div>
     </DashboardPage>
   );
@@ -971,6 +975,172 @@ function LedgerTab({ searchParams, propertyId }: {
   propertyId?: number;
 }) {
   return <LegacyFbView searchParams={searchParams} propertyId={propertyId} />;
+}
+
+// ─── Outlet Revenue ────────────────────────────────────────────────────────
+
+type OutletRawRow = {
+  outlet: string;
+  meal_period: string;
+  covers_reservation_distinct: number;
+  line_count: number;
+  revenue: number;
+};
+
+type OutletSummaryRow = {
+  outlet: string;
+  meal_period: string;
+  revenue: number;
+  covers: number;
+  lines: number;
+};
+
+async function OutletRevenueSection({ pid, money }: { pid: number; money: (n: number) => string }) {
+  const supabase = getSupabaseAdmin();
+  const rawRows = await Promise.resolve(
+    supabase
+      .from('v_outlet_revenue_daily' as never)
+      .select('outlet, meal_period, covers_reservation_distinct, line_count, revenue')
+      .eq('property_id', pid)
+      .order('revenue_date', { ascending: false })
+      .limit(90),
+  ).then((r) => (r.data ?? []) as OutletRawRow[])
+   .catch((): OutletRawRow[] => []);
+
+  const grouped = new Map<string, OutletSummaryRow>();
+  for (const r of rawRows) {
+    const key = `${r.outlet}||${r.meal_period}`;
+    const existing = grouped.get(key) ?? {
+      outlet: r.outlet, meal_period: r.meal_period, revenue: 0, covers: 0, lines: 0,
+    };
+    existing.revenue += Number(r.revenue ?? 0);
+    existing.covers  += Number(r.covers_reservation_distinct ?? 0);
+    existing.lines   += Number(r.line_count ?? 0);
+    grouped.set(key, existing);
+  }
+  const summary = [...grouped.values()].sort((a, b) => b.revenue - a.revenue);
+
+  if (summary.length === 0) {
+    return (
+      <Container title="Outlet Revenue · last 30 days" subtitle="from v_outlet_revenue_daily" density="compact">
+        <Empty>No outlet revenue data in the last 30 days.</Empty>
+      </Container>
+    );
+  }
+
+  return (
+    <Container
+      title="Outlet Revenue · last 30 days"
+      subtitle="from v_outlet_revenue_daily · grouped by outlet and meal period · last 90 daily rows"
+      density="compact"
+    >
+      <MetricMatrix
+        caption="Outlet revenue by meal period, last 30 days."
+        columns={[
+          { key: 'meal',  label: 'Meal Period' },
+          { key: 'rev',   label: 'Revenue' },
+          { key: 'cov',   label: 'Covers' },
+          { key: 'lines', label: 'Lines' },
+        ]}
+        rows={summary.map((r) => ({
+          key: `${r.outlet}||${r.meal_period}`,
+          label: r.outlet || '—',
+          cells: {
+            meal:  { value: r.meal_period || '—', tone: 'mute' },
+            rev:   { value: money(r.revenue) },
+            cov:   { value: r.covers.toLocaleString('en-US'), tone: 'mute' },
+            lines: { value: r.lines.toLocaleString('en-US'), tone: 'mute' },
+          },
+        }))}
+        labelWidth={160}
+        minWidth={480}
+      />
+    </Container>
+  );
+}
+
+// ─── Menu Item Sales ────────────────────────────────────────────────────────
+
+type MenuItemRawRow = {
+  item_id: number;
+  name: string;
+  units_sold: number;
+  revenue: number;
+  seller_band: string;
+};
+
+function SellerBandPill({ band }: { band: string }) {
+  const lower = (band ?? '').toLowerCase();
+  let bg: string;
+  let fg: string;
+  if (lower === 'star')      { bg = '#D1FAE5'; fg = '#065F46'; }
+  else if (lower === 'high') { bg = '#DBEAFE'; fg = '#1E40AF'; }
+  else if (lower === 'low')  { bg = '#FEF3C7'; fg = '#92400E'; }
+  else                       { bg = 'var(--paper-soft,#FAFAF7)'; fg = 'var(--ink-soft,#5A5A5A)'; }
+  return (
+    <span style={{
+      padding: '1px 8px', borderRadius: 99, fontSize: 10, fontWeight: 600,
+      background: bg, color: fg, letterSpacing: '0.04em', textTransform: 'uppercase',
+      display: 'inline-block',
+    }}>{band || '—'}</span>
+  );
+}
+
+async function MenuItemSalesSection({ money }: { money: (n: number) => string }) {
+  const supabase = getSupabaseAdmin();
+  const items = await Promise.resolve(
+    supabase
+      .from('v_menu_item_sales' as never)
+      .select('item_id, name, units_sold, revenue, seller_band')
+      .order('revenue', { ascending: false })
+      .limit(30),
+  ).then((r) => (r.data ?? []) as MenuItemRawRow[])
+   .catch((): MenuItemRawRow[] => []);
+
+  if (items.length === 0) {
+    return (
+      <Container title="Menu Item Performance · top sellers" subtitle="from v_menu_item_sales" density="compact">
+        <Empty>No menu item sales data.</Empty>
+      </Container>
+    );
+  }
+
+  return (
+    <Container
+      title="Menu Item Performance · top 30 sellers"
+      subtitle="from v_menu_item_sales · ordered by revenue · no property filter (view is global)"
+      density="compact"
+    >
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--hairline,#E6DFCC)' }}>
+              <th style={{ padding: '6px 8px', textAlign: 'left',   fontSize: 9.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft,#5A5A5A)', fontWeight: 600 }}>Item Name</th>
+              <th style={{ padding: '6px 8px', textAlign: 'center', fontSize: 9.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft,#5A5A5A)', fontWeight: 600 }}>Seller Band</th>
+              <th style={{ padding: '6px 8px', textAlign: 'right',  fontSize: 9.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft,#5A5A5A)', fontWeight: 600 }}>Units Sold</th>
+              <th style={{ padding: '6px 8px', textAlign: 'right',  fontSize: 9.5, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft,#5A5A5A)', fontWeight: 600 }}>Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it, i) => (
+              <tr key={it.item_id} style={{ background: i % 2 ? 'var(--paper,#FFFFFF)' : 'transparent' }}>
+                <td style={{ padding: '6px 8px', textAlign: 'left',   color: 'var(--ink,#1B1B1B)' }}>{it.name}</td>
+                <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                  <SellerBandPill band={it.seller_band} />
+                </td>
+                <td style={{ padding: '6px 8px', textAlign: 'right',  fontFamily: 'var(--mono,monospace)', fontSize: 11 }}>
+                  {Number(it.units_sold).toLocaleString('en-US')}
+                </td>
+                <td style={{ padding: '6px 8px', textAlign: 'right',  fontFamily: 'var(--mono,monospace)', fontSize: 11, fontWeight: 600 }}>
+                  {money(Number(it.revenue))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Container>
+  );
 }
 
 // ─── shared bits ───────────────────────────────────────────────────────────

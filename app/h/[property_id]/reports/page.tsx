@@ -16,6 +16,7 @@ import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_de
 import AgentDeliveriesPanel from '@/components/inbox/AgentDeliveriesPanel';
 import { listAgentDeliveries } from '@/lib/inbox/agent-deliveries';
 import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
@@ -30,6 +31,17 @@ const KNOWN_PROPERTIES: Record<number, string> = {
 const DEPT_KEYS = new Set([
   'revenue', 'sales', 'marketing', 'operations', 'guest', 'finance',
 ]);
+
+const KNOWN_CB_REPORTS: Record<number, { label: string; category: string }> = {
+  74:  { label: 'Daily Revenue Report',         category: 'Revenue'      },
+  83:  { label: 'Payment Reconciliation',       category: 'Finance'      },
+  61:  { label: 'Cashier Report',               category: 'Finance'      },
+  168: { label: 'Voids, Adjustments & Refunds', category: 'Finance'      },
+  306: { label: 'Deposit Ledger with Details',  category: 'Ledger'       },
+  309: { label: 'AR Ledger with Details',       category: 'Ledger'       },
+  311: { label: 'Current Ledger with Details',  category: 'Ledger'       },
+  38:  { label: 'Expanded Transaction Report',  category: 'Transactions' },
+};
 
 const TITLE_BY_TEMPLATE: Record<string, string> = {
   pulse:     'Pulse',
@@ -111,8 +123,9 @@ export default async function ReportsPage({ params, searchParams }: Props) {
     active: s.label === 'Reports',
   }));
 
-  // Parallel: report runs + agent deliveries
-  const [runsRes, deliveries] = await Promise.all([
+  const sbAdmin = getSupabaseAdmin();
+  // Parallel: report runs + agent deliveries + CB stock report catalog
+  const [runsRes, deliveries, cbCatalogRes] = await Promise.all([
     supabase
       .from('report_runs')
       .select('id, template_code, property_id, params, output_summary, status, created_at')
@@ -121,8 +134,11 @@ export default async function ReportsPage({ params, searchParams }: Props) {
       .order('created_at', { ascending: false })
       .limit(100),
     listAgentDeliveries(propertyId, 100).catch(() => []),
+    sbAdmin.from('v_stock_reports_catalog' as never).select('*').eq('property_id' as never, propertyId).order('report_id' as never),
   ]);
   const runs = ((runsRes.data ?? []) as ReportRun[]);
+  type CbCatRow = { report_id: number; report_name: string; snapshot_count: number; earliest_date: string | null; latest_date: string | null; total_rows: number | null; last_synced_at: string | null; };
+  const cbCatalog = ((cbCatalogRes.data ?? []) as CbCatRow[]);
   const deptLabel = dept.charAt(0).toUpperCase() + dept.slice(1);
 
   return (
@@ -215,6 +231,64 @@ export default async function ReportsPage({ params, searchParams }: Props) {
               selectedIdParam={searchParams.delivery}
               basePath={`/h/${propertyId}/reports`}
             />
+          )}
+        </Container>
+      </div>
+
+      {/* Cloudbeds stock reports catalog */}
+      <div style={fullRow}>
+        <Container
+          title="Cloudbeds stock reports"
+          subtitle={`${cbCatalog.length} report type${cbCatalog.length === 1 ? '' : 's'} synced · v_stock_reports_catalog · full catalog at Administration → CB Reports`}
+          density="compact"
+        >
+          {cbCatalog.length === 0 ? (
+            <div style={emptyStyle}>
+              No Cloudbeds stock report snapshots synced yet for this property.
+              Trigger a sync via the <code>sync-cloudbeds</code> edge function with{' '}
+              <code>scope=stock_report&amp;reportId=74</code> (Daily Revenue) or any of the 8 key report IDs.
+              Once landed, this catalog will populate with monthly, YTD, ledger, and transaction data.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr style={theadRow}>
+                    <th style={th}>ID</th>
+                    <th style={th}>Report</th>
+                    <th style={th}>Category</th>
+                    <th style={th}>Snapshots</th>
+                    <th style={th}>Date range</th>
+                    <th style={th}>Rows</th>
+                    <th style={th}>Last synced</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cbCatalog.map((r) => {
+                    const known = KNOWN_CB_REPORTS[r.report_id];
+                    return (
+                      <tr key={r.report_id} style={trRow}>
+                        <td style={tdLeft}><span style={typePill}>{r.report_id}</span></td>
+                        <td style={tdLeft}>{known?.label ?? r.report_name}</td>
+                        <td style={tdLeft}>{known?.category ?? '—'}</td>
+                        <td style={tdLeft}>{r.snapshot_count}</td>
+                        <td style={tdLeft}>
+                          {r.earliest_date && r.latest_date
+                            ? `${r.earliest_date} → ${r.latest_date}`
+                            : '—'}
+                        </td>
+                        <td style={tdLeft}>{r.total_rows != null ? Number(r.total_rows).toLocaleString() : '—'}</td>
+                        <td style={tdLeft}>
+                          {r.last_synced_at
+                            ? <span title={r.last_synced_at}>{relTime(r.last_synced_at)}</span>
+                            : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </Container>
       </div>

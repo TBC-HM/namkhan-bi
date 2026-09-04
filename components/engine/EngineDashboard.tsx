@@ -33,6 +33,8 @@ export type EnginePanel = {
   columns: Array<{ key: string; label: string; format?: EngineKpi["format"] }>;
   limit?: number;
   order_by?: { col: string; ascending?: boolean };
+  filter?: { col: string; eq: unknown };
+  highlightThreshold?: { key: string; above: number };
 };
 
 export type EngineConfig = {
@@ -74,12 +76,15 @@ async function fetchKpi(k: EngineKpi): Promise<{ value: unknown; ly?: unknown; b
 }
 
 async function fetchPanel(p: EnginePanel): Promise<Array<Record<string, unknown>>> {
-  let q = supabase.from(p.view).select(p.columns.map((c) => c.key).join(","));
+  // supabase is created without typed generics here, so cast to any for chaining
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q: any = (supabase as any).from(p.view).select(p.columns.map((c) => c.key).join(","));
+  if (p.filter) q = q.eq(p.filter.col, p.filter.eq);
   if (p.order_by) q = q.order(p.order_by.col, { ascending: p.order_by.ascending ?? false });
   q = q.limit(p.limit ?? 10);
-  const { data, error } = await q;
-  if (error || !data) return [];
-  return data as unknown as Array<Record<string, unknown>>;
+  return Promise.resolve(q)
+    .then((r: { data?: unknown[] | null; error?: unknown }) => (r.data ?? []) as Array<Record<string, unknown>>)
+    .catch(() => []);
 }
 
 export default async function EngineDashboard({ cfg }: { cfg: EngineConfig }) {
@@ -151,13 +156,18 @@ export default async function EngineDashboard({ cfg }: { cfg: EngineConfig }) {
                       <tr>{p.columns.map((c) => <th key={c.key} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#7d7565', borderBottom: '1px solid #25252d' }}>{c.label}</th>)}</tr>
                     </thead>
                     <tbody>
-                      {rows.map((row, ri) => (
-                        <tr key={ri} style={{ borderBottom: '1px solid #1f1c15' }}>
-                          {p.columns.map((c) => (
-                            <td key={c.key} style={{ padding: '8px 10px', color: 'var(--line-soft)' }}>{fmt(row[c.key], c.format)}</td>
-                          ))}
-                        </tr>
-                      ))}
+                      {rows.map((row, ri) => {
+                        const isHighlight = p.highlightThreshold
+                          ? Number(row[p.highlightThreshold.key] ?? 0) > p.highlightThreshold.above
+                          : false;
+                        return (
+                          <tr key={ri} style={{ borderBottom: '1px solid #1f1c15', background: isHighlight ? 'rgba(255,160,50,0.07)' : undefined }}>
+                            {p.columns.map((c) => (
+                              <td key={c.key} style={{ padding: '8px 10px', color: isHighlight && c.key === p.highlightThreshold?.key ? '#c87a2a' : 'var(--line-soft)', fontWeight: isHighlight && c.key === p.highlightThreshold?.key ? 600 : undefined }}>{fmt(row[c.key], c.format)}</td>
+                            ))}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

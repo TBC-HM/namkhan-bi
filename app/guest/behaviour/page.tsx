@@ -63,6 +63,19 @@ interface DirRow {
   last_adr: number | null;
   last_nights: number | null;
 }
+interface DemographicRow {
+  guest_country: string | null;
+  total_reservations: number | null;
+  total_revenue: number | null;
+  average_length_of_stay: number | null;
+  revenue_share_pct: number | null;
+  reservation_share_pct: number | null;
+}
+interface DiversityRow {
+  dimension: string | null;
+  bucket: string | null;
+  headcount: number | null;
+}
 function daysBetween(iso: string | null, ms: number): number | null {
   if (!iso) return null;
   return Math.floor((ms - new Date(iso).getTime()) / 86_400_000);
@@ -82,7 +95,7 @@ export default async function GuestBehaviourPage({ searchParams, propertyId }: P
 
   const sb = getSupabaseAdmin();
 
-  const [profilesR, resR, dirR] = await Promise.all([
+  const [profilesR, resR, dirR, demoR, diversityR] = await Promise.all([
     sb.schema('guest').from('mv_guest_profile')
       .select('guest_id, full_name, country, email, bookings_count, stays_count, lifetime_revenue, total_nights, avg_adr, first_stay_date, last_stay_date, is_repeat, top_source')
       .eq('property_id', pid)
@@ -95,11 +108,22 @@ export default async function GuestBehaviourPage({ searchParams, propertyId }: P
     sb.schema('guest').from('v_directory_full')
       .select('guest_id, email, phone, arrival_bucket, last_stay_date, spent_restaurant, spent_spa, spent_activities, spent_retail, top_source, last_room_type, party_type, last_adr, last_nights')
       .eq('property_id', pid),
+    sb.from('v_chart_guest_demographics' as never)
+      .select('guest_country, total_reservations, total_revenue, average_length_of_stay, revenue_share_pct, reservation_share_pct')
+      .eq('property_id', pid)
+      .order('revenue_share_pct', { ascending: false })
+      .limit(20),
+    sb.from('v_diversity_mix' as never)
+      .select('dimension, bucket, headcount')
+      .eq('property_id', pid)
+      .order('dimension', { ascending: true }),
   ]);
 
-  const profiles: ProfileRow[] = (profilesR.data as ProfileRow[]) ?? [];
-  const res:      ResRow[] = (resR.data as ResRow[]) ?? [];
-  const dir:      DirRow[] = (dirR.data as DirRow[]) ?? [];
+  const profiles:    ProfileRow[]    = (profilesR.data as ProfileRow[]) ?? [];
+  const res:         ResRow[]        = (resR.data as ResRow[]) ?? [];
+  const dir:         DirRow[]        = (dirR.data as DirRow[]) ?? [];
+  const demographics: DemographicRow[] = (demoR.data as DemographicRow[]) ?? [];
+  const diversity:    DiversityRow[]   = (diversityR.data as DiversityRow[]) ?? [];
 
   // ─── LOYALTY side ──────────────────────────────────────────────────────
   const totalGuests   = profiles.length;
@@ -237,6 +261,22 @@ export default async function GuestBehaviourPage({ searchParams, propertyId }: P
     }))
     .sort((a, b) => (Number(b.lifetime_revenue ?? 0) * (b.intensity + 1)) - (Number(a.lifetime_revenue ?? 0) * (a.intensity + 1)))
     .slice(0, 20);
+
+  // ─── Diversity mix: group by dimension ───
+  const diversityByDimension = new Map<string, { bucket: string; headcount: number }[]>();
+  for (const d of diversity) {
+    const dim = d.dimension ?? 'Other';
+    const arr = diversityByDimension.get(dim) ?? [];
+    arr.push({ bucket: d.bucket ?? '—', headcount: d.headcount ?? 0 });
+    diversityByDimension.set(dim, arr);
+  }
+  const diversityDims = Array.from(diversityByDimension.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dim, rows]) => ({
+      dim,
+      rows: rows.sort((a, b) => b.headcount - a.headcount),
+      total: rows.reduce((s, r) => s + r.headcount, 0),
+    }));
 
   const tabs: DashboardTab[] = GUEST_SUBPAGES.map(s => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/guest/behaviour',
@@ -505,6 +545,77 @@ export default async function GuestBehaviourPage({ searchParams, propertyId }: P
             </div>
           )}
         </div>
+
+        {/* GUEST ORIGINS · country breakdown */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div style={sectionH}>Guest origins · top 20 countries by revenue share</div>
+          {demographics.length === 0 ? (
+            <EmptyBox text="No demographic data available." />
+          ) : (
+            <div style={{ background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={th}>Country</th>
+                    <th style={thR}>Reservations</th>
+                    <th style={thR}>Rev share %</th>
+                    <th style={thR}>Avg LOS</th>
+                    <th style={thR}>Total revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {demographics.map((r, i) => {
+                    const revPct = Number(r.revenue_share_pct ?? 0);
+                    const revColor = revPct >= 20 ? GREEN : revPct >= 8 ? AMBER : INK_S;
+                    return (
+                      <tr key={r.guest_country ?? i}>
+                        <td style={{ ...td, fontWeight: 600 }}>{r.guest_country ?? '—'}</td>
+                        <td style={tdR}>{fmtNum(Number(r.total_reservations ?? 0))}</td>
+                        <td style={{ ...tdR, color: revColor, fontVariantNumeric: 'tabular-nums' }}>{revPct.toFixed(1)}%</td>
+                        <td style={{ ...tdR, color: INK_S }}>{Number(r.average_length_of_stay ?? 0).toFixed(1)}n</td>
+                        <td style={{ ...tdR, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(Number(r.total_revenue ?? 0))}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* DIVERSITY MIX */}
+        {diversityDims.length > 0 && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <div style={sectionH}>Diversity mix</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 8 }}>
+              {diversityDims.map(({ dim, rows, total }) => (
+                <div key={dim} style={cardBox}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: INK, marginBottom: 2, textTransform: 'capitalize' }}>{dim.replace(/_/g, ' ')}</div>
+                  <div style={{ fontSize: 11, color: INK_M, marginBottom: 10 }}>{fmtNum(total)} guests</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {rows.slice(0, 8).map(r => {
+                      const pctVal = total > 0 ? (r.headcount / total) * 100 : 0;
+                      return (
+                        <div key={r.bucket} style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 6, alignItems: 'center', fontSize: 11 }}>
+                          <div style={{ position: 'relative' }}>
+                            <div style={{ fontSize: 11, color: INK_S, marginBottom: 2 }}>{r.bucket}</div>
+                            <div style={{ position: 'relative', height: 6, background: '#FAF6EB', border: '1px solid ' + HAIR, borderRadius: 2 }}>
+                              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: pctVal + '%', background: GREEN, borderRadius: 2 }} />
+                            </div>
+                          </div>
+                          <span style={{ textAlign: 'right', color: INK, fontVariantNumeric: 'tabular-nums' }}>{fmtNum(r.headcount)} · {pctVal.toFixed(0)}%</span>
+                        </div>
+                      );
+                    })}
+                    {rows.length > 8 && (
+                      <div style={{ fontSize: 10, color: INK_M, marginTop: 2 }}>+{rows.length - 8} more buckets</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
       </DashboardPage>
     </div>

@@ -1,18 +1,14 @@
 // app/h/[property_id]/finance/overview/page.tsx
-// PBS 2026-07-08 — Donna finance/overview delegate.
-import DeptSubpageStub from '@/app/h/[property_id]/_shared/DeptSubpageStub';
+// PBS 2026-09-05: replaced DeptSubpageStub with the live FinanceOverviewPage
+// delegate, passing propertyId so data is scoped to the correct tenant.
+import { notFound } from 'next/navigation';
+import FinanceOverviewPage from '@/app/finance/overview/page';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function DonnaFinanceOverview({ params }: { params: { property_id: string } }) {
-  return (
-    <DeptSubpageStub
-      propertyId={Number(params.property_id)}
-      deptLabel="Finance"
-      routeLabel="Overview"
-      namkhanPath="/finance/overview"
-      hint="Will surface Donna finance entry cards once dedicated overview data (P&L / Ledger / HR / Budget / Working capital / Reports) is fully Donna-scoped."
-    />
-  );
+export default async function HFinanceOverview({ params }: { params: { property_id: string } }) {
+  const propertyId = Number(params.property_id);
+  if (!Number.isFinite(propertyId) || propertyId <= 0) notFound();
+  return <FinanceOverviewPage propertyId={propertyId} />;
 }

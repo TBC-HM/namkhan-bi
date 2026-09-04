@@ -18,6 +18,7 @@ import {
   getLatestCommentary,
 } from '../_data';
 import { priorPeriod, supabaseGl, type PeriodWindow } from '@/lib/supabase-gl';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
@@ -59,6 +60,18 @@ function fmtPp(n: number | null | undefined, dp = 1): string {
 function fmtPctV(n: number | null | undefined, dp = 1): string {
   if (n === null || n === undefined || !isFinite(n)) return '—';
   return `${n.toFixed(dp)}%`;
+}
+
+/** 2-decimal USD: $12.34 — used in GOPPAR/CPOR strip */
+function fmtUsd2(n: number | null | undefined): string {
+  if (n == null || !isFinite(Number(n))) return '—';
+  return `$${Number(n).toFixed(2)}`;
+}
+
+/** 1-decimal pct: 23.4% — used in GOPPAR/CPOR strip */
+function fmtPct2(n: number | null | undefined): string {
+  if (n == null || !isFinite(Number(n))) return '—';
+  return `${Number(n).toFixed(1)}%`;
 }
 
 export default async function PnLPage({ searchParams, propertyId }: Props) {
@@ -267,6 +280,47 @@ export default async function PnLPage({ searchParams, propertyId }: Props) {
   // PBS 2026-05-15: 13-week cash forecast no longer rendered on P&L (treasury,
   // not P&L). Only fetching latest commentary now.
   const latestCommentary = await getLatestCommentary(cur);
+
+  // ── GOPPAR / CPOR strip: last 6 months from public views ─────────────────
+  const gopparAdmin = getSupabaseAdmin();
+  const gopparLast6 = (() => {
+    const out: string[] = [];
+    const today = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return out;
+  })();
+  const [gopparRows, cporRows, flowThroughRows] = await Promise.all([
+    Promise.resolve(
+      gopparAdmin
+        .from('v_goppar_monthly' as never)
+        .select('period_yyyymm,rooms_available,rooms_sold,gop,gop_margin_pct,goppar,trevpar_gl,gop_por')
+        .eq('property_id', pid)
+        .in('period_yyyymm', gopparLast6)
+        .order('period_yyyymm', { ascending: false }),
+    ).then((r: any) => (r.data ?? []) as any[]).catch(() => [] as any[]),
+    Promise.resolve(
+      gopparAdmin
+        .from('v_cpor_monthly' as never)
+        .select('period_yyyymm,currency,labour_cost,rooms_sold,cpor')
+        .eq('property_id', pid)
+        .in('period_yyyymm', gopparLast6)
+        .order('period_yyyymm', { ascending: false }),
+    ).then((r: any) => (r.data ?? []) as any[]).catch(() => [] as any[]),
+    Promise.resolve(
+      gopparAdmin
+        .from('v_flow_through_yoy_monthly' as never)
+        .select('*')
+        .eq('property_id', pid)
+        .limit(6),
+    ).then((r: any) => (r.data ?? []) as any[]).catch(() => [] as any[]),
+  ]);
+  // Build a period→cpor lookup for O(1) join in the render below
+  const cporByPeriod = new Map<string, any>(
+    (cporRows as any[]).map((r: any) => [r.period_yyyymm as string, r])
+  );
 
   // PBS 2026-06-18 #228 — room metrics for cur month/quarter, sourced from public.v_room_metrics_monthly
   // (bridge over kpi.v_goppar_monthly + kpi.v_adr_daily). Filtered to Namkhan property.
@@ -771,6 +825,76 @@ export default async function PnLPage({ searchParams, propertyId }: Props) {
           </div>
         );
       })()}
+      {/* ─── GOPPAR / CPOR metric strip ──────────────────────────── */}
+      {(gopparRows as any[]).length > 0 && (
+        <div style={{ background: 'var(--paper, #fff)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, padding: '14px 16px', margin: '6px 0' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 10 }}>GOPPAR / CPOR · last 6 months</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+              <thead>
+                <tr style={{ background: 'var(--paper-warm, #FAFAF7)' }}>
+                  {(['Month', 'GOPPAR', 'GOP Margin %', 'TRevPAR', 'CPOR', 'Rooms Sold'] as const).map((h, i) => (
+                    <th key={h} style={{ padding: '5px 10px', textAlign: i === 0 ? 'left' : 'right', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: 'var(--ink-soft, #5A5A5A)', whiteSpace: 'nowrap' as const }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(gopparRows as any[]).map((row: any) => {
+                  const cRow = cporByPeriod.get(row.period_yyyymm as string);
+                  return (
+                    <tr key={row.period_yyyymm} style={{ borderTop: '1px solid var(--hairline, #E0E0E0)' }}>
+                      <td style={{ padding: '5px 10px', whiteSpace: 'nowrap' as const }}>{row.period_yyyymm}</td>
+                      <td style={{ padding: '5px 10px', textAlign: 'right' }}>{fmtUsd2(row.goppar)}</td>
+                      <td style={{ padding: '5px 10px', textAlign: 'right' }}>{fmtPct2(row.gop_margin_pct)}</td>
+                      <td style={{ padding: '5px 10px', textAlign: 'right' }}>{fmtUsd2(row.trevpar_gl)}</td>
+                      <td style={{ padding: '5px 10px', textAlign: 'right' }}>{cRow ? fmtUsd2(cRow.cpor) : '—'}</td>
+                      <td style={{ padding: '5px 10px', textAlign: 'right' }}>{row.rooms_sold == null ? '—' : Number(row.rooms_sold).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {(flowThroughRows as any[]).length > 0 && (() => {
+            const ftFirst: Record<string, unknown> = (flowThroughRows as any[])[0] ?? {};
+            const ftCols = Object.keys(ftFirst).filter(k => k !== 'property_id');
+            return (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--hairline, #E0E0E0)' }}>
+                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 6 }}>Flow-through YoY</div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--paper-warm, #FAFAF7)' }}>
+                        {ftCols.map(k => (
+                          <th key={k} style={{ padding: '4px 8px', textAlign: 'right', fontSize: 10, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: 'var(--ink-soft, #5A5A5A)', whiteSpace: 'nowrap' as const }}>
+                            {k.replace(/_/g, ' ')}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(flowThroughRows as any[]).map((row: any, i: number) => (
+                        <tr key={i} style={{ borderTop: '1px solid var(--hairline, #E0E0E0)' }}>
+                          {ftCols.map(k => {
+                            const v: unknown = row[k];
+                            const display = v == null ? '—'
+                              : typeof v === 'number' ? (Number.isInteger(v) ? Number(v).toLocaleString() : `$${Number(v).toFixed(2)}`)
+                              : String(v);
+                            return <td key={k} style={{ padding: '4px 8px', textAlign: 'right' }}>{display}</td>;
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
       {/* PBS 2026-06-18 #225 — 3 CFO charts: Revenue · Net Income · Cost ratio (12-mo from pl_section_monthly) */}

@@ -770,6 +770,7 @@ const FINANCE_CFG: DeptCfg = {
     // headline stripes). Replaces the two "Open Docs register" links that
     // lived on the Legal page.
     { label: 'Archive',         href: '/h/260955/finance/archive'                  },
+    { label: 'CB Reports',      href: '/h/260955/admin/reports'                    },
     // cost-governance-v1 (2026-07-30): tenant-scoped platform usage at cost
     // (PBS placement correction: Administration -> Costs on the client surface).
   ],

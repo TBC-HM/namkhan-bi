@@ -38,7 +38,7 @@ export default async function LedgerPage({ searchParams }: Props) {
     tabParam === 'house_accounts' ? 'house_accounts' :
     'receivables';
 
-  const [aged, deposits, houseView] = await Promise.all([
+  const [aged, deposits, houseView, cbRows] = await Promise.all([
     getAgedAr().catch(() => []) as Promise<AgedRowWithContact[]>,
     getDepositsPipeline().catch(() => []) as Promise<DepositRow[]>,
     getHouseAccountsView(PROPERTY_ID).catch(() => ({
@@ -51,7 +51,19 @@ export default async function LedgerPage({ searchParams }: Props) {
       },
       posByHa: {},
     })),
+    Promise.resolve(
+      getSupabaseAdmin()
+        .from('v_stock_reports_catalog' as never)
+        .select('*')
+        .eq('property_id' as never, PROPERTY_ID)
+        .in('report_id' as never, [306, 309, 311])
+    ).then((r) => r.data ?? []).catch(() => []),
   ]);
+
+  type CbCatalogRow = { report_id: number; snapshot_count: number; latest_date: string | null; total_rows: number | null; last_synced_at: string | null; };
+  const cbRows2 = cbRows as CbCatalogRow[];
+  const cbByReport: Record<number, CbCatalogRow> = {};
+  for (const r of cbRows2) cbByReport[r.report_id] = r;
 
   // Receivables aggregates
   const totalAr = aged.reduce((s, r) => s + Number(r.open_balance || 0), 0);
@@ -190,6 +202,10 @@ export default async function LedgerPage({ searchParams }: Props) {
               <AgedArSection rows={aged} />
             </Container>
           </div>
+
+          <div style={fullRow}>
+            <CbReportBanner reportId={309} label="AR Ledger with Details" row={cbByReport[309] ?? null} />
+          </div>
         </>
       )}
 
@@ -218,21 +234,64 @@ export default async function LedgerPage({ searchParams }: Props) {
               <DepositsSection rows={deposits as DepositRow[]} />
             </Container>
           </div>
+
+          <div style={fullRow}>
+            <CbReportBanner reportId={306} label="Deposit Ledger with Details" row={cbByReport[306] ?? null} />
+          </div>
         </>
       )}
 
       {tab === 'house_accounts' && (
-        <div style={fullRow}>
-          <HouseAccountsSection
-            named={houseView.named}
-            walkin={houseView.walkin}
-            stats={houseView.stats}
-            posByHa={houseView.posByHa}
-            propertyId={PROPERTY_ID}
-          />
-        </div>
+        <>
+          <div style={fullRow}>
+            <HouseAccountsSection
+              named={houseView.named}
+              walkin={houseView.walkin}
+              stats={houseView.stats}
+              posByHa={houseView.posByHa}
+              propertyId={PROPERTY_ID}
+            />
+          </div>
+          <div style={fullRow}>
+            <CbReportBanner reportId={311} label="Current Ledger with Details" row={cbByReport[311] ?? null} />
+          </div>
+        </>
       )}
     </DashboardPage>
+  );
+}
+
+type CbCatalogRowProp = { report_id: number; snapshot_count: number; latest_date: string | null; total_rows: number | null; last_synced_at: string | null; } | null;
+
+function CbReportBanner({ reportId, label, row }: { reportId: number; label: string; row: CbCatalogRowProp }) {
+  const hasData = row && row.snapshot_count > 0;
+  return (
+    <div style={{
+      padding: '10px 12px',
+      fontSize: 12,
+      color: 'var(--ink-soft, #5a5a5a)',
+      background: hasData ? 'rgba(31,58,46,0.04)' : 'rgba(100,100,100,0.04)',
+      border: `1px solid ${hasData ? 'rgba(31,58,46,0.18)' : 'var(--hairline, #E6DFCC)'}`,
+      borderLeft: `3px solid ${hasData ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+      borderRadius: 6,
+      lineHeight: 1.5,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 16,
+    }}>
+      <span>
+        <strong style={{ color: hasData ? 'var(--primary, #1F3A2E)' : 'var(--ink, #1B1B1B)' }}>
+          CB · {label}
+        </strong>
+        {' '}(report {reportId}){' '}·{' '}
+        {hasData
+          ? `${row.snapshot_count} snapshot${row.snapshot_count !== 1 ? 's' : ''} · latest ${row.latest_date} · ${(row.total_rows ?? 0).toLocaleString()} rows · synced ${row.last_synced_at ? new Date(row.last_synced_at).toLocaleString() : '—'}`
+          : 'No CB snapshots yet — trigger a sync via sync-cloudbeds edge function'}
+      </span>
+      <a href={`/h/${PROPERTY_ID}/admin/reports`} style={{ fontSize: 11, color: 'var(--brass, #B8A878)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        CB Reports →
+      </a>
+    </div>
   );
 }
 
