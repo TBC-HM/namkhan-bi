@@ -4,6 +4,7 @@
 // Data source: public.v_stock_report_snapshot -> insights.stock_reports_cb
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,14 +13,17 @@ export async function GET(req: NextRequest) {
   const rawPid = searchParams.get('property_id');
   const rawRid = searchParams.get('report_id');
 
-  const propertyId = Number(rawPid);
-  const reportId   = Number(rawRid);
-
-  if (!Number.isFinite(propertyId) || propertyId <= 0) {
-    return new NextResponse('property_id required', { status: 400 });
-  }
+  const reportId = Number(rawRid);
   if (!Number.isFinite(reportId) || reportId <= 0) {
     return new NextResponse('report_id required', { status: 400 });
+  }
+
+  let propertyId: number;
+  try {
+    propertyId = await requirePropertyAccess(req, rawPid);
+  } catch (err) {
+    if (err instanceof Response) return err;
+    return new NextResponse('Unauthorized', { status: 401 });
   }
 
   const sb = getSupabaseAdmin();
