@@ -132,11 +132,14 @@ export default async function AdminReportsPage({ params }: Props) {
                     <th style={th}>Date range</th>
                     <th style={th}>Rows</th>
                     <th style={th}>Last sync</th>
+                    <th style={th}>Download</th>
                   </tr>
                 </thead>
                 <tbody>
                   {catalog.map((r: any) => {
                     const meta = KNOWN_REPORTS[r.report_id] ?? { label: r.report_name, category: 'Other' };
+                    const downloadUrl = `/api/admin/reports/download?property_id=${propertyId}&report_id=${r.report_id}`;
+                    const hasData = Number(r.total_rows ?? 0) > 0;
                     return (
                       <tr key={r.report_id} style={trRow}>
                         <td style={tdMono}>{r.report_id}</td>
@@ -157,6 +160,15 @@ export default async function AdminReportsPage({ params }: Props) {
                           <span style={{ fontSize: 11, color: 'var(--tbl-fg-mute, #5A5A5A)' }}>
                             {r.last_synced_at ? relTime(r.last_synced_at) : '—'}
                           </span>
+                        </td>
+                        <td style={tdLeft}>
+                          {hasData ? (
+                            <a href={downloadUrl} style={downloadBtn}>
+                              ↓ CSV
+                            </a>
+                          ) : (
+                            <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute, #5A5A5A)' }}>—</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -375,10 +387,25 @@ const monthPill: React.CSSProperties = {
   padding: '2px 8px',
   borderRadius: 4,
   background: 'var(--tbl-bg-elev, #F5F0E1)',
+  color: 'var(--tbl-fg, #1B1B1B)',
   fontSize: 11,
   fontWeight: 700,
   fontVariantNumeric: 'tabular-nums',
   letterSpacing: '0.02em',
+};
+
+const downloadBtn: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '2px 8px',
+  fontSize: 10,
+  fontWeight: 600,
+  letterSpacing: '0.04em',
+  background: 'rgba(31,58,46,0.06)',
+  color: '#1F3A2E',
+  border: '1px solid rgba(31,58,46,0.2)',
+  borderRadius: 3,
+  textDecoration: 'none',
+  whiteSpace: 'nowrap',
 };
 
 const syncCard: React.CSSProperties = {
