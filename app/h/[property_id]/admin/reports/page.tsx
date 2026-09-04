@@ -75,8 +75,7 @@ export default async function AdminReportsPage({ params }: Props) {
   const ytdDays        = ytd[0]?.days_with_data ?? 0;
 
   const tabs = [
-    { key: 'reports',   label: 'Reports',       href: `/h/${propertyId}/admin/reports`,       active: true  },
-    { key: 'gmail',     label: 'Gmail connect',  href: `/h/${propertyId}/admin/gmail-connect`, active: false },
+    { key: 'reports', label: 'Reports', href: `/h/${propertyId}/admin/reports`, active: true },
   ];
 
   return (
@@ -272,28 +271,36 @@ export default async function AdminReportsPage({ params }: Props) {
       <div style={fullRow}>
         <Container
           title="Sync reference"
-          subtitle="Edge function: sync-cloudbeds v46 · POST /functions/v1/sync-cloudbeds"
+          subtitle="Edge function: sync-cloudbeds v46 · stock_report scope · data lands in insights.stock_reports_cb"
           density="compact"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: 'var(--tbl-fg, #1B1B1B)' }}>
-            <p style={{ margin: 0, lineHeight: 1.6 }}>
-              All Cloudbeds stock reports are synced via the generic <code>stock_report</code> scope.
-              One call per report per date range. Data lands in <code>insights.stock_reports_cb</code>
-              and is visible above once synced.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 6 }}>
-              {Object.entries(KNOWN_REPORTS).map(([id, meta]) => (
-                <div key={id} style={syncCard}>
-                  <span style={{ fontWeight: 700, color: 'var(--primary, #1F3A2E)' }}>#{id}</span>
-                  {' · '}
-                  <span>{meta.label}</span>
-                  <br />
-                  <code style={{ fontSize: 10, color: '#5A5A5A' }}>
-                    {`{"scope":"stock_report","propertyID":${propertyId},"reportId":${id},"reportName":"${meta.label}","fromDate":"YYYY-MM-DD","toDate":"YYYY-MM-DD"}`}
-                  </code>
-                </div>
-              ))}
-            </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr style={theadRow}>
+                  <th style={th}>ID</th>
+                  <th style={th}>Report</th>
+                  <th style={th}>Category</th>
+                  <th style={th}>Sync payload (replace YYYY-MM-DD)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(KNOWN_REPORTS).map(([id, meta]) => (
+                  <tr key={id} style={trRow}>
+                    <td style={tdMono}>{id}</td>
+                    <td style={tdLeft}>{meta.label}</td>
+                    <td style={tdLeft}>
+                      <span style={{ ...catPill, ...catColor(meta.category) }}>{meta.category}</span>
+                    </td>
+                    <td style={{ ...tdLeft, maxWidth: 520 }}>
+                      <code style={{ fontSize: 10, color: 'var(--tbl-fg-mute, #5A5A5A)', wordBreak: 'break-all' }}>
+                        {`{"scope":"stock_report","propertyID":${propertyId},"reportId":${id},"reportName":"${meta.label}","fromDate":"YYYY-MM-DD","toDate":"YYYY-MM-DD"}`}
+                      </code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Container>
       </div>
@@ -408,11 +415,3 @@ const downloadBtn: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
-const syncCard: React.CSSProperties = {
-  padding: '8px 10px',
-  borderRadius: 6,
-  background: 'var(--tbl-bg-elev, #F5F0E1)',
-  border: '1px solid var(--tbl-border, #E6DFCC)',
-  lineHeight: 1.6,
-  wordBreak: 'break-all',
-};
