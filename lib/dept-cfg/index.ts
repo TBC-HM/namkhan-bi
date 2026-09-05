@@ -760,6 +760,8 @@ const FINANCE_CFG: DeptCfg = {
     // by mistake). Ledger stays a sub-tab of Finance (visible when on any Finance
     // child page — see nav-subgroups /finance/pnl group).
     { label: 'HoD',             href: '/h/260955/finance'                          },
+    // PBS 2026-09-05: Dashboard tab — Finance KPI/GL engine dashboard.
+    { label: 'Dashboard',       href: '/h/260955/finance/dashboard'                },
     { label: 'HR',              href: '/h/260955/finance/hr'                       },
     { label: 'Acc',             href: '/h/260955/finance/costs'                    },
     { label: 'Finance',         href: '/h/260955/finance/pnl'                      },
