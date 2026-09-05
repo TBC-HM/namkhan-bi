@@ -148,78 +148,75 @@ export default async function AdminReportsPage({ params }: Props) {
         </Container>
       </div>
 
-      {/* Stock report catalog */}
+      {/* Unified reports library — all known reports, synced rows show data, unsynced show payload */}
       <div style={fullRow}>
         <Container
-          title="Cloudbeds stock reports catalog"
-          subtitle="Reports synced via sync-cloudbeds edge function · scope=stock_report"
+          title="Reports library"
+          subtitle={`${Object.keys(KNOWN_REPORTS).length} known reports · ${catalog.length} synced · scope=stock_report via sync-cloudbeds edge function`}
           density="compact"
         >
-          {catalog.length === 0 ? (
-            <div style={emptyStyle}>
-              No stock reports synced yet. Trigger a sync by calling the edge function with
-              {' '}<code>scope=stock_report</code> + <code>reportId</code> + <code>reportName</code>.
-              <br /><br />
-              <strong>Key report IDs:</strong> 74 (Daily Revenue), 83 (Payment Reconciliation),
-              61 (Cashier), 168 (Voids), 306 (Deposit Ledger), 309 (AR Ledger), 311 (Current Ledger), 38 (Expanded Transaction)
-            </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr style={theadRow}>
-                    <th style={th}>ID</th>
-                    <th style={th}>Report</th>
-                    <th style={th}>Category</th>
-                    <th style={th}>Snapshots</th>
-                    <th style={th}>Date range</th>
-                    <th style={th}>Rows</th>
-                    <th style={th}>Last sync</th>
-                    <th style={th}>Download</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {catalog.map((r: any) => {
-                    const meta = KNOWN_REPORTS[r.report_id] ?? { label: r.report_name, category: 'Other' };
-                    const downloadUrl = `/api/admin/reports/download?property_id=${propertyId}&report_id=${r.report_id}`;
-                    const hasData = Number(r.total_rows ?? 0) > 0;
-                    return (
-                      <tr key={r.report_id} style={trRow}>
-                        <td style={tdMono}>{r.report_id}</td>
-                        <td style={tdLeft}>
-                          <span style={reportLabel}>{meta.label}</span>
-                        </td>
-                        <td style={tdLeft}>
-                          <span style={{ ...catPill, ...catColor(meta.category) }}>{meta.category}</span>
-                        </td>
-                        <td style={tdRight}>{fmtNum(r.snapshot_count)}</td>
-                        <td style={tdLeft}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={tableStyle}>
+              <thead>
+                <tr style={theadRow}>
+                  <th style={th}>ID</th>
+                  <th style={th}>Report</th>
+                  <th style={th}>Category</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Date range</th>
+                  <th style={th}>Rows</th>
+                  <th style={th}>Last sync</th>
+                  <th style={th}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(KNOWN_REPORTS).map(([idStr, meta]) => {
+                  const id = Number(idStr);
+                  const synced = catalog.find((r: any) => Number(r.report_id) === id);
+                  const downloadUrl = `/api/admin/reports/download?property_id=${propertyId}&report_id=${id}`;
+                  const hasData = synced && Number(synced.total_rows ?? 0) > 0;
+                  return (
+                    <tr key={id} style={{ ...trRow, opacity: synced ? 1 : 0.5 }}>
+                      <td style={tdMono}>{id}</td>
+                      <td style={tdLeft}><span style={reportLabel}>{meta.label}</span></td>
+                      <td style={tdLeft}>
+                        <span style={{ ...catPill, ...catColor(meta.category) }}>{meta.category}</span>
+                      </td>
+                      <td style={tdLeft}>
+                        {synced
+                          ? <span style={syncedBadge}>✓ Synced</span>
+                          : <span style={notSyncedBadge}>Not synced</span>}
+                      </td>
+                      <td style={tdLeft}>
+                        {synced ? (
                           <span style={{ fontSize: 11, color: 'var(--tbl-fg-mute, #5A5A5A)', fontVariantNumeric: 'tabular-nums' }}>
-                            {r.earliest_date} → {r.latest_date}
+                            {synced.earliest_date} → {synced.latest_date}
                           </span>
-                        </td>
-                        <td style={tdRight}>{fmtNum(r.total_rows)}</td>
-                        <td style={tdLeft}>
-                          <span style={{ fontSize: 11, color: 'var(--tbl-fg-mute, #5A5A5A)' }}>
-                            {r.last_synced_at ? relTime(r.last_synced_at) : '—'}
-                          </span>
-                        </td>
-                        <td style={tdLeft}>
-                          {hasData ? (
-                            <a href={downloadUrl} style={downloadBtn}>
-                              ↓ CSV
-                            </a>
-                          ) : (
-                            <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute, #5A5A5A)' }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                        ) : (
+                          <code style={{ fontSize: 9, color: 'var(--tbl-fg-mute, #5A5A5A)', wordBreak: 'break-all' }}>
+                            {`{"scope":"stock_report","propertyID":${propertyId},"reportId":${id},"reportName":"${meta.label}","fromDate":"YYYY-MM-DD","toDate":"YYYY-MM-DD"}`}
+                          </code>
+                        )}
+                      </td>
+                      <td style={tdRight}>{synced ? fmtNum(synced.total_rows) : '—'}</td>
+                      <td style={tdLeft}>
+                        <span style={{ fontSize: 11, color: 'var(--tbl-fg-mute, #5A5A5A)' }}>
+                          {synced?.last_synced_at ? relTime(synced.last_synced_at) : '—'}
+                        </span>
+                      </td>
+                      <td style={tdLeft}>
+                        {hasData ? (
+                          <a href={downloadUrl} style={downloadBtn}>↓ CSV</a>
+                        ) : (
+                          <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute, #8A8A8A)' }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </Container>
       </div>
 
@@ -311,43 +308,6 @@ export default async function AdminReportsPage({ params }: Props) {
         </Container>
       </div>
 
-      {/* Sync reference */}
-      <div style={fullRow}>
-        <Container
-          title="Sync reference"
-          subtitle="Edge function: sync-cloudbeds v46 · stock_report scope · data lands in insights.stock_reports_cb"
-          density="compact"
-        >
-          <div style={{ overflowX: 'auto' }}>
-            <table style={tableStyle}>
-              <thead>
-                <tr style={theadRow}>
-                  <th style={th}>ID</th>
-                  <th style={th}>Report</th>
-                  <th style={th}>Category</th>
-                  <th style={th}>Sync payload (replace YYYY-MM-DD)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(KNOWN_REPORTS).map(([id, meta]) => (
-                  <tr key={id} style={trRow}>
-                    <td style={tdMono}>{id}</td>
-                    <td style={tdLeft}>{meta.label}</td>
-                    <td style={tdLeft}>
-                      <span style={{ ...catPill, ...catColor(meta.category) }}>{meta.category}</span>
-                    </td>
-                    <td style={{ ...tdLeft, maxWidth: 520 }}>
-                      <code style={{ fontSize: 10, color: 'var(--tbl-fg-mute, #5A5A5A)', wordBreak: 'break-all' }}>
-                        {`{"scope":"stock_report","propertyID":${propertyId},"reportId":${id},"reportName":"${meta.label}","fromDate":"YYYY-MM-DD","toDate":"YYYY-MM-DD"}`}
-                      </code>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Container>
-      </div>
     </DashboardPage>
   );
 }
@@ -457,5 +417,25 @@ const downloadBtn: React.CSSProperties = {
   borderRadius: 3,
   textDecoration: 'none',
   whiteSpace: 'nowrap',
+};
+
+const syncedBadge: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '1px 6px',
+  borderRadius: 99,
+  fontSize: 10,
+  fontWeight: 600,
+  background: 'rgba(31,58,46,0.08)',
+  color: '#1F3A2E',
+};
+
+const notSyncedBadge: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '1px 6px',
+  borderRadius: 99,
+  fontSize: 10,
+  fontWeight: 500,
+  background: 'rgba(90,90,90,0.06)',
+  color: '#8A8A8A',
 };
 
