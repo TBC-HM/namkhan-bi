@@ -83,12 +83,19 @@ function readActivePropertyFromCookie(): number {
   return n;
 }
 
+// URL path segments that belong to a canonical dept but live under a different prefix.
+// e.g. /h/[id]/admin/* is part of Administration (slug='finance').
+const SEGMENT_ALIAS: Record<string, string> = { admin: 'finance' };
+
 function resolvePropertyAndDept(pathname: string): { propertyId: number; activeSlug: string | null } {
   // /h/[id]/<slug>(/...) — property explicit in URL.
   const m = pathname.match(/^\/h\/(\d+)(?:\/([^/]+))?/);
   if (m) {
     const propertyId = Number(m[1]);
-    const slug = m[2] && SLUG_SET.has(m[2]) ? m[2] : null;
+    const seg = m[2] ?? null;
+    const slug = seg
+      ? (SLUG_SET.has(seg) ? seg : SEGMENT_ALIAS[seg] ?? null)
+      : null;
     return { propertyId, activeSlug: slug };
   }
 
