@@ -69,9 +69,27 @@ export async function middleware(req: NextRequest) {
   ) return NextResponse.next()
 
   let res = NextResponse.next({ request: { headers: req.headers } })
+
+  // A throw anywhere in middleware is MIDDLEWARE_INVOCATION_FAILED — a hard 500
+  // on EVERY route, including pages that need no auth. createServerClient throws
+  // when either value is falsy, so an env blip took the whole site down rather
+  // than one route (observed intermittently since 2026-07-24). Degrade closed:
+  // no client means no verified session, which is exactly the !user path below.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'auth unavailable' }, { status: 401 })
+    }
+    const url = req.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('next', pathname)
+    return NextResponse.redirect(url)
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll: () => req.cookies.getAll(),
@@ -81,7 +99,17 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // A stale/rotated cookie makes getUser() reject with AuthApiError
+  // (refresh_token_not_found). Unhandled, that 500s the whole request instead of
+  // just sending the user to sign in again. Treat any auth failure as "no user".
+  let user: { id: string; email?: string } | null = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data?.user ?? null
+  } catch {
+    user = null
+  }
+
   if (!user) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'auth required' }, { status: 401 })
@@ -98,8 +126,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const { data: { session } } = await supabase.auth.getSession()
-  const claims = session?.access_token ? decodeJwtPayload(session.access_token) : {}
+  let accessToken: string | undefined
+  try {
+    const { data } = await supabase.auth.getSession()
+    accessToken = data?.session?.access_token
+  } catch {
+    accessToken = undefined
+  }
+  const claims = accessToken ? decodeJwtPayload(accessToken) : {}
   const holdingRole: string = String(claims.holding_role ?? '')
   const propertyIds: number[] = Array.isArray(claims.property_ids)
     ? (claims.property_ids as unknown[]).map((x) => Number(x)).filter((n) => Number.isFinite(n))
