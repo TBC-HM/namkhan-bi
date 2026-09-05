@@ -58,10 +58,11 @@ export default function Page({ searchParams }: Props = {}) {
     hod_display_name: "Intel",
     scope: "USALI 11 · current month",
     kpis: [
-      { label: "Total revenue", view: "v_finance_house_summary", column: "total_revenue", format: "usd", filter: pidFilter },
-      { label: "GOP",           view: "v_finance_house_summary", column: "gop",           format: "usd", filter: pidFilter },
-      { label: "Net income",    view: "v_finance_house_summary", column: "net_income",     format: "usd", filter: pidFilter },
-      { label: "Dept profit",   view: "v_finance_house_summary", column: "total_dept_profit", format: "usd", filter: pidFilter },
+      // GL views are Namkhan-only aggregates — no property_id column, no filter.
+      { label: "Total revenue", view: "v_finance_house_summary", column: "total_revenue", format: "usd" },
+      { label: "GOP",           view: "v_finance_house_summary", column: "gop",           format: "usd" },
+      { label: "Net income",    view: "v_finance_house_summary", column: "net_income",     format: "usd" },
+      { label: "Dept profit",   view: "v_finance_house_summary", column: "total_dept_profit", format: "usd" },
     ],
     panels: [
       {
@@ -78,7 +79,6 @@ export default function Page({ searchParams }: Props = {}) {
           { key: "gop", label: "GOP", format: "usd" },
           { key: "net_income", label: "Net inc", format: "usd" },
         ],
-        filter: pidFilter,
         order_by: { col: "period_yyyymm", ascending: false },
         limit: 18,
       },
@@ -93,7 +93,6 @@ export default function Page({ searchParams }: Props = {}) {
           { key: "variance_usd", label: "Variance", format: "usd" },
           { key: "variance_pct", label: "Var %", format: "pct" },
         ],
-        filter: pidFilter,
         order_by: { col: "variance_usd", ascending: false },
         limit: 20,
       },
@@ -109,7 +108,6 @@ export default function Page({ searchParams }: Props = {}) {
           { key: "supplier_outflow", label: "Suppliers", format: "usd" },
           { key: "net_cash_flow", label: "Net", format: "usd" },
         ],
-        filter: pidFilter,
         order_by: { col: "week_idx", ascending: true },
         limit: 13,
       },
@@ -122,7 +120,6 @@ export default function Page({ searchParams }: Props = {}) {
           { key: "gross_spend_usd", label: "Spend", format: "usd" },
           { key: "line_count", label: "Lines", format: "int" },
         ],
-        filter: pidFilter,
         order_by: { col: "rank_month", ascending: true },
         limit: 15,
       },
