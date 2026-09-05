@@ -1,14 +1,14 @@
 // app/h/[property_id]/admin/reports/page.tsx
-// Cloudbeds Stock Reports catalog + BI aggregations (monthly revenue, trial balance).
-// Reads: v_stock_reports_catalog, v_monthly_revenue_cb, v_trial_balance_monthly_cb
-// All data comes from insights.stock_reports_cb, insights.daily_revenue_cb,
-// finance.trial_balance_cb (synced by sync-cloudbeds v46 edge function).
+// Cloudbeds Stock Reports catalog + BI aggregations (monthly revenue).
+// Reads: v_stock_reports_catalog, v_monthly_revenue_cb
+// Trial balance panel lives on Finance Dashboard.
+// Filtering/sorting and sync/email actions handled by ReportsTableClient.
 
 import { notFound } from 'next/navigation';
 import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { financeSubPagesForProperty } from '@/app/finance/_subpages';
-import SyncButton from './SyncButton';
+import ReportsTableClient from './ReportsTableClient';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -107,15 +107,13 @@ export default async function AdminReportsPage({ params }: Props) {
 
   const sb = getSupabaseAdmin();
 
-  const [catData, monthlyData, tbData] = await Promise.all([
+  const [catData, monthlyData] = await Promise.all([
     sb.from('v_stock_reports_catalog' as never).select('*').eq('property_id', propertyId).order('report_id' as never),
     sb.from('v_monthly_revenue_cb' as never).select('*').eq('property_id', propertyId).order('month_start' as never, { ascending: false }),
-    sb.from('v_trial_balance_monthly_cb' as never).select('*').eq('property_id', propertyId).order('month_start' as never, { ascending: false }),
   ]);
 
   const catalog: any[] = (catData.data ?? []) as any[];
   const monthly: any[] = (monthlyData.data ?? []) as any[];
-  const tbMonthly: any[] = (tbData.data ?? []) as any[];
 
   const totalSnapshots = catalog.reduce((s: number, r: any) => s + Number(r.snapshot_count ?? 0), 0);
   const totalRows      = catalog.reduce((s: number, r: any) => s + Number(r.total_rows ?? 0), 0);
@@ -149,77 +147,21 @@ export default async function AdminReportsPage({ params }: Props) {
         </Container>
       </div>
 
-      {/* Unified reports library — all known reports, synced rows show data, unsynced show payload */}
+      {/* Unified reports library — client component handles filtering, sorting, sync + email actions */}
       <div style={fullRow}>
         <Container
           title="Reports library"
           subtitle={`${Object.keys(KNOWN_REPORTS).length} known reports · ${catalog.length} synced · scope=stock_report via sync-cloudbeds edge function`}
           density="compact"
         >
-          <div style={{ overflowX: 'auto' }}>
-            <table style={tableStyle}>
-              <thead>
-                <tr style={theadRow}>
-                  <th style={th}>ID</th>
-                  <th style={th}>Report</th>
-                  <th style={th}>Category</th>
-                  <th style={th}>Status</th>
-                  <th style={th}>Date range</th>
-                  <th style={th}>Rows</th>
-                  <th style={th}>Last sync</th>
-                  <th style={th}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(KNOWN_REPORTS).map(([idStr, meta]) => {
-                  const id = Number(idStr);
-                  const synced = catalog.find((r: any) => Number(r.report_id) === id);
-                  const downloadUrl = `/api/admin/reports/download?property_id=${propertyId}&report_id=${id}`;
-                  const hasData = synced && Number(synced.total_rows ?? 0) > 0;
-                  return (
-                    <tr key={id} style={{ ...trRow, opacity: synced ? 1 : 0.5 }}>
-                      <td style={tdMono}>{id}</td>
-                      <td style={tdLeft}><span style={reportLabel}>{meta.label}</span></td>
-                      <td style={tdLeft}>
-                        <span style={{ ...catPill, ...catColor(meta.category) }}>{meta.category}</span>
-                      </td>
-                      <td style={tdLeft}>
-                        {synced
-                          ? <span style={syncedBadge}>✓ Synced</span>
-                          : <span style={notSyncedBadge}>Not synced</span>}
-                      </td>
-                      <td style={tdLeft}>
-                        {synced ? (
-                          <span style={{ fontSize: 11, color: 'var(--tbl-fg-mute, #5A5A5A)', fontVariantNumeric: 'tabular-nums' }}>
-                            {synced.earliest_date} → {synced.latest_date}
-                          </span>
-                        ) : (
-                          <code style={{ fontSize: 9, color: 'var(--tbl-fg-mute, #5A5A5A)', wordBreak: 'break-all' }}>
-                            {`{"scope":"stock_report","propertyID":${propertyId},"reportId":${id},"reportName":"${meta.label}","fromDate":"YYYY-MM-DD","toDate":"YYYY-MM-DD"}`}
-                          </code>
-                        )}
-                      </td>
-                      <td style={tdRight}>{synced ? fmtNum(synced.total_rows) : '—'}</td>
-                      <td style={tdLeft}>
-                        <span style={{ fontSize: 11, color: 'var(--tbl-fg-mute, #5A5A5A)' }}>
-                          {synced?.last_synced_at ? relTime(synced.last_synced_at) : '—'}
-                        </span>
-                      </td>
-                      <td style={tdLeft}>
-                        {hasData ? (
-                          <a href={downloadUrl} style={downloadBtn}>↓ CSV</a>
-                        ) : synced ? (
-                          <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute, #8A8A8A)' }}>—</span>
-                        ) : (
-                          <SyncButton propertyId={propertyId} reportId={id} reportName={meta.label} />
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ReportsTableClient
+            rows={Object.entries(KNOWN_REPORTS).map(([idStr, meta]) => ({
+              id: Number(idStr),
+              meta,
+              synced: catalog.find((r: any) => Number(r.report_id) === Number(idStr)) ?? null,
+            }))}
+            propertyId={propertyId}
+          />
         </Container>
       </div>
 
@@ -258,50 +200,6 @@ export default async function AdminReportsPage({ params }: Props) {
                       <td style={tdRight}>{fmtAmt(r.fees_total)}</td>
                       <td style={{ ...tdRight, fontWeight: 700 }}>{fmtAmt(r.total_revenue)}</td>
                       <td style={tdRight}>{fmtAmt(r.cancel_fees_total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Container>
-      </div>
-
-      {/* Trial balance monthly */}
-      <div style={fullRow}>
-        <Container
-          title="Trial balance · monthly summary"
-          subtitle="Aggregated from finance.trial_balance_cb (Accounting API) · v_trial_balance_monthly_cb"
-          density="compact"
-        >
-          {tbMonthly.length === 0 ? (
-            <div style={emptyStyle}>No trial balance data yet. Sync scope=trial_balance first.</div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr style={theadRow}>
-                    <th style={th}>Month</th>
-                    <th style={th}>Days</th>
-                    <th style={th}>GL Charges</th>
-                    <th style={th}>GL Activity</th>
-                    <th style={th}>Deposit Activity</th>
-                    <th style={th}>AR Activity</th>
-                    <th style={th}>Total Activity</th>
-                    <th style={th}>Avg Hotel Close</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tbMonthly.map((r: any) => (
-                    <tr key={r.month_key} style={trRow}>
-                      <td style={tdLeft}><span style={monthPill}>{r.month_key}</span></td>
-                      <td style={tdRight}>{r.days_with_data}</td>
-                      <td style={tdRight}>{fmtAmt(r.total_gl_charges)}</td>
-                      <td style={tdRight}>{fmtAmt(r.total_gl_activity)}</td>
-                      <td style={tdRight}>{fmtAmt(r.total_deposit_activity)}</td>
-                      <td style={tdRight}>{fmtAmt(r.total_ar_activity)}</td>
-                      <td style={{ ...tdRight, fontWeight: 700 }}>{fmtAmt(r.total_activity)}</td>
-                      <td style={tdRight}>{fmtAmt(r.avg_hotel_closing)}</td>
                     </tr>
                   ))}
                 </tbody>
