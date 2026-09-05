@@ -106,23 +106,19 @@ export default async function AdminReportsPage({ params }: Props) {
 
   const sb = getSupabaseAdmin();
 
-  const [catData, monthlyData, tbData, ytdData] = await Promise.all([
+  const [catData, monthlyData, tbData] = await Promise.all([
     sb.from('v_stock_reports_catalog' as never).select('*').eq('property_id', propertyId).order('report_id' as never),
     sb.from('v_monthly_revenue_cb' as never).select('*').eq('property_id', propertyId).order('month_start' as never, { ascending: false }),
     sb.from('v_trial_balance_monthly_cb' as never).select('*').eq('property_id', propertyId).order('month_start' as never, { ascending: false }),
-    sb.from('v_ytd_revenue_cb' as never).select('*').eq('property_id', propertyId),
   ]);
 
   const catalog: any[] = (catData.data ?? []) as any[];
   const monthly: any[] = (monthlyData.data ?? []) as any[];
   const tbMonthly: any[] = (tbData.data ?? []) as any[];
-  const ytd: any[] = (ytdData.data ?? []) as any[];
 
   const totalSnapshots = catalog.reduce((s: number, r: any) => s + Number(r.snapshot_count ?? 0), 0);
   const totalRows      = catalog.reduce((s: number, r: any) => s + Number(r.total_rows ?? 0), 0);
   const lastSync       = catalog.reduce((best: string, r: any) => (!best || r.last_synced_at > best ? r.last_synced_at : best), '');
-  const ytdRevenue     = ytd[0]?.total_revenue ?? null;
-  const ytdDays        = ytd[0]?.days_with_data ?? 0;
 
   // Full Administration sub-nav — stays consistent with all other Finance/Admin pages
   const tabs = financeSubPagesForProperty(propertyId).map(s => ({
@@ -145,12 +141,6 @@ export default async function AdminReportsPage({ params }: Props) {
             <KpiTile label="Report types synced" value={catalog.length} size="sm" />
             <KpiTile label="Total snapshots" value={totalSnapshots} size="sm" />
             <KpiTile label="Total rows" value={totalRows} size="sm" />
-            {ytdRevenue != null && (
-              <KpiTile label="YTD Revenue" value={Math.round(Number(ytdRevenue))} currency="USD" size="sm" status="green" />
-            )}
-            {ytdDays > 0 && (
-              <KpiTile label={`YTD days`} value={ytdDays} size="sm" />
-            )}
             {lastSync && (
               <KpiTile label="Last sync" value={relTime(lastSync) as never} size="sm" />
             )}
