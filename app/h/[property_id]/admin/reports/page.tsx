@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { financeSubPagesForProperty } from '@/app/finance/_subpages';
+import SyncButton from './SyncButton';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -207,8 +208,10 @@ export default async function AdminReportsPage({ params }: Props) {
                       <td style={tdLeft}>
                         {hasData ? (
                           <a href={downloadUrl} style={downloadBtn}>↓ CSV</a>
-                        ) : (
+                        ) : synced ? (
                           <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute, #8A8A8A)' }}>—</span>
+                        ) : (
+                          <SyncButton propertyId={propertyId} reportId={id} reportName={meta.label} />
                         )}
                       </td>
                     </tr>
