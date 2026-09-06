@@ -61,108 +61,6 @@ function shiftYear(iso: string, delta: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-// ─── Ancillary Capture ─────────────────────────────────────────────────────
-// Types + render functions at module scope (never inside an async RSC).
-type AncillaryRawRow = {
-  night_date: string;
-  year: number | null;
-  month: number | null;
-  occupied_rooms: number | null;
-  fb_capture_pct: number | null;
-  fb_por: number | null;
-  spa_capture_pct: number | null;
-  spa_por: number | null;
-  activity_capture_pct: number | null;
-  activity_revenue: number | null;
-  total_ancillary_revenue: number | null;
-  total_ancillary_por: number | null;
-};
-type AncillaryMonthSummary = {
-  key: string; label: string; year: number; month: number; days: number;
-  occRooms: number;
-  fbCapturePct: number | null; fbPor: number | null;
-  spaCapturePct: number | null; spaPor: number | null;
-  totalAncillaryPor: number | null; totalAncillaryRevenue: number;
-};
-const ANC_MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-function ancFmtPct(v: number | null): string { return v == null ? '—' : `${Number(v).toFixed(1)}%`; }
-function ancFmtMoney(v: number | null, sym: string): string { return v == null ? '—' : `${sym}${Math.round(Number(v)).toLocaleString('en-US')}`; }
-
-function AncillaryMonthlyTable({ rows, sym }: { rows: AncillaryMonthSummary[]; sym: string }) {
-  if (rows.length === 0) {
-    return <div style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic', padding: '8px 4px' }}>No monthly data available.</div>;
-  }
-  const thBase: React.CSSProperties = { padding: '4px 8px', fontWeight: 600, color: '#5A5A5A', whiteSpace: 'nowrap' };
-  const tdBase: React.CSSProperties = { padding: '4px 8px', color: '#1B1B1B', whiteSpace: 'nowrap' };
-  const tdR: React.CSSProperties = { ...tdBase, textAlign: 'right' as const };
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11 }}>
-        <thead>
-          <tr style={{ borderBottom: '2px solid #E6DFCC' }}>
-            <th style={{ ...thBase, textAlign: 'left' }}>Month</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>Occ Rooms</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>F&amp;B Capture%</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>F&amp;B POR</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>Spa Capture%</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>Spa POR</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>Total Ancillary POR</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key} style={{ borderBottom: '1px solid #F1EBD9' }}>
-              <td style={{ ...tdBase, fontWeight: 600 }}>{r.label}</td>
-              <td style={tdR}>{r.occRooms}</td>
-              <td style={tdR}>{ancFmtPct(r.fbCapturePct)}</td>
-              <td style={tdR}>{ancFmtMoney(r.fbPor, sym)}</td>
-              <td style={tdR}>{ancFmtPct(r.spaCapturePct)}</td>
-              <td style={tdR}>{ancFmtMoney(r.spaPor, sym)}</td>
-              <td style={tdR}>{ancFmtMoney(r.totalAncillaryPor, sym)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function AncillaryDailyDetail({ rows, sym }: { rows: AncillaryRawRow[]; sym: string }) {
-  if (rows.length === 0) {
-    return <div style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic', padding: '8px 4px' }}>No daily data available.</div>;
-  }
-  const thBase: React.CSSProperties = { padding: '4px 8px', fontWeight: 600, color: '#5A5A5A', whiteSpace: 'nowrap' };
-  const tdBase: React.CSSProperties = { padding: '4px 8px', color: '#1B1B1B', whiteSpace: 'nowrap' };
-  const tdR: React.CSSProperties = { ...tdBase, textAlign: 'right' as const };
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11 }}>
-        <thead>
-          <tr style={{ borderBottom: '2px solid #E6DFCC' }}>
-            <th style={{ ...thBase, textAlign: 'left' }}>Date</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>F&amp;B Capture%</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>Spa Capture%</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>Activity Capture%</th>
-            <th style={{ ...thBase, textAlign: 'right' }}>Total Ancillary Revenue</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.night_date} style={{ borderBottom: '1px solid #F1EBD9' }}>
-              <td style={{ ...tdBase, fontWeight: 600 }}>{r.night_date}</td>
-              <td style={tdR}>{ancFmtPct(r.fb_capture_pct)}</td>
-              <td style={tdR}>{ancFmtPct(r.spa_capture_pct)}</td>
-              <td style={tdR}>{ancFmtPct(r.activity_capture_pct)}</td>
-              <td style={tdR}>{ancFmtMoney(r.total_ancillary_revenue, sym)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-// ───────────────────────────────────────────────────────────────────────────
-
 export default async function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
@@ -212,7 +110,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     parityMatrixRes,
     compsetHistoryRes,
     ratePlanHygieneRes,
-    ancillaryRes,
   ] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
@@ -256,13 +153,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     // PBS 2026-07-09 pm: rate-plan hygiene aggregate (per property).
     // Fail-open: any error here must NOT nuke the whole /revenue HoD render.
     sbAdmin.from('v_rate_plan_hygiene').select('active_plans_total, sleeping_total, sleeping_over_2y, sleeping_1_2y, sleeping_180d_1y, never_booked, never_booked_pct, orphan_count, ytd_revenue_total, nrr_locked_share_pct, flex_share_pct, early_bird_share_pct').eq('property_id', pid).maybeSingle().then((r) => r, () => ({ data: null, error: null })),
-    // Ancillary capture — last 90 nights for daily detail + monthly rollup.
-    (sbAdmin.from('v_ancillary_capture_daily' as never)
-      .select('night_date,year,month,occupied_rooms,fb_capture_pct,fb_por,spa_capture_pct,spa_por,activity_capture_pct,activity_revenue,total_ancillary_revenue,total_ancillary_por')
-      .eq('property_id', pid)
-      .order('night_date', { ascending: false })
-      .limit(90) as unknown as Promise<{ data: AncillaryRawRow[] | null }>
-    ).then((r) => r.data ?? []).catch((): AncillaryRawRow[] => []),
   ]);
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
   const myReportRows  = (myReportsRes.data ?? []) as SendLogRow[];
@@ -567,58 +457,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   };
   const ratePlanInsights = runRatePlanRules(ratePlanCtx);
 
-  // ── Ancillary Capture processing ──────────────────────────────────────────
-  // Daily slice: most recent 7 nights for the detail table.
-  const ancillaryDaily7 = ancillaryRes.slice(0, 7);
-
-  // Monthly rollup: avg capture% and POR per month, sum revenue.
-  type MonthAccum = {
-    year: number; month: number; days: number;
-    occSum: number;
-    fbPctSum: number; fbPctN: number;
-    fbPorSum: number; fbPorN: number;
-    spaPctSum: number; spaPctN: number;
-    spaPorSum: number; spaPorN: number;
-    totalPorSum: number; totalPorN: number;
-    totalRevSum: number;
-  };
-  const ancMonthMap = new Map<string, MonthAccum>();
-  for (const r of ancillaryRes) {
-    const yr = Number(r.year ?? 0);
-    const mo = Number(r.month ?? 0);
-    if (!yr || !mo) continue;
-    const key = `${yr}-${String(mo).padStart(2, '0')}`;
-    let acc = ancMonthMap.get(key);
-    if (!acc) {
-      acc = { year: yr, month: mo, days: 0, occSum: 0, fbPctSum: 0, fbPctN: 0, fbPorSum: 0, fbPorN: 0, spaPctSum: 0, spaPctN: 0, spaPorSum: 0, spaPorN: 0, totalPorSum: 0, totalPorN: 0, totalRevSum: 0 };
-      ancMonthMap.set(key, acc);
-    }
-    acc.days++;
-    acc.occSum += Number(r.occupied_rooms ?? 0);
-    if (r.fb_capture_pct != null) { acc.fbPctSum += Number(r.fb_capture_pct); acc.fbPctN++; }
-    if (r.fb_por != null) { acc.fbPorSum += Number(r.fb_por); acc.fbPorN++; }
-    if (r.spa_capture_pct != null) { acc.spaPctSum += Number(r.spa_capture_pct); acc.spaPctN++; }
-    if (r.spa_por != null) { acc.spaPorSum += Number(r.spa_por); acc.spaPorN++; }
-    if (r.total_ancillary_por != null) { acc.totalPorSum += Number(r.total_ancillary_por); acc.totalPorN++; }
-    acc.totalRevSum += Number(r.total_ancillary_revenue ?? 0);
-  }
-  const ancillaryMonthly: AncillaryMonthSummary[] = Array.from(ancMonthMap.entries())
-    .sort(([a], [b]) => b.localeCompare(a))
-    .slice(0, 12)
-    .map(([key, v]) => ({
-      key,
-      label: `${ANC_MONTH_NAMES[v.month as keyof typeof ANC_MONTH_NAMES] ?? v.month} ${v.year}`,
-      year: v.year, month: v.month, days: v.days,
-      occRooms: v.days > 0 ? Math.round(v.occSum / v.days) : 0,
-      fbCapturePct: v.fbPctN > 0 ? v.fbPctSum / v.fbPctN : null,
-      fbPor: v.fbPorN > 0 ? v.fbPorSum / v.fbPorN : null,
-      spaCapturePct: v.spaPctN > 0 ? v.spaPctSum / v.spaPctN : null,
-      spaPor: v.spaPorN > 0 ? v.spaPorSum / v.spaPorN : null,
-      totalAncillaryPor: v.totalPorN > 0 ? v.totalPorSum / v.totalPorN : null,
-      totalAncillaryRevenue: v.totalRevSum,
-    }));
-  // ──────────────────────────────────────────────────────────────────────────
-
   // PBS 2026-07-17: revenueInsights + activeTargets computed but not rendered here anymore.
   // The Daily Briefing container was removed — insights now live on /revenue/briefing,
   // populated dynamically by /api/cron/briefing-evaluate. Keeping context computation intact
@@ -790,25 +628,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       {/* PBS 2026-08-21: Rooms in house · 30d trend (migrated from /revenue/pulse) sits below YTD stripe. */}
       <RoomsInHouseStripe propertyId={pid} />
 
-      {/* Ancillary Capture — monthly summary + last 7 days detail */}
-      <div style={fullRow}>
-        <details open style={{ border: '1px solid #E6DFCC', borderRadius: 4, background: '#FFFFFF' }}>
-          <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1B1B1B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1EBD9' }}>
-            <span>Ancillary Capture <span style={{ fontSize: 11, color: '#5A5A5A', fontWeight: 500 }}>· F&amp;B · Spa · Activities</span></span>
-            <span style={{ fontSize: 11, color: '#5A5A5A', fontWeight: 500 }}>click to collapse</span>
-          </summary>
-          <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#5A5A5A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Monthly summary · avg capture rate &amp; POR by month</div>
-              <AncillaryMonthlyTable rows={ancillaryMonthly} sym={symToday} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#5A5A5A', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Last 7 nights · daily detail</div>
-              <AncillaryDailyDetail rows={ancillaryDaily7} sym={symToday} />
-            </div>
-          </div>
-        </details>
-      </div>
+      {/* PBS 2026-09-06: Ancillary Capture moved to the property home (/h/[pid]),
+          directly under "Are guests spending beyond the room?" — see
+          app/(cockpit)/_design/AncillaryCapture.tsx. */}
 
       {/* PBS 2026-07-08 (final): grid tightened to 4 tiles — Attention · My Reports (self-sends) · My Tasks · Bugs.
           Scheduled + Send log get their own full-width containers below. */}

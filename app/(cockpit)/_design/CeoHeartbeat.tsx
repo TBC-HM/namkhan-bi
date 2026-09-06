@@ -18,6 +18,7 @@
 import Container from './layout/Container';
 import KpiTile from './tile/KpiTile';
 import MetricMatrix, { type MatrixRow, type MatrixCell, type MatrixTone } from './MetricMatrix';
+import AncillaryCapture from './AncillaryCapture';
 import type { KpiTileProps, Currency } from './types';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import {
@@ -314,6 +315,11 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
           </Container>
         </div>
       )}
+
+      {/* The money behind the capture rate above — moved here from the Revenue HoD page. */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <AncillaryCapture propertyId={pid} sym={sym} />
+      </div>
 
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title={`Waiting on you · ${flags.length}`}
