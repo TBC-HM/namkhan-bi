@@ -168,7 +168,7 @@ type ResRow = {
   check_in_date: string;
   check_out_date: string;
   nights: number;
-  status_canonical: string | null;
+  status: string | null;
   is_cancelled: boolean;
   source_name: string | null;
   rate_plan: string | null;
@@ -378,7 +378,7 @@ function BookingFeed({ rows }: { rows: ResRow[] }) {
                   {Number(r.total_amount ?? 0) > 0 ? fmt$(Number(r.total_amount)) : '—'}
                 </td>
                 <td style={{ ...TD, fontSize: 12, color: cancelled ? 'var(--ink-soft, #5A5A5A)' : 'var(--ink, #1B1B1B)' }}>
-                  {cancelled ? 'Cancelled' : r.status_canonical ?? '—'}
+                  {cancelled ? 'Cancelled' : r.status ?? '—'}
                 </td>
               </tr>
             );
@@ -494,12 +494,12 @@ export default async function RetreatsPage({ propertyId }: Props) {
   const pid = propertyId ?? NAMKHAN_PID;
 
   // Step 1: find reservation IDs identified by retreat add-on products on the folio
-  const { data: addonTxData } = await supabase.schema('pms').from('v_transactions')
+  const { data: addonTxData } = await supabase.from('v_fnb_raw_txn_enriched')
     .select('reservation_id, description')
     .eq('property_id', pid)
     .eq('transaction_type', 'debit')
     .gt('amount', 0)
-    .gte('service_date', '2025-01-01');
+    .gte('check_in_date', '2025-01-01');
 
   const addonReservationIds = new Set<string>(
     ((addonTxData ?? []) as { reservation_id: string; description: string | null }[])
@@ -511,8 +511,8 @@ export default async function RetreatsPage({ propertyId }: Props) {
   );
 
   // Step 2: fetch reservations from known retreat sources + any add-on-identified ones
-  const { data: resData } = await supabase.schema('pms').from('v_reservations')
-    .select('reservation_id, guest_name, check_in_date, check_out_date, nights, status_canonical, is_cancelled, source_name, rate_plan, total_amount')
+  const { data: resData } = await supabase.from('v_reservations_unified')
+    .select('reservation_id, guest_name, check_in_date, check_out_date, nights, status, is_cancelled, source_name, rate_plan, total_amount')
     .eq('property_id', pid)
     .in('source_name', [...BROAD_SOURCES])
     .gte('check_in_date', '2025-01-01')
@@ -527,7 +527,7 @@ export default async function RetreatsPage({ propertyId }: Props) {
   // Step 3: add-on transactions for FIT folios (for spend breakdown)
   let addOns: TxRow[] = [];
   if (fitIds.length > 0) {
-    const { data: txData } = await supabase.schema('pms').from('v_transactions')
+    const { data: txData } = await supabase.from('v_fnb_raw_txn_enriched')
       .select('reservation_id, description, amount')
       .eq('property_id', pid)
       .eq('transaction_type', 'debit')
