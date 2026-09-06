@@ -228,10 +228,14 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
                   </td>
                   <td style={{ ...tdLeft, minWidth: 140 }}>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {hasData && (
+                      {/* Gated on `synced`, not `hasData`: a report that synced clean but
+                          returned nothing is exactly the row you most want to inspect, and
+                          the panel already says so ("sync returned an empty dataset").
+                          Hiding the button there leaves an ambiguous blank row instead. */}
+                      {synced && (
                         <button style={{ ...previewBtn, ...(isPreviewOpen ? previewBtnOpen : null) }}
                           onClick={() => togglePreview(id)}
-                          title={isPreviewOpen ? 'Hide preview' : 'Show the first 25 rows'}>
+                          title={isPreviewOpen ? 'Hide preview' : (hasData ? 'Show the first 25 rows' : 'Snapshot is empty — show what came back')}>
                           {isPreviewOpen ? '▾ Preview' : '▸ Preview'}
                         </button>
                       )}
