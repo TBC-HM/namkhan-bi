@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requirePropertyAccess } from '@/lib/tenancy';
+import { flattenSnapshot } from '@/lib/cb-report-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,27 +47,15 @@ export async function GET(req: NextRequest) {
     report_date: string | null;
     period_from: string | null;
     period_to: string | null;
-    headers: string[];
-    records: Record<string, unknown[]>;
+    headers: unknown;
+    records: unknown;
   };
 
-  const headers: string[] = Array.isArray(snap.headers) ? snap.headers : [];
-  const records = snap.records ?? {};
-
-  // CB returns column-oriented data: records is { columnName: [v1, v2, ...] }. Row
-  // count comes from the first column's array length, matching the CSV route exactly
-  // so preview and download can never disagree about what the snapshot holds.
-  const firstCol = headers[0];
-  const totalRows = firstCol && Array.isArray(records[firstCol]) ? records[firstCol].length : 0;
-
-  const rows: string[][] = [];
-  for (let i = 0; i < Math.min(totalRows, limit); i++) {
-    rows.push(headers.map((h) => {
-      const col = records[h];
-      const v = Array.isArray(col) ? col[i] : null;
-      return v == null ? '' : String(v);
-    }));
-  }
+  // Shared with the CSV route so preview and download can never disagree about what a
+  // snapshot holds — see lib/cb-report-table.ts for the three shapes CB returns.
+  const { columns: headers, rows: allRows } = flattenSnapshot(snap.headers, snap.records);
+  const totalRows = allRows.length;
+  const rows = allRows.slice(0, limit);
 
   return NextResponse.json({
     ok: true,

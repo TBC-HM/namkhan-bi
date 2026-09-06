@@ -92,19 +92,61 @@ real column names (`stay_date` vs `service_date` vs `checkin_date`).
 POST /datainsights/v1.1/stock_reports/{id}/query/data?mode=Run
 ```
 
-Response is **column-oriented**, not row-oriented:
+### 2.4 The response has THREE shapes — this is the biggest trap in the API
+
+`headers` and `records` do not have one fixed structure. Which one you get depends on the
+report's `group_rows` and `periods`, and **the two shapes are indexed in opposite
+directions**. Getting this wrong is silent: you get a header row and zero data.
+
+**Shape 1 — LIST** (no `group_rows`; e.g. 38, 59, 309, 311). Column-oriented:
 
 ```jsonc
 {
-  "headers": ["service_date", "room_revenue", "..."],   // or nested [group, column, metric] triples
-  "index":   [["Jan"], ["Feb"], ...],                   // present on grouped/period reports
-  "records": { "2026-06-01": [12, 3400.0, ...] },       // keyed by the group/date value
-  "totals":  { ... }                                    // when settings.totals is true
+  "headers": ["internal_transaction_code", "service_date", "balance_due_amount"],
+  "records": {
+    "internal_transaction_code": ["4000", "8000", ...],   // one array per COLUMN
+    "service_date":              ["2026-06-08", ...]
+  }
 }
 ```
+Row count = the length of any column array.
 
-Both `app/api/admin/reports/preview/route.ts` and the CSV download route derive row count
-from `records[headers[0]].length` — keep them in agreement if you change either.
+**Shape 2 — GROUPED** (has `group_rows` and/or `periods`; e.g. 74, 96, 101, 102, 110).
+Row-nested, and `headers` becomes an array of **paths**, not strings:
+
+```jsonc
+{
+  "headers": [["occupancy", "aggregated"], ["room_revenue", "sum"]],
+  "records": { "06-08": { "occupancy": { "aggregated": 23.3 },
+                          "room_revenue": { "sum": 3400.0 } } }
+}
+// records[...rowKeys][...headerPath] = scalar
+```
+Row-nesting depth follows `group_rows` — **1** for report 96 (`"06-08"`), **2** for report
+74 (`"Fee"` → `"Service Charge"`). Header depth follows `periods` — **2** normally, **3**
+for a YOY report like 102 (`["This year", "rooms_sold", "sum"]`). So both depths must be
+measured, not assumed: `rowDepth = objectDepth(records) - headerDepth`.
+
+**Shape 3 — EMPTY**: `headers: []`, `records: {}`.
+
+> Indexing shape 2 by column name yields `undefined`, so a naive
+> `records[headers[0]].length` computes 0 rows and the export silently drops everything.
+> That is exactly what happened: the CSV download emitted a header line and nothing else
+> for **13 of 35** reports — every headline revenue one among them. Fixed 2026-09-06 by
+> `lib/cb-report-table.ts` `flattenSnapshot()`, which handles all three and is shared by
+> the download and preview routes so they cannot disagree.
+
+Two further traps once the data is stored:
+
+- **Postgres `jsonb` does not preserve key order.** It sorts keys by length then bytewise,
+  so CB's row order is gone by the time you read a snapshot back — `"Jan, Feb, Mar"`
+  returns as `"Apr, Aug, Dec"`. CB's ordered `index` array is in the raw payload but is
+  not exposed on `public.v_stock_report_snapshot`. `flattenSnapshot` re-sorts (month names
+  in calendar order, everything else naturally) rather than trusting stored order.
+- **`row_count` was wrong until v49.** It was `Object.keys(records).length`, which is the
+  **column** count for shape 1 (report 309 stored `6` for a 6,889-row snapshot) and the
+  outermost group count for shape 2 (report 74 stored `10` for 327 rows). v49's
+  `countSnapshotRows` mirrors `flattenSnapshot`. If you change one, change both.
 
 ---
 
@@ -142,14 +184,22 @@ For datasets with no date dimension at all — in-house lists, credit-note regis
 ```jsonc
 {
   "property_ids": [260955],
-  "filters": <verbatim from GET /stock_reports/{id}>,
-  "periods": <verbatim from GET /stock_reports/{id}>
+  "filters":     <verbatim from GET /stock_reports/{id}>,
+  "periods":     <verbatim from GET /stock_reports/{id}>,
+  "comparisons": <verbatim from GET /stock_reports/{id}>
 }
 ```
 
-Only `filters` and `periods` are replayed. Do **not** echo back `columns`,
+Only `filters`, `periods` and `comparisons` are replayed. Do **not** echo back `columns`,
 `group_rows` or `calculated_columns` — those are applied server-side from the report id,
 and sending them is itself rejected.
+
+**`periods` and `comparisons` are alternatives, and a report uses one or the other.**
+Report 102 has `periods`; report 287 (Pace - YOY Change) has `periods: null` and puts its
+two named windows in `comparisons`, each a name plus its own filter block. Calculated
+columns reference those names either way, so replaying only one of the two still fails
+with *"Calculated columns must use existing comparisons or periods"* — which is what v48
+and v49 did to report 287. Fixed in v50; carry both.
 
 **In this mode the report's own periods govern the window.** A caller's `fromDate`/`toDate`
 are ignored, so v48 stores `period_from`/`period_to` as `NULL` rather than printing a
@@ -213,27 +263,48 @@ list — retrying a different column cannot fix an auth failure or a rate limit.
 
 ---
 
-## 5. How `sync-cloudbeds` resolves a report (v48)
+## 4b. The trap that does NOT raise an error
+
+Sending your own `filters` **replaces** the report's saved filters. CB enforces a match
+only when the report's calculated columns depend on them (§4.2); otherwise it accepts your
+filter, drops the report's, and returns 200. You get the raw dataset over your window,
+under the report's name, with no error anywhere.
+
+All 99 catalogued reports carry saved filters. "Voids, Adjustments and Refunds Review"
+(168) is `is_void = Yes OR is_refund = Yes`; queried with a bare date filter it returned
+6,889 rows instead of 19.
+
+**Therefore: replay the definition first and treat the date probe as the fallback.** That
+is what v51 does. The cost is that the report's own window governs, so a caller's
+from/to is ignored wherever a definition exists — correct, because the report is the
+report, but it means snapshots are not a history series.
+
+## 5. How `sync-cloudbeds` resolves a report (v51)
 
 ```
 fetchReport(from, to)
  │
- ├─ mode already learned this invocation?  → reuse it (filtered / unfiltered / definition)
+ ├─ mode already learned this invocation?  → reuse it (definition / filtered / unfiltered)
  │
- ├─ Phase 1  probe DATE_COLUMN_CANDIDATES in order
+ ├─ Phase 1  GET the definition, replay filters + periods + comparisons verbatim
+ │     200                        → mode = definition   ← the normal path
+ │     no filters/periods/comps   → go to Phase 2
+ │     else                       → go to Phase 2
+ │
+ ├─ Phase 2  probe DATE_COLUMN_CANDIDATES in order
  │     200                        → mode = filtered,  remember the column
  │     400 unknown-column         → next candidate
- │     400 anything else          → STOP probing, remember the message, go to Phase 2
+ │     400 anything else          → STOP probing, remember the message
  │     401/403/429/5xx            → throw
- │
- ├─ Phase 2  GET the definition, replay filters + periods
- │     200                        → mode = definition
- │     else                       → go to Phase 3
  │
  └─ Phase 3  POST { property_ids } unfiltered
        200                        → mode = unfiltered
-       else                       → throw, quoting the Phase-1 message if there was one
+       else                       → throw, quoting the Phase-2 message if there was one
 ```
+
+Phase 1 leads because Phase 2 silently loses the report's own filters (§4b). In practice
+almost every report resolves in Phase 1; Phase 2 exists for definitions that carry no
+filters at all.
 
 The mode is learned **once per invocation** and reused for every date in a multi-date
 run, so a 12-candidate probe is paid at most once, not once per day.

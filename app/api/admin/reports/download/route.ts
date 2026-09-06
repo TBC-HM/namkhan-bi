@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requirePropertyAccess } from '@/lib/tenancy';
+import { flattenSnapshot } from '@/lib/cb-report-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,29 +47,16 @@ export async function GET(req: NextRequest) {
     report_date: string | null;
     period_from: string | null;
     period_to: string | null;
-    headers: string[];
-    records: Record<string, unknown[]>;
+    headers: unknown;
+    records: unknown;
   };
 
-  const headers: string[] = Array.isArray(snap.headers) ? snap.headers : [];
-  const records: Record<string, unknown[]> = snap.records ?? {};
+  // Cloudbeds returns three different snapshot shapes; flattenSnapshot handles all of
+  // them. Doing this inline is what produced header-only CSVs for the 13 grouped reports.
+  const { columns, rows } = flattenSnapshot(snap.headers, snap.records);
 
-  // Determine actual row count from first column's array length
-  const firstCol = headers[0];
-  const rowCount = firstCol && Array.isArray(records[firstCol]) ? records[firstCol].length : 0;
-
-  // Build CSV
-  const lines: string[] = [];
-  lines.push(headers.map(csvCell).join(','));
-
-  for (let i = 0; i < rowCount; i++) {
-    const cells = headers.map((h) => {
-      const col = records[h];
-      const val = Array.isArray(col) ? col[i] : null;
-      return csvCell(val == null ? '' : String(val));
-    });
-    lines.push(cells.join(','));
-  }
+  const lines: string[] = [columns.map(csvCell).join(',')];
+  for (const row of rows) lines.push(row.map(csvCell).join(','));
 
   const csv = lines.join('\r\n');
   const safeName = (snap.report_name ?? `report_${reportId}`).replace(/[^a-zA-Z0-9_-]/g, '_');
