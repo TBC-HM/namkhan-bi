@@ -288,9 +288,16 @@ export const NAV_SUBGROUPS: SubGroup[] = [
 
   // ─── Finance landing strip · PBS 2026-08-25 ─────────────────
   // Finance HoD sub-strip: Planning · Budget · Studio (no HoD — already the current page).
+  // PBS 2026-09-06: the three destinations were missing from `members`, so the strip
+  // appeared on /finance but vanished the moment you clicked one of its own tabs —
+  // no way back except the browser button. They are 2-segment paths, so the
+  // detail-page fallback below (3+ segments only) never rescued them.
   {
     parentHref: '/finance',
-    members: ['/finance', '/finance/overview'],
+    members: [
+      '/finance', '/finance/overview',
+      '/finance/planning', '/finance/budget', '/finance/studio',
+    ],
     tabs: [
       { label: 'Planning', href: '/h/260955/finance/planning' },
       { label: 'Budget',   href: '/h/260955/finance/budget'   },
