@@ -54,9 +54,12 @@ function platformsForCategory(cat: string): string[] {
     .map(([p]) => p === 'google_business' ? 'GBP' : p.charAt(0).toUpperCase() + p.slice(1));
 }
 
+// ── colour extras ─────────────────────────────────────────────────────────────
+const RED = '#B04A2F';
+
 // ── types ─────────────────────────────────────────────────────────────────────
-type TaxTag = { tag_slug: string; tag_label: string; is_active: boolean; category: string };
-type SeoKw  = {
+type TaxTag  = { tag_slug: string; tag_label: string; is_active: boolean; category: string };
+type SeoKw   = {
   keyword:            string;
   active:             boolean;
   monthly_searches:   number | null;
@@ -64,27 +67,42 @@ type SeoKw  = {
   position:           number | null;
   location_name:      string | null;
 };
+type GscRow  = {
+  query:        string;
+  impressions:  number;
+  clicks:       number;
+  ctr:          number;
+  avg_position: number;
+  is_branded:   boolean;
+};
 
 // ── page ─────────────────────────────────────────────────────────────────────
 export default async function HashtagTaxonomyPage() {
   const sb = getSupabaseAdmin();
 
-  const [taxRes, kwRes] = await Promise.all([
+  const [taxRes, kwRes, gscRes] = await Promise.all([
     sb.from('mkt_media_taxonomy')
       .select('category,tag_slug,tag_label,is_active')
       .order('category')
       .order('tag_label'),
 
-    // v_seo_rankings is a public SECURITY DEFINER bridge — safe for admin reads
     sb.from('v_seo_rankings')
       .select('keyword,active,monthly_searches,keyword_difficulty,position,location_name')
-      .eq('property_id', 260955)  // legacy unprefixed path — Namkhan only
+      .eq('property_id', 260955)
       .order('monthly_searches', { ascending: false, nullsFirst: false })
       .limit(60),
+
+    // v_gsc_top_queries unnests the most recent queries report blob
+    sb.from('v_gsc_top_queries')
+      .select('query,impressions,clicks,ctr,avg_position,is_branded')
+      .order('impressions', { ascending: false })
+      .limit(50),
   ]);
 
   const taxTags     = (taxRes.data ?? []) as TaxTag[];
   const seoKeywords = (kwRes.data  ?? []) as SeoKw[];
+  const gscRows     = (gscRes.data ?? []) as GscRow[];
+  const gscNonBrand = gscRows.filter(r => !r.is_branded);
 
   // Deduplicate keywords by text (v_seo_rankings can have rows per market)
   const kwByText = new Map<string, SeoKw>();
@@ -118,14 +136,51 @@ export default async function HashtagTaxonomyPage() {
       </div>
 
       {/* ── 1. Google Search Console ──────────────────────────────────────── */}
-      <Section title="Google Search Console — top queries" badge="not connected" color={AMBER}>
-        <div style={{ fontSize: 12, color: INK_M }}>
-          <strong style={{ color: AMBER }}>Not connected yet.</strong>{' '}
-          GSC data appears here once Google Search Console is synced via the
-          Digital → Analytics page. When live it shows non-branded queries
-          driving traffic — high-impression / low-CTR queries are content
-          opportunities for both blog posts and social captions.
-        </div>
+      <Section
+        title="Google Search Console — top non-branded queries"
+        badge={gscNonBrand.length > 0 ? `${gscNonBrand.length} queries` : 'no data'}
+        color={gscNonBrand.length > 0 ? FOREST : AMBER}
+      >
+        {gscNonBrand.length > 0 ? (
+          <>
+            <div style={{ fontSize: 11, color: INK_M, marginBottom: 10 }}>
+              High impressions + low clicks = content opportunity. These are the topics
+              people search — post about them to capture intent.
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
+                  {['Query', 'Impr.', 'Clicks', 'CTR', 'Avg. pos.'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '4px 10px 6px 0', fontSize: 10, color: INK_M, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {gscNonBrand.map((r, i) => {
+                  const pos = Number(r.avg_position);
+                  const posColor = pos <= 10 ? FOREST : pos <= 20 ? AMBER : RED;
+                  return (
+                    <tr key={i} style={{ borderBottom: `1px solid ${HAIR}` }}>
+                      <td style={{ padding: '5px 10px 5px 0', color: INK }}>{r.query}</td>
+                      <td style={{ padding: '5px 10px 5px 0', color: INK_M }}>{r.impressions.toLocaleString()}</td>
+                      <td style={{ padding: '5px 10px 5px 0', color: INK_M }}>{r.clicks.toLocaleString()}</td>
+                      <td style={{ padding: '5px 10px 5px 0', color: INK_M }}>
+                        {r.impressions > 0 ? `${Math.round(Number(r.ctr) * 100)}%` : '—'}
+                      </td>
+                      <td style={{ padding: '5px 0', color: posColor, fontWeight: 600 }}>
+                        #{Math.round(pos)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </>
+        ) : (
+          <div style={{ fontSize: 12, color: INK_M }}>
+            <strong style={{ color: AMBER }}>No data yet.</strong> GSC reports are loading — check back shortly.
+          </div>
+        )}
       </Section>
 
       {/* ── 2. SEO target keywords ────────────────────────────────────────── */}
