@@ -186,35 +186,49 @@ type TxRow = {
 const fmt$ = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 const fmtN = (n: number, d = 1) => n.toFixed(d);
 
-// ── Shared table styles ───────────────────────────────────────────────────────
+// ── Shared table styles (cockpit-native tokens — black on white) ──────────────
+
+const INK   = 'var(--ink, #1B1B1B)';
+const SOFT  = 'var(--ink-soft, #5A5A5A)';
+const PAPER = 'var(--paper, #FFFFFF)';
+const LINE  = 'var(--hairline, #E6DFCC)';
+const LINE2 = 'var(--hairline-strong, #CCBFA0)';
 
 const TH: React.CSSProperties = {
   textAlign: 'left', padding: '7px 10px',
-  borderBottom: '1px solid var(--tbl-border-strong)',
+  borderBottom: `1px solid ${LINE2}`,
   fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em',
-  color: 'var(--tbl-fg-mute)', whiteSpace: 'nowrap',
+  color: SOFT, whiteSpace: 'nowrap',
 };
 const THR: React.CSSProperties = { ...TH, textAlign: 'right' };
 const TD: React.CSSProperties = {
-  padding: '8px 10px', borderBottom: '1px solid var(--tbl-border)',
-  fontSize: 13, color: 'var(--tbl-fg)', verticalAlign: 'top',
+  padding: '8px 10px', borderBottom: `1px solid ${LINE}`,
+  fontSize: 13, color: INK, verticalAlign: 'top',
 };
 const TDR: React.CSSProperties = {
   ...TD, textAlign: 'right',
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 };
 const TABLE: React.CSSProperties = {
-  width: '100%', borderCollapse: 'collapse', background: 'var(--tbl-bg)',
+  width: '100%', borderCollapse: 'collapse', background: PAPER,
 };
 
 // ── Sub-components (module scope — avoids RSC digest crash) ───────────────────
 
-function ProgramPanel({ p }: { p: typeof PROGRAMS[number] }) {
+function ProgramPanel({ p, last }: { p: typeof PROGRAMS[number]; last?: boolean }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--tbl-fg)', marginBottom: 2 }}>{p.name}</div>
-      <div style={{ fontSize: 12, color: 'var(--tbl-fg-mute)', marginBottom: 10, lineHeight: 1.5 }}>{p.pitch}</div>
-      <div style={{ fontSize: 11, color: 'var(--tbl-fg-mute)', marginBottom: 8 }}>{p.idealFor} · {p.minNights}–{p.maxNights}n · {p.pricingBasis}</div>
+    <div style={{
+      flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10,
+      paddingRight: last ? 0 : 20,
+      borderRight: last ? 'none' : `1px solid ${LINE}`,
+    }}>
+      <div>
+        <div style={{ fontWeight: 600, fontSize: 13, color: INK, marginBottom: 2 }}>{p.name}</div>
+        <div style={{ fontSize: 11, color: SOFT, lineHeight: 1.5 }}>{p.pitch}</div>
+        <div style={{ fontSize: 10, color: SOFT, marginTop: 3 }}>
+          {p.idealFor} · {p.minNights}–{p.maxNights}n · {p.pricingBasis}
+        </div>
+      </div>
 
       <table style={{ ...TABLE, fontSize: 12 }}>
         <thead>
@@ -228,23 +242,23 @@ function ProgramPanel({ p }: { p: typeof PROGRAMS[number] }) {
           <tr>
             <td style={{ ...TD, fontSize: 12 }}>Essential</td>
             <td style={TDR}>{fmt$(p.essential.pricePublic)}</td>
-            <td style={{ ...TDR, color: 'var(--tbl-fg-mute)' }}>{fmt$(p.essential.priceLpa)}</td>
+            <td style={{ ...TDR, color: SOFT }}>{fmt$(p.essential.priceLpa)}</td>
           </tr>
           <tr>
             <td style={{ ...TD, fontSize: 12, borderBottom: 'none' }}>Immersion</td>
             <td style={{ ...TDR, borderBottom: 'none' }}>{fmt$(p.immersion.pricePublic)}</td>
-            <td style={{ ...TDR, borderBottom: 'none', color: 'var(--tbl-fg-mute)' }}>{fmt$(p.immersion.priceLpa)}</td>
+            <td style={{ ...TDR, borderBottom: 'none', color: SOFT }}>{fmt$(p.immersion.priceLpa)}</td>
           </tr>
         </tbody>
       </table>
 
-      <div style={{ marginTop: 10 }}>
-        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--tbl-fg-mute)', marginBottom: 4 }}>Essential</div>
-        <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 11, color: 'var(--tbl-fg)', lineHeight: 1.7 }}>
+      <div>
+        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: SOFT, marginBottom: 4 }}>Essential</div>
+        <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 11, color: INK, lineHeight: 1.7 }}>
           {p.essential.inclusions.map((inc, i) => <li key={i}>{inc}</li>)}
         </ul>
-        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--tbl-fg-mute)', margin: '8px 0 4px' }}>Immersion</div>
-        <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 11, color: 'var(--tbl-fg)', lineHeight: 1.7 }}>
+        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: SOFT, margin: '8px 0 4px' }}>Immersion</div>
+        <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 11, color: INK, lineHeight: 1.7 }}>
           {p.immersion.inclusions.map((inc, i) => <li key={i}>{inc}</li>)}
         </ul>
       </div>
@@ -258,7 +272,7 @@ function ProgramBreakdownTable({
   rows: { code: ProgramCode | null; count: number; revenue: number; nights: number; cancelled: number }[];
 }) {
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
+    <div style={{ overflowX: 'auto', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 6 }}>
       <table style={TABLE}>
         <thead>
           <tr>
@@ -292,7 +306,7 @@ function ProgramBreakdownTable({
 
 function MonthlyBars({ data }: { data: { month: string; revenue: number; count: number }[] }) {
   if (data.length === 0) {
-    return <div style={{ padding: 20, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No stays recorded yet.</div>;
+    return <div style={{ padding: 20, color: 'var(--ink-soft, #5A5A5A)', fontSize: 13 }}>No stays recorded yet.</div>;
   }
   const max = Math.max(...data.map((d) => d.revenue), 1);
   const barW = 48, gap = 14, chartH = 130, padT = 24, padB = 36;
@@ -308,13 +322,13 @@ function MonthlyBars({ data }: { data: { month: string; revenue: number; count: 
           const lbl = new Date(Date.UTC(yr, mo - 1)).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
           return (
             <g key={d.month}>
-              <rect x={x} y={y} width={barW} height={h} fill="var(--tbl-border-strong, #6B7B6E)" rx={2} />
-              <text x={x + barW / 2} y={padT + chartH + 14} textAnchor="middle" fontSize="10" fill="var(--tbl-fg-mute)">{lbl}</text>
+              <rect x={x} y={y} width={barW} height={h} fill="#6B7B6E" rx={2} />
+              <text x={x + barW / 2} y={padT + chartH + 14} textAnchor="middle" fontSize="10" fill="var(--ink-soft, #5A5A5A)">{lbl}</text>
               {d.count > 0 && (
-                <text x={x + barW / 2} y={padT + chartH + 26} textAnchor="middle" fontSize="9" fill="var(--tbl-fg-mute)">{d.count}st</text>
+                <text x={x + barW / 2} y={padT + chartH + 26} textAnchor="middle" fontSize="9" fill="var(--ink-soft, #5A5A5A)">{d.count}st</text>
               )}
               {d.revenue > 0 && (
-                <text x={x + barW / 2} y={y - 5} textAnchor="middle" fontSize="9" fill="var(--tbl-fg)">{fmt$(d.revenue)}</text>
+                <text x={x + barW / 2} y={y - 5} textAnchor="middle" fontSize="9" fill="var(--ink, #1B1B1B)">{fmt$(d.revenue)}</text>
               )}
             </g>
           );
@@ -326,10 +340,10 @@ function MonthlyBars({ data }: { data: { month: string; revenue: number; count: 
 
 function BookingFeed({ rows }: { rows: ResRow[] }) {
   if (rows.length === 0) return (
-    <div style={{ padding: 16, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No retreat bookings found.</div>
+    <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontSize: 13 }}>No retreat bookings found.</div>
   );
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
+    <div style={{ overflowX: 'auto', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 6 }}>
       <table style={TABLE}>
         <thead>
           <tr>
@@ -348,22 +362,22 @@ function BookingFeed({ rows }: { rows: ResRow[] }) {
             const tier = getTier(r.rate_plan);
             const cancelled = r.is_cancelled;
             const muteStyle: React.CSSProperties = cancelled
-              ? { color: 'var(--tbl-fg-mute)', textDecoration: 'line-through' }
+              ? { color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'line-through' }
               : {};
             return (
               <tr key={r.reservation_id}>
                 <td style={{ ...TD, ...muteStyle }}>{r.check_in_date}</td>
                 <td style={{ ...TD, ...muteStyle }}>{r.guest_name ?? '—'}</td>
                 <td style={{ ...TD, ...muteStyle }}>{getProgramName(r.rate_plan, r.source_name)}</td>
-                <td style={{ ...TD, fontSize: 12, color: 'var(--tbl-fg-mute)', textTransform: 'capitalize' }}>
+                <td style={{ ...TD, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'capitalize' }}>
                   {tier ?? '—'}
                 </td>
                 <td style={{ ...TDR, ...muteStyle }}>{r.nights}</td>
-                <td style={{ ...TD, fontSize: 12, color: 'var(--tbl-fg-mute)' }}>{r.source_name ?? '—'}</td>
+                <td style={{ ...TD, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' }}>{r.source_name ?? '—'}</td>
                 <td style={{ ...TDR, ...muteStyle }}>
                   {Number(r.total_amount ?? 0) > 0 ? fmt$(Number(r.total_amount)) : '—'}
                 </td>
-                <td style={{ ...TD, fontSize: 12, color: cancelled ? 'var(--tbl-fg-mute)' : 'var(--tbl-fg)' }}>
+                <td style={{ ...TD, fontSize: 12, color: cancelled ? 'var(--ink-soft, #5A5A5A)' : 'var(--ink, #1B1B1B)' }}>
                   {cancelled ? 'Cancelled' : r.status_canonical ?? '—'}
                 </td>
               </tr>
@@ -388,7 +402,7 @@ function RevenueSplitTable({
 }) {
   const grandTotal = totalPackage + totalRoom + totalExtra;
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
+    <div style={{ overflowX: 'auto', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 6 }}>
       <table style={TABLE}>
         <thead>
           <tr>
@@ -410,27 +424,27 @@ function RevenueSplitTable({
               <td style={TDR}>{r.total > 0 ? fmt$(r.total) : '—'}</td>
               <td style={TDR}>{r.packageRev > 0 ? fmt$(r.packageRev) : '—'}</td>
               <td style={TDR}>{r.roomRev > 0 ? fmt$(r.roomRev) : '—'}</td>
-              <td style={{ ...TDR, color: 'var(--tbl-fg-mute)' }}>{r.extraRev > 0 ? fmt$(r.extraRev) : '—'}</td>
+              <td style={{ ...TDR, color: 'var(--ink-soft, #5A5A5A)' }}>{r.extraRev > 0 ? fmt$(r.extraRev) : '—'}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr style={{ borderTop: '1px solid var(--tbl-border-strong)' }}>
+          <tr style={{ borderTop: '1px solid var(--hairline-strong, #CCBFA0)' }}>
             <td colSpan={3} style={{ ...TD, fontWeight: 600, fontSize: 12, borderBottom: 'none' }}>Total</td>
             <td style={{ ...TDR, fontWeight: 600, borderBottom: 'none' }}>{fmt$(grandTotal)}</td>
             <td style={{ ...TDR, fontWeight: 600, borderBottom: 'none' }}>
               {fmt$(totalPackage)}
-              <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute)', marginLeft: 4 }}>
+              <span style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', marginLeft: 4 }}>
                 ({grandTotal > 0 ? Math.round((totalPackage / grandTotal) * 100) : 0}%)
               </span>
             </td>
             <td style={{ ...TDR, fontWeight: 600, borderBottom: 'none' }}>
               {fmt$(totalRoom)}
-              <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute)', marginLeft: 4 }}>
+              <span style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', marginLeft: 4 }}>
                 ({grandTotal > 0 ? Math.round((totalRoom / grandTotal) * 100) : 0}%)
               </span>
             </td>
-            <td style={{ ...TDR, fontWeight: 600, color: 'var(--tbl-fg-mute)', borderBottom: 'none' }}>
+            <td style={{ ...TDR, fontWeight: 600, color: 'var(--ink-soft, #5A5A5A)', borderBottom: 'none' }}>
               {fmt$(totalExtra)}
             </td>
           </tr>
@@ -442,10 +456,10 @@ function RevenueSplitTable({
 
 function AddOnTable({ rows }: { rows: { desc: string; count: number; total: number }[] }) {
   if (rows.length === 0) return (
-    <div style={{ padding: 16, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No add-on charges on retreat folios.</div>
+    <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontSize: 13 }}>No add-on charges on retreat folios.</div>
   );
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
+    <div style={{ overflowX: 'auto', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 6 }}>
       <table style={TABLE}>
         <thead>
           <tr>
@@ -653,9 +667,9 @@ export default async function RetreatsPage({ propertyId }: Props) {
         subtitle="Three programs, two tiers each · all rates per night incl. 10% SC + 10% VAT · peak season excluded"
         density="compact"
       >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
-          {PROGRAMS.map((p) => (
-            <ProgramPanel key={p.code} p={p} />
+        <div style={{ display: 'flex', flexDirection: 'row', gap: 0, width: '100%', alignItems: 'flex-start' }}>
+          {PROGRAMS.map((p, i) => (
+            <ProgramPanel key={p.code} p={p} last={i === PROGRAMS.length - 1} />
           ))}
         </div>
       </Container>
