@@ -19,8 +19,9 @@ import {
 } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { financeSubPagesForProperty } from '@/app/finance/_subpages';
-import BudgetUpload from './BudgetUpload';
 import NarrativeButton from './NarrativeButton';
+import BudgetUpload from './BudgetUpload';
+import DataPanel from '@/app/(cockpit)/_design/DataPanel';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -76,6 +77,19 @@ function statusFor(varPct: number | null): 'green' | 'amber' | 'red' | 'grey' {
   if (a <= 5) return 'green';
   if (a <= 10) return 'amber';
   return 'red';
+}
+
+/** Thin labelled rule so the page reads as sections instead of one long stack. */
+function SectionRule({ label }: { label: string }) {
+  return (
+    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0 -4px' }}>
+      <span style={{
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase',
+        color: 'var(--ink-soft, #5a5a5a)', whiteSpace: 'nowrap',
+      }}>{label}</span>
+      <span style={{ flex: 1, height: 1, background: 'var(--hairline, #e6dfcc)' }} />
+    </div>
+  );
 }
 
 export default async function FinancePlanningPage({
@@ -251,6 +265,8 @@ export default async function FinancePlanningPage({
         </div>
       </Container>
 
+      <SectionRule label="Control · budget vs actual" />
+
       <Container
         title={`Variance by class · ${selMonth ?? '—'}`}
         subtitle="budget = the approved FY plan · actual = QB P&L by class · forecast = rooms on-the-books (other classes pending)"
@@ -282,6 +298,8 @@ export default async function FinancePlanningPage({
         />
       </Container>
 
+      <SectionRule label="Cash" />
+
       <Container
         title="13-week cash forward"
         subtitle={`${opening?.line_label ?? 'opening from public.v_bank_account_balance'} · settlement layer, USD-equivalent (ADR-173)`}
@@ -304,6 +322,119 @@ export default async function FinancePlanningPage({
           empty={{ title: 'No cash-forward data', hint: 'public.v_cash_forward_13w returned no rows' }}
         />
       </Container>
+
+      {/* ── Performance ─────────────────────────────────────────────────── */}
+      <SectionRule label="Performance" />
+
+      <DataPanel
+        title="House summary · USALI by month"
+        subtitle="finance.v_finance_house_summary · GL layer"
+        view="v_finance_house_summary"
+        columns={[
+          { key: 'period_yyyymm', label: 'Period' },
+          { key: 'total_revenue', label: 'Revenue', format: 'usd' },
+          { key: 'total_dept_profit', label: 'Dept profit', format: 'usd' },
+          { key: 'ag_total', label: 'A&G', format: 'usd' },
+          { key: 'sales_marketing', label: 'Sales+Mkt', format: 'usd' },
+          { key: 'pom', label: 'POM', format: 'usd' },
+          { key: 'utilities', label: 'Utilities', format: 'usd' },
+          { key: 'gop', label: 'GOP', format: 'usd' },
+          { key: 'net_income', label: 'Net inc', format: 'usd' },
+        ]}
+        order_by={{ col: 'period_yyyymm', ascending: false }}
+        limit={18}
+      />
+
+      <DataPanel
+        title="Monthly revenue · CB Insights"
+        subtitle="aggregated from insights.daily_revenue_cb (stock report 74)"
+        view="v_monthly_revenue_cb"
+        columns={[
+          { key: 'month_key', label: 'Month' },
+          { key: 'room_revenue_total', label: 'Room', format: 'usd' },
+          { key: 'other_revenue_total', label: 'Other', format: 'usd' },
+          { key: 'taxes_total', label: 'Taxes', format: 'usd' },
+          { key: 'fees_total', label: 'Fees', format: 'usd' },
+          { key: 'total_revenue', label: 'Total', format: 'usd' },
+        ]}
+        filter={{ col: 'property_id', eq: propertyId }}
+        order_by={{ col: 'month_start', ascending: false }}
+        limit={18}
+      />
+
+      {/* ── Cost control ────────────────────────────────────────────────── */}
+      <SectionRule label="Cost control" />
+
+      <DataPanel
+        title="Top suppliers · current month"
+        subtitle="where the money went"
+        view="v_finance_top_suppliers"
+        columns={[
+          { key: 'rank_month', label: '#', format: 'int' },
+          { key: 'vendor_name', label: 'Vendor' },
+          { key: 'gross_spend_usd', label: 'Spend', format: 'usd' },
+          { key: 'line_count', label: 'Lines', format: 'int' },
+        ]}
+        order_by={{ col: 'rank_month', ascending: true }}
+        limit={15}
+      />
+
+      <DataPanel
+        title="Discount & comp · last 6 months"
+        subtitle="who gave away what · rows over $100 flagged"
+        view="v_tx_comp_discount"
+        columns={[
+          { key: 'month', label: 'Month' },
+          { key: 'usali_dept', label: 'Dept' },
+          { key: 'user_name', label: 'User' },
+          { key: 'line_count', label: 'Lines', format: 'int' },
+          { key: 'comp_discount_value', label: 'Value', format: 'usd' },
+        ]}
+        filter={{ col: 'property_id', eq: propertyId }}
+        order_by={{ col: 'month', ascending: false }}
+        limit={40}
+        highlight={{ key: 'comp_discount_value', above: 100 }}
+      />
+
+      <DataPanel
+        title="Adjustments monitor · last 6 months"
+        subtitle="voids and adjustments · gross over $500 flagged"
+        view="v_tx_adjustments_monitor"
+        columns={[
+          { key: 'month', label: 'Month' },
+          { key: 'adjustment_type', label: 'Type' },
+          { key: 'posted_by', label: 'Posted by' },
+          { key: 'adj_count', label: 'Count', format: 'int' },
+          { key: 'net_amount', label: 'Net', format: 'usd' },
+          { key: 'gross_abs_amount', label: 'Gross abs', format: 'usd' },
+        ]}
+        filter={{ col: 'property_id', eq: propertyId }}
+        order_by={{ col: 'month', ascending: false }}
+        limit={40}
+        highlight={{ key: 'gross_abs_amount', above: 500 }}
+      />
+
+      {/* ── Reference ───────────────────────────────────────────────────── */}
+      <SectionRule label="Reference" />
+
+      <DataPanel
+        title="Trial balance · monthly"
+        subtitle="CB Accounting API · v_trial_balance_monthly_cb"
+        view="v_trial_balance_monthly_cb"
+        columns={[
+          { key: 'month_key', label: 'Month' },
+          { key: 'total_gl_charges', label: 'GL charges', format: 'usd' },
+          { key: 'total_gl_activity', label: 'GL activity', format: 'usd' },
+          { key: 'total_deposit_activity', label: 'Deposits', format: 'usd' },
+          { key: 'total_ar_activity', label: 'AR', format: 'usd' },
+          { key: 'total_activity', label: 'Total', format: 'usd' },
+        ]}
+        filter={{ col: 'property_id', eq: propertyId }}
+        order_by={{ col: 'month_start', ascending: false }}
+        limit={18}
+      />
+
+      <SectionRule label="Narrative" />
 
       <Container
         title="Monthly variance narrative"
@@ -328,6 +459,8 @@ export default async function FinancePlanningPage({
           )}
         </div>
       </Container>
+
+      <SectionRule label="Maintain" />
 
       <Container title="Budget import" subtitle="xlsx → public.fn_budget_import · versioned append-forward · validates against finance.gl_classes">
         <BudgetUpload propertyId={propertyId} latestVersion={budgetVersion} latestVersionAt={null} />

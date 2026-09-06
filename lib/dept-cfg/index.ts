@@ -760,8 +760,10 @@ const FINANCE_CFG: DeptCfg = {
     // by mistake). Ledger stays a sub-tab of Finance (visible when on any Finance
     // child page — see nav-subgroups /finance/pnl group).
     { label: 'HoD',             href: '/h/260955/finance'                          },
-    // PBS 2026-09-05: Dashboard tab — Finance KPI/GL engine dashboard.
-    { label: 'Dashboard',       href: '/h/260955/finance/dashboard'                },
+    // PBS 2026-09-06: Dashboard tab retired. It rendered the old dark engine chrome
+    // and duplicated Planning's budget-vs-actual and 13-week cash. Its panels now sit
+    // on Planning under Performance / Cost control / Reference, in the current design
+    // system. The route still resolves; it is simply no longer in the strip.
     { label: 'HR',              href: '/h/260955/finance/hr'                       },
     { label: 'Acc',             href: '/h/260955/finance/costs'                    },
     { label: 'Finance',         href: '/h/260955/finance/pnl'                      },

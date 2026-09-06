@@ -7,7 +7,6 @@ import { DashboardPage, Container, KpiTile, type KpiTileProps } from '@/app/(coc
 import { FINANCE_SUBPAGES } from '../_subpages';
 import { supabaseGl } from '@/lib/supabase-gl';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import BudgetUpload from './BudgetUpload';
 import BudgetGridClient, { type GridCell, type AccountRef } from './BudgetGridClient';
 
 export const revalidate = 0;
@@ -187,12 +186,11 @@ export default async function BudgetPage() {
         </Container>
       </div>
 
-      {/* 3 · Upload */}
-      <div style={fullRow}>
-        <Container title="Upload" subtitle="drop a new budget CSV" density="compact">
-          <BudgetUpload lastUploadAt={null} />
-        </Container>
-      </div>
+      {/* PBS 2026-09-06: the CSV upload container is gone. It posted to
+          gl.upsert_budget_rows, which is retired and raises feature_not_supported —
+          the button could only ever error. Budget import lives on
+          /h/{pid}/finance/planning, which has the property scope fn_budget_import
+          requires. */}
     </DashboardPage>
   );
 }
