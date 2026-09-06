@@ -63,6 +63,7 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
   const [scheduleId, setScheduleId] = useState<number | null>(null);
   const [scheduleEmail, setScheduleEmail] = useState('');
   const [sendStates, setSendStates] = useState<Record<number, SendState>>({});
+  const [sendError, setSendError] = useState('');
 
   function toggleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -99,15 +100,24 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
 
   async function handleSend(id: number) {
     setSendStates(s => ({ ...s, [id]: 'loading' }));
+    setSendError('');
     try {
       const res = await fetch(`/api/admin/reports/send-email?property_id=${propertyId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ report_id: id, email: scheduleEmail }),
       });
-      setSendStates(s => ({ ...s, [id]: res.ok ? 'done' : 'error' }));
-      if (res.ok) { setScheduleId(null); setScheduleEmail(''); }
-    } catch {
+      if (res.ok) {
+        setSendStates(s => ({ ...s, [id]: 'done' }));
+        setScheduleId(null);
+        setScheduleEmail('');
+      } else {
+        const j = await res.json().catch(() => ({}));
+        setSendError(j.error ?? `Error ${res.status}`);
+        setSendStates(s => ({ ...s, [id]: 'error' }));
+      }
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : 'Network error');
       setSendStates(s => ({ ...s, [id]: 'error' }));
     }
   }
@@ -190,7 +200,7 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
                       {hasData && !isOpen && (
                         <button style={scheduleBtn}
                           onClick={() => { setScheduleId(id); setScheduleEmail(''); setSendStates(s => ({ ...s, [id]: 'idle' })); }}>
-                          ✉ Schedule
+                          ✉ Email
                         </button>
                       )}
                       {!synced && <SyncButtonInline propertyId={propertyId} reportId={id} reportName={meta.label} />}
@@ -215,6 +225,9 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
                         </button>
                         <button style={cancelBtn} onClick={() => setScheduleId(null)}>✕</button>
                       </div>
+                    )}
+                    {isOpen && sending === 'error' && sendError && (
+                      <div style={{ fontSize: 10, color: '#B8542A', marginTop: 4, maxWidth: 240 }}>{sendError}</div>
                     )}
                   </td>
                 </tr>
