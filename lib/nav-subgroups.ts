@@ -451,7 +451,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Overview',         href: '/h/260955/marketing/social'                    },
       { label: 'Instagram',        href: '/h/260955/marketing/social/instagram'          },
       { label: 'Facebook',         href: '/h/260955/marketing/social/facebook'           },
-      { label: 'X / Twitter',      href: '/h/260955/marketing/social/x'                  },
+      { label: 'X',                 href: '/h/260955/marketing/social/x'                  },
       { label: 'LinkedIn',         href: '/h/260955/marketing/social/linkedin'           },
       { label: 'Pinterest',        href: '/h/260955/marketing/social/pinterest'          },
       { label: 'TikTok',           href: '/h/260955/marketing/social/tiktok'             },

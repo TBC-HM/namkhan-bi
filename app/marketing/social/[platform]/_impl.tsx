@@ -44,7 +44,7 @@ const SOCIAL_ALLOW = new Set([
 
 const PLATFORM_LABEL: Record<string, string> = {
   instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok',
-  linkedin: 'LinkedIn', x: 'X / Twitter', twitter: 'X / Twitter', pinterest: 'Pinterest',
+  linkedin: 'LinkedIn', x: 'X', twitter: 'X', pinterest: 'Pinterest',
 };
 
 const HANDLE_TO_URL: Record<string, (h: string) => string> = {

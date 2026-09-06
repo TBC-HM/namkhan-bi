@@ -43,7 +43,7 @@ function prettyPlatform(p: string): string {
   const map: Record<string, string> = {
     google_business: 'Google Business Profile', instagram: 'Instagram',
     facebook: 'Facebook', tiktok: 'TikTok', pinterest: 'Pinterest',
-    linkedin: 'LinkedIn', x: 'X / Twitter', twitter: 'X / Twitter',
+    linkedin: 'LinkedIn', x: 'X', twitter: 'X',
     youtube: 'YouTube', tripadvisor: 'Tripadvisor', booking: 'Booking.com',
     expedia: 'Expedia', threads: 'Threads',
   };

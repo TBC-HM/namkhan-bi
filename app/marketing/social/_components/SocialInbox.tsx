@@ -35,7 +35,7 @@ const CREAM  = '#F5F0E1';
 const PRETTY: Record<string, string> = {
   google_business: 'Google Business Profile', instagram: 'Instagram',
   facebook: 'Facebook', tiktok: 'TikTok', pinterest: 'Pinterest',
-  linkedin: 'LinkedIn', x: 'X / Twitter',
+  linkedin: 'LinkedIn', x: 'X',
 };
 
 function statusColor(s: SocialPostRow['status']): string {
