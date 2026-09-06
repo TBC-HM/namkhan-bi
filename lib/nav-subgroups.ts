@@ -37,13 +37,26 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
   {
     parentHref: '/revenue/rooms',
-    // PBS 2026-08-25: Promotions added — the five OTA promotion registers had
-    // no nav entry at all and were reachable only from the per-source action bar.
-    members: ['/revenue/rooms', '/revenue/channels', '/revenue/channels/promotions', '/revenue/rateplans', '/revenue/markets'],
+    // PBS 2026-09-06: Promotions entry REMOVED. It was added 2026-08-25 pointing at
+    // /revenue/channels/promotions — a hub page that was never committed, so the link
+    // shipped dead. It did not 404: the URL fell through to channels/[source] with
+    // source="promotions", which has no unknown-source guard, and rendered a
+    // channel-detail page for an invented source ("tracked but has not produced
+    // bookings"). A plausible-looking dead page is worse than a missing one.
+    //
+    // Not replaced. The per-OTA registers behind it are settings — an Active toggle,
+    // cost % and notes — with no production or revenue in them, and Cloudbeds does not
+    // flag whether a booking came via Genius or One Key, so programme ROI is not
+    // computable from any data we hold. The channel economics that WOULD answer
+    // "what does this channel pay me" already exist elsewhere.
+    //
+    // The five per-OTA pages stay exactly as they are — Lighthouse uses them, and they
+    // are reached from the per-source action bar (promoHref in
+    // app/revenue/channels/[source]/page.tsx), never from this strip.
+    members: ['/revenue/rooms', '/revenue/channels', '/revenue/rateplans', '/revenue/markets'],
     // PBS 2026-07-09 pm: Performance order — Channels · Rate Plans · Markets · Rooms.
     tabs: [
       { label: 'Channels',   href: '/h/260955/revenue/channels'  },
-      { label: 'Promotions', href: '/h/260955/revenue/channels/promotions' },
       { label: 'Rate Plans', href: '/h/260955/revenue/rateplans' },
       { label: 'Markets',    href: '/h/260955/revenue/markets'   },
       { label: 'Rooms',      href: '/h/260955/revenue/rooms'     },
