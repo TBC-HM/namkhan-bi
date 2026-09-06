@@ -9,71 +9,13 @@ import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 import ReportsTableClient from './ReportsTableClient';
+// PBS 2026-09-06: catalog extracted to lib/cb-reports.ts so Administration > Reports
+// and Revenue > RevReports cannot drift apart.
+import { KNOWN_REPORTS } from '@/lib/cb-reports';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 interface Props { params: { property_id: string } }
-
-// Known stock reports (reportId → human label + category)
-const KNOWN_REPORTS: Record<number, { label: string; category: string }> = {
-  // ── Revenue ──────────────────────────────────────────────────────────────
-  74:  { label: 'Daily Revenue Report',              category: 'Revenue'      },
-  75:  { label: 'Monthly Revenue Summary',           category: 'Revenue'      },
-  76:  { label: 'Revenue by Room Type',              category: 'Revenue'      },
-  77:  { label: 'Revenue by Rate Plan',              category: 'Revenue'      },
-  78:  { label: 'Revenue by Market Segment',         category: 'Revenue'      },
-  79:  { label: 'Revenue by Channel',                category: 'Revenue'      },
-  92:  { label: 'RevPAR Analysis',                   category: 'Revenue'      },
-  93:  { label: 'Pace Report',                       category: 'Revenue'      },
-  94:  { label: 'Pickup Report',                     category: 'Revenue'      },
-  95:  { label: 'Future Revenue on Books',           category: 'Revenue'      },
-  // ── Finance ──────────────────────────────────────────────────────────────
-  83:  { label: 'Payment Reconciliation',            category: 'Finance'      },
-  61:  { label: 'Cashier Report',                    category: 'Finance'      },
-  62:  { label: 'Night Audit Summary',               category: 'Finance'      },
-  63:  { label: 'Night Audit Detail',                category: 'Finance'      },
-  168: { label: 'Voids, Adjustments & Refunds',      category: 'Finance'      },
-  84:  { label: 'Bank Reconciliation',               category: 'Finance'      },
-  85:  { label: 'Trial Balance',                     category: 'Finance'      },
-  86:  { label: 'General Ledger Summary',            category: 'Finance'      },
-  87:  { label: 'A/R Aging Report',                  category: 'Finance'      },
-  88:  { label: 'A/P Summary Report',                category: 'Finance'      },
-  89:  { label: 'Commission Report',                 category: 'Finance'      },
-  90:  { label: 'Travel Agent Report',               category: 'Finance'      },
-  91:  { label: 'Corporate Account Revenue',         category: 'Finance'      },
-  96:  { label: 'Rate Variance Report',              category: 'Finance'      },
-  // ── Ledger ───────────────────────────────────────────────────────────────
-  306: { label: 'Deposit Ledger with Details',       category: 'Ledger'       },
-  309: { label: 'AR Ledger with Details',            category: 'Ledger'       },
-  311: { label: 'Current Ledger with Details',       category: 'Ledger'       },
-  304: { label: 'Pre-Stay Deposit Report',           category: 'Ledger'       },
-  305: { label: 'Guest Ledger',                      category: 'Ledger'       },
-  // ── Transactions ─────────────────────────────────────────────────────────
-  38:  { label: 'Expanded Transaction Report',       category: 'Transactions' },
-  39:  { label: 'Daily Transaction Summary',         category: 'Transactions' },
-  40:  { label: 'Folio Transaction Report',          category: 'Transactions' },
-  // ── Operations ───────────────────────────────────────────────────────────
-  50:  { label: 'Arrivals Report',                   category: 'Operations'   },
-  51:  { label: 'Departures Report',                 category: 'Operations'   },
-  52:  { label: 'In-House Guest List',               category: 'Operations'   },
-  53:  { label: 'Housekeeping Report',               category: 'Operations'   },
-  54:  { label: 'Housekeeping Assignment',           category: 'Operations'   },
-  55:  { label: 'Room Status Report',                category: 'Operations'   },
-  56:  { label: 'Maintenance Report',                category: 'Operations'   },
-  57:  { label: 'Out-of-Order Rooms',               category: 'Operations'   },
-  58:  { label: 'Occupancy Report',                  category: 'Operations'   },
-  59:  { label: 'No-Show Report',                    category: 'Operations'   },
-  60:  { label: 'Cancellation Report',               category: 'Operations'   },
-  // ── Guests ───────────────────────────────────────────────────────────────
-  100: { label: 'Guest History Report',              category: 'Guests'       },
-  101: { label: 'Booking Report',                    category: 'Guests'       },
-  102: { label: 'Group Pickup Report',               category: 'Guests'       },
-  103: { label: 'No-Show / Early Departure',         category: 'Guests'       },
-  // ── Management ───────────────────────────────────────────────────────────
-  110: { label: 'Manager\'s Daily Report',           category: 'Management'   },
-  111: { label: 'Daily Recap Summary',               category: 'Management'   },
-  112: { label: 'Monthly Manager Summary',           category: 'Management'   },
-};
 
 function relTime(iso: string): string {
   const d = new Date(iso);

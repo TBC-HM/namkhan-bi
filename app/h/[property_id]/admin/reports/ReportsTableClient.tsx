@@ -17,7 +17,12 @@ interface Props {
   propertyId: number;
 }
 
-const CATEGORIES = ['All', 'Revenue', 'Finance', 'Ledger', 'Transactions', 'Operations', 'Guests', 'Management'];
+// PBS 2026-09-06: derived from the rows rather than hardcoded. The list used to name
+// all eight categories, so the revenue-filtered page would have offered Housekeeping
+// and Ledger filters that could never match anything.
+function categoriesIn(rows: ReportRow[]): string[] {
+  return ['All', ...Array.from(new Set(rows.map((r) => r.meta.category))).sort()];
+}
 type SortCol = 'id' | 'report' | 'category' | 'lastSync' | 'rows';
 type SortDir = 'asc' | 'desc';
 
@@ -131,7 +136,7 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
       <div style={filterBar}>
         <label style={filterLabel}>Category</label>
         <select style={filterSelect} value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          {categoriesIn(rows).map(c => <option key={c}>{c}</option>)}
         </select>
         <label style={filterLabel}>Status</label>
         <select style={filterSelect} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
