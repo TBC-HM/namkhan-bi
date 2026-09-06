@@ -27,7 +27,7 @@ export default async function RetreatsTenantPage({ params }: Props) {
     key: s.href,
     label: s.label,
     href: s.href,
-    active: s.href.includes('/operations/rooms'),
+    active: s.href.includes('/operations/retreats'),
   })) as DashboardTab[];
 
   return (

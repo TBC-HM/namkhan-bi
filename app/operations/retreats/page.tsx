@@ -1,9 +1,8 @@
 // app/operations/retreats/page.tsx
-// PBS 2026-09-06 — Retreats department analytics.
-// Retreat guests are identified by booking source (three retreat OTA channels).
-// Two models: wholesale (Retreat Reseller, group blocks at group ADR) and
-// individual (BookRetreats, Tripaneer, using Retreat Packages Base Rate plans).
-// Property ID is always Namkhan (260955); /h/ wrapper redirects here.
+// Retreats department analytics — 3 FIT programs + eVigeosport group channel.
+// FIT: BookRetreats + Tripaneer (individual guests, Retreat Packages Base Rate).
+// Group: eVigeosport (multi-room blocks, Group Rate — separate business model).
+// Program catalog inlined: marketing.retreat_programs/pricing not PostgREST-exposed.
 
 import { DashboardPage, Container, KpiTile, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
@@ -12,23 +11,138 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-interface Props {
-  propertyId?: number;
-}
-
 const NAMKHAN_PID = 260955;
 
-const RETREAT_SOURCES = [
-  'Retreat Reseller (f.eVigeosport)',
-  'BookRetreats',
-  'Book Yoga Retreats by Tripaneer',
-] as const;
+// ── Program catalog (source: marketing.retreat_programs / marketing.retreat_pricing) ──
 
-const SRC_LABEL: Record<string, string> = {
-  'Retreat Reseller (f.eVigeosport)': 'Retreat Reseller',
+type ProgramTier = {
+  label: string;
+  inclusions: string[];
+  pricePublic: number;
+  priceLpa: number;
+};
+
+type Program = {
+  code: string;
+  name: string;
+  pitch: string;
+  minNights: number;
+  maxNights: number;
+  pricingBasis: string;
+  idealFor: string[];
+  essential: ProgramTier;
+  immersion: ProgramTier;
+};
+
+const PROGRAMS: Program[] = [
+  {
+    code: 'harmony_mindfulness',
+    name: 'Harmony & Mindfulness',
+    pitch: 'A mindful escape blending relaxation, cultural immersion, and balanced wellness',
+    minNights: 2, maxNights: 6,
+    pricingBasis: 'per person / night',
+    idealFor: ['Solo travelers', 'Wellness seekers', 'Spiritual seekers'],
+    essential: {
+      label: 'Essential',
+      inclusions: [
+        'Half-board meals (plant-rich, wellness-focused) — lunch or dinner',
+        'Daily yoga, Qi Gong & meditation (join-in, 60 min)',
+        'Holistic consultation with wellness team',
+        'Massages & spa rituals (60 min)',
+        'Infinity pool, herbal sauna & ice bath',
+      ],
+      pricePublic: 110, priceLpa: 94,
+    },
+    immersion: {
+      label: 'Immersion',
+      inclusions: [
+        'Full-board meals (plant-rich, wellness-focused) — lunch & dinner',
+        'Daily yoga, Qi Gong & meditation (private, 60 min)',
+        'Holistic consultation with wellness team',
+        'Massages & spa rituals (90 min)',
+        'Cultural & nature-based activities (subject to availability)',
+        'Infinity pool, herbal sauna & ice bath',
+      ],
+      pricePublic: 190, priceLpa: 162,
+    },
+  },
+  {
+    code: 'detox',
+    name: 'Namkhan Detox',
+    pitch: 'A complete reset for body and mind — detox cuisine, restorative therapies, holistic healing',
+    minNights: 2, maxNights: 6,
+    pricingBasis: 'per person / night',
+    idealFor: ['Detox seekers', 'Stress relief', 'Advanced wellness'],
+    essential: {
+      label: 'Essential',
+      inclusions: [
+        'Full-board detox meals (lunch & dinner) & herbal infusions',
+        'Holistic consultation & wellness support',
+        'Daily yoga, Qi Gong & meditation (join-in, 60 min)',
+        'Spa therapies & natural healing rituals (60 min)',
+        'Cultural experiences & eco-farm workshops (subject to availability)',
+        'Herbal sauna, ice bath & infinity pool',
+      ],
+      pricePublic: 130, priceLpa: 111,
+    },
+    immersion: {
+      label: 'Immersion',
+      inclusions: [
+        'Full-board detox meals (lunch & dinner) & herbal infusions',
+        'Holistic consultation & wellness support',
+        'Daily yoga, Qi Gong & meditation (private, 90 min)',
+        'Spa therapies & natural healing rituals (90 min)',
+        'Cultural experiences & eco-farm workshops (subject to availability)',
+        'Herbal sauna, ice bath & infinity pool',
+      ],
+      pricePublic: 210, priceLpa: 179,
+    },
+  },
+  {
+    code: 'serene_couples',
+    name: 'Serene Couples',
+    pitch: 'A romantic wellness escape for connection, relaxation, and shared experiences',
+    minNights: 2, maxNights: 6,
+    pricingBasis: 'per couple / night',
+    idealFor: ['Couples', 'Honeymooners', 'Anniversary celebrants'],
+    essential: {
+      label: 'Essential',
+      inclusions: [
+        'Half-board meals with riverside dining for a couple',
+        'Couples spa rituals & private sessions (60 min)',
+        'Daily yoga, meditation & Qi Gong (join-in, 60 min)',
+        'Mindful workshops & cultural activities',
+        'Infinity pool, herbal sauna & ice bath',
+        'Private time & shared moments in nature',
+      ],
+      pricePublic: 220, priceLpa: 187,
+    },
+    immersion: {
+      label: 'Immersion',
+      inclusions: [
+        'Full-board detox meals (lunch & dinner) & herbal infusions',
+        'Holistic consultation & wellness support',
+        'Daily yoga, Qi Gong & meditation (private, 90 min)',
+        'Spa therapies & natural healing rituals (90 min)',
+        'Cultural experiences & eco-farm workshops (subject to availability)',
+        'Herbal sauna, ice bath & infinity pool',
+      ],
+      pricePublic: 320, priceLpa: 272,
+    },
+  },
+];
+
+const FIT_SOURCES = ['BookRetreats', 'Book Yoga Retreats by Tripaneer'] as const;
+const GROUP_SOURCE = 'Retreat Reseller (f.eVigeosport)' as const;
+const ALL_SOURCES = [...FIT_SOURCES, GROUP_SOURCE] as const;
+
+const SRC_SHORT: Record<string, string> = {
   BookRetreats: 'BookRetreats',
   'Book Yoga Retreats by Tripaneer': 'Tripaneer',
+  [GROUP_SOURCE]: 'eVigeosport',
 };
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type ResRow = {
   reservation_id: string;
@@ -47,18 +161,90 @@ type TxRow = {
   reservation_id: string;
   description: string | null;
   amount: number | null;
-  service_date: string | null;
 };
+
+// ── Formatters ───────────────────────────────────────────────────────────────
 
 const fmt$ = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 const fmtN = (n: number, d = 1) => n.toFixed(d);
+
+// ── Shared table styles ───────────────────────────────────────────────────────
+
+const TH: React.CSSProperties = {
+  textAlign: 'left', padding: '7px 10px',
+  borderBottom: '1px solid var(--tbl-border-strong)',
+  fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em',
+  color: 'var(--tbl-fg-mute)', whiteSpace: 'nowrap',
+};
+const THR: React.CSSProperties = { ...TH, textAlign: 'right' };
+const TD: React.CSSProperties = {
+  padding: '8px 10px', borderBottom: '1px solid var(--tbl-border)',
+  fontSize: 13, color: 'var(--tbl-fg)',
+};
+const TDR: React.CSSProperties = {
+  ...TD, textAlign: 'right',
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+};
+const TABLE: React.CSSProperties = {
+  width: '100%', borderCollapse: 'collapse', background: 'var(--tbl-bg)',
+};
+
+// ── Sub-components (module scope — avoids RSC digest crash) ──────────────────
+
+function ProgramCard({ p }: { p: Program }) {
+  return (
+    <div style={{
+      border: '1px solid var(--tbl-border)', borderRadius: 8,
+      background: 'var(--tbl-bg)', overflow: 'hidden',
+    }}>
+      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--tbl-border)' }}>
+        <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--tbl-fg)', marginBottom: 4 }}>
+          {p.name}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--tbl-fg-mute)', marginBottom: 8 }}>{p.pitch}</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <span style={chip}>{p.minNights}–{p.maxNights} nights</span>
+          <span style={chip}>{p.pricingBasis}</span>
+          {p.idealFor.map((t) => <span key={t} style={chip}>{t}</span>)}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+        {([p.essential, p.immersion] as ProgramTier[]).map((tier) => (
+          <div key={tier.label} style={{
+            padding: '12px 14px',
+            borderRight: tier.label === 'Essential' ? '1px solid var(--tbl-border)' : 'none',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--tbl-fg-mute)', marginBottom: 8 }}>
+              {tier.label}
+            </div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--tbl-fg)', marginBottom: 2 }}>
+              {fmt$(tier.pricePublic)}<span style={{ fontSize: 11, fontWeight: 400, color: 'var(--tbl-fg-mute)' }}> public</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--tbl-fg-mute)', marginBottom: 10 }}>
+              {fmt$(tier.priceLpa)} LPA nett · incl. 10% SC + 10% VAT
+            </div>
+            <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 12, color: 'var(--tbl-fg)', lineHeight: 1.6 }}>
+              {tier.inclusions.map((inc, i) => <li key={i}>{inc}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const chip: React.CSSProperties = {
+  display: 'inline-block', padding: '2px 8px', borderRadius: 12,
+  background: 'var(--tbl-bg-elev, var(--tbl-border))', fontSize: 11,
+  color: 'var(--tbl-fg-mute)', border: '1px solid var(--tbl-border)',
+};
 
 function MonthlyBars({ data }: { data: { month: string; revenue: number; count: number }[] }) {
   if (data.length === 0) {
     return <div style={{ padding: 20, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No stays recorded yet.</div>;
   }
   const max = Math.max(...data.map((d) => d.revenue), 1);
-  const barW = 52, gap = 18, chartH = 160, padT = 24, padB = 38;
+  const barW = 52, gap = 18, chartH = 140, padT = 24, padB = 36;
   const w = data.length * (barW + gap) + gap;
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
@@ -77,7 +263,7 @@ function MonthlyBars({ data }: { data: { month: string; revenue: number; count: 
                 <text x={x + barW / 2} y={padT + chartH + 26} textAnchor="middle" fontSize="9" fill="var(--tbl-fg-mute, #888)">{d.count}st</text>
               )}
               {d.revenue > 0 && (
-                <text x={x + barW / 2} y={y - 5} textAnchor="middle" fontSize="9" fill="var(--tbl-fg, #000)">{fmt$(d.revenue)}</text>
+                <text x={x + barW / 2} y={y - 5} textAnchor="middle" fontSize="9" fill="var(--tbl-fg)">{fmt$(d.revenue)}</text>
               )}
             </g>
           );
@@ -87,26 +273,17 @@ function MonthlyBars({ data }: { data: { month: string; revenue: number; count: 
   );
 }
 
-const TH: React.CSSProperties = {
-  textAlign: 'left', padding: '7px 10px', borderBottom: '1px solid var(--tbl-border-strong)',
-  fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--tbl-fg-mute)',
-  whiteSpace: 'nowrap',
-};
-const THR: React.CSSProperties = { ...TH, textAlign: 'right' };
-const TD: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid var(--tbl-border)', fontSize: 13, color: 'var(--tbl-fg)' };
-const TDR: React.CSSProperties = { ...TD, textAlign: 'right', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' };
-const TABLE: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', background: 'var(--tbl-bg)' };
-
 function SrcTable({ rows }: { rows: { label: string; count: number; revenue: number; nights: number; cancelled: number }[] }) {
+  if (rows.length === 0) return <div style={{ padding: 16, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No bookings found.</div>;
   return (
     <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
       <table style={TABLE}>
         <thead>
           <tr>
-            <th style={TH}>Source</th>
+            <th style={TH}>Channel</th>
             <th style={THR}>Stays</th>
             <th style={THR}>Revenue</th>
-            <th style={THR}>ADR/night</th>
+            <th style={THR}>ADR / night</th>
             <th style={THR}>Avg LOS</th>
             <th style={THR}>Canx</th>
           </tr>
@@ -116,7 +293,7 @@ function SrcTable({ rows }: { rows: { label: string; count: number; revenue: num
             <tr key={r.label}>
               <td style={TD}>{r.label}</td>
               <td style={TDR}>{r.count}</td>
-              <td style={TDR}>{fmt$(r.revenue)}</td>
+              <td style={TDR}>{r.revenue > 0 ? fmt$(r.revenue) : '—'}</td>
               <td style={TDR}>{r.nights > 0 ? fmt$(r.revenue / r.nights) : '—'}</td>
               <td style={TDR}>{r.count > 0 ? fmtN(r.nights / r.count) : '—'}n</td>
               <td style={TDR}>{r.cancelled}</td>
@@ -138,7 +315,7 @@ function PipelineTable({ rows }: { rows: ResRow[] }) {
             <th style={TH}>Check-in</th>
             <th style={TH}>Check-out</th>
             <th style={THR}>Nights</th>
-            <th style={TH}>Source</th>
+            <th style={TH}>Channel</th>
             <th style={TH}>Guest</th>
             <th style={THR}>Value</th>
           </tr>
@@ -149,7 +326,7 @@ function PipelineTable({ rows }: { rows: ResRow[] }) {
               <td style={TD}>{r.check_in_date}</td>
               <td style={TD}>{r.check_out_date}</td>
               <td style={TDR}>{r.nights}</td>
-              <td style={TD}>{SRC_LABEL[r.source_name ?? ''] ?? r.source_name ?? '—'}</td>
+              <td style={TD}>{SRC_SHORT[r.source_name ?? ''] ?? r.source_name ?? '—'}</td>
               <td style={TD}>{r.guest_name ?? '—'}</td>
               <td style={TDR}>{fmt$(Number(r.total_amount ?? 0))}</td>
             </tr>
@@ -161,7 +338,7 @@ function PipelineTable({ rows }: { rows: ResRow[] }) {
 }
 
 function AddOnTable({ rows }: { rows: { desc: string; count: number; total: number }[] }) {
-  if (rows.length === 0) return <div style={{ padding: 16, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No add-on charges found on retreat folios.</div>;
+  if (rows.length === 0) return <div style={{ padding: 16, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No add-on charges on retreat folios.</div>;
   return (
     <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
       <table style={TABLE}>
@@ -188,67 +365,110 @@ function AddOnTable({ rows }: { rows: { desc: string; count: number; total: numb
   );
 }
 
+function GroupTable({ rows }: { rows: ResRow[] }) {
+  if (rows.length === 0) return <div style={{ padding: 16, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No eVigeosport group bookings found.</div>;
+  return (
+    <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
+      <table style={TABLE}>
+        <thead>
+          <tr>
+            <th style={TH}>Check-in</th>
+            <th style={THR}>Nights</th>
+            <th style={TH}>Group / Organizer</th>
+            <th style={TH}>Rate plan</th>
+            <th style={THR}>Value</th>
+            <th style={TH}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.reservation_id}>
+              <td style={TD}>{r.check_in_date}</td>
+              <td style={TDR}>{r.nights}</td>
+              <td style={TD}>{r.guest_name ?? '—'}</td>
+              <td style={TD}>{r.rate_plan ?? '—'}</td>
+              <td style={TDR}>{r.total_amount && Number(r.total_amount) > 0 ? fmt$(Number(r.total_amount)) : '—'}</td>
+              <td style={{ ...TD, color: r.is_cancelled ? 'var(--tbl-fg-mute)' : 'var(--tbl-fg)' }}>
+                {r.is_cancelled ? 'Cancelled' : r.status_canonical ?? '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
+interface Props {
+  propertyId?: number;
+}
+
 export default async function RetreatsPage({ propertyId }: Props) {
   const pid = propertyId ?? NAMKHAN_PID;
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
   const todayIso = today.toISOString().slice(0, 10);
 
-  // Fetch all retreat reservations from 2025 onwards (silver view)
+  // Fetch all retreat reservations — silver view
   const { data: resData } = await supabase.schema('pms').from('v_reservations')
     .select('reservation_id, guest_name, check_in_date, check_out_date, nights, status_canonical, is_cancelled, source_name, rate_plan, total_amount')
     .eq('property_id', pid)
-    .in('source_name', [...RETREAT_SOURCES])
+    .in('source_name', [...ALL_SOURCES])
     .gte('check_in_date', '2025-01-01')
     .order('check_in_date', { ascending: false });
 
   const all = (resData ?? []) as ResRow[];
-  const confirmed = all.filter((r) => !r.is_cancelled);
-  const retreatIds = all.map((r) => r.reservation_id);
 
-  // Fetch add-on transactions for retreat folios (silver view)
+  // Split FIT vs Group
+  const fitAll = all.filter((r) => FIT_SOURCES.includes(r.source_name as typeof FIT_SOURCES[number]));
+  const fitConfirmed = fitAll.filter((r) => !r.is_cancelled);
+  const groupAll = all.filter((r) => r.source_name === GROUP_SOURCE);
+
+  // Fetch add-ons for FIT folios only (non-room charges)
+  const fitIds = fitAll.map((r) => r.reservation_id);
   let addOns: TxRow[] = [];
-  if (retreatIds.length > 0) {
+  if (fitIds.length > 0) {
     const { data: txData } = await supabase.schema('pms').from('v_transactions')
-      .select('reservation_id, description, amount, service_date')
+      .select('reservation_id, description, amount')
       .eq('property_id', pid)
       .eq('transaction_type', 'debit')
       .gt('amount', 0)
-      .in('reservation_id', retreatIds);
+      .in('reservation_id', fitIds);
 
     addOns = ((txData ?? []) as TxRow[]).filter(
       (tx) => !tx.description?.toLowerCase().startsWith('room rate'),
     );
   }
 
-  // ── KPI computation ─────────────────────────────────────────────
-  const ytdRevenue = confirmed.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
-  const ytdNights = confirmed.reduce((s, r) => s + Number(r.nights ?? 0), 0);
-  const ytdAdr = ytdNights > 0 ? ytdRevenue / ytdNights : 0;
-  const avgLos = confirmed.length > 0 ? ytdNights / confirmed.length : 0;
-  const cancelledCount = all.filter((r) => r.is_cancelled).length;
-  const cancellationRate = all.length > 0 ? (cancelledCount / all.length) * 100 : 0;
-
+  // ── FIT KPIs ─────────────────────────────────────────────────────────────
+  const fitRevenue = fitConfirmed.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
+  const fitNights = fitConfirmed.reduce((s, r) => s + Number(r.nights ?? 0), 0);
+  const fitAdr = fitNights > 0 ? fitRevenue / fitNights : 0;
+  const fitAvgLos = fitConfirmed.length > 0 ? fitNights / fitConfirmed.length : 0;
+  const fitCancelled = fitAll.filter((r) => r.is_cancelled).length;
+  const fitCancRate = fitAll.length > 0 ? (fitCancelled / fitAll.length) * 100 : 0;
   const addOnTotal = addOns.reduce((s, tx) => s + Number(tx.amount ?? 0), 0);
-  const addOnPerStay = confirmed.length > 0 ? addOnTotal / confirmed.length : 0;
+  const addOnPerStay = fitConfirmed.length > 0 ? addOnTotal / fitConfirmed.length : 0;
 
-  // ── Source breakdown ─────────────────────────────────────────────
-  const srcMap: Record<string, { count: number; revenue: number; nights: number; cancelled: number }> = {};
-  for (const r of all) {
+  // ── Channel breakdown (FIT) ───────────────────────────────────────────────
+  const fitSrcMap: Record<string, { count: number; revenue: number; nights: number; cancelled: number }> = {};
+  for (const r of fitAll) {
     const k = r.source_name ?? 'Unknown';
-    if (!srcMap[k]) srcMap[k] = { count: 0, revenue: 0, nights: 0, cancelled: 0 };
-    if (r.is_cancelled) { srcMap[k].cancelled += 1; continue; }
-    srcMap[k].count += 1;
-    srcMap[k].revenue += Number(r.total_amount ?? 0);
-    srcMap[k].nights += Number(r.nights ?? 0);
+    if (!fitSrcMap[k]) fitSrcMap[k] = { count: 0, revenue: 0, nights: 0, cancelled: 0 };
+    if (r.is_cancelled) { fitSrcMap[k].cancelled += 1; continue; }
+    fitSrcMap[k].count += 1;
+    fitSrcMap[k].revenue += Number(r.total_amount ?? 0);
+    fitSrcMap[k].nights += Number(r.nights ?? 0);
   }
-  const srcRows = Object.entries(srcMap)
-    .map(([k, v]) => ({ label: SRC_LABEL[k] ?? k, ...v }))
+  const fitSrcRows = Object.entries(fitSrcMap)
+    .map(([k, v]) => ({ label: SRC_SHORT[k] ?? k, ...v }))
     .sort((a, b) => b.revenue - a.revenue);
 
-  // ── Monthly trend ────────────────────────────────────────────────
+  // ── Monthly trend (FIT confirmed) ─────────────────────────────────────────
   const moMap: Record<string, { revenue: number; count: number }> = {};
-  for (const r of confirmed) {
+  for (const r of fitConfirmed) {
     const mo = r.check_in_date.slice(0, 7);
     if (!moMap[mo]) moMap[mo] = { revenue: 0, count: 0 };
     moMap[mo].revenue += Number(r.total_amount ?? 0);
@@ -258,7 +478,7 @@ export default async function RetreatsPage({ propertyId }: Props) {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, v]) => ({ month, revenue: v.revenue, count: v.count }));
 
-  // ── Add-on breakdown ─────────────────────────────────────────────
+  // ── Add-on breakdown ──────────────────────────────────────────────────────
   const addOnMap: Record<string, { count: number; total: number }> = {};
   for (const tx of addOns) {
     const k = (tx.description ?? 'Unknown').trim();
@@ -271,40 +491,65 @@ export default async function RetreatsPage({ propertyId }: Props) {
     .sort((a, b) => b.total - a.total)
     .slice(0, 15);
 
-  // ── Pipeline ─────────────────────────────────────────────────────
-  const upcoming = confirmed
+  // ── Pipeline (FIT upcoming) ───────────────────────────────────────────────
+  const upcoming = fitConfirmed
     .filter((r) => r.check_in_date >= todayIso && r.status_canonical !== 'checked_out')
     .sort((a, b) => a.check_in_date.localeCompare(b.check_in_date))
     .slice(0, 12);
 
-  // ── Tabs ─────────────────────────────────────────────────────────
+  // ── Group KPIs ────────────────────────────────────────────────────────────
+  const groupConfirmed = groupAll.filter((r) => !r.is_cancelled);
+  const groupRevenue = groupConfirmed.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
+  const groupNights = groupConfirmed.reduce((s, r) => s + Number(r.nights ?? 0), 0);
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
   const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
     key: s.href,
     label: s.label,
     href: s.href,
-    active: s.href.includes('/operations/rooms'),
+    active: s.href.includes('/operations/retreats'),
   })) as DashboardTab[];
 
   return (
     <DashboardPage
       title="Retreats"
-      subtitle={`Operations · Departments · Retreats · ${confirmed.length} confirmed stays · property_id=${pid}`}
+      subtitle={`Operations · Departments · Retreats · ${fitConfirmed.length} FIT stays · property_id=${pid}`}
       tabs={tabs}
     >
-      {/* KPI strip */}
-      <Container title="Performance snapshot" subtitle="Retreat-channel bookings from 2025 · confirmed stays only" density="compact">
+      {/* ── Program catalog ── */}
+      <Container
+        title="FIT retreat programs"
+        subtitle="Three programs, two tiers each · sold via BookRetreats & Tripaneer · Namkhan property settings"
+        density="compact"
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16, padding: '4px 0' }}>
+          {PROGRAMS.map((p) => (
+            <ProgramCard key={p.code} p={p} />
+          ))}
+        </div>
+        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--tbl-fg-mute)', fontStyle: 'italic' }}>
+          All pricing per night · includes 10% service charge + 10% VAT · high and green seasons share same rate (2026–27) · peak season excluded
+        </div>
+      </Container>
+
+      {/* ── FIT KPIs ── */}
+      <Container
+        title="FIT performance"
+        subtitle={`Individual retreat bookings · BookRetreats + Tripaneer · confirmed stays 2025 onwards`}
+        density="compact"
+      >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 12 }}>
           <KpiTile
-            label="Revenue (all-time)"
-            value={ytdRevenue}
+            label="FIT revenue"
+            value={fitRevenue}
             currency="USD"
-            footnote={`${confirmed.length} stays confirmed`}
-            status={ytdRevenue > 0 ? 'green' : 'grey'}
+            footnote={`${fitConfirmed.length} confirmed stays`}
+            status={fitRevenue > 0 ? 'green' : 'grey'}
             size="sm"
           />
           <KpiTile
-            label="Retreat ADR"
-            value={ytdAdr}
+            label="ADR / night"
+            value={fitAdr}
             currency="USD"
             footnote="revenue ÷ room nights"
             status="grey"
@@ -312,8 +557,8 @@ export default async function RetreatsPage({ propertyId }: Props) {
           />
           <KpiTile
             label="Avg LOS"
-            value={`${fmtN(avgLos)}n`}
-            footnote="nights per booking"
+            value={`${fmtN(fitAvgLos)}n`}
+            footnote="nights per FIT stay"
             status="grey"
             size="sm"
           />
@@ -327,48 +572,81 @@ export default async function RetreatsPage({ propertyId }: Props) {
           />
           <KpiTile
             label="Cancellation rate"
-            value={`${fmtN(cancellationRate, 0)}%`}
-            footnote={`${cancelledCount} cancelled of ${all.length} total`}
-            status={cancellationRate > 35 ? 'red' : 'grey'}
+            value={`${fmtN(fitCancRate, 0)}%`}
+            footnote={`${fitCancelled} canx of ${fitAll.length} total`}
+            status={fitCancRate > 35 ? 'red' : 'grey'}
             size="sm"
           />
         </div>
       </Container>
 
-      {/* Monthly trend */}
+      {/* ── Monthly trend ── */}
       <Container
         title="Monthly revenue trend"
-        subtitle="Confirmed retreat stays by check-in month · 2025 onwards"
+        subtitle="FIT confirmed stays by check-in month · BookRetreats + Tripaneer · 2025 onwards"
         density="compact"
       >
         <MonthlyBars data={monthlyData} />
       </Container>
 
-      {/* Source breakdown */}
+      {/* ── Channel breakdown ── */}
       <Container
-        title="By booking channel"
-        subtitle="Retreat Reseller = wholesale group packages · BookRetreats + Tripaneer = individual guests"
+        title="FIT channel breakdown"
+        subtitle="BookRetreats vs Tripaneer — individual retreat guests"
         density="compact"
       >
-        <SrcTable rows={srcRows} />
+        <SrcTable rows={fitSrcRows} />
       </Container>
 
-      {/* Upcoming pipeline */}
+      {/* ── Upcoming pipeline ── */}
       <Container
-        title={`Upcoming pipeline${upcoming.length > 0 ? ` — ${upcoming.length} retreat${upcoming.length > 1 ? 's' : ''} confirmed` : ''}`}
-        subtitle="Future check-ins · confirmed status · not yet checked out"
+        title={`Upcoming pipeline${upcoming.length > 0 ? ` — ${upcoming.length} FIT retreat${upcoming.length > 1 ? 's' : ''} confirmed` : ''}`}
+        subtitle="Future FIT check-ins · confirmed · not yet checked out"
         density="compact"
       >
         <PipelineTable rows={upcoming} />
       </Container>
 
-      {/* Add-on spend */}
+      {/* ── Add-on spend ── */}
       <Container
         title="Add-on spend"
-        subtitle={`Non-room charges on retreat folios · total ${fmt$(addOnTotal)} · ${fmt$(addOnPerStay)}/stay`}
+        subtitle={`Non-room charges on FIT folios · total ${fmt$(addOnTotal)} · ${fmt$(addOnPerStay)}/stay`}
         density="compact"
       >
         <AddOnTable rows={addOnRows} />
+      </Container>
+
+      {/* ── eVigeosport group retreats ── */}
+      <Container
+        title="Group retreats — eVigeosport"
+        subtitle="Multi-room block bookings · group organizer · separate model from FIT programs"
+        density="compact"
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 16 }}>
+          <KpiTile
+            label="Group revenue"
+            value={groupRevenue}
+            currency="USD"
+            footnote={`${groupConfirmed.length} confirmed bookings`}
+            status={groupRevenue > 0 ? 'green' : 'grey'}
+            size="sm"
+          />
+          <KpiTile
+            label="Avg LOS"
+            value={`${fmtN(groupConfirmed.length > 0 ? groupNights / groupConfirmed.length : 0)}n`}
+            footnote="nights per group stay"
+            status="grey"
+            size="sm"
+          />
+          <KpiTile
+            label="Cancellations"
+            value={groupAll.filter((r) => r.is_cancelled).length}
+            footnote={`of ${groupAll.length} total group bookings`}
+            status="grey"
+            size="sm"
+          />
+        </div>
+        <GroupTable rows={groupAll.sort((a, b) => b.check_in_date.localeCompare(a.check_in_date))} />
       </Container>
     </DashboardPage>
   );
