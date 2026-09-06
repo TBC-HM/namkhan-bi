@@ -79,6 +79,70 @@ Budget vs actual, revenue, Jan–May 2026 (GL actuals stop at May):
 
 Against the old budget the same period read −71%.
 
+## Cost side — applied 2026-09-06 (migration `budget_2026_cost_lines_to_benchmark_targets`)
+
+PBS direction: **costs are the ops manager's, budgeted top-down on industry benchmarks,
+not carried from actuals — "you can't budget mistakes."**
+
+The mistake in question, found in `Actuals 2025`:
+
+| | 2025 revenue | 2025 cost | ratio | benchmark |
+|---|---|---|---|---|
+| Food | 109,759 | **136,446** | **124%** | 30% |
+| Beverage | 25,278 | 16,794 | 66% | 22% |
+
+Food cost exceeded food revenue. Worth investigating whether farm operating costs are
+posting to `607100 FOOD COST` while the produce is consumed internally — that would
+inflate the ratio with no matching revenue. Waste, theft and menu pricing are the other
+candidates.
+
+2025 total costs ran at **163% of revenue**. Benchmarks put it at 64%. That is a scale
+gap, not only an efficiency gap, and payroll is most of it.
+
+Targets applied to net revenue 1,021,413 (rooms 717,743, F&B 144,787):
+
+| Subcategory | 2025 actual | % rev | Budget 2026 | % rev | Basis |
+|---|---|---|---|---|---|
+| Payroll & Related | 505,542 | 72% | **505,542** | 49.5% | **held flat (PBS)** — same team absorbs 25% more rooms |
+| A&G | 83,963 | 12% | 71,499 | 7.0% | benchmark |
+| Sales & Marketing | 160,297 | 23% | 71,499 | 7.0% | benchmark |
+| Utilities | 49,025 | 7% | 51,071 | 5.0% | benchmark |
+| POM | 54,606 | 8% | 51,071 | 5.0% | benchmark |
+| Cost of Sales | 173,735 | 25% | 41,268 | 4.0% | food 30% of food rev, beverage 22% |
+| Other OpEx | 116,580 | 17% | 40,857 | 4.0% | benchmark |
+
+Payroll was held flat rather than benchmarked to 32% because the 32% figure implies
+cutting $178,690 — about a third of the wage bill — in the same year 6 tents open. Flat
+payroll still drops the ratio 72% → 49.5% through growth alone, and it is a target the
+ops manager can actually act on. The benchmark stays the destination, not the 2026 ask.
+
+Method: one scale factor per subcategory, so account mix and monthly phasing are
+preserved. VAT needs no special handling — stored = net × (1 + rate) and the rate is
+constant within a subcategory, so scaling stored by (target_net / current_net) is exact.
+
+**Result — FY2026 GOP +188,607 (18.5%)**, against 2025's −442,602 (−63%). Below the 25%
+industry floor, but the first profitable year.
+
+Monthly GOP shows the real shape of the business:
+
+| Jan | Feb | Mar | Apr | May | Jun | Jul | Aug | Sep | Oct | Nov | Dec |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| +41.0k | +42.8k | −11.8k | −9.5k | −23.4k | −33.5k | −25.8k | −34.1k | −20.2k | +69.4k | +84.5k | +109.3k |
+
+Five months carry seven. Operating costs are flat at $67–74k every month because payroll
+and overhead do not flex, so June and August each lose ~$34k on their own.
+
+## Drill-down — applied 2026-09-06
+
+`public.v_budget_lines_detail` — an **additive sibling view** (create-forward; the live
+`finance.v_gl_budget_lines` is untouched, so nothing that reads it can change behaviour).
+Carries `property_id`, `period_yyyymm`, `period_year`, `period_month`,
+`usali_subcategory`, `usali_department`, `account_code`, `account_name`, `amount_usd`.
+
+This is what lets a USALI subcategory row expand to the accounts beneath it — Revenue to
+its 11 accounts, Payroll to its 10, and so on. `plan.*` is not exposed via PostgREST,
+which is why the bridge was needed. UI work still to do.
+
 ## Still open
 
 - **`02_unhardcode_budget_scenario.sql` — NOT APPLIED, blocked by the permission
