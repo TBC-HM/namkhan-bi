@@ -143,7 +143,7 @@ export default async function FinancePlanningPage({
       value: hasBudget ? usd(mBudget) : '—',
       size: 'sm',
       status: hasBudget ? 'green' : 'grey',
-      footnote: hasBudget ? `v${budgetVersion} · finance.budget_monthly` : 'no budget loaded',
+      footnote: hasBudget ? `v${budgetVersion} · plan.lines (single budget)` : 'no budget loaded',
     },
     {
       label: `Actual · ${selMonth ?? '—'}`,
@@ -228,7 +228,7 @@ export default async function FinancePlanningPage({
 
       <Container
         title={`Variance by class · ${selMonth ?? '—'}`}
-        subtitle="budget = latest version · actual = QB P&L by class · forecast = Module 2 rooms revenue (other classes pending)"
+        subtitle="budget = the approved FY plan · actual = QB P&L by class · forecast = rooms on-the-books (other classes pending)"
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, fontSize: 12 }}>
           {allMonths.map((m) => (
