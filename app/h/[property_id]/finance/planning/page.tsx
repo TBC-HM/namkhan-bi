@@ -33,6 +33,10 @@ interface VarianceRow {
   gl_class: string;
   class_name: string | null;
   budget_usd: number | null;
+  budget_revenue_usd: number | null;
+  budget_cost_usd: number | null;
+  actual_revenue_usd: number | null;
+  actual_cost_usd: number | null;
   budget_version: number | null;
   forecast_usd: number | null;
   actual_usd: number | null;
@@ -104,7 +108,11 @@ export default async function FinancePlanningPage({
   const allVar = (allVarRaw ?? []) as VarianceRow[];
   const cash = (cashRaw ?? []) as CashRow[];
 
-  const monthsWithActuals = Array.from(new Set(allVar.filter((r) => r.actual_usd != null).map((r) => r.year_month))).sort();
+  const monthsWithActuals  = Array.from(new Set(allVar.filter((r) => r.actual_usd   != null).map((r) => r.year_month))).sort();
+  // PBS 2026-09-06: chips labelled every month without actuals as "(fc)", including
+  // July and August which have neither actuals (QB unposted) nor forecast (the engine
+  // only runs forward). They advertised a forecast that does not exist.
+  const monthsWithForecast = Array.from(new Set(allVar.filter((r) => r.forecast_usd != null).map((r) => r.year_month))).sort();
   const allMonths = Array.from(new Set(allVar.map((r) => r.year_month))).sort();
   const latestActualMonth = monthsWithActuals.length > 0 ? monthsWithActuals[monthsWithActuals.length - 1] : null;
   const selMonth =
@@ -176,22 +184,39 @@ export default async function FinancePlanningPage({
   ];
 
   // ── Variance table ─────────────────────────────────────────────────────────
-  const varianceRows = monthRows.map((r) => ({
-    class: r.class_name ?? r.gl_class,
-    budget: usd(r.budget_usd),
-    forecast: usd(r.forecast_usd),
-    actual: usd(r.actual_usd),
-    var_abs: r.var_abs == null ? '—' : `${r.var_abs >= 0 ? '+' : '−'}${usd(Math.abs(r.var_abs))}`,
-    var_pct: r.var_pct == null ? '—' : `${r.var_pct >= 0 ? '+' : ''}${r.var_pct.toFixed(1)}%`,
-    status: r.var_pct == null ? '·' : Math.abs(r.var_pct) > 10 ? '●' : Math.abs(r.var_pct) > 5 ? '◐' : '○',
-  }));
+  // Revenue and cost are shown apart. The single Budget/Actual pair added them
+  // together, so "Rooms 31,519" was room revenue PLUS front-office salary, OTA
+  // commission, laundry and linen — neither revenue nor profit, and unactionable.
+  const varianceRows = monthRows.map((r) => {
+    const bRev = r.budget_revenue_usd, aRev = r.actual_revenue_usd;
+    const bCost = r.budget_cost_usd,   aCost = r.actual_cost_usd;
+    const revVar  = bRev  != null && aRev  != null && bRev  !== 0 ? ((aRev  - bRev)  / Math.abs(bRev))  * 100 : null;
+    const costVar = bCost != null && aCost != null && bCost !== 0 ? ((aCost - bCost) / Math.abs(bCost)) * 100 : null;
+    const pctTxt = (v: number | null) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+    return {
+      class: r.class_name ?? r.gl_class,
+      bud_rev: usd(bRev),
+      act_rev: usd(aRev),
+      // revenue: over is good. cost: over is bad. Same arrow, opposite meaning.
+      rev_var: pctTxt(revVar),
+      bud_cost: usd(bCost),
+      act_cost: usd(aCost),
+      cost_var: pctTxt(costVar),
+      forecast: usd(r.forecast_usd),
+      status: revVar == null && costVar == null ? '·'
+        : Math.max(Math.abs(revVar ?? 0), Math.abs(costVar ?? 0)) > 10 ? '●'
+        : Math.max(Math.abs(revVar ?? 0), Math.abs(costVar ?? 0)) > 5 ? '◐' : '○',
+    };
+  });
   const varianceCols: ChartSeries[] = [
-    { key: 'budget', label: 'Budget USD' },
-    { key: 'forecast', label: 'Forecast USD' },
-    { key: 'actual', label: 'Actual USD' },
-    { key: 'var_abs', label: 'Δ abs' },
-    { key: 'var_pct', label: 'Δ %' },
-    { key: 'status', label: '>10% = ●' },
+    { key: 'bud_rev',  label: 'Rev budget' },
+    { key: 'act_rev',  label: 'Rev actual' },
+    { key: 'rev_var',  label: 'Rev Δ%' },
+    { key: 'bud_cost', label: 'Cost budget' },
+    { key: 'act_cost', label: 'Cost actual' },
+    { key: 'cost_var', label: 'Cost Δ%' },
+    { key: 'forecast', label: 'Rooms fc' },
+    { key: 'status',   label: '>10% = ●' },
   ];
 
   // ── Cash strip pivot (rows = lines, cols = weeks) ──────────────────────────
@@ -242,7 +267,9 @@ export default async function FinancePlanningPage({
                 color: m === selMonth ? 'var(--paper)' : 'var(--ink)',
               }}
             >
-              {m}{monthsWithActuals.includes(m) ? '' : ' (fc)'}
+              {m}{monthsWithActuals.includes(m) ? ''
+                  : monthsWithForecast.includes(m) ? ' (fc)'
+                  : ' (no data)'}
             </Link>
           ))}
         </div>
