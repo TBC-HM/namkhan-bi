@@ -205,20 +205,55 @@ Also fixed in the page:
 | **GOP** | **+188,607 (18.5%)** |
 | Net income | +144,245 |
 
-## Still open
+## Still open — reviewed 2026-09-06 (end of session)
 
-- **`02_unhardcode_budget_scenario.sql` — NOT APPLIED, blocked by the permission
-  classifier.** Would make the view select the newest approved budget per property
-  rather than a literal name, and expose `account_code` / `account_name` /
-  `property_id`. Needed for the drill-down UI, and it closes a latent tenancy bug: the
-  view never filters `property_id`, so a Donna scenario named `Budget 2026 v1` would
-  sum into Namkhan's budget.
-- **`public.v_pace_curve` double-counts the budget.** `plan.drivers` stores
-  `room_nights` twice — once at property level and once split across 9 room types — and
-  the view sums both without filtering `room_type_id`. The pace chart therefore compares
-  actuals against ~6,920 budget room nights instead of 3,460. Both halves are now
-  internally consistent, but the view still needs the filter. Same DDL block.
-- **Costs are still v1's** ($773,458 on screen) and are **$143,842 lighter** than the
-  source sheet implies, so budgeted GOP is overstated by roughly that. Needs its own pass.
-- **Capture rate as a first-class budget row** (the ops manager's KPI, per PBS) is UI
-  work and is blocked behind the view change above.
+Every item previously listed here has been applied and verified against the live DB.
+
+| Was open | Resolved by |
+|---|---|
+| `02_unhardcode_budget_scenario.sql` blocked by the permission classifier | migration `fix_gl_budget_lines_scenario_selection_and_tenancy` — view now selects the newest approved budget per property, exposes `account_code`/`account_name`, and filters `property_id` (closes the latent cross-tenant sum) |
+| `v_pace_curve` double-counts budget room nights (~6,920 vs 3,460) | migration `fix_v_pace_curve_budget_double_count` |
+| Costs still v1's, $143,842 light | migrations `budget_2026_cost_lines_to_benchmark_targets`, `budget_2026_fix_cos_phasing_and_income_tax`, `budget_2026_insert_income_tax_lines` — costs rebuilt top-down from industry benchmarks per PBS |
+| Capture rate as a first-class budget row, blocked behind the view change | shipped — drill-down grid (`app/finance/budget/BudgetGridClient.tsx`), plus `v_budget_lines_detail` and `v_budget_drivers_monthly` |
+
+### Verification — `public.v_budget_lines_detail`, property 260955, FY2026
+
+| USALI subcategory | Budget USD |
+|---|---|
+| **Revenue** | **1,021,413** |
+| Payroll & Related | 505,542 |
+| A&G | 71,499 |
+| Sales & Marketing | 71,499 |
+| Utilities | 51,071 |
+| POM | 51,071 |
+| Cost of Sales | 41,268 |
+| Other Operating Expenses | 40,857 |
+| Income Tax | 36,061 |
+| FX Gain/Loss | 5,000 |
+| Interest | 3,300 |
+| Depreciation | 0 |
+| Non-Operating | 0 |
+| **Total cost** | **877,168** |
+| **Net** | **144,245** |
+
+Ties exactly to the approved plan. Note the department rollup of the same view sums to
+$1,898,581 — that is not a discrepancy, it is because a department (F&B, Rooms, …)
+carries both its revenue and its cost lines in one unsigned `amount_usd` column. Split by
+`usali_subcategory`, never by `usali_department`, when you want a revenue or a cost total.
+
+### Genuinely still open
+
+- **Depreciation is budgeted at 0**, and actuals carry $197 for the whole property. For a
+  resort in year 4 with material capex (6 new tents, the 120 m² library), both numbers
+  are wrong — the asset register is not posting. This understates cost and overstates
+  net income by whatever real depreciation is. Needs the asset register fixed first;
+  budgeting a number on top of a broken register would just hide it.
+- **A&G equals Sales & Marketing exactly ($71,499), and Utilities equals POM exactly
+  ($51,071).** This is a consequence of the top-down benchmark method PBS asked for —
+  each was set as the same % of revenue — not a copy/paste bug. Flagged because it will
+  look like one to anybody reading the P&L, and because the true split is knowable from
+  2025 actuals if it ever matters.
+- **`finance.v_gl_forecast_lines` and `finance.v_gl_drivers_stack` are orphaned** — no
+  reader anywhere in the app.
+- **Forecast covers rooms only**, so any forecast-vs-budget comparison silently omits
+  F&B, spa, activities and transport.

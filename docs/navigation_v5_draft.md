@@ -199,11 +199,31 @@ Revenue HoD landing + 25 sub-pages. Both holding (`/revenue/*`) and property (`/
 
 ---
 
-## §5 Guest (Contacts) `/guest/*` and `/h/[pid]/guest/*`
+## §5 Guest `/guest/*` and `/h/[pid]/guest/*`
+
+> **2026-09-06 — the "Contacts" top-level department was dissolved (PBS).** The `guest`
+> dept no longer appears in the top strip (`CANONICAL_DEPTS` in
+> `components/page/TopDeptStrip.tsx`). Its pages did not move — every URL below still
+> works — they were re-parented in the *menus*:
+>
+> | Page | Now reached from |
+> |---|---|
+> | `/guest/directory` (Guests) | **Sales** sub-nav |
+> | `/guest/reputation` (Reputation) | **Marketing** sub-nav |
+> | `/guest/behaviour` (Behaviour) | **Marketing** sub-nav |
+>
+> Because the URLs kept the `/guest/` prefix, the strip needs `SUBSEGMENT_ALIAS` +
+> `aliasFor()` to light the right department: `/guest/reputation` highlights Marketing,
+> everything else under `/guest/` highlights Sales. `DEPT_CFG.guest.subPages` is
+> deliberately left intact — `app/guest/_subpages.ts` exports it as the tab strip for
+> ~15 pages, and emptying it would strip their sub-nav.
+>
+> Tenant wiring is unaffected: every moved href already starts `/h/260955/`, which
+> short-circuits the `PROPERTY_SCOPED_HREFS` allowlist.
 
 | URL suffix | Purpose |
 |-----------|---------|
-| _(root)_ | Contacts HoD landing |
+| _(root)_ | Guest HoD landing (no longer a top-level dept) |
 | `/directory` | Guest directory |
 | `/newsletters` | Newsletter management |
 | `/journey` | Guest journey |
@@ -231,6 +251,38 @@ Revenue HoD landing + 25 sub-pages. Both holding (`/revenue/*`) and property (`/
 | `/legal` | Legal hub |
 | `/legal/docs` | Legal documents |
 | `/legal/cases` | Legal cases |
+| `/legal/archive` | Archive — re-parented under Legal 2026-09-06 (was a top-level Administration tab) |
+| `/planning` | Planning — sectioned board; absorbed the legacy dark-theme Dashboard 2026-09-06 |
+| `/admin/reports` | **Reports** (renamed from "CB Reports" 2026-09-06) — Cloudbeds stock report library |
+
+### Reports surfaces — 2026-09-06 restructure (PBS)
+
+Two pages list Cloudbeds stock reports. They share one catalog, `lib/cb-reports.ts`, so
+they cannot drift apart:
+
+| Page | Route | Shows |
+|---|---|---|
+| Administration › Reports | `/h/[pid]/admin/reports` | all 35 catalogued reports |
+| Revenue › RevReports | `/h/[pid]/revenue/revreports` | the 10-report revenue subset, beside Forecast on the Revenue HoD strip |
+
+Both use the same `ReportsTableClient` (filter, sort, Sync, Preview, Download, Email) and
+the same API routes. Rows carry an inline **Preview** button
+(`app/api/admin/reports/preview/route.ts`) so you can see the data without downloading a
+CSV.
+
+The catalog was rebuilt from the live Cloudbeds API on 2026-09-06 — the previous version
+was hand-written from guessed report names, 15 of which did not exist. Never hand-add an
+id; read it from `GET /datainsights/v1.1/stock_reports`. See
+`docs/19_CLOUDBEDS_INSIGHTS_API.md`.
+
+### HoD page consolidation — 2026-09-06
+
+PBS: *"MAX 2 PAGES HOD (PLANNING+DASHBOARD)"*. The legacy dark-theme Finance Dashboard
+(`components/engine/EngineDashboard`, `#2a261d`/JetBrains Mono) duplicated Planning and
+read as a different product. Its panels were rebuilt in the current design system as
+`app/(cockpit)/_design/DataPanel.tsx` and folded into Planning, which is now sectioned:
+Control → Cash → Performance → Cost control → Reference → Narrative → Maintain. The
+Dashboard tab is retired from the Administration strip.
 
 ---
 
