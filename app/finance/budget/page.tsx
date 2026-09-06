@@ -31,6 +31,8 @@ interface DetailRow {
   account_name: string | null;
   amount_usd: number | null;
   actual_usd: number | null;
+  /** false = the month's P&L is still open in QuickBooks; null = no actual at all. */
+  is_final: boolean | null;
 }
 
 // All 14 USALI subcategories the budget can carry. The previous list held 10, so
@@ -50,7 +52,7 @@ export default async function BudgetPage() {
     supabaseGl.from('v_budget_vs_actual').select('period_yyyymm, usali_subcategory, actual_usd'),
     getSupabaseAdmin()
       .from('v_budget_lines_detail')
-      .select('period_yyyymm, usali_subcategory, account_code, account_name, amount_usd, actual_usd')
+      .select('period_yyyymm, usali_subcategory, account_code, account_name, amount_usd, actual_usd, is_final')
       .eq('period_year', 2026)
       .limit(5000),
   ]);
@@ -120,6 +122,14 @@ export default async function BudgetPage() {
   // then by actual — so an account with spend but no budget line still appears, which
   // is how unbudgeted spend becomes visible instead of hiding inside a subtotal.
   const detailCells: Record<string, GridCell> = {};
+  // A month is provisional when ANY of its account rows is still open in QuickBooks.
+  // August 2026 posts 61 accounts against July's 83, so without this it reads as a 29%
+  // miss rather than an unfinished month.
+  const provisionalMonths = Array.from(new Set(
+    ((detailRows ?? []) as DetailRow[])
+      .filter((r) => r.actual_usd != null && r.is_final === false)
+      .map((r) => r.period_yyyymm),
+  )).sort();
   const acctFy = new Map<string, { budget: number; actual: number }>();
   const acctName = new Map<string, string>();
   const acctSub = new Map<string, string>();
@@ -182,6 +192,7 @@ export default async function BudgetPage() {
             revSubcats={['Revenue']}
             accountsBySubcat={accountsBySubcat}
             detailCells={detailCells}
+            provisionalMonths={provisionalMonths}
           />
         </Container>
       </div>

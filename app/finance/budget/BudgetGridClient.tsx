@@ -32,6 +32,13 @@ interface Props {
   accountsBySubcat?: Record<string, AccountRef[]>;
   /** key = `${month}|${accountCode}` */
   detailCells?: Record<string, GridCell>;
+  /**
+   * Months whose actuals are NOT closed yet (gl_pl_monthly.is_final = false). August
+   * 2026 carries 61 accounts against July's 83, so it reads as a 29% miss when it is
+   * simply still open. Marked rather than hidden — a partial actual is still useful,
+   * an unlabelled one is misleading.
+   */
+  provisionalMonths?: string[];
 }
 
 const fmtK = (n: number | null | undefined): string => {
@@ -66,7 +73,9 @@ const C = {
 
 export default function BudgetGridClient({
   months, subcats, cells, revSubcats, accountsBySubcat = {}, detailCells = {},
+  provisionalMonths = [],
 }: Props) {
+  const provisional = new Set(provisionalMonths);
   const [openMonths, setOpenMonths] = useState<Set<string>>(new Set());
   const [openRows, setOpenRows] = useState<Set<string>>(new Set());
 
@@ -126,7 +135,11 @@ export default function BudgetGridClient({
                     aria-expanded={isOpen}
                     title={isOpen ? `Collapse ${m}` : `Show actual and variance for ${m}`}
                   >
-                    {m.slice(5)} <span style={sign}>{isOpen ? '−' : '+'}</span>
+                    {m.slice(5)}
+                    {provisional.has(m) && (
+                      <span style={provMark} title="Month not closed — actuals are partial">°</span>
+                    )}
+                    {' '}<span style={sign}>{isOpen ? '−' : '+'}</span>
                   </button>
                 </th>
               );
@@ -274,4 +287,10 @@ const acctCode: React.CSSProperties = { fontFamily: 'monospace', fontSize: 10.5,
 const unbudgeted: React.CSSProperties = {
   marginLeft: 7, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
   color: C.bad, background: 'rgba(184,84,42,0.09)', borderRadius: 3, padding: '1px 5px',
+};
+
+// Superscript ring on a month whose actuals are still open. Deliberately quiet — it
+// qualifies the number without competing with it.
+const provMark: React.CSSProperties = {
+  color: '#B8542A', fontWeight: 700, marginLeft: 1, verticalAlign: 'super', fontSize: 9,
 };
