@@ -15,12 +15,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
-
-const NAMKHAN_PID = 260955;
 
 type Body = {
   property_id?: number;
@@ -56,7 +55,8 @@ const DEFAULT_FORMAT: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   const body: Body = await req.json().catch(() => ({}));
-  const propertyId = Number(body.property_id ?? NAMKHAN_PID);
+  if (!body.property_id) return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
+  const propertyId = await requirePropertyAccess(req, body.property_id);
   const start = body.start_date ?? ymd(new Date());
   const end = body.end_date ?? ymd(new Date(Date.now() + 28 * 86400000));
   const emptyOnly = body.regenerate_empty_only !== false;

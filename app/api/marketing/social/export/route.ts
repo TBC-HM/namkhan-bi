@@ -12,6 +12,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import JSZip from 'jszip';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 import type { SocialChannelRule } from '@/lib/marketing';
 import type { SocialPostRow } from '@/lib/marketing-social';
 import { formatPostForChannel, postFolderName, captionFileBody, metaFileBody } from '@/lib/social-export';
@@ -20,7 +21,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const NAMKHAN_PID = 260955; // legacy /marketing/social surface is Namkhan-scoped (§0.7)
 const MAX_POSTS = 100;
 const MAX_MEDIA_PER_POST = 8;
 const MAX_MEDIA_BYTES_PER_POST = 15 * 1024 * 1024;
@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
   let body: { post_ids?: unknown; platform?: string; scope?: string; anchor?: string; property_id?: number };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
 
-  const propertyId = Number(body.property_id) || NAMKHAN_PID;
+  if (!body.property_id) return NextResponse.json({ error: 'property_id required' }, { status: 400 });
+  const propertyId = await requirePropertyAccess(req, body.property_id);
   const ids = Array.isArray(body.post_ids) ? body.post_ids.filter((x): x is string => typeof x === 'string') : [];
   const scope = ids.length > 0 ? 'selection' : (body.scope === 'month' ? 'month' : 'week');
   const platform = typeof body.platform === 'string' && body.platform ? body.platform.toLowerCase() : null;

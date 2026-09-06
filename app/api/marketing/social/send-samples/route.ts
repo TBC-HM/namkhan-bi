@@ -11,6 +11,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 import type { SocialChannelRule, SocialProgram } from '@/lib/marketing';
 import type { SocialPostRow } from '@/lib/marketing-social';
 import { formatPostForChannel, parseFormat } from '@/lib/social-export';
@@ -19,7 +20,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const NAMKHAN_PID = 260955; // Namkhan-only this iteration (brief §7)
 const DEFAULT_TO = 'pb@thenamkhan.com';
 
 function esc(s: string): string {
@@ -27,7 +27,7 @@ function esc(s: string): string {
 }
 
 /** Deterministic on-brand sample copy per program category (fallback generic). */
-function sampleFromProgram(platform: string, program: SocialProgram | undefined, n: number): SocialPostRow {
+function sampleFromProgram(platform: string, program: SocialProgram | undefined, n: number, propertyId: number): SocialPostRow {
   const cat = program?.category_code ?? 'general';
   const copy: Record<string, { title: string; caption: string; hashtags: string[] }> = {
     inspirational: {
@@ -70,7 +70,7 @@ function sampleFromProgram(platform: string, program: SocialProgram | undefined,
   const now = new Date().toISOString();
   return {
     post_id: `sample-${platform}-${n}`,
-    property_id: NAMKHAN_PID,
+    property_id: propertyId,
     social_account_id: null,
     platform,
     title: `Sample · ${c.title}`,
@@ -97,7 +97,8 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); } catch { /* defaults */ }
   const to = (body.to ?? DEFAULT_TO).trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return NextResponse.json({ ok: false, error: 'invalid_email' }, { status: 400 });
-  const propertyId = Number(body.property_id) || NAMKHAN_PID;
+  if (!body.property_id) return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
+  const propertyId = await requirePropertyAccess(req, body.property_id);
 
   let sb;
   try { sb = getSupabaseAdmin(); }
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
     const chanPrograms = programs.filter((p) => p.platform === rule.platform);
     let n = 0;
     while (chosen.length < 2) {
-      chosen.push(sampleFromProgram(rule.platform, chanPrograms[n % Math.max(1, chanPrograms.length)], n + 1));
+      chosen.push(sampleFromProgram(rule.platform, chanPrograms[n % Math.max(1, chanPrograms.length)], n + 1, propertyId));
       n += 1;
     }
     const formats = (rule.formats ?? []).map((f) => parseFormat(f));
@@ -168,14 +169,14 @@ export async function POST(req: NextRequest) {
     <p style="font-size:12px;color:#5A5A5A;margin:0 0 4px">
       2 posts per active channel, validated against the per-channel guardrails in
       /settings/property/social_rules, with every export format and size listed per channel.
-      Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC · The Namkhan (260955).
+      Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC · Property ${propertyId}.
     </p>
     ${sections.join('')}`;
 
   const edge = await sb.functions.invoke('send-report-email', {
     body: {
       to,
-      subject: `Social module · sample pack — 2 posts per channel & format (Namkhan)`,
+      subject: `Social module · sample pack — 2 posts per channel & format (property ${propertyId})`,
       html,
       from_label: 'The Namkhan · Social',
     },
