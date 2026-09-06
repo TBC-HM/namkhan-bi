@@ -119,9 +119,12 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
       sb.from('v_attention_flags').select('id, dept_slug, label, severity')
         .eq('property_id', pid)
         .then((r) => r.data ?? [], () => []),
+      // PBS 2026-09-06: current year from January, was the trailing 4 months.
+      // Paired with dropping the .slice(-4) on capMonths below — capping either
+      // one alone silently holds the container at four columns.
       Promise.all((['spa','activity','retail','transport'] as const).map((d) =>
         sb.from(`v_${d}_capture_monthly`).select('period_yyyymm, res_in_house, res_with_purchase, capture_pct')
-          .eq('property_id', pid).order('period_yyyymm', { ascending: false }).limit(4)
+          .eq('property_id', pid).gte('period_yyyymm', `${year}-01`).order('period_yyyymm')
           .then((r) => ({ dept: d, rows: r.data ?? [] }), () => ({ dept: d, rows: [] as never[] })),
       )),
     ]);
@@ -243,7 +246,7 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
   // ── capture ──
   const capMonths = Array.from(new Set(
     capRes.flatMap((c) => c.rows.map((r: Record<string, unknown>) => String(r.period_yyyymm)))
-  )).sort().slice(-4);
+  )).sort();
   const capCols = capMonths.map((m) => ({ key: m, label: MONTHS[Number(m.slice(5, 7)) - 1] ?? m }));
   const capRows: MatrixRow[] = capRes.map(({ dept, rows }) => ({
     key: dept,
