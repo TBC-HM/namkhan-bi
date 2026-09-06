@@ -767,12 +767,13 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'Finance',         href: '/h/260955/finance/pnl'                      },
     // FP&C module 2026-07-28: budget vs actual by class + 13-week cash forward
     // (brief module-financial-planning-control-v1, completion gap #2).
+    // PBS 2026-09-06: Archive moved OFF the top strip and under Legal as a
+    // sub-tab (see the /finance/legal subgroup in lib/nav-subgroups.ts). It is
+    // a legal-archive surface, not a peer of P&L and HR.
     { label: 'Legal',           href: '/h/260955/finance/legal'                    },
-    // PBS 2026-07-24: Archive tab — brain-backed archive overview (prompt +
-    // headline stripes). Replaces the two "Open Docs register" links that
-    // lived on the Legal page.
-    { label: 'Archive',         href: '/h/260955/finance/archive'                  },
-    { label: 'CB Reports',      href: '/h/260955/admin/reports'                    },
+    // PBS 2026-09-06: 'CB Reports' -> 'Reports'. The Cloudbeds origin is an
+    // implementation detail; the revenue-side sibling is at /revenue/revreports.
+    { label: 'Reports',         href: '/h/260955/admin/reports'                    },
     // cost-governance-v1 (2026-07-30): tenant-scoped platform usage at cost
     // (PBS placement correction: Administration -> Costs on the client surface).
   ],

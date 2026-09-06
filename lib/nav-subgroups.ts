@@ -396,11 +396,14 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   // Landing ↔ Rate Desk ↔ Forecast is discoverable in one place).
   {
     parentHref: '/revenue',
-    members: ['/revenue', '/revenue/cockpit', '/revenue/forecast'],
+    members: ['/revenue', '/revenue/cockpit', '/revenue/forecast', '/revenue/revreports'],
     tabs: [
-      { label: 'Overview',  href: '/h/260955/revenue'           },
-      { label: 'Rate Desk', href: '/h/260955/revenue/cockpit'   },
-      { label: 'Forecast',  href: '/h/260955/revenue/forecast'  },
+      { label: 'Overview',   href: '/h/260955/revenue'            },
+      { label: 'Rate Desk',  href: '/h/260955/revenue/cockpit'    },
+      { label: 'Forecast',   href: '/h/260955/revenue/forecast'   },
+      // PBS 2026-09-06: revenue-side twin of Administration > Reports, filtered
+      // to the Cloudbeds stock reports a revenue manager actually uses.
+      { label: 'RevReports', href: '/h/260955/revenue/revreports' },
     ],
   },
 
@@ -442,13 +445,17 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
 
-  // ─── Finance · Archive sub-strip · PBS 2026-08-22 ────────────
-  // 2 bottom-of-page links promoted to a top sub-menu.
+  // ─── Finance · Legal sub-strip · PBS 2026-08-22, re-parented 2026-09-06 ──
+  // Archive used to be a top-level Administration tab with its own sub-strip.
+  // It is a legal-archive surface, so it now sits under Legal. Landing on
+  // /finance/legal, /finance/archive or the docs directory shows the same strip,
+  // which is what makes Archive reachable at all now it is off the top row.
   {
-    parentHref: '/finance/archive',
-    members: ['/finance/archive'],
+    parentHref: '/finance/legal',
+    members: ['/finance/legal', '/finance/archive', '/finance/legal/docs'],
     tabs: [
-      { label: 'Overview',       href: '/h/260955/finance/archive'        },
+      { label: 'Legal',          href: '/h/260955/finance/legal'          },
+      { label: 'Archive',        href: '/h/260955/finance/archive'        },
       { label: 'Directory',      href: '/h/260955/finance/legal/docs'     },
       { label: 'Brain Settings', href: '/h/260955/settings/brain'         },
     ],
