@@ -67,13 +67,31 @@ than hidden: a partial actual is useful, an unlabelled one is not.
 NULL `is_final` means no actual at all for that month, which is not the same as "open"
 and is not marked.
 
-## Note for whoever closes the books
+## July's is_final flag was wrong — corrected 2026-09-07
 
-`gl_pl_monthly` has **July 2026 flagged `is_final = true`** (83 accounts, $105,937).
-That contradicts "we only have to end June". Either July was closed and the by-class
-export simply has not been produced, or that flag is wrong. Worth one question — it
-decides whether July should be on screen at all.
+The 2026-08-28 upload flagged **July `is_final = true`** (83 accounts, $105,937), which
+contradicted "we only have to end June". Asked; PBS: *"JULY NOT CLOSED YET PRELIMINARY"*.
+
+So the flag was wrong, not the observation. Corrected in place — metadata only, no
+amounts touched:
+
+```sql
+UPDATE finance.gl_pl_monthly
+   SET is_final = false,
+       notes = coalesce(notes || ' | ', '')
+               || 'is_final corrected to false 2026-09-07 per PBS: July preliminary'
+ WHERE property_id = 260955 AND period_yyyymm = '2026-07'
+   AND is_final IS DISTINCT FROM false;
+```
+
+State now: **Jan–Jun closed, Jul and Aug provisional**, both carrying the grid's
+superscript marker.
+
+**This will regress if the next upload re-asserts `is_final = true` for July.** The flag
+comes from the upload, not from a close process in this system, so nothing here defends
+it. If preliminary months keep arriving flagged final, the durable fix is for the
+ingester to stop trusting that column — worth doing only if it recurs.
 
 `finance.gl_pl_summary_monthly` (the separate BY CLASS upload, which the Planning page
-reads) genuinely still ends at June, so the Planning variance table correctly stops there.
-The two pages disagreeing by a month is expected, not a bug.
+reads) genuinely still ends at June. So the budget grid shows through August as
+provisional while Planning stops at June — expected, not a bug.

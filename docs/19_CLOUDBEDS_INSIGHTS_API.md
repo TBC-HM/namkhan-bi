@@ -360,14 +360,27 @@ range. From the UI this is the Sync button in `ReportsTableClient`; from SQL, `n
 
 ---
 
-## 7. Result as of 2026-09-06
+## 7. Result as of 2026-09-07
 
-| | before v47 | v47 | v48 |
-|---|---|---|---|
-| Reports syncing | 8 | 29 of 35 | **35 of 35** |
-| Failure: unknown column | many | fixed | fixed |
-| Failure: saved filters/periods | 6 | 6 | **fixed** |
-| Failure: 404 phantom id | 15 | 15 | **removed from catalog** |
+| | v46 | v47 | v48 | v49 | v50 | v51 |
+|---|---|---|---|---|---|---|
+| Reports syncing | 8 | 29 of 35 | 35 of 35 | 35 | 98 of 99 | **99 of 99** |
+| Unknown column | many | **fixed** | — | — | — | — |
+| Saved filters / periods | 6 | 6 | **fixed** | — | — | — |
+| 404 phantom ids | 15 | 15 | **catalog rebuilt** | — | — | — |
+| `row_count` = column count | yes | yes | yes | **fixed** | — | — |
+| `comparisons` not replayed | — | — | 1 (report 287) | 1 | **fixed** | — |
+| Saved filters silently dropped | yes | yes | yes | yes | yes | **fixed** |
+
+The last row is the one that mattered most and was found last: up to v50 the probe sent
+OUR date filter *instead of* the report's saved filters, and Cloudbeds accepted it
+silently for any report it does not enforce. 73 of 99 reports were resolving that way, so
+most snapshots were the raw dataset stored under a narrower report's name — "Voids,
+Adjustments and Refunds Review" returned 6,889 transactions instead of 19. See §4b.
+
+Catalog: **99 reports** listed of the 174 the account exposes — 74 revenue, 25
+administration. Seven are starred as priority (`STARRED_REPORT_IDS`), and three of those
+are parsed into typed tables (§7d).
 
 Verified mode distribution across the 35 (2026-09-06 re-sync, all 35 `success`):
 
@@ -461,9 +474,33 @@ because reservation numbers, invoice ids and dates all arrive as strings and coe
 would corrupt identifiers. Integers keep their form; the rule caps decimals, it does not
 pad to two.
 
+## 7d. What is parsed into typed tables
+
+A snapshot is a JSON blob: not queryable by metric, not comparable across reports, and
+its window is set by each report's own saved definition. Typed extraction is what makes a
+report usable by anything other than the eye.
+
+| Source | Target | Notes |
+|---|---|---|
+| report 74 | `insights.daily_revenue_cb` → `v_monthly_revenue_cb` | pre-existing, parsed in the edge function |
+| reports 39, 77, 145 | `insights.ancillary_sales_cb` → `v_ancillary_sales_cb`, `v_ancillary_monthly_cb` | 2026-09-06, parsed in SQL |
+
+New parsers belong in **SQL, not the edge function**. The snapshots are already `jsonb`
+in `insights.stock_reports_cb`, so SQL needs no Cloudbeds round trip, can be re-run over
+history, and avoids a 60KB redeploy whenever a mapping changes. Report 74 lives in the
+edge function for historical reasons only.
+
+The ancillary parse is verified to the cent against the source JSON (154,693.55 /
+135,832.06 / 343,523.71, diff 0.0000 on each). Full design note, including why the three
+reports cannot be summed together, in `db/proposed/ancillary-typed-v1/README.md`.
+
+**Nothing refreshes these tables automatically.** `insights.fn_parse_ancillary_cb()` is
+manual and must run after each sync or it goes stale silently — the same failure mode as
+the report-309 stub. Deliberately not scheduled while the cadence question is open.
+
 ## 8. Open items
 
-1. **139 reports are real but not surfaced.** `lib/cb-reports.ts` lists 35 of the 174.
+1. **75 reports are real but not surfaced.** `lib/cb-reports.ts` lists 99 of the 174.
    Adding one is a single line — the sync path already handles every shape. Nobody has
    decided which of the 139 earn a row.
 2. **Snapshots are whole-response blobs.** Only report 74 is parsed into a typed table
