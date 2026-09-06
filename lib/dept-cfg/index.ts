@@ -485,6 +485,9 @@ const SALES_CFG: DeptCfg = {
     { label: 'Accounts',      href: '/h/260955/sales/accounts'  },
     { label: 'ICP Segments',  href: '/h/260955/sales/icp'       },
     { label: 'Packages',      href: '/h/260955/sales/packages'  },
+    // PBS 2026-09-06: Contacts dissolved — the guest directory is a commercial
+    // surface, so it lands under Sales. Route unchanged at /guest/directory.
+    { label: 'Guests',        href: '/h/260955/guest/directory' },
   ],
   quickChips: [
     { label: 'Inquiries', href: '/h/260955/sales/inquiries' },
@@ -558,6 +561,10 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Content',  href: '/h/260955/marketing/content'  },
     { label: 'Socials',  href: '/h/260955/marketing/social'   },
     { label: 'Web',      href: '/h/260955/marketing/digital'  },
+    // PBS 2026-09-06: Contacts dissolved — reviews/ratings and guest behaviour are
+    // marketing signals. Routes unchanged at /guest/reputation and /guest/behaviour.
+    { label: 'Reputation', href: '/h/260955/guest/reputation' },
+    { label: 'Behaviour',  href: '/h/260955/guest/behaviour'  },
     // PBS 2026-08-21: top-level Compiler tab removed — duplicate; Compiler
     // lives under Content sub-strip. URL /marketing/compiler still resolves.
   ],

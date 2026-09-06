@@ -29,7 +29,10 @@ const CANONICAL_DEPTS: DeptLink[] = [
   { label: 'Revenue',        slug: 'revenue'    },
   { label: 'Sales',          slug: 'sales'      },
   { label: 'Marketing',      slug: 'marketing'  },
-  { label: 'Contacts',       slug: 'guest'      },
+  // PBS 2026-09-06: Contacts dissolved. Its pages live on under /guest/* but are now
+  // reached from Sales (Guests) and Marketing (Reputation · Behaviour). The routes are
+  // untouched; only the entry points moved. SUBSEGMENT_ALIAS below keeps the correct
+  // parent pill lit.
   { label: 'Operations',     slug: 'operations' },
   { label: 'Administration', slug: 'finance'    },
   // PBS #158/#159 (2026-05-24): IT removed from property menu — only in holding strip.
@@ -87,22 +90,47 @@ function readActivePropertyFromCookie(): number {
 // e.g. /h/[id]/admin/* is part of Administration (slug='finance').
 const SEGMENT_ALIAS: Record<string, string> = { admin: 'finance' };
 
+// A dissolved dept whose pages split across two owners needs the SECOND segment to
+// decide which pill lights. /guest/reputation belongs to Marketing, /guest/directory
+// to Sales — one flat alias cannot express that.
+const SUBSEGMENT_ALIAS: Record<string, { map: Record<string, string>; fallback: string }> = {
+  guest: {
+    map: {
+      reputation:  'marketing',
+      behaviour:   'marketing',
+      newsletters: 'marketing',
+      prospects:   'marketing',
+      reviews:     'marketing',
+      social:      'marketing',
+      influencers: 'marketing',
+      media:       'marketing',
+    },
+    fallback: 'sales',
+  },
+};
+
+function aliasFor(seg: string | null, sub: string | null): string | null {
+  if (!seg) return null;
+  if (SLUG_SET.has(seg)) return seg;
+  const subAlias = SUBSEGMENT_ALIAS[seg];
+  if (subAlias) return (sub && subAlias.map[sub]) || subAlias.fallback;
+  return SEGMENT_ALIAS[seg] ?? null;
+}
+
 function resolvePropertyAndDept(pathname: string): { propertyId: number; activeSlug: string | null } {
   // /h/[id]/<slug>(/...) — property explicit in URL.
-  const m = pathname.match(/^\/h\/(\d+)(?:\/([^/]+))?/);
+  const m = pathname.match(/^\/h\/(\d+)(?:\/([^/]+))?(?:\/([^/]+))?/);
   if (m) {
     const propertyId = Number(m[1]);
-    const seg = m[2] ?? null;
-    const slug = seg
-      ? (SLUG_SET.has(seg) ? seg : SEGMENT_ALIAS[seg] ?? null)
-      : null;
-    return { propertyId, activeSlug: slug };
+    return { propertyId, activeSlug: aliasFor(m[2] ?? null, m[3] ?? null) };
   }
 
   // Legacy: /<slug>(/...) — property comes from cookie.
-  const m2 = pathname.match(/^\/([^/]+)/);
-  const slug = m2 && SLUG_SET.has(m2[1]) ? m2[1] : null;
-  return { propertyId: readActivePropertyFromCookie(), activeSlug: slug };
+  const m2 = pathname.match(/^\/([^/]+)(?:\/([^/]+))?/);
+  return {
+    propertyId: readActivePropertyFromCookie(),
+    activeSlug: m2 ? aliasFor(m2[1], m2[2] ?? null) : null,
+  };
 }
 
 
