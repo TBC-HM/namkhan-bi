@@ -7,6 +7,7 @@ import { DashboardPage, Container, KpiTile, type KpiTileProps } from '@/app/(coc
 import { FINANCE_SUBPAGES } from '../_subpages';
 import { supabaseGl } from '@/lib/supabase-gl';
 import BudgetUpload from './BudgetUpload';
+import BudgetGridClient, { type GridCell } from './BudgetGridClient';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -17,20 +18,25 @@ interface BudgetRow {
   amount_usd: number;
 }
 
-const SUBCAT_ORDER = ['Revenue', 'Cost of Sales', 'Payroll & Related', 'Other Operating Expenses', 'A&G', 'Sales & Marketing', 'POM', 'Utilities', 'Interest', 'FX Gain/Loss'];
-const MONTHS_2026 = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'];
-
-function fmtK(n: number | null | undefined): string {
-  if (n == null || !isFinite(n) || n === 0) return '—';
-  return `$${(n / 1000).toFixed(1)}k`;
+interface VsActualRow {
+  period_yyyymm: string;
+  usali_subcategory: string;
+  actual_usd: number | null;
 }
+
+// All 14 USALI subcategories the budget can carry. The previous list held 10, so
+// rows uploaded as Mgmt Fees / Depreciation / Income Tax / Non-Operating were
+// accepted by the API and then silently omitted from the grid and every total.
+const SUBCAT_ORDER = ['Revenue', 'Cost of Sales', 'Payroll & Related', 'Other Operating Expenses', 'A&G', 'Sales & Marketing', 'POM', 'Utilities', 'Mgmt Fees', 'Depreciation', 'Interest', 'FX Gain/Loss', 'Income Tax', 'Non-Operating'];
+const MONTHS_2026 = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'];
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
 export default async function BudgetPage() {
-  const { data: rows } = await supabaseGl
-    .from('v_budget_lines')
-    .select('period_yyyymm, usali_subcategory, amount_usd');
+  const [{ data: rows }, { data: vsActual }] = await Promise.all([
+    supabaseGl.from('v_budget_lines').select('period_yyyymm, usali_subcategory, amount_usd'),
+    supabaseGl.from('v_budget_vs_actual').select('period_yyyymm, usali_subcategory, actual_usd'),
+  ]);
 
   const allRows = (rows ?? []) as BudgetRow[];
   const totalRows = allRows.length;
@@ -38,6 +44,15 @@ export default async function BudgetPage() {
   for (const r of allRows) {
     const k = `${r.period_yyyymm}|${r.usali_subcategory}`;
     cell.set(k, (cell.get(k) ?? 0) + Number(r.amount_usd || 0));
+  }
+
+  // Actuals, summed across usali_department. A month with no GL rows at all stays
+  // null rather than 0, so an unposted month reads "—" instead of a -100% variance.
+  const actual = new Map<string, number>();
+  for (const r of ((vsActual ?? []) as VsActualRow[])) {
+    if (r.actual_usd == null) continue;
+    const k = `${r.period_yyyymm}|${r.usali_subcategory}`;
+    actual.set(k, (actual.get(k) ?? 0) + Number(r.actual_usd));
   }
   // PBS 2026-06-17 #217 — Revenue and Costs MUST be separate.
   // v_budget_lines stores all amounts as positive (no sign convention), so
@@ -62,8 +77,6 @@ export default async function BudgetPage() {
       }
     }
   }
-  const netMonth = new Map<string, number>();
-  for (const m of MONTHS_2026) netMonth.set(m, (revMonth.get(m) ?? 0) - (costMonth.get(m) ?? 0));
   const netTotal = revTotal - costTotal;
   const monthsCovered = MONTHS_2026.filter((m) => ((revMonth.get(m) ?? 0) + (costMonth.get(m) ?? 0)) > 0).length;
   const subcatsCovered = SUBCAT_ORDER.filter((s) => (rowSum.get(s) ?? 0) > 0).length;
@@ -73,12 +86,22 @@ export default async function BudgetPage() {
 
   const tabs = FINANCE_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href,
-    active: s.href === '/finance/pnl',
+    active: s.href === '/finance/budget',
   }));
+
+  // Grid payload: budget and actual per month × subcategory, serialisable for the
+  // client component that owns the per-month expand.
+  const gridCells: Record<string, GridCell> = {};
+  for (const m of MONTHS_2026) {
+    for (const s of SUBCAT_ORDER) {
+      const k = `${m}|${s}`;
+      gridCells[k] = { budget: cell.get(k) ?? 0, actual: actual.has(k) ? actual.get(k)! : null };
+    }
+  }
 
   const tiles: KpiTileProps[] = [
     { label: 'Budget Revenue · FY', value: Math.round(revTotal), currency: 'USD', size: 'sm', footnote: 'Revenue subcat only', status: 'green' },
-    { label: 'Budget Costs · FY', value: Math.round(costTotal), currency: 'USD', size: 'sm', footnote: 'COGS + Payroll + OpEx + A&G + S&M + POM + Util + Int + FX', status: 'amber' },
+    { label: 'Budget Costs · FY', value: Math.round(costTotal), currency: 'USD', size: 'sm', footnote: 'all non-revenue subcategories', status: 'amber' },
     { label: 'Budget Net Income · FY', value: Math.round(netTotal), currency: 'USD', size: 'sm', footnote: 'Revenue − all cost subcats', status: netTotal > 0 ? 'green' : 'red' },
     { label: 'Months covered', value: `${monthsCovered}/12`, size: 'sm', footnote: 'months with ≥1 budget row' },
     { label: 'Subcats covered', value: `${subcatsCovered}/${SUBCAT_ORDER.length}`, size: 'sm', footnote: 'USALI subcategories with rows' },
@@ -99,49 +122,13 @@ export default async function BudgetPage() {
 
       {/* 2 · Budget grid */}
       <div style={fullRow}>
-        <Container title="Budget grid" subtitle="USALI subcategory rows × month columns" density="compact">
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={th}>USALI subcategory</th>
-                  {MONTHS_2026.map((m) => <th key={m} style={{ ...th, textAlign: 'right' }}>{m.slice(5)}</th>)}
-                  <th style={{ ...th, textAlign: 'right' }}>FY total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SUBCAT_ORDER.map((s) => (
-                  <tr key={s}>
-                    <td style={td}><strong>{s}</strong></td>
-                    {MONTHS_2026.map((m) => {
-                      const v = cell.get(`${m}|${s}`) ?? 0;
-                      return <td key={m} style={{ ...td, textAlign: 'right', color: v === 0 ? 'var(--ink-mute, #6b7280)' : undefined }}>{fmtK(v)}</td>;
-                    })}
-                    <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(rowSum.get(s) ?? 0)}</strong></td>
-                  </tr>
-                ))}
-                {/* PBS #217 — three rollup rows: Revenue · Costs · Net Income */}
-                <tr style={{ borderTop: '2px solid var(--ink-soft, #5a5a5a)' }}>
-                  <td style={td}><strong>Revenue (sum)</strong></td>
-                  {MONTHS_2026.map((m) => <td key={m} style={{ ...td, textAlign: 'right' }}><strong>{fmtK(revMonth.get(m) ?? 0)}</strong></td>)}
-                  <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(revTotal)}</strong></td>
-                </tr>
-                <tr>
-                  <td style={td}><strong>Total Costs</strong></td>
-                  {MONTHS_2026.map((m) => <td key={m} style={{ ...td, textAlign: 'right' }}><strong>{fmtK(costMonth.get(m) ?? 0)}</strong></td>)}
-                  <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(costTotal)}</strong></td>
-                </tr>
-                <tr style={{ borderTop: '1px solid var(--ink-soft, #5a5a5a)' }}>
-                  <td style={td}><strong>Net Income (Rev − Costs)</strong></td>
-                  {MONTHS_2026.map((m) => {
-                    const v = netMonth.get(m) ?? 0;
-                    return <td key={m} style={{ ...td, textAlign: 'right', color: v >= 0 ? 'var(--status-green, #2E7D32)' : 'var(--terracotta, #B8542A)', fontWeight: 700 }}>{fmtK(v)}</td>;
-                  })}
-                  <td style={{ ...td, textAlign: 'right', color: netTotal >= 0 ? 'var(--status-green, #2E7D32)' : 'var(--terracotta, #B8542A)', fontWeight: 700 }}>{fmtK(netTotal)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <Container title="Budget grid" subtitle="USALI subcategory rows × month columns · press + on a month for actual and variance" density="compact">
+          <BudgetGridClient
+            months={MONTHS_2026}
+            subcats={SUBCAT_ORDER}
+            cells={gridCells}
+            revSubcats={['Revenue']}
+          />
         </Container>
       </div>
 
@@ -154,6 +141,3 @@ export default async function BudgetPage() {
     </DashboardPage>
   );
 }
-
-const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--ink-soft, #d4d4d8)', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5a5a5a)', fontWeight: 600 };
-const td: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid var(--ink-soft, #ececec)', fontSize: 12, color: 'var(--ink, #1b1b1b)', fontVariantNumeric: 'tabular-nums' };

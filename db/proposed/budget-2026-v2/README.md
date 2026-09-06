@@ -143,6 +143,68 @@ This is what lets a USALI subcategory row expand to the accounts beneath it — 
 its 11 accounts, Payroll to its 10, and so on. `plan.*` is not exposed via PostgREST,
 which is why the bridge was needed. UI work still to do.
 
+## Four bugs fixed 2026-09-06
+
+**1. Cost of Sales was phased flat 1/12.** It is a variable cost and December sells 4×
+January's room nights, so a flat food-cost line is visibly wrong to anyone operating the
+hotel. Re-phased to the room-night curve, account totals unchanged: Jan $4,437 → Jun
+$1,546 → Dec $6,101, still $41,268 for the year.
+
+**2. Income Tax had no rows at all** — so the earlier UPDATE matched nothing and the
+line stayed null. Inserted 12 monthly rows on `691100 CURRENT INCOME TAX` at 20% (Lao
+corporate rate) of budgeted pre-tax profit: GOP 188,607 − FX 5,000 − Interest 3,300 =
+180,307 → **36,061**.
+
+Two below-GOP lines were deliberately NOT populated, and this is a decision rather than
+an omission:
+- **Non-Operating stays 0.** 2025's $36,899 was $32,474 of TAX PENALTIES & FINES plus
+  $4,425 owner personal expense. Budgeting a fine is precisely the mistake this rebuild
+  exists to stop.
+- **Depreciation stays $197** (vehicle only). `DEPRECIATION BUILDING` and
+  `DEPRECIATION GENERAL ASSET` are both zero for 2025 despite significant capex
+  including the 120 m² library, so the asset register is not posting. That needs the
+  register, not a number invented here. **This one is still a real gap.**
+
+**3. `public.v_pace_curve` double-counted the budget.** `plan.drivers` stores
+`room_nights` twice — property level (`room_type_id IS NULL`) and split across 9 room
+types — and the view summed both. The pace chart compared actuals against **6,920**
+budget room nights instead of 3,460. Added `room_type_id IS NULL` to both the budget and
+STLY CTEs. Now reads Jun 129.6 / Jul 176.7 / Aug 139.5 / Sep 198 / Oct 418.5 / Nov 450.
+
+**4. `finance.v_gl_budget_lines` hardcoded the scenario name** and never filtered
+`property_id`. Now selects the most recently created *approved* budget scenario per
+property per fiscal year, and tail-appends `account_code` / `account_name` /
+`property_id`. The archived original is excluded by its `status='archived'`. This also
+closes the tenancy hole where a Donna scenario sharing the name would have summed into
+Namkhan's budget.
+
+## Budget grid UI — 2026-09-06
+
+`app/finance/budget/BudgetGridClient.tsx`. Each month header carries a **+**; pressing it
+expands that month into three columns — **Budget · Act · Var %** — and collapses again.
+Several months can be open at once. Collapsed months stay a single column so the grid
+still fits without scrolling until detail is asked for.
+
+Variance colour is direction-aware: on Revenue an overshoot is green, on a cost line an
+overspend is red. A month with no GL rows shows "—" rather than a −100% variance, so the
+unposted back half of the year does not read as catastrophic misses.
+
+Also fixed in the page:
+- The tab strip highlighted **P&L** while you were on Budget (`active: s.href === '/finance/pnl'`).
+- `SUBCAT_ORDER` held 10 of the 14 USALI subcategories, so anything landing in Mgmt Fees,
+  Depreciation, Income Tax or Non-Operating was accepted by the upload API and then
+  silently dropped from the grid *and* from every total. Now all 14 — which is how the
+  new Income Tax line becomes visible.
+
+## FY2026 budget as it now stands
+
+| | |
+|---|---|
+| Revenue | 1,021,413 |
+| Total costs | 877,168 |
+| **GOP** | **+188,607 (18.5%)** |
+| Net income | +144,245 |
+
 ## Still open
 
 - **`02_unhardcode_budget_scenario.sql` — NOT APPLIED, blocked by the permission
