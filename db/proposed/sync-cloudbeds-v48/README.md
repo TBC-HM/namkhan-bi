@@ -126,6 +126,22 @@ saved filter is `invoice_number is_not_null`), 304/305 are pinned to a trial-bal
 `cb_invoke_sync` never sends `propertyID`, so removing the default stops all cron
 ingestion. Unchanged in v48.
 
+## Side effect of renaming: duplicate catalog rows
+
+`public.v_stock_reports_catalog` groups by **(report_id, report_name)**. Correcting the
+titles therefore left a second row for every renamed report — 38, 168, 306, 309, 311 each
+appear twice, once under the old invented name and once under the real one.
+
+Patched in the app rather than the DB: both Reports pages now index the catalog by
+`report_id` keeping the newest `last_synced_at`, instead of `catalog.find()`, which
+returned whichever row came first. Report 309 was the visible case — its 2-row stub sits
+beside the real 6-row snapshot, so the page could show "2 rows" for a report that has 6.
+
+**The view itself is still wrong** and would benefit from grouping on `report_id` alone
+(or exposing only the latest snapshot per report). That is DDL and needs approval, so it
+is listed below rather than applied. The app-side fix is correct either way and should
+stay.
+
 ## Still open
 
 1. 139 catalogued reports are not surfaced anywhere.
@@ -135,5 +151,10 @@ ingestion. Unchanged in v48.
    editorial call. A folders endpoint probably exists; not probed.
 4. No scheduled stock-report sync — all runs are manual. The definitions carry
    `schedule_ids`, so Cloudbeds has its own scheduler we do not use.
+
+5. **`v_stock_reports_catalog` groups by (report_id, report_name)** — see above. Needs a
+   view change to group by `report_id` only. Not applied: DDL requires PBS approval, and
+   the standing order is create-forward, so this should be a new sibling view rather than
+   a replacement if the existing shape has other readers.
 
 Full API reference: `docs/19_CLOUDBEDS_INSIGHTS_API.md`.
