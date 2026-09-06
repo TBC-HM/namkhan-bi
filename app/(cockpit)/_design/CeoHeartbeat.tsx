@@ -36,6 +36,8 @@ interface Props {
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+// 708010 ROOM REVENUE — the single account behind the rooms line of the budget.
+const ROOM_REVENUE_ACCOUNT = '708010';
 
 interface DailyRow {
   night_date: string | null;
@@ -99,7 +101,8 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
     .eq('property_id', pid).gte('night_date', from).lte('night_date', to)
     .then((r) => (r.data ?? []) as DailyRow[], () => [] as DailyRow[]);
 
-  const [tyRows, lyRows, fwdRows, fwdLyRows, gopRes, labRes, cporRes, attnRes, capRes] =
+  const [tyRows, lyRows, fwdRows, fwdLyRows, gopRes, labRes, cporRes, attnRes, capRes,
+         budgetRevRes, budgetDrvRes] =
     await Promise.all([
       daily(ytdStart, yesterday),
       daily(shiftYear(ytdStart, -1), shiftYear(yesterday, -1)),
@@ -127,14 +130,58 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
           .eq('property_id', pid).gte('period_yyyymm', `${year}-01`).order('period_yyyymm')
           .then((r) => ({ dept: d, rows: r.data ?? [] }), () => ({ dept: d, rows: [] as never[] })),
       )),
+      // Budget benchmark — same single budget every other surface reads.
+      sb.from('v_budget_lines_detail')
+        .select('period_yyyymm, account_code, amount_usd')
+        .eq('property_id', pid).eq('period_year', year).eq('usali_subcategory', 'Revenue')
+        .then((r) => r.data ?? [], () => []),
+      sb.from('v_budget_drivers_monthly')
+        .select('period_month, rooms_available, room_nights')
+        .eq('property_id', pid).eq('period_year', year)
+        .then((r) => r.data ?? [], () => []),
     ]);
 
   const ty = totals(tyRows);
   const ly = totals(lyRows);
-  // Budget: finance.budget_monthly and finance.gl_budgets are both empty as of
-  // 2026-08-26, so no budget benchmark exists for either property yet. Passing
-  // null keeps the "vs Budget" line dormant rather than inventing a baseline.
-  const score = buildScore(ty, ly, null);
+
+  // PBS 2026-09-06: the "vs Budget" lines were hardcoded null because
+  // finance.budget_monthly and finance.gl_budgets were both empty in Aug 2026. The
+  // budget lives in plan.lines and is now live, so the benchmark is real.
+  //
+  // The budget is monthly and YTD actuals run 1 Jan -> yesterday, so the current month
+  // is pro-rated by elapsed days. Without that, every partial month would read as a
+  // large miss purely because a full month of budget faces part of a month of trading.
+  // Anchored on `yesterday`, not `today`: on the 1st of a month yesterday sits in the
+  // previous month, and weighting off today would count that month both in full and
+  // again as a partial. On 1 January yesterday is last year, so nothing is in scope and
+  // the benchmark stays dormant rather than facing a full year of budget with no trading.
+  const ytdMonth = Number(yesterday.slice(5, 7));
+  const ytdDay   = Number(yesterday.slice(8, 10));
+  const sameYear = Number(yesterday.slice(0, 4)) === year;
+  const elapsedShare = ytdDay / new Date(Date.UTC(year, ytdMonth, 0)).getUTCDate();
+  const ytdWeight = (m: number) =>
+    !sameYear ? 0 : m < ytdMonth ? 1 : m === ytdMonth ? elapsedShare : 0;
+
+  const budget: PeriodTotals = { ...EMPTY_TOTALS };
+  for (const r of (budgetRevRes as Array<Record<string, unknown>>)) {
+    const w = ytdWeight(Number(String(r.period_yyyymm).slice(5, 7)));
+    if (!w) continue;
+    const amt = num(r.amount_usd) ?? 0;
+    budget.totalRevenue += amt * w;
+    if (String(r.account_code) === ROOM_REVENUE_ACCOUNT) budget.roomsRevenue += amt * w;
+  }
+  for (const r of (budgetDrvRes as Array<Record<string, unknown>>)) {
+    const w = ytdWeight(Number(r.period_month));
+    if (!w) continue;
+    budget.roomsSold      += (num(r.room_nights) ?? 0) * w;
+    budget.roomsAvailable += (num(r.rooms_available) ?? 0) * w;
+  }
+  const hasBudget = budget.roomsAvailable > 0 && budget.totalRevenue > 0;
+  const score = buildScore(ty, ly, hasBudget ? budget : null);
+
+  const bIdx = (actual: number | null, planned: number | null) =>
+    hasBudget && planned != null && planned > 0 && actual != null
+      ? Math.round((actual / planned) * 100) : null;
 
   const sdlyD = deltaFromIndex(score.sdlyIndex);
   const scoreTiles: KpiTileProps[] = [
@@ -150,21 +197,21 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
       footnote: `1 Jan → ${yesterday} · gross`,
       status: (score.totalRevenueIndex ?? 0) >= 100 ? 'green' : 'amber',
       stly: ly.roomsRevenue > 0 ? `LY ${money(ly.roomsRevenue, sym)}` : 'LY —',
-      compare: [toComparison('vs SDLY', performanceOrNull(ty.roomsRevenue, ly.roomsRevenue)), toComparison('vs Budget', null)],
+      compare: [toComparison('vs SDLY', performanceOrNull(ty.roomsRevenue, ly.roomsRevenue)), toComparison('vs Budget', bIdx(ty.roomsRevenue, budget.roomsRevenue))],
     },
     {
       label: 'RevPAR · YTD', value: money(revpar(ty), sym), size: 'sm',
       footnote: 'rooms revenue ÷ rooms available',
       status: (score.revparIndex ?? 0) >= 100 ? 'green' : 'amber',
       stly: revpar(ly) != null ? `LY ${money(revpar(ly), sym)}` : 'LY —',
-      compare: [toComparison('vs SDLY', score.revparIndex), toComparison('vs Budget', null)],
+      compare: [toComparison('vs SDLY', score.revparIndex), toComparison('vs Budget', bIdx(revpar(ty), revpar(budget)))],
     },
     {
       label: 'Occupancy · YTD', value: pct(occupancy(ty)), size: 'sm',
       footnote: `${ty.roomsSold.toLocaleString('en-US')} of ${ty.roomsAvailable.toLocaleString('en-US')} room nights`,
       status: (score.occIndex ?? 0) >= 100 ? 'green' : 'amber',
       stly: occupancy(ly) != null ? `LY ${pct(occupancy(ly))}` : 'LY —',
-      compare: [toComparison('vs SDLY', score.occIndex), toComparison('vs Budget', null)],
+      compare: [toComparison('vs SDLY', score.occIndex), toComparison('vs Budget', bIdx(occupancy(ty), occupancy(budget)))],
     },
   ];
 
