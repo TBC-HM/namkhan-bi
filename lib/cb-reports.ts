@@ -151,6 +151,42 @@ const ADMIN_CATALOG: Record<number, KnownReport> = {
 
 export const KNOWN_REPORTS: Record<number, KnownReport> = { ...REVENUE_CATALOG, ...ADMIN_CATALOG };
 
+/**
+ * PBS 2026-09-06: the seven that earn a star — pinned to the top of the RevReports table.
+ *
+ * Chosen on evidence, not on how the report sounds. Two rules applied:
+ *
+ *  1. It must not duplicate something we already compute BETTER. Booking window, LOS and
+ *     guest-country production are all on Revenue › Markets already, cross-tabbed by
+ *     country, room type and stay month (v_country_lead_stack, v_country_los_distribution,
+ *     v_country_revenue_share) — richer than the Cloudbeds equivalents (86, 186, 295, 34),
+ *     so those are not starred. Same for occupancy/RevPAR: ours works, report 110's does
+ *     not (its saved filter zeroes capacity_count — see docs/19 §7c).
+ *
+ *  2. It must actually have data here. Market group & segment reads well on paper but
+ *     Namkhan barely populates the dimension in Cloudbeds: report 239 returns 5 rows, 238
+ *     returns 2, 240 returns 1. Starring those would be starring blanks.
+ *
+ * Row counts below are from the 2026-09-06 sync.
+ */
+export const STARRED_REPORT_IDS: number[] = [
+  74,   // Daily Revenue Report (613) — the topline, and the one already parsed into
+        //   insights.daily_revenue_cb -> v_monthly_revenue_cb. The anchor.
+  145,  // Add-ons, Items and Services Sold Overview by Category (7,241) — ancillary
+        //   capture by category. The ops-manager KPI the 2026 budget is built on.
+  77,   // Add-ons, Items and Services Sold (5,312) — the line-level detail behind 145.
+  39,   // Items and Services Sold Pivot, YTD by Month (601) — the ancillary trend.
+  294,  // Daily Revenue Report by Reservation Source (2,209) — daily revenue x source.
+        //   Finer than v_channel_performance_monthly, which is monthly.
+  194,  // Daily Revenue by Benchmarking Transaction Type (621) — Cloudbeds' own
+        //   benchmark taxonomy. We have no equivalent; genuinely additive.
+  96,   // Pace Report (365) — an independent forward-pace read. Worth keeping as a
+        //   cross-check on v_pace_curve, which has already been wrong once
+        //   (fix_v_pace_curve_budget_double_count).
+];
+
+export const isStarred = (id: number): boolean => STARRED_REPORT_IDS.includes(id);
+
 /** Every revenue-management report in the Cloudbeds catalog. */
 export const REVENUE_REPORT_IDS: number[] = Object.keys(REVENUE_CATALOG).map(Number);
 

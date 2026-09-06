@@ -11,7 +11,7 @@ import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { REVENUE_SUBPAGES } from '@/app/revenue/_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
-import { REVENUE_REPORTS } from '@/lib/cb-reports';
+import { REVENUE_REPORTS, STARRED_REPORT_IDS } from '@/lib/cb-reports';
 import ReportsTableClient from '@/app/h/[property_id]/admin/reports/ReportsTableClient';
 
 export const dynamic = 'force-dynamic';
@@ -84,7 +84,7 @@ export default async function RevReportsPage({ params }: Props) {
       <div style={fullRow}>
         <Container
           title="Revenue reports"
-          subtitle="rate · channel · pace · pickup · demand signals · scope=stock_report via sync-cloudbeds"
+          subtitle={`★ the ${STARRED_REPORT_IDS.length} priority reports are pinned on top · rate · channel · pace · ancillary · scope=stock_report via sync-cloudbeds`}
           density="compact"
         >
           <ReportsTableClient
@@ -94,6 +94,7 @@ export default async function RevReportsPage({ params }: Props) {
               synced: catalogById.get(Number(idStr)) ?? null,
             }))}
             propertyId={propertyId}
+            starredIds={STARRED_REPORT_IDS}
           />
         </Container>
       </div>

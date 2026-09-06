@@ -15,6 +15,13 @@ export type ReportRow = { id: number; meta: KnownReport; synced: CatalogRow | nu
 interface Props {
   rows: ReportRow[];
   propertyId: number;
+  /**
+   * PBS 2026-09-06: ids pinned to the top of the table with a star. Passed in rather
+   * than imported so only the surface that asked for it gets the reordering —
+   * RevReports passes the starred set, Administration passes nothing and keeps its
+   * plain ID ordering.
+   */
+  starredIds?: number[];
 }
 
 // PBS 2026-09-06: derived from the rows rather than hardcoded. The list used to name
@@ -58,7 +65,8 @@ function catColor(cat: string): React.CSSProperties {
 }
 
 type SendState = 'idle' | 'loading' | 'done' | 'error';
-export default function ReportsTableClient({ rows, propertyId }: Props) {
+export default function ReportsTableClient({ rows, propertyId, starredIds = [] }: Props) {
+  const starred = useMemo(() => new Set(starredIds), [starredIds]);
   const [catFilter, setCatFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');  // All | Synced | Not Synced
   const [actionFilter, setActionFilter] = useState('All');  // All | Has CSV | Needs Sync
@@ -86,6 +94,12 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
   const sorted = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
     return [...filtered].sort((a, b) => {
+      // Starred reports form their own block at the top. The chosen column still sorts
+      // WITHIN each block, so clicking a header reorders both groups rather than
+      // scattering the starred ones back through the list.
+      const sa = starred.has(a.id) ? 0 : 1;
+      const sb = starred.has(b.id) ? 0 : 1;
+      if (sa !== sb) return sa - sb;
       switch (sortCol) {
         case 'id': return (a.id - b.id) * dir;
         case 'report': return a.meta.label.localeCompare(b.meta.label) * dir;
@@ -99,7 +113,7 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
         default: return 0;
       }
     });
-  }, [filtered, sortCol, sortDir]);
+  }, [filtered, sortCol, sortDir, starred]);
 
   async function handleSend(id: number) {
     setSendStates(s => ({ ...s, [id]: 'loading' }));
@@ -172,12 +186,25 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
               // 25-row panel could only show the top of a report, and several run to
               // thousands of rows.
               const fullReportHref = `/h/${propertyId}/admin/reports/${id}`;
+              const isStar = starred.has(id);
 
               return (
                 <Fragment key={id}>
-                <tr style={{ ...trRow, opacity: synced ? 1 : 0.5 }}>
+                <tr style={{
+                  ...trRow,
+                  opacity: synced ? 1 : 0.5,
+                  background: isStar ? 'rgba(196,150,32,0.05)' : undefined,
+                }}>
                   <td style={tdMono}>{id}</td>
-                  <td style={tdLeft}><span style={{ fontWeight: 500 }}>{meta.label}</span></td>
+                  <td style={tdLeft}>
+                    {isStar && (
+                      <span style={starMark}
+                            title="Priority report — pinned to the top of this list">
+                        ★
+                      </span>
+                    )}
+                    <span style={{ fontWeight: isStar ? 700 : 500 }}>{meta.label}</span>
+                  </td>
                   <td style={tdLeft}>
                     <span style={{ ...catPill, ...catColor(meta.category) }}>{meta.category}</span>
                   </td>
@@ -333,6 +360,10 @@ const scheduleForm: React.CSSProperties = { display: 'flex', gap: 4, alignItems:
 const emailInput: React.CSSProperties = { fontSize: 11, padding: '3px 8px', borderRadius: 3, border: '1px solid var(--tbl-border,#E6DFCC)', background: 'var(--tbl-bg,#FAF6ED)', color: 'var(--tbl-fg,#1B1B1B)', width: 200 };
 const sendBtn: React.CSSProperties = { padding: '3px 10px', fontSize: 10, fontWeight: 600, background: 'rgba(31,58,46,0.08)', color: '#1F3A2E', border: '1px solid rgba(31,58,46,0.2)', borderRadius: 3, cursor: 'pointer' };
 const cancelBtn: React.CSSProperties = { padding: '3px 7px', fontSize: 10, background: 'transparent', color: 'var(--tbl-fg-mute,#8A8A8A)', border: '1px solid var(--tbl-border,#E6DFCC)', borderRadius: 3, cursor: 'pointer' };
+
+const starMark: React.CSSProperties = {
+  color: '#C49620', fontSize: 12, marginRight: 6, verticalAlign: 'baseline',
+};
 
 // Now an <a target="_blank"> rather than a button, so it needs textDecoration reset.
 const previewBtn: React.CSSProperties = {
