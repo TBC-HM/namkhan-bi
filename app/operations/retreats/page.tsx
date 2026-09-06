@@ -146,6 +146,13 @@ function getTier(ratePlan: string | null): 'essential' | 'immersion' | null {
   return null;
 }
 
+function getPackageUpcharge(code: ProgramCode | null, tier: 'essential' | 'immersion' | null): number {
+  if (!code || !tier) return 0;
+  const p = PROGRAMS.find((prog) => prog.code === code);
+  if (!p) return 0;
+  return p[tier].pricePublic;
+}
+
 function getProgramName(ratePlan: string | null, sourceName: string | null): string {
   const code = getProgramCode(ratePlan);
   if (code) return PROGRAMS.find((p) => p.code === code)!.name;
@@ -368,6 +375,71 @@ function BookingFeed({ rows }: { rows: ResRow[] }) {
   );
 }
 
+function RevenueSplitTable({
+  rows,
+  totalPackage,
+  totalRoom,
+  totalExtra,
+}: {
+  rows: { label: string; stays: number; total: number; packageRev: number; roomRev: number; extraRev: number; nights: number }[];
+  totalPackage: number;
+  totalRoom: number;
+  totalExtra: number;
+}) {
+  const grandTotal = totalPackage + totalRoom + totalExtra;
+  return (
+    <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
+      <table style={TABLE}>
+        <thead>
+          <tr>
+            <th style={TH}>Program · Tier</th>
+            <th style={THR}>Stays</th>
+            <th style={THR}>Nights</th>
+            <th style={THR}>Total revenue</th>
+            <th style={THR}>Package (F&B + Spa)</th>
+            <th style={THR}>Room</th>
+            <th style={THR}>Extra spend</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label}>
+              <td style={TD}>{r.label}</td>
+              <td style={TDR}>{r.stays}</td>
+              <td style={TDR}>{r.nights}</td>
+              <td style={TDR}>{r.total > 0 ? fmt$(r.total) : '—'}</td>
+              <td style={TDR}>{r.packageRev > 0 ? fmt$(r.packageRev) : '—'}</td>
+              <td style={TDR}>{r.roomRev > 0 ? fmt$(r.roomRev) : '—'}</td>
+              <td style={{ ...TDR, color: 'var(--tbl-fg-mute)' }}>{r.extraRev > 0 ? fmt$(r.extraRev) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr style={{ borderTop: '1px solid var(--tbl-border-strong)' }}>
+            <td colSpan={3} style={{ ...TD, fontWeight: 600, fontSize: 12, borderBottom: 'none' }}>Total</td>
+            <td style={{ ...TDR, fontWeight: 600, borderBottom: 'none' }}>{fmt$(grandTotal)}</td>
+            <td style={{ ...TDR, fontWeight: 600, borderBottom: 'none' }}>
+              {fmt$(totalPackage)}
+              <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute)', marginLeft: 4 }}>
+                ({grandTotal > 0 ? Math.round((totalPackage / grandTotal) * 100) : 0}%)
+              </span>
+            </td>
+            <td style={{ ...TDR, fontWeight: 600, borderBottom: 'none' }}>
+              {fmt$(totalRoom)}
+              <span style={{ fontSize: 10, color: 'var(--tbl-fg-mute)', marginLeft: 4 }}>
+                ({grandTotal > 0 ? Math.round((totalRoom / grandTotal) * 100) : 0}%)
+              </span>
+            </td>
+            <td style={{ ...TDR, fontWeight: 600, color: 'var(--tbl-fg-mute)', borderBottom: 'none' }}>
+              {fmt$(totalExtra)}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 function AddOnTable({ rows }: { rows: { desc: string; count: number; total: number }[] }) {
   if (rows.length === 0) return (
     <div style={{ padding: 16, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No add-on charges on retreat folios.</div>
@@ -463,6 +535,63 @@ export default async function RetreatsPage({ propertyId }: Props) {
   const addOnTotal = addOns.reduce((s, tx) => s + Number(tx.amount ?? 0), 0);
   const addOnPerStay = fitConfirmed.length > 0 ? addOnTotal / fitConfirmed.length : 0;
 
+  // ── Revenue split: room vs. retreat package ───────────────────────────────
+  // Package upcharge per night = pricePublic from PROGRAMS constants.
+  // Room component = total_amount - (upcharge × nights).
+  // Extra spend = non-room folio charges (add-ons beyond the package).
+  const splitKey = (code: ProgramCode | null, tier: 'essential' | 'immersion' | null) =>
+    `${code ?? 'other'}::${tier ?? 'unknown'}`;
+
+  const splitMap: Record<string, {
+    label: string; stays: number; nights: number;
+    total: number; packageRev: number; roomRev: number; extraRev: number;
+  }> = {};
+
+  const addOnByRes: Record<string, number> = {};
+  for (const tx of addOns) {
+    addOnByRes[tx.reservation_id] = (addOnByRes[tx.reservation_id] ?? 0) + Number(tx.amount ?? 0);
+  }
+
+  for (const r of fitConfirmed) {
+    const code = getProgramCode(r.rate_plan);
+    const tier = getTier(r.rate_plan);
+    const key = splitKey(code, tier);
+    const upcharge = getPackageUpcharge(code, tier);
+    const nights = Number(r.nights ?? 0);
+    const total = Number(r.total_amount ?? 0);
+    const packageRev = upcharge * nights;
+    const roomRev = Math.max(0, total - packageRev);
+    const extraRev = addOnByRes[r.reservation_id] ?? 0;
+
+    let label: string;
+    if (code && tier) {
+      label = `${PROGRAMS.find((p) => p.code === code)!.name} · ${tier.charAt(0).toUpperCase() + tier.slice(1)}`;
+    } else if (code) {
+      label = `${PROGRAMS.find((p) => p.code === code)!.name} · tier unknown`;
+    } else {
+      label = 'OTA / unattributed';
+    }
+
+    if (!splitMap[key]) splitMap[key] = { label, stays: 0, nights: 0, total: 0, packageRev: 0, roomRev: 0, extraRev: 0 };
+    splitMap[key].stays += 1;
+    splitMap[key].nights += nights;
+    splitMap[key].total += total;
+    splitMap[key].packageRev += packageRev;
+    splitMap[key].roomRev += roomRev;
+    splitMap[key].extraRev += extraRev;
+  }
+
+  // Order: known programs first in PROGRAMS order × tier, then other
+  const splitRows = [
+    ...PROGRAMS.flatMap((p) =>
+      (['essential', 'immersion'] as const).map((tier) => splitMap[splitKey(p.code, tier)]).filter(Boolean)
+    ),
+    ...(splitMap[splitKey(null, null)] ? [splitMap[splitKey(null, null)]] : []),
+  ];
+  const totalPackageRev = splitRows.reduce((s, r) => s + r.packageRev, 0);
+  const totalRoomRev = splitRows.reduce((s, r) => s + r.roomRev, 0);
+  const totalExtraRev = splitRows.reduce((s, r) => s + r.extraRev, 0);
+
   // ── Program breakdown ─────────────────────────────────────────────────────
   const progMap: Record<string, { code: ProgramCode | null; count: number; revenue: number; nights: number; cancelled: number }> = {};
   for (const r of fitAll) {
@@ -551,7 +680,27 @@ export default async function RetreatsPage({ propertyId }: Props) {
           <KpiTile label="Cancellation rate" value={`${fmtN(fitCancRate, 0)}%`}
             footnote={`${fitCancelled} canx of ${fitAll.length} total`}
             status={fitCancRate > 35 ? 'red' : 'grey'} size="sm" />
+          <KpiTile label="Package revenue" value={totalPackageRev} currency="USD"
+            footnote={`${fitRevenue > 0 ? Math.round((totalPackageRev / fitRevenue) * 100) : 0}% of total — F&B + Spa + Activities`}
+            status={totalPackageRev > 0 ? 'green' : 'grey'} size="sm" />
+          <KpiTile label="Room revenue (retreats)" value={totalRoomRev} currency="USD"
+            footnote={`${fitRevenue > 0 ? Math.round((totalRoomRev / fitRevenue) * 100) : 0}% of total — accommodation only`}
+            status="grey" size="sm" />
         </div>
+      </Container>
+
+      {/* ── Revenue split ── */}
+      <Container
+        title="Revenue split — room vs. retreat package"
+        subtitle={`Package upcharge = program price from rate plan · currently all posts to Rooms in Cloudbeds · ${fmt$(totalPackageRev)} is overcrediting Rooms`}
+        density="compact"
+      >
+        <RevenueSplitTable
+          rows={splitRows}
+          totalPackage={totalPackageRev}
+          totalRoom={totalRoomRev}
+          totalExtra={totalExtraRev}
+        />
       </Container>
 
       {/* ── By program ── */}
