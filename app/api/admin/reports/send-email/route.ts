@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { requirePropertyAccess } from '@/lib/tenancy';
+import { flattenSnapshot } from '@/lib/cb-report-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,24 +54,20 @@ export async function POST(req: NextRequest) {
     report_date: string | null;
     period_from: string | null;
     period_to: string | null;
-    headers: string[];
-    records: Record<string, unknown[]>;
+    headers: unknown;
+    records: unknown;
   };
 
-  const headers: string[] = Array.isArray(snap.headers) ? snap.headers : [];
-  const records = snap.records ?? {};
-  const firstCol = headers[0];
-  const rowCount = firstCol && Array.isArray(records[firstCol]) ? records[firstCol].length : 0;
-
-  const lines: string[] = [headers.map(csvCell).join(',')];
-  for (let i = 0; i < rowCount; i++) {
-    lines.push(headers.map((h) => {
-      const col = records[h];
-      const val = Array.isArray(col) ? col[i] : null;
-      return csvCell(val == null ? '' : String(val));
-    }).join(','));
-  }
-  const csv = lines.join('\r\n');
+  // PBS 2026-09-06: this used to flatten inline, assuming `headers` was string[] and
+  // `records` column-oriented. For a GROUPED report `headers[0]` is an ARRAY, so
+  // csvCell(value: string) got a string[], `value.replace` was not a function, and the
+  // route threw an uncaught TypeError — the 500 PBS hit. Even when it did not throw it
+  // produced a header-only CSV. flattenSnapshot handles all three shapes and is the same
+  // code the download route and the full-report page use, so the emailed CSV is now
+  // identical to the downloaded one, two-decimal rule included.
+  const { columns, rows } = flattenSnapshot(snap.headers, snap.records);
+  const rowCount = rows.length;
+  const csv = [columns.map(csvCell).join(','), ...rows.map((r) => r.map(csvCell).join(','))].join('\r\n');
 
   const reportName = snap.report_name ?? `Report ${reportId}`;
   const period = snap.period_from ? `${snap.period_from} → ${snap.period_to}` : (snap.report_date ?? 'unknown period');
@@ -117,8 +114,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, to, rows: rowCount, filename });
 }
 
-function csvCell(value: string): string {
-  return /[,"\n\r]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value;
+// Coerces rather than trusting the annotation. The 500 above happened precisely because
+// a `string`-typed parameter received a string[] at runtime and .replace blew up; a route
+// that emails a file should not 500 over a cell it did not expect.
+function csvCell(value: unknown): string {
+  const s = value == null ? '' : String(value);
+  return /[,"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
 function esc(s: string): string {
