@@ -6,8 +6,9 @@
 import { DashboardPage, Container, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import { supabaseGl } from '@/lib/supabase-gl';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import BudgetUpload from './BudgetUpload';
-import BudgetGridClient, { type GridCell } from './BudgetGridClient';
+import BudgetGridClient, { type GridCell, type AccountRef } from './BudgetGridClient';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,15 @@ interface VsActualRow {
   actual_usd: number | null;
 }
 
+interface DetailRow {
+  period_yyyymm: string;
+  usali_subcategory: string;
+  account_code: string;
+  account_name: string | null;
+  amount_usd: number | null;
+  actual_usd: number | null;
+}
+
 // All 14 USALI subcategories the budget can carry. The previous list held 10, so
 // rows uploaded as Mgmt Fees / Depreciation / Income Tax / Non-Operating were
 // accepted by the API and then silently omitted from the grid and every total.
@@ -33,9 +43,17 @@ const MONTHS_2026 = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '202
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
 export default async function BudgetPage() {
-  const [{ data: rows }, { data: vsActual }] = await Promise.all([
+  // v_budget_lines_detail lives in `public`, so it needs the default client rather than
+  // the gl-scoped one. No property filter, matching gl.v_budget_lines above — only
+  // Namkhan has budget scenarios, and this legacy page is Namkhan-only by construction.
+  const [{ data: rows }, { data: vsActual }, { data: detailRows }] = await Promise.all([
     supabaseGl.from('v_budget_lines').select('period_yyyymm, usali_subcategory, amount_usd'),
     supabaseGl.from('v_budget_vs_actual').select('period_yyyymm, usali_subcategory, actual_usd'),
+    getSupabaseAdmin()
+      .from('v_budget_lines_detail')
+      .select('period_yyyymm, usali_subcategory, account_code, account_name, amount_usd, actual_usd')
+      .eq('period_year', 2026)
+      .limit(5000),
   ]);
 
   const allRows = (rows ?? []) as BudgetRow[];
@@ -99,6 +117,41 @@ export default async function BudgetPage() {
     }
   }
 
+  // Account-level payload for the row drill-down. Accounts are ordered by FY budget,
+  // then by actual — so an account with spend but no budget line still appears, which
+  // is how unbudgeted spend becomes visible instead of hiding inside a subtotal.
+  const detailCells: Record<string, GridCell> = {};
+  const acctFy = new Map<string, { budget: number; actual: number }>();
+  const acctName = new Map<string, string>();
+  const acctSub = new Map<string, string>();
+  for (const r of ((detailRows ?? []) as DetailRow[])) {
+    if (!r.account_code) continue;
+    const k = `${r.period_yyyymm}|${r.account_code}`;
+    const b = Number(r.amount_usd ?? 0);
+    const a = r.actual_usd == null ? null : Number(r.actual_usd);
+    const prev = detailCells[k];
+    detailCells[k] = {
+      budget: (prev?.budget ?? 0) + b,
+      actual: a == null ? (prev?.actual ?? null) : (prev?.actual ?? 0) + a,
+    };
+    acctName.set(r.account_code, r.account_name ?? r.account_code);
+    acctSub.set(r.account_code, r.usali_subcategory);
+    const fy = acctFy.get(r.account_code) ?? { budget: 0, actual: 0 };
+    fy.budget += b;
+    fy.actual += a ?? 0;
+    acctFy.set(r.account_code, fy);
+  }
+  const accountsBySubcat: Record<string, AccountRef[]> = {};
+  for (const [code, sub] of acctSub) {
+    (accountsBySubcat[sub] ??= []).push({ code, name: acctName.get(code) ?? code });
+  }
+  for (const sub of Object.keys(accountsBySubcat)) {
+    accountsBySubcat[sub].sort((x, y) => {
+      const fx = acctFy.get(x.code)!, fy2 = acctFy.get(y.code)!;
+      return (fy2.budget - fx.budget) || (fy2.actual - fx.actual);
+    });
+  }
+
   const tiles: KpiTileProps[] = [
     { label: 'Budget Revenue · FY', value: Math.round(revTotal), currency: 'USD', size: 'sm', footnote: 'Revenue subcat only', status: 'green' },
     { label: 'Budget Costs · FY', value: Math.round(costTotal), currency: 'USD', size: 'sm', footnote: 'all non-revenue subcategories', status: 'amber' },
@@ -122,12 +175,14 @@ export default async function BudgetPage() {
 
       {/* 2 · Budget grid */}
       <div style={fullRow}>
-        <Container title="Budget grid" subtitle="USALI subcategory rows × month columns · press + on a month for actual and variance" density="compact">
+        <Container title="Budget grid" subtitle="press + on a month for actual and variance · press ▸ on a row for its accounts" density="compact">
           <BudgetGridClient
             months={MONTHS_2026}
             subcats={SUBCAT_ORDER}
             cells={gridCells}
             revSubcats={['Revenue']}
+            accountsBySubcat={accountsBySubcat}
+            detailCells={detailCells}
           />
         </Container>
       </div>
