@@ -410,6 +410,57 @@ So a zero-row report is a statement about the property's data, not the sync. Bef
 investigating one, post `{"property_ids":[<pid>]}` by hand: if that is empty too, there
 is nothing to fetch.
 
+## 7c. Reading the values: "-", 0, and one genuinely broken report
+
+Three different things look like "empty" and only one is a fault.
+
+**`"-"` is Cloudbeds' own not-applicable marker**, returned as the literal string. It is
+not null and not zero, and it must never be rendered as 0. It dominates the Day/MTD/YTD
+pivots (report 74 is 63% `"-"`, report 23 is 95%) because "Day" is blank for every
+historical row. Legitimate.
+
+**Zeros are mostly sparse matrices.** The reports with the highest zero share are all
+room-type × date grids — 227 Occupancy by Room Type *and Room Number* is 73% zero, 104 is
+68%, 160 is 66% — because most rooms are not sold on most nights. Also legitimate.
+Across all 99 snapshots: 23.7% zero, 12.5% `"-"`, 25.3% real numbers, 38.5% text.
+
+**Report 110 is genuinely broken, in Cloudbeds, not here.** "Rooms Sold, ADR, RevPar and
+Occupancy" returns `capacity_count = 0` on all 114 days, so `occupancy`, `revpar` and
+`mfd_occupancy` are `"-"` on every row — while `rooms_sold > 0` throughout. Its saved
+definition carries
+
+```
+reservation_source  not_contains  "media estancia"
+stay_date >= 2026-04-01  AND  stay_date <= 2026-07-31
+```
+
+Capacity is a property-level fact with no `reservation_source`, so filtering on that
+column drops the inventory rows and the capacity sum collapses to zero. The date window is
+also hardcoded rather than relative.
+
+Report **155** ("… by Month") is the same metrics on the same dataset with
+`reservation_source: all`, and its capacity is non-zero on all 12 months. So the fix is in
+the Cloudbeds report builder — clear the `reservation_source` filter on 110 — or just use
+155 / 105 (Occupancy Statistics), both of which are correct today.
+
+Diagnostic:
+
+```sql
+SELECT count(*) AS days,
+       count(*) FILTER (WHERE m->'capacity_count'->>'sum' = '0') AS capacity_zero
+FROM (SELECT value AS m FROM public.v_stock_report_snapshot,
+        LATERAL jsonb_each(records)
+      WHERE property_id = 260955 AND report_id = 110) t;
+```
+
+### Number formatting
+
+`flattenSnapshot` caps numbers at **two decimals** (`adr: 166.4542857142857` → `166.45`).
+It rounds real JSON numbers only — numeric-looking *strings* pass through untouched,
+because reservation numbers, invoice ids and dates all arrive as strings and coercing them
+would corrupt identifiers. Integers keep their form; the rule caps decimals, it does not
+pad to two.
+
 ## 8. Open items
 
 1. **139 reports are real but not surfaced.** `lib/cb-reports.ts` lists 35 of the 174.

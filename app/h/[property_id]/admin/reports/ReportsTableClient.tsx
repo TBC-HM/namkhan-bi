@@ -58,11 +58,6 @@ function catColor(cat: string): React.CSSProperties {
 }
 
 type SendState = 'idle' | 'loading' | 'done' | 'error';
-type PreviewData = {
-  report_name: string; period: string | null;
-  headers: string[]; rows: string[][]; total_rows: number; shown: number;
-};
-
 export default function ReportsTableClient({ rows, propertyId }: Props) {
   const [catFilter, setCatFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');  // All | Synced | Not Synced
@@ -73,27 +68,6 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
   const [scheduleEmail, setScheduleEmail] = useState('');
   const [sendStates, setSendStates] = useState<Record<number, SendState>>({});
   const [sendError, setSendError] = useState('');
-  // Preview: the first rows of a synced snapshot, inline. Without it the only way to
-  // find out whether a sync returned anything usable was to download the CSV.
-  const [previewId, setPreviewId] = useState<number | null>(null);
-  const [preview, setPreview] = useState<PreviewData | null>(null);
-  const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [previewError, setPreviewError] = useState('');
-
-  async function togglePreview(id: number) {
-    if (previewId === id) { setPreviewId(null); setPreview(null); return; }
-    setPreviewId(id); setPreview(null); setPreviewState('loading'); setPreviewError('');
-    try {
-      const res = await fetch(`/api/admin/reports/preview?property_id=${propertyId}&report_id=${id}&limit=25`);
-      const j = await res.json();
-      if (!res.ok) { setPreviewError(j.error ?? `Error ${res.status}`); setPreviewState('error'); return; }
-      setPreview(j as PreviewData); setPreviewState('idle');
-    } catch (e) {
-      setPreviewError(e instanceof Error ? e.message : 'Network error');
-      setPreviewState('error');
-    }
-  }
-
   function toggleSort(col: SortCol) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortCol(col); setSortDir('asc'); }
@@ -194,7 +168,10 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
               const sending = sendStates[id];
               const isOpen = scheduleId === id;
 
-              const isPreviewOpen = previewId === id;
+              // PBS 2026-09-06: Preview opens the WHOLE report in a new tab. The inline
+              // 25-row panel could only show the top of a report, and several run to
+              // thousands of rows.
+              const fullReportHref = `/h/${propertyId}/admin/reports/${id}`;
 
               return (
                 <Fragment key={id}>
@@ -233,11 +210,13 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
                           the panel already says so ("sync returned an empty dataset").
                           Hiding the button there leaves an ambiguous blank row instead. */}
                       {synced && (
-                        <button style={{ ...previewBtn, ...(isPreviewOpen ? previewBtnOpen : null) }}
-                          onClick={() => togglePreview(id)}
-                          title={isPreviewOpen ? 'Hide preview' : (hasData ? 'Show the first 25 rows' : 'Snapshot is empty — show what came back')}>
-                          {isPreviewOpen ? '▾ Preview' : '▸ Preview'}
-                        </button>
+                        <a href={fullReportHref} target="_blank" rel="noopener noreferrer"
+                           style={previewBtn}
+                           title={hasData
+                             ? `Open all ${fmtNum(synced.total_rows)} rows in a new tab`
+                             : 'Snapshot is empty — open it to see what came back'}>
+                          Preview ↗
+                        </a>
                       )}
                       {hasData && <a href={downloadUrl} style={downloadBtn}>↓ CSV</a>}
                       {hasData && !isOpen && (
@@ -275,43 +254,6 @@ export default function ReportsTableClient({ rows, propertyId }: Props) {
                   </td>
                 </tr>
 
-                {isPreviewOpen && (
-                  <tr>
-                    <td colSpan={8} style={previewCell}>
-                      {previewState === 'loading' && <div style={previewNote}>Loading preview…</div>}
-                      {previewState === 'error' && <div style={{ ...previewNote, color: '#B8542A' }}>{previewError}</div>}
-                      {preview && previewState === 'idle' && (
-                        <div>
-                          <div style={previewMeta}>
-                            {preview.period ?? '—'} · showing {preview.shown} of {fmtNum(preview.total_rows)} rows
-                          </div>
-                          {preview.headers.length === 0 ? (
-                            <div style={previewNote}>Snapshot has no columns — the sync returned an empty dataset.</div>
-                          ) : (
-                            <div style={{ overflowX: 'auto', maxHeight: 320, overflowY: 'auto' }}>
-                              <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%' }}>
-                                <thead>
-                                  <tr>
-                                    {preview.headers.map((h, i) => (
-                                      <th key={i} style={previewTh}>{h}</th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {preview.rows.map((r, ri) => (
-                                    <tr key={ri} style={{ borderBottom: '1px solid var(--tbl-border, #F1EBD9)' }}>
-                                      {r.map((c, ci) => <td key={ci} style={previewTd}>{c === '' ? '—' : c}</td>)}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )}
                 </Fragment>
               );
             })}
@@ -392,33 +334,10 @@ const emailInput: React.CSSProperties = { fontSize: 11, padding: '3px 8px', bord
 const sendBtn: React.CSSProperties = { padding: '3px 10px', fontSize: 10, fontWeight: 600, background: 'rgba(31,58,46,0.08)', color: '#1F3A2E', border: '1px solid rgba(31,58,46,0.2)', borderRadius: 3, cursor: 'pointer' };
 const cancelBtn: React.CSSProperties = { padding: '3px 7px', fontSize: 10, background: 'transparent', color: 'var(--tbl-fg-mute,#8A8A8A)', border: '1px solid var(--tbl-border,#E6DFCC)', borderRadius: 3, cursor: 'pointer' };
 
+// Now an <a target="_blank"> rather than a button, so it needs textDecoration reset.
 const previewBtn: React.CSSProperties = {
   display: 'inline-block', padding: '2px 8px', fontSize: 10, fontWeight: 600,
   letterSpacing: '0.04em', background: 'rgba(68,85,200,0.07)', color: '#4455C8',
   border: '1px solid rgba(68,85,200,0.25)', borderRadius: 3, cursor: 'pointer',
-  whiteSpace: 'nowrap',
-};
-const previewBtnOpen: React.CSSProperties = {
-  background: '#4455C8', color: '#FFFFFF', borderColor: '#4455C8',
-};
-const previewCell: React.CSSProperties = {
-  padding: '10px 12px 14px 34px', background: 'rgba(68,85,200,0.035)',
-  borderBottom: '1px solid var(--tbl-border, #E6DFCC)',
-};
-const previewMeta: React.CSSProperties = {
-  fontSize: 10, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
-  color: 'var(--tbl-fg-mute, #5A5A5A)', marginBottom: 6,
-};
-const previewNote: React.CSSProperties = {
-  fontSize: 11, fontStyle: 'italic', color: 'var(--tbl-fg-mute, #5A5A5A)', padding: '4px 0',
-};
-const previewTh: React.CSSProperties = {
-  padding: '4px 8px', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.04em',
-  textTransform: 'uppercase', color: 'var(--tbl-fg-mute, #5A5A5A)', textAlign: 'left',
-  whiteSpace: 'nowrap', borderBottom: '2px solid var(--tbl-border-strong, #E6DFCC)',
-  position: 'sticky', top: 0, background: '#FBF9F2',
-};
-const previewTd: React.CSSProperties = {
-  padding: '3px 8px', fontSize: 11, color: 'var(--tbl-fg, #1B1B1B)',
-  whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+  whiteSpace: 'nowrap', textDecoration: 'none',
 };

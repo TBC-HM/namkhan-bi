@@ -51,9 +51,28 @@ function objectDepth(v: unknown): number {
   return depth;
 }
 
+/**
+ * PBS 2026-09-06: max two decimals.
+ * Cloudbeds returns full float precision — `adr: 166.4542857142857`,
+ * `occupancy: 23.333333333333332` — which is unreadable in a table and meaningless
+ * past the cent. Rounded here, so the CSV, the inline preview and the full-report
+ * view all agree.
+ *
+ * Only real JSON numbers are touched. Numeric-looking STRINGS are left exactly as
+ * they came: reservation numbers ("5587990653891"), invoice ids and dates all arrive
+ * as strings, and coercing them would corrupt identifiers. Integers keep their form —
+ * this caps decimals, it does not pad to 2.
+ *
+ * `"-"` is Cloudbeds' own not-applicable marker and passes through untouched; it is
+ * not the same as zero and must not be shown as one.
+ */
 function cell(v: unknown): string {
   if (v === null || v === undefined) return '';
   if (typeof v === 'object') return JSON.stringify(v);
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) return '';
+    return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
+  }
   return String(v);
 }
 
