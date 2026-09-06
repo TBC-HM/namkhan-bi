@@ -11,6 +11,7 @@
 
 import { notFound } from 'next/navigation';
 import { DashboardPage } from '@/app/(cockpit)/_design';
+import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 import { supabase } from '@/lib/supabase';
 import type { StudioCatalogEntry, StudioTemplateRow } from '@/lib/studio/types';
 import StudioTabs from './_components/StudioTabs';
@@ -38,7 +39,16 @@ export default async function SpreadsheetStudioPage({ params }: { params: { prop
   const templates = (templatesRes.data ?? []) as StudioTemplateRow[];
 
   return (
-    <DashboardPage title={`Spreadsheet Studio · ${KNOWN_LABEL[propertyId]}`}>
+    // PBS 2026-09-06: tabs were never passed, so Studio rendered with no Administration
+    // strip at all — no way back to HoD, HR, Acc, Finance, Legal, Archive or CB Reports
+    // except the browser button. Every sibling finance page passes these.
+    <DashboardPage
+      title={`Spreadsheet Studio · ${KNOWN_LABEL[propertyId]}`}
+      tabs={financeSubPagesForProperty(propertyId).map((s) => ({
+        key: s.href, label: s.label, href: s.href,
+        active: s.href.endsWith('/finance/studio'),
+      }))}
+    >
       <StudioTabs propertyId={propertyId} catalog={catalog} initialTemplates={templates} />
     </DashboardPage>
   );
