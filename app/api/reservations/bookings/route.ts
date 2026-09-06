@@ -73,7 +73,6 @@ export async function GET(req: NextRequest) {
   // Build the query dynamically. We use `any` for the builder variable so that
   // chaining .or() and .in() across branches satisfies TypeScript without
   // complex generic juggling.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = sb
     .from('v_reservations_full')
     .select(

@@ -319,6 +319,26 @@ says about them — do not assume the unfiltered path is still reachable.
 
 ---
 
+## 7b. "Synced · 0 rows" is usually not a bug
+
+Eight of the 35 return `success` with `row_count = 0`:
+`40, 58, 90, 91, 92, 95, 304, 305`.
+
+Verified 2026-09-06 by posting an **unfiltered** body to 58 and 90 as a control — both
+also return `{"headers": [], "records": {}}`. The reports are genuinely empty for this
+property, not broken by definition replay:
+
+- 58 / 90 / 91 / 92 — invoices and credit notes. Report 58's saved filter is
+  `invoice_number is_not_null` + `invoice_type is_not_null`; Namkhan does not use
+  Cloudbeds invoicing, so nothing matches.
+- 304 / 305 — pinned to a trial-balance id.
+- 95 — group rooming list, saved against a specific group.
+- 40 — marketing opt-in list; nobody has opted in through Cloudbeds.
+
+So a zero-row report is a statement about the property's data, not the sync. Before
+investigating one, post `{"property_ids":[<pid>]}` by hand: if that is empty too, there
+is nothing to fetch.
+
 ## 8. Open items
 
 1. **139 reports are real but not surfaced.** `lib/cb-reports.ts` lists 35 of the 174.

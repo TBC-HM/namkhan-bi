@@ -77,7 +77,6 @@ async function fetchKpi(k: EngineKpi): Promise<{ value: unknown; ly?: unknown; b
 
 async function fetchPanel(p: EnginePanel): Promise<Array<Record<string, unknown>>> {
   // supabase is created without typed generics here, so cast to any for chaining
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q: any = (supabase as any).from(p.view).select(p.columns.map((c) => c.key).join(","));
   if (p.filter) q = q.eq(p.filter.col, p.filter.eq);
   if (p.order_by) q = q.order(p.order_by.col, { ascending: p.order_by.ascending ?? false });

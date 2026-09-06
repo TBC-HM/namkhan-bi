@@ -111,6 +111,15 @@ row_count 6 · headers ["internal_transaction_code",
 
 Create-forward — the 2026-09-04 stub row is still there, untouched.
 
+## Zero-row reports are real, not a regression
+
+8 of the 35 sync clean but return 0 rows: `40, 58, 90, 91, 92, 95, 304, 305`. Because 6 of
+these moved from `unfiltered` to `definition`, the obvious worry is that definition replay
+dropped their data. It did not — posting an unfiltered body to 58 and 90 as a control also
+returns `{"headers": [], "records": {}}`. Namkhan does not use Cloudbeds invoicing (58's
+saved filter is `invoice_number is_not_null`), 304/305 are pinned to a trial-balance id,
+95 to a specific group, and nobody has opted in through 40.
+
 ## Deliberately NOT changed
 
 `Number(body.propertyID ?? 260955)` stays, for the reason given in the v47 brief:
