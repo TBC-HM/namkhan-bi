@@ -69,11 +69,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, post_id: payload.post_id, already: false, ai_skipped: 'no_slot_context' });
   }
 
-  // 4. Fetch platform spec and taxonomy hashtag candidates in parallel
+  // 4. Fetch platform spec, channel rule context, and taxonomy hashtag candidates in parallel
   const tagCategories = HASHTAG_CATEGORIES[slot.platform] ?? ['subject', 'activity'];
-  const [{ data: spec }, tagsRes] = await Promise.all([
+  const [{ data: spec }, { data: rule }, tagsRes] = await Promise.all([
     sb.from('v_social_platform_specs')
       .select('caption_max_chars,hashtags_allowed,hashtag_max')
+      .eq('platform', slot.platform)
+      .maybeSingle(),
+    sb.from('v_social_channel_rules')
+      .select('audience_notes,banned_topics')
+      .eq('property_id', slot.property_id)
       .eq('platform', slot.platform)
       .maybeSingle(),
     tagCategories.length > 0
@@ -89,12 +94,15 @@ export async function POST(req: NextRequest) {
   const hashtagsAllowed = (spec as any)?.hashtags_allowed !== false;
   const hashtagMax = hashtagsAllowed ? Math.min(15, (spec as any)?.hashtag_max ?? 15) : 0;
 
+  const audienceNotes = (rule as any)?.audience_notes as string | null;
+  const bannedTopics  = (rule as any)?.banned_topics  as string[] | null;
+
   const hashtagCandidates = ((tagsRes as any)?.data ?? []).map(
     (t: { tag_slug: string; tag_label: string }) =>
       `#${t.tag_slug.replace(/_/g, '')} (${t.tag_label})`
   ) as string[];
 
-  // 5. Build AI prompt from real slot data
+  // 5. Build AI prompt from real slot data + channel rule context
   const slotLines = [
     slot.title    && `Title: ${slot.title}`,
     slot.hook     && `Hook: ${slot.hook}`,
@@ -106,13 +114,18 @@ export async function POST(req: NextRequest) {
     `Platform: ${slot.platform}`,
   ].filter(Boolean).join('\n');
 
+  const channelContext = [
+    audienceNotes && audienceNotes !== 'n/a' && `Target audience: ${audienceNotes}`,
+    bannedTopics && bannedTopics.length > 0 && `Never mention: ${bannedTopics.join(', ')}`,
+  ].filter(Boolean).join('\n');
+
   const hashtagLine = hashtagMax > 0 && hashtagCandidates.length > 0
     ? `Pick up to ${hashtagMax} hashtags from these brand-taxonomy candidates (or derive natural variants): ${hashtagCandidates.slice(0, 25).join(', ')}`
     : 'No hashtags for this platform — return hashtags as an empty array.';
 
   const userPrompt = `Write one ${slot.platform} post for this calendar slot:
 ${slotLines}
-
+${channelContext ? `\n${channelContext}` : ''}
 Caption limit: ${captionMax} characters (hard limit — do not exceed).
 ${hashtagLine}
 
