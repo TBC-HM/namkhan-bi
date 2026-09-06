@@ -81,15 +81,17 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
   const year      = Number(today.slice(0, 4));
   const monthIdx  = Number(today.slice(5, 7)); // 1-12
 
-  // Four whole months ahead, starting next month.
-  const fwd = Array.from({ length: 4 }, (_, i) => {
+  // PBS 2026-09-06: six whole months ahead, starting next month (was four).
+  const FWD_MONTHS = 6;
+  const fwd = Array.from({ length: FWD_MONTHS }, (_, i) => {
     const m = monthIdx + 1 + i;
     const y = year + Math.floor((m - 1) / 12);
     const mm = ((m - 1) % 12) + 1;
     return { y, mm, key: `${y}-${String(mm).padStart(2, '0')}`, label: MONTHS[mm - 1] };
   });
+  const fwdLast = fwd[fwd.length - 1];
   const fwdFrom = `${fwd[0].key}-01`;
-  const fwdTo   = addDays(`${fwd[3].y}-${String(fwd[3].mm).padStart(2, '0')}-01`, 31).slice(0, 8) + '01';
+  const fwdTo   = addDays(`${fwdLast.y}-${String(fwdLast.mm).padStart(2, '0')}-01`, 31).slice(0, 8) + '01';
 
   const daily = (from: string, to: string) => sb
     .from('v_kpi_daily_property')
@@ -175,15 +177,16 @@ export default async function CeoHeartbeat({ propertyId: pid, currency }: Props)
   const gopBy   = index(gopRes as Array<Record<string, unknown>>, 'period_yyyymm', (k) => String(k).slice(5, 7));
   const labBy   = index(labRes as Array<Record<string, unknown>>, 'period_month', (k) => String(k).slice(5, 7));
   const cporBy  = index(cporRes as Array<Record<string, unknown>>, 'period_month', (k) => String(k).slice(5, 7));
-  // PBS 2026-08-26: only months that actually carry a figure. v_goppar_monthly
-  // stops at 2026-05 for Namkhan while labour/CPOR run to June, so asking for
-  // months through July painted a fully blank trailing column that read as
-  // breakage rather than as an un-posted ledger.
+  // PBS 2026-08-26: only months that actually carry a figure. The ledger views
+  // can lag each other, so a month with nothing posted anywhere painted a blank
+  // trailing column that read as breakage rather than as an un-posted ledger.
+  // PBS 2026-09-06: dropped the trailing .slice(-6) — PBS wants the year from
+  // January, which is what the caption already claimed.
   const monthHasData = (m: string) =>
     gopBy[m] !== undefined || labBy[m] !== undefined || cporBy[m] !== undefined;
   const monthCols = Array.from({ length: Math.max(1, monthIdx) }, (_, i) => ({
     key: String(i + 1).padStart(2, '0'), label: MONTHS[i],
-  })).filter((c) => monthHasData(c.key)).slice(-6);
+  })).filter((c) => monthHasData(c.key));
 
   const profitRows: MatrixRow[] = [
     monthRow('rev', 'GL revenue', 'from the ledger', monthCols, (m) => {
