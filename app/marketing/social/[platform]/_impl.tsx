@@ -20,6 +20,7 @@ import { getSocialAccounts, getSocialChannelRules, getSocialPrograms } from '@/l
 import { getSocialPostsForProperty } from '@/lib/marketing-social';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { MARKETING_SUBPAGES } from '../../_subpages';
+import ProgramsPanel from './_programs-panel';
 
 // Legacy /marketing/social/* surface is Namkhan-scoped by contract (§0.7);
 // the tenant route delegates here until the module goes multi-property (§7).
@@ -239,31 +240,8 @@ export default async function SocialPlatformPage({ params }: Props) {
             )}
           </Section>
 
-          <Section title="Weekly content programs" note="settings › property › social_programs">
-            {chanPrograms.length > 0 ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: `1px solid ${HAIR}` }}>
-                    <th style={thSt}>Category</th>
-                    <th style={thSt}>Days</th>
-                    <th style={{ ...thSt, textAlign: 'right' }}>Posts / wk</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {chanPrograms.map((p) => (
-                    <tr key={p.id} style={{ borderBottom: `1px solid ${HAIR}` }}>
-                      <td style={tdSt}>{p.label}</td>
-                      <td style={tdSt}>{(p.weekday_slots ?? []).map((d) => WEEKDAY[d - 1] ?? d).join(', ') || '—'}</td>
-                      <td style={{ ...tdSt, textAlign: 'right' }}>{p.posts_per_week}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p style={{ margin: 0, fontSize: 12, color: INK_M }}>
-                No programs for {label} yet — categories drive the calendar&apos;s generated slots.
-              </p>
-            )}
+          <Section title="Weekly content programs" note="marketing.social_programs">
+            <ProgramsPanel propertyId={NAMKHAN_PID} platform={platform} initial={chanPrograms} />
           </Section>
         </div>
 
