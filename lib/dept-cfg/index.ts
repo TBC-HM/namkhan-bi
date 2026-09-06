@@ -646,6 +646,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Transport',  href: '/h/260955/operations/transport'   },
     { label: 'Other',      href: '/h/260955/operations/other'       },
     { label: 'Suppliers',  href: '/h/260955/operations/suppliers'   },
+    { label: 'Retreats',   href: '/h/260955/operations/retreats'    },
   ],
   defaultAttn: [
     { id: 'l1', label: 'F&B waste +18% vs last week',         severity: 'medium', kind: 'leakage'     },
@@ -671,6 +672,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { matcher: 'activit',    href: '/h/260955/operations/activities'      },
     { matcher: 'inventory',  href: '/h/260955/operations/inventory'       },
     { matcher: 'catalog',    href: '/h/260955/finance/messy-data'         },
+    { matcher: 'retreat',    href: '/h/260955/operations/retreats'        },
   ],
   defaultDrilldown: '/h/260955/operations',
   kpiTiles: [

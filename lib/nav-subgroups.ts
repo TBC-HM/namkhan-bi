@@ -128,6 +128,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/transport',
       '/operations/other',
       '/operations/menus',
+      '/operations/retreats',
     ],
     tabs: [
       { label: 'Rooms',      href: '/h/260955/operations/rooms'      },
@@ -138,6 +139,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Transport',  href: '/h/260955/operations/transport'  },
       { label: 'Other',      href: '/h/260955/operations/other'      },
       { label: 'Menus',      href: '/h/260955/operations/menus'      },
+      { label: 'Retreats',   href: '/h/260955/operations/retreats'   },
     ],
   },
   // ─── Operations · Inventory · Orders sub-strip · PBS 2026-08-24 ──
