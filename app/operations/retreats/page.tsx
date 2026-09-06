@@ -133,13 +133,11 @@ const PROGRAMS: Program[] = [
 ];
 
 const FIT_SOURCES = ['BookRetreats', 'Book Yoga Retreats by Tripaneer'] as const;
-const GROUP_SOURCE = 'Retreat Reseller (f.eVigeosport)' as const;
-const ALL_SOURCES = [...FIT_SOURCES, GROUP_SOURCE] as const;
+const ALL_SOURCES = [...FIT_SOURCES] as const;
 
 const SRC_SHORT: Record<string, string> = {
   BookRetreats: 'BookRetreats',
   'Book Yoga Retreats by Tripaneer': 'Tripaneer',
-  [GROUP_SOURCE]: 'eVigeosport',
 };
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -365,39 +363,6 @@ function AddOnTable({ rows }: { rows: { desc: string; count: number; total: numb
   );
 }
 
-function GroupTable({ rows }: { rows: ResRow[] }) {
-  if (rows.length === 0) return <div style={{ padding: 16, color: 'var(--tbl-fg-mute)', fontSize: 13 }}>No eVigeosport group bookings found.</div>;
-  return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--tbl-border)', borderRadius: 6 }}>
-      <table style={TABLE}>
-        <thead>
-          <tr>
-            <th style={TH}>Check-in</th>
-            <th style={THR}>Nights</th>
-            <th style={TH}>Group / Organizer</th>
-            <th style={TH}>Rate plan</th>
-            <th style={THR}>Value</th>
-            <th style={TH}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.reservation_id}>
-              <td style={TD}>{r.check_in_date}</td>
-              <td style={TDR}>{r.nights}</td>
-              <td style={TD}>{r.guest_name ?? '—'}</td>
-              <td style={TD}>{r.rate_plan ?? '—'}</td>
-              <td style={TDR}>{r.total_amount && Number(r.total_amount) > 0 ? fmt$(Number(r.total_amount)) : '—'}</td>
-              <td style={{ ...TD, color: r.is_cancelled ? 'var(--tbl-fg-mute)' : 'var(--tbl-fg)' }}>
-                {r.is_cancelled ? 'Cancelled' : r.status_canonical ?? '—'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -421,10 +386,8 @@ export default async function RetreatsPage({ propertyId }: Props) {
 
   const all = (resData ?? []) as ResRow[];
 
-  // Split FIT vs Group
-  const fitAll = all.filter((r) => FIT_SOURCES.includes(r.source_name as typeof FIT_SOURCES[number]));
+  const fitAll = all;
   const fitConfirmed = fitAll.filter((r) => !r.is_cancelled);
-  const groupAll = all.filter((r) => r.source_name === GROUP_SOURCE);
 
   // Fetch add-ons for FIT folios only (non-room charges)
   const fitIds = fitAll.map((r) => r.reservation_id);
@@ -496,11 +459,6 @@ export default async function RetreatsPage({ propertyId }: Props) {
     .filter((r) => r.check_in_date >= todayIso && r.status_canonical !== 'checked_out')
     .sort((a, b) => a.check_in_date.localeCompare(b.check_in_date))
     .slice(0, 12);
-
-  // ── Group KPIs ────────────────────────────────────────────────────────────
-  const groupConfirmed = groupAll.filter((r) => !r.is_cancelled);
-  const groupRevenue = groupConfirmed.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
-  const groupNights = groupConfirmed.reduce((s, r) => s + Number(r.nights ?? 0), 0);
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
   const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
@@ -616,38 +574,6 @@ export default async function RetreatsPage({ propertyId }: Props) {
         <AddOnTable rows={addOnRows} />
       </Container>
 
-      {/* ── eVigeosport group retreats ── */}
-      <Container
-        title="Group retreats — eVigeosport"
-        subtitle="Multi-room block bookings · group organizer · separate model from FIT programs"
-        density="compact"
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 16 }}>
-          <KpiTile
-            label="Group revenue"
-            value={groupRevenue}
-            currency="USD"
-            footnote={`${groupConfirmed.length} confirmed bookings`}
-            status={groupRevenue > 0 ? 'green' : 'grey'}
-            size="sm"
-          />
-          <KpiTile
-            label="Avg LOS"
-            value={`${fmtN(groupConfirmed.length > 0 ? groupNights / groupConfirmed.length : 0)}n`}
-            footnote="nights per group stay"
-            status="grey"
-            size="sm"
-          />
-          <KpiTile
-            label="Cancellations"
-            value={groupAll.filter((r) => r.is_cancelled).length}
-            footnote={`of ${groupAll.length} total group bookings`}
-            status="grey"
-            size="sm"
-          />
-        </div>
-        <GroupTable rows={groupAll.sort((a, b) => b.check_in_date.localeCompare(a.check_in_date))} />
-      </Container>
     </DashboardPage>
   );
 }
