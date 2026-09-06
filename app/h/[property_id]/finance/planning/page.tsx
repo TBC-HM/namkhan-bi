@@ -150,10 +150,19 @@ export default async function FinancePlanningPage({
   const tickets = (ticketsRaw ?? []) as NarrativeTicket[];
 
   // ── KPI tiles ──────────────────────────────────────────────────────────────
-  const mBudget = monthRows.reduce((s, r) => s + (r.budget_usd ?? 0), 0);
-  const mActual = monthRows.reduce((s, r) => s + (r.actual_usd ?? 0), 0);
-  const hasBudget = monthRows.some((r) => r.budget_usd != null);
-  const mVarPct = hasBudget && mBudget !== 0 ? ((mActual - mBudget) / Math.abs(mBudget)) * 100 : null;
+  // PBS 2026-09-06: these summed budget_usd / actual_usd across every class, which adds
+  // each department's REVENUE to its COSTS and then computes a variance on the total —
+  // a number with no meaning. The table below already separates the two; the tiles now
+  // do too. budget_usd/actual_usd are left untouched in the view for compatibility but
+  // are not shown anywhere.
+  const mBudgetRev = monthRows.reduce((s, r) => s + (r.budget_revenue_usd ?? 0), 0);
+  const mActualRev = monthRows.reduce((s, r) => s + (r.actual_revenue_usd ?? 0), 0);
+  const mBudgetCost = monthRows.reduce((s, r) => s + (r.budget_cost_usd ?? 0), 0);
+  const mActualCost = monthRows.reduce((s, r) => s + (r.actual_cost_usd ?? 0), 0);
+  const hasBudget    = monthRows.some((r) => r.budget_revenue_usd != null);
+  const hasActualRev = monthRows.some((r) => r.actual_revenue_usd != null);
+  const mVarPct = hasBudget && mBudgetRev !== 0
+    ? ((mActualRev - mBudgetRev) / Math.abs(mBudgetRev)) * 100 : null;
 
   const opening = cash.find((c) => c.line_key === 'opening_balance');
   const closings = cash.filter((c) => c.line_key === 'closing_balance');
@@ -161,25 +170,26 @@ export default async function FinancePlanningPage({
 
   const tiles: KpiTileProps[] = [
     {
-      label: `Budget · ${selMonth ?? '—'}`,
-      value: hasBudget ? usd(mBudget) : '—',
+      label: `Revenue · ${selMonth ?? '—'}`,
+      value: hasActualRev ? usd(mActualRev) : '—',
       size: 'sm',
-      status: hasBudget ? 'green' : 'grey',
-      footnote: hasBudget ? `v${budgetVersion} · plan.lines (single budget)` : 'no budget loaded',
+      status: hasActualRev ? 'green' : 'grey',
+      footnote: hasBudget ? `budget ${usd(mBudgetRev)} · v${budgetVersion}` : 'no budget loaded',
     },
     {
-      label: `Actual · ${selMonth ?? '—'}`,
-      value: monthRows.some((r) => r.actual_usd != null) ? usd(mActual) : '—',
+      label: `Cost · ${selMonth ?? '—'}`,
+      value: monthRows.some((r) => r.actual_cost_usd != null) ? usd(mActualCost) : '—',
       size: 'sm',
-      status: monthRows.some((r) => r.actual_usd != null) ? 'green' : 'grey',
-      footnote: 'QB P&L by class (ADR-159)',
+      // Over budget on cost is bad — the opposite reading to the revenue tile.
+      status: mActualCost === 0 ? 'grey' : mActualCost > mBudgetCost ? 'red' : 'green',
+      footnote: hasBudget ? `budget ${usd(mBudgetCost)}` : 'QB P&L by class (ADR-159)',
     },
     {
-      label: 'Variance vs budget',
+      label: 'Revenue vs budget',
       value: mVarPct == null ? '—' : `${mVarPct >= 0 ? '+' : ''}${mVarPct.toFixed(1)}%`,
       size: 'sm',
       status: statusFor(mVarPct),
-      footnote: 'all classes, GL layer USD',
+      footnote: 'revenue only — costs in the tile alongside',
     },
     {
       label: 'Opening cash',
