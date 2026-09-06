@@ -55,6 +55,7 @@ export default async function AdminReportsPage({ params }: Props) {
   ]);
 
   const catalog: any[] = (catData.data ?? []) as any[];
+  const catalogById = newestByReportId(catalog);
   const monthly: any[] = (monthlyData.data ?? []) as any[];
 
   const totalSnapshots = catalog.reduce((s: number, r: any) => s + Number(r.snapshot_count ?? 0), 0);
@@ -100,7 +101,7 @@ export default async function AdminReportsPage({ params }: Props) {
             rows={Object.entries(KNOWN_REPORTS).map(([idStr, meta]) => ({
               id: Number(idStr),
               meta,
-              synced: catalog.find((r: any) => Number(r.report_id) === Number(idStr)) ?? null,
+              synced: catalogById.get(Number(idStr)) ?? null,
             }))}
             propertyId={propertyId}
           />
@@ -282,3 +283,17 @@ const notSyncedBadge: React.CSSProperties = {
   color: '#8A8A8A',
 };
 
+// v_stock_reports_catalog groups by (report_id, report_name), so a report that has been
+// synced under more than one name — several were renamed on 2026-09-06 when the catalog
+// was rebuilt from the Cloudbeds API — appears once per name. A plain .find() would then
+// return whichever row happens to come first, which can be the stale one (report 309 had
+// a 2-row stub alongside its real 6-row snapshot). Always take the most recently synced.
+function newestByReportId(catalog: any[]): Map<number, any> {
+  const best = new Map<number, any>();
+  for (const row of catalog) {
+    const id = Number(row.report_id);
+    const cur = best.get(id);
+    if (!cur || String(row.last_synced_at ?? '') > String(cur.last_synced_at ?? '')) best.set(id, row);
+  }
+  return best;
+}

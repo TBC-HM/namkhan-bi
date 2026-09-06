@@ -42,12 +42,14 @@ export default async function RevReportsPage({ params }: Props) {
     .order('report_id' as never);
 
   const catalog: any[] = (catData ?? []) as any[];
+  const catalogById = newestByReportId(catalog);
   const ids = Object.keys(REVENUE_REPORTS).map(Number);
 
   // Counters describe the REVENUE subset only — the Administration page owns the
   // whole-catalog numbers, and two pages quoting different totals for "reports
   // synced" would be read as a bug.
-  const mine = catalog.filter((r) => ids.includes(Number(r.report_id)));
+  // Deduped, so a report synced under two names counts once and its rows are not doubled.
+  const mine = ids.map((id) => catalogById.get(id)).filter(Boolean) as any[];
   const syncedCount = mine.length;
   const totalRows = mine.reduce((s, r) => s + Number(r.total_rows ?? 0), 0);
   const withData = mine.filter((r) => Number(r.total_rows ?? 0) > 0).length;
@@ -89,7 +91,7 @@ export default async function RevReportsPage({ params }: Props) {
             rows={Object.entries(REVENUE_REPORTS).map(([idStr, meta]) => ({
               id: Number(idStr),
               meta,
-              synced: catalog.find((r: any) => Number(r.report_id) === Number(idStr)) ?? null,
+              synced: catalogById.get(Number(idStr)) ?? null,
             }))}
             propertyId={propertyId}
           />
@@ -100,3 +102,18 @@ export default async function RevReportsPage({ params }: Props) {
 }
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+
+// v_stock_reports_catalog groups by (report_id, report_name), so a report that has been
+// synced under more than one name — several were renamed on 2026-09-06 when the catalog
+// was rebuilt from the Cloudbeds API — appears once per name. A plain .find() would then
+// return whichever row happens to come first, which can be the stale one (report 309 had
+// a 2-row stub alongside its real 6-row snapshot). Always take the most recently synced.
+function newestByReportId(catalog: any[]): Map<number, any> {
+  const best = new Map<number, any>();
+  for (const row of catalog) {
+    const id = Number(row.report_id);
+    const cur = best.get(id);
+    if (!cur || String(row.last_synced_at ?? '') > String(cur.last_synced_at ?? '')) best.set(id, row);
+  }
+  return best;
+}
