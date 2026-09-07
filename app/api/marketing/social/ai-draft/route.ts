@@ -40,13 +40,19 @@ export async function POST(req: NextRequest) {
   };
   const tagCats = TAG_CATEGORIES[platform] ?? ['subject','activity'];
 
-  const [specRes, tagsRes] = await Promise.all([
+  const [specRes, tagsRes, linksRes] = await Promise.all([
     sb.from('v_social_platform_specs')
       .select('platform, display_name, caption_max_chars, hashtags_allowed, hashtag_max, requires_title, notes')
       .eq('platform', platform).maybeSingle(),
     tagCats.length > 0
       ? sb.from('mkt_media_taxonomy').select('tag_slug,tag_label').in('category', tagCats).eq('is_active', true).limit(40)
       : Promise.resolve({ data: [] }),
+    sb.from('v_marketing_internal_link_catalog')
+      .select('id,title,url,section,anchor_hint')
+      .eq('property_id', property_id)
+      .eq('active', true)
+      .order('is_pinned', { ascending: false })
+      .limit(30),
   ]);
 
   const spec = specRes.data;
@@ -62,6 +68,12 @@ export async function POST(req: NextRequest) {
     .map((t: { tag_slug: string }) => `#${t.tag_slug.replace(/_/g, '').toLowerCase()}`)
     .join(' ');
 
+  type LinkRow = { id: number; title: string; url: string; section: string; anchor_hint: string | null };
+  const links: LinkRow[] = (linksRes as any)?.data ?? [];
+  const linkMenu = links.map(l => `${l.id}|${l.section}|${l.title}`).join(', ');
+
+  const PHOTO_AREAS = ['restaurant','lifestyle','rooms','grounds','pool','Organic Farm','activities','luang_prabang'];
+
   const systemPrompt = 'You are a hospitality-industry social media copywriter. Respond only with valid JSON, no markdown, no prose.';
   const userPrompt = `You are a social media copywriter for ${propertyName}, a luxury boutique hotel. Draft ONE social post for ${platformLabel}.
 
@@ -72,8 +84,12 @@ Rules:
 - Language: English.
 ${hint ? `- User hint / seed idea: "${hint.slice(0, 200)}"` : '- No user hint — pick a natural single moment (morning mist, temple bells, herbal tea, river silence, monk sweeping at dawn, etc.).'}
 
+Also pick:
+- link_id: the id of the most relevant link from this catalog (or null if none fits): ${linkMenu}
+- photo_area: the most relevant photo area from: ${PHOTO_AREAS.join(', ')} (or null)
+
 Respond in EXACTLY this JSON format, no prose:
-{"caption": "...", "hashtags": "..."}
+{"caption": "...", "hashtags": "...", "link_id": null, "photo_area": null}
 
 The hashtags field is a space-separated string (with # prefix) or an empty string if no hashtags allowed.`;
 
@@ -92,14 +108,47 @@ The hashtags field is a space-separated string (with # prefix) or an empty strin
   const m = r.text.match(/\{[\s\S]*\}/);
   let caption = '';
   let hashtags = '';
+  let linkId: number | null = null;
+  let photoArea: string | null = null;
   try {
     const parsed = m ? JSON.parse(m[0]) : {};
-    caption = String(parsed.caption ?? '').slice(0, captionMax);
-    hashtags = String(parsed.hashtags ?? '').trim();
+    caption   = String(parsed.caption ?? '').slice(0, captionMax);
+    hashtags  = String(parsed.hashtags ?? '').trim();
+    linkId    = typeof parsed.link_id === 'number' ? parsed.link_id : null;
+    photoArea = typeof parsed.photo_area === 'string' ? parsed.photo_area : null;
   } catch {
-    // Fall back to the raw text
     caption = r.text.slice(0, captionMax);
   }
 
-  return NextResponse.json({ ok: true, caption, hashtags, platform, captionMax, hashtagMax });
+  // Resolve suggested link
+  const suggestedLink = linkId != null ? links.find(l => l.id === linkId) ?? null : null;
+
+  // Fetch one photo from the suggested area
+  let mediaUrl: string | null = null;
+  if (photoArea) {
+    const photoQ = sb.from('mkt_v_media_ready')
+      .select('raw_path,renders')
+      .eq('property_id', property_id)
+      .eq('property_area', photoArea)
+      .eq('asset_type', 'photo')
+      .contains('usage_rights', ['social_organic'])
+      .order('captured_at', { ascending: false, nullsFirst: false })
+      .limit(1);
+    const { data: photos } = await photoQ;
+    if (photos && photos.length > 0) {
+      const ph = photos[0] as { raw_path: string | null; renders: Record<string, string> | null };
+      const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+      mediaUrl = ph.renders?.web_2k
+        ? `${STORAGE_BASE}/${ph.renders.web_2k}`
+        : ph.raw_path ? `${STORAGE_BASE}/${ph.raw_path}` : null;
+    }
+  }
+
+  return NextResponse.json({
+    ok: true, caption, hashtags, platform, captionMax, hashtagMax,
+    link_url:   suggestedLink?.url   ?? null,
+    link_title: suggestedLink?.title ?? null,
+    media_url:  mediaUrl,
+    photo_area: photoArea,
+  });
 }

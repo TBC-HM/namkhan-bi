@@ -151,6 +151,7 @@ export default function ChannelsManager({
   const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaArea, setMediaArea] = useState('');
+  const [linkCatalog, setLinkCatalog] = useState<Array<{ id: number; title: string; url: string; section: string }>>([]);
 
   const ruleByPlatform = new Map(rules.map((r) => [r.platform, r]));
   const programsByPlatform = new Map<string, SocialProgram[]>();
@@ -225,6 +226,13 @@ export default function ChannelsManager({
       linkedin_description: '', linkedin_document_url: '',
       aiBusy: false, busy: false, msg: null,
     });
+    // Load link catalog once
+    if (linkCatalog.length === 0) {
+      fetch(`/api/marketing/social/link-catalog?property_id=${propertyId}`)
+        .then(r => r.json())
+        .then(j => { if (j.ok) setLinkCatalog(j.links ?? []); })
+        .catch(() => {});
+    }
   }
 
   async function loadMediaAssets(area: string) {
@@ -259,8 +267,10 @@ export default function ChannelsManager({
       if (!j.ok) throw new Error(j.error ?? 'AI draft failed');
       setQuickPost({
         ...quickPost, aiBusy: false,
-        caption: j.caption ?? quickPost.caption,
-        hashtags: j.hashtags ?? quickPost.hashtags,
+        caption:  j.caption   ?? quickPost.caption,
+        hashtags: j.hashtags  ?? quickPost.hashtags,
+        media_url: j.media_url ?? quickPost.media_url,
+        link_url:  j.link_url  ?? quickPost.link_url,
       });
     } catch (ex) {
       setQuickPost({ ...quickPost, aiBusy: false, msg: (ex as Error)?.message ?? 'AI failed' });
@@ -538,10 +548,25 @@ export default function ChannelsManager({
                   </Field>
                 )}
 
-                <Field label="Link URL (optional · appended to post)">
-                  <input type="url" style={inputSt} placeholder="https://…"
-                         value={quickPost.link_url}
-                         onChange={(e) => setQuickPost({ ...quickPost, link_url: e.target.value })} />
+                <Field label="Link (optional · appended to post)">
+                  {linkCatalog.length > 0 ? (
+                    <select style={inputSt}
+                      value={quickPost.link_url}
+                      onChange={(e) => setQuickPost({ ...quickPost, link_url: e.target.value })}>
+                      <option value="">— none —</option>
+                      {Array.from(new Set(linkCatalog.map(l => l.section))).map(sec => (
+                        <optgroup key={sec} label={sec.charAt(0).toUpperCase() + sec.slice(1)}>
+                          {linkCatalog.filter(l => l.section === sec).map(l => (
+                            <option key={l.id} value={l.url}>{l.title}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  ) : (
+                    <input type="url" style={inputSt} placeholder="https://…"
+                           value={quickPost.link_url}
+                           onChange={(e) => setQuickPost({ ...quickPost, link_url: e.target.value })} />
+                  )}
                 </Field>
 
                 <Field label="Media (optional)">
