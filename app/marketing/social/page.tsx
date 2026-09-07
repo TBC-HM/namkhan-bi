@@ -175,8 +175,7 @@ export default async function SocialPage({ searchParams }: Props) {
   const tiles: KpiTileProps[] = [
     { label: 'Proposed slots',     value: proposedSlots,  size: 'sm', footnote: `${windowDays}d window · review in calendar` },
     { label: 'Drafts in inbox',    value: draftPosts,     size: 'sm', footnote: 'awaiting approval' },
-    { label: 'Ready',              value: readyPosts,     size: 'sm', footnote: 'approved · awaiting export' },
-    { label: 'Scheduled',          value: scheduledPosts, size: 'sm' },
+    { label: 'Queued for publish',  value: readyPosts + scheduledPosts, size: 'sm', footnote: 'approved · queued for publish' },
     { label: 'Published · 30d',    value: pushed30d,      size: 'sm' },
     { label: 'Failed',             value: failedPosts,    size: 'sm', footnote: failedPosts > 0 ? 'action needed' : 'clear' },
   ];

@@ -141,7 +141,7 @@ export default function SocialFlow({
         </div>
 
         {/* Kanban */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 6 }}>
 
           {/* PROPOSED — interactive */}
           <Column title="Proposed" note="click Accept to draft" count={proposed.length} color={AMBER}>
@@ -202,22 +202,16 @@ export default function SocialFlow({
             {drafting.length === 0 && optimisticDrafting.length === 0 && <Empty text="Accept a slot →" />}
           </Column>
 
-          {/* READY */}
-          <Column title="Ready" note="approved · set schedule" count={ready.length} color={GREEN}>
-            {ready.slice(0, 12).map((p) => (
-              <PostCard key={p.post_id} platform={p.platform} label={p.title ?? '(untitled)'}
-                sub={p.scheduled_at ? `target ${p.scheduled_at.slice(0, 10)}` : 'no date'} linkHref="?view=inbox" />
-            ))}
-            {ready.length === 0 && <Empty text="Approve drafts in Inbox →" />}
-          </Column>
-
-          {/* SCHEDULED */}
-          <Column title="Scheduled" note="queued for publish" count={scheduled.length} color={FOREST}>
-            {scheduled.slice(0, 12).map((p) => (
-              <PostCard key={p.post_id} platform={p.platform} label={p.title ?? '(untitled)'}
-                sub={p.scheduled_at?.slice(0, 16).replace('T', ' ') ?? 'no date'} linkHref="?view=inbox" />
-            ))}
-            {scheduled.length === 0 && <Empty text="—" />}
+          {/* QUEUED (ready + scheduled merged) */}
+          <Column title="Queued" note="approved · queued for publish" count={ready.length + scheduled.length} color={GREEN}>
+            {[...ready, ...scheduled]
+              .sort((a, b) => (a.scheduled_at ?? '').localeCompare(b.scheduled_at ?? ''))
+              .map((p) => (
+                <PostCard key={p.post_id} platform={p.platform} label={p.title ?? '(untitled)'}
+                  sub={p.scheduled_at ? p.scheduled_at.slice(0, 10) : 'no date'}
+                  linkHref="?view=inbox" />
+              ))}
+            {ready.length === 0 && scheduled.length === 0 && <Empty text="Approve drafts in Inbox →" />}
           </Column>
 
           {/* PUBLISHED */}
