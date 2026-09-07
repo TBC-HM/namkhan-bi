@@ -360,6 +360,27 @@ export default function SocialInbox({ posts, rules }: {
                             ))}
                           </div>
                         )}
+                        {/* Pre-attached photo preview */}
+                        {p.media_urls && p.media_urls.length > 0 && (
+                          <div style={{ marginBottom: 6, position: 'relative', display: 'inline-block' }}>
+                            <img
+                              src={p.media_urls[0]}
+                              alt="attached media"
+                              style={{ width: '100%', maxHeight: 120, objectFit: 'cover', borderRadius: 3, display: 'block', border: `1px solid ${HAIR}` }}
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                            <span style={{ position: 'absolute', top: 3, right: 3, fontSize: 8, background: 'rgba(0,0,0,0.55)', color: WHITE, padding: '1px 4px', borderRadius: 2 }}>
+                              media ✓
+                            </span>
+                          </div>
+                        )}
+                        {/* Link URL chip */}
+                        {p.link_url && (
+                          <div style={{ marginBottom: 6, fontSize: 9, color: FOREST, background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 3, padding: '2px 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={p.link_url}>
+                            🔗 {p.link_url}
+                          </div>
+                        )}
                         {p.platform === 'pinterest' && (
                           <div style={{ marginBottom: 6 }}>
                             <select
