@@ -35,6 +35,7 @@ const CREAM  = '#F5F0E1';
 
 const LANDING_SLUG: Record<string, string> = {
   google_business: 'google-business',
+  tripadvisor: 'tripadvisor',
   instagram: 'instagram', facebook: 'facebook', tiktok: 'tiktok',
   pinterest: 'pinterest', linkedin: 'linkedin', x: 'x', twitter: 'twitter',
 };
