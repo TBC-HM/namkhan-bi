@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
     height_px:   a.height_px,
     tags:        a.tags,
     thumbnail_url: thumbnailUrl(a.renders, a.raw_path),
+    raw_path_url: a.raw_path ? `${STORAGE_BASE}/${a.raw_path}` : null,
     full_url:    a.renders?.web_2k
       ? `${STORAGE_BASE}/${a.renders.web_2k}`
       : (a.raw_path ? `${STORAGE_BASE}/${a.raw_path}` : null),

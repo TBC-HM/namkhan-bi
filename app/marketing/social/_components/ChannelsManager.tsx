@@ -99,6 +99,7 @@ interface MediaAsset {
   alt_text: string | null;
   property_area: string | null;
   thumbnail_url: string | null;
+  raw_path_url: string | null;
   full_url: string | null;
 }
 
@@ -685,7 +686,8 @@ export default function ChannelsManager({
                           onClick={() => { setQuickPost({ ...quickPost!, media_url: a.full_url ?? '' }); setMediaPicker(false); }}>
                           {a.thumbnail_url ? (
                             <img src={a.thumbnail_url} alt={a.alt_text ?? a.filename}
-                                 style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }} />
+                                 style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', display: 'block' }}
+                                 onError={(e) => { if (a.raw_path_url) e.currentTarget.src = a.raw_path_url; }} />
                           ) : (
                             <div style={{ width: '100%', aspectRatio: '1', background: CREAM, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: INK_M }}>
                               {a.asset_type}

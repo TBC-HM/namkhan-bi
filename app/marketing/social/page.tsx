@@ -199,6 +199,13 @@ export default async function SocialPage({ searchParams }: Props) {
               {VIEW_LABEL[v]}
             </a>
           ))}
+          <a href="/h/260955/marketing/social/hashtags"
+             style={{ padding: '8px 16px', fontSize: 12, fontWeight: 600, textDecoration: 'none',
+                      color: INK_M,
+                      borderBottom: '2px solid transparent',
+                      marginBottom: -2, whiteSpace: 'nowrap' as const }}>
+            Hashtags ↗
+          </a>
         </div>
 
         <Banner text="CALENDAR · FLOW · CHANNELS · INBOX are DB-backed (marketing.social_calendar → social_posts, programs drive the plan, guardrails in Property Settings). BOOST is still Phase-1 sample data — needs channel analytics APIs. Export (A5) + per-channel landings ship next." />
@@ -230,6 +237,7 @@ export default async function SocialPage({ searchParams }: Props) {
                 { label: 'TikTok',          href: '/h/260955/marketing/social/tiktok'             },
                 { label: 'Google Business', href: '/h/260955/marketing/social/google-business'    },
                 { label: 'YouTube',         href: '/h/260955/marketing/youtube/dashboard'         },
+                { label: 'Hashtags',        href: '/h/260955/marketing/social/hashtags'           },
               ].map((t) => (
                 <TenantLink key={t.href} href={t.href} style={{
                   padding: '6px 8px', fontSize: 12, fontWeight: t.label === 'Overview' ? 700 : 500,

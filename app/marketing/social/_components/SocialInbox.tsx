@@ -19,6 +19,7 @@ interface MediaAsset {
   width_px: number | null;
   height_px: number | null;
   thumbnail_url: string | null;
+  raw_path_url: string | null;
   full_url: string | null;
 }
 
@@ -235,11 +236,20 @@ export default function SocialInbox({ posts, rules }: {
                             {p.caption.length > 280 ? p.caption.slice(0, 280) + '…' : p.caption}
                           </div>
                         )}
-                        <div style={{ fontSize: 9, color: overCap ? RED : INK_M, marginBottom: 6 }}>
+                        <div style={{ fontSize: 9, color: overCap ? RED : INK_M, marginBottom: p.hashtags?.length ? 4 : 6 }}>
                           {p.scheduled_at ? `target ${p.scheduled_at.slice(0, 10)} · ` : ''}
                           {capLen} chars{overCap ? ' — OVER CHANNEL LIMIT' : ''}
                           {p.last_error ? ` · last error: ${p.last_error.slice(0, 60)}` : ''}
                         </div>
+                        {p.hashtags && p.hashtags.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 6 }}>
+                            {p.hashtags.map((h, i) => (
+                              <span key={i} style={{ fontSize: 9, background: CREAM, color: FOREST, padding: '1px 5px', borderRadius: 10, border: `1px solid ${HAIR}` }}>
+                                {h.startsWith('#') ? h : `#${h}`}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                           {p.status === 'draft' && (
                             <button type="button" disabled={busy !== null} onClick={() => setStatus(p.post_id, 'ready')} style={btnPrimary}>
@@ -302,7 +312,8 @@ export default function SocialInbox({ posts, rules }: {
                     disabled={busy !== null}
                     style={{ background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 6, cursor: 'pointer', textAlign: 'left' }}>
                     {a.thumbnail_url
-                      ? <img src={a.thumbnail_url} alt={a.alt_text ?? a.filename} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 3, display: 'block', marginBottom: 4 }} />
+                      ? <img src={a.thumbnail_url} alt={a.alt_text ?? a.filename} style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: 3, display: 'block', marginBottom: 4 }}
+                             onError={(e) => { if (a.raw_path_url) e.currentTarget.src = a.raw_path_url; }} />
                       : <div style={{ width: '100%', aspectRatio: '4/3', background: HAIR, borderRadius: 3, marginBottom: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🖼</div>
                     }
                     <div style={{ fontSize: 9, color: INK_M, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={a.filename}>
