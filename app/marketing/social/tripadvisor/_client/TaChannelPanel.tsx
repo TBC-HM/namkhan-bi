@@ -119,7 +119,7 @@ export default function TaChannelPanel({
       setSeedMsg('5 programs saved — edit them below.');
       const res = await fetch(`/api/marketing/social/programs?property_id=${propertyId}&platform=tripadvisor`);
       const j = await res.json();
-      if (j.ok && Array.isArray(j.programs)) setPrograms(j.programs);
+      if (Array.isArray(j.programs)) setPrograms(j.programs);
     } catch (e) {
       setSeedMsg('Seed failed: ' + (e instanceof Error ? e.message : String(e)));
     } finally { setSeeding(false); }
