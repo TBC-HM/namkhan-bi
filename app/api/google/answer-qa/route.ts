@@ -41,10 +41,12 @@ export async function POST(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
 
-  // Verify the question belongs to this property
+  // Verify the question belongs to this property.
+  // google_question_name (Google API resource name) is not yet a column — omitted here;
+  // the google-sync call below is null-guarded and gracefully skips when absent.
   const { data: qrow, error: qErr } = await sb
     .schema('marketing').from('gbp_questions')
-    .select('question_id, property_id, google_question_name')
+    .select('question_id, property_id')
     .eq('question_id', questionId)
     .eq('property_id', propertyId)
     .maybeSingle();
@@ -66,7 +68,8 @@ export async function POST(req: NextRequest) {
   if (upErr) return NextResponse.json({ ok: false, error: 'db_update_failed: ' + upErr.message }, { status: 500 });
 
   // Optionally call google-sync to post to GBP API (non-blocking on failure)
-  const googleQuestionName = (qrow as { google_question_name?: string | null }).google_question_name ?? null;
+  // google_question_name not yet in schema — null until column is added.
+  const googleQuestionName: string | null = null;
   if (googleQuestionName) {
     try {
       await sb.functions.invoke('google-sync', {

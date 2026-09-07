@@ -7,6 +7,7 @@
 // The AI caption generator in accept-slot/route.ts draws from section 1, filtered by platform.
 // Full keyword management lives at /h/[property_id]/marketing/seo → Keywords tab.
 
+import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
@@ -148,7 +149,8 @@ export default async function HashtagTaxonomyPage() {
   const activeCount = taxTags.filter(t => t.is_active).length;
 
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, fontFamily: 'system-ui,sans-serif' }}>
+    <DashboardPage title="Keywords & Hashtags">
+    <div style={{ gridColumn: '1 / -1', padding: '20px 24px', maxWidth: 1100, fontFamily: 'system-ui,sans-serif' }}>
 
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
@@ -374,6 +376,7 @@ export default async function HashtagTaxonomyPage() {
       </Section>
 
     </div>
+    </DashboardPage>
   );
 }
 
