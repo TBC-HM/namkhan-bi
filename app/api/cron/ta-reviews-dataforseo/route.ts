@@ -125,6 +125,11 @@ export async function POST(req: Request) {
   let totalInserted = 0;
   let totalFetched = 0;
   const subcatAccum: TaSubRating[] = [];
+  // Collect source_review_ids of reviews that have owner replies.
+  // fn_reviews_ingest_apify uses ON CONFLICT DO NOTHING so existing rows are not updated.
+  // After the ingest loop we do a separate UPDATE pass to fix response_status on rows
+  // that previously came in without owner_answer data.
+  const respondedSourceIds: string[] = [];
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const res = await fetch('https://api.dataforseo.com/v3/business_data/tripadvisor/reviews/live', {
@@ -171,8 +176,29 @@ export async function POST(req: Request) {
       totalInserted += Number((ingestData as Record<string, unknown>)?.inserted ?? rows.length);
     }
 
+    // Collect source_review_ids of reviews that have owner replies on this page
+    for (const row of rows as Array<Record<string, unknown>>) {
+      if (row.response_status === 'responded' && typeof row.source_review_id === 'string') {
+        respondedSourceIds.push(row.source_review_id);
+      }
+    }
+
     // Stop early if fewer items than DEPTH (last page)
     if (items.length < DEPTH) break;
+  }
+
+  // Fix response_status on existing rows that already existed in DB (ON CONFLICT DO NOTHING
+  // skipped them during ingest, but they may have been imported without owner_answer data).
+  let respondedUpdated = 0;
+  if (respondedSourceIds.length > 0) {
+    const { data: updatedRows } = await sb.from('mkt_reviews')
+      .update({ response_status: 'responded', responded_by: 'the_namkhan' })
+      .eq('source', 'tripadvisor')
+      .eq('property_id', PROPERTY_ID)
+      .in('source_review_id', respondedSourceIds)
+      .neq('response_status', 'responded')
+      .select('id');
+    respondedUpdated = updatedRows?.length ?? 0;
   }
 
   // Aggregate subcategory scores and store
@@ -202,6 +228,7 @@ export async function POST(req: Request) {
     url_path,
     total_fetched: totalFetched,
     total_inserted: totalInserted,
+    responded_status_updated: respondedUpdated,
     subcategory_reviews_counted: subcatAccum.length,
     duration_ms: Date.now() - started,
   });

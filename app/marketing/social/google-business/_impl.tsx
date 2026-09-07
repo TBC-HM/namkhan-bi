@@ -450,7 +450,17 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
               cta={{ label: 'Open reputation page', href: '/guest/reputation' }}
             />
           ) : (
-            <GbpReviewReply reviews={reviews.slice(0, 5)} propertyId={pid} />
+            <GbpReviewReply
+              reviews={[...reviews]
+                .sort((a, b) => {
+                  // Unanswered first so the reply queue is immediately visible
+                  const aP = a.response_status !== 'responded' ? 0 : 1;
+                  const bP = b.response_status !== 'responded' ? 0 : 1;
+                  return aP - bP;
+                })
+                .slice(0, 20)}
+              propertyId={pid}
+            />
           )}
         </div>
 

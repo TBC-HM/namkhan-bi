@@ -89,10 +89,22 @@ export default function ReputationReviewsTabs({ reviews }: { reviews: Review[] }
                 <span style={{
                   fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
                   padding:'2px 8px', borderRadius:10,
-                  background: r.response_status === 'responded' ? '#E4F1E0' : '#FBE8E4',
-                  color:      r.response_status === 'responded' ? '#1F5C2C' : RED,
-                  border: '1px solid ' + (r.response_status === 'responded' ? '#A9CFA0' : '#E8B7AB'),
-                }}>{r.response_status ?? 'unknown'}</span>
+                  background: r.response_status === 'responded' ? '#E4F1E0'
+                            : r.response_status === 'unanswered' ? '#FBE8E4'
+                            : '#F5F0E1',
+                  color:      r.response_status === 'responded' ? '#1F5C2C'
+                            : r.response_status === 'unanswered' ? RED
+                            : '#5A5A5A',
+                  border: '1px solid ' + (
+                    r.response_status === 'responded' ? '#A9CFA0'
+                    : r.response_status === 'unanswered' ? '#E8B7AB'
+                    : '#E6DFCC'
+                  ),
+                }}>
+                  {r.response_status === 'responded' ? 'replied'
+                   : r.response_status === 'unanswered' ? 'unanswered'
+                   : r.response_status ?? '—'}
+                </span>
                 {r.reviewer_name && <span style={{ color:INK_S, fontSize:11 }}>by {r.reviewer_name}</span>}
               </div>
               {r.title && <div style={{ fontStyle:'italic', fontWeight:500, color:INK, marginBottom:4 }}>{r.title}</div>}

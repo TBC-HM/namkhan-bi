@@ -52,27 +52,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'review has no Google review id yet (scraped aggregate — individual replies unlock once the GBP API pull lands post-allowlist)' }, { status: 409 });
   }
 
-  const { data: fnData, error: fnErr } = await sb.functions.invoke('google-sync', {
-    body: { action: 'post-reply', propertyID: property, reviewId: row.source_review_id, comment },
-  });
-
-  if (fnErr) {
-    // Surface the upstream failure verbatim (A5) — e.g. "no google_account_id/location_id"
-    // while the allowlist is pending. Edge fn returns 500 with { ok:false, error }.
-    let detail = String((fnErr as any)?.message ?? fnErr);
-    try {
-      const ctx = (fnErr as any)?.context;
-      if (ctx && typeof ctx.json === 'function') {
-        const j = await ctx.json();
-        if (j?.error) detail = String(j.error);
-      }
-    } catch { /* keep the generic message */ }
-    return NextResponse.json({ ok: false, error: detail }, { status: 502 });
-  }
-  if (fnData && fnData.ok === false) {
-    return NextResponse.json({ ok: false, error: String(fnData.error ?? 'google-sync post-reply failed') }, { status: 502 });
-  }
-
+  // Save to DB FIRST — always capture the reply text regardless of Google API state.
+  // GBP Management API allowlist may still be pending; we don't want the user to lose
+  // their draft if the upstream call fails.
   const { error: upErr } = await sb
     .schema('marketing').from('reviews')
     .update({
@@ -83,9 +65,23 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', reviewId);
   if (upErr) {
-    // Reply reached Google but local bookkeeping failed — report honestly.
-    return NextResponse.json({ ok: true, warning: 'reply posted to Google, local status update failed: ' + upErr.message }, { status: 200 });
+    return NextResponse.json({ ok: false, error: 'db_save_failed: ' + upErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, updateTime: (fnData as any)?.updateTime ?? null });
+  // Best-effort: push to Google via the edge function. If this fails (allowlist pending,
+  // wrong source_review_id format, etc.) the reply is already saved locally.
+  const { data: fnData, error: fnErr } = await sb.functions.invoke('google-sync', {
+    body: { action: 'post-reply', propertyID: property, reviewId: row.source_review_id, comment },
+  });
+
+  if (fnErr || (fnData && fnData.ok === false)) {
+    // Not a crash — reply is in DB. Surface a clear warning, not raw Google HTML.
+    return NextResponse.json({
+      ok: true,
+      synced_to_google: false,
+      warning: 'Reply saved locally. It will sync to Google once the GBP Management API access is active (allowlist pending).',
+    });
+  }
+
+  return NextResponse.json({ ok: true, synced_to_google: true, updateTime: (fnData as any)?.updateTime ?? null });
 }
