@@ -128,7 +128,7 @@ export default async function TripAdvisorPage({
   const pid = propertyId ?? PROPERTY_ID;
   const sb = getSupabaseAdmin();
 
-  const [reviewsR, summaryR, taPrograms, taRules] = await Promise.all([
+  const [reviewsR, summaryR, subcatR, taPrograms, taRules] = await Promise.all([
     sb.from('mkt_reviews')
       .select('id, source, reviewer_name, rating_norm, title, body, reviewed_at, response_status, response_text')
       .eq('property_id', pid)
@@ -140,12 +140,17 @@ export default async function TripAdvisorPage({
       .eq('property_id', pid)
       .eq('source', 'tripadvisor')
       .maybeSingle(),
+    sb.from('v_ta_subcategory_latest')
+      .select('*')
+      .eq('property_id', pid)
+      .maybeSingle(),
     getSocialPrograms(pid),
     getSocialChannelRules(pid),
   ]);
 
   const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
   const summary: SummaryRow | null = (summaryR.data as SummaryRow | null) ?? null;
+  const subcat = subcatR.data as Record<string, number | null> | null;
   const taPrograms_: SocialProgram[] = (taPrograms as SocialProgram[]).filter((p) => p.platform === 'tripadvisor');
   const taRule: SocialChannelRule | null = ((taRules as SocialChannelRule[]).find((r) => r.platform === 'tripadvisor')) ?? null;
 
@@ -261,8 +266,20 @@ export default async function TripAdvisorPage({
 
           {/* Subcategory ratings — DataForSEO enrichment */}
           <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
-            <div style={sectionHead}>Subcategory ratings <span style={sectionNote}>Value · Rooms · Location · Cleanliness · Service · Sleep Quality</span></div>
-            <SubcategoryPlaceholder />
+            <div style={sectionHead}>
+              Subcategory ratings
+              <span style={sectionNote}>Value · Rooms · Location · Cleanliness · Service · Sleep Quality</span>
+              {subcat?.scraped_at && (
+                <span style={{ ...sectionNote, marginLeft: 'auto' }}>
+                  via DataForSEO · {new Date(String(subcat.scraped_at)).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+              )}
+            </div>
+            {subcat ? (
+              <SubcategoryGrid subcat={subcat} />
+            ) : (
+              <SubcategoryPlaceholder />
+            )}
           </div>
         </div>
 
@@ -326,16 +343,15 @@ export default async function TripAdvisorPage({
 
         {/* ── DataForSEO pull section ────────────────────────────────── */}
         <div style={{ gridColumn: '1 / -1', background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
-          <div style={sectionHead}>DataForSEO enrichment <span style={sectionNote}>Business Data API · TripAdvisor Reviews endpoint</span></div>
-          <div style={{ fontSize: 12, color: INK_S, lineHeight: 1.6, marginBottom: 12 }}>
-            DataForSEO can pull up to <strong>4,490 reviews</strong> per request via the async Reviews endpoint, with subcategory ratings (Value / Rooms / Location / Cleanliness / Service / Sleep Quality), rating distribution, and owner replies.
-            Credentials are already configured in <code>fn_dataforseo_credentials()</code>. To wire:
+          <div style={sectionHead}>DataForSEO enrichment <span style={sectionNote}>Business Data API · TripAdvisor Reviews endpoint · wired</span></div>
+          <div style={{ fontSize: 12, color: INK_S, lineHeight: 1.6, marginBottom: 8 }}>
+            Pulls up to <strong>4,490 reviews</strong> (45 pages × 100) with subcategory ratings (Value / Rooms / Location / Cleanliness / Service / Sleep Quality). Two cron routes are deployed — apply the SQL migrations then schedule:
           </div>
           <ol style={{ fontSize: 11, color: INK_S, lineHeight: 1.8, paddingLeft: 20, margin: 0 }}>
-            <li>Find the property&apos;s TripAdvisor <code>url_path</code> via the Search endpoint (keyword=&quot;Namkhan&quot;, location=&quot;Koh Samui&quot;).</li>
-            <li>Store the <code>url_path</code> in a property config column.</li>
-            <li>Create a pg_cron job that POSTs a Reviews task and stores results in <code>mkt_reviews</code> + a new <code>mkt_ta_subcategory_ratings</code> table.</li>
-            <li>The subcategory ratings section above will auto-populate once the table exists.</li>
+            <li>Apply migrations in <code>db/proposed/ta-dataforseo-enrichment-v1/</code> via Supabase MCP.</li>
+            <li>Run <code>/api/cron/ta-urlpath-discover</code> once — discovers and caches the property&apos;s TA <code>url_path</code>.</li>
+            <li>Schedule <code>/api/cron/ta-reviews-dataforseo</code> weekly (Mon 04:00 UTC) via pg_cron — pulls reviews + subcategory data.</li>
+            <li>Subcategory ratings section above auto-populates after first run.</li>
           </ol>
         </div>
 
@@ -408,6 +424,43 @@ function ReviewCard({ r, compact = false }: { r: ReviewRow; compact?: boolean })
       {replied && r.response_text && !compact && (
         <div style={{ marginTop: 6, fontSize: 11, color: INK_S2, fontStyle: 'italic', paddingLeft: 8, borderLeft: `2px solid ${TA_G2}` }}>
           {r.response_text.length > 200 ? r.response_text.slice(0, 200) + '…' : r.response_text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubcategoryGrid({ subcat }: { subcat: Record<string, number | null> }) {
+  const CATS: { label: string; key: string }[] = [
+    { label: 'Value',         key: 'value_rating' },
+    { label: 'Rooms',         key: 'rooms_rating' },
+    { label: 'Location',      key: 'location_rating' },
+    { label: 'Cleanliness',   key: 'cleanliness_rating' },
+    { label: 'Service',       key: 'service_rating' },
+    { label: 'Sleep Quality', key: 'sleep_quality_rating' },
+  ];
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
+        {CATS.map(({ label, key }) => {
+          const score = subcat[key] != null ? Number(subcat[key]) : null;
+          const color = score == null ? INK_D : score >= 4.5 ? TA_FOREST : score >= 4.0 ? TA_GREEN : score >= 3.0 ? AMBER : RED;
+          return (
+            <div key={key} style={{ padding: '8px 10px', background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, textAlign: 'center' }}>
+              <div style={{ fontSize: 10, color: INK_M, marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color }}>
+                {score != null ? score.toFixed(1) : '—'}
+              </div>
+              {score != null && (
+                <div style={{ fontSize: 9, color: INK_D, marginTop: 2 }}>/ 5.0</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {subcat.total_reviews_pulled != null && (
+        <div style={{ fontSize: 10, color: INK_D, marginTop: 4 }}>
+          Aggregated from {Number(subcat.total_reviews_pulled).toLocaleString()} reviews pulled via DataForSEO.
         </div>
       )}
     </div>
