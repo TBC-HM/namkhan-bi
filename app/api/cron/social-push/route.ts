@@ -36,11 +36,13 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
 
-  // Find all scheduled posts whose time has arrived
+  // Find all approved/scheduled posts whose time has arrived.
+  // 'ready' = approved by user but not yet dispatched to Upload Post.
+  // 'scheduled' = legacy label; both statuses are eligible for push.
   const { data: duePosts, error: qErr } = await sb
     .from('v_social_posts')
     .select('post_id,property_id,platform,scheduled_at')
-    .eq('status', 'scheduled')
+    .in('status', ['ready', 'scheduled'])
     .lte('scheduled_at', new Date().toISOString())
     .order('scheduled_at', { ascending: true })
     .limit(20); // safety cap per run

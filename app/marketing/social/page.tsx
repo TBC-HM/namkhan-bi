@@ -309,21 +309,21 @@ export default async function SocialPage({ searchParams }: Props) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>Scheduled queue</div>
                 <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
-                  auto-push runs every 5 min · approve the cron in db/proposed/social-push-cron-v1
+                  auto-push cron active · fires every 5 min
                 </div>
               </div>
-              {posts.filter((p: any) => p.status === 'scheduled').length === 0 ? (
+              {posts.filter((p: any) => p.status === 'ready' || p.status === 'scheduled').length === 0 ? (
                 <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: INK_M }}>
-                  No scheduled posts yet. Approve a draft in Channel Inbox, then set a publish time.
+                  No posts in queue. Approve a draft in Channel Inbox to add it here.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {posts.filter((p: any) => p.status === 'scheduled').map((p: any) => (
+                  {posts.filter((p: any) => p.status === 'ready' || p.status === 'scheduled').map((p: any) => (
                     <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#FAFAF7', border: `1px solid ${HAIR}`, borderRadius: 4, fontSize: 12 }}>
                       <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: '#C28F2C', minWidth: 24 }}>{p.platform?.slice(0,2).toUpperCase()}</span>
                       <span style={{ flex: 1, color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title ?? p.caption?.slice(0, 80) ?? '—'}</span>
                       <span style={{ color: INK_M, fontSize: 10, whiteSpace: 'nowrap' as const }}>{p.scheduled_at ? new Date(p.scheduled_at).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '—'}</span>
-                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 9, color: p.up_request_id ? '#5DA46B' : '#C28F2C' }}>{p.up_request_id ? 'in UP' : 'pending'}</span>
+                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 9, color: p.status === 'ready' ? '#C28F2C' : '#5DA46B' }}>{p.status === 'ready' ? 'approved · awaiting push' : 'in UP'}</span>
                     </div>
                   ))}
                 </div>
