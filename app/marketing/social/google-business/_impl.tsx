@@ -89,12 +89,14 @@ interface SummaryRow {
   score_overall: number | null;
 }
 interface CompetitorRow {
-  comp_id: number;
+  comp_id: string;
   property_name: string;
   star_rating: number | null;
   is_self: boolean | null;
   is_active: boolean | null;
   city: string | null;
+  google_rating: number | null;
+  google_reviews: number | null;
 }
 
 interface PageProps {
@@ -162,11 +164,23 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
       .eq('property_id', pid).eq('is_primary', true).eq('is_active', true)
       .maybeSingle();
     if (!setRow?.set_id) return [];
-    const { data } = await sb.from('v_compset_competitor_property_detail')
-      .select('comp_id, property_name, star_rating, is_self, is_active, city')
-      .eq('set_id', setRow.set_id).eq('is_active', true)
-      .order('star_rating', { ascending: false }).limit(10);
-    return (data as CompetitorRow[]) ?? [];
+    const [{ data: comps }, { data: gbpSnaps }] = await Promise.all([
+      sb.from('v_compset_competitor_property_detail')
+        .select('comp_id, property_name, star_rating, is_self, is_active, city')
+        .eq('set_id', setRow.set_id).eq('is_active', true)
+        .order('star_rating', { ascending: false }).limit(10),
+      sb.from('v_competitor_gbp_latest')
+        .select('comp_id, rating, reviews_count'),
+    ]);
+    const gbpMap = new Map(((gbpSnaps ?? []) as Array<{ comp_id: string; rating: number | null; reviews_count: number | null }>).map((s) => [s.comp_id, s]));
+    return ((comps ?? []) as Array<Omit<CompetitorRow, 'google_rating' | 'google_reviews'>>).map((c) => {
+      const snap = gbpMap.get(c.comp_id as unknown as string);
+      return {
+        ...c,
+        google_rating:  snap?.rating       != null ? Number(snap.rating)        : null,
+        google_reviews: snap?.reviews_count != null ? Number(snap.reviews_count) : null,
+      } as CompetitorRow;
+    });
   })();
 
   const [oauthR, reviewsR, mapsR, summaryR, compRows, allowlistR, keywordsR, questionsR, gbpPostsR] = await Promise.all([
@@ -537,11 +551,13 @@ function CompetitorBenchmark({ competitors, rating, totalReviews }: { competitor
           {/* Namkhan self row (locked at top with brass accent) */}
           <BenchmarkRow name={self?.property_name ?? 'The Namkhan'} rating={rating} reviews={totalReviews} star={self?.star_rating ?? null} isSelf accent={GOLD} />
           {others.slice(0, 6).map((c) => (
-            <BenchmarkRow key={c.comp_id} name={c.property_name} rating={null} reviews={null} star={c.star_rating} isSelf={false} accent={INK_M} />
+            <BenchmarkRow key={c.comp_id} name={c.property_name} rating={c.google_rating} reviews={c.google_reviews} star={c.star_rating} isSelf={false} accent={INK_M} />
           ))}
-          <div style={{ fontSize: 10, color: INK_D, marginTop: 6, fontStyle: 'italic' }}>
-            PLACEHOLDER — competitor ratings + review counts populate once the Google Places Details API is wired for each <code>google_place_id</code>. Star rating is live from compset admin.
-          </div>
+          {others.some((c) => c.google_rating == null) && (
+            <div style={{ fontSize: 10, color: INK_D, marginTop: 6, fontStyle: 'italic' }}>
+              Live Google ratings pull nightly via DataForSEO · first results appear ~24 h after setup
+            </div>
+          )}
         </div>
       )}
     </div>
