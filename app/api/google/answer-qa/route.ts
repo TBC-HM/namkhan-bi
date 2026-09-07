@@ -1,11 +1,14 @@
 // app/api/google/answer-qa/route.ts
 // Save an answer to a GBP Q&A question.
 // POST { property_id, question_id, answer_text }
+// L22: property_id from body is untrusted — requirePropertyAccess() verifies
+// the caller's session has a grant for that property (throws 400/401/403).
 // Writes to marketing.gbp_questions, then calls google-sync action=post-qa-answer
 // if the edge function supports it (graceful fallback — saves to DB regardless).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,13 +17,18 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); }
   catch { return NextResponse.json({ ok: false, error: 'invalid_json' }, { status: 400 }); }
 
-  const propertyId = Number(body.property_id);
+  // L22: verify caller owns access to this property — throws 400/401/403 if not
+  let propertyId: number;
+  try {
+    propertyId = await requirePropertyAccess(req, body.property_id as string | number | null | undefined);
+  } catch (e) {
+    if (e instanceof Response) return e;
+    return NextResponse.json({ ok: false, error: 'access_denied' }, { status: 403 });
+  }
+
   const questionId = String(body.question_id ?? '').trim();
   const answerText = String(body.answer_text ?? '').trim();
 
-  if (!Number.isFinite(propertyId) || propertyId <= 0) {
-    return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
-  }
   if (!questionId) {
     return NextResponse.json({ ok: false, error: 'question_id required' }, { status: 400 });
   }
