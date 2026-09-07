@@ -12,7 +12,7 @@ import { requirePropertyAccess } from '@/lib/tenancy';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_FIELDS = new Set(['caption', 'hashtags', 'title', 'media_urls', 'link_url', 'scheduled_at']);
+const ALLOWED_FIELDS = new Set(['caption', 'hashtags', 'title', 'media_urls', 'link_url', 'scheduled_at', 'pinterest_board_id']);
 
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;

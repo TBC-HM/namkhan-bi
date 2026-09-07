@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
     ? Math.min(15, (spec as { hashtag_max?: number } | null)?.hashtag_max ?? 15)
     : 0;
   const platformLabel = (spec as { display_name?: string } | null)?.display_name ?? platform;
+  const requiresTitle = (spec as { requires_title?: boolean } | null)?.requires_title ?? false;
+  const titleMax = (spec as { title_max_chars?: number } | null)?.title_max_chars ?? 100;
   const propertyName = PROPERTY_NAME[property_id] ?? `Property ${property_id}`;
 
   const taxonomyTags = ((tagsRes as any)?.data ?? [])
@@ -129,25 +131,45 @@ export async function POST(req: NextRequest) {
     : '';
 
   const systemPrompt = 'You are a hospitality-industry social media copywriter. Respond only with valid JSON, no markdown, no prose.';
+
+  const titleInstruction = requiresTitle ? `
+TITLE (${platformLabel} pin title — REQUIRED):
+- Max ${titleMax} characters.
+- Lead with the strongest keyword phrase (e.g. "Luxury Spa Retreat Luang Prabang").
+- No hashtags in the title. Evocative but search-optimised.
+- Count carefully — do NOT exceed ${titleMax} characters.
+` : '';
+
+  const captionLabel = requiresTitle ? `DESCRIPTION (pin body — not the title):` : `CAPTION:`;
+  const captionInstruction = requiresTitle
+    ? `Max ${captionMax} characters. Sensory and evocative — the title handles the keyword hook, so here you can be more narrative. Do NOT include hashtags in the description; put them in the hashtags field.`
+    : `MUST be ≤ ${captionMax} characters. COUNT CAREFULLY.`;
+
+  const hashtagInstruction = hashtagMax > 0
+    ? `Include ${requiresTitle ? '2–5' : `up to ${hashtagMax}`} hashtags. ${isRetreat ? `Since this is a RETREAT post, prioritise: ${categoryHashtags}. Mix with property tags from: ` : 'Choose from: '}${taxonomyTags.slice(0, 300)}.`
+    : 'NO hashtags — platform disallows.';
+
+  const jsonFormat = requiresTitle
+    ? '{"title": "...", "caption": "...", "hashtags": "...", "link_id": null, "photo_area": null}'
+    : '{"caption": "...", "hashtags": "...", "link_id": null, "photo_area": null}';
+
   const userPrompt = `You are a social media copywriter for ${propertyName}, a luxury boutique hotel in Luang Prabang, Laos. Draft ONE social post for ${platformLabel}.
 
 HARD RULES — violation = rejected post:
-1. Caption MUST be ≤ ${captionMax} characters. COUNT CAREFULLY. This is an absolute limit — do not exceed it.
+1. ${captionLabel} ${captionInstruction}
 2. NEVER mention prices, rates, nightly costs, "all-inclusive", or any monetary figure — not even approximate ones. Direct readers to the website or say "Book direct" instead.
 3. Only use facts from the PROPERTY DATA below. Never invent room names, spa treatments, or experiences.
 4. BRAND VOCABULARY — never use these terms (use the luxury alternative instead):
   ${vocabBlock || '(none)'}
 ${bannedTopicsLine ? `5. ${bannedTopicsLine}` : ''}
-
+${titleInstruction}
 STYLE:
 - Voice: warm, evocative, sensory, understated luxury. Never sales-y. Max 1 emoji.
 - Language: English.
 ${hint ? `- Seed idea: "${hint.slice(0, 200)}"` : '- No seed — pick one natural moment (morning mist, temple bells, herbal tea on the terrace, monk at dawn, river light, bamboo silence).'}
 
 HASHTAGS:
-${hashtagMax > 0
-  ? `Include up to ${hashtagMax} hashtags. ${isRetreat ? `Since this is a RETREAT post, prioritise these retreat hashtags: ${categoryHashtags}. Mix with property tags from: ` : 'Choose from: '}${taxonomyTags.slice(0, 300)}.`
-  : 'NO hashtags — platform disallows.'}
+${hashtagInstruction}
 
 PROPERTY DATA (use this, never invent):
 ${propertyKnowledge}
@@ -159,9 +181,9 @@ PHOTO AREA (pick from: ${PHOTO_AREAS.join(', ')} — or null):
 Choose the area that best matches the post topic. Retreat posts → lifestyle or grounds. Spa posts → lifestyle. Restaurant posts → restaurant.
 
 Respond in EXACTLY this JSON format, no other text:
-{"caption": "...", "hashtags": "...", "link_id": null, "photo_area": null}
+${jsonFormat}
 
-Hashtags field: space-separated string with # prefix, or "" if not allowed.`;
+${requiresTitle ? 'title: pin title (keyword-first, ≤' + titleMax + ' chars, no hashtags). ' : ''}caption field: the ${requiresTitle ? 'description body' : 'post text'}. Hashtags field: space-separated string with # prefix, or "" if not allowed.`;
 
   // Safety truncation: if AI still over-generates, hard-clamp at captionMax before returning
 
@@ -182,12 +204,16 @@ Hashtags field: space-separated string with # prefix, or "" if not allowed.`;
   let hashtags = '';
   let linkId: number | null = null;
   let photoArea: string | null = null;
+  let pinTitle: string | null = null;
   try {
     const parsed = m ? JSON.parse(m[0]) : {};
     caption   = String(parsed.caption ?? '').slice(0, captionMax);
     hashtags  = String(parsed.hashtags ?? '').trim();
     linkId    = typeof parsed.link_id === 'number' ? parsed.link_id : null;
     photoArea = typeof parsed.photo_area === 'string' ? parsed.photo_area : null;
+    if (requiresTitle && parsed.title) {
+      pinTitle = String(parsed.title).slice(0, titleMax);
+    }
   } catch {
     caption = r.text.slice(0, captionMax);
   }
@@ -218,6 +244,7 @@ Hashtags field: space-separated string with # prefix, or "" if not allowed.`;
 
   return NextResponse.json({
     ok: true, caption, hashtags, platform, captionMax, hashtagMax,
+    title:      pinTitle,
     link_url:   suggestedLink?.url   ?? null,
     link_title: suggestedLink?.title ?? null,
     media_url:  mediaUrl,

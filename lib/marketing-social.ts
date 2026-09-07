@@ -53,6 +53,7 @@ export interface SocialPostRow {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  pinterest_board_id?: string | null;
 }
 
 /** Calendar slots for one property in [fromIso, toIso). Rejected slots included — callers filter. */

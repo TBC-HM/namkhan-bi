@@ -75,7 +75,37 @@ Deno.serve(async (req: Request) => {
     let result: Record<string, unknown>;
     const scheduleDate = p.scheduled_at ? { schedule_date: p.scheduled_at } : {};
 
-    if (mediaUrls.length === 0) {
+    // ── Pinterest: always images, separate title + description + board_id ──
+    if ((p.platform as string) === 'pinterest') {
+      const pinTitle = String(p.title ?? '').slice(0, 100);
+      const pinBody  = [String(p.caption ?? p.title ?? ''), tags].filter(Boolean).join('\n\n').slice(0, 500);
+      if (mediaUrls.length === 0) {
+        return res({ ok: false, error: 'pinterest_requires_image' }, 422);
+      }
+      const files: File[] = [];
+      for (const url of mediaUrls.slice(0, 5)) {
+        try {
+          const r = await fetch(url);
+          if (!r.ok) continue;
+          const buf = await r.arrayBuffer();
+          if (buf.byteLength > MAX_MEDIA_BYTES) continue;
+          const ext = url.split('?')[0].split('.').pop()?.toLowerCase() ?? 'jpg';
+          files.push(new File([buf], `photo.${ext}`, { type: `image/${ext}` }));
+        } catch { /* skip */ }
+      }
+      if (files.length === 0) return res({ ok: false, error: 'all_media_fetch_failed' }, 502);
+      const pinParams: Record<string, unknown> = {
+        user:        profileUsername as string,
+        platform:    ['pinterest'],
+        title:       pinTitle,
+        description: pinBody,
+        photos:      files,
+        ...scheduleDate,
+      };
+      if (p.link_url)            pinParams.link     = String(p.link_url);
+      if (p.pinterest_board_id)  pinParams.board_id = String(p.pinterest_board_id);
+      result = await up.uploadPhotos(pinParams) as Record<string, unknown>;
+    } else if (mediaUrls.length === 0) {
       result = await up.uploadText({
         user: profileUsername as string,
         platform: [upPlatform(p.platform as string)],
@@ -170,6 +200,15 @@ Deno.serve(async (req: Request) => {
             p_handle:       String(items[0].username ?? items[0].name ?? ''),
             p_avatar_url:   String(items[0].picture ?? items[0].avatar ?? ''),
           });
+          // Pinterest: persist all boards so the UI can show a board picker
+          if (platform === 'pinterest') {
+            try {
+              await sb.rpc('fn_pinterest_boards_upsert', {
+                p_property_id: propertyId,
+                p_boards:      items,
+              });
+            } catch { /* non-fatal */ }
+          }
           synced.push({ platform, ok: true, accounts: items.length });
         } else {
           synced.push({ platform, ok: true, accounts: 0 });

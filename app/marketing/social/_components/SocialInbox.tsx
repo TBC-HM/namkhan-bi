@@ -61,6 +61,28 @@ export default function SocialInbox({ posts, rules }: {
   const [mediaPicker, setMediaPicker] = useState<{ postId: string; propertyId: number } | null>(null);
   const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [pinterestBoards, setPinterestBoards] = useState<Array<{ board_id: string; board_name: string }>>([]);
+  const [boardPick, setBoardPick] = useState<Record<string, string>>({});
+
+  // Load Pinterest boards once if any Pinterest posts exist
+  useEffect(() => {
+    const pinPost = posts.find(p => p.platform === 'pinterest');
+    if (!pinPost) return;
+    fetch(`/api/marketing/social/pinterest-boards?property_id=${pinPost.property_id}`)
+      .then(r => r.json())
+      .then(j => { if (j.ok) setPinterestBoards(j.boards ?? []); })
+      .catch(() => {});
+  }, [posts]);
+
+  async function assignBoard(postId: string, boardId: string) {
+    setBoardPick(prev => ({ ...prev, [postId]: boardId }));
+    try {
+      await fetch('/api/marketing/social/update-post', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: postId, pinterest_board_id: boardId }),
+      });
+    } catch { /* best effort */ }
+  }
 
   const openMediaPicker = useCallback(async (post: SocialPostRow) => {
     setMediaPicker({ postId: post.post_id, propertyId: post.property_id });
@@ -108,6 +130,7 @@ export default function SocialInbox({ posts, rules }: {
       if (!draft.ok) throw new Error(draft.error ?? 'AI draft failed');
 
       const updateBody: Record<string, unknown> = { post_id: post.post_id, caption: draft.caption };
+      if (draft.title)    updateBody.title = draft.title;
       if (draft.hashtags) updateBody.hashtags = draft.hashtags.split(/\s+/).filter(Boolean);
       if (draft.media_url) updateBody.media_urls = [draft.media_url];
       if (draft.link_url) updateBody.link_url = draft.link_url;
@@ -285,6 +308,22 @@ export default function SocialInbox({ posts, rules }: {
                                 {h.startsWith('#') ? h : `#${h}`}
                               </span>
                             ))}
+                          </div>
+                        )}
+                        {p.platform === 'pinterest' && (
+                          <div style={{ marginBottom: 6 }}>
+                            <select
+                              value={boardPick[p.post_id] ?? p.pinterest_board_id ?? ''}
+                              onChange={(e) => assignBoard(p.post_id, e.target.value)}
+                              style={{ fontSize: 10, padding: '3px 5px', borderRadius: 3, border: `1px solid ${HAIR}`, color: INK_S, width: '100%', background: WHITE }}>
+                              <option value="">— Select Pinterest board —</option>
+                              {pinterestBoards.map(b => (
+                                <option key={b.board_id} value={b.board_id}>{b.board_name}</option>
+                              ))}
+                            </select>
+                            {!boardPick[p.post_id] && !p.pinterest_board_id && (
+                              <div style={{ fontSize: 9, color: AMBER, marginTop: 2 }}>⚠ No board selected — post will go to default protected board</div>
+                            )}
                           </div>
                         )}
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
