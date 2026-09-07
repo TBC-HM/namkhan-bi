@@ -35,7 +35,7 @@ const INK_M = '#5A5A5A';
 const RED = '#B04A2F';
 
 export default function ReputationReviewsTabs({ reviews }: { reviews: Review[] }) {
-  const [active, setActive] = useState<string>('tripadvisor');
+  const [active, setActive] = useState<string>('google');
   const counts = new Map<string, number>();
   for (const t of TABS) counts.set(t, 0);
   for (const r of reviews) counts.set(r.source, (counts.get(r.source) ?? 0) + 1);

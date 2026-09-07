@@ -84,7 +84,7 @@ export default async function GuestReputationPage({ searchParams, propertyId }: 
   // /marketing/social/google-business. Reputation page = reviews only.
   const [oauthR, reviewsR, listingsR, summaryR, allowlistR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
-    sb.from('mkt_reviews').select('*').eq('property_id', pid).order('reviewed_at', { ascending: false }).limit(50),
+    sb.from('mkt_reviews').select('*').eq('property_id', pid).order('reviewed_at', { ascending: false }).limit(300),
     sb.from('v_external_listings').select('*').eq('property_id', pid).eq('category','reputation'),
     sb.from('v_review_source_summary').select('*').eq('property_id', pid),
     sb.schema('marketing').from('google_api_allowlist_state').select('*').eq('property_id', pid).maybeSingle(),

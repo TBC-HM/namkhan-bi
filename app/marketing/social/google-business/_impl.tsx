@@ -33,6 +33,8 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import SourceBadge from '@/components/marketing/SourceBadge';
 import ReviewsVelocityChart from './_client/ReviewsVelocityChart';
+import GbpQaPanel from './_client/GbpQaPanel';
+import GbpReviewReply from './_client/GbpReviewReply';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -140,7 +142,7 @@ function sumWindow(rows: MapsRow[], days: number, field: keyof MapsRow): number 
 // discovery terms; low-volume terms come back as a threshold ("≤ N") bucket.
 interface DiscoveryTermRow { term: string; month: string; impressions: number | null; bucket: string | null }
 interface PhotoRow { url: string; caption: string; views: number; type: 'exterior' | 'interior' | 'room' | 'food' | 'other'; posted: string }
-interface QaRow { question: string; asked_by: string; asked_at: string; answered: boolean; answer: string | null }
+interface QaRow { question_id: string; question: string; asked_by: string; asked_at: string; answered: boolean; answer: string | null }
 interface PostRow { title: string; body: string; posted_at: string | null; type: 'update' | 'offer' | 'event'; views: number | null; clicks: number | null; status: 'draft' | 'published' | 'scheduled' }
 
 // ─── Page ─────────────────────────────────────────────────────────────────
@@ -282,6 +284,7 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
     question_id: string; question_text: string; asked_at: string | null;
     asked_by: string | null; answer_text: string | null;
   }> | null) ?? []).map((q) => ({
+    question_id: String(q.question_id ?? ''),
     question: q.question_text ?? '—',
     asked_by: q.asked_by ?? 'Anonymous',
     asked_at: q.asked_at ?? '',
@@ -406,7 +409,7 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
                 cta={{ label: 'View GBP Q&A on Google', href: 'https://business.google.com/' }}
               />
             ) : (
-              <QaQueue rows={qaRows} />
+              <GbpQaPanel rows={qaRows} propertyId={pid} />
             )}
           </div>
 
@@ -435,11 +438,11 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
             <EmptyPanel
               icon="★"
               title="No Google reviews scraped yet"
-              body="Reviews are pulled hourly once the OAuth flow completes. The full reply UI lives on the reputation page."
+              body="Reviews are pulled hourly once the OAuth flow completes."
               cta={{ label: 'Open reputation page', href: '/guest/reputation' }}
             />
           ) : (
-            <RecentReviewsList reviews={reviews.slice(0, 5)} pid={pid} />
+            <GbpReviewReply reviews={reviews.slice(0, 5)} propertyId={pid} />
           )}
         </div>
 
