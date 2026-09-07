@@ -23,6 +23,7 @@ import SourceQbTransactionsTable, { type QbTxnRow } from './_components/SourceQb
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
+import { otaSlugForSourceName } from '@/lib/ota-promotions';
 import {
   getChannelEconomicsForRange,
   getChannelDailyForRange,
@@ -78,13 +79,12 @@ export default async function ChannelDetailPage({ params, searchParams, property
   const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
   const sourceName = decodeURIComponent(params.source);
   const isBookingCom = /Booking\.com/i.test(sourceName);
-  const isExpedia = /expedia/i.test(sourceName);
   // Promotions landing pages (per-OTA) — reachable from the source landing action bar.
-  const promoHref = isBookingCom
-    ? '/revenue/channels/booking-com/promotions'
-    : isExpedia
-      ? '/revenue/channels/expedia/promotions'
-      : null;
+  // PBS 2026-08-25: was hardcoded to booking.com + expedia only, so the Agoda /
+  // Trip.com / Tiket registers had no entry point anywhere. Resolved from the
+  // OTA registry instead, and emitted property-scoped per L6.
+  const promoSlug = otaSlugForSourceName(sourceName);
+  const promoHref = promoSlug ? `/h/${pid}/revenue/channels/${promoSlug}/promotions` : null;
   const sp = (searchParams?.win) ? searchParams : { ...searchParams, win: 'l12m' };
   const period = resolvePeriod(sp);
 

@@ -2,8 +2,13 @@
 // app/revenue/channels/_components/ChannelPromotionsPanel.tsx
 // PBS 2026-07-07: Shared UI panel for OTA promotion activation.
 // Each row: label · Active toggle · cost % · cost flat · notes · save.
+// PBS 2026-08-25 (ota-promotions-tiers-v1): member tier floor, benefit kind and
+// campaign window added. Genius and One Key are both tier-FLOOR programmes —
+// "this tier and above" — so the tier select offers the OTA's own ladder from
+// lib/ota-promotions.ts rather than a generic 1/2/3.
 
 import { useState } from 'react';
+import { otaChannelForKey, BENEFIT_KINDS } from '@/lib/ota-promotions';
 
 export interface PromotionRow {
   channel: string;
@@ -13,6 +18,13 @@ export interface PromotionRow {
   cost_pct: number | null;
   cost_flat: number | null;
   notes: string | null;
+  /** Groups tiered rows under one programme ('genius', 'one_key'). */
+  programme: string | null;
+  /** Lowest member tier targeted, in the OTA's own vocabulary. NULL = not tier-targeted. */
+  member_tier_floor: string | null;
+  benefit_kind: string;
+  valid_from: string | null;
+  valid_to: string | null;
 }
 
 interface Props { channel: string; propertyId: number; initial: PromotionRow[] }
@@ -41,6 +53,10 @@ export default function ChannelPromotionsPanel({ channel, propertyId, initial }:
   const [newLabel, setNewLabel] = useState<string>('');
   const [newKey, setNewKey] = useState<string>('');
 
+  // The OTA's own tier ladder. Empty for OTAs whose ladder we have not
+  // modelled — the column then renders "n/a" instead of a misleading select.
+  const memberTiers = otaChannelForKey(channel)?.memberTiers ?? [];
+
   const patch = (key: string, p: Partial<PromotionRow>) =>
     setRows(prev => prev.map(r => r.promo_key === key ? { ...r, ...p } : r));
 
@@ -56,6 +72,8 @@ export default function ChannelPromotionsPanel({ channel, propertyId, initial }:
       channel, promo_key: key, label,
       is_active: false, cost_pct: null, cost_flat: null,
       notes: PROMO_TYPES.find((t) => t.type === newType)?.suffix ?? '',
+      programme: null, member_tier_floor: null,
+      benefit_kind: 'rate_discount', valid_from: null, valid_to: null,
     };
     setSavingKey(key);
     setMsg(null);
@@ -68,6 +86,8 @@ export default function ChannelPromotionsPanel({ channel, propertyId, initial }:
           promo_key: key, label,
           is_active: false, cost_pct: null, cost_flat: null,
           notes: row.notes ?? '',
+          programme: null, member_tier_floor: null,
+          benefit_kind: 'rate_discount', valid_from: null, valid_to: null,
         }),
       });
       const j = await r.json();
@@ -98,6 +118,11 @@ export default function ChannelPromotionsPanel({ channel, propertyId, initial }:
           cost_pct: row.cost_pct == null ? null : Number(row.cost_pct),
           cost_flat: row.cost_flat == null ? null : Number(row.cost_flat),
           notes: row.notes ?? '',
+          programme: row.programme,
+          member_tier_floor: row.member_tier_floor,
+          benefit_kind: row.benefit_kind || 'rate_discount',
+          valid_from: row.valid_from || null,
+          valid_to: row.valid_to || null,
         }),
       });
       const j = await r.json();
@@ -144,14 +169,18 @@ export default function ChannelPromotionsPanel({ channel, propertyId, initial }:
         )}
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 1100 }}>
         <thead style={{ background: '#FAFAF7' }}>
           <tr>
             <th style={th}>Status</th>
             <th style={{ ...th, width: 220 }}>Promotion</th>
             <th style={th}>Active</th>
+            <th style={th} title="What the guest receives. Cost % only means a rate cut for a rate discount.">Kind</th>
+            <th style={th} title="Lowest member tier targeted — this tier AND ABOVE.">Member tier</th>
             <th style={th}>Cost %</th>
             <th style={th}>Cost flat (USD)</th>
+            <th style={{ ...th, minWidth: 150 }} title="Campaign window. Leave blank for an always-on programme.">Window</th>
             <th style={{ ...th, minWidth: 200 }}>Notes</th>
             <th style={th}></th>
           </tr>
@@ -171,6 +200,25 @@ export default function ChannelPromotionsPanel({ channel, propertyId, initial }:
                   onChange={e => patch(r.promo_key, { is_active: e.target.checked })} />
               </td>
               <td style={td}>
+                <select value={r.benefit_kind || 'rate_discount'}
+                  onChange={e => patch(r.promo_key, { benefit_kind: e.target.value })}
+                  style={{ ...inp, width: 130 }}>
+                  {BENEFIT_KINDS.map(k => (<option key={k.key} value={k.key}>{k.label}</option>))}
+                </select>
+              </td>
+              <td style={td}>
+                {memberTiers.length === 0 ? (
+                  <span style={{ color: '#8A8A8A' }}>n/a</span>
+                ) : (
+                  <select value={r.member_tier_floor ?? ''}
+                    onChange={e => patch(r.promo_key, { member_tier_floor: e.target.value || null })}
+                    style={{ ...inp, width: 140 }}>
+                    <option value="">Not tier-targeted</option>
+                    {memberTiers.map(t => (<option key={t.key} value={t.key}>{t.label}</option>))}
+                  </select>
+                )}
+              </td>
+              <td style={td}>
                 <input type="number" step="0.01" value={r.cost_pct ?? ''}
                   onChange={e => patch(r.promo_key, { cost_pct: e.target.value === '' ? null : Number(e.target.value) })}
                   style={inp} />
@@ -179,6 +227,17 @@ export default function ChannelPromotionsPanel({ channel, propertyId, initial }:
                 <input type="number" step="0.01" value={r.cost_flat ?? ''}
                   onChange={e => patch(r.promo_key, { cost_flat: e.target.value === '' ? null : Number(e.target.value) })}
                   style={inp} />
+              </td>
+              <td style={td}>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <input type="date" value={r.valid_from ?? ''}
+                    onChange={e => patch(r.promo_key, { valid_from: e.target.value || null })}
+                    style={{ ...inp, width: 130 }} />
+                  <span style={{ color: '#8A8A8A' }}>→</span>
+                  <input type="date" value={r.valid_to ?? ''}
+                    onChange={e => patch(r.promo_key, { valid_to: e.target.value || null })}
+                    style={{ ...inp, width: 130 }} />
+                </div>
               </td>
               <td style={td}>
                 <input type="text" value={r.notes ?? ''}
@@ -194,6 +253,7 @@ export default function ChannelPromotionsPanel({ channel, propertyId, initial }:
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
