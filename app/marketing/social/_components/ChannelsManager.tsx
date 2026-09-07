@@ -170,8 +170,12 @@ export default function ChannelsManager({
   }
   const specByPlatform = new Map(platformSpecs.map((s) => [s.platform, s]));
 
-  const posting = accounts.filter((a) => ruleByPlatform.has(a.platform));
-  const other   = accounts.filter((a) => !ruleByPlatform.has(a.platform));
+  // tripadvisor + youtube promoted to full channel cards even without a guardrail rule.
+  // booking + expedia removed from the reputation surface (managed elsewhere).
+  const PROMOTED = new Set(['tripadvisor', 'youtube']);
+  const HIDDEN   = new Set(['booking', 'expedia']);
+  const posting = accounts.filter((a) => ruleByPlatform.has(a.platform) || PROMOTED.has(a.platform));
+  const other   = accounts.filter((a) => !ruleByPlatform.has(a.platform) && !PROMOTED.has(a.platform) && !HIDDEN.has(a.platform));
 
   async function saveEdit(e: EditState) {
     setBusy(true); setErr(null);
@@ -363,13 +367,13 @@ export default function ChannelsManager({
         {err && <div style={{ color: RED, fontSize: 11, marginBottom: 8 }}>{err}</div>}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 10 }}>
           {posting.map((a) => {
-            const rule = ruleByPlatform.get(a.platform)!;
+            const rule = ruleByPlatform.get(a.platform); // undefined for promoted-without-rule channels
             const progs = programsByPlatform.get(a.platform) ?? [];
             const conn = connectedByPlatform.get(a.platform);
             const dests = destsByPlatform.get(a.platform) ?? [];
             const slug = LANDING_SLUG[a.platform];
             const landingHref = slug ? `/marketing/social/${slug}` : null;
-            const isOn = a.active && rule.active;
+            const isOn = a.active && (rule ? rule.active : true);
             return (
               <div key={a.id} style={{ ...cardSt, opacity: isOn ? 1 : 0.65 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
@@ -393,25 +397,31 @@ export default function ChannelsManager({
                   )}
                 </div>
 
-                <div style={{ background: CREAM, borderLeft: `2px solid ${FOREST}`, padding: '6px 8px' }}>
-                  <div style={microLabelSt}>Guardrails</div>
-                  <div style={{ fontSize: 10.5, color: INK_S, lineHeight: 1.6 }}>
-                    caption ≤ {rule.caption_max_chars ?? '—'} chars
-                    {' · '}{rule.hashtags_allowed ? `≤ ${rule.hashtag_max ?? 0} hashtags` : 'no hashtags'}
-                    {' · '}{rule.posting_frequency ?? '—'}
-                    {' · '}autonomy {rule.autonomy_phase}
-                  </div>
-                  {rule.banned_topics?.length > 0 && (
-                    <div style={{ fontSize: 10, color: RED, marginTop: 2 }}>banned: {rule.banned_topics.join(', ')}</div>
-                  )}
-                  {dests.length > 0 && (
-                    <div style={{ fontSize: 10, color: INK_M, marginTop: 3 }}>
-                      {dests.length} destination{dests.length === 1 ? '' : 's'} configured
+                {rule ? (
+                  <div style={{ background: CREAM, borderLeft: `2px solid ${FOREST}`, padding: '6px 8px' }}>
+                    <div style={microLabelSt}>Guardrails</div>
+                    <div style={{ fontSize: 10.5, color: INK_S, lineHeight: 1.6 }}>
+                      caption ≤ {rule.caption_max_chars ?? '—'} chars
+                      {' · '}{rule.hashtags_allowed ? `≤ ${rule.hashtag_max ?? 0} hashtags` : 'no hashtags'}
+                      {' · '}{rule.posting_frequency ?? '—'}
+                      {' · '}autonomy {rule.autonomy_phase}
                     </div>
-                  )}
-                </div>
+                    {rule.banned_topics?.length > 0 && (
+                      <div style={{ fontSize: 10, color: RED, marginTop: 2 }}>banned: {rule.banned_topics.join(', ')}</div>
+                    )}
+                    {dests.length > 0 && (
+                      <div style={{ fontSize: 10, color: INK_M, marginTop: 3 }}>
+                        {dests.length} destination{dests.length === 1 ? '' : 's'} configured
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ background: CREAM, borderLeft: `2px solid ${FOREST}`, padding: '6px 8px', fontSize: 10.5, color: INK_M, fontStyle: 'italic' }}>
+                    No posting guardrails — add via channel rules to set limits
+                  </div>
+                )}
 
-                {progs.length > 0 && (
+                {rule && progs.length > 0 && (
                   <div>
                     <div style={microLabelSt}>Weekly programs</div>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
