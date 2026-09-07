@@ -76,11 +76,20 @@ type GscRow  = {
   is_branded:   boolean;
 };
 
+// ── verdict helpers ───────────────────────────────────────────────────────────
+function verdict(uses: number, isActive: boolean, hasGsc: boolean): { label: string; color: string } {
+  if (!isActive) return { label: '✗ Off', color: '#888' };
+  if (uses >= 5 || (uses >= 2 && hasGsc)) return { label: '✓ Keep', color: FOREST };
+  if (uses >= 2) return { label: '~ Keep', color: AMBER };
+  if (uses === 1) return { label: '? Monitor', color: AMBER };
+  return { label: '✗ Unused', color: RED };
+}
+
 // ── page ─────────────────────────────────────────────────────────────────────
 export default async function HashtagTaxonomyPage() {
   const sb = getSupabaseAdmin();
 
-  const [taxRes, kwRes, gscRes] = await Promise.all([
+  const [taxRes, kwRes, gscRes, postsRes] = await Promise.all([
     sb.from('mkt_media_taxonomy')
       .select('category,tag_slug,tag_label,is_active')
       .order('category')
@@ -97,12 +106,30 @@ export default async function HashtagTaxonomyPage() {
       .select('query,impressions,clicks,ctr,avg_position,is_branded')
       .order('impressions', { ascending: false })
       .limit(50),
+
+    // hashtag usage — how often each tag was used in actual social posts
+    sb.from('v_social_posts')
+      .select('hashtags')
+      .eq('property_id', 260955)
+      .not('hashtags', 'is', null),
   ]);
 
   const taxTags     = (taxRes.data ?? []) as TaxTag[];
   const seoKeywords = (kwRes.data  ?? []) as SeoKw[];
   const gscRows     = (gscRes.data ?? []) as GscRow[];
   const gscNonBrand = gscRows.filter(r => !r.is_branded);
+
+  // Count per hashtag slug across all posts (hashtags stored as text[] with or without #)
+  const usageCount = new Map<string, number>();
+  for (const post of ((postsRes.data ?? []) as Array<{ hashtags: string[] | null }>)) {
+    for (const h of (post.hashtags ?? [])) {
+      const slug = h.replace(/^#/, '').toLowerCase();
+      usageCount.set(slug, (usageCount.get(slug) ?? 0) + 1);
+    }
+  }
+
+  // GSC signal: top non-branded queries with meaningful impressions
+  const gscSignals = gscNonBrand.filter(r => r.impressions >= 50);
 
   // Deduplicate keywords by text (v_seo_rankings can have rows per market)
   const kwByText = new Map<string, SeoKw>();
@@ -261,55 +288,88 @@ export default async function HashtagTaxonomyPage() {
         </table>
       </Section>
 
-      {/* ── 4. Brand visual taxonomy ──────────────────────────────────────── */}
+      {/* ── 4. Brand visual taxonomy — usage table ────────────────────────── */}
       <Section
-        title="Brand visual taxonomy"
+        title="Brand visual taxonomy — usage & traffic"
         badge={`${activeCount} active tags · ${byCategory.size} categories`}
         color={FOREST}
       >
         <div style={{ fontSize: 11, color: INK_M, marginBottom: 12 }}>
-          Brand-approved visual/mood tags the AI selects hashtags from when drafting posts.
-          Green = active (included); grey = inactive (excluded).
-          Managed in Supabase → <code>mkt_media_taxonomy</code>.
+          Each tag the AI can pick from — with how often it has been used in posts, whether it matches a
+          Google Search query, and a keep / dump verdict. Managed in Supabase → <code>mkt_media_taxonomy</code>.
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {Array.from(byCategory.entries()).map(([cat, catTags]) => {
-            const platforms = platformsForCategory(cat);
-            return (
-              <div key={cat}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                  <div style={{ fontWeight: 600, fontSize: 12, color: INK }}>
-                    {CATEGORY_LABEL[cat] ?? cat}
-                    <span style={{ fontSize: 10, color: INK_M, fontWeight: 400, marginLeft: 8 }}>
-                      {catTags.filter(t => t.is_active).length} active
-                    </span>
-                  </div>
-                  {platforms.length > 0 && (
-                    <div style={{ fontSize: 10, color: FOREST }}>
-                      used by: {platforms.join(', ')}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {catTags.map(t => (
-                    <div
-                      key={t.tag_slug}
-                      style={{
-                        padding: '3px 9px', borderRadius: 20, fontSize: 11,
-                        background: t.is_active ? FOREST : HAIR,
-                        color:      t.is_active ? WHITE  : INK_M,
-                        opacity:    t.is_active ? 1      : 0.5,
-                      }}
-                      title={`#${t.tag_slug.replace(/_/g, '')} · ${t.tag_label}`}
-                    >
-                      <span style={{ fontWeight: 600 }}>#{t.tag_slug.replace(/_/g, '')}</span>
-                      <span style={{ fontSize: 10, marginLeft: 5, opacity: 0.7 }}>{t.tag_label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+
+        {/* Summary row */}
+        {(() => {
+          const allTags = taxTags;
+          const unused  = allTags.filter(t => t.is_active && (usageCount.get(t.tag_slug.replace(/_/g,'').toLowerCase()) ?? 0) === 0).length;
+          const totalUsed = allTags.reduce((s, t) => s + (usageCount.get(t.tag_slug.replace(/_/g,'').toLowerCase()) ?? 0), 0);
+          return (
+            <div style={{ display: 'flex', gap: 16, marginBottom: 14, fontSize: 11 }}>
+              <span style={{ color: FOREST, fontWeight: 600 }}>{totalUsed} total uses</span>
+              <span style={{ color: unused > 0 ? RED : INK_M }}>{unused} tags never used</span>
+              <span style={{ color: INK_M }}>{gscSignals.length} GSC signals matched</span>
+            </div>
+          );
+        })()}
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: `2px solid ${HAIR}` }}>
+                {['Hashtag', 'Label', 'Category', 'Platforms', 'Used', 'GSC signal', 'Verdict'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '4px 12px 6px 0', fontSize: 10, color: INK_M, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {taxTags
+                .map(t => {
+                  const slug     = t.tag_slug.replace(/_/g, '').toLowerCase();
+                  const uses     = usageCount.get(slug) ?? 0;
+                  const labelLow = t.tag_label.toLowerCase();
+                  const gscMatch = gscSignals.find(g =>
+                    g.query.toLowerCase().includes(labelLow) ||
+                    labelLow.split(' ').some(w => w.length > 3 && g.query.toLowerCase().includes(w))
+                  );
+                  return { t, slug, uses, gscMatch };
+                })
+                .sort((a, b) => {
+                  // active first, then by uses desc, then alpha
+                  if (a.t.is_active !== b.t.is_active) return a.t.is_active ? -1 : 1;
+                  if (b.uses !== a.uses) return b.uses - a.uses;
+                  return a.t.tag_label.localeCompare(b.t.tag_label);
+                })
+                .map(({ t, slug, uses, gscMatch }, i) => {
+                  const platforms = platformsForCategory(t.category);
+                  const v         = verdict(uses, t.is_active, !!gscMatch);
+                  const rowBg     = i % 2 === 0 ? WHITE : CREAM;
+                  return (
+                    <tr key={t.tag_slug} style={{ background: rowBg }}>
+                      <td style={{ padding: '5px 12px 5px 0', fontFamily: 'monospace', fontSize: 11, color: t.is_active ? FOREST : INK_M, opacity: t.is_active ? 1 : 0.5, whiteSpace: 'nowrap' }}>
+                        #{slug}
+                      </td>
+                      <td style={{ padding: '5px 12px 5px 0', color: INK, opacity: t.is_active ? 1 : 0.5 }}>{t.tag_label}</td>
+                      <td style={{ padding: '5px 12px 5px 0', color: INK_M, fontSize: 11 }}>{CATEGORY_LABEL[t.category] ?? t.category}</td>
+                      <td style={{ padding: '5px 12px 5px 0', color: INK_M, fontSize: 10 }}>{platforms.join(', ') || '—'}</td>
+                      <td style={{ padding: '5px 12px 5px 0', color: uses > 0 ? INK : RED, fontWeight: uses > 0 ? 600 : 400, textAlign: 'right', paddingRight: 24 }}>
+                        {uses > 0 ? uses : '0'}
+                      </td>
+                      <td style={{ padding: '5px 12px 5px 0', fontSize: 11 }}>
+                        {gscMatch ? (
+                          <span title={`"${gscMatch.query}" — ${gscMatch.impressions.toLocaleString()} impr · ${gscMatch.clicks} clicks`} style={{ color: BLUE, cursor: 'default' }}>
+                            ✓ &ldquo;{gscMatch.query.slice(0, 28)}{gscMatch.query.length > 28 ? '…' : ''}&rdquo; · {gscMatch.impressions.toLocaleString()} impr
+                          </span>
+                        ) : (
+                          <span style={{ color: INK_M, opacity: 0.4 }}>—</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '5px 0', fontWeight: 600, fontSize: 11, color: v.color, whiteSpace: 'nowrap' }}>{v.label}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
         </div>
       </Section>
 
