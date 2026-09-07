@@ -18,9 +18,8 @@ export const maxDuration = 60;
 
 function authGate(req: Request): NextResponse | null {
   const required = process.env.CRON_SHARED_SECRET ?? process.env.CRON_SECRET;
-  if (!required) return null;
-  const url = new URL(req.url);
-  const provided = url.searchParams.get('secret') ?? req.headers.get('x-cron-secret') ?? '';
+  if (!required) return NextResponse.json({ ok: false, error: 'cron_secret_not_configured' }, { status: 503 });
+  const provided = req.headers.get('x-cron-secret') ?? '';
   if (provided !== required) return NextResponse.json({ ok: false, error: 'cron_secret_invalid' }, { status: 401 });
   return null;
 }
@@ -95,4 +94,4 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, cached: false, url_path, name: match?.name, rating: match?.rating });
 }
 
-export const GET = POST;
+// GET not exported — POST only, so secrets stay out of URLs and logs.
