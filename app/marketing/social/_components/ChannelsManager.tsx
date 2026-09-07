@@ -122,6 +122,7 @@ interface QuickPostState {
   youtube_title: string;   // YouTube (required)
   youtube_description: string; // YouTube
   youtube_first_comment: string; // YouTube (like Instagram)
+  link_url: string;               // X / all platforms (appended to caption)
   linkedin_description: string;  // LinkedIn (rich caption)
   linkedin_document_url: string; // LinkedIn (optional PDF/PPT upload URL)
   aiBusy: boolean;
@@ -149,6 +150,7 @@ export default function ChannelsManager({
   const [mediaPicker, setMediaPicker] = useState(false);
   const [mediaAssets, setMediaAssets] = useState<MediaAsset[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaArea, setMediaArea] = useState('');
 
   const ruleByPlatform = new Map(rules.map((r) => [r.platform, r]));
   const programsByPlatform = new Map<string, SocialProgram[]>();
@@ -214,7 +216,7 @@ export default function ChannelsManager({
     const dests = destsByPlatform.get(platform) ?? [];
     setQuickPost({
       platform,
-      caption: '', media_url: '', hashtags: '', scheduled_at: '',
+      caption: '', media_url: '', hashtags: '', scheduled_at: '', link_url: '',
       dest_id: dests.length ? dests[0].dest_id : '',
       first_comment: '', instagram_media_type: 'IMAGE', post_mode: 'MEDIA_UPLOAD', long_text_as_post: false,
       tiktok_privacy_level: 'PUBLIC', tiktok_disable_comment: false, tiktok_disable_duet: false, tiktok_disable_stitch: false,
@@ -225,18 +227,24 @@ export default function ChannelsManager({
     });
   }
 
-  async function openMediaPicker() {
-    if (!quickPost) return;
-    setMediaPicker(true);
-    if (mediaAssets.length > 0) return; // already loaded
+  async function loadMediaAssets(area: string) {
     setMediaLoading(true);
     try {
-      const res = await fetch(`/api/marketing/social/media-library?property_id=${propertyId}&limit=24`);
+      const params = new URLSearchParams({ property_id: String(propertyId), limit: '20', type: 'photo' });
+      if (area) params.set('area', area);
+      const res = await fetch(`/api/marketing/social/media-library?${params}`);
       const j = await res.json();
       if (j.ok) setMediaAssets(j.assets ?? []);
     } catch { /* silent */ } finally {
       setMediaLoading(false);
     }
+  }
+
+  async function openMediaPicker() {
+    if (!quickPost) return;
+    setMediaArea('');
+    setMediaPicker(true);
+    await loadMediaAssets('');
   }
 
   async function aiRecon() {
@@ -270,6 +278,7 @@ export default function ChannelsManager({
       fd.set('caption', quickPost.caption);
       fd.set('hashtags', quickPost.hashtags);
       if (quickPost.media_url) fd.set('media_url', quickPost.media_url);
+      if (quickPost.link_url) fd.set('link_url', quickPost.link_url);
       if (quickPost.scheduled_at) fd.set('scheduled_at', quickPost.scheduled_at);
       fd.append('platforms', quickPost.platform);
       // Per-platform destination + specific fields
@@ -529,6 +538,12 @@ export default function ChannelsManager({
                   </Field>
                 )}
 
+                <Field label="Link URL (optional · appended to post)">
+                  <input type="url" style={inputSt} placeholder="https://…"
+                         value={quickPost.link_url}
+                         onChange={(e) => setQuickPost({ ...quickPost, link_url: e.target.value })} />
+                </Field>
+
                 <Field label="Media (optional)">
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {quickPost.media_url ? (
@@ -669,14 +684,26 @@ export default function ChannelsManager({
               {/* Media library sub-overlay */}
               {mediaPicker && (
                 <div style={{ position: 'absolute', inset: 0, background: 'rgba(27,27,27,0.88)', zIndex: 10, borderRadius: 6, display: 'flex', flexDirection: 'column', padding: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{ fontWeight: 700, fontSize: 13, color: WHITE }}>Pick from media library</span>
                     <button type="button" onClick={() => setMediaPicker(false)} style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: WHITE }}>×</button>
+                  </div>
+                  {/* Area filter chips */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4, marginBottom: 10 }}>
+                    {['', 'restaurant', 'lifestyle', 'rooms', 'grounds', 'pool', 'Organic Farm', 'activities', 'luang_prabang'].map(area => (
+                      <button key={area} type="button"
+                        style={{ fontSize: 10, padding: '3px 8px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                                 background: mediaArea === area ? WHITE : 'rgba(255,255,255,0.15)',
+                                 color: mediaArea === area ? '#1B1B1B' : WHITE, fontWeight: mediaArea === area ? 600 : 400 }}
+                        onClick={async () => { setMediaArea(area); await loadMediaAssets(area); }}>
+                        {area || 'All'}
+                      </button>
+                    ))}
                   </div>
                   {mediaLoading ? (
                     <div style={{ textAlign: 'center', color: HAIR, padding: 32 }}>Loading…</div>
                   ) : mediaAssets.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: HAIR, padding: 32 }}>No media found in library</div>
+                    <div style={{ textAlign: 'center', color: HAIR, padding: 32 }}>No photos in this category</div>
                   ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, overflowY: 'auto' as const, flex: 1 }}>
                       {mediaAssets.map((a) => (

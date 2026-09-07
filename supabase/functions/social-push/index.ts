@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
     const tags = Array.isArray(p.hashtags)
       ? (p.hashtags as string[]).map(h => h.startsWith('#') ? h : `#${h}`).join(' ')
       : '';
-    const caption = [p.caption ?? p.title ?? '', tags].filter(Boolean).join('\n\n');
+    const caption = [p.caption ?? p.title ?? '', p.link_url ?? null, tags].filter(Boolean).join('\n\n');
     const mediaUrls: string[] = Array.isArray(p.media_urls)
       ? (p.media_urls as string[]).filter(u => /^https?:\/\//i.test(u))
       : [];

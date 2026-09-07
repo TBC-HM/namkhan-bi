@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   const contentType = req.headers.get('content-type') || '';
   const isJson = contentType.includes('application/json');
 
-  let caption = '', title = '', hashtags: string[] = [], media_url = '', scheduled_at = '';
+  let caption = '', title = '', hashtags: string[] = [], media_url = '', scheduled_at = '', link_url = '';
   let platforms: string[] = [];
   let property_id = DEFAULT_PID;
   let return_to = '/marketing/social?view=channels';
@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
       title = String(b.title || '');
       hashtags = tagsFromString(b.hashtags);
       media_url = String(b.media_url || '');
+      link_url = String(b.link_url || '');
       scheduled_at = String(b.scheduled_at || '');
       platforms = Array.isArray(b.platforms) ? b.platforms.map(String) : [];
       property_id = Number(b.property_id) || DEFAULT_PID;
@@ -103,6 +104,7 @@ export async function POST(req: NextRequest) {
       title = readFormValue(f, 'title') || caption.slice(0, 60);
       hashtags = tagsFromString(readFormValue(f, 'hashtags'));
       media_url = readFormValue(f, 'media_url');
+      link_url = readFormValue(f, 'link_url');
       scheduled_at = readFormValue(f, 'scheduled_at');
       platforms = f.getAll('platforms').map(String).filter(Boolean);
       property_id = Number(f.get('property_id')) || DEFAULT_PID;
@@ -180,6 +182,7 @@ export async function POST(req: NextRequest) {
       };
       if (hashtags.length) p.hashtags = hashtags;
       if (media_url) p.media_urls = [media_url];
+      if (link_url) p.link_url = link_url;
       if (scheduled_at) p.scheduled_at = scheduled_at;
       // Stash per-platform extras in ai_notes as JSON so the edge fn can pick them up
       p.ai_notes = JSON.stringify(platformExtra);
