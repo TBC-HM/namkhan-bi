@@ -12,6 +12,8 @@ import { PROPERTY_ID } from '@/lib/supabase';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import ReviewsVelocityChart from '../google-business/_client/ReviewsVelocityChart';
+import TaChannelPanel from './_client/TaChannelPanel';
+import { getSocialPrograms, getSocialChannelRules, type SocialProgram, type SocialChannelRule } from '@/lib/marketing';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -126,7 +128,7 @@ export default async function TripAdvisorPage({
   const pid = propertyId ?? PROPERTY_ID;
   const sb = getSupabaseAdmin();
 
-  const [reviewsR, summaryR] = await Promise.all([
+  const [reviewsR, summaryR, taPrograms, taRules] = await Promise.all([
     sb.from('mkt_reviews')
       .select('id, source, reviewer_name, rating_norm, title, body, reviewed_at, response_status, response_text')
       .eq('property_id', pid)
@@ -138,10 +140,14 @@ export default async function TripAdvisorPage({
       .eq('property_id', pid)
       .eq('source', 'tripadvisor')
       .maybeSingle(),
+    getSocialPrograms(pid),
+    getSocialChannelRules(pid),
   ]);
 
   const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
   const summary: SummaryRow | null = (summaryR.data as SummaryRow | null) ?? null;
+  const taPrograms_: SocialProgram[] = (taPrograms as SocialProgram[]).filter((p) => p.platform === 'tripadvisor');
+  const taRule: SocialChannelRule | null = ((taRules as SocialChannelRule[]).find((r) => r.platform === 'tripadvisor')) ?? null;
 
   // ── KPI derivations ─────────────────────────────────────────────────────
   const score = summary?.score_overall != null ? Number(summary.score_overall) : null;
@@ -310,6 +316,13 @@ export default async function TripAdvisorPage({
             </div>
           )}
         </div>
+
+        {/* ── Channel settings: guardrails + programs ───────────────── */}
+        <TaChannelPanel
+          propertyId={pid}
+          initialRule={taRule}
+          initialPrograms={taPrograms_}
+        />
 
         {/* ── DataForSEO pull section ────────────────────────────────── */}
         <div style={{ gridColumn: '1 / -1', background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>

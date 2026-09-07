@@ -235,6 +235,7 @@ export default async function SocialPage({ searchParams }: Props) {
                 { label: 'Pinterest',       href: '/h/260955/marketing/social/pinterest'          },
                 { label: 'TikTok',          href: '/h/260955/marketing/social/tiktok'             },
                 { label: 'Google Business', href: '/h/260955/marketing/social/google-business'    },
+                { label: 'TripAdvisor',     href: '/h/260955/marketing/social/tripadvisor'        },
                 { label: 'YouTube',         href: '/h/260955/marketing/youtube/dashboard'         },
                 { label: 'Hashtags',        href: '/h/260955/marketing/social/hashtags'           },
               ].map((t) => (
