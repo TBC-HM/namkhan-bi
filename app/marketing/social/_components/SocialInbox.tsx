@@ -63,6 +63,8 @@ export default function SocialInbox({ posts, rules }: {
   const [mediaLoading, setMediaLoading] = useState(false);
   const [pinterestBoards, setPinterestBoards] = useState<Array<{ board_id: string; board_name: string }>>([]);
   const [boardPick, setBoardPick] = useState<Record<string, string>>({});
+  const [captionEdit, setCaptionEdit] = useState<Record<string, string>>({}); // postId -> edited text
+  const [captionSaving, setCaptionSaving] = useState<Record<string, boolean>>({});
 
   // Load Pinterest boards once if any Pinterest posts exist
   useEffect(() => {
@@ -115,6 +117,24 @@ export default function SocialInbox({ posts, rules }: {
       setErr(ex?.message ?? 'media update failed');
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function saveCaption(post: SocialPostRow, text: string) {
+    setCaptionSaving((s) => ({ ...s, [post.post_id]: true }));
+    try {
+      const res = await fetch('/api/marketing/social/update-post', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: post.post_id, caption: text }),
+      });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error ?? 'save failed');
+      setCaptionEdit((e) => { const n = { ...e }; delete n[post.post_id]; return n; });
+      router.refresh();
+    } catch (ex: any) {
+      setErr(ex?.message ?? 'save failed');
+    } finally {
+      setCaptionSaving((s) => { const n = { ...s }; delete n[post.post_id]; return n; });
     }
   }
 
@@ -291,11 +311,41 @@ export default function SocialInbox({ posts, rules }: {
                             {p.status}
                           </span>
                         </div>
-                        {p.caption && (
-                          <div style={{ fontSize: 11, color: INK_S, whiteSpace: 'pre-wrap', marginBottom: 4, maxHeight: 96, overflow: 'hidden' }}>
-                            {p.caption.length > 280 ? p.caption.slice(0, 280) + '…' : p.caption}
-                          </div>
-                        )}
+                        {(() => {
+                          const editing = captionEdit[p.post_id] !== undefined;
+                          const currentText = captionEdit[p.post_id] ?? p.caption ?? '';
+                          return editing ? (
+                            <div style={{ marginBottom: 4 }}>
+                              <textarea
+                                value={currentText}
+                                onChange={(e) => setCaptionEdit((prev) => ({ ...prev, [p.post_id]: e.target.value }))}
+                                rows={5}
+                                style={{ width: '100%', fontSize: 11, color: INK_S, fontFamily: 'inherit', border: `1px solid ${FOREST}`, borderRadius: 3, padding: '4px 6px', resize: 'vertical', boxSizing: 'border-box' }}
+                              />
+                              <div style={{ display: 'flex', gap: 4, marginTop: 3 }}>
+                                <button type="button" onClick={() => saveCaption(p, currentText)}
+                                  disabled={captionSaving[p.post_id]}
+                                  style={{ fontSize: 10, padding: '2px 8px', background: FOREST, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer' }}>
+                                  {captionSaving[p.post_id] ? 'Saving…' : '✓ Save'}
+                                </button>
+                                <button type="button" onClick={() => setCaptionEdit((e) => { const n = { ...e }; delete n[p.post_id]; return n; })}
+                                  style={{ fontSize: 10, padding: '2px 8px', background: 'none', color: INK_M, border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer' }}>
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() => setCaptionEdit((prev) => ({ ...prev, [p.post_id]: p.caption ?? '' }))}
+                              title="Click to edit caption"
+                              style={{ fontSize: 11, color: INK_S, whiteSpace: 'pre-wrap', marginBottom: 4, maxHeight: 96, overflow: 'hidden', cursor: 'text', borderRadius: 2, padding: '2px 3px', border: `1px solid transparent` }}
+                              onMouseEnter={(e) => (e.currentTarget.style.border = `1px solid ${HAIR}`)}
+                              onMouseLeave={(e) => (e.currentTarget.style.border = '1px solid transparent')}
+                            >
+                              {p.caption ? (p.caption.length > 280 ? p.caption.slice(0, 280) + '…' : p.caption) : <span style={{ color: INK_M, fontStyle: 'italic' }}>Click to add caption…</span>}
+                            </div>
+                          );
+                        })()}
                         <div style={{ fontSize: 9, color: overCap ? RED : INK_M, marginBottom: p.hashtags?.length ? 4 : 6 }}>
                           {p.scheduled_at ? `target ${p.scheduled_at.slice(0, 10)} · ` : ''}
                           {capLen} chars{overCap ? ' — OVER CHANNEL LIMIT' : ''}

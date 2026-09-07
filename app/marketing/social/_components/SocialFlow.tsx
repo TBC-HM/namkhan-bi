@@ -104,7 +104,12 @@ export default function SocialFlow({
   // ── Column data ────────────────────────────────────────────────
 
   const proposed = filterSlots(initialSlots.filter((s) => s.status === 'proposed'))
-    .filter((s) => slotStates[s.slot_id] !== 'rejected');
+    .filter((s) => slotStates[s.slot_id] !== 'rejected' && slotStates[s.slot_id] !== 'accepted');
+
+  // Optimistic drafting entries — slots accepted this session not yet in refreshed posts
+  const optimisticDrafting = filterSlots(
+    initialSlots.filter((s) => s.status === 'proposed' && slotStates[s.slot_id] === 'accepted')
+  );
 
   const drafting = filterPosts(posts.filter((p) => p.status === 'draft'));
   const ready    = filterPosts(posts.filter((p) => p.status === 'ready'));
@@ -182,12 +187,19 @@ export default function SocialFlow({
           </Column>
 
           {/* DRAFTING */}
-          <Column title="Drafting" note="AI-drafted · edit in Inbox" count={drafting.length} color={AMBER}>
+          <Column title="Drafting" note="AI-drafted · edit in Inbox" count={drafting.length + optimisticDrafting.length} color={AMBER}>
+            {optimisticDrafting.map((s) => (
+              <div key={`opt:${s.slot_id}`} style={{ background: WHITE, border: `1px solid ${AMBER}`, borderRadius: 3, padding: '6px 8px', opacity: 0.7 }}>
+                <div style={{ fontSize: 9, color: INK_M, marginBottom: 2 }}>{GLYPH[s.platform] ?? s.platform} · {s.slot_date}</div>
+                <div style={{ fontSize: 11, color: INK, lineHeight: 1.4, marginBottom: 4 }}>{s.title ?? s.hook ?? s.program_label ?? '(drafting…)'}</div>
+                <div style={{ fontSize: 9, color: AMBER, fontWeight: 600 }}>AI writing…</div>
+              </div>
+            ))}
             {drafting.slice(0, 12).map((p) => (
               <PostCard key={p.post_id} platform={p.platform} label={p.title ?? '(untitled)'}
                 sub={`draft · ${p.created_at?.slice(0, 10) ?? ''}`} linkHref="?view=inbox" />
             ))}
-            {drafting.length === 0 && <Empty text="Accept a slot →" />}
+            {drafting.length === 0 && optimisticDrafting.length === 0 && <Empty text="Accept a slot →" />}
           </Column>
 
           {/* READY */}

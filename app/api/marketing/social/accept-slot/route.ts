@@ -17,9 +17,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+const PHOTO_AREAS = ['restaurant','lifestyle','rooms','grounds','pool','Organic Farm','activities','luang_prabang'];
+
 const SYSTEM_PROMPT =
   `You are Lumen, social content lead for The Namkhan — a 24-room Small Luxury Hotels of the World jungle eco-lodge in Luang Prabang, Laos, with an organic eco-farm on the Nam Khan river. Voice: warm, sensory, understated luxury; Lao provenance; never salesy or cliché; no exclamation spam; max 1 emoji if it adds warmth.
-Return ONLY valid JSON, no prose, no markdown: {"caption":"...","hashtags":["#tag1","#tag2"]}`;
+Return ONLY valid JSON, no prose, no markdown: {"caption":"...","hashtags":["#tag1","#tag2"],"photo_area":"rooms","link_id":null}`;
 
 const HASHTAG_CATEGORIES: Record<string, string[]> = {
   instagram:       ['subject','mood','activity','food_beverage','property_area','style'],
@@ -69,11 +71,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, post_id: payload.post_id, already: false, ai_skipped: 'no_slot_context' });
   }
 
-  // 4. Fetch platform spec, channel rule context, and taxonomy hashtag candidates in parallel
+  // 4. Fetch platform spec, channel rule, hashtag candidates, and link catalog in parallel
   const tagCategories = HASHTAG_CATEGORIES[slot.platform] ?? ['subject', 'activity'];
-  const [{ data: spec }, { data: rule }, tagsRes] = await Promise.all([
+  const [{ data: spec }, { data: rule }, tagsRes, linksRes] = await Promise.all([
     sb.from('v_social_platform_specs')
-      .select('caption_max_chars,hashtags_allowed,hashtag_max')
+      .select('caption_max_chars,hashtags_allowed,hashtag_max,requires_title,title_max_chars')
       .eq('platform', slot.platform)
       .maybeSingle(),
     sb.from('v_social_channel_rules')
@@ -88,11 +90,19 @@ export async function POST(req: NextRequest) {
           .eq('is_active', true)
           .limit(50)
       : Promise.resolve({ data: [] }),
+    sb.from('v_marketing_internal_link_catalog')
+      .select('id,title,url')
+      .eq('property_id', slot.property_id)
+      .eq('active', true)
+      .order('is_pinned', { ascending: false })
+      .limit(20),
   ]);
 
   const captionMax = (spec as any)?.caption_max_chars ?? 500;
   const hashtagsAllowed = (spec as any)?.hashtags_allowed !== false;
   const hashtagMax = hashtagsAllowed ? Math.min(15, (spec as any)?.hashtag_max ?? 15) : 0;
+  const requiresTitle = (spec as any)?.requires_title === true;
+  const titleMax = (spec as any)?.title_max_chars ?? 100;
 
   const audienceNotes = (rule as any)?.audience_notes as string | null;
   const bannedTopics  = (rule as any)?.banned_topics  as string[] | null;
@@ -101,6 +111,10 @@ export async function POST(req: NextRequest) {
     (t: { tag_slug: string; tag_label: string }) =>
       `#${t.tag_slug.replace(/_/g, '')} (${t.tag_label})`
   ) as string[];
+
+  type LinkRow = { id: number; title: string; url: string };
+  const links: LinkRow[] = (linksRes as any)?.data ?? [];
+  const linkMenu = links.map((l) => `${l.id}|${l.title}`).join(', ');
 
   // 5. Build AI prompt from real slot data + channel rule context
   const slotLines = [
@@ -123,13 +137,21 @@ export async function POST(req: NextRequest) {
     ? `Pick up to ${hashtagMax} hashtags from these brand-taxonomy candidates (or derive natural variants): ${hashtagCandidates.slice(0, 25).join(', ')}`
     : 'No hashtags for this platform — return hashtags as an empty array.';
 
+  const titleLine = requiresTitle
+    ? `Also write a pin TITLE (max ${titleMax} chars, keyword-first, no hashtags) in the "title" field.`
+    : '';
+
   const userPrompt = `Write one ${slot.platform} post for this calendar slot:
 ${slotLines}
 ${channelContext ? `\n${channelContext}` : ''}
 Caption limit: ${captionMax} characters (hard limit — do not exceed).
+${titleLine}
 ${hashtagLine}
+PHOTO AREA — pick one that best matches the post topic from: ${PHOTO_AREAS.join(', ')}. Put it in "photo_area".
+LINK — if a page below is highly relevant, put its id in "link_id", otherwise null:
+${linkMenu || '(none available)'}
 
-Return ONLY: {"caption":"...","hashtags":["#tag",...]}`;
+Return ONLY: {"caption":"...","hashtags":["#tag",...],"photo_area":"...","link_id":null${requiresTitle ? ',"title":"..."' : ''}}`;
 
   // 6. Call AI
   const aiResult = await callAnthropic({
@@ -146,23 +168,57 @@ Return ONLY: {"caption":"...","hashtags":["#tag",...]}`;
   // 7. Parse AI response
   let caption = '';
   let hashtags: string[] = [];
+  let photoArea: string | null = null;
+  let linkId: number | null = null;
+  let aiTitle: string | null = null;
   try {
     const m = aiResult.text.match(/\{[\s\S]*\}/);
     if (m) {
       const parsed = JSON.parse(m[0]);
-      caption = String(parsed.caption ?? '').slice(0, captionMax).trim();
-      hashtags = Array.isArray(parsed.hashtags)
+      caption   = String(parsed.caption ?? '').slice(0, captionMax).trim();
+      hashtags  = Array.isArray(parsed.hashtags)
         ? (parsed.hashtags as unknown[]).filter((h) => typeof h === 'string').slice(0, hashtagMax)
         : [];
+      photoArea = typeof parsed.photo_area === 'string' && PHOTO_AREAS.includes(parsed.photo_area)
+        ? parsed.photo_area : null;
+      linkId    = typeof parsed.link_id === 'number' ? parsed.link_id : null;
+      if (requiresTitle && parsed.title) aiTitle = String(parsed.title).slice(0, titleMax);
     }
   } catch { /* draft keeps brief_md set by fn_social_slot_accept */ }
 
-  // 8. Write caption + hashtags back to the draft via fn_social_post_update
+  // 8. Resolve photo from media library if AI suggested an area
+  let mediaUrl: string | null = null;
+  if (photoArea) {
+    const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+    const { data: photos } = await sb.from('mkt_v_media_ready')
+      .select('raw_path,renders')
+      .eq('property_id', slot.property_id)
+      .eq('property_area', photoArea)
+      .eq('asset_type', 'photo')
+      .contains('usage_rights', ['social_organic'])
+      .order('captured_at', { ascending: false, nullsFirst: false })
+      .limit(1);
+    if (photos && photos.length > 0) {
+      const ph = photos[0] as { raw_path: string | null; renders: Record<string, string> | null };
+      mediaUrl = ph.renders?.web_2k
+        ? `${STORAGE_BASE}/${ph.renders.web_2k}`
+        : ph.raw_path ? `${STORAGE_BASE}/${ph.raw_path}` : null;
+    }
+  }
+
+  // Resolve link URL from catalog
+  const resolvedLink = linkId != null ? links.find((l) => l.id === linkId) : null;
+
+  // 9. Write all enrichments back to the draft
   if (caption) {
     const patch: Record<string, unknown> = { post_id: payload.post_id, caption, hashtags };
-    if (slot.title) patch.title = slot.title;
+    // Title: Pinterest-required title from AI, fallback to slot title
+    if (aiTitle) patch.title = aiTitle;
+    else if (slot.title) patch.title = slot.title;
+    if (mediaUrl)             patch.media_urls = [mediaUrl];
+    if (resolvedLink?.url)    patch.link_url   = resolvedLink.url;
     await sb.rpc('fn_social_post_update', { p: patch });
   }
 
-  return NextResponse.json({ ok: true, post_id: payload.post_id, already: false, ai_caption: !!caption });
+  return NextResponse.json({ ok: true, post_id: payload.post_id, already: false, ai_caption: !!caption, has_media: !!mediaUrl, has_link: !!resolvedLink });
 }
