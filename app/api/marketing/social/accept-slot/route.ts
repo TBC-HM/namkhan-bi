@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
           .limit(50)
       : Promise.resolve({ data: [] }),
     sb.from('v_marketing_internal_link_catalog')
-      .select('id,title,url')
+      .select('id,title,url,is_pinned')
       .eq('property_id', slot.property_id)
       .eq('active', true)
       .order('is_pinned', { ascending: false })
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       `#${t.tag_slug.replace(/_/g, '')} (${t.tag_label})`
   ) as string[];
 
-  type LinkRow = { id: number; title: string; url: string };
+  type LinkRow = { id: number; title: string; url: string; is_pinned: boolean };
   const links: LinkRow[] = (linksRes as any)?.data ?? [];
   const linkMenu = links.map((l) => `${l.id}|${l.title}`).join(', ');
 
@@ -141,17 +141,20 @@ export async function POST(req: NextRequest) {
     ? `Also write a pin TITLE (max ${titleMax} chars, keyword-first, no hashtags) in the "title" field.`
     : '';
 
+  // First pinned link — guaranteed fallback for link_id when AI returns null
+  const defaultLink = links.find((l) => l.is_pinned) ?? links[0] ?? null;
+
   const userPrompt = `Write one ${slot.platform} post for this calendar slot:
 ${slotLines}
 ${channelContext ? `\n${channelContext}` : ''}
-Caption limit: ${captionMax} characters (hard limit — do not exceed).
+Caption limit: ${captionMax} characters (HARD LIMIT — count every character including hashtags; do not exceed under any circumstances).
 ${titleLine}
 ${hashtagLine}
-PHOTO AREA — pick one that best matches the post topic from: ${PHOTO_AREAS.join(', ')}. Put it in "photo_area".
-LINK — if a page below is highly relevant, put its id in "link_id", otherwise null:
+PHOTO AREA — you MUST pick exactly one from this list (case-sensitive, no other values accepted): ${PHOTO_AREAS.join(', ')}. Put it in "photo_area".
+LINK — pick the single most relevant link id from the list below. ALWAYS return a link_id number — never return null. If the post is about atmosphere/experience, use the booking or homepage link. If no perfect match, default to id 1 (booking):
 ${linkMenu || '(none available)'}
 
-Return ONLY: {"caption":"...","hashtags":["#tag",...],"photo_area":"...","link_id":null${requiresTitle ? ',"title":"..."' : ''}}`;
+Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_area":"<one of the areas above>","link_id":<number>${requiresTitle ? ',"title":"..."' : ''}}`;
 
   // 6. Call AI
   const aiResult = await callAnthropic({
@@ -186,16 +189,21 @@ Return ONLY: {"caption":"...","hashtags":["#tag",...],"photo_area":"...","link_i
     }
   } catch { /* draft keeps brief_md set by fn_social_slot_accept */ }
 
-  // 8. Resolve photo from media library if AI suggested an area
+  // 8. Resolve photo — waterfall: AI area → lifestyle → restaurant → grounds
   let mediaUrl: string | null = null;
-  if (photoArea) {
-    const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+  const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+  const photoAreaFallbacks = [
+    ...(photoArea ? [photoArea] : []),
+    ...(['lifestyle', 'restaurant', 'grounds'].filter((a) => a !== photoArea)),
+  ];
+  for (const area of photoAreaFallbacks) {
     const { data: photos } = await sb.from('mkt_v_media_ready')
       .select('raw_path,renders')
       .eq('property_id', slot.property_id)
-      .eq('property_area', photoArea)
+      .eq('property_area', area)
       .eq('asset_type', 'photo')
       .contains('usage_rights', ['social_organic'])
+      .not('raw_path', 'is', null)
       .order('captured_at', { ascending: false, nullsFirst: false })
       .limit(1);
     if (photos && photos.length > 0) {
@@ -203,11 +211,12 @@ Return ONLY: {"caption":"...","hashtags":["#tag",...],"photo_area":"...","link_i
       mediaUrl = ph.renders?.web_2k
         ? `${STORAGE_BASE}/${ph.renders.web_2k}`
         : ph.raw_path ? `${STORAGE_BASE}/${ph.raw_path}` : null;
+      if (mediaUrl) break;
     }
   }
 
-  // Resolve link URL from catalog
-  const resolvedLink = linkId != null ? links.find((l) => l.id === linkId) : null;
+  // Resolve link — fallback to first pinned link if AI returned null or unknown id
+  const resolvedLink = linkId != null ? (links.find((l) => l.id === linkId) ?? defaultLink) : defaultLink;
 
   // 9. Write all enrichments back to the draft
   if (caption) {
