@@ -283,57 +283,67 @@ export default function ChannelsManager({
     if (!quickPost) return;
     setQuickPost({ ...quickPost, busy: true, msg: null });
     try {
-      const fd = new FormData();
-      fd.set('property_id', String(propertyId));
-      fd.set('return_to', '/marketing/social?view=channels');
-      fd.set('caption', quickPost.caption);
-      fd.set('hashtags', quickPost.hashtags);
-      if (quickPost.media_url) fd.set('media_url', quickPost.media_url);
-      if (quickPost.link_url) fd.set('link_url', quickPost.link_url);
-      if (quickPost.scheduled_at) fd.set('scheduled_at', quickPost.scheduled_at);
-      fd.append('platforms', quickPost.platform);
-      // Per-platform destination + specific fields
+      // JSON mode — gets the real { ok, results } back instead of a 303 redirect
+      // that silently swallows per-platform errors.
+      const extra: Record<string, unknown> = {};
       const spec = specByPlatform.get(quickPost.platform);
       if (spec?.requires_dest_pick && quickPost.dest_id) {
-        if (quickPost.platform === 'pinterest') fd.set('pinterest_board_id', quickPost.dest_id);
-        if (quickPost.platform === 'google_business') fd.set('google_business_location_id', quickPost.dest_id);
-        if (quickPost.platform === 'facebook') fd.set('facebook_page_id', quickPost.dest_id);
-        if (quickPost.platform === 'linkedin') fd.set('linkedin_page_urn', quickPost.dest_id);
+        if (quickPost.platform === 'pinterest')       extra.pinterest_board_id          = quickPost.dest_id;
+        if (quickPost.platform === 'google_business') extra.google_business_location_id = quickPost.dest_id;
+        if (quickPost.platform === 'facebook')        extra.facebook_page_id            = quickPost.dest_id;
+        if (quickPost.platform === 'linkedin')        extra.linkedin_page_urn           = quickPost.dest_id;
       }
-      if (quickPost.platform === 'instagram' && quickPost.first_comment) fd.set('instagram_first_comment', quickPost.first_comment);
-      if (quickPost.platform === 'instagram' && quickPost.instagram_media_type) fd.set('instagram_media_type', quickPost.instagram_media_type);
-      if (quickPost.platform === 'tiktok' && quickPost.post_mode) fd.set('tiktok_post_mode', quickPost.post_mode);
+      if (quickPost.platform === 'instagram') {
+        if (quickPost.first_comment)       extra.instagram_first_comment = quickPost.first_comment;
+        if (quickPost.instagram_media_type) extra.instagram_media_type   = quickPost.instagram_media_type;
+      }
       if (quickPost.platform === 'tiktok') {
-        fd.set('tiktok_privacy_level', quickPost.tiktok_privacy_level);
-        if (quickPost.tiktok_disable_comment) fd.set('tiktok_disable_comment', 'true');
-        if (quickPost.tiktok_disable_duet)    fd.set('tiktok_disable_duet', 'true');
-        if (quickPost.tiktok_disable_stitch)  fd.set('tiktok_disable_stitch', 'true');
+        if (quickPost.post_mode) extra.tiktok_post_mode = quickPost.post_mode;
+        extra.tiktok_privacy_level = quickPost.tiktok_privacy_level;
+        if (quickPost.tiktok_disable_comment) extra.tiktok_disable_comment = true;
+        if (quickPost.tiktok_disable_duet)    extra.tiktok_disable_duet    = true;
+        if (quickPost.tiktok_disable_stitch)  extra.tiktok_disable_stitch  = true;
       }
-      if (quickPost.platform === 'x' && quickPost.long_text_as_post) fd.set('x_long_text_as_post', 'true');
-      if (quickPost.platform === 'google_business') fd.set('google_business_type', quickPost.gbp_post_type);
-      // YouTube — title required + description + first-comment (Upload Post /upload passes these
-      // through to YouTube Data API v3; quota-aware handling belongs to the edge fn).
+      if (quickPost.platform === 'x' && quickPost.long_text_as_post) extra.x_long_text_as_post = true;
+      if (quickPost.platform === 'google_business') extra.google_business_type = quickPost.gbp_post_type;
       if (quickPost.platform === 'youtube') {
-        if (quickPost.youtube_title) fd.set('youtube_title', quickPost.youtube_title);
-        if (quickPost.youtube_description) fd.set('youtube_description', quickPost.youtube_description);
-        if (quickPost.youtube_first_comment) fd.set('youtube_first_comment', quickPost.youtube_first_comment);
+        if (quickPost.youtube_title)         extra.youtube_title         = quickPost.youtube_title;
+        if (quickPost.youtube_description)   extra.youtube_description   = quickPost.youtube_description;
+        if (quickPost.youtube_first_comment) extra.youtube_first_comment = quickPost.youtube_first_comment;
       }
-      // LinkedIn — org URN comes from the destination picker above (linkedin_page_urn).
-      // Description + optional document upload passthrough to Upload Post /upload.
       if (quickPost.platform === 'linkedin') {
-        if (quickPost.linkedin_description) fd.set('linkedin_description', quickPost.linkedin_description);
-        if (quickPost.linkedin_document_url) fd.set('linkedin_document_url', quickPost.linkedin_document_url);
+        if (quickPost.linkedin_description)  extra.linkedin_description  = quickPost.linkedin_description;
+        if (quickPost.linkedin_document_url) extra.linkedin_document_url = quickPost.linkedin_document_url;
       }
 
-      // Follow redirect naturally — the endpoint returns 303 back to /marketing/social?view=channels
-      const res = await fetch('/api/marketing/social/quick-push', { method: 'POST', body: fd });
-      if (res.ok || res.redirected) {
-        setQuickPost({ ...quickPost, busy: false, msg: '✓ Sent — check Publish or platform for confirmation.' });
-        setTimeout(() => { setQuickPost(null); router.refresh(); }, 1400);
-      } else {
-        const j = await res.json().catch(() => ({}));
+      const payload: Record<string, unknown> = {
+        property_id:  propertyId,
+        caption:      quickPost.caption,
+        hashtags:     quickPost.hashtags,
+        platforms:    [quickPost.platform],
+      };
+      if (quickPost.media_url)    payload.media_url    = quickPost.media_url;
+      if (quickPost.link_url)     payload.link_url     = quickPost.link_url;
+      if (quickPost.scheduled_at) payload.scheduled_at = quickPost.scheduled_at;
+      if (Object.keys(extra).length) payload.extra = extra;
+
+      const res = await fetch('/api/marketing/social/quick-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+      const platformResult = (j.results as Array<{ platform: string; ok: boolean; error?: string }> | undefined)
+        ?.find((r) => r.platform === quickPost.platform);
+      if (platformResult?.ok === false) {
+        throw new Error(platformResult.error ?? 'push failed');
+      }
+      if (!j.ok && !platformResult) {
         throw new Error(j.error ?? `HTTP ${res.status}`);
       }
+      const scheduled = !!quickPost.scheduled_at;
+      setQuickPost({ ...quickPost, busy: false, msg: scheduled ? '✓ Scheduled.' : '✓ Sent — check platform for confirmation.' });
+      setTimeout(() => { setQuickPost(null); router.refresh(); }, 1400);
     } catch (ex) {
       setQuickPost({ ...quickPost, busy: false, msg: (ex as Error)?.message ?? 'push failed' });
     }
