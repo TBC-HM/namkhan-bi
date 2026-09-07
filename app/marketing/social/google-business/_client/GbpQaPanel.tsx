@@ -37,9 +37,29 @@ function QaCard({ row, propertyId }: { row: QaRow; propertyId: number }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [localAnswer, setLocalAnswer] = useState<string | null>(row.answer);
   const [answered, setAnswered] = useState(row.answered);
+
+  async function aiDraft() {
+    setAiBusy(true);
+    setResult(null);
+    try {
+      const r = await fetch('/api/google/ai-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ property_id: propertyId, mode: 'qa_answer', question: row.question }),
+      });
+      const j = await r.json();
+      if (j.ok) setText(j.draft ?? '');
+      else setResult({ ok: false, message: String(j.error ?? 'AI draft failed') });
+    } catch (e) {
+      setResult({ ok: false, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   async function submit() {
     if (busy || text.trim().length < 2) return;
@@ -98,14 +118,23 @@ function QaCard({ row, propertyId }: { row: QaRow; propertyId: number }) {
             }}
           />
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button onClick={submit} disabled={busy || text.trim().length < 2}
+            <button onClick={submit} disabled={busy || aiBusy || text.trim().length < 2}
               style={{
                 padding: '5px 12px', fontSize: 11, fontWeight: 600,
-                background: busy || text.trim().length < 2 ? INK_M : GREEN,
+                background: busy || aiBusy || text.trim().length < 2 ? INK_M : GREEN,
                 color: WHITE, border: 'none', borderRadius: 3, cursor: busy ? 'wait' : 'pointer',
                 fontFamily: 'inherit',
               }}>
               {busy ? 'Saving…' : 'Post answer publicly'}
+            </button>
+            <button onClick={aiDraft} disabled={aiBusy || busy}
+              style={{
+                padding: '5px 10px', fontSize: 11, fontWeight: 600,
+                background: aiBusy ? AMBER : '#00AF87', color: WHITE,
+                border: 'none', borderRadius: 3, cursor: aiBusy ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+              }}>
+              {aiBusy ? '✨ Drafting…' : '✨ AI draft'}
             </button>
             <button onClick={() => { setOpen(false); setText(''); setResult(null); }}
               style={{ padding: '5px 10px', fontSize: 11, background: 'transparent', border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', color: INK_M }}>

@@ -35,6 +35,8 @@ import SourceBadge from '@/components/marketing/SourceBadge';
 import ReviewsVelocityChart from './_client/ReviewsVelocityChart';
 import GbpQaPanel from './_client/GbpQaPanel';
 import GbpReviewReply from './_client/GbpReviewReply';
+import ProgramsPanel from '@/app/marketing/social/[platform]/_programs-panel';
+import { getSocialPrograms, type SocialProgram } from '@/lib/marketing';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -185,7 +187,7 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
     });
   })();
 
-  const [oauthR, reviewsR, mapsR, summaryR, compRows, allowlistR, keywordsR, questionsR, gbpPostsR] = await Promise.all([
+  const [oauthR, reviewsR, mapsR, summaryR, compRows, allowlistR, keywordsR, questionsR, gbpPostsR, allPrograms] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', pid).eq('source', 'google').order('reviewed_at', { ascending: false }).limit(500),
     sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', pid).order('date', { ascending: false }).limit(400),
@@ -207,6 +209,7 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
       .select('post_id, title, caption, status, up_status, pushed_at, created_at')
       .eq('property_id', pid).eq('platform', 'google_business')
       .order('created_at', { ascending: false }).limit(20),
+    getSocialPrograms(pid),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
@@ -308,6 +311,8 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
           : (p.status === 'scheduled') ? ('scheduled' as const)
           : ('draft' as const),
   }));
+
+  const gbpPrograms: SocialProgram[] = (allPrograms as SocialProgram[]).filter((p) => p.platform === 'google_business');
 
   const connectedParam = (Array.isArray(searchParams.google) ? searchParams.google[0] : searchParams.google) ?? null;
 
@@ -444,6 +449,12 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
           ) : (
             <GbpReviewReply reviews={reviews.slice(0, 5)} propertyId={pid} />
           )}
+        </div>
+
+        {/* Weekly content programs */}
+        <div style={{ gridColumn: '1 / -1', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+          <div style={sectionHead}>Weekly content programs <span style={sectionNote}>marketing.social_programs · GBP posting cadence</span></div>
+          <ProgramsPanel propertyId={pid} platform="google_business" initial={gbpPrograms} />
         </div>
 
         {/* Footer credits */}

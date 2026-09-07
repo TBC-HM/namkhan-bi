@@ -25,6 +25,7 @@ const INK    = '#1B1B1B';
 const INK_S  = '#3A3A3A';
 const INK_M  = '#5A5A5A';
 const GREEN  = '#084838';
+const AMBER  = '#C28F2C';
 const RED    = '#B04A2F';
 const CREAM  = '#F5F0E1';
 
@@ -42,8 +43,34 @@ function ReviewCard({ r, propertyId }: { r: ReviewRow; propertyId: number }) {
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [replied, setReplied] = useState(r.response_status === 'responded');
+
+  async function aiDraft() {
+    setAiBusy(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/google/ai-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          property_id: propertyId,
+          mode: 'review_reply',
+          review_text: r.body ?? r.title ?? '',
+          reviewer_name: r.reviewer_name ?? 'Guest',
+          rating: r.rating_norm ?? 0,
+        }),
+      });
+      const j = await res.json();
+      if (j.ok) setComment(j.draft ?? '');
+      else setResult({ ok: false, message: String(j.error ?? 'AI draft failed') });
+    } catch (e) {
+      setResult({ ok: false, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   async function submit() {
     if (busy || comment.trim().length < 2) return;
@@ -112,14 +139,23 @@ function ReviewCard({ r, propertyId }: { r: ReviewRow; propertyId: number }) {
             }}
           />
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button onClick={submit} disabled={busy || comment.trim().length < 2}
+            <button onClick={submit} disabled={busy || aiBusy || comment.trim().length < 2}
               style={{
                 padding: '5px 12px', fontSize: 11, fontWeight: 600,
-                background: busy || comment.trim().length < 2 ? INK_M : GREEN,
+                background: busy || aiBusy || comment.trim().length < 2 ? INK_M : GREEN,
                 color: WHITE, border: 'none', borderRadius: 3, cursor: busy ? 'wait' : 'pointer',
                 fontFamily: 'inherit',
               }}>
               {busy ? 'Posting…' : 'Post reply to Google'}
+            </button>
+            <button onClick={aiDraft} disabled={aiBusy || busy}
+              style={{
+                padding: '5px 10px', fontSize: 11, fontWeight: 600,
+                background: aiBusy ? AMBER : '#00AF87', color: WHITE,
+                border: 'none', borderRadius: 3, cursor: aiBusy ? 'wait' : 'pointer',
+                fontFamily: 'inherit',
+              }}>
+              {aiBusy ? '✨ Drafting…' : '✨ AI draft'}
             </button>
             <button onClick={() => { setOpen(false); setComment(''); setResult(null); }}
               style={{ padding: '5px 10px', fontSize: 11, background: 'transparent', border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer', fontFamily: 'inherit', color: INK_M }}>
