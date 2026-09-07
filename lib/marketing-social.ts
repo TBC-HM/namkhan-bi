@@ -30,7 +30,7 @@ export interface SocialCalendarSlot {
   updated_at: string;
 }
 
-export type SocialPostStatus = 'draft' | 'ready' | 'scheduled' | 'pushed' | 'failed' | 'cancelled';
+export type SocialPostStatus = 'proposed' | 'draft' | 'ready' | 'scheduled' | 'pushed' | 'failed' | 'cancelled';
 
 export interface SocialPostRow {
   post_id: string;

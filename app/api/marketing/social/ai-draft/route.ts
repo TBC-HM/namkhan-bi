@@ -19,13 +19,14 @@ const PROPERTY_NAME: Record<number, string> = {
 };
 
 export async function POST(req: NextRequest) {
-  let b: { platform?: string; property_id?: number; hint?: string | null };
+  let b: { platform?: string; property_id?: number; hint?: string | null; category_code?: string | null };
   try { b = await req.json(); } catch { return NextResponse.json({ ok: false, error: 'invalid_json' }, { status: 400 }); }
   const platform = String(b.platform || '');
   if (!platform) return NextResponse.json({ ok: false, error: 'platform required' }, { status: 400 });
   if (!b.property_id) return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
   const property_id = await requirePropertyAccess(req, b.property_id);
   const hint = (b.hint ?? '').toString().trim();
+  const categoryCode = (b.category_code ?? '').toString().toLowerCase().trim();
 
   const sb = getSupabaseAdmin();
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
   };
   const tagCats = TAG_CATEGORIES[platform] ?? ['subject','activity'];
 
-  const [specRes, tagsRes, linksRes] = await Promise.all([
+  const [specRes, tagsRes, linksRes, briefRes] = await Promise.all([
     sb.from('v_social_platform_specs')
       .select('platform, display_name, caption_max_chars, hashtags_allowed, hashtag_max, requires_title, notes')
       .eq('platform', platform).maybeSingle(),
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
       .eq('active', true)
       .order('is_pinned', { ascending: false })
       .limit(30),
+    sb.rpc('fn_social_property_brief', { p_property_id: property_id }),
   ]);
 
   const spec = specRes.data;
@@ -72,26 +74,74 @@ export async function POST(req: NextRequest) {
   const links: LinkRow[] = (linksRes as any)?.data ?? [];
   const linkMenu = links.map(l => `${l.id}|${l.section}|${l.title}`).join(', ');
 
+  // Property knowledge base — real rooms, spa, activities, season, retreats
+  const brief = (briefRes as any)?.data ?? {};
+  const roomLines = (brief.rooms ?? []).map((r: any) =>
+    `• ${r.name}${r.size_sqm ? ` (${r.size_sqm}m²)` : ''}${r.view ? `, ${r.view} view` : ''}${r.pitch ? ` — ${r.pitch}` : ''}`
+  ).join('\n');
+  const spaLines = (brief.spa ?? []).map((s: any) =>
+    `• ${s.name}${s.duration_min ? ` · ${s.duration_min}min` : ''}${s.price_usd != null ? ` · $${s.price_usd}` : ''}`
+  ).join('\n');
+  const activityLines = (brief.activities ?? []).map((a: any) =>
+    `• ${a.name}${a.price_amount != null ? ` · $${a.price_amount}` : ''}${a.description ? ` — ${a.description.slice(0, 100)}` : ''}`
+  ).join('\n');
+  const season = brief.current_season
+    ? `${brief.current_season.name} (${brief.current_season.start} – ${brief.current_season.end})`
+    : 'no current season defined';
+  const retreatLines = (brief.retreats ?? []).map((r: any) =>
+    `• ${r.name}${r.min_nights ? ` · min ${r.min_nights} nights` : ''}${r.pitch ? ` — ${r.pitch}` : ''}`
+  ).join('\n');
+
+  const propertyKnowledge = [
+    roomLines ? `ROOMS:\n${roomLines}` : '',
+    spaLines ? `SPA TREATMENTS:\n${spaLines}` : '',
+    activityLines ? `ACTIVITIES:\n${activityLines}` : '',
+    `CURRENT SEASON: ${season}`,
+    retreatLines ? `RETREAT PROGRAMS:\n${retreatLines}` : '',
+  ].filter(Boolean).join('\n\n');
+
   const PHOTO_AREAS = ['restaurant','lifestyle','rooms','grounds','pool','Organic Farm','activities','luang_prabang'];
 
+  // Category-aware hashtag pools — infer from explicit code OR hint text (post title)
+  const isRetreat = categoryCode.includes('retreat') || categoryCode.includes('wellness') || categoryCode.includes('mindful')
+    || hint.toLowerCase().includes('retreat') || hint.toLowerCase().includes('wellness');
+  const categoryHashtags = isRetreat
+    ? '#retreats #wellness #mindfultravel #yogaretreat #wellnesstravel #retreatlife #digitaldetox #slowtravel #luangprabang #namkhan'
+    : '';
+
   const systemPrompt = 'You are a hospitality-industry social media copywriter. Respond only with valid JSON, no markdown, no prose.';
-  const userPrompt = `You are a social media copywriter for ${propertyName}, a luxury boutique hotel. Draft ONE social post for ${platformLabel}.
+  const userPrompt = `You are a social media copywriter for ${propertyName}, a luxury boutique hotel in Luang Prabang, Laos. Draft ONE social post for ${platformLabel}.
 
-Rules:
-- Caption ≤ ${captionMax} characters (hard limit).
-- ${hashtagMax > 0 ? `Include up to ${hashtagMax} on-brand hashtags at the end of the caption. Choose from or adapt these taxonomy tags: ${taxonomyTags.slice(0, 300)}.` : 'NO hashtags — platform disallows.'}
-- Voice: warm, evocative, sensory, understated luxury. Never sales-y. Never emoji-heavy (max 1 emoji).
+HARD RULES — violation = rejected post:
+1. Caption MUST be ≤ ${captionMax} characters. COUNT CAREFULLY. This is an absolute limit — do not exceed it.
+2. NEVER mention prices, rates, nightly costs, "all-inclusive", or any monetary figure — not even approximate ones. Direct readers to the website or say "Book direct" instead.
+3. Only use facts from the PROPERTY DATA below. Never invent room names, spa treatments, or experiences.
+
+STYLE:
+- Voice: warm, evocative, sensory, understated luxury. Never sales-y. Max 1 emoji.
 - Language: English.
-${hint ? `- User hint / seed idea: "${hint.slice(0, 200)}"` : '- No user hint — pick a natural single moment (morning mist, temple bells, herbal tea, river silence, monk sweeping at dawn, etc.).'}
+${hint ? `- Seed idea: "${hint.slice(0, 200)}"` : '- No seed — pick one natural moment (morning mist, temple bells, herbal tea on the terrace, monk at dawn, river light, bamboo silence).'}
 
-Also pick:
-- link_id: the id of the most relevant link from this catalog (or null if none fits): ${linkMenu}
-- photo_area: the most relevant photo area from: ${PHOTO_AREAS.join(', ')} (or null)
+HASHTAGS:
+${hashtagMax > 0
+  ? `Include up to ${hashtagMax} hashtags. ${isRetreat ? `Since this is a RETREAT post, prioritise these retreat hashtags: ${categoryHashtags}. Mix with property tags from: ` : 'Choose from: '}${taxonomyTags.slice(0, 300)}.`
+  : 'NO hashtags — platform disallows.'}
 
-Respond in EXACTLY this JSON format, no prose:
+PROPERTY DATA (use this, never invent):
+${propertyKnowledge}
+
+LINK CATALOG (pick the most relevant id, or null):
+${linkMenu}
+
+PHOTO AREA (pick from: ${PHOTO_AREAS.join(', ')} — or null):
+Choose the area that best matches the post topic. Retreat posts → lifestyle or grounds. Spa posts → lifestyle. Restaurant posts → restaurant.
+
+Respond in EXACTLY this JSON format, no other text:
 {"caption": "...", "hashtags": "...", "link_id": null, "photo_area": null}
 
-The hashtags field is a space-separated string (with # prefix) or an empty string if no hashtags allowed.`;
+Hashtags field: space-separated string with # prefix, or "" if not allowed.`;
+
+  // Safety truncation: if AI still over-generates, hard-clamp at captionMax before returning
 
   const r = await callAnthropic({
     model: 'claude-sonnet-4-6',

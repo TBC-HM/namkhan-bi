@@ -96,8 +96,45 @@ export default function SocialInbox({ posts, rules }: {
     }
   }
 
+  async function rewritePost(post: SocialPostRow) {
+    const key = `rewrite:${post.post_id}`;
+    setBusy(key); setErr(null);
+    try {
+      const draftRes = await fetch('/api/marketing/social/ai-draft', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: post.platform, property_id: post.property_id, hint: post.title ?? null }),
+      });
+      const draft = await draftRes.json();
+      if (!draft.ok) throw new Error(draft.error ?? 'AI draft failed');
+
+      const updateBody: Record<string, unknown> = { post_id: post.post_id, caption: draft.caption };
+      if (draft.hashtags) updateBody.hashtags = draft.hashtags.split(/\s+/).filter(Boolean);
+      if (draft.media_url) updateBody.media_urls = [draft.media_url];
+      if (draft.link_url) updateBody.link_url = draft.link_url;
+
+      const updRes = await fetch('/api/marketing/social/update-post', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updateBody),
+      });
+      const upd = await updRes.json();
+      if (!upd.ok) throw new Error(upd.error ?? 'update failed');
+
+      if (post.status === 'proposed') {
+        await fetch('/api/marketing/socials', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ op: 'set_status', post_id: post.post_id, status: 'draft' }),
+        });
+      }
+      setNote('Content rewritten — review and approve.');
+      router.refresh();
+    } catch (ex: any) {
+      setErr(ex?.message ?? 'rewrite failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const activePlatforms = rules.filter((r) => r.active).map((r) => r.platform);
-  const open = posts.filter((p) => p.status === 'draft' || p.status === 'ready' || p.status === 'failed');
+  const open = posts.filter((p) => ['proposed','draft','ready','failed'].includes(p.status));
   const byPlatform = new Map<string, SocialPostRow[]>();
   for (const pf of activePlatforms) byPlatform.set(pf, []);
   for (const p of open) {
@@ -251,6 +288,11 @@ export default function SocialInbox({ posts, rules }: {
                           </div>
                         )}
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {p.status === 'proposed' && (
+                            <button type="button" disabled={busy !== null} onClick={() => setStatus(p.post_id, 'draft')} style={btnSecondary}>
+                              {busy === p.post_id ? '…' : '✓ Accept'}
+                            </button>
+                          )}
                           {p.status === 'draft' && (
                             <button type="button" disabled={busy !== null} onClick={() => setStatus(p.post_id, 'ready')} style={btnPrimary}>
                               {busy === p.post_id ? '…' : '✓ Approve'}
@@ -261,6 +303,12 @@ export default function SocialInbox({ posts, rules }: {
                               ↩ Back to draft
                             </button>
                           )}
+                          <button type="button" disabled={busy !== null}
+                            onClick={() => rewritePost(p)}
+                            style={btnSecondary}
+                            title="Ask AI to rewrite this post using real property data">
+                            {busy === `rewrite:${p.post_id}` ? '…' : p.status === 'proposed' ? '✦ AI Write' : '↺ Rewrite'}
+                          </button>
                           <button type="button" disabled={busy !== null}
                             onClick={() => openMediaPicker(p)}
                             style={btnSecondary}

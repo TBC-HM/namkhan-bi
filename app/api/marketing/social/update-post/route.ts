@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   // Verify caller has access to this post's property — throws Response on 400/401/403
   await requirePropertyAccess(req, existing.property_id);
 
-  if (!['draft', 'ready'].includes(existing.status)) {
+  if (!['draft', 'ready', 'proposed'].includes(existing.status)) {
     return NextResponse.json({ ok: false, error: `cannot edit ${existing.status} post` }, { status: 409 });
   }
 
