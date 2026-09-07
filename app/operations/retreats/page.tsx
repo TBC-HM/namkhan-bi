@@ -4,7 +4,7 @@
 // program name OR folio has a retreat add-on product (Heart of Laos, Namkhan Balance, etc.)
 // Group retreats (eVigeosport, Stone Throw, Fedex, etc.) → separate group page.
 
-import { DashboardPage, Container, KpiTile, type DashboardTab } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, MetricRow, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import { supabase } from '@/lib/supabase';
 
@@ -661,63 +661,77 @@ export default async function RetreatsPage({ propertyId }: Props) {
       subtitle={`Operations · Departments · Retreats · ${fitConfirmed.length} confirmed stays · property_id=${pid}`}
       tabs={tabs}
     >
-      {/* ── 3 programs in one row ── */}
-      <Container
-        title="FIT retreat programs"
-        subtitle="Three programs, two tiers each · all rates per night incl. 10% SC + 10% VAT · peak season excluded"
-        density="compact"
-      >
-        <div style={{ display: 'flex', flexDirection: 'row', gap: 0, width: '100%', alignItems: 'flex-start' }}>
-          {PROGRAMS.map((p, i) => (
-            <ProgramPanel key={p.code} p={p} last={i === PROGRAMS.length - 1} />
-          ))}
-        </div>
-      </Container>
+      {/* ── 1 · Performance — headline stripe, full page width ── */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title="FIT performance"
+          subtitle="All FIT retreat bookings · website, email & OTA · from 2025"
+          density="compact"
+          expandable={false}
+        >
+          <MetricRow
+            size="sm"
+            tiles={[
+              { label: 'FIT revenue', value: fitRevenue, currency: 'USD',
+                footnote: `${fitConfirmed.length} confirmed stays`,
+                status: fitRevenue > 0 ? 'green' : 'grey' },
+              { label: 'ADR / night', value: fitAdr, currency: 'USD',
+                footnote: 'revenue ÷ room nights', status: 'grey' },
+              { label: 'Avg LOS', value: `${fmtN(fitAvgLos)}n`,
+                footnote: 'nights per stay · programs run 2–6n', status: 'grey' },
+              { label: 'Add-on / stay', value: addOnPerStay, currency: 'USD',
+                footnote: 'non-room folio charges',
+                status: addOnPerStay > 0 ? 'green' : 'grey' },
+              { label: 'Cancellation rate', value: `${fmtN(fitCancRate, 0)}%`,
+                footnote: `${fitCancelled} canx of ${fitAll.length} total`,
+                status: fitCancRate > 35 ? 'red' : 'grey' },
+              { label: 'Package revenue', value: totalPackageRev, currency: 'USD',
+                footnote: `${fitRevenue > 0 ? Math.round((totalPackageRev / fitRevenue) * 100) : 0}% of total — F&B + Spa + Activities`,
+                status: totalPackageRev > 0 ? 'green' : 'grey' },
+            ]}
+          />
+        </Container>
+      </div>
 
-      {/* ── KPIs ── */}
-      <Container
-        title="FIT performance"
-        subtitle={`All FIT retreat bookings · website, email & OTA · from 2025`}
-        density="compact"
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 12 }}>
-          <KpiTile label="FIT revenue" value={fitRevenue} currency="USD"
-            footnote={`${fitConfirmed.length} confirmed stays`}
-            status={fitRevenue > 0 ? 'green' : 'grey'} size="sm" />
-          <KpiTile label="ADR / night" value={fitAdr} currency="USD"
-            footnote="revenue ÷ room nights" status="grey" size="sm" />
-          <KpiTile label="Avg LOS" value={`${fmtN(fitAvgLos)}n`}
-            footnote="nights per stay" status="grey" size="sm" />
-          <KpiTile label="Add-on / stay" value={addOnPerStay} currency="USD"
-            footnote="non-room folio charges"
-            status={addOnPerStay > 0 ? 'green' : 'grey'} size="sm" />
-          <KpiTile label="Cancellation rate" value={`${fmtN(fitCancRate, 0)}%`}
-            footnote={`${fitCancelled} canx of ${fitAll.length} total`}
-            status={fitCancRate > 35 ? 'red' : 'grey'} size="sm" />
-          <KpiTile label="Package revenue" value={totalPackageRev} currency="USD"
-            footnote={`${fitRevenue > 0 ? Math.round((totalPackageRev / fitRevenue) * 100) : 0}% of total — F&B + Spa + Activities`}
-            status={totalPackageRev > 0 ? 'green' : 'grey'} size="sm" />
-          <KpiTile label="Room revenue (retreats)" value={totalRoomRev} currency="USD"
-            footnote={`${fitRevenue > 0 ? Math.round((totalRoomRev / fitRevenue) * 100) : 0}% of total — accommodation only`}
-            status="grey" size="sm" />
-        </div>
-      </Container>
+      {/* ── 2 · Programs & pricing — full page width, directly under the stripe ── */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title="FIT retreat programs"
+          subtitle="Three programs, two tiers each · all rates per night incl. 10% SC + 10% VAT · peak season excluded"
+          density="compact"
+        >
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 0, width: '100%', alignItems: 'flex-start' }}>
+            {PROGRAMS.map((p, i) => (
+              <ProgramPanel key={p.code} p={p} last={i === PROGRAMS.length - 1} />
+            ))}
+          </div>
+        </Container>
+      </div>
 
-      {/* ── Revenue split ── */}
-      <Container
-        title="Revenue split — room vs. retreat package"
-        subtitle={`Package upcharge = program price from rate plan · currently all posts to Rooms in Cloudbeds · ${fmt$(totalPackageRev)} is overcrediting Rooms`}
-        density="compact"
-      >
-        <RevenueSplitTable
-          rows={splitRows}
-          totalPackage={totalPackageRev}
-          totalRoom={totalRoomRev}
-          totalExtra={totalExtraRev}
-        />
-      </Container>
+      {/* ── 3 · Trend ── */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Monthly revenue" subtitle="Confirmed FIT stays by check-in month · 2025 onwards" density="compact">
+          <MonthlyBars data={monthlyData} />
+        </Container>
+      </div>
 
-      {/* ── By program ── */}
+      {/* ── 4 · Where the money sits — widest table, needs the full row ── */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title="Revenue split — room vs. retreat package"
+          subtitle={`Package upcharge = program price from rate plan · currently all posts to Rooms in Cloudbeds · ${fmt$(totalPackageRev)} is overcrediting Rooms`}
+          density="compact"
+        >
+          <RevenueSplitTable
+            rows={splitRows}
+            totalPackage={totalPackageRev}
+            totalRoom={totalRoomRev}
+            totalExtra={totalExtraRev}
+          />
+        </Container>
+      </div>
+
+      {/* ── 5 · Two narrow breakdowns — packed side by side by the page grid ── */}
       <Container
         title="By program"
         subtitle="Revenue and stays split by retreat program"
@@ -726,21 +740,6 @@ export default async function RetreatsPage({ propertyId }: Props) {
         <ProgramBreakdownTable rows={progRows} />
       </Container>
 
-      {/* ── Monthly trend ── */}
-      <Container title="Monthly revenue" subtitle="Confirmed FIT stays by check-in month · 2025 onwards" density="compact">
-        <MonthlyBars data={monthlyData} />
-      </Container>
-
-      {/* ── Booking feed ── */}
-      <Container
-        title={`All retreat bookings — ${fitAll.length} total`}
-        subtitle="Every booking identified by rate plan or folio add-on · cancelled shown struck-through"
-        density="compact"
-      >
-        <BookingFeed rows={fitAll} />
-      </Container>
-
-      {/* ── Add-on spend ── */}
       <Container
         title="Add-on spend"
         subtitle={`Non-room charges on retreat folios · total ${fmt$(addOnTotal)} · ${fmt$(addOnPerStay)}/stay`}
@@ -748,6 +747,17 @@ export default async function RetreatsPage({ propertyId }: Props) {
       >
         <AddOnTable rows={addOnRows} />
       </Container>
+
+      {/* ── 6 · Detail — 8 columns, needs the full row ── */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title={`All retreat bookings — ${fitAll.length} total`}
+          subtitle="Every booking identified by rate plan or folio add-on · cancelled shown struck-through"
+          density="compact"
+        >
+          <BookingFeed rows={fitAll} />
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
