@@ -17,11 +17,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const PHOTO_AREAS = ['restaurant','lifestyle','rooms','grounds','pool','Organic Farm','activities','luang_prabang'];
+// Fallback area order when no photo found by asset_id (qc_score > 75 filter)
+const PHOTO_AREA_FALLBACKS = ['lifestyle', 'restaurant', 'grounds', 'rooms', 'pool'];
 
 const SYSTEM_PROMPT =
   `You are Lumen, social content lead for The Namkhan — a 24-room Small Luxury Hotels of the World jungle eco-lodge in Luang Prabang, Laos, with an organic eco-farm on the Nam Khan river. Voice: warm, sensory, understated luxury; Lao provenance; never salesy or cliché; no exclamation spam; max 1 emoji if it adds warmth.
-Return ONLY valid JSON, no prose, no markdown: {"caption":"...","hashtags":["#tag1","#tag2"],"photo_area":"rooms","link_id":null}`;
+Return ONLY valid JSON, no prose, no markdown: {"caption":"...","hashtags":["#tag1","#tag2"],"photo_id":"<uuid>","link_id":<number>}`;
 
 const HASHTAG_CATEGORIES: Record<string, string[]> = {
   instagram:       ['subject','mood','activity','food_beverage','property_area','style'],
@@ -71,9 +72,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, post_id: payload.post_id, already: false, ai_skipped: 'no_slot_context' });
   }
 
-  // 4. Fetch platform spec, channel rule, hashtag candidates, and link catalog in parallel
+  // 4. Fetch platform spec, channel rule, hashtag candidates, link catalog, and top photos in parallel
   const tagCategories = HASHTAG_CATEGORIES[slot.platform] ?? ['subject', 'activity'];
-  const [{ data: spec }, { data: rule }, tagsRes, linksRes] = await Promise.all([
+  const [{ data: spec }, { data: rule }, tagsRes, linksRes, photosRes] = await Promise.all([
     sb.from('v_social_platform_specs')
       .select('caption_max_chars,hashtags_allowed,hashtag_max,requires_title,title_max_chars')
       .eq('platform', slot.platform)
@@ -96,6 +97,16 @@ export async function POST(req: NextRequest) {
       .eq('active', true)
       .order('is_pinned', { ascending: false })
       .limit(20),
+    // Top-scored photos (qc_score > 75) with captions — AI picks by asset_id
+    sb.from('mkt_v_media_ready')
+      .select('asset_id,caption,alt_text,property_area,renders,raw_path')
+      .eq('property_id', slot.property_id)
+      .eq('asset_type', 'photo')
+      .contains('usage_rights', ['social_organic'])
+      .not('raw_path', 'is', null)
+      .gt('qc_score', 75)
+      .order('qc_score', { ascending: false })
+      .limit(20),
   ]);
 
   const captionMax = (spec as any)?.caption_max_chars ?? 500;
@@ -115,6 +126,15 @@ export async function POST(req: NextRequest) {
   type LinkRow = { id: number; title: string; url: string; is_pinned: boolean };
   const links: LinkRow[] = (linksRes as any)?.data ?? [];
   const linkMenu = links.map((l) => `${l.id}|${l.title}`).join(', ');
+  const defaultLink = links.find((l) => l.is_pinned) ?? links[0] ?? null;
+
+  type PhotoCandidate = { asset_id: string; caption: string | null; alt_text: string | null; property_area: string | null; renders: Record<string,string> | null; raw_path: string | null };
+  const photos: PhotoCandidate[] = (photosRes as any)?.data ?? [];
+  const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+  const photoMap = new Map(photos.map((p) => [p.asset_id, p]));
+  const photoMenu = photos
+    .map((p) => `${p.asset_id} | ${p.caption ?? p.alt_text ?? p.property_area ?? 'photo'} | ${p.property_area ?? ''}`)
+    .join('\n');
 
   // 5. Build AI prompt from real slot data + channel rule context
   const slotLines = [
@@ -141,20 +161,19 @@ export async function POST(req: NextRequest) {
     ? `Also write a pin TITLE (max ${titleMax} chars, keyword-first, no hashtags) in the "title" field.`
     : '';
 
-  // First pinned link — guaranteed fallback for link_id when AI returns null
-  const defaultLink = links.find((l) => l.is_pinned) ?? links[0] ?? null;
-
   const userPrompt = `Write one ${slot.platform} post for this calendar slot:
 ${slotLines}
 ${channelContext ? `\n${channelContext}` : ''}
 Caption limit: ${captionMax} characters (HARD LIMIT — count every character including hashtags; do not exceed under any circumstances).
 ${titleLine}
 ${hashtagLine}
-PHOTO AREA — you MUST pick exactly one from this list (case-sensitive, no other values accepted): ${PHOTO_AREAS.join(', ')}. Put it in "photo_area".
-LINK — pick the single most relevant link id from the list below. ALWAYS return a link_id number — never return null. If the post is about atmosphere/experience, use the booking or homepage link. If no perfect match, default to id 1 (booking):
+PHOTO — pick the asset_id of the photo whose caption best matches this post's tone and subject. All listed photos have qc_score > 75. Return its UUID in "photo_id". You MUST pick one:
+${photoMenu || '(no photos available — use null)'}
+
+LINK — pick the single most relevant link id. ALWAYS return a link_id number — never return null. Default to id 1 (booking) when no specific match:
 ${linkMenu || '(none available)'}
 
-Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_area":"<one of the areas above>","link_id":<number>${requiresTitle ? ',"title":"..."' : ''}}`;
+Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_id":"<uuid>","link_id":<number>${requiresTitle ? ',"title":"..."' : ''}}`;
 
   // 6. Call AI
   const aiResult = await callAnthropic({
@@ -171,51 +190,57 @@ Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_area":"<
   // 7. Parse AI response
   let caption = '';
   let hashtags: string[] = [];
-  let photoArea: string | null = null;
+  let photoId: string | null = null;
   let linkId: number | null = null;
   let aiTitle: string | null = null;
   try {
     const m = aiResult.text.match(/\{[\s\S]*\}/);
     if (m) {
       const parsed = JSON.parse(m[0]);
-      caption   = String(parsed.caption ?? '').slice(0, captionMax).trim();
-      hashtags  = Array.isArray(parsed.hashtags)
+      caption  = String(parsed.caption ?? '').slice(0, captionMax).trim();
+      hashtags = Array.isArray(parsed.hashtags)
         ? (parsed.hashtags as unknown[]).filter((h) => typeof h === 'string').slice(0, hashtagMax)
         : [];
-      photoArea = typeof parsed.photo_area === 'string' && PHOTO_AREAS.includes(parsed.photo_area)
-        ? parsed.photo_area : null;
-      linkId    = typeof parsed.link_id === 'number' ? parsed.link_id : null;
+      photoId  = typeof parsed.photo_id === 'string' && photoMap.has(parsed.photo_id)
+        ? parsed.photo_id : null;
+      linkId   = typeof parsed.link_id === 'number' ? parsed.link_id : null;
       if (requiresTitle && parsed.title) aiTitle = String(parsed.title).slice(0, titleMax);
     }
   } catch { /* draft keeps brief_md set by fn_social_slot_accept */ }
 
-  // 8. Resolve photo — waterfall: AI area → lifestyle → restaurant → grounds
+  // 8. Resolve photo — AI-picked asset first, then fallback by area (qc_score > 75)
   let mediaUrl: string | null = null;
-  const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
-  const photoAreaFallbacks = [
-    ...(photoArea ? [photoArea] : []),
-    ...(['lifestyle', 'restaurant', 'grounds'].filter((a) => a !== photoArea)),
-  ];
-  for (const area of photoAreaFallbacks) {
-    const { data: photos } = await sb.from('mkt_v_media_ready')
-      .select('raw_path,renders')
-      .eq('property_id', slot.property_id)
-      .eq('property_area', area)
-      .eq('asset_type', 'photo')
-      .contains('usage_rights', ['social_organic'])
-      .not('raw_path', 'is', null)
-      .order('captured_at', { ascending: false, nullsFirst: false })
-      .limit(1);
-    if (photos && photos.length > 0) {
-      const ph = photos[0] as { raw_path: string | null; renders: Record<string, string> | null };
-      mediaUrl = ph.renders?.web_2k
-        ? `${STORAGE_BASE}/${ph.renders.web_2k}`
-        : ph.raw_path ? `${STORAGE_BASE}/${ph.raw_path}` : null;
-      if (mediaUrl) break;
+  const resolveUrl = (ph: { raw_path: string | null; renders: Record<string,string> | null } | null) => {
+    if (!ph) return null;
+    return ph.renders?.web_2k
+      ? `${STORAGE_BASE}/${ph.renders.web_2k}`
+      : ph.raw_path ? `${STORAGE_BASE}/${ph.raw_path}` : null;
+  };
+
+  if (photoId) {
+    mediaUrl = resolveUrl(photoMap.get(photoId) ?? null);
+  }
+  if (!mediaUrl) {
+    // Fallback: best qc_score > 75 photo in preferred areas
+    for (const area of PHOTO_AREA_FALLBACKS) {
+      const { data: fallbackPhotos } = await sb.from('mkt_v_media_ready')
+        .select('raw_path,renders')
+        .eq('property_id', slot.property_id)
+        .eq('property_area', area)
+        .eq('asset_type', 'photo')
+        .contains('usage_rights', ['social_organic'])
+        .not('raw_path', 'is', null)
+        .gt('qc_score', 75)
+        .order('qc_score', { ascending: false })
+        .limit(1);
+      if (fallbackPhotos && fallbackPhotos.length > 0) {
+        mediaUrl = resolveUrl(fallbackPhotos[0] as { raw_path: string | null; renders: Record<string,string> | null });
+        if (mediaUrl) break;
+      }
     }
   }
 
-  // Resolve link — fallback to first pinned link if AI returned null or unknown id
+  // Resolve link — fallback to first pinned link when AI returns null or unknown id
   const resolvedLink = linkId != null ? (links.find((l) => l.id === linkId) ?? defaultLink) : defaultLink;
 
   // 9. Write all enrichments back to the draft
