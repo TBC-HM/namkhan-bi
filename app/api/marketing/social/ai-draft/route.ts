@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   };
   const tagCats = TAG_CATEGORIES[platform] ?? ['subject','activity'];
 
-  const [specRes, tagsRes, linksRes, briefRes] = await Promise.all([
+  const [specRes, tagsRes, linksRes, briefRes, vocabRes, channelRuleRes] = await Promise.all([
     sb.from('v_social_platform_specs')
       .select('platform, display_name, caption_max_chars, hashtags_allowed, hashtag_max, requires_title, notes')
       .eq('platform', platform).maybeSingle(),
@@ -55,6 +55,12 @@ export async function POST(req: NextRequest) {
       .order('is_pinned', { ascending: false })
       .limit(30),
     sb.rpc('fn_social_property_brief', { p_property_id: property_id }),
+    sb.from('v_yt_vocabulary_matrix').select('banned_term_lower,luxury_alternative,severity').limit(50),
+    sb.from('v_social_channel_rules')
+      .select('audience_notes,banned_topics')
+      .eq('property_id', property_id)
+      .eq('platform', platform)
+      .maybeSingle(),
   ]);
 
   const spec = specRes.data;
@@ -102,6 +108,19 @@ export async function POST(req: NextRequest) {
 
   const PHOTO_AREAS = ['restaurant','lifestyle','rooms','grounds','pool','Organic Farm','activities','luang_prabang'];
 
+  // Brand vocabulary matrix — never use banned terms
+  type VocabRow = { banned_term_lower: string; luxury_alternative: string; severity: string };
+  const vocab = ((vocabRes as any)?.data ?? []) as VocabRow[];
+  const vocabBlock = vocab.filter(v => v.severity === 'block').map(v =>
+    v.luxury_alternative ? `"${v.banned_term_lower}" → say "${v.luxury_alternative}" instead` : `"${v.banned_term_lower}" — do not use`
+  ).join('\n  ');
+
+  // Channel-level banned topics (e.g. X: politics, religion, competitors by name)
+  const bannedTopics = ((channelRuleRes as any)?.data?.banned_topics ?? []) as string[];
+  const bannedTopicsLine = bannedTopics.length > 0
+    ? `NEVER mention these on ${platformLabel}: ${bannedTopics.join(', ')}.`
+    : '';
+
   // Category-aware hashtag pools — infer from explicit code OR hint text (post title)
   const isRetreat = categoryCode.includes('retreat') || categoryCode.includes('wellness') || categoryCode.includes('mindful')
     || hint.toLowerCase().includes('retreat') || hint.toLowerCase().includes('wellness');
@@ -116,6 +135,9 @@ HARD RULES — violation = rejected post:
 1. Caption MUST be ≤ ${captionMax} characters. COUNT CAREFULLY. This is an absolute limit — do not exceed it.
 2. NEVER mention prices, rates, nightly costs, "all-inclusive", or any monetary figure — not even approximate ones. Direct readers to the website or say "Book direct" instead.
 3. Only use facts from the PROPERTY DATA below. Never invent room names, spa treatments, or experiences.
+4. BRAND VOCABULARY — never use these terms (use the luxury alternative instead):
+  ${vocabBlock || '(none)'}
+${bannedTopicsLine ? `5. ${bannedTopicsLine}` : ''}
 
 STYLE:
 - Voice: warm, evocative, sensory, understated luxury. Never sales-y. Max 1 emoji.

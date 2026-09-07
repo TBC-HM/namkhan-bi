@@ -189,7 +189,7 @@ type TransportRow = { name: string; transport_type: string | null; route_from: s
 type CruiseRow = { name: string; cruise_type: string | null; route_from: string | null; route_to: string | null; duration_min: number | null };
 
 async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number, group_slug: string | null) {
-  const [rulesR, linksR, retreatsR, activitiesR, sendersR, goalsR, policyR, groupR, realityR, roomsR, facilitiesR, transportR, cruisesR, learningsR] = await Promise.all([
+  const [rulesR, linksR, retreatsR, activitiesR, sendersR, goalsR, policyR, groupR, realityR, roomsR, facilitiesR, transportR, cruisesR, learningsR, vocabR] = await Promise.all([
     sb.from('v_marketing_email_general_rules').select('rule_kind, rule_text').or(`property_id.eq.${pid},property_id.is.null`).eq('active', true).limit(50),
     sb.from('v_marketing_internal_link_catalog')
       .select('section, anchor_hint, url, title, description, is_pinned')
@@ -215,6 +215,7 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number,
     // Mira read-side (v5): last 10 active learnings from owner edits feed back
     // into every Saya call. Empty is normal (not a stale signal).
     sb.from('v_email_learnings').select('learned_rule, edit_summary, field').eq('property_id', pid).eq('active', true).order('created_at', { ascending: false }).limit(10),
+    sb.from('v_yt_vocabulary_matrix').select('banned_term_lower,luxury_alternative,severity').limit(60),
   ]);
 
   // Per-surface ok/fail — surfaced in context_used.surfaces so a broken view is
@@ -234,6 +235,7 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number,
     transport: !transportR.error,
     cruises: !cruisesR.error,
     learnings: !learningsR.error,
+    vocab: !vocabR.error,
   };
 
   // 2026-08-17 fix (ADR-297, PBS decision: marketing.email_general_rules is canonical
@@ -261,6 +263,9 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number,
   type GroupVoice = { slug: string; name: string; voice_type: 'b2c'|'b2b'|'mixed' | null; voice_summary: string | null };
   const group: GroupVoice | null = ((groupR as { data?: GroupVoice | null }).data) ?? null;
 
+  type VocabRow = { banned_term_lower: string; luxury_alternative: string; severity: string };
+  const vocab = ((vocabR as any)?.data ?? []) as VocabRow[];
+
   return {
     rules,
     links: (linksR.data as Array<{ section: string; anchor_hint: string; url: string; title: string | null; description: string | null; is_pinned: boolean | null }> | null) ?? [],
@@ -276,6 +281,7 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number,
     transport: (transportR.data as TransportRow[] | null) ?? [],
     cruises: (cruisesR.data as CruiseRow[] | null) ?? [],
     learnings: (learningsR.data as Array<{ learned_rule: string | null; edit_summary: string | null; field: string | null }> | null) ?? [],
+    vocab,
     surfaces,
   };
 }
@@ -570,6 +576,17 @@ function assembleUserPrompt(
   parts.push('### GUARDRAILS (LOAD-BEARING · you must follow these)');
   if (ctx.rules.length === 0) parts.push('(none loaded)');
   else for (const r of ctx.rules) parts.push(`- [${r.rule_kind}] ${r.rule_text}`);
+
+  const blockedVocab = ctx.vocab.filter(v => v.severity === 'block');
+  if (blockedVocab.length > 0) {
+    parts.push('');
+    parts.push('### BRAND VOCABULARY — HARD BLOCKS (never use these terms)');
+    for (const v of blockedVocab) {
+      parts.push(v.luxury_alternative
+        ? `- "${v.banned_term_lower}" → say "${v.luxury_alternative}" instead`
+        : `- "${v.banned_term_lower}" — do not use`);
+    }
+  }
 
   if (!ctx.policy?.block_links && ctx.links.length > 0) {
     parts.push('');
