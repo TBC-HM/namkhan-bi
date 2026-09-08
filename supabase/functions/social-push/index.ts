@@ -76,6 +76,7 @@ Deno.serve(async (req: Request) => {
     const scheduleDate = p.scheduled_at ? { schedule_date: p.scheduled_at } : {};
 
     // ── Pinterest: always images, separate title + description + board_id ──
+    try {
     if ((p.platform as string) === 'pinterest') {
       const pinTitle = String(p.title ?? '').slice(0, 100);
       const pinBody  = [String(p.caption ?? p.title ?? ''), tags].filter(Boolean).join('\n\n').slice(0, 500);
@@ -146,6 +147,17 @@ Deno.serve(async (req: Request) => {
         photos: files,
         ...scheduleDate,
       }) as Record<string, unknown>;
+    }
+    } catch (upErr) {
+      const errMsg = upErr instanceof Error ? upErr.message : String(upErr);
+      await sb.rpc('fn_social_post_mark_pushed', {
+        p_post_id:       postId,
+        p_up_request_id: null,
+        p_up_job_id:     null,
+        p_up_status:     'error',
+        p_up_error:      errMsg,
+      }).catch(() => { /* best effort */ });
+      return res({ ok: false, error: 'upload_post_sdk_error', detail: errMsg }, 200);
     }
 
     const requestId  = (result?.request_id ?? result?.id ?? null) as string | null;
