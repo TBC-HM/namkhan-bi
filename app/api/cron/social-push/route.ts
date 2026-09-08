@@ -23,7 +23,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-const CRON_SECRET = process.env.CRON_SECRET ?? '';
+const CRON_SECRET = process.env.CRON_SHARED_SECRET ?? process.env.CRON_SECRET ?? '';
 
 export async function GET(req: NextRequest) {
   // Basic auth — reject if secret not set or doesn't match
@@ -39,12 +39,15 @@ export async function GET(req: NextRequest) {
   // Find all approved/scheduled posts whose time has arrived.
   // 'ready' = approved by user but not yet dispatched to Upload Post.
   // 'scheduled' = legacy label; both statuses are eligible for push.
+  // NULL scheduled_at means "publish immediately" — include them explicitly
+  // because SQL NULL <= now() evaluates to NULL (falsy), not TRUE.
+  const now = new Date().toISOString();
   const { data: duePosts, error: qErr } = await sb
     .from('v_social_posts')
     .select('post_id,property_id,platform,scheduled_at')
     .in('status', ['ready', 'scheduled'])
-    .lte('scheduled_at', new Date().toISOString())
-    .order('scheduled_at', { ascending: true })
+    .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
+    .order('scheduled_at', { ascending: true, nullsFirst: true })
     .limit(20); // safety cap per run
 
   if (qErr) {
