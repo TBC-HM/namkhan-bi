@@ -39,6 +39,37 @@ function slotColor(status: SocialCalendarSlot['status']): string {
   }
 }
 
+// Returns the "highest progress" status for a set of slots on one day.
+// Used to tint the day cell so the user can see at a glance which days
+// are done vs. still open.
+function dayProgress(daySlots: SocialCalendarSlot[]): 'published' | 'scheduled' | 'drafted' | 'proposed' | 'empty' {
+  if (daySlots.length === 0) return 'empty';
+  if (daySlots.some((s) => s.status === 'published'))  return 'published';
+  if (daySlots.some((s) => s.status === 'scheduled'))  return 'scheduled';
+  if (daySlots.some((s) => s.status === 'drafted' || s.status === 'accepted')) return 'drafted';
+  return 'proposed';
+}
+
+function dayProgressLabel(p: ReturnType<typeof dayProgress>): string {
+  switch (p) {
+    case 'published':  return '✓ live';
+    case 'scheduled':  return '✓ queued';
+    case 'drafted':    return '~ draft';
+    case 'proposed':   return '○ open';
+    default:           return '';
+  }
+}
+
+function dayProgressColor(p: ReturnType<typeof dayProgress>): string {
+  switch (p) {
+    case 'published':  return '#5DA46B';
+    case 'scheduled':  return FOREST;
+    case 'drafted':    return '#3E8DBE';
+    case 'proposed':   return AMBER;
+    default:           return 'transparent';
+  }
+}
+
 const GLYPH: Record<string, string> = {
   google_business: 'GBP', instagram: 'IG', pinterest: 'PI', tiktok: 'TT',
   facebook: 'FB', linkedin: 'LI', x: 'X',
@@ -134,6 +165,17 @@ export default function SocialCalendar({ propertyId, slots, programs, todayIso, 
           </span>
         </div>
 
+        {/* Day-state legend */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 9, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Day state:</span>
+          {([['empty', 'no slots'], ['proposed', '○ open'], ['drafted', '~ draft'], ['scheduled', '✓ queued'], ['published', '✓ live']] as const).map(([p, label]) => (
+            <span key={p} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 3, height: 12, background: dayProgressColor(p as Parameters<typeof dayProgressColor>[0]), borderRadius: 1, display: 'inline-block' }} />
+              <span style={{ fontSize: 9, color: INK_M }}>{label}</span>
+            </span>
+          ))}
+        </div>
+
         {visible.length === 0 && (
           <div style={{ padding: '18px 12px', textAlign: 'center', color: INK_M, fontSize: 12, background: CREAM, borderRadius: 4, marginBottom: 10 }}>
             No slots in this window yet. <strong>Generate plan</strong> expands the weekly programs
@@ -147,14 +189,23 @@ export default function SocialCalendar({ propertyId, slots, programs, todayIso, 
             const daySlots = byDate.get(iso) ?? [];
             const d = new Date(iso + 'T00:00:00Z');
             const isToday = iso === todayIso;
+            const prog = dayProgress(daySlots);
+            const progColor = dayProgressColor(prog);
             return (
               <div key={iso} style={{
                 background: WHITE, border: `1px solid ${isToday ? FOREST : HAIR}`, borderRadius: 4,
                 padding: '6px 8px', minHeight: 68, display: 'flex', flexDirection: 'column', gap: 4,
+                // Subtle left-border tint shows day status at a glance
+                borderLeft: `3px solid ${prog === 'empty' ? HAIR : progColor}`,
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>{d.toLocaleDateString('en-GB', { day: '2-digit', timeZone: 'UTC' })}</span>
-                  <span style={{ fontSize: 9, color: INK_M }}>{d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })} · {d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                    <span style={{ fontSize: 9, color: INK_M }}>{d.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' })} · {d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>
+                    {prog !== 'empty' && (
+                      <span style={{ fontSize: 8, color: progColor, fontWeight: 700 }}>{dayProgressLabel(prog)}</span>
+                    )}
+                  </div>
                 </div>
                 {daySlots.length === 0 ? (
                   <div style={{ color: INK_M, fontSize: 10 }}>—</div>
