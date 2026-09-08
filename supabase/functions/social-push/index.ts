@@ -27,13 +27,22 @@ function upPlatform(p: string): string {
 
 const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
 
-// Supabase Storage buckets may require the service role key even when the
-// URL path says /public/ — add the header when fetching from our own project.
+// Supabase Storage buckets require the service role key even when the URL
+// says /public/ — add the header only when the URL's hostname exactly matches
+// this project's Supabase host (prevents SSRF credential leak via substring bypass).
 function storageHeaders(url: string): Record<string, string> {
   const srk = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  if (srk && url.includes('supabase.co/storage')) {
-    return { Authorization: `Bearer ${srk}` };
-  }
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+  if (!srk || !supabaseUrl) return {};
+  try {
+    const projectHost = new URL(supabaseUrl).hostname.toLowerCase().replace(/\.$/, '');
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return {};
+    const host = u.hostname.toLowerCase().replace(/\.$/, '');
+    if (host === projectHost && u.pathname.startsWith('/storage/')) {
+      return { Authorization: `Bearer ${srk}` };
+    }
+  } catch { /* malformed URL — no headers */ }
   return {};
 }
 
