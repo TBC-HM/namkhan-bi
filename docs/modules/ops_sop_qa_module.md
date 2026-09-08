@@ -188,8 +188,13 @@ Until those land, most tiles honestly read zero. That is the point of the page.
    triggers an inline recompute (this is what killed the marketing page for
    Donna). `?refresh=1` still passes 0 — and **works here**, because the QA
    recompute is ~0.5 s rather than marketing's 17 s.
-6. No secondary tab bar needed hiding: `lib/nav-subgroups.ts` has no subgroup
-   matching `/operations/quality`.
+6. The page wraps in the `DashboardPage` shell so the **Operations department
+   strip renders on this route** (HoD · Quality · Departments · Inventory ·
+   Maintenance · QA). Tabs come from `DEPT_CFG.operations.subPages` through
+   `rewriteSubPagesForProperty(pid)`, so they stay on-tenant. The brief's "no
+   duplicate secondary tab bar" means do not draw a SECOND strip repeating the
+   page's own six tabs — `lib/nav-subgroups.ts` has no subgroup matching this
+   route, so no `SubTabStrip` renders and there is no duplicate.
 
 ## Change log
 
@@ -198,3 +203,4 @@ Until those land, most tiles honestly read zero. That is the point of the page.
 | `b5735248` | Initial build; Operations menu item added |
 | `f674ee57` | `payload.loops` is null for a tenant with no source_map row — page crashed on Donna |
 | `008141b7` | Dates render in UTC — fixed a real server/client text mismatch (did not clear all hydration errors) |
+| `68107481` | Department sub-menu was missing on the route — page now wraps in the DashboardPage shell |

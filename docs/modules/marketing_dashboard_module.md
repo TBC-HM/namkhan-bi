@@ -164,8 +164,13 @@ header, where staleness is visible rather than hidden.
 3. `params` / `searchParams` are typed as Promises and awaited (Next 14 here).
 4. Display helpers take a widened `Val` type instead of ~40 `as Num` casts —
    jsonb numerics can arrive as strings, and a cast would have hidden that.
-5. No secondary tab bar needed hiding: `lib/nav-subgroups.ts` has no subgroup
-   matching `/marketing/dashboard`, so the shell draws none.
+5. The page wraps in the `DashboardPage` shell so the **Marketing department
+   strip renders on this route** (HoD · Dashboard · Audience · Content · Socials
+   · Web · Reputation · Behaviour). Tabs come from `DEPT_CFG.marketing.subPages`
+   through `rewriteSubPagesForProperty(pid)`, so they stay on-tenant. The brief's
+   "no duplicate secondary tab bar" means do not draw a SECOND strip repeating
+   the page's own five tabs — `lib/nav-subgroups.ts` has no subgroup matching
+   this route, so no `SubTabStrip` renders and there is no duplicate.
 
 ## Change log
 
@@ -175,3 +180,4 @@ header, where staleness is visible rather than hidden.
 | `db43de43` | `p_max_age_minutes` 15 → 1440; page never recomputes synchronously |
 | `60230a28` | `?refresh=1` falls back to the cached payload instead of a dead page |
 | `008141b7` | Dates render in UTC — fixed a real server/client text mismatch (did not clear all hydration errors) |
+| `68107481` | Department sub-menu was missing on the route — page now wraps in the DashboardPage shell |
