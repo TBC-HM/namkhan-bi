@@ -133,7 +133,7 @@ export default async function TripAdvisorPage({
       .select('id, source, reviewer_name, rating_norm, title, body, reviewed_at, response_status, response_text')
       .eq('property_id', pid)
       .eq('source', 'tripadvisor')
-      .order('reviewed_at', { ascending: false })
+      .order('reviewed_at', { ascending: false, nullsFirst: false })
       .limit(500),
     sb.from('v_review_source_summary')
       .select('*')
@@ -380,6 +380,8 @@ function ReviewCard({ r, compact = false }: { r: ReviewRow; compact?: boolean })
   const rating = r.rating_norm != null ? Number(r.rating_norm) : null;
   const replied = r.response_status === 'responded';
   const ratingColor = rating != null ? (rating >= 4 ? TA_G2 : rating <= 2 ? RED2 : '#C28F2C') : INK_M2;
+  const COMPACT_CHARS = 120;
+  const FULL_CHARS    = 320;
 
   return (
     <div style={{
@@ -391,7 +393,9 @@ function ReviewCard({ r, compact = false }: { r: ReviewRow; compact?: boolean })
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: INK_M2 }}>🦉</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: INK2 }}>{r.reviewer_name ?? 'Anonymous'}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: INK2 }}>
+            {r.reviewer_name ?? <span style={{ fontStyle: 'italic', color: INK_M2 }}>Anonymous reviewer</span>}
+          </span>
           {rating != null && (
             <span style={{ fontSize: 11, fontWeight: 700, color: ratingColor }}>{rating.toFixed(1)} ★</span>
           )}
@@ -410,11 +414,25 @@ function ReviewCard({ r, compact = false }: { r: ReviewRow; compact?: boolean })
         </div>
       </div>
       {r.title && <div style={{ fontSize: 12, fontWeight: 600, color: INK2, marginBottom: 3 }}>{r.title}</div>}
-      {!compact && r.body && (
-        <div style={{ fontSize: 11, color: INK_S2, lineHeight: 1.5, marginBottom: 6 }}>
-          {r.body.length > 260 ? r.body.slice(0, 260) + '…' : r.body}
+
+      {/* Body — compact shows first 120 chars; full uses <details> for long reviews */}
+      {r.body && compact && (
+        <div style={{ fontSize: 11, color: INK_S2, lineHeight: 1.5, marginBottom: 4 }}>
+          {r.body.length > COMPACT_CHARS ? r.body.slice(0, COMPACT_CHARS) + '…' : r.body}
         </div>
       )}
+      {r.body && !compact && r.body.length <= FULL_CHARS && (
+        <div style={{ fontSize: 11, color: INK_S2, lineHeight: 1.5, marginBottom: 6 }}>{r.body}</div>
+      )}
+      {r.body && !compact && r.body.length > FULL_CHARS && (
+        <details style={{ marginBottom: 6 }}>
+          <summary style={{ fontSize: 11, color: TA_F2, cursor: 'pointer', listStyle: 'none', userSelect: 'none' }}>
+            {r.body.slice(0, FULL_CHARS)}… <span style={{ fontWeight: 600 }}>▾ read more</span>
+          </summary>
+          <div style={{ marginTop: 4, fontSize: 11, color: INK_S2, lineHeight: 1.5 }}>{r.body.slice(FULL_CHARS)}</div>
+        </details>
+      )}
+
       {!replied && (
         <a href="https://www.tripadvisor.com/ManagementCenter" target="_blank" rel="noopener noreferrer"
           style={{ display: 'inline-block', marginTop: 4, padding: '4px 10px', fontSize: 11, fontWeight: 600, background: TA_G2, color: WHITE2, borderRadius: 3, textDecoration: 'none' }}>
@@ -423,7 +441,7 @@ function ReviewCard({ r, compact = false }: { r: ReviewRow; compact?: boolean })
       )}
       {replied && r.response_text && !compact && (
         <div style={{ marginTop: 6, fontSize: 11, color: INK_S2, fontStyle: 'italic', paddingLeft: 8, borderLeft: `2px solid ${TA_G2}` }}>
-          {r.response_text.length > 200 ? r.response_text.slice(0, 200) + '…' : r.response_text}
+          {r.response_text}
         </div>
       )}
     </div>

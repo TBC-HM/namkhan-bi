@@ -33,13 +33,20 @@ export const REVENUE_PAGES: PageDescriptor[] = [
   { page_slug: 'reports',        page_label: 'Reports',            page_href: '/revenue/reports' },
 ];
 
-// Other dept catalogs — start empty (flat list until PBS provides per-page split).
+// Other dept catalogs.
 export const SALES_PAGES: PageDescriptor[]        = [];
-export const MARKETING_PAGES: PageDescriptor[]    = [];
+export const MARKETING_PAGES: PageDescriptor[]    = [
+  { page_slug: 'social-content',    page_label: 'Social Content',    page_href: '/marketing/social' },
+  { page_slug: 'tripadvisor-social', page_label: 'TripAdvisor',       page_href: '/marketing/social/tripadvisor' },
+  { page_slug: 'newsletter',         page_label: 'Newsletter',         page_href: '/guest/newsletters' },
+];
 export const OPERATIONS_PAGES: PageDescriptor[]   = [];
 export const CONTACTS_PAGES: PageDescriptor[]     = [];
 export const FINANCE_PAGES: PageDescriptor[]      = []; // 'Administration' domain
-export const REPUTATION_PAGES: PageDescriptor[]   = [];
+export const REPUTATION_PAGES: PageDescriptor[]   = [
+  { page_slug: 'tripadvisor',        page_label: 'TripAdvisor',        page_href: '/marketing/social/tripadvisor' },
+  { page_slug: 'google-business',    page_label: 'Google Business',    page_href: '/marketing/social/google-business' },
+];
 export const RETENTION_PAGES: PageDescriptor[]    = [];
 export const NEWSLETTER_PAGES: PageDescriptor[]   = [];
 export const OBSERVATIONS_PAGES: PageDescriptor[] = [];
@@ -144,6 +151,22 @@ export const RULE_PAGE_MAP: Record<string, string> = {
   pricing_bar_stale_stay_date:        'pricing',
   pricing_promo_stacking_below_floor: 'pricing',
   pricing_bar_flat_across_dow:        'pricing',
+
+  // ── Reputation · TripAdvisor ──────────────────────────────────────
+  response_rate_target:               'tripadvisor',
+  rating_drop_pp:                     'tripadvisor',
+  low_scoring_unanswered:             'tripadvisor',
+  scrape_stale_days:                  'tripadvisor',
+  ta_score_min:                       'tripadvisor',
+  ta_ranking_target:                  'tripadvisor',
+
+  // ── Reputation · Google Business ──────────────────────────────────
+  gbp_response_rate_target:           'google-business',
+  gbp_rating_min:                     'google-business',
+
+  // ── Marketing · Social ────────────────────────────────────────────
+  social_posting_cadence_min:         'social-content',
+  social_response_rate_min:           'social-content',
 };
 
 // Seasonal rules — thresholds vary by month (Jan low-season vs July high-season).
