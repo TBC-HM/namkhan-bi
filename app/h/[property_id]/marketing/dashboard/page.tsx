@@ -37,17 +37,29 @@ export default async function MarketingDashboardPage({ params, searchParams }: P
 
   // getSupabaseAdmin() throws when SUPABASE_SERVICE_ROLE_KEY is absent (any
   // environment but Vercel). Degrade to the error card rather than a 500.
-  let data: unknown;
-  let message: string | null = null;
-  try {
-    const res = await getSupabaseAdmin().rpc('fn_mkt_dash_payload', {
-      p_property_id: pid,
-      p_max_age_minutes: maxAgeMinutes,
-    });
-    data = res.data;
-    message = res.error?.message ?? null;
-  } catch (e) {
-    message = e instanceof Error ? e.message : String(e);
+  async function load(maxAge: number) {
+    try {
+      const res = await getSupabaseAdmin().rpc('fn_mkt_dash_payload', {
+        p_property_id: pid,
+        p_max_age_minutes: maxAge,
+      });
+      return { data: res.data as unknown, message: res.error?.message ?? null };
+    } catch (e) {
+      return { data: null as unknown, message: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  let { data, message } = await load(maxAgeMinutes);
+
+  // ?refresh=1 asks fn_mkt_dash_payload to recompute inline, which currently
+  // exceeds the PostgREST statement timeout (~17 s of work). Rather than leave a
+  // dead page, fall back to the cached payload and say the refresh failed. The
+  // real fix is a statement_timeout raise on the function — SQL, so out of scope
+  // for this brief.
+  let refreshFailed: string | null = null;
+  if (message && maxAgeMinutes === 0) {
+    refreshFailed = message;
+    ({ data, message } = await load(1440));
   }
 
   if (message || !data) {
@@ -59,5 +71,14 @@ export default async function MarketingDashboardPage({ params, searchParams }: P
     );
   }
 
-  return <MarketingDashboard pid={pid} payload={data as Payload} initialTab={sp.tab} />;
+  return (
+    <>
+      {refreshFailed && (
+        <p className="mx-auto max-w-[1320px] border-l-[3px] border-amber-600 bg-amber-50 px-3 py-2 text-sm">
+          Refresh did not finish ({refreshFailed}). Showing the last cached payload — its age is in the header below.
+        </p>
+      )}
+      <MarketingDashboard pid={pid} payload={data as Payload} initialTab={sp.tab} />
+    </>
+  );
 }
