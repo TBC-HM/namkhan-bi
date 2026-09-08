@@ -54,8 +54,9 @@ export async function POST(req: NextRequest) {
   if (qErr) return NextResponse.json({ ok: false, error: 'lookup_failed: ' + qErr.message }, { status: 500 });
   if (!qrow) return NextResponse.json({ ok: false, error: `question ${questionId} not found for property ${propertyId}` }, { status: 404 });
 
-  // Save answer to DB
-  const { error: upErr } = await sb
+  // Save answer to DB — select() so we can detect 0-row updates (Supabase
+  // returns no error when the filter matches nothing; we need to check explicitly).
+  const { data: updated, error: upErr } = await sb
     .schema('marketing').from('gbp_questions')
     .update({
       answer_text: answerText,
@@ -63,12 +64,17 @@ export async function POST(req: NextRequest) {
       answered_by: 'the_namkhan',
     })
     .eq('question_id', questionId)
-    .eq('property_id', propertyId);
+    .eq('property_id', propertyId)
+    .select('question_id');
 
   if (upErr) return NextResponse.json({ ok: false, error: 'db_update_failed: ' + upErr.message }, { status: 500 });
+  if (!updated || updated.length === 0) {
+    return NextResponse.json({ ok: false, error: `update matched 0 rows — question ${questionId} may not belong to property ${propertyId}` }, { status: 404 });
+  }
 
-  // Optionally call google-sync to post to GBP API (non-blocking on failure)
-  // google_question_name not yet in schema — null until column is added.
+  // google_question_name not yet in schema — answer is saved to DB only.
+  // Publishing to Google requires the GBP API allowlist + google_question_name column.
+  // Once both land, un-null googleQuestionName here (ADR pending).
   const googleQuestionName: string | null = null;
   if (googleQuestionName) {
     try {
@@ -78,5 +84,9 @@ export async function POST(req: NextRequest) {
     } catch { /* best-effort — DB is already saved */ }
   }
 
-  return NextResponse.json({ ok: true, synced_to_google: !!googleQuestionName });
+  return NextResponse.json({
+    ok: true,
+    synced_to_google: !!googleQuestionName,
+    note: googleQuestionName ? undefined : 'Answer saved to Namkhan BI — will publish to Google once GBP API allowlist is approved.',
+  });
 }

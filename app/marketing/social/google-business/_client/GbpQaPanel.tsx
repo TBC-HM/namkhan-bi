@@ -77,7 +77,12 @@ function QaCard({ row, propertyId }: { row: QaRow; propertyId: number }) {
         setAnswered(true);
         setOpen(false);
         setText('');
-        setResult({ ok: true, message: 'Answer saved.' });
+        setResult({
+          ok: true,
+          message: j.synced_to_google
+            ? 'Answer published to Google.'
+            : (j.note ?? 'Answer saved — will publish to Google once GBP API allowlist is approved.'),
+        });
       } else {
         setResult({ ok: false, message: String(j.error ?? 'save failed') });
       }
