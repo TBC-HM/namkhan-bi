@@ -631,6 +631,10 @@ const OPERATIONS_CFG: DeptCfg = {
     // PBS 2026-07-07 night: QA back as top-level tab. Docs moved to a sub-tab
     // of Overview (renders below the top strip when on Overview).
     { label: 'HoD',              href: '/h/260955/operations'                 },
+    // PBS 2026-09-09 · brief quality-dashboard-v1 — the ops_sop_qa_module area
+    // dashboard (six tabs on fn_qa_dash_payload). The QA tab below still points at
+    // the SOP registry, which is one of this page's CTA targets.
+    { label: 'Quality',          href: '/h/260955/operations/quality'         },
     { label: 'Departments',      href: '/h/260955/operations/rooms'           },
     { label: 'Inventory',        href: '/h/260955/operations/inventory'       },
     { label: 'Maintenance',      href: '/h/260955/operations/maintenance'     },
