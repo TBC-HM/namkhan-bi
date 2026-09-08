@@ -6,6 +6,11 @@
 // mounted here directly with a tenant-scoped basePath; the product grid is
 // the new ShopCatalog client island. Auto-approve cap reads from
 // procurement.config (seeded $500), no longer hardcoded.
+//
+// 2026-09-09 (ADR-310): ShopCart now takes propertyId as a REQUIRED prop.
+// procurement.requests.property_id is NOT NULL with no default, so without it
+// every submit died on 23502 before the routing RPC was reached.
+// NAV IS UNCHANGED: tabs still come from OPERATIONS_SUBPAGES exactly as before.
 
 import { redirect } from 'next/navigation';
 import { DashboardPage, Container, MetricRow, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -67,11 +72,11 @@ async function fetchShopData(propertyId: number) {
 export default async function ShopPage({ params }: Props) {
   const propertyId = Number(params.property_id);
   if (!Number.isFinite(propertyId) || propertyId <= 0) {
-    redirect(`/h/${NAMKHAN_PROPERTY_ID}/operations/inventory/shop`);
+    redirect('/h/' + NAMKHAN_PROPERTY_ID + '/operations/inventory/shop');
   }
 
   const { items, categories, units, locations, cap } = await fetchShopData(propertyId);
-  const basePath = `/h/${propertyId}/operations/inventory`;
+  const basePath = '/h/' + propertyId + '/operations/inventory';
 
   const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
     key: s.href,
@@ -89,7 +94,7 @@ export default async function ShopPage({ params }: Props) {
             { label: 'Items available',    value: fmtInt(items.length),      footnote: 'Approved + active catalog items' },
             { label: 'Categories',         value: fmtInt(categories.length), footnote: 'Rows in inv.categories' },
             { label: 'Delivery locations', value: fmtInt(locations.length),  footnote: 'Rows in inv.locations' },
-            { label: 'Auto-approve cap',   value: `$${fmtInt(cap)}`,         footnote: 'procurement.config · under this auto-approves' },
+            { label: 'Auto-approve cap',   value: '$' + fmtInt(cap),         footnote: 'procurement.config · under this auto-approves' },
           ]}
         />
       </div>
@@ -101,7 +106,12 @@ export default async function ShopPage({ params }: Props) {
       </div>
 
       {/* Cart drawer + propose-new-item modal (client islands) */}
-      <ShopCart locations={locations} basePath={basePath} autoApproveCap={cap} />
+      <ShopCart
+        locations={locations}
+        propertyId={propertyId}
+        basePath={basePath}
+        autoApproveCap={cap}
+      />
       <ProposeNewItemButton categories={categories} units={units} suppliers={[]} />
     </DashboardPage>
   );
