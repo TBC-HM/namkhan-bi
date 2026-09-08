@@ -122,6 +122,34 @@ every tenant. On Donna, where the PM tile is entirely em dashes, "broken at
 assign" is asserted about a tenant with no PM data at all. Cosmetic, but it
 states a diagnosis the payload did not support.
 
+**Residual hydration warnings (open, cosmetic).** Both dashboards log React #425
+(text content does not match server-rendered HTML) plus #418 and #423 on every
+load. React then discards the server HTML for the tree and re-renders it on the
+client. Nothing is visibly wrong: the final DOM is textually identical to the
+server HTML, all tabs render, and no data is affected.
+
+What is established:
+
+- It is ours. Untouched control pages (`/h/260955/operations/sops`,
+  `/h/260955/marketing/audience`, `/h/260955/revenue`) log only React #329, which
+  is a pre-existing shell issue. Our two pages add the #425/#418/#423 cluster.
+- It is not tab-specific — it fires on the simplest tab (`?tab=depts`) too, so it
+  lives in the shared header or tab bar, not in any tab's markup.
+- **Cause 1, found and fixed:** `generated_at` was rendered with no `timeZone`,
+  so the server (UTC) and the browser (any offset) produced different text —
+  server `08/09/2026, 22:35:13`, client `09/09/2026, 00:35:13`. Fixed in
+  `008141b7`; server and client now emit identical header text, verified by
+  diffing the server HTML against the hydrated DOM.
+- **Cause 2, hypothesised and disproved:** that Node's ICU and the browser's ICU
+  emit different invisible characters (NBSP vs space), which a whitespace-
+  normalising diff would hide. All `Intl` use was removed in `792b4afa` and the
+  errors were unchanged. The formatting is now deterministic and locale-
+  independent, which is worth keeping, but it was not the cause.
+- Root cause of the residual is **not yet identified**. Next step would be to
+  reproduce against a local dev build, where React prints the offending text
+  instead of a minified error code — that needs `SUPABASE_SERVICE_ROLE_KEY`
+  locally, which this environment does not have.
+
 **Four CTAs 404** — see the link check above. Data fix, not a code fix.
 
 **The module's page-probe still points at the old URL.** The ship-gate probe for
@@ -169,4 +197,4 @@ Until those land, most tiles honestly read zero. That is the point of the page.
 |---|---|
 | `b5735248` | Initial build; Operations menu item added |
 | `f674ee57` | `payload.loops` is null for a tenant with no source_map row — page crashed on Donna |
-| `008141b7` | Dates render in UTC — server/client mismatch was breaking hydration |
+| `008141b7` | Dates render in UTC — fixed a real server/client text mismatch (did not clear all hydration errors) |
