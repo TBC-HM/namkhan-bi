@@ -26,8 +26,17 @@ const num = (v: Val): number | null => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
-const nInt = (v: Val) => { const n = num(v); return n == null ? '—' : Math.round(n).toLocaleString('en-US'); };
-const nMoney = (v: Val) => { const n = num(v); return n == null ? '—' : '$' + Math.round(n).toLocaleString('en-US'); };
+// Dates and numbers are formatted WITHOUT Intl. Node's ICU and the browser's ICU
+// can render the same instant with different invisible characters (NBSP vs space,
+// U+202F before AM/PM), which is a hydration mismatch React reports as #425 — and
+// which a whitespace-normalising diff cannot see. Building the strings by hand
+// makes server and client byte-identical. All values are read in UTC, matching the
+// database, the crons and deploy.deployments.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const pad2 = (n: number) => (n < 10 ? '0' + n : String(n));
+const group = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const nInt = (v: Val) => { const n = num(v); return n == null ? '—' : group(Math.round(n)); };
+const nMoney = (v: Val) => { const n = num(v); return n == null ? '—' : '$' + group(Math.round(n)); };
 const nMoneyK = (v: Val) => { const n = num(v); return n == null ? '—' : '$' + (n / 1000).toFixed(1) + 'k'; };
 const nPct = (v: Val, d = 1) => { const n = num(v); return n == null ? '—' : n.toFixed(d) + '%'; };
 const nSigned = (v: Val, suffix = '%') => { const n = num(v); return n == null ? '—' : (n > 0 ? '+' : '') + n.toFixed(1) + suffix; };
@@ -38,11 +47,12 @@ const nSigned = (v: Val, suffix = '%') => { const n = num(v); return n == null ?
 const nDate = (v: Val) => {
   if (typeof v !== 'string' || !v) return '—';
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return Number.isNaN(d.getTime()) ? '—' : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 };
 const nStamp = (v: string) => {
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('en-GB', { timeZone: 'UTC' }) + ' UTC';
+  if (Number.isNaN(d.getTime())) return '—';
+  return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}, ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())} UTC`;
 };
 const tone = (v: Val, bad: (n: number) => boolean, warn?: (n: number) => boolean) => {
   const n = num(v);
