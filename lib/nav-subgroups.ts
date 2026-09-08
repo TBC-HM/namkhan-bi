@@ -512,6 +512,27 @@ function stripTenantPrefix(p: string): { normalized: string; tenantPrefix: strin
     : { normalized: p, tenantPrefix: '' };
 }
 
+/**
+ * Does a department-strip tab point at this subgroup's parent?
+ *
+ * Dept tabs come from DEPT_CFG and carry a tenant prefix
+ * (`/h/260955/operations/quality`), while a subgroup's `parentHref` is always
+ * unprefixed (`/operations/quality`). DashboardPage's original
+ * `t.href === subGroup.parentHref` check therefore never matched for prefixed
+ * tabs, so the parent tab stayed unhighlighted while an operator was inside one
+ * of its sub-pages — visible on /operations/sops, /operations/qa/*,
+ * /marketing/compiler, /operations/spa and every other subgroup child.
+ *
+ * Additive by design: callers keep their existing equality check and use this as
+ * an OR, so a tab that highlights today can never stop highlighting.
+ */
+export function isSubgroupParentHref(tabHref: string | undefined, parentHref: string): boolean {
+  if (!tabHref) return false;
+  const tab = stripTenantPrefix(tabHref.split('?')[0]).normalized;
+  const parent = stripTenantPrefix(parentHref.split('?')[0]).normalized;
+  return tab === parent;
+}
+
 export function findSubGroup(pathname: string): SubGroup | null {
   const { normalized } = stripTenantPrefix(pathname);
   // Exact match on member first

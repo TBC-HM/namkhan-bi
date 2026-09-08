@@ -30,7 +30,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import type { DashboardPageProps, DashboardTab } from '../types';
 import HeaderPills from '@/components/page/HeaderPills';
-import { findSubGroup, prefixTabHref } from '@/lib/nav-subgroups';
+import { findSubGroup, isSubgroupParentHref, prefixTabHref } from '@/lib/nav-subgroups';
 import '../internal/tokens.css';
 
 export default function DashboardPage(props: DashboardPageProps) {
@@ -46,7 +46,13 @@ export default function DashboardPage(props: DashboardPageProps) {
   const smartTabs = tabs?.map(t => {
     if (t.active) return t;
     const isExact = t.href && (pathname === t.href || pathname === t.href.split('?')[0]);
-    const isSubgroupParent = subGroup && t.href === subGroup.parentHref;
+    // PBS 2026-09-09: the original equality check only fired for UNPREFIXED tab
+    // hrefs, so a tenant-prefixed dept tab (every one of them, they come from
+    // DEPT_CFG as /h/260955/...) never matched its subgroup parent and nothing
+    // highlighted while you were inside a sub-page. The second clause is purely
+    // additive — the first is unchanged, so no tab that highlights today can stop.
+    const isSubgroupParent =
+      subGroup && (t.href === subGroup.parentHref || isSubgroupParentHref(t.href, subGroup.parentHref));
     return isExact || isSubgroupParent ? { ...t, active: true } : t;
   });
 
