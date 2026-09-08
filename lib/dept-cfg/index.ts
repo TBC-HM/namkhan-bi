@@ -631,14 +631,19 @@ const OPERATIONS_CFG: DeptCfg = {
     // PBS 2026-07-07 night: QA back as top-level tab. Docs moved to a sub-tab
     // of Overview (renders below the top strip when on Overview).
     { label: 'HoD',              href: '/h/260955/operations'                 },
-    // PBS 2026-09-09 · brief quality-dashboard-v1 — the ops_sop_qa_module area
-    // dashboard (six tabs on fn_qa_dash_payload). The QA tab below still points at
-    // the SOP registry, which is one of this page's CTA targets.
+    // PBS 2026-09-09 · brief quality-dashboard-v1 — the ops_sop_qa_module area.
+    // This is the ONLY quality entry in Operations: the dashboard (six tabs on
+    // fn_qa_dash_payload) measures the five loops, and the QA working pages —
+    // SOP registry, QA registry, proposals, generate, agent instructions — hang
+    // off it as the sub-strip defined in lib/nav-subgroups.ts.
     { label: 'Quality',          href: '/h/260955/operations/quality'         },
     { label: 'Departments',      href: '/h/260955/operations/rooms'           },
     { label: 'Inventory',        href: '/h/260955/operations/inventory'       },
     { label: 'Maintenance',      href: '/h/260955/operations/maintenance'     },
-    { label: 'QA',               href: '/h/260955/operations/sops'            },
+    // PBS 2026-09-09: the separate "QA" top tab is gone — it pointed at
+    // /operations/sops and duplicated the Quality area. The SOP registry and the
+    // rest of the QA tooling are now the Quality area's sub-strip (see the
+    // /operations/quality subgroup in lib/nav-subgroups.ts). One area, not two.
   ],
   quickChips: [
     { label: 'HoD',        href: '/h/260955/operations'             },

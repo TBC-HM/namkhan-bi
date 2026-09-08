@@ -102,14 +102,23 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
   // PBS 2026-07-09 pm: QA sub-strip — SOPs + Registry + Proposals + Generate.
+  // PBS 2026-09-09: re-parented from /operations/sops to /operations/quality.
+  // Operations used to carry TWO quality areas — a "Quality" tab (the dashboard)
+  // and a "QA" tab (the SOP registry). The QA tab is gone from DEPT_CFG and this
+  // subgroup now hangs the whole QA toolset off Quality: the dashboard measures
+  // the five loops, these pages are where the work is done. Adding
+  // /operations/quality as a member means the strip is present on the dashboard
+  // too, so the tools are one click away from the numbers that flag them.
   {
-    parentHref: '/operations/sops',
+    parentHref: '/operations/quality',
     members: [
+      '/operations/quality',
       '/operations/sops', '/operations/qa',
       '/operations/qa/registry', '/operations/qa/proposals',
       '/operations/qa/generate', '/operations/qa/agent-instructions',
     ],
     tabs: [
+      { label: 'Dashboard',          href: '/h/260955/operations/quality'               },
       { label: 'SOPs',               href: '/h/260955/operations/sops'                  },
       { label: 'QA registry',        href: '/h/260955/operations/qa/registry'           },
       { label: 'Proposals',          href: '/h/260955/operations/qa/proposals'          },
