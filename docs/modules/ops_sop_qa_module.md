@@ -55,10 +55,15 @@ and `/operations/qa/*` keep working and keep their sub-strip; it is simply paren
 to Quality now, and is present on the dashboard too, so the tool sits one click
 from the number that flags it.
 
-Known papercut: on the QA sub-pages no department tab highlights, because
-`DashboardPage` compares a tenant-prefixed tab href against an unprefixed subgroup
-`parentHref`. That was already true when the parent was "QA"; fixing it means
-editing the shared shell.
+Fixed in `4c5c2d36`: the parent tab now highlights while you are inside any
+subgroup child, so **Quality** stays lit on `/operations/sops` and
+`/operations/qa/*`. `DashboardPage` had compared a tenant-prefixed tab href
+against an unprefixed subgroup `parentHref`, which could never match; the new
+`isSubgroupParentHref()` in `lib/nav-subgroups.ts` compares both with the prefix
+stripped, added as an extra OR so no tab that highlighted before could stop.
+The same latent bug affected 11 other areas — Comp & Parity, Departments,
+Inventory, Content, Web, Administration, Acc, HR, Legal and ICP Segments all
+gained the highlight the 2026-07-07 shell comment had promised.
 
 ## Tabs
 
