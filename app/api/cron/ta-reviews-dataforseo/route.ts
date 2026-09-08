@@ -100,9 +100,9 @@ export async function POST(req: Request) {
 
   const sb = getSupabaseAdmin();
 
-  // Read cached url_path
+  // Read cached url_path via public bridge view (table lives in marketing schema)
   const { data: config } = await sb
-    .from('ta_property_config')
+    .from('v_ta_property_config')
     .select('url_path')
     .eq('property_id', PROPERTY_ID)
     .maybeSingle();
@@ -220,7 +220,7 @@ export async function POST(req: Request) {
       },
     };
 
-    await sb.from('mkt_ta_subcategory_ratings').insert(subcatRow);
+    await sb.rpc('fn_ta_subcategory_insert', { p_row: subcatRow });
   }
 
   return NextResponse.json({
