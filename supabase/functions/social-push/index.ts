@@ -27,6 +27,18 @@ function upPlatform(p: string): string {
 
 const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
 
+// Wraps a promise in a race against a rejection timer so SDK calls that hang
+// are caught by the inner try/catch rather than letting Supabase kill the
+// process after its hard timeout (which leaves up_status=null, no cleanup).
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label}_timeout_${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 // Supabase Storage buckets require the service role key even when the URL
 // says /public/ — add the header only when the URL's hostname exactly matches
 // this project's Supabase host (prevents SSRF credential leak via substring bypass).
@@ -98,6 +110,10 @@ Deno.serve(async (req: Request) => {
 
     let result: Record<string, unknown>;
     const scheduleDate = p.scheduled_at ? { schedule_date: p.scheduled_at } : {};
+    // SDK timeout: 20 s per call. If Upload Post API hangs, the inner catch
+    // fires, marks the post as error, and returns 200 — preventing Supabase
+    // from killing the process and leaving up_status=null.
+    const SDK_TIMEOUT_MS = 20_000;
 
     // ── Pinterest: always images, separate title + description + board_id ──
     try {
@@ -139,14 +155,20 @@ Deno.serve(async (req: Request) => {
       };
       if (p.link_url)            pinParams.link     = String(p.link_url);
       if (p.pinterest_board_id)  pinParams.board_id = String(p.pinterest_board_id);
-      result = await up.uploadPhotos(pinParams) as Record<string, unknown>;
+      result = await withTimeout(
+        up.uploadPhotos(pinParams) as Promise<Record<string, unknown>>,
+        SDK_TIMEOUT_MS, 'pinterest_upload_photos'
+      );
     } else if (mediaUrls.length === 0) {
-      result = await up.uploadText({
-        user: profileUsername as string,
-        platform: [upPlatform(p.platform as string)],
-        title: caption,
-        ...scheduleDate,
-      }) as Record<string, unknown>;
+      result = await withTimeout(
+        up.uploadText({
+          user: profileUsername as string,
+          platform: [upPlatform(p.platform as string)],
+          title: caption,
+          ...scheduleDate,
+        }) as Promise<Record<string, unknown>>,
+        SDK_TIMEOUT_MS, 'upload_text'
+      );
     } else if (mediaUrls.some(isVideo)) {
       const videoUrl = mediaUrls.find(isVideo)!;
       const fetchRes = await fetch(videoUrl, { headers: storageHeaders(videoUrl) });
@@ -154,13 +176,16 @@ Deno.serve(async (req: Request) => {
       const buf = await fetchRes.arrayBuffer();
       if (buf.byteLength > MAX_MEDIA_BYTES) return res({ ok: false, error: 'media_too_large' }, 413);
       const ext = videoUrl.split('?')[0].split('.').pop()?.toLowerCase() ?? 'mp4';
-      result = await up.upload({
-        user: profileUsername as string,
-        platform: [upPlatform(p.platform as string)],
-        title: caption,
-        media: new File([buf], `video.${ext}`, { type: `video/${ext}` }),
-        ...scheduleDate,
-      }) as Record<string, unknown>;
+      result = await withTimeout(
+        up.upload({
+          user: profileUsername as string,
+          platform: [upPlatform(p.platform as string)],
+          title: caption,
+          media: new File([buf], `video.${ext}`, { type: `video/${ext}` }),
+          ...scheduleDate,
+        }) as Promise<Record<string, unknown>>,
+        SDK_TIMEOUT_MS, 'upload_video'
+      );
     } else {
       const files: File[] = [];
       for (const url of mediaUrls.slice(0, 10)) {
@@ -175,24 +200,31 @@ Deno.serve(async (req: Request) => {
       }
       if (files.length === 0) {
         // All image fetches failed (e.g. storage auth) — publish text-only as fallback
-        result = await up.uploadText({
-          user: profileUsername as string,
-          platform: [upPlatform(p.platform as string)],
-          title: caption,
-          ...scheduleDate,
-        }) as Record<string, unknown>;
+        result = await withTimeout(
+          up.uploadText({
+            user: profileUsername as string,
+            platform: [upPlatform(p.platform as string)],
+            title: caption,
+            ...scheduleDate,
+          }) as Promise<Record<string, unknown>>,
+          SDK_TIMEOUT_MS, 'upload_text_fallback'
+        );
       } else {
-        result = await up.uploadPhotos({
-          user: profileUsername as string,
-          platform: [upPlatform(p.platform as string)],
-          title: caption,
-          photos: files,
-          ...scheduleDate,
-        }) as Record<string, unknown>;
+        result = await withTimeout(
+          up.uploadPhotos({
+            user: profileUsername as string,
+            platform: [upPlatform(p.platform as string)],
+            title: caption,
+            photos: files,
+            ...scheduleDate,
+          }) as Promise<Record<string, unknown>>,
+          SDK_TIMEOUT_MS, 'upload_photos'
+        );
       }
     }
     } catch (upErr) {
       const errMsg = upErr instanceof Error ? upErr.message : String(upErr);
+      console.error('upload_post_sdk_error:', errMsg, 'post_id:', postId, 'platform:', p.platform);
       await sb.rpc('fn_social_post_mark_pushed', {
         p_post_id:       postId,
         p_up_request_id: null,

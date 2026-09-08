@@ -74,13 +74,22 @@ export async function GET(req: NextRequest) {
       });
       if (pushErr) {
         failed++;
-        errors.push(`${post.post_id}: ${pushErr.message}`);
+        // Capture the actual edge-function response body, not just the generic message
+        let detail = pushErr.message;
+        try {
+          const ctx = (pushErr as any).context;
+          if (ctx) {
+            const bodyText = await ctx.text().catch(() => '');
+            detail = `${pushErr.message} | ${bodyText}`;
+          }
+        } catch { /* best effort */ }
+        errors.push(`${post.post_id} [${post.platform}]: ${detail}`);
       } else {
         pushed++;
       }
     } catch (e: any) {
       failed++;
-      errors.push(`${post.post_id}: ${String(e?.message ?? e)}`);
+      errors.push(`${post.post_id} [${post.platform}]: ${String(e?.message ?? e)}`);
     }
   }
 
