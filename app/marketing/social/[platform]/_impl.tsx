@@ -21,6 +21,7 @@ import { getSocialPostsForProperty } from '@/lib/marketing-social';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import ProgramsPanel from './_programs-panel';
+import PinterestBoardCalendar from './_pinterest-board-calendar';
 
 // Legacy /marketing/social/* surface is Namkhan-scoped by contract (§0.7);
 // the tenant route delegates here until the module goes multi-property (§7).
@@ -109,6 +110,7 @@ export default async function SocialPlatformPage({ params }: Props) {
   const dbRow = all.find((a: any) => a.platform.toLowerCase() === platform);
   const rule = rules.find((r) => r.platform === platform);
   const chanPrograms = programs.filter((p) => p.platform === platform);
+  const boardPrograms = chanPrograms.filter((p: any) => p.category_code === 'board');
   const posts = allPosts.filter((p) => p.platform === platform && p.status !== 'cancelled');
   const recentPosts = [...posts].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')).slice(0, 8);
   const exportQueue = posts.filter((p) => p.status === 'ready' || p.status === 'scheduled');
@@ -240,8 +242,18 @@ export default async function SocialPlatformPage({ params }: Props) {
             )}
           </Section>
 
-          <Section title="Weekly content programs" note="marketing.social_programs">
-            <ProgramsPanel propertyId={NAMKHAN_PID} platform={platform} initial={chanPrograms} />
+          <Section
+            title={platform === 'pinterest' ? 'Pinterest board calendar' : 'Weekly content programs'}
+            note={platform === 'pinterest' ? 'one program per board · drives slots in the content calendar' : 'marketing.social_programs'}>
+            {platform === 'pinterest' ? (
+              <PinterestBoardCalendar
+                propertyId={NAMKHAN_PID}
+                boards={boards}
+                programs={boardPrograms as any}
+              />
+            ) : (
+              <ProgramsPanel propertyId={NAMKHAN_PID} platform={platform} initial={chanPrograms} />
+            )}
           </Section>
         </div>
 

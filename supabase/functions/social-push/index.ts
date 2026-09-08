@@ -47,6 +47,7 @@ function storageHeaders(url: string): Record<string, string> {
 }
 
 Deno.serve(async (req: Request) => {
+  try {
   if (!req.headers.get('Authorization')) return res({ ok: false, error: 'unauthorized' }, 401);
 
   let body: Record<string, unknown>;
@@ -60,7 +61,11 @@ Deno.serve(async (req: Request) => {
     { auth: { autoRefreshToken: false, persistSession: false } },
   );
 
-  const { data: apiKey } = await sb.rpc('fn_upload_post_credentials');
+  const { data: apiKey, error: credErr } = await sb.rpc('fn_upload_post_credentials');
+  if (credErr) {
+    console.error('fn_upload_post_credentials error:', credErr);
+    return res({ ok: false, error: 'credentials_rpc_failed', detail: credErr.message }, 500);
+  }
   if (!apiKey) return res({ ok: false, error: 'upload_post_key_not_configured' }, 500);
 
   const up = new UploadPost({ token: apiKey as string });
@@ -300,4 +305,8 @@ Deno.serve(async (req: Request) => {
   }
 
   return res({ ok: false, error: `unknown_mode: ${mode}` }, 400);
+  } catch (topErr) {
+    console.error('social-push top-level crash:', topErr);
+    return res({ ok: false, error: 'internal_error', detail: String(topErr) }, 500);
+  }
 });
