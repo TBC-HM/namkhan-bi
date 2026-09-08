@@ -197,7 +197,18 @@ export async function POST(req: NextRequest) {
         const { error: pushErr } = await sb.functions.invoke('social-push', {
           body: { mode: 'push', post_id, property_id, platform_extras: platformExtra },
         });
-        if (pushErr) throw pushErr;
+        if (pushErr) {
+          // Extract actual edge function response body when available
+          let detail = (pushErr as Error)?.message ?? String(pushErr);
+          try {
+            const ctx = (pushErr as unknown as { context?: Response }).context;
+            if (ctx) {
+              const txt = await ctx.clone().text();
+              detail = txt || detail;
+            }
+          } catch { /* ignore */ }
+          throw new Error(detail);
+        }
       }
       results.push({ platform, ok: true, post_id: String(post_id) });
     } catch (e) {
