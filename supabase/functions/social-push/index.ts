@@ -27,6 +27,16 @@ function upPlatform(p: string): string {
 
 const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
 
+// Supabase Storage buckets may require the service role key even when the
+// URL path says /public/ — add the header when fetching from our own project.
+function storageHeaders(url: string): Record<string, string> {
+  const srk = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  if (srk && url.includes('supabase.co/storage')) {
+    return { Authorization: `Bearer ${srk}` };
+  }
+  return {};
+}
+
 Deno.serve(async (req: Request) => {
   if (!req.headers.get('Authorization')) return res({ ok: false, error: 'unauthorized' }, 401);
 
@@ -86,7 +96,7 @@ Deno.serve(async (req: Request) => {
       const files: File[] = [];
       for (const url of mediaUrls.slice(0, 5)) {
         try {
-          const r = await fetch(url);
+          const r = await fetch(url, { headers: storageHeaders(url) });
           if (!r.ok) continue;
           const buf = await r.arrayBuffer();
           if (buf.byteLength > MAX_MEDIA_BYTES) continue;
@@ -115,7 +125,7 @@ Deno.serve(async (req: Request) => {
       }) as Record<string, unknown>;
     } else if (mediaUrls.some(isVideo)) {
       const videoUrl = mediaUrls.find(isVideo)!;
-      const fetchRes = await fetch(videoUrl);
+      const fetchRes = await fetch(videoUrl, { headers: storageHeaders(videoUrl) });
       if (!fetchRes.ok) return res({ ok: false, error: `media_fetch_failed: ${fetchRes.status}` }, 502);
       const buf = await fetchRes.arrayBuffer();
       if (buf.byteLength > MAX_MEDIA_BYTES) return res({ ok: false, error: 'media_too_large' }, 413);
@@ -131,7 +141,7 @@ Deno.serve(async (req: Request) => {
       const files: File[] = [];
       for (const url of mediaUrls.slice(0, 10)) {
         try {
-          const r = await fetch(url);
+          const r = await fetch(url, { headers: storageHeaders(url) });
           if (!r.ok) continue;
           const buf = await r.arrayBuffer();
           if (buf.byteLength > MAX_MEDIA_BYTES) continue;
@@ -139,14 +149,23 @@ Deno.serve(async (req: Request) => {
           files.push(new File([buf], `photo.${ext}`, { type: `image/${ext}` }));
         } catch { /* skip */ }
       }
-      if (files.length === 0) return res({ ok: false, error: 'all_media_fetch_failed' }, 502);
-      result = await up.uploadPhotos({
-        user: profileUsername as string,
-        platform: [upPlatform(p.platform as string)],
-        title: caption,
-        photos: files,
-        ...scheduleDate,
-      }) as Record<string, unknown>;
+      if (files.length === 0) {
+        // All image fetches failed (e.g. storage auth) — publish text-only as fallback
+        result = await up.uploadText({
+          user: profileUsername as string,
+          platform: [upPlatform(p.platform as string)],
+          title: caption,
+          ...scheduleDate,
+        }) as Record<string, unknown>;
+      } else {
+        result = await up.uploadPhotos({
+          user: profileUsername as string,
+          platform: [upPlatform(p.platform as string)],
+          title: caption,
+          photos: files,
+          ...scheduleDate,
+        }) as Record<string, unknown>;
+      }
     }
     } catch (upErr) {
       const errMsg = upErr instanceof Error ? upErr.message : String(upErr);
