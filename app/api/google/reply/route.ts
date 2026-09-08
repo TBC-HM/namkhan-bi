@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,11 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); }
   catch { return NextResponse.json({ ok: false, error: 'invalid_json' }, { status: 400 }); }
 
-  const property = Number(body.property ?? 260955);
+  const rawProperty = body.property;
+  if (!rawProperty) {
+    return NextResponse.json({ ok: false, error: 'property required' }, { status: 400 });
+  }
+  const property = await requirePropertyAccess(req, rawProperty);
   const reviewId = Number(body.reviewId);
   const comment = String(body.comment ?? '').trim();
   if (!Number.isFinite(reviewId) || reviewId <= 0) {
@@ -63,7 +68,8 @@ export async function POST(req: NextRequest) {
       responded_at: new Date().toISOString(),
       responded_by: 'the_namkhan',
     })
-    .eq('id', reviewId);
+    .eq('id', reviewId)
+    .eq('property_id', property);
   if (upErr) {
     return NextResponse.json({ ok: false, error: 'db_save_failed: ' + upErr.message }, { status: 500 });
   }

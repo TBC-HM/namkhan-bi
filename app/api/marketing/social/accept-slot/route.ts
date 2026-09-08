@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 import { callAnthropic, isLlmOk } from '@/lib/youtube/skills-common';
 
 export const runtime = 'nodejs';
@@ -40,6 +41,11 @@ export async function POST(req: NextRequest) {
   if (!slot_id || !Number.isFinite(slot_id)) {
     return NextResponse.json({ ok: false, error: 'slot_id required' }, { status: 400 });
   }
+  const rawPropertyId = body?.property_id;
+  if (!rawPropertyId) {
+    return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
+  }
+  const propertyId = await requirePropertyAccess(req, rawPropertyId);
 
   const sb = getSupabaseAdmin();
 
@@ -62,6 +68,7 @@ export async function POST(req: NextRequest) {
     sb.from('v_social_calendar_slots')
       .select('property_id,platform,slot_date,category_code,program_label,format,title,hook,brief_md')
       .eq('slot_id', slot_id)
+      .eq('property_id', propertyId)
       .maybeSingle(),
     Promise.resolve(null), // placeholder — spec fetched below once we know the platform
   ]);

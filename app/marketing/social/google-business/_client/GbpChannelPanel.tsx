@@ -174,7 +174,7 @@ export default function GbpChannelPanel({ propertyId, initialRule, initialProgra
           }).then((r) => r.json())
         )
       );
-      const failed = results.filter((r) => !r.id);
+      const failed = results.filter((r) => r.error != null);
       if (failed.length) {
         setSeedMsg(`Saved ${results.length - failed.length}/5 — ${failed[0]?.error ?? 'partial failure'}`);
       } else {

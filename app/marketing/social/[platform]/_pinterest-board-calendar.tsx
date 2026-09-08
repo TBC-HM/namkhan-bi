@@ -3,7 +3,7 @@
 // Each board gets a social_programs row (seeded via /api/marketing/social/seed-pinterest-programs).
 // Standard generate-plan then creates slots per board using those programs.
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const WHITE  = '#FFFFFF';
@@ -44,6 +44,7 @@ function ymd(d: Date): string { return d.toISOString().slice(0, 10); }
 export default function PinterestBoardCalendar({ propertyId, boards, programs: initialPrograms }: Props) {
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[]>(initialPrograms);
+  useEffect(() => { setPrograms(initialPrograms); }, [initialPrograms]);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -94,7 +95,7 @@ export default function PinterestBoardCalendar({ propertyId, boards, programs: i
     const res = await fetch('/api/marketing/social/generate-plan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ property_id: propertyId, start_date: start, end_date: end, regenerate_empty_only: true }),
+      body: JSON.stringify({ property_id: propertyId, start_date: start, end_date: end, regenerate_empty_only: true, platform: 'pinterest' }),
     });
     const j = await res.json().catch(() => ({}));
     setBusy(null);

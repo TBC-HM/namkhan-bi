@@ -22,7 +22,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 800;
+export const maxDuration = 295;
 
 const PROPERTY_ID = 260955;
 // Pull 100 reviews per page; up to 45 pages = 4,500 reviews (DataForSEO cap)
@@ -46,6 +46,11 @@ interface TaSubRating {
   sleep_quality: number | null;
 }
 
+interface TaReviewHighlight {
+  feature: string;
+  assessment: string | number;
+}
+
 interface TaReviewItem {
   id?: string | number;
   date?: string;
@@ -53,8 +58,28 @@ interface TaReviewItem {
   title?: string;
   text?: string;
   user_profile?: { name?: string; location?: string };
-  reviews_rating?: TaSubRating;
+  review_highlights?: TaReviewHighlight[];
   owner_answer?: { text?: string };
+}
+
+// DataForSEO returns subcategories in review_highlights array, not a flat object.
+// feature names: "Value", "Rooms", "Location", "Cleanliness", "Service", "Sleep Quality"
+function extractSubRating(highlights: TaReviewHighlight[] | undefined): TaSubRating | null {
+  if (!highlights || highlights.length === 0) return null;
+  const find = (name: string) => {
+    const h = highlights.find((h) => h.feature.toLowerCase() === name.toLowerCase());
+    if (!h) return null;
+    const v = typeof h.assessment === 'number' ? h.assessment : parseFloat(String(h.assessment));
+    return Number.isFinite(v) ? v : null;
+  };
+  return {
+    value:         find('value'),
+    rooms:         find('rooms'),
+    location:      find('location'),
+    cleanliness:   find('cleanliness'),
+    service:       find('service'),
+    sleep_quality: find('sleep quality'),
+  };
 }
 
 function num(v: unknown): number | null {
@@ -74,7 +99,7 @@ function mapTaReview(it: TaReviewItem, urlPath: string): Record<string, unknown>
   return {
     source_review_id,
     reviewer_name:    it.user_profile?.name ?? null,
-    reviewer_country: it.user_profile?.location?.slice(0, 2)?.toUpperCase() ?? null,
+    reviewer_country: it.user_profile?.location ?? null,
     rating_raw:       ratingVal,
     rating_scale:     5,
     title:            it.title ?? null,
@@ -151,18 +176,10 @@ export async function POST(req: Request) {
 
     totalFetched += items.length;
 
-    // Collect subcategory scores from this page
+    // Collect subcategory scores from this page (DataForSEO returns review_highlights array)
     for (const it of items) {
-      if (it.reviews_rating) {
-        subcatAccum.push({
-          value:         num(it.reviews_rating.value),
-          rooms:         num(it.reviews_rating.rooms),
-          location:      num(it.reviews_rating.location),
-          cleanliness:   num(it.reviews_rating.cleanliness),
-          service:       num(it.reviews_rating.service),
-          sleep_quality: num(it.reviews_rating.sleep_quality),
-        });
-      }
+      const sub = extractSubRating(it.review_highlights);
+      if (sub) subcatAccum.push(sub);
     }
 
     // Map and ingest into mkt_reviews
@@ -207,7 +224,14 @@ export async function POST(req: Request) {
       property_id:           PROPERTY_ID,
       scraped_at:            new Date().toISOString(),
       total_reviews_pulled:  totalFetched,
-      avg_rating:            avg(subcatAccum.map((s) => s.value)),
+      avg_rating:            avg([
+        ...subcatAccum.map((s) => s.value),
+        ...subcatAccum.map((s) => s.rooms),
+        ...subcatAccum.map((s) => s.location),
+        ...subcatAccum.map((s) => s.cleanliness),
+        ...subcatAccum.map((s) => s.service),
+        ...subcatAccum.map((s) => s.sleep_quality),
+      ]),
       value_rating:          avg(subcatAccum.map((s) => s.value)),
       rooms_rating:          avg(subcatAccum.map((s) => s.rooms)),
       location_rating:       avg(subcatAccum.map((s) => s.location)),

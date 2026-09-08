@@ -26,6 +26,7 @@ type Body = {
   start_date?: string;
   end_date?: string;
   regenerate_empty_only?: boolean;
+  platform?: string;
 };
 
 type ProgramRow = {
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
   const body: Body = await req.json().catch(() => ({}));
   if (!body.property_id) return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
   const propertyId = await requirePropertyAccess(req, body.property_id);
+  const platform = body.platform ?? null;
   const start = body.start_date ?? ymd(new Date());
   const end = body.end_date ?? ymd(new Date(Date.now() + 28 * 86400000));
   const emptyOnly = body.regenerate_empty_only !== false;
@@ -68,8 +70,12 @@ export async function POST(req: NextRequest) {
   const sb = getSupabaseAdmin();
 
   const [programsRes, existingRes] = await Promise.all([
-    sb.from('v_social_programs').select('id, platform, category_code, label, weekday_slots, posts_per_week, notes')
-      .eq('property_id', propertyId).eq('active', true),
+    (() => {
+      let q = sb.from('v_social_programs').select('id, platform, category_code, label, weekday_slots, posts_per_week, notes')
+        .eq('property_id', propertyId).eq('active', true);
+      if (platform) q = q.eq('platform', platform);
+      return q;
+    })(),
     sb.from('v_social_calendar_slots').select('slot_date, platform, program_id, status')
       .eq('property_id', propertyId).gte('slot_date', start).lt('slot_date', end),
   ]);

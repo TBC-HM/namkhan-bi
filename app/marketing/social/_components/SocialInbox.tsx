@@ -164,7 +164,7 @@ export default function SocialInbox({ posts, rules }: {
       if (post.status === 'proposed') {
         await fetch('/api/marketing/socials', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ op: 'set_status', post_id: post.post_id, status: 'draft' }),
+          body: JSON.stringify({ op: 'set_status', post_id: post.post_id, status: 'draft', property_id: post.property_id }),
         });
       }
       setNote('Content rewritten — review and approve.');
@@ -187,11 +187,12 @@ export default function SocialInbox({ posts, rules }: {
   }
 
   async function setStatus(postId: string, status: 'ready' | 'draft' | 'cancelled') {
+    const post = posts.find((p) => p.post_id === postId);
     setBusy(postId); setErr(null);
     try {
       const res = await fetch('/api/marketing/socials', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ op: 'set_status', post_id: postId, status }),
+        body: JSON.stringify({ op: 'set_status', post_id: postId, status, property_id: post?.property_id }),
       });
       const j = await res.json();
       if (!j.ok) throw new Error(j.error ?? 'update failed');

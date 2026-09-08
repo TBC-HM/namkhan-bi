@@ -186,6 +186,10 @@ export async function POST(req: NextRequest) {
       if (scheduled_at) p.scheduled_at = scheduled_at;
       // Stash per-platform extras in ai_notes as JSON so the edge fn can pick them up
       p.ai_notes = JSON.stringify(platformExtra);
+      // Persist pinterest_board_id as a first-class column so social-push can route to the right board
+      if (platform === 'pinterest' && platformExtra.pinterest_board_id) {
+        p.pinterest_board_id = String(platformExtra.pinterest_board_id);
+      }
 
       const { data: post_id, error: createErr } = await sb.rpc('fn_social_post_create', { p });
       if (createErr || !post_id) throw createErr || new Error('create returned no id');

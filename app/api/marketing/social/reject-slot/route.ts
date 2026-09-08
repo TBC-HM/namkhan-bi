@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,6 +16,11 @@ export async function POST(req: NextRequest) {
   if (!slot_id || !Number.isFinite(slot_id)) {
     return NextResponse.json({ ok: false, error: 'slot_id required' }, { status: 400 });
   }
+  const rawPropertyId = body?.property_id;
+  if (!rawPropertyId) {
+    return NextResponse.json({ ok: false, error: 'property_id required' }, { status: 400 });
+  }
+  await requirePropertyAccess(req, rawPropertyId);
 
   const sb = getSupabaseAdmin();
   const { data, error } = await sb.rpc('fn_social_slot_reject', { p_slot_id: slot_id });
