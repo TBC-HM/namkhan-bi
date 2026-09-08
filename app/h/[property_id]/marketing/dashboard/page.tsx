@@ -27,6 +27,14 @@ export default async function MarketingDashboardPage({ params, searchParams }: P
   const pid = Number(property_id);
   if (!Number.isFinite(pid)) notFound();
 
+  // The mkt-dash-refresh-15min cron owns refreshing the cache. A page load must
+  // NEVER trigger fn_mkt_dash_payload's fallback path: that recompute takes ~17 s,
+  // blows the PostgREST statement timeout and kills the render. Observed on Donna
+  // (1000001), whose cache the cron does not keep warm — at 1 h 45 min old, every
+  // load fell through and failed. So accept a day-old cached payload and let the
+  // header show its true age; ?refresh=1 still forces a deliberate recompute.
+  const maxAgeMinutes = sp.refresh === '1' ? 0 : 1440;
+
   // getSupabaseAdmin() throws when SUPABASE_SERVICE_ROLE_KEY is absent (any
   // environment but Vercel). Degrade to the error card rather than a 500.
   let data: unknown;
@@ -34,7 +42,7 @@ export default async function MarketingDashboardPage({ params, searchParams }: P
   try {
     const res = await getSupabaseAdmin().rpc('fn_mkt_dash_payload', {
       p_property_id: pid,
-      p_max_age_minutes: sp.refresh === '1' ? 0 : 15,
+      p_max_age_minutes: maxAgeMinutes,
     });
     data = res.data;
     message = res.error?.message ?? null;

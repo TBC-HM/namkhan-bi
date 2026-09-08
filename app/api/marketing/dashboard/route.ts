@@ -29,7 +29,8 @@ export async function GET(req: Request) {
 
   const { data, error } = await getSupabaseAdmin().rpc('fn_mkt_dash_payload', {
     p_property_id: pid,
-    p_max_age_minutes: url.searchParams.get('refresh') === '1' ? 0 : 15,
+    // Same rule as the page: never trigger the ~17 s synchronous recompute.
+    p_max_age_minutes: url.searchParams.get('refresh') === '1' ? 0 : 1440,
   });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: error.code === '42501' ? 403 : 500 });
