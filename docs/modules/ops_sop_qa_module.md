@@ -37,6 +37,29 @@ only. If a number is wrong, fix the view — not the page.
 | `app/h/[property_id]/operations/quality/types.ts` | payload types, transcribed from the views |
 | `lib/dept-cfg/index.ts` | Operations menu item "Quality" (second, after HoD) |
 
+## Navigation — one area, three levels
+
+Operations has **one** quality entry. The old "QA" top tab (which pointed at
+`/operations/sops`) was removed on 2026-09-09; the QA tooling now hangs off
+Quality as its sub-strip.
+
+| Level | Shows | Source |
+|---|---|---|
+| Department strip | HoD · **Quality** · Departments · Inventory · Maintenance | `DEPT_CFG.operations.subPages` |
+| Quality sub-strip | **Dashboard** · SOPs · QA registry · Proposals · Generate · Agent instructions | `lib/nav-subgroups.ts`, parentHref `/operations/quality` |
+| Page tabs | Today · Departments · Standards & SOPs · People & training · Audits & PM · Guest signal & CAPA | this component |
+
+The split is deliberate: the **dashboard measures** the five loops, the **QA pages
+are where the work is done**. No page moved and no URL changed — `/operations/sops`
+and `/operations/qa/*` keep working and keep their sub-strip; it is simply parented
+to Quality now, and is present on the dashboard too, so the tool sits one click
+from the number that flags it.
+
+Known papercut: on the QA sub-pages no department tab highlights, because
+`DashboardPage` compares a tenant-prefixed tab href against an unprefixed subgroup
+`parentHref`. That was already true when the parent was "QA"; fixing it means
+editing the shared shell.
+
 ## Tabs
 
 `#today` · `#depts` · `#standards` · `#people` · `#verify` · `#guest`
@@ -204,3 +227,4 @@ Until those land, most tiles honestly read zero. That is the point of the page.
 | `f674ee57` | `payload.loops` is null for a tenant with no source_map row — page crashed on Donna |
 | `008141b7` | Dates render in UTC — fixed a real server/client text mismatch (did not clear all hydration errors) |
 | `68107481` | Department sub-menu was missing on the route — page now wraps in the DashboardPage shell |
+| `1e045975` | QA folded into Quality — duplicate "QA" top tab removed, QA pages re-parented as the Quality sub-strip |
