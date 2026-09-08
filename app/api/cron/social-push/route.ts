@@ -42,19 +42,23 @@ export async function GET(req: NextRequest) {
   // NULL scheduled_at means "publish immediately" — include them explicitly
   // because SQL NULL <= now() evaluates to NULL (falsy), not TRUE.
   const now = new Date().toISOString();
+  // PostgREST requires timestamp values in or() expressions to be quoted.
+  // Without quotes the colon chars confuse the parser → 0 rows, no error.
   const { data: duePosts, error: qErr } = await sb
     .from('v_social_posts')
     .select('post_id,property_id,platform,scheduled_at')
     .in('status', ['ready', 'scheduled'])
-    .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
+    .or(`scheduled_at.is.null,scheduled_at.lte."${now}"`)
     .order('scheduled_at', { ascending: true, nullsFirst: true })
     .limit(20); // safety cap per run
 
   if (qErr) {
+    console.error('[social-push-cron] query error:', qErr.message);
     return NextResponse.json({ ok: false, error: qErr.message }, { status: 500 });
   }
 
   const due = duePosts?.length ?? 0;
+  console.log(`[social-push-cron] due=${due} at ${now}`);
   if (due === 0) {
     return NextResponse.json({ ok: true, due: 0, pushed: 0, failed: 0, errors: [] });
   }
@@ -80,5 +84,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  console.log(`[social-push-cron] done: due=${due} pushed=${pushed} failed=${failed}`);
+  if (errors.length) console.error('[social-push-cron] errors:', errors);
   return NextResponse.json({ ok: true, due, pushed, failed, errors });
 }
