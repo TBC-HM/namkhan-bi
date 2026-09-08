@@ -29,10 +29,18 @@ const num = (v: Val): number | null => {
 };
 const nInt = (v: Val) => { const n = num(v); return n == null ? '—' : Math.round(n).toLocaleString('en-US'); };
 const nPct = (v: Val, d = 1) => { const n = num(v); return n == null ? '—' : n.toFixed(d) + '%'; };
+// Dates render in UTC on BOTH server and client. Without an explicit timeZone the
+// server (Vercel, UTC) and the browser (any offset) produce different text, which
+// is a hydration mismatch (React #425) — it made React throw away the server HTML
+// and re-render the whole page on every load, and flipped the date near midnight.
 const nDate = (v: Val) => {
   if (typeof v !== 'string' || !v) return '—';
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+};
+const nStamp = (v: string) => {
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('en-GB', { timeZone: 'UTC' }) + ' UTC';
 };
 const cls = { bad: 'text-red-800', warn: 'text-amber-700', ok: 'text-emerald-900', na: 'text-neutral-500' };
 const statusCls = (s: string) => (s === 'live' ? 'bg-emerald-100 text-emerald-900' : s === 'partial' ? 'bg-amber-100 text-amber-800' : s === 'open' ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-600');
@@ -109,7 +117,7 @@ export default function QualityDashboard({ pid, payload, initialTab }: { pid: nu
   return (
     <div className="mx-auto max-w-[1320px] px-7 py-6">
       <header className="flex flex-wrap items-end justify-between gap-4 pb-3">
-        <h1 className="font-serif text-3xl leading-tight">Quality dashboard<small className="mt-1 block font-sans text-sm text-neutral-500">Property {pid} · generated {new Date(payload.generated_at).toLocaleString('en-GB')}{payload.cached ? ` · cached ${Math.round((payload.cache_age_sec ?? 0) / 60)} min` : ''}</small></h1>
+        <h1 className="font-serif text-3xl leading-tight">Quality dashboard<small className="mt-1 block font-sans text-sm text-neutral-500">Property {pid} · generated {nStamp(payload.generated_at)}{payload.cached ? ` · cached ${Math.round((payload.cache_age_sec ?? 0) / 60)} min` : ''}</small></h1>
         <div className="text-right text-xs text-neutral-500">Audits recorded <b className="text-neutral-900">{nInt(au.audits)}</b> · training records <b className="text-neutral-900">{nInt(wf.training_records)}</b> · certifications <b className="text-neutral-900">{nInt(wf.certifications)}</b> · PM done <b className="text-neutral-900">{nInt(pm.done_30d)} of {nInt(pm.sched_30d)}</b></div>
       </header>
       <div role="tablist" aria-label="Quality dashboard sections" className="flex gap-0.5 overflow-x-auto border-b-2 border-neutral-900">

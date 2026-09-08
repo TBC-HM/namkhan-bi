@@ -31,10 +31,18 @@ const nMoney = (v: Val) => { const n = num(v); return n == null ? '—' : '$' + 
 const nMoneyK = (v: Val) => { const n = num(v); return n == null ? '—' : '$' + (n / 1000).toFixed(1) + 'k'; };
 const nPct = (v: Val, d = 1) => { const n = num(v); return n == null ? '—' : n.toFixed(d) + '%'; };
 const nSigned = (v: Val, suffix = '%') => { const n = num(v); return n == null ? '—' : (n > 0 ? '+' : '') + n.toFixed(1) + suffix; };
+// Dates render in UTC on BOTH server and client. Without an explicit timeZone the
+// server (Vercel, UTC) and the browser (any offset) produce different text, which
+// is a hydration mismatch (React #425) — it made React throw away the server HTML
+// and re-render the whole page on every load, and flipped the date near midnight.
 const nDate = (v: Val) => {
   if (typeof v !== 'string' || !v) return '—';
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+};
+const nStamp = (v: string) => {
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('en-GB', { timeZone: 'UTC' }) + ' UTC';
 };
 const tone = (v: Val, bad: (n: number) => boolean, warn?: (n: number) => boolean) => {
   const n = num(v);
@@ -134,7 +142,7 @@ export default function MarketingDashboard({ pid, payload, initialTab }: { pid: 
       {/* header */}
       <header className="flex flex-wrap items-end justify-between gap-4 pb-3">
         <h1 className="font-serif text-3xl leading-tight">Marketing dashboard
-          <small className="mt-1 block font-sans text-sm text-neutral-500">Property {pid} · generated {new Date(payload.generated_at).toLocaleString('en-GB')}{payload.cached ? ` · cached ${Math.round((payload.cache_age_sec ?? 0) / 60)} min` : ''}</small>
+          <small className="mt-1 block font-sans text-sm text-neutral-500">Property {pid} · generated {nStamp(payload.generated_at)}{payload.cached ? ` · cached ${Math.round((payload.cache_age_sec ?? 0) / 60)} min` : ''}</small>
         </h1>
         <div className="text-right text-xs text-neutral-500">
           {payload.deploy && <>Production build <b className="text-neutral-900">{payload.deploy.commit_short}</b> aliased {nDate(payload.deploy.prod_aliased_at)}<br /></>}
