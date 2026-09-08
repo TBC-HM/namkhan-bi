@@ -223,11 +223,20 @@ Deno.serve(async (req: Request) => {
       ?? ['facebook', 'linkedin', 'pinterest', 'google-business'];
     const synced: Array<Record<string, unknown>> = [];
 
+    // Resolve Upload Post user ID: prefer stored profile (may differ from bc{pid} convention)
+    const upUserFor = async (dbPlatform: string): Promise<string> => {
+      const { data } = await sb.rpc('fn_social_profile_for_property', {
+        p_property_id: propertyId,
+        p_platform:    dbPlatform,
+      });
+      return (data as string | null) ?? `bc${propertyId}`;
+    };
+
     const listFns: Record<string, () => Promise<unknown>> = {
-      facebook:          () => up.getFacebookPages({ user: `bc${propertyId}` }),
-      linkedin:          () => up.getLinkedinPages({ user: `bc${propertyId}` }),
-      pinterest:         () => up.getPinterestBoards({ user: `bc${propertyId}` }),
-      'google-business': () => up.getGoogleBusinessLocations({ user: `bc${propertyId}` }),
+      facebook:          async () => up.getFacebookPages({ user: await upUserFor('facebook') }),
+      linkedin:          async () => up.getLinkedinPages({ user: await upUserFor('linkedin') }),
+      pinterest:         async () => up.getPinterestBoards({ user: await upUserFor('pinterest') }),
+      'google-business': async () => up.getGoogleBusinessLocations({ user: await upUserFor('google_business') }),
     };
 
     for (const platform of platforms) {
@@ -237,10 +246,12 @@ Deno.serve(async (req: Request) => {
         const listRes = await fn() as Record<string, unknown>;
         const items = (listRes?.data ?? listRes?.pages ?? listRes?.boards ?? listRes?.locations ?? []) as Record<string, unknown>[];
         if (items.length > 0) {
+          const dbPlatform = platform.replace('-', '_');
+          const resolvedUser = await upUserFor(dbPlatform);
           await sb.rpc('fn_social_profile_upsert', {
             p_property_id:  propertyId,
-            p_platform:     platform.replace('-', '_'),
-            p_up_user_id:   `bc${propertyId}`,
+            p_platform:     dbPlatform,
+            p_up_user_id:   resolvedUser,
             p_display_name: String(items[0].name ?? ''),
             p_handle:       String(items[0].username ?? items[0].name ?? ''),
             p_avatar_url:   String(items[0].picture ?? items[0].avatar ?? ''),
