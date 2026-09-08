@@ -151,9 +151,9 @@ export default function MarketingDashboard({ pid, payload, initialTab }: { pid: 
     <div className="mx-auto max-w-[1320px] px-7 py-6">
       {/* header */}
       <header className="flex flex-wrap items-end justify-between gap-4 pb-3">
-        <h1 className="font-serif text-3xl leading-tight">Marketing dashboard
-          <small className="mt-1 block font-sans text-sm text-neutral-500">Property {pid} · generated {nStamp(payload.generated_at)}{payload.cached ? ` · cached ${Math.round((payload.cache_age_sec ?? 0) / 60)} min` : ''}</small>
-        </h1>
+        {/* The page title is rendered by the DashboardPage shell (which also draws
+            the Marketing department strip), so this is the metadata line only. */}
+        <p className="text-sm text-neutral-500">Property {pid} · generated {nStamp(payload.generated_at)}{payload.cached ? ` · cached ${Math.round((payload.cache_age_sec ?? 0) / 60)} min` : ''}</p>
         <div className="text-right text-xs text-neutral-500">
           {payload.deploy && <>Production build <b className="text-neutral-900">{payload.deploy.commit_short}</b> aliased {nDate(payload.deploy.prod_aliased_at)}<br /></>}
           Goals table: <b className="text-neutral-900">{nInt(badges.goals.stored)} of {nInt(badges.goals.total)}</b> goals have a stored value

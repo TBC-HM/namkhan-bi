@@ -9,6 +9,9 @@
 // own guard exempts role='service_role', so this is the client that passes it.
 // Tenancy: pid comes from the route param only — never a default (L22).
 import { notFound } from 'next/navigation';
+import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
+import { DEPT_CFG } from '@/lib/dept-cfg';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionScope, canSeeProperty } from '@/lib/session-scope';
 import MarketingDashboard from './MarketingDashboard';
@@ -30,6 +33,16 @@ export default async function MarketingDashboardPage({ params, searchParams }: P
 
   const scope = await getSessionScope();
   if (!canSeeProperty(pid, scope)) notFound();
+
+  // The department strip must render on THIS route too. Without the DashboardPage
+  // shell the page drew its own markup only, so clicking Marketing → Dashboard made
+  // the sub-menu (HoD · Dashboard · Audience · Content · Socials · Web · Reputation
+  // · Behaviour) disappear. Tabs come from DEPT_CFG and are rewritten to the active
+  // tenant, the same way the /h/[property_id]/[...rest] catch-all does it.
+  // The page's own five tabs live inside the component and are a level below these.
+  const deptTabs: DashboardTab[] = rewriteSubPagesForProperty(
+    DEPT_CFG.marketing.subPages ?? [], pid,
+  ).map((s2) => ({ key: s2.href, label: s2.label, href: s2.href }));
 
   // The mkt-dash-refresh-15min cron owns refreshing the cache. A page load must
   // NEVER trigger fn_mkt_dash_payload's fallback path: that recompute takes ~17 s,
@@ -66,23 +79,28 @@ export default async function MarketingDashboardPage({ params, searchParams }: P
     ({ data, message } = await load(1440));
   }
 
+  // The error state keeps the shell too — losing the navigation is exactly the
+  // failure this wrapper exists to prevent.
   if (message || !data) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold">Marketing dashboard</h1>
-        <p className="mt-2 text-sm text-red-700">Could not load dashboard: {message ?? 'no payload returned'}</p>
-      </div>
+      <DashboardPage title="Marketing · Dashboard" tabs={deptTabs}>
+        <div style={{ gridColumn: '1 / -1' }} className="p-6">
+          <p className="text-sm text-red-700">Could not load dashboard: {message ?? 'no payload returned'}</p>
+        </div>
+      </DashboardPage>
     );
   }
 
   return (
-    <>
-      {refreshFailed && (
-        <p className="mx-auto max-w-[1320px] border-l-[3px] border-amber-600 bg-amber-50 px-3 py-2 text-sm">
-          Refresh did not finish ({refreshFailed}). Showing the last cached payload — its age is in the header below.
-        </p>
-      )}
-      <MarketingDashboard pid={pid} payload={data as Payload} initialTab={sp.tab} />
-    </>
+    <DashboardPage title="Marketing · Dashboard" tabs={deptTabs}>
+      <div style={{ gridColumn: '1 / -1' }}>
+        {refreshFailed && (
+          <p className="mx-auto max-w-[1320px] border-l-[3px] border-amber-600 bg-amber-50 px-3 py-2 text-sm">
+            Refresh did not finish ({refreshFailed}). Showing the last cached payload — its age is in the header below.
+          </p>
+        )}
+        <MarketingDashboard pid={pid} payload={data as Payload} initialTab={sp.tab} />
+      </div>
+    </DashboardPage>
   );
 }

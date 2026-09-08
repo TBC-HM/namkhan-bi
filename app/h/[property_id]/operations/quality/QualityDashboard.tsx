@@ -127,7 +127,9 @@ export default function QualityDashboard({ pid, payload, initialTab }: { pid: nu
   return (
     <div className="mx-auto max-w-[1320px] px-7 py-6">
       <header className="flex flex-wrap items-end justify-between gap-4 pb-3">
-        <h1 className="font-serif text-3xl leading-tight">Quality dashboard<small className="mt-1 block font-sans text-sm text-neutral-500">Property {pid} · generated {nStamp(payload.generated_at)}{payload.cached ? ` · cached ${Math.round((payload.cache_age_sec ?? 0) / 60)} min` : ''}</small></h1>
+        {/* The page title is rendered by the DashboardPage shell (which also draws
+            the Operations department strip), so this is the metadata line only. */}
+        <p className="text-sm text-neutral-500">Property {pid} · generated {nStamp(payload.generated_at)}{payload.cached ? ` · cached ${Math.round((payload.cache_age_sec ?? 0) / 60)} min` : ''}</p>
         <div className="text-right text-xs text-neutral-500">Audits recorded <b className="text-neutral-900">{nInt(au.audits)}</b> · training records <b className="text-neutral-900">{nInt(wf.training_records)}</b> · certifications <b className="text-neutral-900">{nInt(wf.certifications)}</b> · PM done <b className="text-neutral-900">{nInt(pm.done_30d)} of {nInt(pm.sched_30d)}</b></div>
       </header>
       <div role="tablist" aria-label="Quality dashboard sections" className="flex gap-0.5 overflow-x-auto border-b-2 border-neutral-900">
