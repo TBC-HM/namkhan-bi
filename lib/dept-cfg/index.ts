@@ -556,7 +556,7 @@ const MARKETING_CFG: DeptCfg = {
     // nav (URL /marketing/seo still resolves — just no longer surfaced). Socials
     // label with singular /marketing/social href preserves existing page path.
     { label: 'HoD',      href: '/h/260955/marketing'          },
-    { label: 'Overview', href: '/h/260955/marketing/overview' },
+    { label: 'Dashboard', href: '/h/260955/marketing/dashboard' },
     { label: 'Audience', href: '/h/260955/marketing/audience' },
     { label: 'Content',  href: '/h/260955/marketing/content'  },
     { label: 'Socials',  href: '/h/260955/marketing/social'   },

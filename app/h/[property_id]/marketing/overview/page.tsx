@@ -1,13 +1,16 @@
 // app/h/[property_id]/marketing/overview/page.tsx
-// PBS 2026-07-11 pm — property-scoped delegate for /marketing/overview.
-// Mounts the flat MarketingOverviewPage with the property_id from the route.
-import MarketingOverviewPage from '@/app/marketing/overview/page';
+// Brief marketing-dashboard-v1 · the old overview page is retired.
+// Permanent (308) redirect to the new dashboard, preserving ?tab= if present.
+import { permanentRedirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+interface PageProps {
+  params: Promise<{ property_id: string }>;
+  searchParams?: Promise<{ tab?: string }>;
+}
 
-export default async function ScopedMarketingOverviewPage({ params }: { params: Promise<{ property_id: string }> }) {
+export default async function RetiredMarketingOverviewPage({ params, searchParams }: PageProps) {
   const { property_id } = await params;
-  const pid = Number(property_id);
-  return <MarketingOverviewPage propertyId={Number.isFinite(pid) ? pid : undefined} />;
+  const sp = (await searchParams) ?? {};
+  const tab = sp.tab ? `?tab=${encodeURIComponent(sp.tab)}` : '';
+  permanentRedirect(`/h/${property_id}/marketing/dashboard${tab}`);
 }
