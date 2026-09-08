@@ -125,7 +125,9 @@ export interface QaPayload {
     guest: { low_180d: Num; findings_open: Num };
   };
   actions: Action[] | null;
-  loops: Loops;
+  // null for a tenant with no ops.qa_dash_source_map row (Donna 1000001) — as are
+  // guest.summary, people.learning, verification.{pm,audits,legal,sustainability}.
+  loops: Loops | null;
   freshness: FreshnessRow[] | null;
   agenda: AgendaRow[] | null;
   goals: GoalRow[] | null;

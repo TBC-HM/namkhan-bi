@@ -14,7 +14,7 @@ import { Fragment, useEffect, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import Link from 'next/link';
 import type {
-  QaPayload, TabKey, Action, Row, Val,
+  QaPayload, TabKey, Action, Row, Val, Loops,
   DeptMatrixRow, SopByDeptRow, StaffByDeptRow, CertCoverageRow, SkillDemandRow,
   PmByDeptRow, ThemeRow, LowReviewRow, GoalRow, FreshnessRow, AgendaRow,
   Pillar, SusStandard, LegalCategoryRow,
@@ -35,7 +35,7 @@ const nDate = (v: Val) => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 };
 const cls = { bad: 'text-red-800', warn: 'text-amber-700', ok: 'text-emerald-900', na: 'text-neutral-500' };
-const statusCls = (s: string) => (s === 'live' ? 'bg-emerald-100 text-emerald-900' : s === 'partial' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800');
+const statusCls = (s: string) => (s === 'live' ? 'bg-emerald-100 text-emerald-900' : s === 'partial' ? 'bg-amber-100 text-amber-800' : s === 'open' ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-600');
 const flagCls = (f: string | null) => (f === 'bad' ? cls.bad : f === 'warn' ? cls.warn : f === 'ok' ? cls.ok : cls.na);
 
 function Tile({ title, sub, big, bigTone, chip, chipTone, rows, cta, ctaHref, note, noteRed, wide, children }: {
@@ -84,7 +84,9 @@ export default function QualityDashboard({ pid, payload, initialTab }: { pid: nu
     go(TABS[(i + (e.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length].key);
   };
 
-  const { badges: B, metrics: m, loops: L, standards: S, people: P, verification: V, guest: G } = payload;
+  const { badges: B, metrics: m, standards: S, people: P, verification: V, guest: G } = payload;
+  // payload.loops is null for a tenant with no qa_dash_source_map row.
+  const L: Partial<Loops> = payload.loops ?? {};
   const actions: Action[] = payload.actions ?? [];
   const goals: GoalRow[] = payload.goals ?? [];
   const freshness: FreshnessRow[] = payload.freshness ?? [];
@@ -124,15 +126,15 @@ export default function QualityDashboard({ pid, payload, initialTab }: { pid: nu
             </div>
             <div className="grid gap-px border border-neutral-200 bg-neutral-200 md:grid-cols-5">
               {([
-                ['1 · Standards', L.standards_status, `${nInt(m.sops_in_date)} / ${nInt(m.sops)}`, `SOPs in date · ${nInt(m.sops_never_reviewed)} never reviewed, ${nInt(m.sops_overdue)} overdue · ${nInt(m.sops_lao)} Lao of ${nInt(m.sops_with_body)} · ${nInt(m.proposals_open)} proposals open`],
-                ['2 · People', L.people_status, nInt(L.people_certs_held), `certificates evidenced vs ${nInt(L.people_cert_fte_required)} FTE required · ${nInt(m.platform_users)} of ${nInt(m.staff_active)} staff have a login · ${nInt(m.departments_with_hod)} of ${nInt(m.departments)} HODs`],
-                ['3 · Verification', L.verification_status, nPct(L.verification_pm_pct), `PM done in 30 d (${nInt(m.pm_done_30d)} of ${nInt(m.pm_sched_30d)}), ${nInt(m.pm_past_due)} past due · ${nInt(m.audits)} audits ever · ${nInt(m.sus_compliant)} of ${nInt(m.sus_reqs)} sustainability requirements`],
-                ['4 · Guest signal', L.guest_status, nInt(L.guest_themed_reviews), `reviews themed · ${nInt(L.guest_low_180d)} under 4 in 180 d · ${nInt(L.guest_unanswered)} never answered · ${nInt(m.recovery_cases)} recovery cases`],
-                ['5 · Corrective action', L.capa_status, nInt(L.capa_findings_open), `findings open · ${nInt(L.capa_low_reviews_without_finding)} low reviews without a finding · ${nInt(m.findings_overdue)} overdue`],
+                ['1 · Standards', L.standards_status ?? '—', `${nInt(m.sops_in_date)} / ${nInt(m.sops)}`, `SOPs in date · ${nInt(m.sops_never_reviewed)} never reviewed, ${nInt(m.sops_overdue)} overdue · ${nInt(m.sops_lao)} Lao of ${nInt(m.sops_with_body)} · ${nInt(m.proposals_open)} proposals open`],
+                ['2 · People', L.people_status ?? '—', nInt(L.people_certs_held), `certificates evidenced vs ${nInt(L.people_cert_fte_required)} FTE required · ${nInt(m.platform_users)} of ${nInt(m.staff_active)} staff have a login · ${nInt(m.departments_with_hod)} of ${nInt(m.departments)} HODs`],
+                ['3 · Verification', L.verification_status ?? '—', nPct(L.verification_pm_pct), `PM done in 30 d (${nInt(m.pm_done_30d)} of ${nInt(m.pm_sched_30d)}), ${nInt(m.pm_past_due)} past due · ${nInt(m.audits)} audits ever · ${nInt(m.sus_compliant)} of ${nInt(m.sus_reqs)} sustainability requirements`],
+                ['4 · Guest signal', L.guest_status ?? '—', nInt(L.guest_themed_reviews), `reviews themed · ${nInt(L.guest_low_180d)} under 4 in 180 d · ${nInt(L.guest_unanswered)} never answered · ${nInt(m.recovery_cases)} recovery cases`],
+                ['5 · Corrective action', L.capa_status ?? '—', nInt(L.capa_findings_open), `findings open · ${nInt(L.capa_low_reviews_without_finding)} low reviews without a finding · ${nInt(m.findings_overdue)} overdue`],
               ] as [string, string, string, string][]).map(([t, st, v, d], i) => (
                 <div key={i} className="flex min-h-[150px] flex-col bg-white p-3.5">
                   <h4 className="flex justify-between text-xs font-semibold">{t}<span className={`rounded px-1.5 text-[11px] font-medium ${statusCls(st)}`}>{st}</span></h4>
-                  <div className={`my-2 font-serif text-2xl leading-none ${st === 'live' ? '' : st === 'partial' ? cls.warn : cls.bad}`}>{v}</div>
+                  <div className={`my-2 font-serif text-2xl leading-none ${st === 'live' ? '' : st === 'partial' ? cls.warn : st === 'open' ? cls.bad : cls.na}`}>{v}</div>
                   <div className="text-xs text-neutral-500">{d}</div>
                 </div>))}
             </div>
