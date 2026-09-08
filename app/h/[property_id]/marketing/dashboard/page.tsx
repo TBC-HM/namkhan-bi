@@ -10,6 +10,7 @@
 // Tenancy: pid comes from the route param only — never a default (L22).
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSessionScope, canSeeProperty } from '@/lib/session-scope';
 import MarketingDashboard from './MarketingDashboard';
 import type { Payload } from './types';
 
@@ -26,6 +27,9 @@ export default async function MarketingDashboardPage({ params, searchParams }: P
   const sp = (await searchParams) ?? {};
   const pid = Number(property_id);
   if (!Number.isFinite(pid)) notFound();
+
+  const scope = await getSessionScope();
+  if (!canSeeProperty(pid, scope)) notFound();
 
   // The mkt-dash-refresh-15min cron owns refreshing the cache. A page load must
   // NEVER trigger fn_mkt_dash_payload's fallback path: that recompute takes ~17 s,

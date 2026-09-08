@@ -105,6 +105,10 @@ Deno.serve(async (req: Request) => {
       const pinTitle = String(p.title ?? '').slice(0, 100);
       const pinBody  = [String(p.caption ?? p.title ?? ''), tags].filter(Boolean).join('\n\n').slice(0, 500);
       if (mediaUrls.length === 0) {
+        await sb.rpc('fn_social_post_mark_pushed', {
+          p_post_id: postId, p_up_request_id: null, p_up_job_id: null,
+          p_up_status: 'error', p_up_error: 'pinterest_requires_image',
+        }).catch(() => {});
         return res({ ok: false, error: 'pinterest_requires_image' }, 422);
       }
       const files: File[] = [];
@@ -118,7 +122,13 @@ Deno.serve(async (req: Request) => {
           files.push(new File([buf], `photo.${ext}`, { type: `image/${ext}` }));
         } catch { /* skip */ }
       }
-      if (files.length === 0) return res({ ok: false, error: 'all_media_fetch_failed' }, 502);
+      if (files.length === 0) {
+        await sb.rpc('fn_social_post_mark_pushed', {
+          p_post_id: postId, p_up_request_id: null, p_up_job_id: null,
+          p_up_status: 'error', p_up_error: 'all_media_fetch_failed',
+        }).catch(() => {});
+        return res({ ok: false, error: 'all_media_fetch_failed' }, 502);
+      }
       const pinParams: Record<string, unknown> = {
         user:        profileUsername as string,
         platform:    ['pinterest'],
@@ -257,17 +267,21 @@ Deno.serve(async (req: Request) => {
             p_avatar_url:   String(items[0].picture ?? items[0].avatar ?? ''),
           });
           // Pinterest: persist all boards so the UI can show a board picker
+          let boardsErr: string | null = null;
           if (platform === 'pinterest') {
             try {
               await sb.rpc('fn_pinterest_boards_upsert', {
                 p_property_id: propertyId,
                 p_boards:      items,
               });
-            } catch { /* non-fatal */ }
+            } catch (e) {
+              boardsErr = String(e);
+              console.error('fn_pinterest_boards_upsert failed:', boardsErr);
+            }
           }
-          synced.push({ platform, ok: true, accounts: items.length });
+          synced.push({ platform, ok: true, accounts: items.length, ...(boardsErr ? { boards_err: boardsErr } : {}) });
         } else {
-          synced.push({ platform, ok: true, accounts: 0 });
+          synced.push({ platform, ok: false, error: 'no_accounts_returned', accounts: 0 });
         }
       } catch (e) {
         synced.push({ platform, ok: false, error: String(e) });

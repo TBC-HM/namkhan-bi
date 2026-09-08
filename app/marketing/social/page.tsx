@@ -149,7 +149,7 @@ export default async function SocialPage({ searchParams }: Props) {
     getSocialCalendarSlots(NAMKHAN_PID, todayIso, addDaysIso(todayIso, windowDays)),
     getSocialPostsForProperty(NAMKHAN_PID),
     sb.from('v_up_profiles').select('*').eq('property_id', NAMKHAN_PID).then(r => r.data ?? []),
-    view === 'analytics' ? sb.from('v_up_analytics').select('*').limit(50).then(r => r.data ?? []) : Promise.resolve([]),
+    view === 'analytics' ? sb.from('v_up_analytics').select('*').eq('property_id', NAMKHAN_PID).limit(50).then(r => r.data ?? []) : Promise.resolve([]),
     sb.from('v_up_destinations').select('*').eq('property_id', NAMKHAN_PID).eq('active', true).then(r => r.data ?? []),
     sb.from('v_social_platform_specs').select('*').then(r => r.data ?? []),
   ]);

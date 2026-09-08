@@ -150,11 +150,10 @@ export async function POST(req: Request) {
   let totalInserted = 0;
   let totalFetched = 0;
   const subcatAccum: TaSubRating[] = [];
-  // Collect source_review_ids of reviews that have owner replies.
-  // fn_reviews_ingest_apify uses ON CONFLICT DO NOTHING so existing rows are not updated.
-  // After the ingest loop we do a separate UPDATE pass to fix response_status on rows
-  // that previously came in without owner_answer data.
+  // Collect reviews with owner replies so we can backfill response_status + response_text
+  // on rows that already existed in DB (ON CONFLICT DO NOTHING skipped them during ingest).
   const respondedSourceIds: string[] = [];
+  const respondedTextMap = new Map<string, string>(); // source_review_id → response_text
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const res = await fetch('https://api.dataforseo.com/v3/business_data/tripadvisor/reviews/live', {
@@ -193,10 +192,11 @@ export async function POST(req: Request) {
       totalInserted += Number((ingestData as Record<string, unknown>)?.inserted ?? rows.length);
     }
 
-    // Collect source_review_ids of reviews that have owner replies on this page
+    // Collect reviews that have owner replies on this page
     for (const row of rows as Array<Record<string, unknown>>) {
       if (row.response_status === 'responded' && typeof row.source_review_id === 'string') {
         respondedSourceIds.push(row.source_review_id);
+        respondedTextMap.set(row.source_review_id, String(row.response_text ?? ''));
       }
     }
 
@@ -216,6 +216,16 @@ export async function POST(req: Request) {
       .neq('response_status', 'responded')
       .select('id');
     respondedUpdated = updatedRows?.length ?? 0;
+    // Backfill response_text per row (batch update can't set different values per row)
+    for (const [sid, text] of respondedTextMap) {
+      if (!text) continue;
+      await sb.from('mkt_reviews')
+        .update({ response_text: text })
+        .eq('source', 'tripadvisor')
+        .eq('property_id', PROPERTY_ID)
+        .eq('source_review_id', sid)
+        .is('response_text', null);
+    }
   }
 
   // Aggregate subcategory scores and store
