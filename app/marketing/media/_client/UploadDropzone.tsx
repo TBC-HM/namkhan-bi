@@ -8,11 +8,14 @@
 //   fn_media_asset_video_meta_update.
 'use client';
 
+import { useUploadScope } from '@/lib/upload-scope';
 import { useState, useRef } from 'react';
 
-// L22 — propertyId is REQUIRED and has no default. A default here silently routed
-// every upload from a non-Namkhan surface into Namkhan's library.
-interface Props { onResult?: (msg: string) => void; propertyId: number; onUploadDone?: () => void }
+// L22 — no hardcoded property default. Callers that know their scope pass it
+// explicitly; everyone else resolves it from the URL via useUploadScope().
+// The old `propertyId = 260955` default silently routed every upload from a
+// non-Namkhan surface into Namkhan's library.
+interface Props { onResult?: (msg: string) => void; propertyId?: number; onUploadDone?: () => void }
 
 const HAIR   = '#E6DFCC';
 const INK    = '#1B1B1B';
@@ -116,6 +119,8 @@ async function extractVideoMetadata(file: File): Promise<VideoMeta | null> {
 }
 
 export default function UploadDropzone({ onResult, propertyId, onUploadDone }: Props) {
+  const scopeFromUrl = useUploadScope();
+  const effectivePropertyId = propertyId ?? scopeFromUrl;
   const [busy, setBusy] = useState(false);
   const [prog, setProg] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
@@ -163,7 +168,7 @@ export default function UploadDropzone({ onResult, propertyId, onUploadDone }: P
         setProg(`Signing ${f.name}…`);
         const signRes = await fetch('/api/marketing/upload-sign', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: f.name, content_type: mime, size: f.size, sha256: sha, property_id: propertyId }),
+          body: JSON.stringify({ filename: f.name, content_type: mime, size: f.size, sha256: sha, property_id: effectivePropertyId }),
         });
         const signJson = await signRes.json();
         if (!signRes.ok) {

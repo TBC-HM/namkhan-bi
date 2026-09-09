@@ -6,6 +6,7 @@
 // Storage, bypassing Vercel's 4.5 MB function body limit. Only metadata (a few
 // hundred bytes) flows through /api/marketing/upload-sign.
 
+import { useUploadScope } from '@/lib/upload-scope';
 import { useCallback, useState, useRef } from 'react';
 
 type Status = 'queued' | 'hashing' | 'signing' | 'uploading' | 'finalizing' | 'ingested' | 'ready' | 'rejected' | 'duplicate';
@@ -73,6 +74,9 @@ async function sha256Hex(file: File): Promise<string> {
 }
 
 export default function UploadDropzone() {
+  // Scope follows the URL the operator is standing in — tenant or holding.
+  // Never prompted, never a hardcoded constant (L22).
+  const uploadScope = useUploadScope();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const photographerRef = useRef<HTMLInputElement>(null);
@@ -109,6 +113,7 @@ export default function UploadDropzone() {
           sha256: sha,
           photographer: photographer || undefined,
           license: license || undefined,
+          property_id: uploadScope,
         }),
       });
       const signJson: any = await signRes.json().catch(() => ({}));
