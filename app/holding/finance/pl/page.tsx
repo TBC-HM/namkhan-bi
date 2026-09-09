@@ -21,6 +21,8 @@ import {
 import { isoDateOrNull, dateLabel } from './_lib/format';
 import { PlSubTabs, ErrorPanel, TABS, PL_PATH, type TabKey } from './_components/ui';
 import PeriodFilter from './_components/PeriodFilter';
+import YearTabs from './_components/YearTabs';
+import AnnualRollup, { type YearColumn } from './_components/AnnualRollup';
 import DataQualityPanel from './_components/DataQualityPanel';
 import OverviewTab from './_components/OverviewTab';
 import DepartmentsTab from './_components/DepartmentsTab';
@@ -33,7 +35,7 @@ export const revalidate = 0;
 
 export default async function HoldingPlPage({ searchParams }: {
   searchParams?: {
-    tab?: string; from?: string; to?: string;
+    tab?: string; from?: string; to?: string; year?: string;
     dept?: string; line_type?: string; flag?: string;
   };
 }) {
@@ -42,15 +44,26 @@ export default async function HoldingPlPage({ searchParams }: {
     : 'overview') as TabKey;
 
   // Null when absent or malformed — the RPC then chooses the period.
-  const qFrom = isoDateOrNull(searchParams?.from);
-  const qTo = isoDateOrNull(searchParams?.to);
+  // ?year=YYYY is shorthand for that calendar year and is validated against the
+  // years the DATA actually contains, never against a hardcoded list.
+  const qYear = /^\d{4}$/.test(searchParams?.year ?? '') ? searchParams!.year! : null;
+  const qFrom = qYear ? `${qYear}-01-01` : isoDateOrNull(searchParams?.from);
+  const qTo = qYear ? `${qYear}-12-31` : isoDateOrNull(searchParams?.to);
 
   const cfg = DEPT_CFG.holding_finance;
   const deptTabs: DashboardTab[] = cfg.subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href === PL_PATH,
   }));
 
-  const payload = await fetchHoldingPl(qFrom, qTo);
+  // Always resolve the full period first: it is what tells us which years the
+  // ledger actually contains. The year buttons are built from that, never from
+  // a list written down here.
+  const full = await fetchHoldingPl(null, null);
+  const years = full.ok && full.data
+    ? Array.from(new Set(full.data.by_month.map((m) => m.period_yyyymm.slice(0, 4)))).sort()
+    : [];
+
+  const payload = qFrom || qTo ? await fetchHoldingPl(qFrom, qTo) : full;
 
   if (!payload.ok || !payload.data) {
     return (
@@ -78,6 +91,15 @@ export default async function HoldingPlPage({ searchParams }: {
   const lineType = searchParams?.line_type || null;
   const flag = searchParams?.flag || null;
 
+  // Annual roll-up: one payload per year, so the gold layer does the arithmetic
+  // for each column rather than this page re-summing months.
+  const yearColumns: YearColumn[] = tab === 'overview'
+    ? await Promise.all(years.map(async (y): Promise<YearColumn> => {
+        const r = await fetchHoldingPl(`${y}-01-01`, `${y}-12-31`);
+        return { year: y, payload: r.ok ? r.data : null, error: r.ok ? null : r.error };
+      }))
+    : [];
+
   const [monthly, arRows, ledgerRows, lineTypes] = await Promise.all([
     tab === 'departments' ? fetchPlMonthly(from, to) : Promise.resolve(null),
     tab === 'ar' ? fetchArAgeing() : Promise.resolve(null),
@@ -99,9 +121,13 @@ export default async function HoldingPlPage({ searchParams }: {
           <PlSubTabs current={tab} from={qFrom} to={qTo} />
           <PeriodFilter tab={tab} from={from} to={to} />
         </div>
+        {years.length > 0 && <YearTabs tab={tab} years={years} current={qYear} />}
       </div>
 
       {tab === 'overview' && <OverviewTab p={p} />}
+      {tab === 'overview' && yearColumns.length > 0 && (
+        <AnnualRollup columns={yearColumns} currency={p.reporting_currency} />
+      )}
       {tab === 'departments' && monthly && <DepartmentsTab p={p} monthly={monthly} />}
       {tab === 'ar' && arRows && <ArAgeingTab p={p} rows={arRows} />}
       {tab === 'ledger' && ledgerRows && (
