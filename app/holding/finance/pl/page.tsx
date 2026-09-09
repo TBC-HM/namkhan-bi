@@ -17,6 +17,7 @@ import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import {
   fetchHoldingPl, fetchPlLines, fetchArAgeing, fetchPlMonthly, fetchLineTypes,
+  fetchHoldingBudget,
 } from './_lib/fetchPayload';
 import { isoDateOrNull, dateLabel } from './_lib/format';
 import { PlSubTabs, ErrorPanel, TABS, PL_PATH, type TabKey } from './_components/ui';
@@ -29,6 +30,7 @@ import DepartmentsTab from './_components/DepartmentsTab';
 import ArAgeingTab from './_components/ArAgeingTab';
 import LedgerTab from './_components/LedgerTab';
 import UploadTab from './_components/UploadTab';
+import BudgetTab from './_components/BudgetTab';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -100,11 +102,12 @@ export default async function HoldingPlPage({ searchParams }: {
       }))
     : [];
 
-  const [monthly, arRows, ledgerRows, lineTypes] = await Promise.all([
+  const [monthly, arRows, ledgerRows, lineTypes, budget] = await Promise.all([
     tab === 'departments' ? fetchPlMonthly(from, to) : Promise.resolve(null),
     tab === 'ar' ? fetchArAgeing() : Promise.resolve(null),
     tab === 'ledger' ? fetchPlLines({ from, to, dept, lineType, flag }) : Promise.resolve(null),
     tab === 'ledger' ? fetchLineTypes(from, to) : Promise.resolve([] as string[]),
+    tab === 'budget' ? fetchHoldingBudget(qFrom, qTo) : Promise.resolve(null),
   ]);
 
   return (
@@ -135,6 +138,15 @@ export default async function HoldingPlPage({ searchParams }: {
           p={p} rows={ledgerRows} lineTypes={lineTypes}
           from={from} to={to} dept={dept} lineType={lineType} flag={flag}
         />
+      )}
+      {tab === 'budget' && budget && (
+        budget.ok && budget.data
+          ? <BudgetTab b={budget.data} />
+          : (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <ErrorPanel what="The budget payload" message={budget.error ?? 'Unknown error'} />
+            </div>
+          )
       )}
       {tab === 'upload' && <UploadTab p={p} />}
 

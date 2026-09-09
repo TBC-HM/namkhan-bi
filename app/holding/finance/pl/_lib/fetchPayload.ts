@@ -16,6 +16,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type {
   HoldingPlPayload, PlLineRow, ArAgeingRow, CashCollectedRow, PlMonthlyRow,
+  HoldingBudgetPayload,
 } from './types';
 
 /**
@@ -154,5 +155,28 @@ export async function fetchLineTypes(from: string, to: string): Promise<string[]
     )).sort();
   } catch {
     return [];
+  }
+}
+
+/**
+ * Budget / forecast payload. Same contract as the P&L: the gold layer does the
+ * arithmetic, the page only lays it out. Returns zeros and coverage.has_plan =
+ * false when no plan exists — never a fabricated figure.
+ */
+export async function fetchHoldingBudget(
+  from: string | null,
+  to: string | null,
+): Promise<Fetched<HoldingBudgetPayload>> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data, error } = await sb.rpc('fn_holding_budget_payload', {
+      p_from: from,
+      p_to: to,
+    });
+    if (error) return { ok: false, data: null, error: `fn_holding_budget_payload failed: ${error.message}` };
+    if (!data) return { ok: false, data: null, error: 'fn_holding_budget_payload returned no payload.' };
+    return { ok: true, data: data as HoldingBudgetPayload, error: null };
+  } catch (e) {
+    return { ok: false, data: null, error: e instanceof Error ? e.message : String(e) };
   }
 }

@@ -113,3 +113,66 @@ export type PlMonthlyRow = {
   dept_margin_eur: number | null;
   estimated_eur: number | null;
 };
+
+// ─── Budget / forecast (fn_holding_budget_payload) ────────────────────────
+// Same conventions as the P&L payload: every dimension is a plain string so a
+// new department or account appears without a code change, and no figure is
+// ever defaulted in the component.
+
+export type BudgetScenarioTotals = {
+  revenue_eur: number;
+  direct_cost_eur: number;
+  overhead_eur: number;
+  ebitda_eur: number;
+};
+
+export type BudgetMonthRow = {
+  period_yyyymm: string;
+  budget_revenue_eur: number;
+  forecast_revenue_eur: number;
+  actual_revenue_eur: number;
+  budget_cost_eur: number;
+  forecast_cost_eur: number;
+  actual_cost_eur: number;
+};
+
+export type BudgetDeptRow = {
+  dept_code: string;
+  dept_name: string;
+  budget_revenue_eur: number;
+  actual_revenue_eur: number;
+  budget_cost_eur: number;
+  actual_cost_eur: number;
+};
+
+export type BudgetAccountRow = {
+  dept_code: string;
+  account_code: string;
+  account_name: string;
+  line_type: string;
+  budget_eur: number;
+  forecast_eur: number;
+  actual_eur: number;
+};
+
+export type HoldingBudgetPayload = {
+  entity: string;
+  reporting_currency: string;
+  basis: string;
+  period: { from: string; to: string };
+  generated_at: string;
+  totals: {
+    budget: BudgetScenarioTotals;
+    forecast: BudgetScenarioTotals;
+    actual: BudgetScenarioTotals;
+  };
+  by_month: BudgetMonthRow[];
+  by_department: BudgetDeptRow[];
+  by_account: BudgetAccountRow[];
+  coverage: {
+    budget_lines: number;
+    forecast_lines: number;
+    months_planned: number;
+    has_plan: boolean;
+  };
+};

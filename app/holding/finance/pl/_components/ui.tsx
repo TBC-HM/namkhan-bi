@@ -11,11 +11,14 @@ export const INK_M = '#5A5A5A';
 export const FOREST = '#084838';
 export const RUST = '#8C3B2E';
 
-export type TabKey = 'overview' | 'departments' | 'ar' | 'ledger' | 'upload';
+export type TabKey = 'overview' | 'departments' | 'budget' | 'ar' | 'ledger' | 'upload';
 
 export const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'overview',    label: 'Overview' },
   { key: 'departments', label: 'Departments' },
+  // 'Budget' singular — /holding/finance/costs?tab=budgets is a DIFFERENT
+  // feature (AI/ops spend governance). Do not let the two labels converge.
+  { key: 'budget',      label: 'Budget' },
   { key: 'ar',          label: 'AR ageing' },
   { key: 'ledger',      label: 'Ledger' },
   { key: 'upload',      label: 'Upload' },
