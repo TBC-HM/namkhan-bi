@@ -22,7 +22,6 @@ import {
   SECTION_TO_TABLE,
   SECTION_FIELD_WHITELIST,
   SECTION_LABELS,
-  PROPERTY_ID,
   countPlaceholders,
   listSettingsSections,
   type FieldSchemaRow,
@@ -32,11 +31,21 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: { section: string };
+  searchParams: { property_id?: string };
 }
 
-export default async function PropertySectionPage({ params }: PageProps) {
+export default async function PropertySectionPage({ params, searchParams }: PageProps) {
   const cfg = SECTION_TO_TABLE[params.section];
   if (!cfg) notFound();
+
+  // L22 — this editor lives in the LEGACY unprefixed tree and used to read and write
+  // PROPERTY_ID (260955) unconditionally. Reachable from the left rail and the user
+  // menu, that made it a Namkhan-only editor an operator could open from Donna's
+  // context. The tenant is now explicit in the URL and there is NO default: with no
+  // ?property_id, the page shows a picker instead of guessing. The real gate is still
+  // requirePropertyAccess() in /api/settings/upsert — this is the UX half.
+  const rawPid = (searchParams?.property_id ?? '').trim();
+  const propertyId = /^\d+$/.test(rawPid) ? Number(rawPid) : null;
 
   let admin;
   try {
@@ -77,19 +86,59 @@ export default async function PropertySectionPage({ params }: PageProps) {
           property.* and give it a tenant selector) before it can be used again.
         </Insight>
         <div className="settings-layout">
-          <SectionSidebar sections={sections} active={params.section} />
+          <SectionSidebar sections={sections} active={params.section} propertyId={propertyId} />
         </div>
       </Page>
     );
   }
 
   const schema = cfg.schema ?? 'marketing';
+
+  if (cfg.hasPropertyId && propertyId == null) {
+    const { data: propRows } = await admin
+      .from('v_tenancy_properties')
+      .select('property_id, display_name, status')
+      .order('property_id');
+    const props = (propRows ?? []) as Array<{ property_id: number; display_name: string | null; status: string | null }>;
+    return (
+      <Page
+        eyebrow={`Settings · Property · ${SECTION_LABELS[params.section] ?? params.section}`}
+        title={<>Property <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>configuration</em>.</>}
+        subPages={SETTINGS_SUBPAGES}
+      >
+        <Insight tone="warn" eye="pick a property">
+          This section is tenant-scoped and this editor has no default property — a default
+          would silently open one hotel&apos;s data from another&apos;s context. Choose which
+          property to edit:
+          {' '}
+          {props.map((p) => (
+            <a
+              key={p.property_id}
+              href={`/settings/property/${params.section}?property_id=${p.property_id}`}
+              style={{ marginRight: 12, fontWeight: 600, color: 'var(--brass)' }}
+            >
+              {p.display_name ?? p.property_id}
+            </a>
+          ))}
+        </Insight>
+        <div className="settings-layout">
+          <SectionSidebar sections={sections} active={params.section} propertyId={propertyId} />
+        </div>
+      </Page>
+    );
+  }
   // Parallel reads: field schema for THIS table, rows for THIS section.
   const [fieldSchemaRes, rowsRes] = await Promise.all([
-    admin.schema('marketing').from('v_settings_field_schema').select('*').eq('table_name', cfg.table).order('ordinal_position'),
-    cfg.multiRow
-      ? admin.schema(schema).from(cfg.table).select('*').order(cfg.pk, { ascending: true })
-      : admin.schema(schema).from(cfg.table).select('*').eq('property_id', PROPERTY_ID).limit(1),
+    // table_schema is REQUIRED here: certifications, facilities and seasons exist in
+    // BOTH marketing and property, so table_name alone would merge two column sets
+    // into one form (migration settings_field_schema_add_property_content_scopes).
+    admin.schema('marketing').from('v_settings_field_schema').select('*')
+      .eq('table_name', cfg.table).eq('table_schema', schema).order('ordinal_position'),
+    cfg.hasPropertyId
+      ? (cfg.multiRow
+          ? admin.schema(schema).from(cfg.table).select('*').eq('property_id', propertyId).order(cfg.pk, { ascending: true })
+          : admin.schema(schema).from(cfg.table).select('*').eq('property_id', propertyId).limit(1))
+      : admin.schema(schema).from(cfg.table).select('*').order(cfg.pk, { ascending: true }),
   ]);
 
   const fieldSchema: FieldSchemaRow[] = (fieldSchemaRes.data ?? []) as FieldSchemaRow[];
@@ -133,13 +182,14 @@ export default async function PropertySectionPage({ params }: PageProps) {
       )}
 
       <div className="settings-layout">
-        <SectionSidebar sections={sections} active={params.section} />
+        <SectionSidebar sections={sections} active={params.section} propertyId={propertyId} />
         <Card
           title={currentSection?.display_name ?? 'Section'}
           sub={`${cfg.table} · ${rows.length} ${rows.length === 1 ? 'row' : 'rows'} · ${fields.length} fields${currentSection?.description ? ` · ${currentSection.description}` : ''}`}
-          source={`marketing.${cfg.table}`}
+          source={`${schema}.${cfg.table}`}
         >
           <SectionEditor
+            propertyId={propertyId}
             sectionCode={params.section}
             table={cfg.table}
             pk={cfg.pk}

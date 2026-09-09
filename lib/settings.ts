@@ -39,12 +39,12 @@ export interface FieldSchemaRow {
 // PBS 2026-09-09 audit — three corrections, all verified against the live DB:
 //  · `schema` is explicit. `data_integrations` lives in `property`, everything
 //    else in `marketing`; the route used to hardcode `.schema('marketing')`.
-//  · `missing: true` marks a target that NO LONGER EXISTS in the database
-//    (marketing.property_profile / property_contact / booking_policies /
-//    property_banking / property_licenses were dropped). Saves against these
-//    used to surface a raw Postgres 42P01; they now fail with a clear message.
-//    The /h/[pid]/settings pages READ property.* — these five sections have no
-//    working editor and need an owner decision (retire vs repoint).
+//  · `missing: true` marks a target absent from the live DB. RESOLVED 2026-09-09
+//    (PBS-approved): the 7 sections that pointed at the dropped marketing tables
+//    (property_profile / property_contact / booking_policies / property_banking /
+//    property_licenses) now point at their real homes in property.* and content.*,
+//    which is where the /h/[pid] pages already read. The flag stays in the type so
+//    a future drop fails loudly instead of raising a bare Postgres 42P01.
 //  · `hasPropertyId` matched reality for only 14 of 17 rows. social_accounts and
 //    room_type_content DO carry property_id (were false → tenant scope was never
 //    applied); retreat_pricing does NOT (was true).
@@ -55,18 +55,18 @@ export const SECTION_TO_TABLE: Record<
     pk: string;
     multiRow: boolean;
     hasPropertyId: boolean;
-    schema?: 'marketing' | 'property';
+    schema?: 'marketing' | 'property' | 'content';
     /** Target table is absent from the live DB — reject the write loudly. */
     missing?: boolean;
   }
 > = {
-  property_identity: { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
-  location_climate:  { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
-  brand:             { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
-  contacts:          { table: 'property_contact', pk: 'contact_id',  multiRow: true,  hasPropertyId: true, missing: true },
+  property_identity: { table: 'identity',  pk: 'property_id', multiRow: false, hasPropertyId: true, schema: 'property' },
+  location_climate:  { table: 'location',  pk: 'property_id', multiRow: false, hasPropertyId: true, schema: 'property' },
+  brand:             { table: 'brand',     pk: 'property_id', multiRow: false, hasPropertyId: true, schema: 'property' },
+  contacts:          { table: 'contacts',  pk: 'contact_id',  multiRow: true,  hasPropertyId: true, schema: 'property' },
   social:            { table: 'social_accounts',  pk: 'id',          multiRow: true,  hasPropertyId: true },
   rooms:             { table: 'room_type_content',pk: 'room_type_id',multiRow: true,  hasPropertyId: true },
-  booking_policies:  { table: 'booking_policies', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
+  booking_policies:  { table: 'policies',  pk: 'property_id', multiRow: false, hasPropertyId: true, schema: 'property' },
   certifications:    { table: 'certifications',   pk: 'cert_id',     multiRow: true,  hasPropertyId: true },
   facilities:        { table: 'facilities',       pk: 'facility_id', multiRow: true,  hasPropertyId: true },
   activities:        { table: 'activities_catalog', pk: 'activity_id', multiRow: true, hasPropertyId: true },
@@ -81,8 +81,12 @@ export const SECTION_TO_TABLE: Record<
   social_rules:      { table: 'social_channel_rules', pk: 'id',      multiRow: true,  hasPropertyId: true },
   social_programs:   { table: 'social_programs',  pk: 'id',          multiRow: true,  hasPropertyId: true },
   // Financial & legal identity — new sections 2026-08-04
-  banking:           { table: 'property_banking', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
-  licenses:          { table: 'property_licenses', pk: 'license_id', multiRow: true,  hasPropertyId: true, missing: true },
+  banking:           { table: 'property_banking', pk: 'property_id', multiRow: false, hasPropertyId: true, schema: 'content' },
+  // property.licenses, NOT content.property_licenses — fn_license_upsert (the live
+  // LicensesPanel write path) targets property.licenses, so the editor must agree with it.
+  // Both are empty today; the Banking page still READS content.property_licenses via
+  // v_property_licenses, which is a separate read/write split flagged to PBS 2026-09-09.
+  licenses:          { table: 'licenses',  pk: 'id',          multiRow: true,  hasPropertyId: true, schema: 'property' },
   // Settings → Data → "Add email feed". The client has posted this section since
   // 2026-08-04 but it was never registered here, so every save 400'd with
   // "Unknown section" — the feature has never once written a row.
@@ -142,30 +146,13 @@ export function listSettingsSections(): SettingsSectionSummary[] {
   }));
 }
 
-// Field whitelists for sections that share a physical table (property_profile).
-// Other sections render every editable field from their table.
-export const SECTION_FIELD_WHITELIST: Record<string, string[]> = {
-  property_identity: [
-    'legal_name', 'trading_name', 'star_rating', 'category', 'brand_taglines',
-    'short_description', 'long_description', 'unique_selling_points',
-    'affiliations', 'tax_id', 'vat_registered', 'business_license_no',
-  ],
-  location_climate: [
-    'street_line_1', 'street_line_2', 'village', 'district', 'city', 'province',
-    'country', 'postal_code', 'latitude', 'longitude', 'google_plus_code',
-    'google_maps_url', 'timezone',
-    'airport_distance_km', 'airport_drive_time_min', 'train_distance_km',
-    'train_drive_time_min', 'bus_drive_time_min',
-    'climate_temp_min_c', 'climate_temp_max_c', 'climate_rainy_months',
-    'climate_summary', 'shuttle_available', 'shuttle_description',
-    'check_in_time', 'check_out_time', 'primary_language', 'languages_spoken',
-    'website_url', 'booking_engine_url',
-  ],
-  brand: [
-    'logo_url', 'hero_image_url', 'brand_color_hex', 'brand_palette',
-    'brand_typography', 'brand_logo_variants', 'brand_assets_url',
-  ],
-};
+// Field whitelists existed because property_identity / location_climate / brand all
+// shared marketing.property_profile. Since 2026-09-09 each has its own table
+// (property.identity / property.location / property.brand), so no whitelist is needed
+// — every editable column of the table belongs to that section. Kept as an empty map
+// rather than deleted: SectionEditor still consults it, and a future shared table
+// will need it again.
+export const SECTION_FIELD_WHITELIST: Record<string, string[]> = {};
 
 // Postgres enum values used by FieldRenderer for input_type='enum'.
 // Hardcoded because v_settings_field_schema does not expose enum allowed

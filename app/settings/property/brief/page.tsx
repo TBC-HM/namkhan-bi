@@ -12,11 +12,21 @@ import Insight from '@/components/sections/Insight';
 import SectionSidebar from '@/components/settings/SectionSidebar';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { SETTINGS_SUBPAGES } from '../../_subpages';
-import { PROPERTY_ID, listSettingsSections } from '@/lib/settings';
+import { listSettingsSections } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
 
-export default async function FactsheetBriefPage() {
+export default async function FactsheetBriefPage({
+  searchParams,
+}: {
+  searchParams: { property_id?: string };
+}) {
+  // L22 — same fix as the section editor: this page rendered NAMKHAN's factsheet
+  // whatever tenant the operator came from, because f_factsheet_markdown was called
+  // with the hardcoded PROPERTY_ID. The tenant is explicit in the URL now, with a
+  // picker and no default when it is absent.
+  const rawPid = (searchParams?.property_id ?? '').trim();
+  const propertyId = /^\d+$/.test(rawPid) ? Number(rawPid) : null;
   let admin;
   try {
     admin = getSupabaseAdmin();
@@ -36,9 +46,41 @@ export default async function FactsheetBriefPage() {
 
   // marketing.v_settings_sections_live was dropped — the rail now comes from the
   // code registry (PBS 2026-09-09), same source as the write path.
-  const mdRes = await admin.schema('marketing').rpc('f_factsheet_markdown', { p_property_id: PROPERTY_ID });
-
   const sections = listSettingsSections();
+
+  if (propertyId == null) {
+    const { data: propRows } = await admin
+      .from('v_tenancy_properties')
+      .select('property_id, display_name')
+      .order('property_id');
+    const props = (propRows ?? []) as Array<{ property_id: number; display_name: string | null }>;
+    return (
+      <Page
+        eyebrow="Settings · Property · AI agent brief"
+        title={<>Property <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>configuration</em>.</>}
+        subPages={SETTINGS_SUBPAGES}
+      >
+        <Insight tone="warn" eye="pick a property">
+          The factsheet is per-property and this page has no default. Choose one:
+          {' '}
+          {props.map((p) => (
+            <a
+              key={p.property_id}
+              href={`/settings/property/brief?property_id=${p.property_id}`}
+              style={{ marginRight: 12, fontWeight: 600, color: 'var(--brass)' }}
+            >
+              {p.display_name ?? p.property_id}
+            </a>
+          ))}
+        </Insight>
+        <div className="settings-layout">
+          <SectionSidebar sections={sections} active="" />
+        </div>
+      </Page>
+    );
+  }
+
+  const mdRes = await admin.schema('marketing').rpc('f_factsheet_markdown', { p_property_id: propertyId });
   const markdown: string = typeof mdRes.data === 'string' ? mdRes.data : '';
   const placeholderHits = (markdown.match(/\[LOREM IPSUM/g) ?? []).length;
 
@@ -63,7 +105,7 @@ export default async function FactsheetBriefPage() {
       )}
 
       <div className="settings-layout">
-        <SectionSidebar sections={sections} active="" />
+        <SectionSidebar sections={sections} active="" propertyId={propertyId} />
         <Card
           title="Factsheet"
           sub={`${markdown.length.toLocaleString()} chars · marketing.f_factsheet_markdown · auto-generated from every editable section. Inject this into agent system prompts.`}

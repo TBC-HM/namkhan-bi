@@ -11,6 +11,8 @@ import FieldRenderer from './FieldRenderer';
 import type { FieldSchemaRow } from '@/lib/settings';
 
 interface Props {
+  /** Verified tenant for this editor session. Null only for tables with no property_id. */
+  propertyId: number | null;
   sectionCode: string;
   table: string;            // physical table name in marketing schema
   pk: string;
@@ -21,7 +23,7 @@ interface Props {
 }
 
 export default function SectionEditor({
-  sectionCode, table, pk, multiRow, hasPropertyId, fields, rows: initialRows,
+  propertyId, sectionCode, table, pk, multiRow, hasPropertyId, fields, rows: initialRows,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -52,7 +54,7 @@ export default function SectionEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           section: sectionCode, table, pk, row,
-          ...(hasPropertyId ? { property_id: row.property_id } : {}),
+          ...(hasPropertyId ? { property_id: propertyId ?? row.property_id } : {}),
         }),
       });
       const json = await res.json();
@@ -95,7 +97,7 @@ export default function SectionEditor({
           // L22: the delete route scopes by the VERIFIED property_id, so the
           // tenant has to travel with the request. Rows come from the server,
           // so row.property_id is the row's own owner.
-          ...(hasPropertyId ? { property_id: row.property_id } : {}),
+          ...(hasPropertyId ? { property_id: propertyId ?? row.property_id } : {}),
         }),
       });
       const json = await res.json();
