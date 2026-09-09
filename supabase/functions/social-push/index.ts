@@ -81,6 +81,15 @@ Deno.serve(async (req: Request) => {
   if (!apiKey) return res({ ok: false, error: 'upload_post_key_not_configured' }, 500);
 
   const up = new UploadPost(apiKey as string);
+  // SDK v2.13 sends form field 'user' but Upload Post API now requires 'username'.
+  // Patch _addCommonParams to swap the append key before the SDK appends it.
+  const _origCommon = (up as any)._addCommonParams.bind(up);
+  (up as any)._addCommonParams = (form: any, opts: Record<string, unknown>) => {
+    const realAppend = form.append.bind(form);
+    form.append = (name: string, value: unknown, options?: unknown) =>
+      realAppend(name === 'user' ? 'username' : name, value, options);
+    _origCommon(form, opts);
+  };
 
   // ── PUSH ─────────────────────────────────────────────────────────────────
   if (mode === 'push') {
