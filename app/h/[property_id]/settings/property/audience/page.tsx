@@ -42,7 +42,6 @@ export default async function PropertyAudienceSettingsPage({
           { key: 'audience',   label: 'Newsletter', href: `/h/${propertyId}/settings/property/audience`, active: true },
           { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
           { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-          { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
           { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
           { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
         ]}
@@ -92,7 +91,6 @@ export default async function PropertyAudienceSettingsPage({
         { key: 'audience',   label: 'Newsletter', href: `/h/${propertyId}/settings/property/audience`, active: true },
         { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
         { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-        { key: 'brain',      label: 'Brain',      href: `/h/${propertyId}/settings/brain` },
         { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
         { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
       ]}

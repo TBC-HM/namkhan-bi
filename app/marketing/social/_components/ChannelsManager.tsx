@@ -208,7 +208,7 @@ export default function ChannelsManager({
     try {
       const res = await fetch('/api/settings/delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section: 'social', table: 'social_accounts', pk: 'id', id }),
+        body: JSON.stringify({ section: 'social', table: 'social_accounts', pk: 'id', id, property_id: propertyId }),
       });
       const j = await res.json();
       if (!j.ok) throw new Error(j.error ?? 'delete failed');

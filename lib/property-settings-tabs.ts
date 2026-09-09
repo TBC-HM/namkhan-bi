@@ -18,7 +18,6 @@ export function getSettingsTabs(propertyId: number, activeKey: string): Settings
     { key: 'guardrails',     label: 'Guardrails',     path: `${base}/guardrails`     },
     { key: 'documents',      label: 'Documents',      path: `${base}/documents`      },
     { key: 'data',           label: 'Data',           path: `${base}/data`           },
-    { key: 'brain',          label: 'Brain',          path: `${base}/brain`          },
     { key: 'send_logs',      label: 'Send Logs',      path: `${base}/send-logs`      },
     { key: 'knowledge',      label: 'Knowledge',      path: `${base}/knowledge`      },
     { key: 'banking',        label: 'Banking & Legal', path: `${base}/banking`       },

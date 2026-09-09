@@ -53,7 +53,37 @@ function safeLanguage(raw: any): string {
   return 'en'; // safe fallback
 }
 
-function safeDocType(raw: string): string {
+// ADR-305 / memory 881 — doc families are TENANT CONFIG, never a hardcoded list.
+// ALLOWED_DOC_TYPES above had drifted 8 values behind dms.documents' check
+// constraint, so the holding families PBS created (research_plattform,
+// research_modules, plattform, company_docs, sales, finance, integrations_apis)
+// were unknown here and the substring heuristic below rewrote
+// 'research_plattform' → 'research'. dms.fn_enforce_doc_type_vocab then rejected
+// every holding upload, including the page's own defaultDocType. Fix: the live
+// vocab for the scope wins over both the static set and the heuristic.
+async function loadDocTypeVocab(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  propertyId: number | null,
+): Promise<Set<string>> {
+  let q = admin.from('v_doc_type_vocab').select('value').eq('active', true);
+  q = propertyId == null ? q.is('property_id', null) : q.eq('property_id', propertyId);
+  const { data } = await q;
+  return new Set(((data ?? []) as { value: string }[]).map((r) => r.value).filter(Boolean));
+}
+
+function safeDocType(raw: string, vocab?: Set<string>): string {
+  // Exact match against the scope's live vocab always wins — no remap.
+  if (vocab?.has(raw)) return raw;
+  if (!vocab?.size && ALLOWED_DOC_TYPES.has(raw)) return raw;
+  const guess = heuristicDocType(raw);
+  // A heuristic answer the scope does not actually accept would be rejected by
+  // dms.fn_enforce_doc_type_vocab — land on 'other' (present in every vocab)
+  // and let the register's triage surface reclassify it.
+  if (vocab?.size && !vocab.has(guess)) return vocab.has('other') ? 'other' : guess;
+  return guess;
+}
+
+function heuristicDocType(raw: string): string {
   if (ALLOWED_DOC_TYPES.has(raw)) return raw;
   const t = (raw || '').toLowerCase();
   // Smart remap based on common AI variants
@@ -237,8 +267,11 @@ export async function POST(req: NextRequest) {
   }
 
   // --- 2b. Validate + remap classifier doc_type AND language to enforce DB constraints
+  // Vocab is scope-specific: holding (property_id NULL) and each tenant define
+  // their own families, so load the one this upload is being filed under.
+  const docTypeVocab = await loadDocTypeVocab(admin, targetPropertyId).catch(() => new Set<string>());
   const originalDocType = cls.doc_type as string;
-  const safeType = safeDocType(originalDocType);
+  const safeType = safeDocType(originalDocType, docTypeVocab);
   if (safeType !== originalDocType) {
     cls.doc_type = safeType as typeof cls.doc_type;
     cls.tags = [...(cls.tags || []), `remap:${originalDocType}->${safeType}`].slice(0, 8);
@@ -256,7 +289,7 @@ export async function POST(req: NextRequest) {
   // against the same enum + fallback to safeDocType if unknown.
   const overrides = (req as any)._overrides ?? {};
   if (overrides.doc_type) {
-    const safeOverride = safeDocType(overrides.doc_type);
+    const safeOverride = safeDocType(overrides.doc_type, docTypeVocab);
     if (safeOverride !== cls.doc_type) {
       cls.tags = [...(cls.tags || []), `override:${cls.doc_type}->${safeOverride}`].slice(0, 8);
       cls.doc_type = safeOverride as typeof cls.doc_type;

@@ -1,18 +1,30 @@
 // POST /api/settings/upsert
-// Upserts one row into a marketing-schema settings table.
+// Upserts one row into a settings table (marketing schema, or property for the
+// sections that declare schema: 'property').
 //
-// Auth model (v1): the dashboard is password-gated upstream and uses mock auth.
-// We service-role through this endpoint (same pattern as /api/marketing/upload),
-// because client-side anon writes are blocked by RLS on every settings table.
+// Auth model (2026-09-09, L22/ADR-281): this endpoint used to be unauthenticated
+// AND to overwrite every row's property_id with the literal 260955 — so a Donna
+// user's save silently landed on Namkhan, and the tenant scope was decorative.
+// Tenant-scoped sections now resolve the property from the request
+// (body.property_id, else row.property_id), verify it with requirePropertyAccess()
+// and write the VERIFIED value. Sections whose table has no property_id column
+// (retreat_pricing) keep the previous behaviour — there is nothing to scope by.
+//
+// Write shape (2026-09-09): 10 of the 12 live targets are auto-updatable VIEWS,
+// and Postgres cannot do INSERT .. ON CONFLICT against a view (no unique index to
+// infer) — so the old .upsert() raised 42P10 on every EDIT while adds worked.
+// We now UPDATE by pk (scoped by property_id) and INSERT only when nothing matched.
 //
 // Body shape:
-//   { section: string, table: string, pk: string, row: Record<string, unknown> }
+//   { section: string, table: string, pk: string, row: Record<string, unknown>,
+//     property_id?: number }
 //
-// Validates section is one of the 15 known sections, sanitizes the row to drop
+// Validates section is one of the known sections, sanitizes the row to drop
 // audit columns (created_at, updated_at, updated_by) so the trigger sets them.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 import { SECTION_TO_TABLE } from '@/lib/settings';
 
 export const runtime = 'nodejs';
@@ -46,6 +58,29 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
+  if (cfg.missing) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          `Section ${section} has no live table (${cfg.schema ?? 'marketing'}.${cfg.table} was dropped). ` +
+          `This editor is disconnected — the data is read from property.* and needs an owner decision before it can be edited here.`,
+      },
+      { status: 501 },
+    );
+  }
+
+  // L22: verify the caller may write this tenant, and use the VERIFIED id.
+  let verifiedPropertyId: number | null = null;
+  if (cfg.hasPropertyId) {
+    const raw = body.property_id ?? (row as Record<string, unknown>).property_id;
+    try {
+      verifiedPropertyId = await requirePropertyAccess(req, raw as number | string | null | undefined);
+    } catch (e) {
+      if (e instanceof Response) return e;
+      return NextResponse.json({ ok: false, error: 'authorization_check_failed' }, { status: 403 });
+    }
+  }
 
   // Sanitize: strip audit cols (server trigger handles them).
   const clean: Record<string, unknown> = {};
@@ -53,11 +88,7 @@ export async function POST(req: Request) {
     if (STRIPPED_COLS.has(k)) continue;
     clean[k] = v;
   }
-
-  // For tables with property_id, force the canonical id (defense-in-depth).
-  if (cfg.hasPropertyId) {
-    clean['property_id'] = 260955;
-  }
+  if (verifiedPropertyId != null) clean['property_id'] = verifiedPropertyId;
 
   // For new rows in multi-row tables, drop a null PK so the DB can generate it.
   if (cfg.multiRow && (clean[pk] == null || clean[pk] === '')) {
@@ -71,15 +102,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: e?.message ?? 'admin client unavailable' }, { status: 500 });
   }
 
-  const sb = admin.schema('marketing').from(table);
+  const schema = cfg.schema ?? 'marketing';
+  const from = () => admin.schema(schema).from(table);
 
-  // Distinguish insert vs upsert: if PK is present, upsert on the PK conflict.
-  // For single-row property tables (pk = property_id), always upsert on property_id.
+  const pkValue = clean[pk];
   let queryRes;
-  if (cfg.multiRow && (!(pk in clean) || clean[pk] == null)) {
-    queryRes = await sb.insert(clean).select('*').single();
+  if (pkValue == null || pkValue === '') {
+    queryRes = await from().insert(clean).select('*').single();
   } else {
-    queryRes = await sb.upsert(clean, { onConflict: pk }).select('*').single();
+    // UPDATE first — always scoped by the verified tenant so a shared pk
+    // (e.g. data_integrations.slug, unique per property) cannot cross tenants.
+    let upd = from().update(clean).eq(pk, pkValue);
+    if (verifiedPropertyId != null) upd = upd.eq('property_id', verifiedPropertyId);
+    const updRes = await upd.select('*');
+    if (updRes.error) {
+      return NextResponse.json(
+        { ok: false, error: updRes.error.message, code: updRes.error.code },
+        { status: 400 },
+      );
+    }
+    queryRes = (updRes.data ?? []).length
+      ? { data: updRes.data![0], error: null }
+      : await from().insert(clean).select('*').single();
   }
 
   if (queryRes.error) {

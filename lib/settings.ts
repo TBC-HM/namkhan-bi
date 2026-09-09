@@ -7,6 +7,9 @@
 // marketing_lead. The app currently uses mock auth (no JWT), so service-role
 // is the only path for both reads and writes on these tables.
 
+// L22: this is the LEGACY single-tenant editor's default and is used only by the
+// unprefixed /settings/* tree. It is NOT a fallback for the property-scoped API —
+// /api/settings/upsert now resolves the tenant from the request and verifies it.
 export const PROPERTY_ID = 260955;
 
 export interface SectionRow {
@@ -31,25 +34,46 @@ export interface FieldSchemaRow {
   label: string;
 }
 
-// section_code → physical table info
+// section_code → physical table info.
+//
+// PBS 2026-09-09 audit — three corrections, all verified against the live DB:
+//  · `schema` is explicit. `data_integrations` lives in `property`, everything
+//    else in `marketing`; the route used to hardcode `.schema('marketing')`.
+//  · `missing: true` marks a target that NO LONGER EXISTS in the database
+//    (marketing.property_profile / property_contact / booking_policies /
+//    property_banking / property_licenses were dropped). Saves against these
+//    used to surface a raw Postgres 42P01; they now fail with a clear message.
+//    The /h/[pid]/settings pages READ property.* — these five sections have no
+//    working editor and need an owner decision (retire vs repoint).
+//  · `hasPropertyId` matched reality for only 14 of 17 rows. social_accounts and
+//    room_type_content DO carry property_id (were false → tenant scope was never
+//    applied); retreat_pricing does NOT (was true).
 export const SECTION_TO_TABLE: Record<
   string,
-  { table: string; pk: string; multiRow: boolean; hasPropertyId: boolean }
+  {
+    table: string;
+    pk: string;
+    multiRow: boolean;
+    hasPropertyId: boolean;
+    schema?: 'marketing' | 'property';
+    /** Target table is absent from the live DB — reject the write loudly. */
+    missing?: boolean;
+  }
 > = {
-  property_identity: { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true },
-  location_climate:  { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true },
-  brand:             { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true },
-  contacts:          { table: 'property_contact', pk: 'contact_id',  multiRow: true,  hasPropertyId: true },
-  social:            { table: 'social_accounts',  pk: 'id',          multiRow: true,  hasPropertyId: false },
-  rooms:             { table: 'room_type_content',pk: 'room_type_id',multiRow: true,  hasPropertyId: false },
-  booking_policies:  { table: 'booking_policies', pk: 'property_id', multiRow: false, hasPropertyId: true },
+  property_identity: { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
+  location_climate:  { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
+  brand:             { table: 'property_profile', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
+  contacts:          { table: 'property_contact', pk: 'contact_id',  multiRow: true,  hasPropertyId: true, missing: true },
+  social:            { table: 'social_accounts',  pk: 'id',          multiRow: true,  hasPropertyId: true },
+  rooms:             { table: 'room_type_content',pk: 'room_type_id',multiRow: true,  hasPropertyId: true },
+  booking_policies:  { table: 'booking_policies', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
   certifications:    { table: 'certifications',   pk: 'cert_id',     multiRow: true,  hasPropertyId: true },
   facilities:        { table: 'facilities',       pk: 'facility_id', multiRow: true,  hasPropertyId: true },
   activities:        { table: 'activities_catalog', pk: 'activity_id', multiRow: true, hasPropertyId: true },
   meeting_rooms:     { table: 'meeting_rooms',    pk: 'meeting_room_id', multiRow: true, hasPropertyId: true },
   meeting_packages:  { table: 'meeting_packages', pk: 'package_id',  multiRow: true,  hasPropertyId: true },
   retreats:          { table: 'retreat_programs', pk: 'retreat_id',  multiRow: true,  hasPropertyId: true },
-  retreat_pricing:   { table: 'retreat_pricing',  pk: 'pricing_id',  multiRow: true,  hasPropertyId: true },
+  retreat_pricing:   { table: 'retreat_pricing',  pk: 'pricing_id',  multiRow: true,  hasPropertyId: false },
   seasons:           { table: 'seasons',          pk: 'season_id',   multiRow: true,  hasPropertyId: true },
   // Social module (spec-social-media-module · 2026-07-25): per-channel output
   // guardrails + weekly content programs. Both property-scoped (Namkhan forced
@@ -57,8 +81,12 @@ export const SECTION_TO_TABLE: Record<
   social_rules:      { table: 'social_channel_rules', pk: 'id',      multiRow: true,  hasPropertyId: true },
   social_programs:   { table: 'social_programs',  pk: 'id',          multiRow: true,  hasPropertyId: true },
   // Financial & legal identity — new sections 2026-08-04
-  banking:           { table: 'property_banking', pk: 'property_id', multiRow: false, hasPropertyId: true },
-  licenses:          { table: 'property_licenses', pk: 'license_id', multiRow: true,  hasPropertyId: true },
+  banking:           { table: 'property_banking', pk: 'property_id', multiRow: false, hasPropertyId: true, missing: true },
+  licenses:          { table: 'property_licenses', pk: 'license_id', multiRow: true,  hasPropertyId: true, missing: true },
+  // Settings → Data → "Add email feed". The client has posted this section since
+  // 2026-08-04 but it was never registered here, so every save 400'd with
+  // "Unknown section" — the feature has never once written a row.
+  data_integration_email: { table: 'data_integrations', pk: 'slug', multiRow: true, hasPropertyId: true, schema: 'property' },
 };
 
 // Field whitelists for sections that share a physical table (property_profile).

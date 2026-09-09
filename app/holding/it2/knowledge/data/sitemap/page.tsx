@@ -249,7 +249,6 @@ function propertyAreas(pid: number): SitemapArea[] {
           { label: 'Team', url: base + '/settings/property' },
           { label: 'Audience', url: base + '/settings/property' },
         ]},
-        { label: 'Brain (AI settings)', url: base + '/settings/brain' },
         { label: 'Media (guardrails, channels, naming)', url: base + '/settings/media' },
         { label: 'Rate plans', url: base + '/settings/rate-plans' },
         { label: 'Guardrails', url: base + '/settings/guardrails' },

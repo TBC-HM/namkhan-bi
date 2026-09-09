@@ -139,6 +139,17 @@ export default async function HoldingDocumentsSettingsPage({ searchParams }: Pro
         </Container>
       </div>
 
+      {/* PBS 2026-09-09: the family/subtype editor sat BELOW a 25-row register, so on a
+          156-doc holding register it was three screens down and read as missing. Settings
+          come before the data they govern — same papercut PBS fixed on Media 2026-08-03. */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Document vocabulary · holding" subtitle="Families · Subtypes · Matters · Cases · Collections · Tags · Authors — holding scope">
+          <div style={{ padding: '8px 16px 16px' }}>
+            <DocRegistrySettingsPanel propertyId={0} families={d.families} familyVocab={d.familyVocab} subtypeVocab={d.subtypeVocab} projects={d.projects} cases={d.cases} collections={d.collections} tags={d.tags} authors={d.authors} />
+          </div>
+        </Container>
+      </div>
+
       {/* Inline triage table — classify newly uploaded docs without leaving this page */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container
@@ -176,13 +187,6 @@ export default async function HoldingDocumentsSettingsPage({ searchParams }: Pro
         </Container>
       </div>
 
-      <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
-        <Container title="Document vocabulary · holding" subtitle="Families · Subtypes · Matters · Cases · Collections · Tags · Authors — holding scope">
-          <div style={{ padding: '8px 16px 16px' }}>
-            <DocRegistrySettingsPanel propertyId={0} families={d.families} familyVocab={d.familyVocab} subtypeVocab={d.subtypeVocab} projects={d.projects} cases={d.cases} collections={d.collections} tags={d.tags} authors={d.authors} />
-          </div>
-        </Container>
-      </div>
     </DashboardPage>
   );
 }

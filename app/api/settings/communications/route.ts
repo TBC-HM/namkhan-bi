@@ -1,18 +1,30 @@
 // app/api/settings/communications/route.ts
+// 2026-09-09 (L22/ADR-281): property_id came straight from the request body with
+// no access check, so any authenticated caller could rewrite another tenant's
+// sender identity, email footer address and signature. Now verified with requirePropertyAccess() and written from
+// the VERIFIED id, never the client-supplied one.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requirePropertyAccess } from '@/lib/tenancy';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { property_id, ...fields } = body;
-    if (!property_id) return NextResponse.json({ error: 'property_id required' }, { status: 400 });
+    const { property_id: _raw, ...fields } = body;
+
+    let propertyId: number;
+    try {
+      propertyId = await requirePropertyAccess(req, _raw);
+    } catch (e) {
+      if (e instanceof Response) return e;
+      return NextResponse.json({ error: 'authorization_check_failed' }, { status: 403 });
+    }
 
     const sb = getSupabaseAdmin();
     const { data, error } = await sb
       .schema('property')
       .from('communications')
-      .upsert({ property_id, ...fields, updated_at: new Date().toISOString() }, { onConflict: 'property_id' })
+      .upsert({ property_id: propertyId, ...fields, updated_at: new Date().toISOString() }, { onConflict: 'property_id' })
       .select()
       .single();
 

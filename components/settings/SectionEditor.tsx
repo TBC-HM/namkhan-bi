@@ -50,7 +50,10 @@ export default function SectionEditor({
       const res = await fetch('/api/settings/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section: sectionCode, table, pk, row }),
+        body: JSON.stringify({
+          section: sectionCode, table, pk, row,
+          ...(hasPropertyId ? { property_id: row.property_id } : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -87,7 +90,13 @@ export default function SectionEditor({
       const res = await fetch('/api/settings/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section: sectionCode, table, pk, id: row[pk] }),
+        body: JSON.stringify({
+          section: sectionCode, table, pk, id: row[pk],
+          // L22: the delete route scopes by the VERIFIED property_id, so the
+          // tenant has to travel with the request. Rows come from the server,
+          // so row.property_id is the row's own owner.
+          ...(hasPropertyId ? { property_id: row.property_id } : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || `Delete failed (${res.status})`);

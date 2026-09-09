@@ -50,7 +50,7 @@ export default async function ArchiveSettingsPage({ params }: { params: { proper
           <div style={{ padding: '4px 16px 12px' }}>
             <StatRow label="Total documents registered"  value={stats.total} />
             <StatRow label="Archive path"                value={`/h/${pid}/finance/legal/docs`} />
-            <StatRow label="Brain pipeline"              value={`/h/${pid}/settings/brain`} />
+            <StatRow label="Document register"           value={`/h/${pid}/settings/documents`} />
           </div>
           <div style={{ padding: '12px 16px', borderTop: '1px solid #F5F1EA' }}>
             <a
@@ -60,22 +60,22 @@ export default async function ArchiveSettingsPage({ params }: { params: { proper
               Open Document Archive →
             </a>
             <a
-              href={`/h/${pid}/settings/brain`}
+              href={`/h/${pid}/settings/documents`}
               style={{ fontSize: 12, fontWeight: 600, color: '#1F3A2E', textDecoration: 'none' }}
             >
-              Brain Pipeline →
+              Document Vocabulary →
             </a>
           </div>
         </Container>
       </div>
 
       <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
-        <Container title="Retention & Thresholds" subtitle="Auto-archive rules · expiry · sensitivity — managed in Brain settings">
+        <Container title="Retention & Thresholds" subtitle="Auto-archive rules · expiry · sensitivity — driven by the document vocabulary">
           <div style={{ padding: '12px 16px', color: '#5A5A5A', fontSize: 13 }}>
             <p style={{ margin: 0 }}>
-              Retention rules and sensitivity thresholds are configured in the{' '}
-              <a href={`/h/${pid}/settings/brain`} style={{ color: '#1F3A2E', fontWeight: 600 }}>Brain settings</a>.
-              {' '}Classification status, excluded docs, and nightly battery reports are all managed there.
+              Families and subtypes — which drive retention and brain indexing — are configured in{' '}
+              <a href={`/h/${pid}/settings/documents`} style={{ color: '#1F3A2E', fontWeight: 600 }}>Documents settings</a>.
+              {' '}Ask the Brain itself through the floating panel; the embedded Brain settings console was retired 2026-08-19.
             </p>
           </div>
         </Container>

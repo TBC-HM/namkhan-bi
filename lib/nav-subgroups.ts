@@ -485,7 +485,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Legal',          href: '/h/260955/finance/legal'          },
       { label: 'Archive',        href: '/h/260955/finance/archive'        },
       { label: 'Directory',      href: '/h/260955/finance/legal/docs'     },
-      { label: 'Brain Settings', href: '/h/260955/settings/brain'         },
     ],
   },
 
