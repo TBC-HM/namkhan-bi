@@ -38,7 +38,12 @@ export default async function HoldingMediaSettingsPage() {
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Upload holding media" subtitle="Brand photos · logos · group certificates — Iris QA applies, assets available across all properties">
           <div style={{ padding: 16 }}>
-            <UploadDropzone propertyId={0} onUploadDone={() => window.location.reload()} />
+            {/* PBS 2026-09-09: this is a SERVER component, and onUploadDone={() => ...}
+                is a function prop — "Event handlers cannot be passed to Client Component
+                props" (digest 1017923517), so this page 500'd. The prop is optional and
+                the sibling at /h/[pid]/settings/media never passed it; LibraryTab may,
+                because that one IS a client component. Dropped, matching the sibling. */}
+            <UploadDropzone propertyId={0} />
             <p style={{ fontSize: 11, color: '#5A5A5A', marginTop: 8, margin: '8px 0 0' }}>
               Uploaded assets go through the Iris QA pipeline with property_id = NULL (holding scope). To browse, open Marketing → Media and filter by holding. Supports files AND folders — drag a whole folder to upload all contents.
             </p>
