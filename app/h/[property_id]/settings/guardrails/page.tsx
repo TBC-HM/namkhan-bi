@@ -28,17 +28,36 @@ interface GuardrailRow {
 
 async function runProbes(propertyId: number): Promise<Record<string, ProbeResult>> {
   const sb = getSupabaseAdmin();
+  // PBS 2026-09-09 — these four probes read public.campaigns /
+  // public.campaign_recipients / public.mv_guest_profile / public.v_directory_full.
+  // None of those exist: all four live in the `guest` schema. Every probe therefore
+  // errored, and probe() below swallowed the error as ok:true — so 13 guardrails
+  // across retention, newsletter, observations and marketing showed a LIVE dot while
+  // nothing had verified them. Verified live: guest.campaigns 40 rows (has
+  // property_id), guest.v_directory_full 17,429 (has property_id),
+  // guest.mv_guest_profile 4,589 and guest.campaign_recipients 0 — and the last two
+  // have NO property_id column, so they must not be filtered.
   const [kpi, reviews, campaigns, campaignRcpt, mvGuest, vDirectory] = await Promise.all([
     sb.rpc('fn_revenue_hod_today_kpi', { p_property_id: propertyId }),
     sb.from('mkt_reviews').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
-    sb.from('campaigns').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
-    sb.from('campaign_recipients').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
-    sb.from('mv_guest_profile').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
-    sb.from('v_directory_full').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
+    sb.schema('guest').from('campaigns').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
+    sb.schema('guest').from('campaign_recipients').select('id', { head: true, count: 'exact' }),
+    sb.schema('guest').from('mv_guest_profile').select('guest_id', { head: true, count: 'exact' }),
+    sb.schema('guest').from('v_directory_full').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
   ]);
 
-  function probe(res: { data?: unknown; error?: { message: string } | null; count?: number | null }, label: string): ProbeResult {
-    if (res.error) return { ok: true, reason: `probe unavailable (${res.error.message})` };
+  function probe(res: { data?: unknown; error?: { message: string; code?: string } | null; count?: number | null }, label: string): ProbeResult {
+    if (res.error) {
+      // A relation that does not exist is not a transient blip — it means the rule's
+      // stated data source is wrong, and reporting that as ok is how 13 guardrails
+      // came to show a live dot over nothing. Transient errors stay optimistic so a
+      // network blip never paints the cockpit falsely red.
+      const msg = res.error.message ?? '';
+      const missingRelation = res.error.code === '42P01' || res.error.code === 'PGRST205'
+        || /does not exist|could not find the table|schema cache/i.test(msg);
+      if (missingRelation) return { ok: false, reason: `${label} does not exist (${msg})` };
+      return { ok: true, reason: `probe unavailable (${msg})` };
+    }
     if (res.count == null) return { ok: true, reason: 'count unavailable · optimistic' };
     if (res.count === 0)  return { ok: false, reason: `${label} has 0 rows for this property` };
     return { ok: true };
