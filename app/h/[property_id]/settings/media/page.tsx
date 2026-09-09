@@ -16,17 +16,25 @@ export const revalidate = 0;
 
 async function fetchAllSettingsData(propertyId: number) {
   const sb = getSupabaseAdmin();
+  // L5/L7 — these bridges are SECURITY DEFINER and bypass RLS, so an unfiltered
+  // read returns EVERY tenant's rows. naming_conventions, caption_rules,
+  // alt_text_rules and brand_palette all carry property_id and were read
+  // unscoped (PBS 2026-09-09): Donna's Media settings listed Namkhan's naming
+  // conventions and both tenants' brand palettes side by side — a brand bleed
+  // L26 explicitly forbids. The rest of the list has NO property_id column and
+  // is genuinely platform-wide: tier thresholds, aspect ratios, text policy,
+  // channel specs, rules_active. Verified against information_schema, not assumed.
   const [
     naming, captions, altText, tiers, ratios, textPolicy, palette,
     channelSpecs, rulesActive, reality, categories, rooms, facilities,
   ] = await Promise.all([
-    sb.from('v_media_naming_conventions').select('*'),
-    sb.from('v_media_caption_rules').select('*'),
-    sb.from('v_media_alt_text_rules').select('*'),
+    sb.from('v_media_naming_conventions').select('*').eq('property_id', propertyId),
+    sb.from('v_media_caption_rules').select('*').eq('property_id', propertyId),
+    sb.from('v_media_alt_text_rules').select('*').eq('property_id', propertyId),
     sb.from('v_media_tier_thresholds').select('*'),
     sb.from('v_media_aspect_ratio_rules').select('*'),
     sb.from('v_media_text_policy').select('*').eq('id', 1).maybeSingle(),
-    sb.from('v_media_brand_palette').select('*'),
+    sb.from('v_media_brand_palette').select('*').eq('property_id', propertyId),
     sb.from('v_media_channel_specs').select('*'),
     sb.from('v_media_rules_active').select('*'),
     sb.from('v_reality_profile').select('*').eq('property_id', propertyId).maybeSingle(),

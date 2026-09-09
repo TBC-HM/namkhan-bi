@@ -50,11 +50,16 @@ export default async function PropertyAudienceSettingsPage({
   }
 
   const [blocklistRes, groupsRes, groupRulesRes, emailRes, routingRes, chromeRes, goalsRes] = await Promise.all([
-    admin.from('v_marketing_subscriber_blocklist').select('*').limit(500),
-    admin.from('v_subscriber_groups').select('id, slug, name, description, color, is_system, sort_order, member_count, newsletter_cadence_per_month, voice_type, voice_summary').order('sort_order'),
+    // Blocklist carries BOTH per-tenant rows and platform-wide rows (property_id
+    // NULL, 83 of them) that must stay visible to everyone — hence the .or(),
+    // not a plain .eq(). Unscoped, this listed 23 of Namkhan's blocklisted guest
+    // email addresses on Donna's page: a cross-tenant PII read (L29).
+    admin.from('v_marketing_subscriber_blocklist').select('*')
+      .or(`property_id.eq.${propertyId},property_id.is.null`).limit(500),
+    admin.from('v_subscriber_groups').select('id, slug, name, description, color, is_system, sort_order, member_count, newsletter_cadence_per_month, voice_type, voice_summary').eq('property_id', propertyId).order('sort_order'),
     admin.from('v_marketing_subscriber_group_rules').select('*').limit(1000),
     admin.from('v_marketing_property_email_settings').select('*').eq('property_id', propertyId).maybeSingle(),
-    admin.from('v_marketing_import_routing_rules').select('*').limit(500),
+    admin.from('v_marketing_import_routing_rules').select('*').eq('property_id', propertyId).limit(500),
     admin.from('v_marketing_property_email_settings')
       .select('property_id, header_logo_asset_id, header_logo_public_url, header_tagline, default_hero_asset_id, default_hero_public_url, footer_address_lines, footer_social_links, footer_disclaimer_text, footer_unsubscribe_wording')
       .eq('property_id', propertyId).maybeSingle(),

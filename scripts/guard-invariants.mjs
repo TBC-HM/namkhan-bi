@@ -310,6 +310,71 @@ if (unguarded.length) {
 }
 
 // ---------------------------------------------------------------------------
+// GUARD 4 — TENANT-SCOPED BRIDGE READS (PBS 2026-09-09)
+//
+// WHY. public.v_* bridges are SECURITY DEFINER: they bypass RLS, so the ONLY
+// isolation is the .eq('property_id', …) the caller writes (L5). An audit of the
+// tenant settings tree found SEVEN reads missing it — the Media page listed both
+// tenants' naming conventions, caption rules, alt-text rules and brand palettes
+// (a brand bleed L26 forbids), and the Newsletter page listed 23 of Namkhan's
+// blocklisted GUEST EMAIL ADDRESSES on Donna's screen (L29, PII).
+//
+// None of it is a type error, none of it throws, and the page looks fine — you
+// only notice if you know how many rows that tenant should have. Hence a gate.
+//
+// The list below is exactly the views VERIFIED (information_schema, 2026-09-09)
+// to carry a property_id column and to be read from a tenant surface. Add a view
+// here when you add a tenant-scoped bridge; a view with NO property_id column
+// (v_media_tier_thresholds, v_media_channel_specs, v_doc_subtype_vocab, …) is
+// genuinely platform-wide and must NOT be listed.
+// ---------------------------------------------------------------------------
+const TENANT_SCOPED_VIEWS = [
+  'v_media_naming_conventions',
+  'v_media_caption_rules',
+  'v_media_alt_text_rules',
+  'v_media_brand_palette',
+  'v_marketing_subscriber_blocklist',
+  'v_subscriber_groups',
+  'v_marketing_import_routing_rules',
+];
+const TENANT_SURFACE_DIRS = ['app/h'];
+const unscopedReads = [];
+for (const dir of TENANT_SURFACE_DIRS) {
+  const abs = join(ROOT, dir);
+  if (!existsSync(abs)) continue;
+  for (const file of walk(abs)) {
+    const rel = relative(ROOT, file).split('\\').join('/');
+    const src = readFileSync(file, 'utf8');
+    for (const view of TENANT_SCOPED_VIEWS) {
+      let idx = src.indexOf(`.from('${view}')`);
+      while (idx !== -1) {
+        // the statement runs to the next .from( or the end of the call list
+        const nxt = src.indexOf(".from('", idx + 7);
+        let stmt = src.slice(idx, nxt === -1 ? src.length : nxt);
+        for (const stop of ['\n  ]', '\n]', ';\n']) {
+          const k = stmt.indexOf(stop);
+          if (k !== -1) stmt = stmt.slice(0, k);
+        }
+        if (!/\.(eq|is|in|or)\(\s*[`'"].*property_id/.test(stmt)) {
+          unscopedReads.push(`${rel}:${src.slice(0, idx).split('\n').length}  ${view}`);
+        }
+        idx = src.indexOf(`.from('${view}')`, idx + 1);
+      }
+    }
+  }
+}
+if (unscopedReads.length) {
+  violations.push(
+    `${unscopedReads.length} tenant-scoped bridge read(s) with no property_id filter (L5/L7):\n` +
+      unscopedReads.map((r) => `      - ${r}`).join('\n') +
+      `\n    These views are SECURITY DEFINER — they bypass RLS and return EVERY\n` +
+      `    tenant's rows. Add .eq('property_id', propertyId), or .or(...is.null)\n` +
+      `    where platform-wide rows must stay visible. The page will not error\n` +
+      `    without it; it will just quietly show another hotel's data.`
+  );
+}
+
+// ---------------------------------------------------------------------------
 if (violations.length) {
   console.error('\n\u001b[31m✖ INVARIANT GATE FAILED\u001b[0m — ' + violations.length + ' violation(s)\n');
   violations.forEach((v, i) => console.error(`  ${i + 1}. ${v}\n`));
@@ -322,5 +387,5 @@ if (violations.length) {
 console.log(
   `✓ invariant gate: ${REQUIRED_EXEMPTIONS.length} middleware exemptions present and correctly ordered; ` +
     `tenant-id ratchet holding (${Object.values(counts).reduce((a,b)=>a+b,0)} tracked across ${Object.keys(counts).length} files); ` +
-    `holding/tenant separation clean.`
+    `holding/tenant separation clean; ${TENANT_SCOPED_VIEWS.length} tenant-scoped bridges filtered.`
 );

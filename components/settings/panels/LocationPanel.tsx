@@ -5,7 +5,15 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { PanelHeader } from './_shared';
-import { supabase } from '@/lib/supabase';
+// PBS 2026-09-09: was `import { supabase } from '@/lib/supabase'`. In the browser
+// that module falls back to the ANON key with persistSession:false, so no user JWT
+// is ever attached and every request runs as `anon` — which ADR-277 revoked EXECUTE
+// from. Saves here returned "permission denied for function". lib/supabase/client.ts
+// already existed for exactly this: anon key + the user's session cookies, so calls
+// run as `authenticated`.
+import { createClient } from '@/lib/supabase/client';
+
+const supabase = createClient();
 import { btnPrimary, btnGhost, sectionTitle, fieldLabel, ErrorBanner, LabeledInput, LabeledTextarea, ArrayInput } from './_settings_ui';
 
 type Row = { property_id: number; street_line_1: string | null; street_line_2: string | null; village: string | null; district: string | null; city: string | null; province: string | null; country: string | null; postal_code: string | null; latitude: number | null; longitude: number | null; google_plus_code: string | null; what3words: string | null; google_maps_url: string | null; primary_language: string | null; languages_spoken: string[] | null; timezone: string | null; airport_distance_km: number | null; airport_drive_time_min: number | null; climate_temp_min_c: number | null; climate_temp_max_c: number | null; climate_summary: string | null; } | null;

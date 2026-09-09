@@ -10,7 +10,15 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { PanelHeader, EmptyState } from './_shared';
-import { supabase } from '@/lib/supabase';
+// PBS 2026-09-09: was `import { supabase } from '@/lib/supabase'`. In the browser
+// that module falls back to the ANON key with persistSession:false, so no user JWT
+// is ever attached and every request runs as `anon` — which ADR-277 revoked EXECUTE
+// from. Saves here returned "permission denied for function". lib/supabase/client.ts
+// already existed for exactly this: anon key + the user's session cookies, so calls
+// run as `authenticated`.
+import { createClient } from '@/lib/supabase/client';
+
+const supabase = createClient();
 
 type LicenseRow = {
   id: number;
