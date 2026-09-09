@@ -21,9 +21,20 @@ const TASK_STATUS_COLOR: Record<string, string> = {
   done: OK, skipped: INK_M, not_started: AMBER, blocked: RED,
 };
 
-function fmtDate(d: string | null): string {
-  if (!d) return '—';
-  return new Date(d).toISOString().slice(0, 10);
+// Digest 1703522725 — RangeError: Invalid time value, 4 occurrences 2026-09-09.
+// ROOT CAUSE: the three call sites below passed `String(c.activation_at ?? null)`.
+// For a NULL column that produces the STRING "null", which is truthy, so the `!d`
+// guard never fired, `new Date("null")` returned an Invalid Date and .toISOString()
+// threw — taking down the whole page render, not just one cell. Triggered by the
+// v_onboarding_cases row "Test Hotel Paradise" (created 2026-08-24, activation_at
+// NULL); the page has been dead since that row appeared.
+// The String() wrappers are gone. This function is also hardened so no single bad
+// value can 500 the page again — same shape as fmtDate in LeadsCockpit.tsx.
+function fmtDate(d: unknown): string {
+  if (d == null || d === '' || d === 'null' || d === 'undefined') return '—';
+  const parsed = new Date(d as string);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toISOString().slice(0, 10);
 }
 
 const TASK_ACTIONS: Record<string, { label: string; href: (pid: number) => string }> = {
@@ -91,15 +102,19 @@ export default async function HoldingOnboardingPage() {
       <div style={{ gridColumn: '1/-1', display: 'flex', flexDirection: 'column' as const, gap: 16 }}>
         {cases.map(c => {
           const caseId = String(c.case_id);
-          const pid = Number(c.property_id);
+          // Same row, same defect class: 'Test Hotel Paradise' has property_id NULL, and
+          // Number(null) is 0 — which is the HOLDING sentinel everywhere else in this
+          // codebase. The card rendered 'Property 0' and linked to /h/0/settings/... ,
+          // a tenant-shaped URL for a case that has no tenant. Unassigned cases now say so.
+          const pid = c.property_id == null ? null : Number(c.property_id);
           const pct = Number(c.completion_pct ?? 0);
           const isSim = Boolean(c.is_simulation);
           const tasks = tasksByCase[caseId] ?? [];
           const pendingRequired = tasks.filter(t => String(t.status) === 'not_started' && Boolean(t.required));
           const doneTasks = tasks.filter(t => String(t.status) === 'done');
           const statusColor = STATUS_COLOR[String(c.status)] ?? INK_M;
-          const knowledgeDocs = docsByProperty[pid] ?? 0;
-          const goalsCount = goalsByProperty[pid] ?? 0;
+          const knowledgeDocs = pid == null ? 0 : (docsByProperty[pid] ?? 0);
+          const goalsCount = pid == null ? 0 : (goalsByProperty[pid] ?? 0);
 
           return (
             <div key={caseId} style={{ background: WHITE, border: `2px solid ${pct === 100 ? OK : AMBER}`, borderRadius: 8, overflow: 'hidden' }}>
@@ -111,7 +126,7 @@ export default async function HoldingOnboardingPage() {
                     {isSim && <span style={{ marginLeft: 8, fontSize: 10, padding: '2px 8px', borderRadius: 10, background: AMBER + '30', color: AMBER, fontWeight: 700 }}>SIMULATION</span>}
                   </div>
                   <div style={{ fontSize: 11, color: isSim ? INK_M : 'rgba(255,255,255,.75)', marginTop: 2 }}>
-                    Property {pid} · {String(c.onboarding_model)} · {String(c.template_code)}
+                    {pid == null ? 'No property assigned' : `Property ${pid}`} · {String(c.onboarding_model)} · {String(c.template_code)}
                     {c.contract_ref ? ` · ${c.contract_ref}` : ''}
                   </div>
                 </div>
@@ -153,7 +168,7 @@ export default async function HoldingOnboardingPage() {
                               <div style={{ fontSize: 11, fontWeight: 600, color: INK }}>{String(t.title)}</div>
                               <div style={{ fontSize: 10, color: INK_M }}>{String(t.phase_code)}</div>
                             </div>
-                            {action && (
+                            {action && pid != null && (
                               <Link href={action.href(pid)} style={{ fontSize: 10, padding: '3px 10px', background: FOREST, color: WHITE, borderRadius: 3, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' as const }}>
                                 {action.label}
                               </Link>
@@ -191,23 +206,31 @@ export default async function HoldingOnboardingPage() {
                       </div>
                       <div style={{ fontSize: 18, fontWeight: 700, color: goalsCount >= 3 ? OK : AMBER }}>{goalsCount}</div>
                     </div>
-                    <Link href={`/h/${pid}/settings/knowledge`}
-                      style={{ fontSize: 11, padding: '8px 14px', background: FOREST, color: WHITE, borderRadius: 4, textDecoration: 'none', fontWeight: 600, textAlign: 'center' as const, display: 'block' }}>
-                      → Open Knowledge & Goals intake
-                    </Link>
-                    <Link href={`/h/${pid}/settings/property`}
-                      style={{ fontSize: 11, padding: '6px 14px', background: WHITE, color: FOREST, border: `1px solid ${FOREST}`, borderRadius: 4, textDecoration: 'none', fontWeight: 600, textAlign: 'center' as const, display: 'block' }}>
-                      → Property settings
-                    </Link>
+                    {pid == null ? (
+                      <div style={{ fontSize: 11, padding: '8px 14px', background: CREAM, color: INK_M, borderRadius: 4, textAlign: 'center' as const }}>
+                        No property assigned yet — settings links appear once this case has one.
+                      </div>
+                    ) : (
+                      <>
+                        <Link href={`/h/${pid}/settings/knowledge`}
+                          style={{ fontSize: 11, padding: '8px 14px', background: FOREST, color: WHITE, borderRadius: 4, textDecoration: 'none', fontWeight: 600, textAlign: 'center' as const, display: 'block' }}>
+                          → Open Knowledge & Goals intake
+                        </Link>
+                        <Link href={`/h/${pid}/settings/property`}
+                          style={{ fontSize: 11, padding: '6px 14px', background: WHITE, color: FOREST, border: `1px solid ${FOREST}`, borderRadius: 4, textDecoration: 'none', fontWeight: 600, textAlign: 'center' as const, display: 'block' }}>
+                          → Property settings
+                        </Link>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Completion footer */}
               <div style={{ borderTop: `1px solid ${HAIR}`, padding: '8px 16px', background: '#FAFAF7', display: 'flex', gap: 16, fontSize: 10, color: INK_M }}>
-                <span>Activated: {fmtDate(String(c.activation_at ?? null))}</span>
-                <span>Target go-live: {fmtDate(String(c.target_go_live_at ?? null))}</span>
-                <span>Updated: {fmtDate(String(c.updated_at ?? null))}</span>
+                <span>Activated: {fmtDate(c.activation_at)}</span>
+                <span>Target go-live: {fmtDate(c.target_go_live_at)}</span>
+                <span>Updated: {fmtDate(c.updated_at)}</span>
                 {c.contract_ref && <span>Contract: {String(c.contract_ref)}</span>}
               </div>
             </div>
