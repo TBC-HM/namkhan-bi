@@ -7,7 +7,7 @@
 // Modes: push | poll | sync_profiles | analytics
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { UploadPost } from 'https://esm.sh/upload-post@latest';
+import { UploadPost } from 'https://esm.sh/upload-post@2.13.0';
 
 function res(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -80,7 +80,7 @@ Deno.serve(async (req: Request) => {
   }
   if (!apiKey) return res({ ok: false, error: 'upload_post_key_not_configured' }, 500);
 
-  const up = new UploadPost({ token: apiKey as string });
+  const up = new UploadPost(apiKey as string);
 
   // ── PUSH ─────────────────────────────────────────────────────────────────
   if (mode === 'push') {
@@ -109,7 +109,7 @@ Deno.serve(async (req: Request) => {
       : [];
 
     let result: Record<string, unknown>;
-    const scheduleDate = p.scheduled_at ? { schedule_date: p.scheduled_at } : {};
+    const scheduleDate = p.scheduled_at ? { scheduledDate: p.scheduled_at } : {};
     // SDK timeout: 20 s per call. If Upload Post API hangs, the inner catch
     // fires, marks the post as error, and returns 200 — preventing Supabase
     // from killing the process and leaving up_status=null.
@@ -121,10 +121,10 @@ Deno.serve(async (req: Request) => {
       const pinTitle = String(p.title ?? '').slice(0, 100);
       const pinBody  = [String(p.caption ?? p.title ?? ''), tags].filter(Boolean).join('\n\n').slice(0, 500);
       if (mediaUrls.length === 0) {
-        await sb.rpc('fn_social_post_mark_pushed', {
+        try { await sb.rpc('fn_social_post_mark_pushed', {
           p_post_id: postId, p_up_request_id: null, p_up_job_id: null,
           p_up_status: 'error', p_up_error: 'pinterest_requires_image',
-        }).catch(() => {});
+        }); } catch { /* best effort */ }
         return res({ ok: false, error: 'pinterest_requires_image' }, 422);
       }
       const files: File[] = [];
@@ -139,31 +139,30 @@ Deno.serve(async (req: Request) => {
         } catch { /* skip */ }
       }
       if (files.length === 0) {
-        await sb.rpc('fn_social_post_mark_pushed', {
+        try { await sb.rpc('fn_social_post_mark_pushed', {
           p_post_id: postId, p_up_request_id: null, p_up_job_id: null,
           p_up_status: 'error', p_up_error: 'all_media_fetch_failed',
-        }).catch(() => {});
+        }); } catch { /* best effort */ }
         return res({ ok: false, error: 'all_media_fetch_failed' }, 502);
       }
-      const pinParams: Record<string, unknown> = {
+      const pinOpts: Record<string, unknown> = {
         user:        profileUsername as string,
-        platform:    ['pinterest'],
+        platforms:   ['pinterest'],
         title:       pinTitle,
         description: pinBody,
-        photos:      files,
         ...scheduleDate,
       };
-      if (p.link_url)            pinParams.link     = String(p.link_url);
-      if (p.pinterest_board_id)  pinParams.board_id = String(p.pinterest_board_id);
+      if (p.link_url)            pinOpts.pinterestLink    = String(p.link_url);
+      if (p.pinterest_board_id)  pinOpts.pinterestBoardId = String(p.pinterest_board_id);
       result = await withTimeout(
-        up.uploadPhotos(pinParams) as Promise<Record<string, unknown>>,
+        up.uploadPhotos(files, pinOpts) as Promise<Record<string, unknown>>,
         SDK_TIMEOUT_MS, 'pinterest_upload_photos'
       );
     } else if (mediaUrls.length === 0) {
       result = await withTimeout(
         up.uploadText({
           user: profileUsername as string,
-          platform: [upPlatform(p.platform as string)],
+          platforms: [upPlatform(p.platform as string)],
           title: caption,
           ...scheduleDate,
         }) as Promise<Record<string, unknown>>,
@@ -177,13 +176,15 @@ Deno.serve(async (req: Request) => {
       if (buf.byteLength > MAX_MEDIA_BYTES) return res({ ok: false, error: 'media_too_large' }, 413);
       const ext = videoUrl.split('?')[0].split('.').pop()?.toLowerCase() ?? 'mp4';
       result = await withTimeout(
-        up.upload({
-          user: profileUsername as string,
-          platform: [upPlatform(p.platform as string)],
-          title: caption,
-          media: new File([buf], `video.${ext}`, { type: `video/${ext}` }),
-          ...scheduleDate,
-        }) as Promise<Record<string, unknown>>,
+        up.upload(
+          new File([buf], `video.${ext}`, { type: `video/${ext}` }),
+          {
+            user: profileUsername as string,
+            platforms: [upPlatform(p.platform as string)],
+            title: caption,
+            ...scheduleDate,
+          }
+        ) as Promise<Record<string, unknown>>,
         SDK_TIMEOUT_MS, 'upload_video'
       );
     } else {
@@ -203,7 +204,7 @@ Deno.serve(async (req: Request) => {
         result = await withTimeout(
           up.uploadText({
             user: profileUsername as string,
-            platform: [upPlatform(p.platform as string)],
+            platforms: [upPlatform(p.platform as string)],
             title: caption,
             ...scheduleDate,
           }) as Promise<Record<string, unknown>>,
@@ -211,13 +212,15 @@ Deno.serve(async (req: Request) => {
         );
       } else {
         result = await withTimeout(
-          up.uploadPhotos({
-            user: profileUsername as string,
-            platform: [upPlatform(p.platform as string)],
-            title: caption,
-            photos: files,
-            ...scheduleDate,
-          }) as Promise<Record<string, unknown>>,
+          up.uploadPhotos(
+            files,
+            {
+              user: profileUsername as string,
+              platforms: [upPlatform(p.platform as string)],
+              title: caption,
+              ...scheduleDate,
+            }
+          ) as Promise<Record<string, unknown>>,
           SDK_TIMEOUT_MS, 'upload_photos'
         );
       }
@@ -225,13 +228,13 @@ Deno.serve(async (req: Request) => {
     } catch (upErr) {
       const errMsg = upErr instanceof Error ? upErr.message : String(upErr);
       console.error('upload_post_sdk_error:', errMsg, 'post_id:', postId, 'platform:', p.platform);
-      await sb.rpc('fn_social_post_mark_pushed', {
+      try { await sb.rpc('fn_social_post_mark_pushed', {
         p_post_id:       postId,
         p_up_request_id: null,
         p_up_job_id:     null,
         p_up_status:     'error',
         p_up_error:      errMsg,
-      }).catch(() => { /* best effort */ });
+      }); } catch { /* best effort */ }
       return res({ ok: false, error: 'upload_post_sdk_error', detail: errMsg }, 200);
     }
 
