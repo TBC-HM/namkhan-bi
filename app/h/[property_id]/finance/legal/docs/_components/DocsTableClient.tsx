@@ -13,7 +13,17 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { supabase } from '@/lib/supabase';
+// PBS 2026-09-09: was `import { supabase } from '@/lib/supabase'`. In the browser that
+// module falls back to the ANON key with persistSession:false, so no user JWT is ever
+// attached and every call runs as `anon` — which ADR-277 revoked EXECUTE from. Verified
+// against the live DB: all 9 fn_doc_* RPCs behind the inline triage table (remap family/subtype/status/
+// sensitivity/importance/author/project, link+unlink case and collection, tag,
+// archive/unarchive/purge)
+// are anon-BLOCKED and authenticated-OK, so every one of them returned "permission
+// denied for function". lib/supabase/client.ts already existed for exactly this.
+import { createClient } from '@/lib/supabase/client';
+
+const supabase = createClient();
 
 interface VocabRow { doc_type: string; subtype_slug: string; label: string | null; time_model: string | null }
 interface DocRow {

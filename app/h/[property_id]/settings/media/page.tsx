@@ -96,7 +96,7 @@ export default async function MediaSettingsPage({ params }: { params: { property
       <div style={{ gridColumn: '1 / -1', marginTop: 16 }}>
         <Container title="Upload photos & videos" subtitle="Drag & drop or click — routed through existing Iris QA scoring and mapping pipeline">
           <div style={{ padding: 16 }}>
-            <UploadDropzone />
+            <UploadDropzone propertyId={propertyId} />
           </div>
         </Container>
       </div>

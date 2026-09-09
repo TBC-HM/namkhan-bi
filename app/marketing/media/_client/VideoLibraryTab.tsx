@@ -263,7 +263,7 @@ export default function VideoLibraryTab({ propertyId, mediaPage, channelSpecs, o
 
       {showUpload && (
         <div style={{ marginBottom:16 }}>
-          <UploadDropzone onResult={r => setMsg(r)} />
+          <UploadDropzone propertyId={propertyId} onResult={r => setMsg(r)} />
         </div>
       )}
 

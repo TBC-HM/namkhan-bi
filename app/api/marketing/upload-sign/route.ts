@@ -46,7 +46,11 @@ export async function POST(req: NextRequest) {
   catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }); }
 
   const { filename, content_type, size, sha256 } = body;
-  const property_id = Number(body.property_id ?? 260955);
+  // L22 — no property default. A missing scope is a 400, never Namkhan.
+  const property_id = Number(body.property_id);
+  if (!Number.isFinite(property_id) || property_id <= 0) {
+    return NextResponse.json({ error: 'property_scope_required' }, { status: 400 });
+  }
   if (!filename || !content_type || !size || !sha256) {
     return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
   }

@@ -10,7 +10,9 @@
 
 import { useState, useRef } from 'react';
 
-interface Props { onResult?: (msg: string) => void; propertyId?: number; onUploadDone?: () => void }
+// L22 — propertyId is REQUIRED and has no default. A default here silently routed
+// every upload from a non-Namkhan surface into Namkhan's library.
+interface Props { onResult?: (msg: string) => void; propertyId: number; onUploadDone?: () => void }
 
 const HAIR   = '#E6DFCC';
 const INK    = '#1B1B1B';
@@ -113,7 +115,7 @@ async function extractVideoMetadata(file: File): Promise<VideoMeta | null> {
   }
 }
 
-export default function UploadDropzone({ onResult, propertyId = 260955, onUploadDone }: Props) {
+export default function UploadDropzone({ onResult, propertyId, onUploadDone }: Props) {
   const [busy, setBusy] = useState(false);
   const [prog, setProg] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);

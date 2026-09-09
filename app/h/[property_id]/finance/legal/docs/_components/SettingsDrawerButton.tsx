@@ -19,7 +19,19 @@
 import { Fragment, useEffect, useMemo, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+// PBS 2026-09-09: was `import { supabase } from '@/lib/supabase'`. In the browser that
+// module falls back to the ANON key with persistSession:false, so no user JWT is ever
+// attached and every call runs as `anon` — which ADR-277 revoked EXECUTE from. Verified
+// against the live DB: its 13 vocab RPCs (authors, cases, collections, projects, tags, subtypes).
+// Document FAMILIES deliberately do NOT come through here — fn_doc_type_vocab_upsert
+// has EXECUTE revoked from authenticated too, and is reached via
+// /api/settings/doc-families behind a holding owner/admin gate. That split is correct
+// and is left alone
+// are anon-BLOCKED and authenticated-OK, so every one of them returned "permission
+// denied for function". lib/supabase/client.ts already existed for exactly this.
+import { createClient } from '@/lib/supabase/client';
+
+const supabase = createClient();
 
 interface VocabRow   { doc_type: string; subtype_slug: string; label: string | null; time_model: string | null; active?: boolean; sort_order?: number | null }
 interface CaseRow    { case_ref: string; title: string | null; matter_type: string | null; status: string | null }
