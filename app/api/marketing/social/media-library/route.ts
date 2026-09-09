@@ -11,7 +11,9 @@ import { requirePropertyAccess } from '@/lib/tenancy';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-renders`;
+// Renders live in the original 'media' bucket (media_renders.file_path paths like {asset_id}/{purpose}.jpg).
+// media-renders is a new bucket for future renders but existing files are in 'media'.
+const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
 const STORAGE_RAW     = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-raw`;
 
 function thumbnailUrl(renders: Record<string, string> | null, raw_path: string | null): string | null {

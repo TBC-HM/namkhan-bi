@@ -465,6 +465,7 @@ export default function SocialInbox({ posts, rules }: {
               <button type="button" onClick={() => setMediaPicker(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: INK_M, lineHeight: 1 }}>×</button>
             </div>
             <div style={{ fontSize: 10, color: INK_M }}>Photos approved for social use · click to assign · scroll to browse all {mediaAssets.length > 0 ? `(${mediaAssets.length} shown)` : ''}</div>
+            {err && <div style={{ padding: '6px 8px', border: `1px solid ${RED}`, borderRadius: 3, color: RED, fontSize: 11 }}>{err}</div>}
             {mediaLoading && <div style={{ fontSize: 12, color: INK_M, padding: '32px 0', textAlign: 'center' }}>Loading library…</div>}
             {!mediaLoading && mediaAssets.length === 0 && (
               <div style={{ fontSize: 12, color: INK_M, padding: '32px 0', textAlign: 'center' }}>No media found for this property.</div>
