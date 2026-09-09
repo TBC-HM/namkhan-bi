@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getSessionScope } from '@/lib/session-scope';
+import { requireHoldingFromRequest } from '@/lib/holding/guard';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -42,6 +43,11 @@ async function logAudit(action: string, target: string, success: boolean, actor:
 }
 
 export async function POST(req: NextRequest) {
+  // Holding gate. Middleware 403s /holding/* pages but NOT /api/holding/*, so
+  // without this any signed-in tenant user reaches this route. Fails closed.
+  const _gate = await requireHoldingFromRequest(req);
+  if (!_gate.ok) return NextResponse.json({ error: _gate.message }, { status: _gate.status });
+
   let body: Body;
   try {
     body = (await req.json()) as Body;

@@ -4,6 +4,7 @@
 // generator's "Pick client" dropdown reads this route.
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireHoldingFromRequest } from '@/lib/holding/guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,12 @@ interface ClientRow {
   last_invoice_at: string | null;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Holding gate. Middleware 403s /holding/* pages but NOT /api/holding/*, so
+  // without this any signed-in tenant user reaches this route. Fails closed.
+  const _gate = await requireHoldingFromRequest(req);
+  if (!_gate.ok) return NextResponse.json({ error: _gate.message }, { status: _gate.status });
+
   try {
     const sb = getSupabaseAdmin();
     const { data, error } = await sb.from('v_holding_clients')

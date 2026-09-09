@@ -2,10 +2,16 @@
 // PBS 2026-07-08: save the editable invoice template.
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireHoldingFromRequest } from '@/lib/holding/guard';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Holding gate. Middleware 403s /holding/* pages but NOT /api/holding/*, so
+  // without this any signed-in tenant user reaches this route. Fails closed.
+  const _gate = await requireHoldingFromRequest(req);
+  if (!_gate.ok) return NextResponse.json({ error: _gate.message }, { status: _gate.status });
+
   try {
     const sb = getSupabaseAdmin();
     const { data, error } = await sb.from('v_holding_invoice_template').select('*').maybeSingle();
@@ -17,6 +23,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  // Holding gate. Middleware 403s /holding/* pages but NOT /api/holding/*, so
+  // without this any signed-in tenant user reaches this route. Fails closed.
+  const _gate = await requireHoldingFromRequest(req);
+  if (!_gate.ok) return NextResponse.json({ error: _gate.message }, { status: _gate.status });
+
   try {
     const body = await req.json() as {
       brand_name: string; brand_color: string; header_line: string; footer_line: string;

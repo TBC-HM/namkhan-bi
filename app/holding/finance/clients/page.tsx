@@ -21,13 +21,35 @@ export default async function HoldingClientsPage() {
     ...cfg.subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/holding/finance/clients' })),
   ];
 
-  const totalBilled = rows.reduce((s, r) => s + Number(r.total_billed || 0), 0);
   const withInvoices = rows.filter((r) => (r.invoices_count ?? 0) > 0).length;
+
+  // PBS 2026-09-09 fix: this used to sum total_billed across ALL clients and
+  // stamp "EUR" on the result. Clients bill in their own currency (EUR/USD/AED/
+  // LAK — see the picker in ClientNew), so that produced a number with no
+  // meaning, and it contradicted the table below, which correctly formats each
+  // row in its own currency. Subtotal per currency instead; never add across.
+  const billedByCurrency = rows.reduce<Record<string, number>>((acc, r) => {
+    const amount = Number(r.total_billed || 0);
+    if (!amount) return acc;
+    const ccy = r.currency || 'unknown';
+    acc[ccy] = (acc[ccy] ?? 0) + amount;
+    return acc;
+  }, {});
+  const billedLabel = Object.entries(billedByCurrency)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ccy, amount]) => {
+      try {
+        return amount.toLocaleString('en-US', { style: 'currency', currency: ccy, maximumFractionDigits: 0 });
+      } catch {
+        return `${amount.toLocaleString('en-US', { maximumFractionDigits: 0 })} ${ccy}`;
+      }
+    })
+    .join(' · ');
 
   return (
     <DashboardPage
       title="Finance · Holding · Clients"
-      subtitle={`${rows.length} client${rows.length === 1 ? '' : 's'} · ${withInvoices} with invoices · total billed ${totalBilled.toLocaleString('en-US', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}`}
+      subtitle={`${rows.length} client${rows.length === 1 ? '' : 's'} · ${withInvoices} with invoices${billedLabel ? ` · billed ${billedLabel}` : ''}`}
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1' }}>

@@ -7,6 +7,13 @@
 'use client';
 
 import { useEffect, useState, useTransition, type CSSProperties } from 'react';
+// PBS 2026-09-09: the Preview button used to render from a SECOND, hand-copied
+// renderer in this file with the brand, footer and sender block hardcoded. It
+// had drifted from the real one, so Preview showed something different from what
+// create-and-send actually mailed — it ignored the saved Template entirely.
+// Now both use lib/holding/invoice-html.ts. That module's only import is
+// `import type`, so it carries no server code into the client bundle.
+import { renderInvoiceHtml, type InvoiceTemplate } from '@/lib/holding/invoice-html';
 
 interface LineItem { description: string; qty: number; unit_price: number }
 interface Recipient {
@@ -44,6 +51,10 @@ export default function InvoiceGenerator({ initialNextNumber }: { initialNextNum
   const [pickedProfileId, setPickedProfileId] = useState<string>('');
   const [saveProfile, setSaveProfile] = useState<boolean>(true);
 
+  // Saved invoice template (brand, sender identity, IBAN, footer). Preview must
+  // render with the SAME template the send path uses, or it misreports the document.
+  const [template, setTemplate] = useState<InvoiceTemplate | null>(null);
+
   // Recurring
   const [recurringOn, setRecurringOn] = useState<boolean>(false);
   const [recurringCadence, setRecurringCadence] = useState<'monthly'|'quarterly'|'yearly'>('monthly');
@@ -52,6 +63,10 @@ export default function InvoiceGenerator({ initialNextNumber }: { initialNextNum
     fetch('/api/holding/invoices/recipients')
       .then((r) => r.ok ? r.json() : Promise.reject(r))
       .then((d) => setProfiles((d.rows as Recipient[]) ?? []))
+      .catch(() => {});
+    fetch('/api/holding/invoices/template')
+      .then((r) => r.ok ? r.json() : Promise.reject(r))
+      .then((d) => setTemplate((d.row as InvoiceTemplate) ?? null))
       .catch(() => {});
   }, []);
 
@@ -78,48 +93,31 @@ export default function InvoiceGenerator({ initialNextNumber }: { initialNextNum
   const removeLine = (i: number) => setLines((arr) => arr.length > 1 ? arr.filter((_, idx) => idx !== i) : arr);
   const canPreview = recipientName.trim().length > 0 && lines.some((l) => l.description.trim() && Number(l.qty) > 0 && Number(l.unit_price) > 0);
 
+  // Renders with the shared renderer and the SAVED template, so this preview is
+  // the document that will actually be sent. Falls back to the renderer's own
+  // defaults only while the template request is still in flight.
   const buildHtml = (invoiceNumber: string): string => {
-    const rows = lines.filter((l) => l.description.trim()).map((l) => `
-      <tr>
-        <td style="padding:8px 10px;border-bottom:1px solid ${HAIRLINE};font-size:12px;color:${INK}">${escapeHtml(l.description)}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid ${HAIRLINE};font-size:12px;text-align:right;font-variant-numeric:tabular-nums">${Number(l.qty).toLocaleString('en-US')}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid ${HAIRLINE};font-size:12px;text-align:right;font-variant-numeric:tabular-nums">${money(Number(l.unit_price))}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid ${HAIRLINE};font-size:12px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">${money(Number(l.qty) * Number(l.unit_price))}</td>
-      </tr>`).join('');
-    return `<!doctype html><html><body style="margin:0;padding:0;background:#FFFFFF;font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${INK}">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:720px;margin:0 auto;background:${PAPER}">
-        <tr><td style="padding:28px 32px 14px 32px;border-bottom:1px solid ${HAIRLINE}">
-          <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:4px">Invoice</div>
-          <div style="font-size:22px;font-weight:700;color:${PRIMARY};letter-spacing:-0.01em">The Beyond Circle</div>
-          <div style="font-size:12px;color:${INK_SOFT};margin-top:2px">Invoice no.: <strong style="color:${INK}">${invoiceNumber}</strong> · Issued: <strong style="color:${INK}">${new Date().toISOString().slice(0,10)}</strong>${dueAt ? ` · Due: <strong style="color:${INK}">${dueAt}</strong>` : ''}${recurringOn ? ` · <strong style="color:${PRIMARY}">Recurring: ${recurringCadence}</strong>` : ''}</div>
-        </td></tr>
-        <tr><td style="padding:22px 32px 6px 32px">
-          <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:${INK_SOFT};margin-bottom:6px">Billed to</div>
-          <div style="font-size:14px;font-weight:600;color:${INK}">${escapeHtml(recipientName)}</div>
-          ${recipientEmail ? `<div style="font-size:12px;color:${INK_SOFT}">${escapeHtml(recipientEmail)}</div>` : ''}
-          ${recipientAddress ? `<div style="font-size:12px;color:${INK_SOFT};white-space:pre-wrap">${escapeHtml(recipientAddress)}</div>` : ''}
-          ${taxId ? `<div style="font-size:12px;color:${INK_SOFT}">Tax ID: ${escapeHtml(taxId)}</div>` : ''}
-          ${subject ? `<div style="margin-top:10px;font-size:13px;color:${INK}"><strong>Subject:</strong> ${escapeHtml(subject)}</div>` : ''}
-        </td></tr>
-        <tr><td style="padding:14px 32px 0 32px">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${HAIRLINE};background:${PAPER};border-radius:6px;overflow:hidden">
-            <thead><tr style="background:${PAPER_SOFT}"><th style="padding:8px 10px;text-align:left;font-size:9px;color:${INK_SOFT};font-weight:700">Description</th><th style="padding:8px 10px;text-align:right;font-size:9px;color:${INK_SOFT};font-weight:700">Qty</th><th style="padding:8px 10px;text-align:right;font-size:9px;color:${INK_SOFT};font-weight:700">Unit</th><th style="padding:8px 10px;text-align:right;font-size:9px;color:${INK_SOFT};font-weight:700">Amount</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </td></tr>
-        <tr><td style="padding:14px 32px">
-          <table role="presentation" width="100%"><tr><td></td><td style="width:280px">
-            <table role="presentation" width="100%">
-              <tr><td style="padding:4px 10px;font-size:12px;color:${INK_SOFT}">Subtotal</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-variant-numeric:tabular-nums">${money(subtotal)}</td></tr>
-              ${taxPct > 0 ? `<tr><td style="padding:4px 10px;font-size:12px;color:${INK_SOFT}">Tax (${taxPct}%)</td><td style="padding:4px 10px;font-size:12px;text-align:right;font-variant-numeric:tabular-nums">${money(taxAmount)}</td></tr>` : ''}
-              <tr><td style="padding:8px 10px;font-size:14px;font-weight:700;color:${INK};border-top:1px solid ${HAIRLINE}">Total</td><td style="padding:8px 10px;font-size:14px;text-align:right;font-weight:700;color:${PRIMARY};border-top:1px solid ${HAIRLINE};font-variant-numeric:tabular-nums">${money(total)}</td></tr>
-            </table>
-          </td></tr></table>
-        </td></tr>
-        ${notes ? `<tr><td style="padding:14px 32px;font-size:11px;color:${INK_SOFT};white-space:pre-wrap;border-top:1px solid ${HAIRLINE}"><strong style="color:${INK}">Notes:</strong> ${escapeHtml(notes)}</td></tr>` : ''}
-        <tr><td style="padding:20px 32px 24px 32px;border-top:1px solid ${HAIRLINE};font-size:11px;color:${INK_SOFT}">The Beyond Circle · Holding · issued via Namkhan BI cockpit.</td></tr>
-      </table>
-    </body></html>`;
+    const tpl: InvoiceTemplate = template ?? {
+      brand_name: '', brand_color: '', header_line: null, footer_line: '',
+      sender_name: null, sender_address: null, sender_email: null,
+      sender_phone: null, sender_tax_id: null, sender_iban: null,
+    };
+    return renderInvoiceHtml(
+      {
+        recipient_name: recipientName,
+        recipient_email: recipientEmail || null,
+        recipient_address: recipientAddress || null,
+        tax_id: taxId || null,
+        subject: subject || null,
+        line_items: lines.filter((l) => l.description.trim()),
+        tax_pct: Number(taxPct) || 0,
+        currency,
+        notes: notes || null,
+        due_at: dueAt || null,
+        recurring_cadence: recurringOn ? recurringCadence : null,
+      },
+      invoiceNumber, subtotal, taxAmount, total, tpl,
+    );
   };
 
   const submit = () => {
@@ -283,7 +281,6 @@ export default function InvoiceGenerator({ initialNextNumber }: { initialNextNum
   );
 }
 
-function escapeHtml(s: string): string { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 const labelStyle: CSSProperties = { fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK_SOFT, fontWeight: 700 };
 const inputStyle: CSSProperties = { padding: '5px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 4, fontSize: 12, background: PAPER, color: INK, fontFamily: 'inherit' };

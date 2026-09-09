@@ -14,10 +14,16 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireHoldingFromRequest } from '@/lib/holding/guard';
 
 const BUCKET = 'module-findings';
 
 export async function POST(req: Request) {
+  // Holding gate. Middleware 403s /holding/* pages but NOT /api/holding/*, so
+  // without this any signed-in tenant user reaches this route. Fails closed.
+  const _gate = await requireHoldingFromRequest(req);
+  if (!_gate.ok) return NextResponse.json({ error: _gate.message }, { status: _gate.status });
+
   try {
     const fd = await req.formData();
     const moduleName = String(fd.get('module') ?? '').trim();
@@ -61,6 +67,11 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  // Holding gate. Middleware 403s /holding/* pages but NOT /api/holding/*, so
+  // without this any signed-in tenant user reaches this route. Fails closed.
+  const _gate = await requireHoldingFromRequest(req);
+  if (!_gate.ok) return NextResponse.json({ error: _gate.message }, { status: _gate.status });
+
   try {
     const body = await req.json();
     const findingId = Number(body?.finding_id);
@@ -93,6 +104,11 @@ export async function PUT(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  // Holding gate. Middleware 403s /holding/* pages but NOT /api/holding/*, so
+  // without this any signed-in tenant user reaches this route. Fails closed.
+  const _gate = await requireHoldingFromRequest(req);
+  if (!_gate.ok) return NextResponse.json({ error: _gate.message }, { status: _gate.status });
+
   try {
     const body = await req.json();
     const id = Number(body?.id);

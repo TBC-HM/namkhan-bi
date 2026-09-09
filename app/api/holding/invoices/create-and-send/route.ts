@@ -7,6 +7,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 // PBS 2026-09-09: the renderer moved to lib/holding/invoice-html.ts so the
 // preview page renders the same document. Behaviour here is unchanged.
 import { renderInvoiceHtml, loadInvoiceTemplate } from '@/lib/holding/invoice-html';
+import { requireHoldingFromRequest } from '@/lib/holding/guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,11 @@ function addToDate(iso: string, cadence: 'monthly' | 'quarterly' | 'yearly'): st
 }
 
 export async function POST(req: Request) {
+  // Holding gate. Middleware 403s /holding/* pages but NOT /api/holding/*, so
+  // without this any signed-in tenant user reaches this route. Fails closed.
+  const _gate = await requireHoldingFromRequest(req);
+  if (!_gate.ok) return NextResponse.json({ error: _gate.message }, { status: _gate.status });
+
   try {
     const body = (await req.json()) as Body;
     if (!body.recipient_name?.trim()) return NextResponse.json({ error: 'recipient_name required' }, { status: 400 });
