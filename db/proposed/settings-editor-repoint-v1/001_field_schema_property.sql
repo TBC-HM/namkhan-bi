@@ -1,4 +1,14 @@
--- PROPOSED — NOT APPLIED. Needs PBS approval (L3).
+-- APPLIED 2026-09-09 via Supabase MCP apply_migration as
+--   `settings_field_schema_add_property_content_scopes`
+-- after PBS approval. This file is the audit copy; the applied version differs in two
+-- ways found during the pre-apply check:
+--   · content.property_banking and property.licenses were added to the WHERE list —
+--     banking/licenses live in `content`/`property`, not `property` alone.
+--   · marketing.v_settings_field_schema is NOT a no-op passthrough after all: it selects
+--     named columns, so it had to be replaced too or the new table_schema column would
+--     never reach the caller. The note at the bottom of this file was wrong.
+-- The separation caveat below was resolved in the same change: the legacy editor now
+-- takes an explicit ?property_id and shows a picker instead of defaulting to 260955.
 -- brief: settings-editor-repoint-v1
 --
 -- PROBLEM
