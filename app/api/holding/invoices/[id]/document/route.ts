@@ -11,6 +11,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { loadInvoiceDocument, invoiceFilename } from '@/lib/holding/invoice-document';
+import { requireHoldingFromRequest } from '@/lib/holding/guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,12 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Middleware 403s a non-holding session on /holding/* but NOT on /api/holding/*,
+  // so without this gate any signed-in tenant user could read TBC's invoices by
+  // id. Gate first, before the id is even resolved.
+  const gate = await requireHoldingFromRequest(req);
+  if (!gate.ok) return new Response(gate.message, { status: gate.status });
+
   const { id: raw } = await params;
   const id = Number(raw);
   if (!Number.isFinite(id)) {

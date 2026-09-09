@@ -23,6 +23,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect, notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { loadInvoiceDocument } from '@/lib/holding/invoice-document';
+import { requireHoldingFromCookies, canSendOnBehalfOfHolding } from '@/lib/holding/guard';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -47,6 +48,15 @@ async function sendInvoiceAction(formData: FormData): Promise<void> {
   let outcome = 'ok';
   let message = '';
   try {
+    // Middleware already 403s non-holding sessions on /holding/*, and a server
+    // action POSTs to this page's own path — but this send leaves the building
+    // (L28), so it does not rely on a path prefix alone.
+    const gate = await requireHoldingFromCookies();
+    if (!gate.ok) throw new Error(gate.message);
+    if (!canSendOnBehalfOfHolding(gate.role)) {
+      throw new Error('your holding role may not send invoices');
+    }
+
     const sb = getSupabaseAdmin();
     const doc = await loadInvoiceDocument(sb, id);
     if (!doc || !doc.html) throw new Error('invoice could not be rendered — nothing was sent');
@@ -68,8 +78,12 @@ async function sendInvoiceAction(formData: FormData): Promise<void> {
       }),
     });
     if (!res.ok) {
+      // Log the upstream body server-side; never echo it back through the URL.
       const body = await res.text().catch(() => '');
-      throw new Error(`emailer HTTP ${res.status}${body ? ` — ${body.slice(0, 200)}` : ''}`);
+      console.error('[holding/invoice-send] emailer failed', {
+        id, status: res.status, body: body.slice(0, 500),
+      });
+      throw new Error(`the emailer rejected the send (HTTP ${res.status}) — details are in the server log`);
     }
 
     // It has now genuinely been issued, so this render BECOMES the issued record.
