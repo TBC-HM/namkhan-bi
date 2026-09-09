@@ -69,7 +69,7 @@ export default function SocialFlow({
       const res = await fetch('/api/marketing/social/accept-slot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slot_id: slot.slot_id }),
+        body: JSON.stringify({ slot_id: slot.slot_id, property_id: slot.property_id }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -91,7 +91,7 @@ export default function SocialFlow({
       const res = await fetch('/api/marketing/social/reject-slot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slot_id: slot.slot_id }),
+        body: JSON.stringify({ slot_id: slot.slot_id, property_id: slot.property_id }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) {
