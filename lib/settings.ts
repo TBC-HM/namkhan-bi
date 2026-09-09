@@ -89,6 +89,59 @@ export const SECTION_TO_TABLE: Record<
   data_integration_email: { table: 'data_integrations', pk: 'slug', multiRow: true, hasPropertyId: true, schema: 'property' },
 };
 
+// ── Section registry ────────────────────────────────────────────────────────
+// PBS 2026-09-09: both legacy settings pages read marketing.v_settings_sections_live
+// to build their section list and sidebar. That view was DROPPED, so /settings
+// rendered "No sections registered." and the section editor had an empty rail —
+// silently, because a PostgREST error just yields no rows. SECTION_TO_TABLE is the
+// code's own source of truth for what sections exist; derive the list from it and
+// the two pages can never drift from the write path again.
+
+export const SECTION_LABELS: Record<string, string> = {
+  property_identity: 'Identity',
+  location_climate:  'Location & Climate',
+  brand:             'Brand',
+  contacts:          'Contacts',
+  social:            'Social Accounts',
+  rooms:             'Room Content',
+  booking_policies:  'Booking Policies',
+  certifications:    'Certifications',
+  facilities:        'Facilities',
+  activities:        'Activities',
+  meeting_rooms:     'Meeting Rooms',
+  meeting_packages:  'Meeting Packages',
+  retreats:          'Retreat Programs',
+  retreat_pricing:   'Retreat Pricing',
+  seasons:           'Seasons',
+  social_rules:      'Social Guardrails',
+  social_programs:   'Social Programs',
+  banking:           'Banking',
+  licenses:          'Licenses',
+  data_integration_email: 'Data · Email Feeds',
+};
+
+export interface SettingsSectionSummary {
+  section_code: string;
+  display_name: string;
+  description: string;
+  source_table: string;
+  /** Target table is absent from the live DB — the section cannot be edited. */
+  missing: boolean;
+}
+
+/** Every registered section, in declaration order, with its live/dead status. */
+export function listSettingsSections(): SettingsSectionSummary[] {
+  return Object.entries(SECTION_TO_TABLE).map(([code, cfg]) => ({
+    section_code: code,
+    display_name: SECTION_LABELS[code] ?? code.replace(/_/g, ' '),
+    description: cfg.missing
+      ? `Disconnected — ${cfg.schema ?? 'marketing'}.${cfg.table} no longer exists.`
+      : `${cfg.schema ?? 'marketing'}.${cfg.table}`,
+    source_table: `${cfg.schema ?? 'marketing'}.${cfg.table}`,
+    missing: cfg.missing === true,
+  }));
+}
+
 // Field whitelists for sections that share a physical table (property_profile).
 // Other sections render every editable field from their table.
 export const SECTION_FIELD_WHITELIST: Record<string, string[]> = {

@@ -4,6 +4,7 @@ import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { listSettingsSections } from '@/lib/settings';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import {
   GuestStatusHeader, StatusCell, SectionHead,
@@ -22,23 +23,28 @@ export default async function SettingsSnapshotPage() {
   let admin;
   try { admin = getSupabaseAdmin(); } catch { admin = null; }
 
-  const sectionsP = admin
-    ? admin.schema('marketing').from('v_settings_sections_live').select('*').order('display_order')
-    : Promise.resolve({ data: [], error: null } as any);
+  // PBS 2026-09-09: marketing.v_settings_sections_live and marketing.property_profile
+  // were both DROPPED, so this page rendered "No sections registered." and a 0%
+  // completeness score — silently, because a PostgREST error just yields no rows.
+  // Sections now come from the code registry (same source as the write path) and the
+  // profile from property.identity + property.location, which is where the live data is.
   const profileP = admin
-    ? admin.schema('marketing').from('property_profile').select('*').eq('property_id', PROPERTY_ID).maybeSingle()
+    ? admin.schema('property').from('identity').select('*').eq('property_id', PROPERTY_ID).maybeSingle()
+    : Promise.resolve({ data: null, error: null } as any);
+  const locationP = admin
+    ? admin.schema('property').from('location').select('city, country').eq('property_id', PROPERTY_ID).maybeSingle()
     : Promise.resolve({ data: null, error: null } as any);
   const roomsP = supabase.from('room_types').select('id', { count: 'exact', head: true }).eq('property_id', PROPERTY_ID);
   const usersP = supabase.from('app_users').select('id', { count: 'exact', head: true }).eq('active', true);
   const dqP = supabase.from('dq_known_issues').select('id, severity, status', { count: 'exact' }).neq('status', 'fixed');
 
   const [
-    { data: sections },
     { data: profile },
+    { data: location },
     { count: roomsCount },
     { count: activeUsers },
     { data: dqIssues, count: dqOpenCount },
-  ] = await Promise.all([sectionsP, profileP, roomsP, usersP, dqP]);
+  ] = await Promise.all([profileP, locationP, roomsP, usersP, dqP]);
 
   const dqCritical = (dqIssues ?? []).filter((d: any) => d.severity === 'critical' || d.severity === 'high').length;
 
@@ -51,15 +57,16 @@ export default async function SettingsSnapshotPage() {
     }
   }
   const completePct = totalFields > 0 ? ((totalFields - placeholders) / totalFields) * 100 : 0;
-  const sectionsList = (sections ?? []) as Array<{ section_code: string; display_name: string; description: string | null; placeholder_count: number | null; row_count: number | null; }>;
+  const sectionsList = listSettingsSections();
+  const liveSections = sectionsList.filter((s) => !s.missing);
 
   return (
     <Page eyebrow="Settings · Snapshot" title={<>One source of truth <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>for the property</em>.</>}>
       <GuestStatusHeader
         top={<>
-          <StatusCell label="SOURCE"><StatusPill tone="active">marketing.property_profile</StatusPill><span style={metaDim}>· room_types · app_users · dq_known_issues</span></StatusCell>
+          <StatusCell label="SOURCE"><StatusPill tone="active">property.identity</StatusPill><span style={metaDim}>· room_types · app_users · dq_known_issues</span></StatusCell>
           <StatusCell label="PROPERTY"><span style={metaStrong}>{profile?.trading_name ?? '—'}</span></StatusCell>
-          <StatusCell label="LOCATION"><span style={metaSm}>{profile?.city ?? '—'}{profile?.country ? `, ${profile.country}` : ''}</span></StatusCell>
+          <StatusCell label="LOCATION"><span style={metaSm}>{location?.city ?? '—'}{location?.country ? `, ${location.country}` : ''}</span></StatusCell>
           <span style={{ flex: 1 }} />
         </>}
         bottom={<>
@@ -85,7 +92,7 @@ export default async function SettingsSnapshotPage() {
         <KpiBox value={null} unit="text" valueText={profile?.trading_name ?? '—'} label="Property" tooltip="Property trading_name from marketing.property_profile. Editable via /settings/property/property_identity." />
         <KpiBox value={roomsCount ?? 0} unit="count" label="Room types"             tooltip="Distinct rows in public.room_types — feeds /revenue/pricing rate ladder + /revenue/inventory." />
         <KpiBox value={completePct} unit="pct" label="Profile complete"             tooltip="Percent of property_profile fields that are not LOREM IPSUM/TODO. Drives marketing copy + AI agent context." />
-        <KpiBox value={sectionsList.length} unit="count" label="Editable sections"  tooltip="Settings panes available under /settings/property/[section]. Source: marketing.v_settings_sections_live." />
+        <KpiBox value={liveSections.length} unit="count" label="Editable sections"  tooltip="Settings panes under /settings/property/[section] whose table still exists. Source: SECTION_TO_TABLE in lib/settings.ts." />
         <KpiBox value={activeUsers ?? 0} unit="count" label="Active users"          tooltip="App users with active=true. Rows in public.app_users." />
         <KpiBox value={dqOpenCount ?? 0} unit="count" label="DQ open"               tooltip="Open data-quality issues across the dashboard. Source: public.dq_known_issues." />
       </div>
@@ -126,16 +133,15 @@ export default async function SettingsSnapshotPage() {
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <SectionHead title="Property sections" emphasis={`${sectionsList.length} editable`} sub="Click to edit · placeholder count flags incomplete" source="marketing.v_settings_sections_live" />
+        <SectionHead title="Property sections" emphasis={`${liveSections.length} of ${sectionsList.length} editable`} sub="Click to edit · disconnected sections have no live table" source="lib/settings.ts · SECTION_TO_TABLE" />
         {sectionsList.length === 0 ? (
           <div style={{ padding: 32, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, textAlign: 'center', color: 'var(--ink-mute)', fontStyle: 'italic' }}>
-            {admin ? 'No sections registered.' : 'Service-role key missing — add SUPABASE_SERVICE_ROLE_KEY in Vercel env.'}
+            {'No sections registered in lib/settings.ts.'}
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
             {sectionsList.map((s) => {
-              const ph = Number(s.placeholder_count ?? 0);
-              const tone = ph === 0 ? 'active' : ph >= 5 ? 'expired' : 'pending';
+              const tone = s.missing ? 'expired' : 'active';
               return (
                 <TenantLink key={s.section_code} href={`/settings/property/${s.section_code}`}
                   style={{
@@ -145,12 +151,11 @@ export default async function SettingsSnapshotPage() {
                   }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontWeight: 500, fontSize: 'var(--t-md)' }}>{s.display_name}</div>
-                    <StatusPill tone={tone}>{ph === 0 ? '✓' : `${ph}`}</StatusPill>
+                    <StatusPill tone={tone}>{s.missing ? 'no table' : '✓'}</StatusPill>
                   </div>
                   {s.description && <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', lineHeight: 1.4 }}>{s.description}</div>}
                   <div style={{ marginTop: 'auto', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', letterSpacing: 'var(--ls-loose)' }}>
-                    {s.row_count ?? 0} {s.row_count === 1 ? 'row' : 'rows'}
-                    {ph > 0 && <span style={{ color: 'var(--brass)' }}> · {ph} placeholder{ph === 1 ? '' : 's'}</span>}
+                    {s.source_table}
                   </div>
                 </TenantLink>
               );

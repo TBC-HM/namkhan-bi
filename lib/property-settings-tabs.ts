@@ -15,6 +15,11 @@ export function getSettingsTabs(propertyId: number, activeKey: string): Settings
     { key: 'property',       label: 'Property',       path: `${base}/property`       },
     { key: 'media',          label: 'Media',          path: `${base}/media`          },
     { key: 'rate_plans',     label: 'Rate Plans',     path: `${base}/rate-plans`     },
+    // PBS 2026-09-09: /settings/property/audience (renamed Newsletter 2026-07-22) is a
+    // real settings page that only ever appeared in its OWN inline tab array — two
+    // hand-copied, drifted copies — so it had no entry point from any other settings
+    // page. Canonical now; the inline copies are gone.
+    { key: 'newsletter',     label: 'Newsletter',     path: `${base}/property/audience` },
     { key: 'guardrails',     label: 'Guardrails',     path: `${base}/guardrails`     },
     { key: 'documents',      label: 'Documents',      path: `${base}/documents`      },
     { key: 'data',           label: 'Data',           path: `${base}/data`           },

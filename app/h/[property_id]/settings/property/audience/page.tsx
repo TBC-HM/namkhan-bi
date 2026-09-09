@@ -9,6 +9,7 @@
 // Wired into the `/h/[property_id]/settings/property` DashboardPage tab strip.
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSettingsTabs } from '@/lib/property-settings-tabs';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import AudienceSettingsClient, {
   type BlocklistRow, type GroupRow, type GroupRuleRow,
@@ -35,16 +36,7 @@ export default async function PropertyAudienceSettingsPage({
       <DashboardPage
         title={`Settings · Newsletter`}
         subtitle={`Property ID ${propertyId} · config error`}
-        tabs={[
-          { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property` },
-          { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
-          { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
-          { key: 'audience',   label: 'Newsletter', href: `/h/${propertyId}/settings/property/audience`, active: true },
-          { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
-          { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-          { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
-          { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
-        ]}
+        tabs={getSettingsTabs(propertyId, 'newsletter')}
       >
         <div style={{ gridColumn: '1 / -1' }}>
           <Container title="Newsletter" subtitle="service-role key missing">
@@ -84,16 +76,7 @@ export default async function PropertyAudienceSettingsPage({
     <DashboardPage
       title={`Settings · Newsletter`}
       subtitle={`Property ID ${propertyId} · ${blocklist.length} blocklist · ${groups.length} groups · ${groupRules.length} group rules · ${routingRules.length} routing rules · ${editorialGoals.length} editorial goals`}
-      tabs={[
-        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property` },
-        { key: 'media',      label: 'Media',      href: `/h/${propertyId}/settings/media` },
-        { key: 'rate_plans', label: 'Rate Plans', href: `/h/${propertyId}/settings/rate-plans` },
-        { key: 'audience',   label: 'Newsletter', href: `/h/${propertyId}/settings/property/audience`, active: true },
-        { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
-        { key: 'data',       label: 'Data',       href: `/h/${propertyId}/settings/data` },
-        { key: 'send_logs',  label: 'Send Logs',  href: `/h/${propertyId}/settings/send-logs`  },
-        { key: 'knowledge',  label: 'Knowledge',  href: `/h/${propertyId}/settings/knowledge` },
-      ]}
+      tabs={getSettingsTabs(propertyId, 'newsletter')}
     >
       <div style={{ gridColumn: '1 / -1' }}>
         <Container

@@ -214,6 +214,102 @@ if (improved.length) {
 }
 
 // ---------------------------------------------------------------------------
+// GUARD 3 — HOLDING / TENANT SEPARATION (PBS 2026-09-09)
+//
+// WHY. Holding (property_id NULL, addressed as 0 in the doc/ingest APIs) and a
+// tenant (260955 / 1000001) are different brains — L7 says no cross-brain
+// retrieval, ever. Two live leaks got through review because both are
+// *absences* rather than wrong code:
+//   · app/holding/it/brain redirect()ed to /h/260955/... — a holding page
+//     silently depositing the operator in a tenant's tree.
+//   · TenantLink had no holding branch, so '/settings' from any /holding/*
+//     page fell through to the LEGACY unprefixed settings tree, which is
+//     hardcoded to PROPERTY_ID 260955.
+//
+// WHAT IS NOT A VIOLATION: a holding page LISTING tenants and linking into them
+// (portfolio cards, per-property cost splits, "Namkhan photo settings →"). That
+// is holding's job, and the operator is choosing. The bug class is a SILENT
+// resolution — a redirect, or a nav strip that leaves holding without being
+// asked. Only those are gated.
+// ---------------------------------------------------------------------------
+const HOLDING_DIR = join(ROOT, 'app/holding');
+// redirect('/h/260955/...') / redirect(`/h/${x}/...`) inside a holding file
+const HOLDING_REDIRECT_RE = /redirect\s*\(\s*[`'"]\/h\//;
+
+function isCommentLine(line) {
+  const t = line.trim();
+  return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*');
+}
+
+const holdingLeaks = [];
+if (existsSync(HOLDING_DIR)) {
+  for (const file of walk(HOLDING_DIR)) {
+    const rel = relative(ROOT, file).split('\\').join('/');
+    readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+      if (isCommentLine(line)) return;
+      if (HOLDING_REDIRECT_RE.test(line)) {
+        holdingLeaks.push(`${rel}:${i + 1}  ${line.trim().slice(0, 100)}`);
+      }
+    });
+  }
+}
+if (holdingLeaks.length) {
+  violations.push(
+    `${holdingLeaks.length} holding file(s) REDIRECT into a tenant tree (L7 separation):\n` +
+      holdingLeaks.map((l) => `      - ${l}`).join('\n') +
+      `\n    A holding page may LINK into a tenant the operator picked; it may not\n` +
+      `    redirect there. A redirect gives no choice and no signal that the brain\n` +
+      `    changed. Send them to a /holding/* destination instead.`
+  );
+}
+
+// RULE 3a: each settings tab strip must stay inside its own scope. The holding
+// strip leaving for /h/<id>/ (or the property strip leaving for /holding/) is
+// how an operator crosses the boundary without noticing.
+const TAB_CONFIGS = [
+  { rel: 'app/holding/settings/_components/tabs.ts', forbidden: /['"`]\/h\/\d+\//, scope: 'holding' },
+  { rel: 'lib/property-settings-tabs.ts', forbidden: /['"`]\/holding\//, scope: 'property' },
+];
+for (const { rel, forbidden, scope } of TAB_CONFIGS) {
+  const abs = join(ROOT, rel);
+  if (!existsSync(abs)) continue;
+  const bad = readFileSync(abs, 'utf8').split('\n')
+    .filter((l) => !isCommentLine(l) && forbidden.test(l));
+  if (bad.length) {
+    violations.push(
+      `${rel} emits a link outside its own (${scope}) scope:\n` +
+        bad.map((l) => `      - ${l.trim().slice(0, 100)}`).join('\n') +
+        `\n    A settings tab strip must address only its own scope, or the tab bar\n` +
+        `    itself becomes the cross-tenant door.`
+    );
+  }
+}
+
+// RULE 3b: the settings write routes are tenant-scoped and MUST verify the
+// caller. These four were unauthenticated until 2026-09-09 and one of them
+// overwrote every row's property_id with the literal 260955.
+const GUARDED_SETTINGS_ROUTES = [
+  'app/api/settings/upsert/route.ts',
+  'app/api/settings/delete/route.ts',
+  'app/api/settings/communications/route.ts',
+  'app/api/settings/sales/route.ts',
+  'app/api/settings/knowledge/route.ts',
+];
+const unguarded = GUARDED_SETTINGS_ROUTES.filter((rel) => {
+  const abs = join(ROOT, rel);
+  if (!existsSync(abs)) return false;            // route removed — not a violation
+  return !readFileSync(abs, 'utf8').includes('requirePropertyAccess');
+});
+if (unguarded.length) {
+  violations.push(
+    `${unguarded.length} tenant-scoped settings route(s) lost requirePropertyAccess() (L22):\n` +
+      unguarded.map((r) => `      - ${r}`).join('\n') +
+      `\n    getSupabaseAdmin() bypasses RLS, so a route that trusts a client-supplied\n` +
+      `    property_id lets any authenticated caller write another tenant's settings.`
+  );
+}
+
+// ---------------------------------------------------------------------------
 if (violations.length) {
   console.error('\n\u001b[31m✖ INVARIANT GATE FAILED\u001b[0m — ' + violations.length + ' violation(s)\n');
   violations.forEach((v, i) => console.error(`  ${i + 1}. ${v}\n`));
@@ -225,5 +321,6 @@ if (violations.length) {
 
 console.log(
   `✓ invariant gate: ${REQUIRED_EXEMPTIONS.length} middleware exemptions present and correctly ordered; ` +
-    `tenant-id ratchet holding (${Object.values(counts).reduce((a,b)=>a+b,0)} tracked across ${Object.keys(counts).length} files).`
+    `tenant-id ratchet holding (${Object.values(counts).reduce((a,b)=>a+b,0)} tracked across ${Object.keys(counts).length} files); ` +
+    `holding/tenant separation clean.`
 );

@@ -145,9 +145,20 @@ export async function POST(req: NextRequest) {
   // every document ingested through this route was hard-filed to 260955 (Namkhan)
   // no matter which surface uploaded it. 0 means HOLDING scope, stored as NULL.
   let targetPropertyId: number | null = 260955;
+  // PBS 2026-09-09 — HOLDING/TENANT SEPARATION. This used to swallow a junk
+  // property_id and silently fall back to Namkhan, so a holding upload whose id
+  // arrived as '' / 'undefined' / NaN was FILED INTO A TENANT'S BRAIN with no
+  // error anywhere. Absent is still the documented legacy default (app/knowledge
+  // has no property context to send one); a value that is PRESENT but unusable is
+  // now a hard 400 — a client bug must never resolve to someone else's data.
+  let propertyIdError: string | null = null;
   function setProperty(raw: unknown) {
-    const n = typeof raw === 'string' ? Number(raw) : typeof raw === 'number' ? raw : NaN;
-    if (!Number.isFinite(n)) return;         // absent / junk → keep the legacy default
+    if (raw === undefined || raw === null) return;   // absent → legacy default
+    const n = typeof raw === 'string' ? Number(raw.trim()) : typeof raw === 'number' ? raw : NaN;
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+      propertyIdError = `unusable property_id: ${JSON.stringify(raw)} — refusing to guess a tenant`;
+      return;
+    }
     targetPropertyId = n === 0 ? null : n;   // 0 → holding (property_id IS NULL)
   }
 
@@ -211,6 +222,14 @@ export async function POST(req: NextRequest) {
     mimeType = file.type || 'application/octet-stream';
     buffer = Buffer.from(await file.arrayBuffer());
     sizeBytes = buffer.length;
+  }
+
+  // Fail closed on an unusable tenant BEFORE any storage move or LLM spend.
+  if (propertyIdError) {
+    if (stagingBucket && stagingPath) {
+      try { await admin.storage.from(stagingBucket).remove([stagingPath]); } catch {}
+    }
+    return NextResponse.json({ ok: false, stage: 'property_scope', error: propertyIdError }, { status: 400 });
   }
 
   // --- 0. SHA-256 dedup via SECURITY DEFINER RPC (PostgREST only exposes public)

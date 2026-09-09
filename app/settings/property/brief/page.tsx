@@ -12,7 +12,7 @@ import Insight from '@/components/sections/Insight';
 import SectionSidebar from '@/components/settings/SectionSidebar';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { SETTINGS_SUBPAGES } from '../../_subpages';
-import { PROPERTY_ID, type SectionRow } from '@/lib/settings';
+import { PROPERTY_ID, listSettingsSections } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,12 +34,11 @@ export default async function FactsheetBriefPage() {
     );
   }
 
-  const [sectionsRes, mdRes] = await Promise.all([
-    admin.schema('marketing').from('v_settings_sections_live').select('*').order('display_order'),
-    admin.schema('marketing').rpc('f_factsheet_markdown', { p_property_id: PROPERTY_ID }),
-  ]);
+  // marketing.v_settings_sections_live was dropped — the rail now comes from the
+  // code registry (PBS 2026-09-09), same source as the write path.
+  const mdRes = await admin.schema('marketing').rpc('f_factsheet_markdown', { p_property_id: PROPERTY_ID });
 
-  const sections: SectionRow[] = (sectionsRes.data ?? []) as SectionRow[];
+  const sections = listSettingsSections();
   const markdown: string = typeof mdRes.data === 'string' ? mdRes.data : '';
   const placeholderHits = (markdown.match(/\[LOREM IPSUM/g) ?? []).length;
 

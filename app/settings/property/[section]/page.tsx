@@ -21,9 +21,10 @@ import { SETTINGS_SUBPAGES } from '../../_subpages';
 import {
   SECTION_TO_TABLE,
   SECTION_FIELD_WHITELIST,
+  SECTION_LABELS,
   PROPERTY_ID,
   countPlaceholders,
-  type SectionRow,
+  listSettingsSections,
   type FieldSchemaRow,
 } from '@/lib/settings';
 
@@ -55,19 +56,45 @@ export default async function PropertySectionPage({ params }: PageProps) {
     );
   }
 
-  // Parallel reads: sections, field schema for THIS table, rows for THIS section.
-  const [sectionsRes, fieldSchemaRes, rowsRes] = await Promise.all([
-    admin.schema('marketing').from('v_settings_sections_live').select('*').order('display_order'),
+  // Section list comes from the code registry — marketing.v_settings_sections_live
+  // was dropped and left this rail empty (PBS 2026-09-09).
+  const sections = listSettingsSections();
+
+  // A section whose table no longer exists has nothing to read or write. Say so
+  // instead of rendering an empty form that 501s on save.
+  if (cfg.missing) {
+    return (
+      <Page
+        eyebrow={`Settings · Property · ${SECTION_LABELS[params.section] ?? params.section}`}
+        title={<>Property <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>configuration</em>.</>}
+        subPages={SETTINGS_SUBPAGES}
+      >
+        <Insight tone="alert" eye="disconnected">
+          <strong>{cfg.schema ?? 'marketing'}.{cfg.table}</strong> no longer exists in the
+          database. The live data for this section is in <strong>property.*</strong> and is
+          shown read-only at <strong>/h/[property_id]/settings/property</strong>. This editor
+          has no working write path — it needs an owner decision (retire it, or repoint it at
+          property.* and give it a tenant selector) before it can be used again.
+        </Insight>
+        <div className="settings-layout">
+          <SectionSidebar sections={sections} active={params.section} />
+        </div>
+      </Page>
+    );
+  }
+
+  const schema = cfg.schema ?? 'marketing';
+  // Parallel reads: field schema for THIS table, rows for THIS section.
+  const [fieldSchemaRes, rowsRes] = await Promise.all([
     admin.schema('marketing').from('v_settings_field_schema').select('*').eq('table_name', cfg.table).order('ordinal_position'),
     cfg.multiRow
-      ? admin.schema('marketing').from(cfg.table).select('*').order(cfg.pk, { ascending: true })
-      : admin.schema('marketing').from(cfg.table).select('*').eq('property_id', PROPERTY_ID).limit(1),
+      ? admin.schema(schema).from(cfg.table).select('*').order(cfg.pk, { ascending: true })
+      : admin.schema(schema).from(cfg.table).select('*').eq('property_id', PROPERTY_ID).limit(1),
   ]);
 
-  const sections: SectionRow[] = (sectionsRes.data ?? []) as SectionRow[];
   const fieldSchema: FieldSchemaRow[] = (fieldSchemaRes.data ?? []) as FieldSchemaRow[];
   const rows: any[] = rowsRes.data ?? [];
-  const dbErr = sectionsRes.error || fieldSchemaRes.error || rowsRes.error;
+  const dbErr = fieldSchemaRes.error || rowsRes.error;
 
   // Apply field whitelist for sections that share property_profile.
   const whitelist = SECTION_FIELD_WHITELIST[params.section];
