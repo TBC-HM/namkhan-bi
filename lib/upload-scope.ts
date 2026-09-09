@@ -3,9 +3,14 @@
 // defaulted to a constant.
 //
 // PBS 2026-09-09: /marketing/upload and its dropzone sent NO property_id at all
-// and relied on the server's `?? 260955`. Once that default was removed (L22)
-// the page 400'd. The fix is not to re-add a default or to prompt the operator —
-// it is to read the scope the operator is already standing in.
+// and relied on a hardcoded property-id fallback on the server. Once that
+// default was removed (L22) the page 400'd. The fix is not to re-add a default
+// or to prompt the operator — it is to read the scope the operator is already
+// standing in.
+//
+// NB: do not write the old fallback out literally here. guard-invariants.mjs
+// matches the pattern in comments as well as in code, so quoting it fails the
+// prebuild — that is what put main and production into ERROR on eccd8cd7.
 //
 // The rules mirror components/nav/TenantLink.rewriteHref, which is the canonical
 // place tenant vs holding is decided for navigation. Keep the two in step.
