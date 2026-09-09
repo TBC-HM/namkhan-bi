@@ -34,24 +34,45 @@ export async function POST(req: NextRequest) {
 
   const limit = Math.max(1, Math.min(200, Number(body?.limit ?? 50)));
   const force = Boolean(body?.force_rescore);
-  const tier: string | null = body?.tier ?? null;
+  const tier: string | null = body?.tier ?? null; // accepted for compatibility; the queue view defines eligibility
 
-  let q = admin.from('v_marketing_media_page')
-    .select('asset_id, property_id, primary_tier, qa_scored_at')
-    .eq('asset_type', 'photo')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  // L22 — property_id is required. This route previously selected across EVERY
+  // tenant and then applied roleForProperty(items[0].property_id) to the whole
+  // batch, so a mixed batch scored Donna's photos with Namkhan's agent.
+  const property_id = Number(body?.property_id);
+  if (!Number.isFinite(property_id) || property_id <= 0) {
+    return NextResponse.json({ ok: false, error: 'property_scope_required' }, { status: 400 });
+  }
 
-  if (!force) q = q.is('qa_scored_at', null);
-  if (tier)   q = q.eq('primary_tier', tier);
+  // Scoring costs real money per asset, so the eligible set is defined once, in
+  // public.v_media_qa_score_queue (skip_reason IS NULL AND quality_index IS NULL).
+  // That excludes zero-byte files, assets with no object in storage, mimes the
+  // scorer cannot read, sub-20KB web sprites and logos — 472 assets at Donna.
+  // Never re-derive that predicate here; extend the view.
+  let items: any[] = [];
+  if (force) {
+    // Forced re-score still respects the prefilter: an asset that cannot be
+    // scored does not become scoreable because someone passed force.
+    let q = admin.from('v_media_qa_prefilter')
+      .select('asset_id, property_id')
+      .eq('property_id', property_id)
+      .is('skip_reason', null)
+      .limit(limit);
+    const { data, error } = await q;
+    if (error) return NextResponse.json({ ok: false, error: 'list_failed', detail: error.message }, { status: 500 });
+    items = data ?? [];
+  } else {
+    const { data, error } = await admin.from('v_media_qa_score_queue')
+      .select('asset_id, property_id')
+      .eq('property_id', property_id)
+      .limit(limit);
+    if (error) return NextResponse.json({ ok: false, error: 'list_failed', detail: error.message }, { status: 500 });
+    items = data ?? [];
+  }
 
-  const { data: rows, error } = await q;
-  if (error) return NextResponse.json({ ok: false, error: 'list_failed', detail: error.message }, { status: 500 });
+  if (items.length === 0) return NextResponse.json({ ok: true, data: { scored: 0, avg_quality_index: null, fails_by_rule: {}, note: 'queue empty for this property' } });
 
-  const items = rows ?? [];
-  if (items.length === 0) return NextResponse.json({ ok: true, data: { scored: 0, avg_quality_index: null, fails_by_rule: {} } });
-
-  const role = roleForProperty(items[0].property_id);
+  const role = roleForProperty(property_id);
   const results: any[] = [];
 
   for (let i = 0; i < items.length; i += CHUNK) {
@@ -78,7 +99,33 @@ export async function POST(req: NextRequest) {
     fails['errors'] = (fails['errors'] ?? 0) + 1;
   }
 
-  const output = { scored: scored_ok.length, attempted: results.length, avg_quality_index: avg, fails_by_rule: fails };
-  await log(admin, { role, skill: 'score_batch', status: 'ok', duration_ms: Date.now() - t0, cost_milli: scored_ok.length * 15, input: { limit, tier, force_rescore: force }, output });
+  // Real spend, summed from what media-qa-score actually metered (v11+).
+  // Every scored asset returns cost_usd priced by public.fn_meter_ai_call from
+  // costs.price_book_rates; the authoritative row is already in ai_token_meter.
+  // This previously read `cost_milli: scored_ok.length * 15` — a flat
+  // $0.015/asset invention that ran ~5.4x under the real ~$0.081.
+  let cost_usd = 0;
+  let tokens_in = 0;
+  let tokens_out = 0;
+  let unmetered = 0;
+  for (const r of scored_ok) {
+    const c = Number(r.result?.cost_usd);
+    if (Number.isFinite(c)) cost_usd += c; else unmetered += 1;
+    tokens_in  += Number(r.result?.tokens?.input  ?? 0);
+    tokens_out += Number(r.result?.tokens?.output ?? 0);
+  }
+  cost_usd = Math.round(cost_usd * 1e6) / 1e6;
+
+  const output = {
+    scored: scored_ok.length, attempted: results.length, avg_quality_index: avg,
+    fails_by_rule: fails, cost_usd, tokens_in, tokens_out,
+    // >0 means those assets ran on a pre-v11 engine that reported no usage.
+    unmetered_assets: unmetered,
+  };
+  await log(admin, {
+    role, skill: 'score_batch', status: 'ok', duration_ms: Date.now() - t0,
+    cost_milli: Math.round(cost_usd * 1000),
+    input: { limit, tier, force_rescore: force }, output,
+  });
   return NextResponse.json({ ok: true, data: output });
 }
