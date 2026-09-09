@@ -84,7 +84,12 @@ const Th = ({ c, r }: { c: string; r?: boolean }) => <th className={`pb-1.5 font
 
 export default function QualityDashboard({ pid, payload, initialTab }: { pid: number; payload: QaPayload; initialTab?: string }) {
   const base = `/h/${pid}`;
-  const href = (p: string) => (p.startsWith('/') ? `${base}${p}` : p);
+  // Action-rule route_paths are stored unprefixed (`/operations/staff`) and get the
+  // tenant prefix here. `/holding/*` is a canonical top-level tree of its own (L6) —
+  // prefixing it produced /h/260955/holding/... which matches no route and 404s via
+  // the catch-all. Pass it through untouched.
+  const href = (p: string) =>
+    p.startsWith('/holding/') || !p.startsWith('/') ? p : `${base}${p}`;
   const valid = (t?: string): t is TabKey => !!t && TABS.some((x) => x.key === t);
   const [tab, setTab] = useState<TabKey>(valid(initialTab) ? initialTab : 'today');
   useEffect(() => {
