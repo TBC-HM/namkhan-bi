@@ -5,6 +5,7 @@
 // via POST /api/marketing/social/update-post.
 
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { SocialChannelRule } from '@/lib/marketing';
 import type { SocialPostRow } from '@/lib/marketing-social';
@@ -254,6 +255,7 @@ export default function SocialInbox({ posts, rules }: {
   const ruleFor = new Map(rules.map((r) => [r.platform, r]));
 
   return (
+    <>
     <div style={{ gridColumn: '1 / -1' }}>
       <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
@@ -452,21 +454,23 @@ export default function SocialInbox({ posts, rules }: {
         </div>
       </div>
 
-      {/* Media picker overlay */}
-      {mediaPicker && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: WHITE, borderRadius: 8, padding: '20px 24px', maxWidth: 820, width: '94vw', maxHeight: '82vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    </div>
+
+      {/* Media picker overlay — rendered via portal onto document.body so it escapes any overflow/transform parent */}
+      {mediaPicker && typeof document !== 'undefined' && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: WHITE, borderRadius: 8, padding: '20px 24px', maxWidth: 860, width: '94vw', maxHeight: '84vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.32)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>Select media from library</div>
-              <button type="button" onClick={() => setMediaPicker(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: INK_M }}>×</button>
+              <button type="button" onClick={() => setMediaPicker(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: INK_M, lineHeight: 1 }}>×</button>
             </div>
-            <div style={{ fontSize: 10, color: INK_M }}>Photos approved for social_organic use · click to assign to this post</div>
-            {mediaLoading && <div style={{ fontSize: 12, color: INK_M, padding: '24px 0', textAlign: 'center' }}>Loading library…</div>}
+            <div style={{ fontSize: 10, color: INK_M }}>Photos approved for social use · click to assign · scroll to browse all {mediaAssets.length > 0 ? `(${mediaAssets.length} shown)` : ''}</div>
+            {mediaLoading && <div style={{ fontSize: 12, color: INK_M, padding: '32px 0', textAlign: 'center' }}>Loading library…</div>}
             {!mediaLoading && mediaAssets.length === 0 && (
-              <div style={{ fontSize: 12, color: INK_M, padding: '24px 0', textAlign: 'center' }}>No media found for this property.</div>
+              <div style={{ fontSize: 12, color: INK_M, padding: '32px 0', textAlign: 'center' }}>No media found for this property.</div>
             )}
             {!mediaLoading && mediaAssets.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, overflowY: 'auto', flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, overflowY: 'auto', flex: 1 }}>
                 {mediaAssets.map((a) => (
                   <button key={a.asset_id} type="button"
                     onClick={() => pickMedia(a)}
@@ -486,9 +490,10 @@ export default function SocialInbox({ posts, rules }: {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 

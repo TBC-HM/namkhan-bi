@@ -221,24 +221,27 @@ ${requiresTitle ? 'title: pin title (keyword-first, ≤' + titleMax + ' chars, n
   // Resolve suggested link
   const suggestedLink = linkId != null ? links.find(l => l.id === linkId) ?? null : null;
 
-  // Fetch one photo from the suggested area
+  // Fetch one photo from the suggested area (fall back to any social_organic photo if AI picked null area)
+  const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-renders`;
+  const STORAGE_RAW     = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-raw`;
   let mediaUrl: string | null = null;
-  if (photoArea) {
-    const photoQ = sb.from('mkt_v_media_ready')
+  {
+    let photoQ = sb.from('mkt_v_media_ready')
       .select('raw_path,renders')
       .eq('property_id', property_id)
-      .eq('property_area', photoArea)
       .eq('asset_type', 'photo')
       .contains('usage_rights', ['social_organic'])
-      .order('captured_at', { ascending: false, nullsFirst: false })
-      .limit(1);
+      .not('raw_path', 'is', null)
+      .order('captured_at', { ascending: false, nullsFirst: false });
+    if (photoArea) photoQ = (photoQ as any).eq('property_area', photoArea);
+    photoQ = (photoQ as any).limit(10);
     const { data: photos } = await photoQ;
     if (photos && photos.length > 0) {
-      const ph = photos[0] as { raw_path: string | null; renders: Record<string, string> | null };
-      const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+      // Pick a random photo from the top 10 to avoid always using the same image
+      const ph = photos[Math.floor(Math.random() * photos.length)] as { raw_path: string | null; renders: Record<string, string> | null };
       mediaUrl = ph.renders?.web_2k
-        ? `${STORAGE_BASE}/${ph.renders.web_2k}`
-        : ph.raw_path ? `${STORAGE_BASE}/${ph.raw_path}` : null;
+        ? `${STORAGE_RENDERS}/${ph.renders.web_2k}`
+        : ph.raw_path ? `${STORAGE_RAW}/${ph.raw_path}` : null;
     }
   }
 
