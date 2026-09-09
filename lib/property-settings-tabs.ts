@@ -22,6 +22,10 @@ export function getSettingsTabs(propertyId: number, activeKey: string): Settings
     { key: 'newsletter',     label: 'Newsletter',     path: `${base}/property/audience` },
     { key: 'guardrails',     label: 'Guardrails',     path: `${base}/guardrails`     },
     { key: 'documents',      label: 'Documents',      path: `${base}/documents`      },
+    // PBS 2026-09-09: settings/archive is a working page (archive stats, retention
+    // thresholds) that appeared in NO tab list, so it was reachable only by typing the
+    // URL. Listed rather than deleted — it renders live data and nothing else covers it.
+    { key: 'archive',        label: 'Archive',        path: `${base}/archive`        },
     { key: 'data',           label: 'Data',           path: `${base}/data`           },
     { key: 'send_logs',      label: 'Send Logs',      path: `${base}/send-logs`      },
     { key: 'knowledge',      label: 'Knowledge',      path: `${base}/knowledge`      },

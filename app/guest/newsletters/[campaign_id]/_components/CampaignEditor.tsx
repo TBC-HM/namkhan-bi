@@ -9,7 +9,13 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TenantLink from '@/components/nav/TenantLink';
-import { supabase } from '@/lib/supabase';
+// PBS 2026-09-09: `supabase` from '@/lib/supabase' is the ANON key with
+// persistSession:false in the browser — no user JWT, so calls run as `anon`,
+// which ADR-277 revoked. Verified anon-BLOCKED / authenticated-OK for every
+// RPC and view this file uses. lib/supabase/client.ts carries the session.
+import { createClient } from '@/lib/supabase/client';
+
+const supabase = createClient();
 import MediaPicker from './MediaPicker';
 import RefineNewsletterButton from './RefineNewsletterButton';
 import { renderNewsletterEmail, type EmailChrome } from '@/lib/emailRenderer';
