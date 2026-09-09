@@ -204,13 +204,15 @@ export default function SocialInbox({ posts, rules }: {
     }
   }
 
-  async function exportZip(scope: 'selection' | 'week' | 'month', opts: { postIds?: string[]; platform?: string }) {
+  async function exportZip(scope: 'selection' | 'week' | 'month', opts: { postIds?: string[]; platform?: string; propertyId?: number }) {
     const key = `export:${scope}:${opts.platform ?? opts.postIds?.[0] ?? 'all'}`;
     setBusy(key); setErr(null); setNote(null);
     try {
       const res = await fetch('/api/marketing/social/export', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(scope === 'selection' ? { post_ids: opts.postIds } : { scope, platform: opts.platform }),
+        body: JSON.stringify(scope === 'selection'
+          ? { post_ids: opts.postIds, property_id: opts.propertyId }
+          : { scope, platform: opts.platform, property_id: opts.propertyId }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -284,11 +286,11 @@ export default function SocialInbox({ posts, rules }: {
                     {PRETTY[platform] ?? platform}
                   </span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <button type="button" disabled={busy !== null} onClick={() => exportZip('week', { platform })}
+                    <button type="button" disabled={busy !== null} onClick={() => exportZip('week', { platform, propertyId: list[0]?.property_id ?? posts[0]?.property_id })}
                       style={btnTiny} title={`Zip of this week's approved ${PRETTY[platform] ?? platform} posts`}>
                       {busy === `export:week:${platform}` ? '…' : '⬇ wk'}
                     </button>
-                    <button type="button" disabled={busy !== null} onClick={() => exportZip('month', { platform })}
+                    <button type="button" disabled={busy !== null} onClick={() => exportZip('month', { platform, propertyId: list[0]?.property_id ?? posts[0]?.property_id })}
                       style={btnTiny} title={`Zip of this month's approved ${PRETTY[platform] ?? platform} posts`}>
                       {busy === `export:month:${platform}` ? '…' : '⬇ mo'}
                     </button>
@@ -427,7 +429,7 @@ export default function SocialInbox({ posts, rules }: {
                             {busy === `media:${p.post_id}` ? '…' : '🖼 Media'}
                           </button>
                           <button type="button" disabled={busy !== null}
-                            onClick={() => exportZip('selection', { postIds: [p.post_id] })}
+                            onClick={() => exportZip('selection', { postIds: [p.post_id], propertyId: p.property_id })}
                             style={btnSecondary} title="Download this post as an upload-ready zip (caption + media, channel-formatted)">
                             {busy === `export:selection:${p.post_id}` ? '…' : '⬇ Export'}
                           </button>

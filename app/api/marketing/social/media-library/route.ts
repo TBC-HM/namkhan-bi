@@ -11,12 +11,13 @@ import { requirePropertyAccess } from '@/lib/tenancy';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-renders`;
+const STORAGE_RAW     = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-raw`;
 
 function thumbnailUrl(renders: Record<string, string> | null, raw_path: string | null): string | null {
-  if (renders?.thumbnail) return `${STORAGE_BASE}/${renders.thumbnail}`;
-  if (renders?.web_2k)    return `${STORAGE_BASE}/${renders.web_2k}`;
-  if (raw_path)            return `${STORAGE_BASE}/${raw_path}`;
+  if (renders?.thumbnail) return `${STORAGE_RENDERS}/${renders.thumbnail}`;
+  if (renders?.web_2k)    return `${STORAGE_RENDERS}/${renders.web_2k}`;
+  if (raw_path)            return `${STORAGE_RAW}/${raw_path}`;
   return null;
 }
 
@@ -63,10 +64,10 @@ export async function GET(req: NextRequest) {
     height_px:   a.height_px,
     tags:        a.tags,
     thumbnail_url: thumbnailUrl(a.renders, a.raw_path),
-    raw_path_url: a.raw_path ? `${STORAGE_BASE}/${a.raw_path}` : null,
+    raw_path_url: a.raw_path ? `${STORAGE_RAW}/${a.raw_path}` : null,
     full_url:    a.renders?.web_2k
-      ? `${STORAGE_BASE}/${a.renders.web_2k}`
-      : (a.raw_path ? `${STORAGE_BASE}/${a.raw_path}` : null),
+      ? `${STORAGE_RENDERS}/${a.renders.web_2k}`
+      : (a.raw_path ? `${STORAGE_RAW}/${a.raw_path}` : null),
   }));
 
   return NextResponse.json({ ok: true, assets, page, limit, total_on_page: assets.length });
