@@ -474,7 +474,7 @@ jobs:
             $SCHEMAS,
             '$DETAIL'::jsonb
           );
-EOSQL
+          EOSQL
 
           # Clean up
           echo "Dropping drill database..."
