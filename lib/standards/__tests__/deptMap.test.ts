@@ -220,4 +220,30 @@ describe('deptForProseHint — back of house', () => {
   ])('regression: %s still maps to %s after the widening', (hint, dept) => {
     expect(deptForProseHint(hint, '').dept_code).toBe(dept);
   });
+
+  // Found in live data: the bare `security` stem captured "social security".
+  it('maps "Mandatory social security contributions (NSSF) at 6% employer" to hr', () => {
+    expect(deptForProseHint('labor', 'Mandatory social security contributions (NSSF) at 6% employer').dept_code).toBe('hr');
+  });
+
+  it('maps "Employee contracts show support for health care and social security" to hr', () => {
+    expect(deptForProseHint('labor', 'Employee contracts show support for health care and social security').dept_code).toBe('hr');
+  });
+
+  it('maps "NSSF pension contributions" to hr', () => {
+    expect(deptForProseHint('', 'NSSF pension contributions').dept_code).toBe('hr');
+  });
+
+  // Regression guards proving the move did not break security.
+  it('maps "fire drill and evacuation routes" to security', () => {
+    expect(deptForProseHint('', 'fire drill and evacuation routes').dept_code).toBe('security');
+  });
+
+  it('maps "guest security and access control" to security', () => {
+    expect(deptForProseHint('', 'guest security and access control').dept_code).toBe('security');
+  });
+
+  it('maps "no facilitation of trafficking through accommodation" to security', () => {
+    expect(deptForProseHint('', 'no facilitation of trafficking through accommodation').dept_code).toBe('security');
+  });
 });

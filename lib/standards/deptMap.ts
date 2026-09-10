@@ -59,8 +59,8 @@ export function deptForSection(section: string): Dept {
 // above, for the same reason: Plan A's final review found the *original*
 // SLH ordering had misfiled 26 real database rows because a broad
 // front_office rule outranked the narrower spa/dining rules it happened to
-// share substrings with. This table has two concrete instances of that same
-// hazard, both resolved by ORDER (not by narrowing the stem list, since the
+// share substrings with. This table has three concrete instances of that same
+// hazard, all resolved by ORDER (not by narrowing the stem list, since the
 // brief requires the broad stems below):
 //   1. "pool plant" (grounds — pool filtration/irrigation plant) vs bare
 //      "plant" (maintenance — general plant/equipment). grounds is checked
@@ -70,6 +70,11 @@ export function deptForSection(section: string): Dept {
 //      security ("fire safet") and hr ("occupational health"). kitchen is
 //      checked first, ahead of security/hr, so any food-safety phrasing
 //      lands on kitchen rather than a generic safety department.
+//   3. bare "security" (security dept) captured "social security" (hr dept —
+//      mandatory social security contributions/NSSF, employee contracts showing
+//      support for social security). hr is checked BEFORE security, so
+//      "Mandatory social security contributions" resolves to hr rather than
+//      security. Found in live data (real AI output against real standards).
 // housekeeping is also deliberately checked early (right after kitchen) so
 // its "cleaning product" stem is never shadowed by maintenance's broader
 // bare "chemical" stem further down the list.
@@ -102,10 +107,10 @@ const PROSE_RULES: Array<[RegExp, Dept]> = [
                                    { dept_code: 'kitchen',      dept_code_2: null }],
   [/guest room clean|housekeep|cleaning product|linen|towel|laundr|amenit/i,
                                    { dept_code: 'housekeeping', dept_code_2: null }],
-  [/fire safet|fire drill|emergency|evacuat|first aid|security/i,
-                                   { dept_code: 'security',     dept_code_2: null }],
-  [/occupational health|staff welfare|wage|working hour|child protect|discriminat|harassment|competenc|labour|labor|training|employ/i,
+  [/occupational health|staff welfare|wage|working hour|child protect|discriminat|harassment|competenc|labour|labor|training|employ|social security|social protection|nssf|pension/i,
                                    { dept_code: 'hr',           dept_code_2: null }],
+  [/fire safet|fire drill|emergency|evacuat|first aid|security|traffick|exploitat/i,
+                                   { dept_code: 'security',     dept_code_2: null }],
   [/supplier|procure|purchas|local sourcing|supply chain/i,
                                    { dept_code: 'purchasing',   dept_code_2: null }],
   // "pool plant" MUST stay here, ahead of maintenance's bare /plant/ below —
