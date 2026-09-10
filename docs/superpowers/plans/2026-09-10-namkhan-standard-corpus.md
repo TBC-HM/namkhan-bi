@@ -173,7 +173,15 @@ REVOKE ALL ON public.v_standards_atoms        FROM anon;
 REVOKE ALL ON public.v_standards_gap          FROM anon;
 GRANT SELECT ON public.v_standards_requirements TO authenticated, service_role;
 GRANT SELECT ON public.v_standards_atoms        TO authenticated, service_role;
-GRANT SELECT ON public.v_standards_gap          TO authenticated, service_role;
+
+-- v_standards_gap exposes property_id and per-property coverage with no tenant
+-- filter, so it is service_role ONLY. Granting it to `authenticated` would let
+-- either tenant read the other's coverage (R1/L7) — the same leak shape as
+-- v_qa_dash_sop. Callers go through fn_standards_gap_summary(bigint), behind
+-- requirePropertyAccess() (L22). The other two views are tenant-neutral by design
+-- and carry no property_id column at all, so they are safe for authenticated.
+GRANT SELECT ON public.v_standards_gap TO service_role;
+ALTER TABLE standards.sop_coverage ENABLE ROW LEVEL SECURITY;
 ```
 
 - [ ] **Step 4: Apply it and re-run the verification**

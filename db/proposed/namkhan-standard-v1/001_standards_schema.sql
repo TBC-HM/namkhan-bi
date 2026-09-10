@@ -100,3 +100,20 @@ REVOKE ALL ON public.v_standards_gap          FROM anon;
 GRANT SELECT ON public.v_standards_requirements TO authenticated, service_role;
 GRANT SELECT ON public.v_standards_atoms        TO authenticated, service_role;
 GRANT SELECT ON public.v_standards_gap          TO authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- SECURITY FIX (applied same day, migration standards_gap_view_tenant_lockdown_v1)
+--
+-- v_standards_gap selects c.property_id and per-property coverage with NO tenant
+-- filter. Granting it to `authenticated` let any logged-in user of either tenant
+-- read the other's coverage — the same R1/L7 shape as the v_qa_dash_sop leak, and
+-- a violation of the invariant that a bridge bypassing RLS must filter
+-- property_id itself. The gap view is service_role only; callers go through
+-- fn_standards_gap_summary(bigint) behind requirePropertyAccess() (L22).
+--
+-- v_standards_requirements and v_standards_atoms stay readable by authenticated
+-- ON PURPOSE: they are tenant-neutral (no property_id column at all), which is
+-- the point of the shared-corpus model.
+-- ---------------------------------------------------------------------------
+REVOKE SELECT ON public.v_standards_gap FROM authenticated;
+ALTER TABLE standards.sop_coverage ENABLE ROW LEVEL SECURITY;
