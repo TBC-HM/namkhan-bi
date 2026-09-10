@@ -1,0 +1,26 @@
+-- AUDIT COPY — applied live as standards_atom_embeddings_v1 and standards_merge_pair_v1.
+--
+-- EMBEDDINGS ARE 384-DIM, NOT 1536. The platform embeds with Supabase.ai gte-small inside
+-- the Edge runtime — a LOCAL model, so no third-party call, no key, no cost, and no conflict
+-- with L17's Anthropic-only lock (which governs LLM providers, not an in-runtime embedder).
+-- brain.chunks' 1536-dim vectors come from a different/older embedder; not the house standard.
+--
+-- THRESHOLDS. The plan proposed auto-merge at >=0.95 with a 0.85 ask-floor. Both were wrong
+-- for this corpus and were changed after MEASURING:
+--   * 0.85 yields 12,900 candidate pairs (12,682 in the ask band) because gte-small scores
+--     generic compliance prose highly. Unaffordable and uninformative.
+--   * 0.97 is NOT safe to auto-merge. Sampling its weakest pairs found 3 of 8 were different
+--     obligations: "monthly records including the PURPOSE of each type" vs "including the
+--     MONTH AND YEAR"; "presented DRINKS menus" vs "presented menus"; "THE PROVISIONAL
+--     INSPECTOR shall complete the training" vs "Shall complete the training".
+--   FINAL: auto-merge >= 0.99 only (spelling variants). 0.93-0.99 goes to AI adjudication.
+--
+-- SAFETY INVARIANT: fn_standards_merge_pair re-points every citation to the survivor BEFORE
+-- deleting the loser, and RAISEs if the total citation count would ever fall. A merge that
+-- loses a citation has silently removed a requirement from the standard.
+ALTER TABLE standards.atoms ADD COLUMN IF NOT EXISTS embedding vector(384);
+ALTER TABLE standards.atoms ADD COLUMN IF NOT EXISTS embedded_at timestamptz;
+-- fn_standards_dedupe_candidates(float)  — pairs WITHIN one department only
+-- fn_standards_atoms_needing_embedding(int) / fn_standards_set_embedding(uuid, vector)
+-- fn_standards_merge_pair(uuid survivor, uuid loser, text reason)
+-- All service_role only; see the live database for current bodies.
