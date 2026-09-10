@@ -43,41 +43,59 @@ export function deptForSection(section: string): Dept {
 // Prose-source vocabulary -> Namkhan department.
 //
 // The SLH inspection above is a guest-journey audit: it never sees a kitchen,
-// a chemical store or a switchboard, so ten of the sixteen live departments
-// (kitchen, grounds, maintenance, security, hr, purchasing, boat, activities,
-// finance, sales_marketing) get zero requirements from it alone. The four
-// prose standards (GSTC, ASEAN Green Hotel, Travelife, ...) speak a
-// back-of-house vocabulary instead, and this table is what routes that
-// vocabulary onto the departments SLH cannot reach.
+// a linen store, a chemical store or a switchboard, so ten of the sixteen
+// live departments (kitchen, housekeeping, grounds, maintenance, security,
+// hr, purchasing, boat, activities, finance, sales_marketing) get zero (or
+// near-zero) requirements from it alone. The four prose standards (GSTC,
+// ASEAN Green Hotel, Travelife, ...) speak a back-of-house vocabulary
+// instead, and this table is what routes that vocabulary onto the
+// departments SLH cannot reach. Rules match on word STEMS (not exact
+// phrases) against `${hint} ${sectionText}` lowercased, so realistic
+// real-world phrasing ("occupational health and safety", "energy efficiency
+// of equipment", "local employment", "guest amenities refill") lands on a
+// real department instead of falling through to admin_general.
 //
 // PROSE_RULES must be ordered most-specific-first, same discipline as RULES
 // above, for the same reason: Plan A's final review found the *original*
 // SLH ordering had misfiled 26 real database rows because a broad
 // front_office rule outranked the narrower spa/dining rules it happened to
-// share substrings with. This table has the identical hazard —
-// "wastewater" contains "waste", so a bare /waste/ rule would let generic
-// wastewater (maintenance) get caught by a waste-segregation (grounds) rule,
-// and "pool plant" (grounds — pool filtration/irrigation plant) would get
-// caught by a hypothetical bare /plant/ maintenance rule. Every pattern below
-// is written specific enough to avoid that, and kitchen/security/hr/
-// purchasing are checked BEFORE grounds/maintenance so a requirement that is
-// unambiguously "kitchen" (e.g. "Kitchen waste and food storage
-// temperatures") is never grabbed by the later, broader waste/energy rules.
+// share substrings with. This table has two concrete instances of that same
+// hazard, both resolved by ORDER (not by narrowing the stem list, since the
+// brief requires the broad stems below):
+//   1. "pool plant" (grounds — pool filtration/irrigation plant) vs bare
+//      "plant" (maintenance — general plant/equipment). grounds is checked
+//      BEFORE maintenance, so "landscaping, irrigation, pool plant" resolves
+//      to grounds before maintenance's bare /plant/ ever gets a look.
+//   2. "food safet(y)" (kitchen) vs the broader safety-adjacent vocabulary in
+//      security ("fire safet") and hr ("occupational health"). kitchen is
+//      checked first, ahead of security/hr, so any food-safety phrasing
+//      lands on kitchen rather than a generic safety department.
+// housekeeping is also deliberately checked early (right after kitchen) so
+// its "cleaning product" stem is never shadowed by maintenance's broader
+// bare "chemical" stem further down the list.
 // Do not reorder without re-checking every case below.
 const PROSE_RULES: Array<[RegExp, Dept]> = [
-  [/haccp|cold chain|food safety|food hygien|food storage|pest control|kitchen/i,
+  [/haccp|food safet|food hygien|food storage|pest control|cold chain|kitchen/i,
                                    { dept_code: 'kitchen',      dept_code_2: null }],
-  [/fire safety|fire drill|fire suppression|life safety/i,
+  [/guest room clean|housekeep|cleaning product|linen|towel|laundr|amenit/i,
+                                   { dept_code: 'housekeeping', dept_code_2: null }],
+  [/fire safet|fire drill|emergency|evacuat|first aid|security/i,
                                    { dept_code: 'security',     dept_code_2: null }],
-  [/staff welfare|wages?|working hours|child protection|training|competenc|labour|labor/i,
+  [/occupational health|staff welfare|wage|working hour|child protect|discriminat|harassment|competenc|labour|labor|training|employ/i,
                                    { dept_code: 'hr',           dept_code_2: null }],
-  [/supplier|sourcing|procurement/i,
+  [/supplier|procure|purchas|local sourcing|supply chain/i,
                                    { dept_code: 'purchasing',   dept_code_2: null }],
-  [/landscap|irrigation|garden|waste segregat|recycl/i,
+  // "pool plant" MUST stay here, ahead of maintenance's bare /plant/ below —
+  // see hazard #1 in the comment above.
+  [/pool plant|landscap|irrigation|garden|waste segregat|recycl|compost|biodivers/i,
                                    { dept_code: 'grounds',      dept_code_2: null }],
-  [/energy consumption|electricity|metering|water consumption|wastewater|chemical storage|chemical handling|hazardous material|hvac|boiler/i,
+  [/energy|water consum|wastewater|effluent|chemical|boiler|equipment maint|air condition|refrigerant|plant/i,
                                    { dept_code: 'maintenance',  dept_code_2: null }],
-  [/community|donation|csr|stakeholder|guest communication|sustainab/i,
+  [/restaurant|beverage|menu|dining/i,
+                                   { dept_code: 'roots_service',dept_code_2: null }],
+  [/spa|wellness|treatment room/i,
+                                   { dept_code: 'spa',          dept_code_2: null }],
+  [/community|donation|stakeholder|sustainability polic|management system|legal complian|guest communication/i,
                                    { dept_code: 'gm',           dept_code_2: null }],
 ];
 

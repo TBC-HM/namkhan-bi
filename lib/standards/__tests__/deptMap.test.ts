@@ -135,4 +135,50 @@ describe('deptForProseHint — back of house', () => {
       expect(LIVE.has(deptForProseHint(h, '').dept_code)).toBe(true);
     }
   });
+
+  // Reviewer-found gap (Critical finding): these five plausible real phrasings
+  // used to misfile four of five into admin_general, and deptForProseHint never
+  // returned housekeeping at all. Regression-guard each one explicitly.
+  it('maps "occupational health and safety" to a real department, not admin_general', () => {
+    expect(deptForProseHint('occupational health and safety', '').dept_code).not.toBe('admin_general');
+  });
+
+  it('maps "energy efficiency of equipment" to maintenance', () => {
+    expect(deptForProseHint('energy efficiency of equipment', '').dept_code).toBe('maintenance');
+  });
+
+  it('maps "local employment" to hr', () => {
+    expect(deptForProseHint('local employment', '').dept_code).toBe('hr');
+  });
+
+  it('maps "guest amenities refill" to housekeeping', () => {
+    expect(deptForProseHint('guest amenities refill', '').dept_code).toBe('housekeeping');
+  });
+
+  it('deptForProseHint CAN return housekeeping (it used to never return it)', () => {
+    const results = [
+      deptForProseHint('fresh linen and towels', ''),
+      deptForProseHint('laundry turnaround for guest rooms', ''),
+      deptForProseHint('housekeeping cleaning product storage', ''),
+    ].map((d) => d.dept_code);
+    expect(results).toContain('housekeeping');
+  });
+
+  // One phrasing per department in the stem-mapping table (task brief), covering
+  // every one of the ten previously-starved departments plus the two SLH already
+  // reaches, to prove every stem group actually routes where the table says.
+  it.each([
+    ['HACCP audit and cold chain monitoring',        'kitchen'],
+    ['fresh linen, towels and laundry turnaround',    'housekeeping'],
+    ['energy efficiency of equipment',                'maintenance'],
+    ['landscaping, irrigation and biodiversity',      'grounds'],
+    ['fire safety drills and evacuation routes',      'security'],
+    ['occupational health and safety',                'hr'],
+    ['supplier procurement and local sourcing',       'purchasing'],
+    ['community stakeholder engagement',              'gm'],
+    ['restaurant beverage and dining menu',           'roots_service'],
+    ['spa wellness treatment room',                   'spa'],
+  ])('maps %s to %s', (hint, dept) => {
+    expect(deptForProseHint(hint, '').dept_code).toBe(dept);
+  });
 });
