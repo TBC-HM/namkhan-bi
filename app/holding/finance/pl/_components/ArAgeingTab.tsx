@@ -15,7 +15,7 @@ import type { Fetched } from '../_lib/fetchPayload';
 import { money, count, dateLabel, num } from '../_lib/format';
 import {
   TABLE, TH, TD, TD_NUM, SCROLL_X, HAIR, INK_M, RUST, FOREST,
-  EmptyLine, ErrorPanel, LayerNote,
+  EmptyLine, ErrorPanel, LayerNote, PL_PATH,
 } from './ui';
 
 /** Order buckets by the label's own content — no hardcoded bucket list. */
@@ -26,13 +26,24 @@ function bucketRank(label: string): number {
   return m ? Number(m[0]) : Number.MAX_SAFE_INTEGER;
 }
 
-export default function ArAgeingTab({ p, rows }: {
-  p: HoldingPlPayload; rows: Fetched<ArAgeingRow[]>;
+export default function ArAgeingTab({ p, rows, clients, client, from, to }: {
+  p: HoldingPlPayload;
+  rows: Fetched<ArAgeingRow[]>;
+  clients: string[];
+  client: string | null;
+  from: string | null;
+  to: string | null;
 }) {
   const cur = p.reporting_currency;
   const buckets = Object.entries(p.ar.buckets ?? {})
     .sort((a, b) => bucketRank(a[0]) - bucketRank(b[0]));
   const bucketSum = buckets.reduce((s, [, v]) => s + (num(v) ?? 0), 0);
+
+  // Total of the rows ACTUALLY displayed, so it tracks the client filter. Only
+  // the reporting column is summed — native currencies must never be added.
+  const shownTotalEur = rows.ok && rows.data
+    ? rows.data.reduce((s, r) => s + (num(r.amount_eur) ?? 0), 0)
+    : 0;
 
   return (
     <>
@@ -104,6 +115,25 @@ export default function ArAgeingTab({ p, rows }: {
           title="Open invoices"
           subtitle="public.v_holding_ar_ageing · native amount and reporting figure side by side"
           density="compact"
+          action={
+            <form method="get" action={PL_PATH} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="hidden" name="tab" value="ar" />
+              {from && <input type="hidden" name="from" value={from} />}
+              {to && <input type="hidden" name="to" value={to} />}
+              <select name="client" defaultValue={client ?? ''} aria-label="Client" style={{
+                border: `1px solid ${HAIR}`, padding: '5px 8px', fontSize: 12,
+                fontFamily: 'inherit', background: '#fff', color: 'inherit',
+              }}>
+                <option value="">All clients</option>
+                {clients.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button type="submit" style={{
+                border: `1px solid ${FOREST}`, background: FOREST, color: '#fff',
+                padding: '5px 12px', fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>Filter</button>
+            </form>
+          }
         >
           {!rows.ok || !rows.data ? (
             <ErrorPanel what="AR ageing detail" message={rows.error ?? 'Unknown error'} />
@@ -148,13 +178,28 @@ export default function ArAgeingTab({ p, rows }: {
                       </tr>
                     );
                   })}
+                  <tr>
+                    <td style={{ ...TD, borderTop: `1px solid ${HAIR}`, fontWeight: 700 }} colSpan={4}>
+                      {client ? `${client} · ` : ''}{count(rows.data.length)} open invoice(s)
+                    </td>
+                    <td style={{ ...TD_NUM, borderTop: `1px solid ${HAIR}`, color: INK_M, fontSize: 11 }}>
+                      not summed
+                    </td>
+                    <td style={{ ...TD, borderTop: `1px solid ${HAIR}` }} />
+                    <td style={{ ...TD_NUM, borderTop: `1px solid ${HAIR}`, fontWeight: 700, color: FOREST }}>
+                      {money(shownTotalEur, cur, 2)}
+                    </td>
+                    <td style={{ ...TD, borderTop: `1px solid ${HAIR}` }} colSpan={4} />
+                  </tr>
                 </tbody>
               </table>
             </div>
           )}
           <div style={{ fontSize: 11, color: INK_M, marginTop: 8, borderTop: `1px solid ${HAIR}`, paddingTop: 6 }}>
-            Native is the currency the counterparty is billed in. The {cur} column
-            is the reporting layer, converted at the rate described under Data quality.
+            Native is the currency the counterparty is billed in and is deliberately
+            NOT totalled — these rows are billed in more than one currency and adding
+            them would produce a meaningless number. The {cur} column is the
+            reporting layer and is the one that sums.
           </div>
         </Container>
       </div>

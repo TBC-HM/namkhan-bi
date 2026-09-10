@@ -17,7 +17,7 @@ import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import {
   fetchHoldingPl, fetchPlLines, fetchArAgeing, fetchPlMonthly, fetchLineTypes,
-  fetchHoldingBudget,
+  fetchHoldingBudget, fetchArClients,
 } from './_lib/fetchPayload';
 import { isoDateOrNull, dateLabel } from './_lib/format';
 import { PlSubTabs, ErrorPanel, TABS, PL_PATH, type TabKey } from './_components/ui';
@@ -38,7 +38,7 @@ export const revalidate = 0;
 export default async function HoldingPlPage({ searchParams }: {
   searchParams?: {
     tab?: string; from?: string; to?: string; year?: string;
-    dept?: string; line_type?: string; flag?: string;
+    dept?: string; line_type?: string; flag?: string; client?: string;
   };
 }) {
   const tab: TabKey = (TABS.some((t) => t.key === searchParams?.tab)
@@ -92,6 +92,7 @@ export default async function HoldingPlPage({ searchParams }: {
   const dept = searchParams?.dept || null;
   const lineType = searchParams?.line_type || null;
   const flag = searchParams?.flag || null;
+  const arClient = searchParams?.client || null;
 
   // Annual roll-up: one payload per year, so the gold layer does the arithmetic
   // for each column rather than this page re-summing months.
@@ -102,12 +103,13 @@ export default async function HoldingPlPage({ searchParams }: {
       }))
     : [];
 
-  const [monthly, arRows, ledgerRows, lineTypes, budget] = await Promise.all([
+  const [monthly, arRows, ledgerRows, lineTypes, budget, arClients] = await Promise.all([
     tab === 'departments' ? fetchPlMonthly(from, to) : Promise.resolve(null),
-    tab === 'ar' ? fetchArAgeing() : Promise.resolve(null),
+    tab === 'ar' ? fetchArAgeing(arClient) : Promise.resolve(null),
     tab === 'ledger' ? fetchPlLines({ from, to, dept, lineType, flag }) : Promise.resolve(null),
     tab === 'ledger' ? fetchLineTypes(from, to) : Promise.resolve([] as string[]),
     tab === 'budget' ? fetchHoldingBudget(qFrom, qTo) : Promise.resolve(null),
+    tab === 'ar' ? fetchArClients() : Promise.resolve([] as string[]),
   ]);
 
   return (
@@ -132,7 +134,9 @@ export default async function HoldingPlPage({ searchParams }: {
         <AnnualRollup columns={yearColumns} currency={p.reporting_currency} />
       )}
       {tab === 'departments' && monthly && <DepartmentsTab p={p} monthly={monthly} />}
-      {tab === 'ar' && arRows && <ArAgeingTab p={p} rows={arRows} />}
+      {tab === 'ar' && arRows && (
+        <ArAgeingTab p={p} rows={arRows} clients={arClients} client={arClient} from={qFrom} to={qTo} />
+      )}
       {tab === 'ledger' && ledgerRows && (
         <LedgerTab
           p={p} rows={ledgerRows} lineTypes={lineTypes}

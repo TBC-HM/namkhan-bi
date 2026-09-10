@@ -81,18 +81,43 @@ export async function fetchPlLines(f: LedgerFilters): Promise<Fetched<PlLineRow[
   }
 }
 
-export async function fetchArAgeing(): Promise<Fetched<ArAgeingRow[]>> {
+export async function fetchArAgeing(
+  client?: string | null,
+): Promise<Fetched<ArAgeingRow[]>> {
   try {
     const sb = getSupabaseAdmin();
-    const { data, error } = await sb
+    let q = sb
       .from('v_holding_ar_ageing')
       .select('*')
       .order('days_overdue', { ascending: false })
       .limit(ROW_LIMIT);
+    if (client) q = q.eq('recipient_name', client);
+    const { data, error } = await q;
     if (error) return { ok: false, data: null, error: `v_holding_ar_ageing failed: ${error.message}` };
     return { ok: true, data: (data ?? []) as ArAgeingRow[], error: null };
   } catch (e) {
     return { ok: false, data: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * Clients that actually have an open receivable, for the AR filter. Deliberately
+ * unfiltered so the dropdown keeps offering every client even while one is
+ * selected — otherwise picking a client collapses the list to that client.
+ */
+export async function fetchArClients(): Promise<string[]> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data, error } = await sb
+      .from('v_holding_ar_ageing')
+      .select('recipient_name')
+      .limit(ROW_LIMIT);
+    if (error || !data) return [];
+    return Array.from(new Set(
+      (data as Array<{ recipient_name: string }>).map((r) => r.recipient_name).filter(Boolean),
+    )).sort();
+  } catch {
+    return [];
   }
 }
 
