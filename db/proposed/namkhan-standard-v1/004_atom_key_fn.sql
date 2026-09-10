@@ -14,7 +14,12 @@
 --     = roots_service:refills-of-beverages-were-proactively-offered:21f9e69207a63bf9
 -- Both matched. If lib/standards/atomKey.ts ever changes, this MUST change with it.
 CREATE OR REPLACE FUNCTION public.fn_standards_atom_key(p_dept text, p_text text)
-RETURNS text LANGUAGE sql IMMUTABLE AS $$
+RETURNS text LANGUAGE sql IMMUTABLE
+-- pgcrypto's digest() lives in the `extensions` schema. Without this SET, calling this
+-- from any function with a restricted search_path fails: "function digest(text, unknown)
+-- does not exist". Caught by the final whole-branch review.
+SET search_path TO 'public', 'extensions'
+AS $$
   WITH n AS (
     SELECT regexp_replace(btrim(regexp_replace(lower(coalesce(p_text,'')), '[^a-z0-9]+', ' ', 'g')),
                           '\s+', ' ', 'g') AS norm
@@ -24,5 +29,5 @@ RETURNS text LANGUAGE sql IMMUTABLE AS $$
          left(encode(digest(p_dept || '::' || n.norm, 'sha256'), 'hex'), 16)
   FROM n;
 $$;
-REVOKE ALL ON FUNCTION public.fn_standards_atom_key(text, text) FROM anon, PUBLIC;
+REVOKE ALL ON FUNCTION public.fn_standards_atom_key(text, text) FROM anon, PUBLIC, authenticated;
 GRANT EXECUTE ON FUNCTION public.fn_standards_atom_key(text, text) TO service_role;
