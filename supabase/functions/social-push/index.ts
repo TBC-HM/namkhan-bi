@@ -121,6 +121,27 @@ Deno.serve(async (req: Request) => {
     if (pErr || !post) return res({ ok: false, error: pErr?.message ?? 'post_not_found' }, 404);
     const p = post as Record<string, unknown>;
 
+    // PUBLISHING vs LISTENING channel. marketing.social_accounts holds both kinds and marks
+    // both active=true, so the composer could queue a post to a reputation-only channel.
+    // booking / expedia / tripadvisor are review channels with NO write API of any kind
+    // (TripAdvisor's Content API is read-only) - such a post can never publish and would
+    // otherwise sit at 'ready' being retried every 5 minutes forever. A platform is
+    // publishable iff it has a social_platform_specs row; see v_social_channels.publishable.
+    const { data: spec } = await sb
+      .from('v_social_platform_specs')
+      .select('platform')
+      .eq('platform', p.platform as string)
+      .maybeSingle();
+    if (!spec) {
+      const why = `platform_not_publishable: '${String(p.platform)}' is a review/reputation `
+                + `channel with no publishing API - post it manually`;
+      try { await sb.rpc('fn_social_post_mark_pushed', {
+        p_post_id: postId, p_up_request_id: null, p_up_job_id: null,
+        p_up_status: 'error', p_up_error: why,
+      }); } catch { /* best effort */ }
+      return res({ ok: false, error: 'platform_not_publishable', platform: p.platform }, 422);
+    }
+
     const { data: profileUsername } = await sb.rpc('fn_social_profile_for_property', {
       p_property_id: p.property_id,
       p_platform:    p.platform,
