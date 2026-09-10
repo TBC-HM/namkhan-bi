@@ -20,6 +20,11 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const pad2 = (n: number) => (n < 10 ? '0' + n : String(n));
 const group = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const nInt = (n: number | null | undefined) => (typeof n === 'number' && Number.isFinite(n) ? group(Math.round(n)) : '—');
+const nDate = (v: string | null) => {
+  if (!v) return '—';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? '—' : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+};
 const stamp = (v: string) => {
   const d = new Date(v);
   if (Number.isNaN(d.getTime())) return '—';
@@ -59,6 +64,27 @@ const badgeCls = (kind: 'exact' | 'declared' | 'suggested' | 'none') =>
    : kind === 'declared' ? 'border-amber-300 bg-amber-100 text-amber-900'
    : kind === 'suggested' ? 'border-sky-300 bg-sky-100 text-sky-900'
    :                        'border-red-300 bg-red-100 text-red-900');
+
+// Every SOP code is a door. The viewer already exists — /operations/sops/<code>/preview
+// renders the full structured document (cover, numbered sections, revision history,
+// signature blocks) with Print / Save as PDF, Download .doc, Edit and Send-by-email.
+// It was simply never linked from here, so the code read as dead text.
+//
+// The canonical /h/<pid>/... form is emitted (L6). For Namkhan that route is a stub
+// which redirects to the live legacy path; for a tenant without SOPs it renders the
+// wiring-pending page, which is the correct answer rather than a 404.
+function SopLink({ pid, code }: { pid: number; code: string | null }) {
+  if (!code) return null;
+  return (
+    <a
+      href={`/h/${pid}/operations/sops/${encodeURIComponent(code)}/preview`}
+      className="font-medium text-neutral-800 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-800"
+      title={`Open ${code} — full document, print, download, send`}
+    >
+      {code}
+    </a>
+  );
+}
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -126,6 +152,23 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
         <Stat label="Suggested" value={nInt(t?.suggested)} sub="awaiting your verdict" />
       </div>
 
+      {/* How we actually SCORED. The corpus says what we must do; this says where we
+          lost points. Both are keyed by dept_code and both were already in the
+          database — the page simply never joined them until now. */}
+      {payload.audit?.audited_at && (
+        <div className="mb-4 border-l-[3px] border-emerald-700 bg-emerald-50/60 px-3 py-2 text-sm text-neutral-800">
+          <strong>SLH blind visit {nDate(payload.audit.audited_at)}</strong>
+          {payload.audit.auditor ? ` · ${payload.audit.auditor}` : ''} ·{' '}
+          {nInt(payload.audit.departments)} departments scored. Lowest section:{' '}
+          <strong className="text-red-800">
+            {payload.audit.worst_dept} {payload.audit.worst_pct != null ? `${payload.audit.worst_pct}%` : ''}
+          </strong>
+          {payload.audit.worst_pct != null && payload.audit.worst_pct < 80
+            ? ' — below the SLH 80% fail line.'
+            : '.'}
+        </div>
+      )}
+
       {/* Three strengths, never one number. Collapsing them would report 504 of
           1,777 covered when 208 are, and the difference is entirely unconfirmed
           machine guesses. */}
@@ -192,6 +235,7 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
             <thead>
               <tr className="border-b border-neutral-300 text-left text-xs uppercase tracking-wide text-neutral-500">
                 <th className="py-1.5 pr-3 font-medium">Department</th>
+                <th className="py-1.5 pr-3 text-right font-medium">SLH</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Requirements</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Exact</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Declared</th>
@@ -209,6 +253,26 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                       <Link href={`${base}?dept=${encodeURIComponent(d.dept_code)}`} className="font-medium text-neutral-900 underline-offset-2 hover:underline">
                         {d.dept_name}
                       </Link>
+                    </td>
+                    {/* Weighted department score, with the worst section called out beneath it.
+                        Housekeeping is 92.6% overall and 79.3% on the pool deck; showing
+                        either number alone misleads in opposite directions. */}
+                    <td className="py-1.5 pr-3 text-right tabular-nums" title={d.slh_top_miss ?? ''}>
+                      {d.slh_pct == null ? (
+                        <span className="text-neutral-400">—</span>
+                      ) : (
+                        <>
+                          <span className={d.slh_pct < 80 ? 'font-semibold text-red-800' : 'text-neutral-900'}>
+                            {d.slh_pct}%
+                          </span>
+                          {d.slh_worst_pct != null && d.slh_sections != null && d.slh_sections > 1
+                            && d.slh_worst_pct < d.slh_pct && (
+                            <div className={`text-[11px] ${d.slh_worst_pct < 80 ? 'text-red-800' : 'text-amber-700'}`}>
+                              worst {d.slh_worst_pct}%
+                            </div>
+                          )}
+                        </>
+                      )}
                     </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(d.atoms)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-emerald-900">{nInt(d.exact)}</td>
@@ -236,6 +300,30 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
               Clear department
             </Link>
           </div>
+
+          {/* The requirements below say what this department must do. This says where it
+              actually lost points at the last blind visit — the two belong on one screen. */}
+          {(() => {
+            const d = depts.find((x) => x.dept_code === payload.dept);
+            if (!d || d.slh_pct == null) return null;
+            return (
+              <div className="mb-3 border-l-[3px] border-neutral-300 px-3 py-2 text-sm">
+                <span className="text-neutral-700">SLH score </span>
+                <strong className={d.slh_pct < 80 ? 'text-red-800' : 'text-neutral-900'}>{d.slh_pct}%</strong>
+                {d.slh_sections != null && d.slh_sections > 1 && d.slh_worst_pct != null && (
+                  <span className="text-neutral-700">
+                    {' '}across {nInt(d.slh_sections)} sections · worst{' '}
+                    <strong className={d.slh_worst_pct < 80 ? 'text-red-800' : 'text-amber-700'}>
+                      {d.slh_worst_pct}%
+                    </strong>
+                  </span>
+                )}
+                {d.slh_top_miss && (
+                  <p className="mt-0.5 max-w-4xl text-[13px] text-neutral-600">{d.slh_top_miss}</p>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <input
@@ -291,13 +379,14 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                     {i.has_exact && (
                       <>
                         <span className={badgeCls('exact')}>Exact</span>
-                        <span className="text-neutral-600">{i.sop_code}</span>
+                        <SopLink pid={pid} code={i.sop_code} />
                       </>
                     )}
                     {!i.has_exact && i.has_declared && (
                       <>
                         <span className={badgeCls('declared')}>Declared</span>
-                        <span className="text-neutral-600">{i.sop_code} — confirm it covers this obligation</span>
+                        <SopLink pid={pid} code={i.sop_code} />
+                        <span className="text-neutral-600">— confirm it covers this obligation</span>
                       </>
                     )}
                     {!i.covered && i.has_suggested && (
@@ -305,7 +394,7 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                         <span className={badgeCls('suggested')}>
                           Suggested {i.suggested_conf != null ? `${Math.round(i.suggested_conf * 100)}%` : ''}
                         </span>
-                        <span className="text-neutral-600">{i.suggested_sop}</span>
+                        <SopLink pid={pid} code={i.suggested_sop} />
                         {i.suggested_note && <span className="text-neutral-500">· {i.suggested_note}</span>}
                       </>
                     )}

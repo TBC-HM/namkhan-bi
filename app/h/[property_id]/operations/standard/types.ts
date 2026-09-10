@@ -31,6 +31,22 @@ export interface DeptRow {
   suggested: number;
   /** atoms built from more than one source requirement */
   multi_source: number;
+  /** SLH score, weighted across this department's audited sections. null = not audited */
+  slh_pct: number | null;
+  /** worst single section — a department can be strong overall and still be bleeding in one place */
+  slh_worst_pct: number | null;
+  slh_sections: number | null;
+  /** the worst section's recorded cause */
+  slh_top_miss: string | null;
+}
+
+/** Header summary of the most recent SLH blind visit. */
+export interface AuditSummary {
+  auditor: string | null;
+  audited_at: string | null;
+  departments: number;
+  worst_dept: string | null;
+  worst_pct: number | null;
 }
 
 export interface AtomRow {
@@ -81,6 +97,8 @@ export interface StandardPayload {
   dept: string | null;
   dept_name: string | null;
   totals: StandardTotals;
+  /** null when the property has no recorded SLH inspection */
+  audit: AuditSummary | null;
   authorities: AuthorityRow[];
   departments: DeptRow[];
   /** empty unless `dept` is set */
