@@ -74,7 +74,13 @@ export default function OverviewTab({ p }: { p: HoldingPlPayload }) {
         <MetricRow tiles={tiles} size="sm" />
       </div>
 
-      <div style={{ gridColumn: '1 / -1' }}>
+      {/* PBS 2026-09-10: the trend and the EBITDA bridge belong side by side —
+          one shows the shape of the year, the other how the year adds up.
+          auto-fit means they stack rather than squash on a narrow screen. */}
+      <div style={{
+        gridColumn: '1 / -1', display: 'grid', gap: 10, alignItems: 'start',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+      }}>
         <Container
           title="Monthly revenue and cost"
           subtitle={`${p.entity} · ${p.basis} basis · ${cur} reporting layer`}
@@ -84,13 +90,13 @@ export default function OverviewTab({ p }: { p: HoldingPlPayload }) {
             <EmptyLine what="No month falls inside the selected period. Widen the period or clear it to use the full range the RPC resolves." />
           ) : (
             <Chart
-              variant="bar"
+              variant="line"
               data={chartData}
               xKey="month"
               series={[
-                { key: 'revenue',     label: 'Revenue',     type: 'bar' },
-                { key: 'direct_cost', label: 'Direct cost', type: 'bar' },
-                { key: 'overhead',    label: 'Overhead',    type: 'bar' },
+                { key: 'revenue',     label: 'Revenue',     type: 'line' },
+                { key: 'direct_cost', label: 'Direct cost', type: 'line' },
+                { key: 'overhead',    label: 'Overhead',    type: 'line' },
               ]}
               height={280}
               legend="top"
@@ -100,9 +106,7 @@ export default function OverviewTab({ p }: { p: HoldingPlPayload }) {
           )}
           <LayerNote currency={cur} />
         </Container>
-      </div>
 
-      <div style={{ gridColumn: '1 / -1' }}>
         <Container
           title="How EBITDA is built"
           subtitle="Each line is a field on the payload — none is recomputed here."

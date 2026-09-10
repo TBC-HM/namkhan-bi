@@ -14,9 +14,10 @@
 // Draft revenue stays on its own line and is never folded into revenue or EBITDA.
 
 import { Container } from '@/app/(cockpit)/_design';
-import type { HoldingPlPayload } from '../_lib/types';
+import type { HoldingPlPayload, PlLineRow } from '../_lib/types';
 import { money, num, monthLabel } from '../_lib/format';
 import { TABLE, TH, TD, TD_NUM, SCROLL_X, HAIR, INK_M, FOREST, EmptyLine, LayerNote } from './ui';
+import PlMatrix from './PlMatrix';
 
 export interface YearColumn {
   year: string;
@@ -29,8 +30,10 @@ function monthEbitda(m: { revenue_eur: number; direct_cost_eur: number; overhead
   return (num(m.revenue_eur) ?? 0) - (num(m.direct_cost_eur) ?? 0) - (num(m.overhead_eur) ?? 0);
 }
 
-export default function AnnualRollup({ columns, currency }: {
+export default function AnnualRollup({ columns, currency, lines }: {
   columns: YearColumn[]; currency: string;
+  /** All P&L lines for the full period; each year filters its own slice. */
+  lines: PlLineRow[];
 }) {
   const live = columns.filter((c) => c.payload);
 
@@ -129,74 +132,26 @@ export default function AnnualRollup({ columns, currency }: {
         </Container>
       </div>
 
-      {/* Month-by-month, per year — the actual roll-up */}
+      {/* Month-by-month, per year — months ACROSS, accounts down, subtotals in
+          between and EBITDA at the foot. PBS 2026-09-10: was months-down with
+          department aggregates only, which cannot be read as a P&L. */}
       {live.map((c) => {
-        const p = c.payload!;
-        const months = p.by_month;
-        const sum = (k: 'revenue_eur' | 'direct_cost_eur' | 'overhead_eur') =>
-          months.reduce((s, m) => s + (num(m[k]) ?? 0), 0);
-        const ebitdaSum = months.reduce((s, m) => s + monthEbitda(m), 0);
-
+        const yearLines = lines.filter((l) => l.period_yyyymm.startsWith(c.year));
         return (
           <div key={c.year} style={{ gridColumn: '1 / -1' }}>
             <Container
               title={`FY ${c.year} · month by month`}
-              subtitle={`${months.length} month(s) with postings · ${currency} reporting layer`}
+              subtitle={`Every revenue and cost account, months across the top · ${currency} reporting layer`}
               density="compact"
             >
-              {months.length === 0 ? (
-                <EmptyLine what={`FY ${c.year} has no month carrying a posting.`} />
+              {yearLines.length === 0 ? (
+                <EmptyLine what={`FY ${c.year} has no posting to lay out.`} />
               ) : (
-                <div style={SCROLL_X}>
-                  <table style={TABLE}>
-                    <thead>
-                      <tr>
-                        <th style={TH}>Month</th>
-                        <th style={{ ...TH, textAlign: 'right' }}>Revenue</th>
-                        <th style={{ ...TH, textAlign: 'right' }}>Direct cost</th>
-                        <th style={{ ...TH, textAlign: 'right' }}>Overhead</th>
-                        <th style={{ ...TH, textAlign: 'right' }}>EBITDA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {months.map((m) => {
-                        const e = monthEbitda(m);
-                        return (
-                          <tr key={m.period_yyyymm}>
-                            <td style={{ ...TD, whiteSpace: 'nowrap' }}>{monthLabel(m.period_yyyymm)}</td>
-                            <td style={TD_NUM}>{money(m.revenue_eur, currency)}</td>
-                            <td style={TD_NUM}>{money(m.direct_cost_eur, currency)}</td>
-                            <td style={TD_NUM}>{money(m.overhead_eur, currency)}</td>
-                            <td style={{ ...TD_NUM, fontWeight: 600, color: e < 0 ? '#8C3B2E' : 'inherit' }}>
-                              {money(e, currency)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      <tr>
-                        <td style={{ ...TD, borderTop: `1px solid ${HAIR}`, fontWeight: 700, color: FOREST }}>
-                          FY {c.year} total
-                        </td>
-                        <td style={{ ...TD_NUM, borderTop: `1px solid ${HAIR}`, fontWeight: 700 }}>
-                          {money(sum('revenue_eur'), currency)}
-                        </td>
-                        <td style={{ ...TD_NUM, borderTop: `1px solid ${HAIR}`, fontWeight: 700 }}>
-                          {money(sum('direct_cost_eur'), currency)}
-                        </td>
-                        <td style={{ ...TD_NUM, borderTop: `1px solid ${HAIR}`, fontWeight: 700 }}>
-                          {money(sum('overhead_eur'), currency)}
-                        </td>
-                        <td style={{ ...TD_NUM, borderTop: `1px solid ${HAIR}`, fontWeight: 700, color: FOREST }}>
-                          {money(ebitdaSum, currency)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                <PlMatrix lines={yearLines} currency={currency} dense />
               )}
               <div style={{ fontSize: 11, color: INK_M, marginTop: 8 }}>
-                Months with no posting are not returned by the payload and are not
-                shown — a missing month means nothing was booked, not a zero.
+                A blank cell means nothing was booked to that account that month —
+                it is not a zero. Draft revenue is excluded and shown on Overview.
               </div>
             </Container>
           </div>

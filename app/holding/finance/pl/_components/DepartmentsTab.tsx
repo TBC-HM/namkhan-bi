@@ -9,13 +9,14 @@
 // while overhead is not), never keyed off a department code.
 
 import { Container } from '@/app/(cockpit)/_design';
-import type { HoldingPlPayload, PlMonthlyRow } from '../_lib/types';
+import type { HoldingPlPayload, PlMonthlyRow, PlLineRow } from '../_lib/types';
 import type { Fetched } from '../_lib/fetchPayload';
 import { money, monthLabel, num } from '../_lib/format';
 import {
   TABLE, TH, TD, TD_NUM, SCROLL_X, HAIR, INK_M, FOREST,
   EmptyLine, ErrorPanel, LayerNote, Flag,
 } from './ui';
+import PlMatrix from './PlMatrix';
 
 function isOverheadOnly(d: { revenue_eur: number; direct_cost_eur: number; overhead_eur: number }): boolean {
   return (num(d.revenue_eur) ?? 0) === 0
@@ -23,8 +24,10 @@ function isOverheadOnly(d: { revenue_eur: number; direct_cost_eur: number; overh
     && (num(d.overhead_eur) ?? 0) !== 0;
 }
 
-export default function DepartmentsTab({ p, monthly }: {
-  p: HoldingPlPayload; monthly: Fetched<PlMonthlyRow[]>;
+export default function DepartmentsTab({ p, monthly, lines }: {
+  p: HoldingPlPayload;
+  monthly: Fetched<PlMonthlyRow[]>;
+  lines: Fetched<PlLineRow[]>;
 }) {
   const cur = p.reporting_currency;
   const depts = p.by_department;
@@ -115,8 +118,29 @@ export default function DepartmentsTab({ p, monthly }: {
 
       <div style={{ gridColumn: '1 / -1' }}>
         <Container
+          title="Profit & loss · account by month"
+          subtitle="Months across the top, every revenue and cost account down the side, with subtotals and EBITDA."
+          density="compact"
+        >
+          {!lines.ok || !lines.data ? (
+            <ErrorPanel what="The account detail" message={lines.error ?? 'Unknown error'} />
+          ) : lines.data.length === 0 ? (
+            <EmptyLine what="No posting falls inside this period." />
+          ) : (
+            <PlMatrix lines={lines.data} currency={cur} dense />
+          )}
+          <div style={{ fontSize: 11, color: INK_M, marginTop: 8 }}>
+            Draft revenue is excluded here and reported separately on Overview.
+            A blank cell means nothing was booked to that account that month.
+          </div>
+          <LayerNote currency={cur} />
+        </Container>
+      </div>
+
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
           title="Department by month"
-          subtitle="public.v_holding_pl_monthly"
+          subtitle="public.v_holding_pl_monthly · per-department detail including draft and estimate columns"
           density="compact"
         >
           {!monthly.ok || !monthly.data ? (

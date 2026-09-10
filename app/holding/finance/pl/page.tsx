@@ -148,7 +148,7 @@ export default async function HoldingPlPage({ searchParams }: {
       }))
     : [];
 
-  const [monthly, arRows, ledgerRows, lineTypes, budget, arClients, planLines, planAccounts] = await Promise.all([
+  const [monthly, arRows, ledgerRows, lineTypes, budget, arClients, planLines, planAccounts, matrixLines] = await Promise.all([
     tab === 'departments' ? fetchPlMonthly(from, to) : Promise.resolve(null),
     tab === 'ar' ? fetchArAgeing(arClient) : Promise.resolve(null),
     tab === 'ledger' ? fetchPlLines({ from, to, dept, lineType, flag }) : Promise.resolve(null),
@@ -157,6 +157,10 @@ export default async function HoldingPlPage({ searchParams }: {
     tab === 'ar' ? fetchArClients() : Promise.resolve([] as string[]),
     tab === 'budget' ? fetchBudgetLines(qYear) : Promise.resolve(null),
     tab === 'budget' ? fetchPlannableAccounts() : Promise.resolve([] as Array<{ code: string; label: string }>),
+    // Unfiltered lines for the account-by-month matrix on Overview and Departments.
+    tab === 'overview' || tab === 'departments'
+      ? fetchPlLines({ from, to })
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -178,9 +182,15 @@ export default async function HoldingPlPage({ searchParams }: {
 
       {tab === 'overview' && <OverviewTab p={p} />}
       {tab === 'overview' && yearColumns.length > 0 && (
-        <AnnualRollup columns={yearColumns} currency={p.reporting_currency} />
+        <AnnualRollup
+          columns={yearColumns}
+          currency={p.reporting_currency}
+          lines={matrixLines?.ok && matrixLines.data ? matrixLines.data : []}
+        />
       )}
-      {tab === 'departments' && monthly && <DepartmentsTab p={p} monthly={monthly} />}
+      {tab === 'departments' && monthly && matrixLines && (
+        <DepartmentsTab p={p} monthly={monthly} lines={matrixLines} />
+      )}
       {tab === 'ar' && arRows && (
         <ArAgeingTab p={p} rows={arRows} clients={arClients} client={arClient} from={qFrom} to={qTo} />
       )}
