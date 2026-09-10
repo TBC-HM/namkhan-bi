@@ -103,27 +103,39 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
   // PBS 2026-07-09 pm: QA sub-strip — SOPs + Registry + Proposals + Generate.
   // PBS 2026-09-09: re-parented from /operations/sops to /operations/quality.
-  // Operations used to carry TWO quality areas — a "Quality" tab (the dashboard)
-  // and a "QA" tab (the SOP registry). The QA tab is gone from DEPT_CFG and this
-  // subgroup now hangs the whole QA toolset off Quality: the dashboard measures
-  // the five loops, these pages are where the work is done. Adding
-  // /operations/quality as a member means the strip is present on the dashboard
-  // too, so the tools are one click away from the numbers that flag them.
+  // PBS 2026-09-10 (cockpit_decisions #315, protected_path_decisions #18): folded
+  // from six tabs to three, and Standard added.
+  //
+  // The six tabs were four jobs. SOPs and QA registry were two registers over
+  // overlapping data; Proposals and Generate were two doors to the same act of
+  // creating more. The cost was measurable: 458 open SOP proposals, none of them
+  // linked to any requirement, generated from a prompt box before a standard
+  // existed. A generator not driven by a gap produces exactly that.
+  //
+  // Three tabs, three questions:
+  //   Dashboard — how are we doing        (the five loops)
+  //   Standard  — what must we do         (1,777 merged requirements, origin-tagged)
+  //   SOPs      — how we do it            (the documents that close them)
+  // Proposing and generating stop being destinations and become an action on an
+  // uncovered requirement; agent instructions belong behind the settings gear.
+  //
+  // Every old route stays a MEMBER even though it is no longer a tab. The pages
+  // still exist and are still reachable — by a dashboard action-rule CTA or a
+  // bookmark — and keeping them listed means the strip renders when you land
+  // there. Dropping them from `members` would have stranded four live pages
+  // outside their own navigation.
   {
     parentHref: '/operations/quality',
     members: [
-      '/operations/quality',
+      '/operations/quality', '/operations/standard',
       '/operations/sops', '/operations/qa',
       '/operations/qa/registry', '/operations/qa/proposals',
       '/operations/qa/generate', '/operations/qa/agent-instructions',
     ],
     tabs: [
-      { label: 'Dashboard',          href: '/h/260955/operations/quality'               },
-      { label: 'SOPs',               href: '/h/260955/operations/sops'                  },
-      { label: 'QA registry',        href: '/h/260955/operations/qa/registry'           },
-      { label: 'Proposals',          href: '/h/260955/operations/qa/proposals'          },
-      { label: 'Generate',           href: '/h/260955/operations/qa/generate'           },
-      { label: 'Agent instructions', href: '/h/260955/operations/qa/agent-instructions' },
+      { label: 'Dashboard', href: '/h/260955/operations/quality' },
+      { label: 'Standard',  href: '/h/260955/operations/standard' },
+      { label: 'SOPs',      href: '/h/260955/operations/sops'    },
     ],
   },
   {
