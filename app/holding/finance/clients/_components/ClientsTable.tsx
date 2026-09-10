@@ -4,6 +4,7 @@
 'use client';
 
 import { useMemo, useState, useTransition, type CSSProperties } from 'react';
+import Link from 'next/link';
 
 export interface ClientRow {
   id: number;
@@ -125,6 +126,10 @@ export default function ClientsTable({ rows }: { rows: ClientRow[] }) {
               <tr key={r.id}>
                 <td style={td}>
                   <button type="button" onClick={() => setEditing(r)} style={{ background: 'none', border: 'none', color: PRIMARY, cursor: 'pointer', fontWeight: 700, padding: 0, textDecoration: 'underline', fontSize: 12 }}>{r.name}</button>
+                  {/* The name still opens the quick-edit drawer (unchanged). This
+                      opens the full client page: contacts, invoices, receivables,
+                      revenue by service line and contracts. */}
+                  <Link href={`/holding/finance/clients/${r.id}`} title="Open client page" style={{ marginLeft: 8, color: PRIMARY, fontSize: 11, textDecoration: 'none', fontWeight: 600 }}>open →</Link>
                   {r.contact_person && <div style={{ fontSize: 10, color: INK_SOFT }}>{r.contact_person}</div>}
                   {r.email && <div style={{ fontSize: 10, color: INK_SOFT }}>{r.email}</div>}
                 </td>
