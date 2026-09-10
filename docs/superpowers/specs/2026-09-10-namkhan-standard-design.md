@@ -1,6 +1,7 @@
 # The Namkhan Standard — design
 
-**Date:** 2026-09-10 · **Status:** awaiting PBS review · **Budget:** ADR-313 (USD 250/month)
+**Date:** 2026-09-10 · **Status:** awaiting PBS sign-off · **Budget:** ADR-313 (USD 250/month)
+**Rulings:** ADR-314 (turndown daily · pool deck F&B+housekeeping · Namkhan before Donna)
 **Module:** `ops_sop_qa_module` · **Property:** Namkhan 260955 (Donna 1000001 by extension)
 
 ---
@@ -104,10 +105,10 @@ Driven by the 2026 inspection, now in the register with 8 audit records and 30 f
 
 | Dept | Score | Root cause |
 |---|---|---|
-| grounds | **79.3%** — only sub-80 section | pool debris; furniture quality; pool deck unattended for the whole stay |
+| housekeeping + F&B | **79.3%** — only sub-80 section | deck debris + furniture (housekeeping); deck unattended all stay, no drink or cushion ever offered (F&B) |
 | gm | 91.7% | no SLH pins, no SLH Directory, no management contact with the guest in two days |
 | roots_service | 93.6% | In-Room-Dining **delivery 59.9%** — five misses on one tray; no proactive refills anywhere |
-| housekeeping | 93.9% | turndown (see below); no laundry bag; no fire/safety info in room |
+| housekeeping | 93.9% | turndown — now DAILY per ADR-314; no laundry bag; no fire/safety info in room |
 | kitchen | 98.5% | no chef table visit |
 
 **Turndown is a policy regression, not a capability gap.** The 2025 inspection scored
@@ -136,7 +137,7 @@ read-back, tray completeness, chef visit.
 - **Lao 5-star** — not in the register.
 - **Training courses** — the university has 0 learners. Courses read the same atoms, later.
 - **Auto-publish** — proposals only.
-- **Donna's SOPs** — the model supports her; generating them is a separate run.
+- **Donna's SOPs** — the model supports her; her run follows Namkhan's (ADR-314).
 
 ## 9. Risks
 
@@ -144,14 +145,40 @@ read-back, tray completeness, chef visit.
 |---|---|
 | Autorun produces plausible but useless SOPs | Slice 1 is small enough to read in full; stage 7 self-verification is itself unproven and is checked by hand first |
 | Merge step collapses two genuinely different requirements | `atom_sources` preserves every citation, so a bad merge is reversible without re-ingesting |
-| Lao translation quality unverifiable by the author | Needs a named human reviewer before any Lao SOP goes active — **open, see §10** |
+| Lao translation quality unverifiable by the author | **The Lao hold rule, §11.** Generate but never activate; safety-critical SOPs excluded from Lao entirely until a named validator exists. |
 | Cap reached mid-corpus | Halt + owner signal; failure-first ordering means the highest-value SOPs are already written |
 | Brain chunker races a multi-call text load | Set `extraction_status` last, or repair with `fn_brain_write_chunks` |
 
-## 10. Open questions for PBS
+## 10. Rulings — PBS 2026-09-10 (ADR-314)
 
-1. **Who reviews the Lao translations?** No Lao speaker is wired into the acceptance path.
-   Without one, stage 5 produces text nobody can validate.
-2. **Turndown frequency** — daily, or keep 3x/week and make it explicit at check-in?
-   Blocks the single highest-value SOP in slice 1.
-3. **Pool deck ownership** — which department and which shift? Blocks the grounds SOPs.
+1. **Turndown is DAILY.** The 3x/week (Tue/Thu/Sat) schedule is retired. The SOP is
+   built from the 2025 inspection, which scored this same service **4/4** including the
+   signature amenity (hand-woven tea filter + handwritten note). The standard already
+   exists in evidence — encode it, staff it daily, train it. Do not invent one.
+2. **Pool deck is shared: F&B + housekeeping.** Housekeeping owns deck cleanliness and
+   furniture (Q278, Q287); F&B owns guest service on the deck (the unattended-deck
+   finding). Re-filed from `grounds`, which was the agent's incorrect first attribution
+   and would have left half the gap unassigned.
+3. **Namkhan first, Donna after.** One pass for Namkhan end to end, then Donna reusing
+   the same tenant-neutral corpus with her own SOPs. The §3 model already supports this;
+   no schema change is needed when her turn comes.
+
+## 11. THE LAO HOLD RULE — unresolved, and it gates stage 5
+
+**No Lao validator exists.** PBS confirmed the need on 2026-09-10; no person is named.
+
+This is the one risk that can silently produce 150 useless artifacts, because nobody in
+the acceptance path can read the output. Therefore:
+
+- Stage 5 **may generate** Lao bodies. It **may not activate them.**
+- A Lao SOP stays `status='in_review'` until a **named** Lao validator signs it off.
+  English remains the authoritative version until then.
+- Safety-critical SOPs (fire, food safety, child protection, pool) are **excluded from
+  Lao generation entirely** until a validator exists. A mistranslated safety instruction
+  is worse than an English one a supervisor must interpret.
+- The autorun records the validator's name per SOP. No name, no activation — enforced in
+  data, not in a comment.
+
+**This does not block slice 1.** Turndown, in-room dining, pool deck and loyalty proceed
+in English now; Lao is generated and held. Sourcing the validator is a parallel task, and
+it is the one open item on this spec.
