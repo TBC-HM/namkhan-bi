@@ -1,0 +1,12 @@
+-- AUDIT COPIES of the three functions applied live for Plan B Task 3.
+-- Applied as: standards_source_chunks_bridge_v1, standards_dept_for_hint_v1,
+-- standards_load_prose_v1. All service_role only — they read raw standard text and
+-- write into the shared tenant-neutral corpus.
+--
+-- fn_standards_dept_for_hint is an EXACT PORT of deptForProseHint() in
+-- lib/standards/deptMap.ts, verified equivalent on 24 real cases (every dept_hint the
+-- live atomiser produced, plus 12 collision guards) BEFORE it was allowed to write.
+-- If lib/standards/deptMap.ts changes, THIS CHANGES WITH IT.
+--
+-- See the live database for the current bodies; this file records that they exist and
+-- why, which is what was missing in Plan A and got caught by its final review.
