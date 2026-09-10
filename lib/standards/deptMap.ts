@@ -7,17 +7,27 @@
 
 type Dept = { dept_code: string; dept_code_2: string | null };
 
-// RULES must be ordered longest-prefix-first. Pool matches before "In Room" to prevent
-// "Pool Dining" mismatches. The order is load-bearing — changing it breaks section routing.
+// RULES must be ordered most-specific-first, NOT alphabetically or by department.
+// SLH section names are hyphenated ("In Room Dining - Telephone Ordering",
+// "Spa - Arrival", "Spa - Departure"), so a generic front_office rule
+// (telephone|arrival|departure|...) will match words that appear in the second
+// half of a dining/spa section name. Before this fix, front_office outranked
+// spa and dining, which misfiled 26 of 338 real requirements:
+//   "In Room Dining - Telephone Ordering" -> matched /telephone/ -> front_office (15 rows)
+//   "Spa - Arrival"                       -> matched /arrival/   -> front_office (7 rows)
+//   "Spa - Departure"                     -> matched /departure/ -> front_office (4 rows)
+// Keeping pool/spa/dining/housekeeping ahead of front_office (and the broad
+// public-areas/brand catch-alls last) ensures the specific department wins.
+// The order is load-bearing — changing it breaks section routing.
 const RULES: Array<[RegExp, Dept]> = [
   [/^pool|beach/i,                 { dept_code: 'housekeeping',  dept_code_2: 'roots_service' }],
-  [/telephone|check ?in|check ?out|rooming|departure|arrival|request|concierge|booking/i,
-                                   { dept_code: 'front_office',  dept_code_2: null }],
-  [/bedroom|bathroom|stayover|turndown|housekeeping/i,
-                                   { dept_code: 'housekeeping',  dept_code_2: null }],
+  [/spa/i,                         { dept_code: 'spa',           dept_code_2: null }],
   [/breakfast|bar|lounge|in ?room dining|dining|restaurant/i,
                                    { dept_code: 'roots_service', dept_code_2: 'kitchen' }],
-  [/spa/i,                         { dept_code: 'spa',           dept_code_2: null }],
+  [/bedroom|bathroom|stayover|turndown|housekeeping/i,
+                                   { dept_code: 'housekeeping',  dept_code_2: null }],
+  [/telephone|check ?in|check ?out|rooming|departure|arrival|request|concierge|booking/i,
+                                   { dept_code: 'front_office',  dept_code_2: null }],
   [/public areas|fitness/i,        { dept_code: 'maintenance',   dept_code_2: 'housekeeping' }],
   [/slh brand|differentiator|loyalty|service recovery|sustainab/i,
                                    { dept_code: 'gm',            dept_code_2: null }],

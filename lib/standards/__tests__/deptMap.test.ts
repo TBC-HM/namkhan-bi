@@ -40,6 +40,38 @@ describe('deptForSection', () => {
     expect(deptForSection('Some Future SLH Section').dept_code).toBe('admin_general');
   });
 
+  it('files "In Room Dining - Telephone Ordering" under roots_service, not front_office', () => {
+    // Regression for the real misfile: /telephone/ used to outrank dining because
+    // front_office was checked before the dining rule (15 rows misfiled).
+    const d = deptForSection('In Room Dining - Telephone Ordering');
+    expect(d.dept_code).toBe('roots_service');
+    expect(d.dept_code).not.toBe('front_office');
+  });
+
+  it('files "Spa - Arrival" under spa, not front_office', () => {
+    // Regression: /arrival/ used to outrank spa (7 rows misfiled).
+    const d = deptForSection('Spa - Arrival');
+    expect(d.dept_code).toBe('spa');
+    expect(d.dept_code).not.toBe('front_office');
+  });
+
+  it('files "Spa - Departure" under spa, not front_office', () => {
+    // Regression: /departure/ used to outrank spa (4 rows misfiled).
+    const d = deptForSection('Spa - Departure');
+    expect(d.dept_code).toBe('spa');
+    expect(d.dept_code).not.toBe('front_office');
+  });
+
+  it('still files plain "Breakfast Service" under roots_service (regression guard)', () => {
+    const d = deptForSection('Breakfast Service');
+    expect(d.dept_code).toBe('roots_service');
+  });
+
+  it('still reaches front_office for "Check out" (proves the front_office rule is still reachable)', () => {
+    const d = deptForSection('Check out');
+    expect(d.dept_code).toBe('front_office');
+  });
+
   it('only ever returns live dept codes', () => {
     const LIVE = new Set(['front_office','housekeeping','kitchen','roots_service','maintenance',
       'grounds','spa','activities','boat','security','finance','gm','hr','purchasing',

@@ -39,9 +39,13 @@ export async function POST() {
   });
   if (mErr) return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 });
 
+  // fn_standards_merge_atoms is ON CONFLICT DO NOTHING, so atoms_total/citations_total
+  // are table-wide totals AFTER the upsert, not deltas — a re-run that creates nothing
+  // still reports the full totals, and that's correct (a no-op re-run, not new rows).
   return NextResponse.json({
     ok: true,
-    atoms_created: byKey.size,
-    citations_created: (merged as any)?.citations ?? 0,
+    atoms_submitted: byKey.size,
+    atoms_total: (merged as any)?.atoms ?? 0,
+    citations_total: (merged as any)?.citations ?? 0,
   });
 }

@@ -30,7 +30,12 @@ export async function POST() {
 
   const parsed = parseSlhInspection(doc.extracted_md);
   const rows = parsed.map((r) => {
-    const d = deptForSection(r.subsection ? `${r.section} - ${r.subsection}` : r.section);
+    // Use the full hyphenated section string for BOTH dept and category lookups —
+    // categoryForSection(r.subsection ?? r.section) previously discarded the section
+    // for hyphenated headers, so e.g. "Bedroom Survey" never reached the /survey/
+    // branch and `product` had 0 rows across the real corpus.
+    const full = r.subsection ? `${r.section} - ${r.subsection}` : r.section;
+    const d = deptForSection(full);
     return {
       section: r.section,
       subsection: r.subsection,
@@ -39,7 +44,7 @@ export async function POST() {
       weight: r.missed ? 1 : null,
       dept_code: d.dept_code,
       dept_code_2: d.dept_code_2,
-      category: categoryForSection(r.subsection ?? r.section),
+      category: categoryForSection(full),
       verdict_2026: r.verdict,
     };
   });
