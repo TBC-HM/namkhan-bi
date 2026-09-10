@@ -1,7 +1,7 @@
 // app/api/marketing/social/media-library/route.ts
 // PBS 2026-09-03 — serve media library assets approved for social_organic use.
 // Source: public.mkt_v_media_ready (bridge over media.media_assets, already
-// REVOKE'd from anon). Render URLs are constructed from the public `media`
+// REVOKE'd from anon). Render URLs are constructed from the public `media-renders`
 // Supabase Storage bucket.
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,9 +11,11 @@ import { requirePropertyAccess } from '@/lib/tenancy';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Renders live in the original 'media' bucket (media_renders.file_path paths like {asset_id}/{purpose}.jpg).
-// media-renders is a new bucket for future renders but existing files are in 'media'.
-const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+// Renders live in 'media-renders' (media_renders.file_path paths like {asset_id}/{purpose}.jpg).
+// VERIFIED 2026-09-10: bucket 'media' holds 0 objects; 'media-renders' holds 11,087.
+// A stale comment here claimed the opposite and built every media_url against the empty
+// bucket, so social posts 404'd on their image and silently published as text-only.
+const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-renders`;
 const STORAGE_RAW     = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-raw`;
 
 function thumbnailUrl(renders: Record<string, string> | null, raw_path: string | null): string | null {
