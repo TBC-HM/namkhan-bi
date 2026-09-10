@@ -81,3 +81,50 @@ SELECT * FROM public.fn_standards_suggest_coverage(260955); -- suggestions
 All three are idempotent. `fn_map_declared_coverage` and
 `fn_map_similarity_suggestions` clear only their OWN rows — a `manual` row, once a
 human has made one, is never touched by either.
+
+---
+
+## Added after the first pass (same session)
+
+### Incremental chunking — a trap that was closed before it fired
+
+`fn_build_sop_chunks` v1 DELETEd every chunk and re-inserted. Safe to run by hand,
+**unsafe to schedule**: it discards all 786 embeddings, so suggestions collapse to
+zero and only return after ~79 edge invocations. A nightly job doing that is a
+nightly outage. v2 hashes `title || body_md` per SOP; unchanged SOPs keep chunks
+AND embeddings. Verified: an incremental re-run reports `rechunked: 0` and all 786
+embeddings survive.
+
+### Nightly refresh — cron 269 `standards-coverage-refresh-nightly`, 03:10Z
+
+`public.fn_standards_coverage_refresh_all()`: incremental chunks → declared
+coverage → suggestions → fire embedder catch-ups for anything new. Guarded by
+`fn_automation_enabled()` like every other job here. Clear of module-reaudit
+(02:15) and qa-dash goals writeback (02:25). The stored command was executed by
+hand once to prove it parses — pg_cron reports "succeeded" on jobs that do nothing.
+
+Two reporting bugs found and fixed by reading the receipt rather than trusting it:
+- the per-property loop ASSIGNED counters instead of accumulating, so Donna
+  (correctly writing nothing) overwrote Namkhan's counts — a healthy run reported
+  `declared_pairs: 0`, i.e. success looked identical to failure;
+- `fn_map_declared_coverage`'s summary counted every coverage row for the property,
+  sweeping in the 296 similarity rows and reporting 1,277 declared pairs where 981
+  exist. A function must report what it did, not what it found lying around.
+
+### `sop_chunks.kind` — proposal triage on the same machinery
+
+`kind` is `'sop'` (drives coverage) or `'proposal'` (drives triage only, never
+coverage). One table, one embedder, one edge function. `fn_map_similarity_suggestions`
+filters `kind='sop'`, because a proposal is a plan to write an SOP and treating it as
+coverage would report obligations handled by a document that does not exist.
+
+**The chunker's delete is scoped to `kind='sop'`** — without that it would delete
+every proposal chunk nightly.
+
+`public.v_standards_proposal_triage` — one row per open proposal: nearest
+requirement, whether that requirement is already covered, and how many other
+proposals say the same thing. Tenant-safe only via its join to
+`knowledge.sop_proposals.property_id`; callers MUST filter it.
+
+Findings filed: **#683** (10 dangling SOP register links), **#684** (458-proposal
+triage, owner decision open).

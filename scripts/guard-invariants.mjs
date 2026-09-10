@@ -109,9 +109,16 @@ if (!existsSync(MW)) {
 const TENANT_DEFAULT_RE = /\?\?\s*(260955|1000001)\b|:\s*number\s*=\s*(260955|1000001)\b|(?<![=!<>])=\s*(260955|1000001)\s*\)/;
 
 // Frozen 2026-08-24. LOWER these numbers as files are fixed; never raise one.
+//
+// 2026-09-10: four entries lowered to 0 after the guard reported them improved
+// and a separate grep confirmed it. They were fixed by other work and the stale
+// baseline was quietly holding a door open — an entry of 1 on a clean file lets
+// that file silently REGAIN a tenant default without failing the build, which is
+// the exact regression this ratchet exists to catch. Lowering tightens; it is the
+// only safe direction.
 const BASELINE = {
   "app/api/cron/studio-exports/route.ts": 1,
-  "app/api/google/reply/route.ts": 1,
+  "app/api/google/reply/route.ts": 0,
   "app/api/marketing/email/refine-block/route.ts": 1,
   "app/api/marketing/media/area-facets/route.ts": 1,
   "app/api/marketing/media/coverage-drill/route.ts": 1,
@@ -122,7 +129,7 @@ const BASELINE = {
   "app/api/marketing/prospects/scrape/route.ts": 1,
   "app/api/marketing/prospects/stats/route.ts": 1,
   "app/api/marketing/seo/trigger/route.ts": 1,
-  "app/api/marketing/upload-sign/route.ts": 1,
+  "app/api/marketing/upload-sign/route.ts": 0,
   "app/api/marketing/youtube/disconnect/route.ts": 1,
   "app/api/marketing/youtube/oauth-callback/route.ts": 1,
   "app/api/marketing/youtube/request-video/route.ts": 1,
@@ -132,8 +139,8 @@ const BASELINE = {
   "app/finance/_components/TabStrip.tsx": 1,
   "app/finance/pnl/page.tsx": 1,
   "app/h/[property_id]/_components/CeoEntry.tsx": 1,
-  "app/h/[property_id]/finance/pnl/_data.ts": 1,
-  "app/h/[property_id]/finance/pnl/page.tsx": 2,
+  "app/h/[property_id]/finance/pnl/_data.ts": 0,
+  "app/h/[property_id]/finance/pnl/page.tsx": 0,
   "app/holding/it2/system/data-quality/DqClient.tsx": 1,
   "app/marketing/media/_client/AssetEditDrawer.tsx": 1,
   "app/operations/activities/page.tsx": 1,
