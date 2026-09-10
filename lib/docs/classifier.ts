@@ -115,13 +115,40 @@ JSON SCHEMA (return EXACTLY this shape):
   "sensitivity": "public"|"internal"|"confidential"|"restricted"
 }`;
 
+// PBS 2026-09-10 — the key used to come from process.env ONLY, so a key that was
+// present in the vault but absent from the Vercel environment still failed. Mirrors
+// app/api/sop/proposals/seed-batch/route.ts: vault first, env second, cached across
+// warm invocations.
+let CACHED_ANTHROPIC_KEY: string | null = null;
+async function getAnthropicKey(): Promise<string> {
+  if (CACHED_ANTHROPIC_KEY) return CACHED_ANTHROPIC_KEY;
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabaseAdmin');
+    const { data, error } = await getSupabaseAdmin().rpc('fn_get_secret', { p_name: 'ANTHROPIC_API_KEY' });
+    if (!error && typeof data === 'string' && data.length > 20) {
+      CACHED_ANTHROPIC_KEY = data;
+      return data;
+    }
+  } catch { /* fall through to env */ }
+  const envKey = process.env.ANTHROPIC_API_KEY;
+  if (envKey) {
+    CACHED_ANTHROPIC_KEY = envKey;
+    return envKey;
+  }
+  throw new Error('ANTHROPIC_API_KEY missing from Supabase vault AND Vercel env');
+}
+
+/** 429 and 5xx are worth another go; 400 (credit exhausted, bad request) never is. */
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
 export async function classifyDocument(opts: {
   fileName: string;
   mimeType: string;
   extractedText: string;   // first ~8k tokens of body
 }): Promise<DocClassification> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
+  const apiKey = await getAnthropicKey();
 
   // Truncate to ~32k chars (~8k tokens) — enough for classification
   const text = (opts.extractedText || '').slice(0, 32_000);
@@ -132,25 +159,32 @@ export async function classifyDocument(opts: {
     `\n--- EXTRACTED TEXT (first ${text.length} chars) ---\n` +
     (text || '[no text extracted — classify based on filename only]');
 
-  const resp = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 2000,
-      temperature: 0.1,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMsg }],
-    }),
-  });
+  // Two retries on transient failures only. A credit-exhausted 400 fails fast —
+  // retrying it just delays the degraded path by several seconds per upload.
+  let resp: Response | undefined;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    resp = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 2000,
+        temperature: 0.1,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+    });
+    if (resp.ok || !isRetryableStatus(resp.status) || attempt === 2) break;
+    await new Promise(r => setTimeout(r, 500 * 2 ** attempt));
+  }
 
-  if (!resp.ok) {
-    const err = await resp.text();
-    throw new Error(`Anthropic ${resp.status}: ${err}`);
+  if (!resp || !resp.ok) {
+    const err = resp ? await resp.text() : 'no response';
+    throw new Error(`Anthropic ${resp?.status ?? 0}: ${err}`);
   }
 
   const data = await resp.json() as { content: { type: string; text: string }[] };
@@ -172,4 +206,90 @@ export async function classifyDocument(opts: {
   parsed.parties = parsed.parties && typeof parsed.parties === 'object' ? parsed.parties : {};
 
   return parsed;
+}
+
+// ---------------------------------------------------------------------------
+// DEGRADED INGEST (PBS 2026-09-10)
+//
+// /api/docs/ingest used to treat this classifier as mandatory: any failure
+// returned 500 and left the uploaded file stranded in documents-internal/_staging.
+// An Anthropic outage therefore took document upload down completely and ate the
+// file — confirmed twice on 2026-09-09/10 with "credit balance is too low", with
+// ~80 orphaned staging objects accumulated since 2026-05-04.
+//
+// Classification is metadata. It must never gate whether the document is kept.
+// ---------------------------------------------------------------------------
+
+/** dms.documents.documents_status_check — NOT 'needs_review', which the upload UI wrongly promises. */
+export const DEGRADED_STATUS = 'in_review' as const;
+
+/** dms.documents.brain_classification_status_chk, and the column default.
+ *
+ *  Deliberately 'pending', NOT 'needs_human':
+ *   - fn_brain_claim_chunkable() only indexes 'classified'/'human_confirmed', so
+ *     'pending' already keeps an unclassified document out of the brain — we never
+ *     index a guess.
+ *   - fn_brain_claim_classify(), driven by the brain-classify-5min cron, picks
+ *     'pending' documents back up, so the document RE-CLASSIFIES ITSELF once the
+ *     AI is available again. 'needs_human' would demand a person and block that.
+ *
+ *  Note this is also the column default, and public.fn_doc_ingest_persist does not
+ *  accept the column — so the degraded path gets this behaviour by leaving it alone.
+ *  The constant exists so the contract is asserted rather than assumed. */
+export const DEGRADED_CLASSIFICATION_STATUS = 'pending' as const;
+
+export const DEGRADED_TAG = 'unclassified:classifier_unavailable' as const;
+
+/** Deterministic, AI-free classification. Every field the ingest INSERT reads is
+ *  populated, so the degraded path cannot just move the 500 downstream into Postgres. */
+export function fallbackClassification(fileName: string, mimeType: string): DocClassification {
+  const base = (fileName || '').replace(/\.[a-z0-9]+$/i, '').trim();
+  return {
+    doc_type: 'note',
+    doc_subtype: null,
+    importance: 'standard',
+    title: base || 'Untitled upload',
+    title_lo: null,
+    title_fr: null,
+    language: 'en',
+    summary: `Uploaded ${fileName || 'file'} (${mimeType || 'unknown type'}). Automatic classification was unavailable at upload time; this document is awaiting human review.`,
+    keywords: [],
+    tags: [DEGRADED_TAG],
+    external_party: null,
+    parties: {},
+    valid_from: null,
+    valid_until: null,
+    signed: false,
+    reference_number: null,
+    amount: null,
+    amount_currency: null,
+    period_year: null,
+    // Conservative on purpose: an unclassified document has not been assessed, so
+    // it must not land in a public bucket on the way through bucketForSensitivity().
+    sensitivity: 'confidential',
+  };
+}
+
+/** Classify, but never throw. `degraded: true` means the caller should persist the
+ *  document with DEGRADED_STATUS / DEGRADED_CLASSIFICATION_STATUS for human review. */
+export async function classifyWithFallback(opts: {
+  fileName: string;
+  mimeType: string;
+  extractedText: string;
+  /** Test seam — defaults to the real classifier. */
+  _call?: typeof classifyDocument;
+}): Promise<{ cls: DocClassification; degraded: boolean; error: string | null }> {
+  const call = opts._call ?? classifyDocument;
+  try {
+    const cls = await call({
+      fileName: opts.fileName,
+      mimeType: opts.mimeType,
+      extractedText: opts.extractedText,
+    });
+    return { cls, degraded: false, error: null };
+  } catch (e: any) {
+    const error = e?.message ?? 'classifier_failed';
+    console.error('[docs/classify] degraded:', opts.fileName, error);
+    return { cls: fallbackClassification(opts.fileName, opts.mimeType), degraded: true, error };
+  }
 }

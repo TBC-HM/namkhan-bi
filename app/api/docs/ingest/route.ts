@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { extractText } from '@/lib/docs/extract';
-import { classifyDocument } from '@/lib/docs/classifier';
+import { classifyDocument, classifyWithFallback, DEGRADED_STATUS } from '@/lib/docs/classifier';
 import { classifyPdfWithVision } from '@/lib/docs/visionOcr';
 import { chunkBody } from '@/lib/docs/chunker';
 
@@ -273,16 +273,26 @@ export async function POST(req: NextRequest) {
   }
 
   // --- 2. Classify with Claude Haiku (text-only path, if vision didn't already)
+  //
+  // PBS 2026-09-10 — this used to `return 500` on any classifier error, WITHOUT
+  // removing the staged upload (unlike the dedup and property_scope paths, which
+  // both clean up). An Anthropic outage therefore took document upload down
+  // completely and ate the file: confirmed twice on 2026-09-09/10 with
+  // "credit balance is too low", and ~80 objects had piled up in _staging since
+  // 2026-05-04.
+  //
+  // Classification is metadata; it must never decide whether the document is kept.
+  // A degraded ingest is persisted as 'in_review' with classification_status left
+  // at its 'pending' default, which keeps it out of the brain (fn_brain_claim_chunkable
+  // takes only classified/human_confirmed) while letting the brain-classify-5min cron
+  // re-classify it automatically once the AI is reachable again.
+  let classifierDegraded = false;
+  let classifierError: string | null = null;
   if (!cls) {
-    try {
-      cls = await classifyDocument({ fileName, mimeType, extractedText });
-    } catch (e: any) {
-      return NextResponse.json({
-        ok: false,
-        stage: 'classifier',
-        error: e?.message ?? 'classifier_failed',
-      }, { status: 500 });
-    }
+    const result = await classifyWithFallback({ fileName, mimeType, extractedText });
+    cls = result.cls;
+    classifierDegraded = result.degraded;
+    classifierError = result.error;
   }
 
   // --- 2b. Validate + remap classifier doc_type AND language to enforce DB constraints
@@ -369,7 +379,8 @@ export async function POST(req: NextRequest) {
     file_name: fileName,
     file_checksum: sha256,
     language: cls.language,
-    status: 'active',
+    // Degraded ingest is still a kept document — just not an approved one.
+    status: classifierDegraded ? DEGRADED_STATUS : 'active',
     sensitivity: cls.sensitivity,
     keywords: cls.keywords,
     tags: cls.tags,
@@ -386,6 +397,8 @@ export async function POST(req: NextRequest) {
       classifier_model: 'claude-haiku-4-5',
       classifier_version: usedVisionOcr ? 'v1-vision' : 'v1',
       vision_ocr: usedVisionOcr,
+      classifier_degraded: classifierDegraded,
+      classifier_error: classifierError,
     },
   };
 
