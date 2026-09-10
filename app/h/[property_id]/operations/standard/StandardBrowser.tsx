@@ -50,6 +50,16 @@ function Chip({ text }: { text: string }) {
   );
 }
 
+// Coverage strength badges. Fixed colours, and deliberately NOT the authority
+// palette — a reader must never confuse "which standard asks for this" with
+// "how well do we cover it".
+const badgeCls = (kind: 'exact' | 'declared' | 'suggested' | 'none') =>
+  'inline-block rounded border px-1.5 py-0.5 text-[11px] font-medium leading-none ' +
+  (kind === 'exact'     ? 'border-emerald-300 bg-emerald-100 text-emerald-900'
+   : kind === 'declared' ? 'border-amber-300 bg-amber-100 text-amber-900'
+   : kind === 'suggested' ? 'border-sky-300 bg-sky-100 text-sky-900'
+   :                        'border-red-300 bg-red-100 text-red-900');
+
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="border-l-[3px] border-neutral-200 px-3 py-1">
@@ -70,6 +80,7 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
   const [auth, setAuth] = useState('');
   const [cat, setCat] = useState('');
   const [mergedOnly, setMergedOnly] = useState(false);
+  const [cover, setCover] = useState('');
 
   const categories = useMemo(
     () => Array.from(new Set(items.map((i) => i.category).filter((c): c is string => !!c))).sort(),
@@ -80,12 +91,16 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
     const needle = q.trim().toLowerCase();
     return items.filter((i) => {
       if (mergedOnly && i.source_count <= 1) return false;
+      if (cover === 'uncovered'  && (i.covered || i.has_suggested)) return false;
+      if (cover === 'suggested'  && !i.has_suggested) return false;
+      if (cover === 'declared'   && !(i.has_declared && !i.has_exact)) return false;
+      if (cover === 'exact'      && !i.has_exact) return false;
       if (cat && i.category !== cat) return false;
       if (auth && !splitAuth(i.authorities).includes(auth)) return false;
       if (needle && !(`${i.title} ${i.requirement_text}`.toLowerCase().includes(needle))) return false;
       return true;
     });
-  }, [items, q, auth, cat, mergedOnly]);
+  }, [items, q, auth, cat, mergedOnly, cover]);
 
   const base = `/h/${pid}/operations/standard`;
   const coverPct = t && t.atoms > 0 ? (100 * t.covered) / t.atoms : 0;
@@ -102,21 +117,43 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
         <p className="mt-1 text-xs text-neutral-500">Generated {stamp(payload.generated_at)}</p>
       </header>
 
-      <div className="mb-5 grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Requirements" value={nInt(t?.atoms)} sub="the merged standard" />
         <Stat label="Citations" value={nInt(t?.requirements)} sub="raw questions behind them" />
         <Stat label="Merged" value={nInt(t?.multi_source)} sub="asked by more than one authority" />
         <Stat label="Authorities" value={nInt(t?.authorities)} sub={`${nInt(t?.sources)} documents`} />
-        <Stat label="Covered by an SOP" value={`${coverPct.toFixed(1)}%`} sub={`${nInt(t?.covered)} of ${nInt(t?.atoms)}`} />
+        <Stat label="Covered" value={`${coverPct.toFixed(1)}%`} sub={`${nInt(t?.covered)} of ${nInt(t?.atoms)}`} />
+        <Stat label="Suggested" value={nInt(t?.suggested)} sub="awaiting your verdict" />
       </div>
 
-      {t && t.covered === 0 && (
-        <p className="mb-5 border-l-[3px] border-amber-600 bg-amber-50 px-3 py-2 text-sm text-neutral-800">
-          No SOP is mapped to any requirement yet. The corpus is loaded and merged; the coverage
-          mapping that links existing SOPs to these requirements has not been run, so every line
-          below reads as uncovered. That is the honest state, not a rendering fault.
+      {/* Three strengths, never one number. Collapsing them would report 504 of
+          1,777 covered when 208 are, and the difference is entirely unconfirmed
+          machine guesses. */}
+      <div className="mb-5 border-l-[3px] border-neutral-300 px-3 py-2 text-sm text-neutral-700">
+        <p className="mb-1">
+          <strong>{nInt(t?.covered)}</strong> of {nInt(t?.atoms)} requirements are covered by
+          one of your {nInt(t?.sops)} active SOPs — and coverage comes in three strengths that
+          this page deliberately keeps apart:
         </p>
-      )}
+        <ul className="ml-4 list-disc space-y-0.5">
+          <li>
+            <span className={badgeCls('exact')}>Exact</span>{' '}
+            <strong>{nInt(t?.exact)}</strong> — the SOP names this requirement. Trust it.
+          </li>
+          <li>
+            <span className={badgeCls('declared')}>Declared</span>{' '}
+            <strong>{nInt(t?.declared)}</strong> — the SOP names the <em>law</em> this comes from
+            and is credited with every obligation under it. Coarse: confirm the SOP really
+            covers this particular one.
+          </li>
+          <li>
+            <span className={badgeCls('suggested')}>Suggested</span>{' '}
+            <strong>{nInt(t?.suggested)}</strong> — an embedding proposed an SOP section.
+            Measured precision is roughly two in three, so these count as{' '}
+            <strong>nothing</strong> until you confirm them. They are the cheapest wins on the page.
+          </li>
+        </ul>
+      </div>
 
       <section className="mb-6">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-700">Where it comes from</h2>
@@ -156,8 +193,10 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
               <tr className="border-b border-neutral-300 text-left text-xs uppercase tracking-wide text-neutral-500">
                 <th className="py-1.5 pr-3 font-medium">Department</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Requirements</th>
-                <th className="py-1.5 pr-3 text-right font-medium">Merged</th>
-                <th className="py-1.5 pr-3 text-right font-medium">Covered</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Exact</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Declared</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Suggested</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Uncovered</th>
                 <th className="py-1.5 pr-3 font-medium" />
               </tr>
             </thead>
@@ -172,9 +211,11 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                       </Link>
                     </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(d.atoms)}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-neutral-500">{nInt(d.multi_source)}</td>
-                    <td className={`py-1.5 pr-3 text-right tabular-nums ${d.covered === 0 ? 'text-red-800' : 'text-emerald-900'}`}>
-                      {nInt(d.covered)}
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-emerald-900">{nInt(d.exact)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-amber-800">{nInt(d.declared)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-sky-900">{nInt(d.suggested)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-red-800">
+                      {nInt(d.atoms - d.covered - d.suggested)}
                     </td>
                     <td className="py-1.5 pr-3 text-xs text-neutral-500">{active ? 'shown below' : ''}</td>
                   </tr>
@@ -211,6 +252,13 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
               <option value="">All categories</option>
               {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
+            <select value={cover} onChange={(e) => setCover(e.target.value)} className="rounded border border-neutral-300 px-2 py-1 text-sm">
+              <option value="">Any coverage</option>
+              <option value="suggested">Suggested — needs your verdict</option>
+              <option value="declared">Declared — confirm the law covers it</option>
+              <option value="exact">Exact</option>
+              <option value="uncovered">Uncovered, no suggestion</option>
+            </select>
             <label className="flex items-center gap-1.5 text-sm text-neutral-700">
               <input type="checkbox" checked={mergedOnly} onChange={(e) => setMergedOnly(e.target.checked)} />
               Merged only
@@ -239,10 +287,29 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                   {i.requirement_text && i.requirement_text !== i.title && (
                     <p className="mt-0.5 max-w-4xl text-sm text-neutral-600">{i.requirement_text}</p>
                   )}
-                  <div className="mt-0.5 text-xs">
-                    {i.covered
-                      ? <span className="text-emerald-900">Covered{i.sop_code ? ` — ${i.sop_code}` : ''}</span>
-                      : <span className="text-red-800">No SOP</span>}
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                    {i.has_exact && (
+                      <>
+                        <span className={badgeCls('exact')}>Exact</span>
+                        <span className="text-neutral-600">{i.sop_code}</span>
+                      </>
+                    )}
+                    {!i.has_exact && i.has_declared && (
+                      <>
+                        <span className={badgeCls('declared')}>Declared</span>
+                        <span className="text-neutral-600">{i.sop_code} — confirm it covers this obligation</span>
+                      </>
+                    )}
+                    {!i.covered && i.has_suggested && (
+                      <>
+                        <span className={badgeCls('suggested')}>
+                          Suggested {i.suggested_conf != null ? `${Math.round(i.suggested_conf * 100)}%` : ''}
+                        </span>
+                        <span className="text-neutral-600">{i.suggested_sop}</span>
+                        {i.suggested_note && <span className="text-neutral-500">· {i.suggested_note}</span>}
+                      </>
+                    )}
+                    {!i.covered && !i.has_suggested && <span className={badgeCls('none')}>No SOP</span>}
                   </div>
                 </li>
               ))}
