@@ -169,6 +169,30 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
         </div>
       )}
 
+      {/* What GUESTS say, beside what the inspector said. The two disagree and the
+          disagreement is the point: housekeeping's guests rate it 4.79/5 while SLH
+          scored its pool deck 79.3%. A guest rates the room they slept in; an
+          inspector walks the whole property against a checklist. */}
+      {payload.guest?.platforms?.length ? (
+        <div className="mb-4 border-l-[3px] border-sky-700 bg-sky-50/60 px-3 py-2 text-sm text-neutral-800">
+          <strong>Guest ratings</strong>
+          {payload.guest.as_of ? ` · read ${nDate(payload.guest.as_of)}` : ''} ·{' '}
+          {payload.guest.platforms.map((p, i) => (
+            <span key={p.source}>
+              {i > 0 ? ' · ' : ''}
+              <span className="capitalize">{p.source}</span>{' '}
+              <strong>{p.overall}{p.scale ? `/${p.scale}` : ''}</strong>
+              {p.reviews != null ? ` (${nInt(p.reviews)})` : ''}
+              {p.rank != null && p.rank_of != null ? ` · #${p.rank} of ${nInt(p.rank_of)}` : ''}
+            </span>
+          ))}
+          <div className="mt-0.5 text-xs text-neutral-600">
+            Department scores below are these categories weighted onto the department that
+            owns them, normalised to 5 — Booking publishes out of 10, TripAdvisor out of 5.
+          </div>
+        </div>
+      ) : null}
+
       {/* Three strengths, never one number. Collapsing them would report 504 of
           1,777 covered when 208 are, and the difference is entirely unconfirmed
           machine guesses. */}
@@ -236,6 +260,7 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
               <tr className="border-b border-neutral-300 text-left text-xs uppercase tracking-wide text-neutral-500">
                 <th className="py-1.5 pr-3 font-medium">Department</th>
                 <th className="py-1.5 pr-3 text-right font-medium">SLH</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Guests</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Requirements</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Exact</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Declared</th>
@@ -270,6 +295,19 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                             <div className={`text-[11px] ${d.slh_worst_pct < 80 ? 'text-red-800' : 'text-amber-700'}`}>
                               worst {d.slh_worst_pct}%
                             </div>
+                          )}
+                        </>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums" title={d.guest_weakest ?? ''}>
+                      {d.guest_score == null ? (
+                        <span className="text-neutral-400">—</span>
+                      ) : (
+                        <>
+                          <span className="text-neutral-900">{d.guest_score.toFixed(2)}</span>
+                          <span className="text-[11px] text-neutral-500">/5</span>
+                          {d.guest_weakest && (
+                            <div className="text-[11px] text-neutral-500">{d.guest_weakest}</div>
                           )}
                         </>
                       )}
@@ -320,6 +358,13 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                 )}
                 {d.slh_top_miss && (
                   <p className="mt-0.5 max-w-4xl text-[13px] text-neutral-600">{d.slh_top_miss}</p>
+                )}
+                {d.guest_score != null && (
+                  <p className="mt-1 text-[13px] text-neutral-700">
+                    Guests rate this department <strong>{d.guest_score.toFixed(2)}/5</strong>
+                    {d.guest_platforms ? ` across ${nInt(d.guest_platforms)} platform${d.guest_platforms > 1 ? 's' : ''}` : ''}
+                    {d.guest_weakest ? ` · weakest ${d.guest_weakest}` : ''}.
+                  </p>
                 )}
               </div>
             );
