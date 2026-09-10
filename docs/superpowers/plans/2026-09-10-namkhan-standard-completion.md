@@ -200,7 +200,7 @@ git commit -m "feat(standards): map prose-source vocabulary onto the 16 live dep
 
 **Interfaces:**
 - Consumes: `atomiseChunk` (Task 1), `deptForProseHint` (Task 2), `public.fn_standards_load_requirements` (Plan A).
-- Produces: `POST /api/standards/atomise` body `{ source_key: string, limit?: number }` → `{ ok, source_key, chunks_processed, requirements_extracted, inserted, degraded_chunks, cost_usd }`.
+- Produces: `public.fn_standards_source_chunks(p_source_key text)` (service_role only — the `brain` schema is not PostgREST-exposed); `POST /api/standards/atomise` body `{ source_key: string, limit?: number }` → `{ ok, source_key, chunks_processed, requirements_extracted, inserted, degraded_chunks, cost_usd }`.
 
 - [ ] **Step 1: Write the route**
 
@@ -294,11 +294,13 @@ Expected: 71 requirements, `unmapped` = 0.
 
 **Files:**
 - Create: `db/proposed/namkhan-standard-v2/002_atom_embeddings.sql`
+- Create: `lib/standards/dedupe.ts`
 - Create: `app/api/standards/dedupe/route.ts`
+- Modify: `supabase/functions/embed-kb/index.ts` (add a `standards_atoms` target)
 - Test: `lib/standards/__tests__/dedupe.test.ts`
 
 **Interfaces:**
-- Produces: `standards.atoms.embedding vector(1536)`; `public.fn_standards_dedupe_candidates(p_threshold float)` returning candidate pairs within one department; `POST /api/standards/dedupe` → `{ ok, candidates, merged, kept_separate, cost_usd }`.
+- Produces: `standards.atoms.embedding vector(384)`; `public.fn_standards_dedupe_candidates(p_threshold float)` returning candidate pairs within one department; `POST /api/standards/dedupe` → `{ ok, candidates, merged, kept_separate, cost_usd }`.
 - Also: `export function shouldAutoMerge(similarity: number): 'merge' | 'ask' | 'keep'` (pure, tested).
 
 - [ ] **Step 1: Write the failing test for the threshold policy**
@@ -331,8 +333,15 @@ which is worse than a duplicate a human can spot.
 
 - [ ] **Step 4: Add the embedding column and candidate function**
 
-`ALTER TABLE standards.atoms ADD COLUMN IF NOT EXISTS embedding vector(1536);` plus an ivfflat
-index. `fn_standards_dedupe_candidates` returns pairs **within the same `dept_code` only** —
+`ALTER TABLE standards.atoms ADD COLUMN IF NOT EXISTS embedding vector(384);` plus an ivfflat index.
+
+**384, not 1536.** The platform embeds with `new Supabase.ai.Session("gte-small")` inside the Edge
+runtime (`supabase/functions/embed-kb/index.ts`) — a LOCAL model, so there is no third-party LLM
+call, no API key and no cost, and no conflict with L17's Anthropic-only lock, which governs LLM
+providers rather than an in-runtime embedder. `brain.chunks` holds 1536-dim vectors from a
+different/older embedder; do NOT copy that dimension. Extend `embed-kb` with a `standards_atoms`
+target rather than writing a second embedder — it already owns the session, batching, audit-log
+write and failure accounting. `fn_standards_dedupe_candidates` returns pairs **within the same `dept_code` only** —
 cross-department similarity is meaningless here and would quadratically inflate the candidate set.
 
 - [ ] **Step 5: Run dedupe and verify nothing was lost**
