@@ -73,7 +73,7 @@ interface RevLine { account_code: string; account_name: string; line_type: strin
 interface Agreement {
   id: number; agreement_code: string; agreement_title: string; agreement_type: string;
   status: string; effective_from: string; effective_to: string | null; currency: string | null;
-  signed_pdf_url: string | null; notes: string | null;
+  signed_pdf_url: string | null; storage_url: string | null; notes: string | null;
 }
 
 function Pill({ text, tone }: { text: string; tone: 'good' | 'warn' | 'bad' | 'mute' }) {
@@ -113,12 +113,15 @@ export default async function ClientDetailPage(
     sb.from('v_holding_pl_lines')
       .select('account_code, account_name, line_type, amount_eur, period_yyyymm')
       .eq('counterparty', client.name).limit(2000),
-    // Plain embed, matched in JS. A .or() across an embedded resource needs
-    // foreignTable/referencedTable syntax that differs between supabase-js
-    // versions and fails at RUNTIME, not build time — not worth the risk for a
-    // table this small.
+    // Joined by KEY, not by name. contracts.parties.holding_client_id (added
+    // 2026-09-10) points at the CRM client. Name matching was already wrong in
+    // practice — the CRM says "Green Tea Sole Company ltd" while the party says
+    // "Green Tea Sole Company Limited", and no string comparison joins those
+    // without guessing. Guessing on a legal register files a contract against
+    // the wrong counterparty.
     sb.schema('contracts').from('agreements')
-      .select('id, agreement_code, agreement_title, agreement_type, status, effective_from, effective_to, currency, signed_pdf_url, notes, party_id, parties(legal_name, display_name)')
+      .select('id, agreement_code, agreement_title, agreement_type, status, effective_from, effective_to, currency, signed_pdf_url, storage_url, notes, party_id, parties!inner(legal_name, holding_client_id)')
+      .eq('parties.holding_client_id', id)
       .limit(500),
   ]);
 
@@ -126,20 +129,7 @@ export default async function ClientDetailPage(
   const ar = (arRes.data ?? []) as Ar[];
   const revLines = (revRes.data ?? []) as RevLine[];
   const agreementsError = agrRes.error?.message ?? null;
-  const needle = client.name.trim().toLowerCase();
-  const agreements = ((agrRes.data ?? []) as unknown as Array<Agreement & {
-    parties?: { legal_name?: string; display_name?: string } | null;
-  }>).filter((a) => {
-    const legal = (a.parties?.legal_name ?? '').trim().toLowerCase();
-    const disp = (a.parties?.display_name ?? '').trim().toLowerCase();
-    // Match either direction: the CRM name and the legal party name are written
-    // differently ("The Namkhan" vs "Green Tea Sole Company Limited").
-    return Boolean(needle) && (
-      legal === needle || disp === needle ||
-      legal.includes(needle) || needle.includes(legal && legal.length > 3 ? legal : '\u0000') ||
-      disp.includes(needle) || needle.includes(disp && disp.length > 3 ? disp : '\u0000')
-    );
-  });
+  const agreements = (agrRes.data ?? []) as unknown as Agreement[];
 
   // Totals per currency — never summed across (L15).
   const billedByCcy = invoices.reduce<Record<string, number>>((a, i) => {
