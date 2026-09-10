@@ -73,6 +73,29 @@ export function deptForSection(section: string): Dept {
 // housekeeping is also deliberately checked early (right after kitchen) so
 // its "cleaning product" stem is never shadowed by maintenance's broader
 // bare "chemical" stem further down the list.
+//
+// 2026-09-10 widening (real-AI-output fix): a real atomiser run against a
+// real standard showed 40% of hints falling through to admin_general — not
+// because the vocabulary was missing, but because the model emits COMPOUND
+// hints ("sustainability management", "engineering facilities") while the
+// rules only matched narrower literals ("sustainability polic",
+// "legal complian"). The fix is bare stems on maintenance/gm/front_office,
+// which makes the ordering discipline even more load-bearing: every
+// department-specific rule (kitchen through spa) MUST stay ahead of the
+// broad gm and front_office rules, which are now the two LAST entries
+// before the admin_general fallback. Three more hazards, resolved by ORDER:
+//   3. bare "polic" (gm) vs "child protect(ion)" (hr): "child protection
+//      policy" must stay hr. hr is checked long before gm, so it wins.
+//   4. bare "complian"/"sustainab" (gm) vs "food safet" (kitchen): kitchen
+//      is checked first (rule #1 in this table), so "food safety" can never
+//      fall into gm even though neither of its words is safety-specific
+//      vocabulary shared with gm's stems.
+//   5. "guest relation"/"guest service" (front_office, new) vs "amenit"
+//      (housekeeping): "guest amenities refill" must stay housekeeping.
+//      housekeeping is checked long before front_office, so it wins — the
+//      new front_office stems are narrow phrases ("guest relation", "guest
+//      service", "front desk", ...), never a bare "guest", specifically so
+//      they cannot shadow housekeeping's guest-facing stems.
 // Do not reorder without re-checking every case below.
 const PROSE_RULES: Array<[RegExp, Dept]> = [
   [/haccp|food safet|food hygien|food storage|pest control|cold chain|kitchen/i,
@@ -89,13 +112,17 @@ const PROSE_RULES: Array<[RegExp, Dept]> = [
   // see hazard #1 in the comment above.
   [/pool plant|landscap|irrigation|garden|waste segregat|recycl|compost|biodivers/i,
                                    { dept_code: 'grounds',      dept_code_2: null }],
-  [/energy|water consum|wastewater|effluent|chemical|boiler|equipment maint|air condition|refrigerant|plant/i,
+  [/engineering|facilit|technical service|utilit|hvac|plumb|electric|energy|water consum|wastewater|effluent|chemical|boiler|equipment maint|air condition|refrigerant|plant/i,
                                    { dept_code: 'maintenance',  dept_code_2: null }],
   [/restaurant|beverage|menu|dining/i,
                                    { dept_code: 'roots_service',dept_code_2: null }],
   [/spa|wellness|treatment room/i,
                                    { dept_code: 'spa',          dept_code_2: null }],
-  [/community|donation|stakeholder|sustainability polic|management system|legal complian|guest communication/i,
+  // Broad catch-alls. MUST be the last two entries before admin_general —
+  // see hazards #3-#5 above for why every specific rule sits ahead of these.
+  [/guest relation|guest service|reception|reservation|front desk|concierge/i,
+                                   { dept_code: 'front_office', dept_code_2: null }],
+  [/community|donation|stakeholder|governance|management system|reporting|monitoring|guest communication|sustainab|complian|polic/i,
                                    { dept_code: 'gm',           dept_code_2: null }],
 ];
 

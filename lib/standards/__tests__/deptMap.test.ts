@@ -181,4 +181,43 @@ describe('deptForProseHint — back of house', () => {
   ])('maps %s to %s', (hint, dept) => {
     expect(deptForProseHint(hint, '').dept_code).toBe(dept);
   });
+
+  // 2026-09-10: these are the ACTUAL dept_hint values a real AI atomiser run
+  // produced against a real standard. 40% of real output was falling through
+  // to admin_general (acceptance threshold: under 20%) because the model
+  // emits compound hints while the rules demanded narrower literals. Each of
+  // these must now resolve to a real department.
+  it.each([
+    ['sustainability management',      'gm'],
+    ['compliance',                     'gm'],
+    ['management guest relations',     'front_office'],
+    ['management sustainability',      'gm'],
+    ['engineering sustainability',     'maintenance'],
+    ['engineering facilities',         'maintenance'],
+    ['engineering energy',             'maintenance'],
+  ])('maps real atomiser hint %s to %s, never admin_general', (hint, dept) => {
+    const d = deptForProseHint(hint, '');
+    expect(d.dept_code).toBe(dept);
+    expect(d.dept_code).not.toBe('admin_general');
+  });
+
+  // Regression block: the widening above added bare stems (engineering,
+  // facilit, sustainab, complian, polic, guest relation/service, ...) that
+  // are broad enough to threaten rules earlier in PROSE_RULES. Every one of
+  // these must still resolve exactly as it did before the widening — see the
+  // ordering comment above PROSE_RULES for the specific hazard each guards.
+  it.each([
+    ['engineering energy',              'maintenance'],
+    ['food safety',                     'kitchen'],
+    ['child protection policy',         'hr'],
+    ['sustainability polic',            'gm'],
+    ['guest amenities refill',          'housekeeping'],
+    ['pool plant chemical dosing',      'grounds'],
+    ['supplier code of conduct',        'purchasing'],
+    ['occupational health and safety',  'hr'],
+    ['waste segregation',               'grounds'],
+    ['energy efficiency of equipment',  'maintenance'],
+  ])('regression: %s still maps to %s after the widening', (hint, dept) => {
+    expect(deptForProseHint(hint, '').dept_code).toBe(dept);
+  });
 });
