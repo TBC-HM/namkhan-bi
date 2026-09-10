@@ -58,6 +58,29 @@ function storageHeaders(url: string): Record<string, string> {
   return {};
 }
 
+// SDK v2.13.0 uses axios + npm form-data and hardcodes field name 'user' in _addCommonParams,
+// but the Upload Post REST API requires 'username' in form-data POST bodies.
+// Bypass the SDK for upload calls and use native Deno fetch + FormData directly.
+// Auth scheme is 'Apikey <key>', NOT 'Bearer' (Bearer is only for validate-jwt).
+// Using Bearer returns 'Invalid or expired token' with a perfectly valid key —
+// that regression broke all publishing 2026-09-09 18:31Z .. 09-10. Cf. app/api/marketing/social/connect/route.ts:48.
+async function upPost(
+  apiKey: string,
+  endpoint: string,
+  fd: FormData,
+): Promise<Record<string, unknown>> {
+  const r = await fetch(`https://api.upload-post.com/api${endpoint}`, {
+    method: 'POST',
+    headers: { Authorization: `Apikey ${apiKey}` },
+    body: fd,
+  });
+  const j = await r.json() as Record<string, unknown>;
+  if (!r.ok) {
+    throw new Error(`Upload-Post API error: ${String(j?.message ?? j?.error ?? r.status)}`);
+  }
+  return j;
+}
+
 Deno.serve(async (req: Request) => {
   try {
   if (!req.headers.get('Authorization')) return res({ ok: false, error: 'unauthorized' }, 401);
@@ -81,15 +104,6 @@ Deno.serve(async (req: Request) => {
   if (!apiKey) return res({ ok: false, error: 'upload_post_key_not_configured' }, 500);
 
   const up = new UploadPost(apiKey as string);
-  // SDK v2.13 sends form field 'user' but Upload Post API now requires 'username'.
-  // Patch _addCommonParams to swap the append key before the SDK appends it.
-  const _origCommon = (up as any)._addCommonParams.bind(up);
-  (up as any)._addCommonParams = (form: any, opts: Record<string, unknown>) => {
-    const realAppend = form.append.bind(form);
-    form.append = (name: string, value: unknown, options?: unknown) =>
-      realAppend(name === 'user' ? 'username' : name, value, options);
-    _origCommon(form, opts);
-  };
 
   // ── PUSH ─────────────────────────────────────────────────────────────────
   if (mode === 'push') {
@@ -118,7 +132,6 @@ Deno.serve(async (req: Request) => {
       : [];
 
     let result: Record<string, unknown>;
-    const scheduleDate = p.scheduled_at ? { scheduledDate: p.scheduled_at } : {};
     // SDK timeout: 20 s per call. If Upload Post API hangs, the inner catch
     // fires, marks the post as error, and returns 200 — preventing Supabase
     // from killing the process and leaving up_status=null.
@@ -128,7 +141,6 @@ Deno.serve(async (req: Request) => {
     try {
     if ((p.platform as string) === 'pinterest') {
       const pinTitle = String(p.title ?? '').slice(0, 100);
-      const pinBody  = [String(p.caption ?? p.title ?? ''), tags].filter(Boolean).join('\n\n').slice(0, 500);
       if (mediaUrls.length === 0) {
         try { await sb.rpc('fn_social_post_mark_pushed', {
           p_post_id: postId, p_up_request_id: null, p_up_job_id: null,
@@ -154,27 +166,26 @@ Deno.serve(async (req: Request) => {
         }); } catch { /* best effort */ }
         return res({ ok: false, error: 'all_media_fetch_failed' }, 502);
       }
-      const pinOpts: Record<string, unknown> = {
-        user:        profileUsername as string,
-        platforms:   ['pinterest'],
-        title:       pinTitle,
-        description: pinBody,
-        ...scheduleDate,
-      };
-      if (p.link_url)            pinOpts.pinterestLink    = String(p.link_url);
-      if (p.pinterest_board_id)  pinOpts.pinterestBoardId = String(p.pinterest_board_id);
+      const pinFd = new FormData();
+      for (const f of files) pinFd.append('photos[]', f);
+      pinFd.append('username', profileUsername as string);
+      pinFd.append('title', pinTitle);
+      pinFd.append('platform[]', 'pinterest');
+      if (p.scheduled_at) pinFd.append('scheduled_date', String(p.scheduled_at));
+      if (p.link_url) pinFd.append('pinterest_link', String(p.link_url));
+      if (p.pinterest_board_id) pinFd.append('pinterest_board_id', String(p.pinterest_board_id));
       result = await withTimeout(
-        up.uploadPhotos(files, pinOpts) as Promise<Record<string, unknown>>,
+        upPost(apiKey as string, '/upload_photos', pinFd),
         SDK_TIMEOUT_MS, 'pinterest_upload_photos'
       );
     } else if (mediaUrls.length === 0) {
+      const txtFd = new FormData();
+      txtFd.append('username', profileUsername as string);
+      txtFd.append('platform[]', upPlatform(p.platform as string));
+      txtFd.append('title', caption);
+      if (p.scheduled_at) txtFd.append('scheduled_date', String(p.scheduled_at));
       result = await withTimeout(
-        up.uploadText({
-          user: profileUsername as string,
-          platforms: [upPlatform(p.platform as string)],
-          title: caption,
-          ...scheduleDate,
-        }) as Promise<Record<string, unknown>>,
+        upPost(apiKey as string, '/upload_text', txtFd),
         SDK_TIMEOUT_MS, 'upload_text'
       );
     } else if (mediaUrls.some(isVideo)) {
@@ -184,16 +195,14 @@ Deno.serve(async (req: Request) => {
       const buf = await fetchRes.arrayBuffer();
       if (buf.byteLength > MAX_MEDIA_BYTES) return res({ ok: false, error: 'media_too_large' }, 413);
       const ext = videoUrl.split('?')[0].split('.').pop()?.toLowerCase() ?? 'mp4';
+      const vidFd = new FormData();
+      vidFd.append('video', new File([buf], `video.${ext}`, { type: `video/${ext}` }));
+      vidFd.append('username', profileUsername as string);
+      vidFd.append('platform[]', upPlatform(p.platform as string));
+      vidFd.append('title', caption);
+      if (p.scheduled_at) vidFd.append('scheduled_date', String(p.scheduled_at));
       result = await withTimeout(
-        up.upload(
-          new File([buf], `video.${ext}`, { type: `video/${ext}` }),
-          {
-            user: profileUsername as string,
-            platforms: [upPlatform(p.platform as string)],
-            title: caption,
-            ...scheduleDate,
-          }
-        ) as Promise<Record<string, unknown>>,
+        upPost(apiKey as string, '/upload', vidFd),
         SDK_TIMEOUT_MS, 'upload_video'
       );
     } else {
@@ -210,26 +219,24 @@ Deno.serve(async (req: Request) => {
       }
       if (files.length === 0) {
         // All image fetches failed (e.g. storage auth) — publish text-only as fallback
+        const txtFdFb = new FormData();
+        txtFdFb.append('username', profileUsername as string);
+        txtFdFb.append('platform[]', upPlatform(p.platform as string));
+        txtFdFb.append('title', caption);
+        if (p.scheduled_at) txtFdFb.append('scheduled_date', String(p.scheduled_at));
         result = await withTimeout(
-          up.uploadText({
-            user: profileUsername as string,
-            platforms: [upPlatform(p.platform as string)],
-            title: caption,
-            ...scheduleDate,
-          }) as Promise<Record<string, unknown>>,
+          upPost(apiKey as string, '/upload_text', txtFdFb),
           SDK_TIMEOUT_MS, 'upload_text_fallback'
         );
       } else {
+        const photoFd = new FormData();
+        for (const f of files) photoFd.append('photos[]', f);
+        photoFd.append('username', profileUsername as string);
+        photoFd.append('platform[]', upPlatform(p.platform as string));
+        photoFd.append('title', caption);
+        if (p.scheduled_at) photoFd.append('scheduled_date', String(p.scheduled_at));
         result = await withTimeout(
-          up.uploadPhotos(
-            files,
-            {
-              user: profileUsername as string,
-              platforms: [upPlatform(p.platform as string)],
-              title: caption,
-              ...scheduleDate,
-            }
-          ) as Promise<Record<string, unknown>>,
+          upPost(apiKey as string, '/upload_photos', photoFd),
           SDK_TIMEOUT_MS, 'upload_photos'
         );
       }
