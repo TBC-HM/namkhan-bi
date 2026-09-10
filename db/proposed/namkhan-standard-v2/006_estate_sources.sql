@@ -1,0 +1,23 @@
+-- AUDIT COPY — applied live as standards_estate_sources_v1 (Plan B Task 4b).
+--
+-- The obligations that were in the ESTATE but not in the standard. No AI, no purchased
+-- document: ops.legal_compliance_register (30 laws, key_obligations already written out as
+-- newline bullets) and ops.sustainability_requirements (83 GSTC-aligned, with targets).
+--
+-- THIS IS WHAT CLOSED THE KITCHEN GAP. I reported that no food-safety standard existed in
+-- the document register. True — but the Lao Food Law was in a TABLE the whole time, with
+-- its obligations spelled out: food handler health certificates, kitchen hygiene +
+-- HACCP-equivalent practices, supplier verification, cold chain, allergen disclosure,
+-- pest control. Same for fire (Lao Law on Fire Prevention) and labour (Lao Labour Law,
+-- ILO 138/182/29/105).
+--
+-- ops.qa_bank (413 rows) is deliberately NOT a source: those are staff Q&A DERIVED from
+-- standards, not obligations. Loading them would fill the standard with answers.
+--
+-- BUG FOUND AND FIXED IN THE SAME PASS: two real rows about "social security" (NSSF
+-- contributions, employee health-care support) filed under `security`, because the bare
+-- `security` stem matched the phrase "social security". These are HR obligations. The hr
+-- rule now precedes security in BOTH fn_standards_dept_for_hint and
+-- lib/standards/deptMap.ts, re-verified equivalent on 12 cases afterwards.
+--
+-- See the live database for the current function bodies.
