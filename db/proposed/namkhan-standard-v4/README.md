@@ -128,3 +128,53 @@ proposals say the same thing. Tenant-safe only via its join to
 
 Findings filed: **#683** (10 dangling SOP register links), **#684** (458-proposal
 triage, owner decision open).
+
+---
+
+## Dedupe adjudication — all 510 borderline pairs judged
+
+`standards-dedupe-judge` (edge fn) + prompt `standards_dedupe_judge` (id 250) +
+`standards.dedupe_verdicts` + `public.v_standards_dedupe_queue`.
+
+**It never merges.** It writes a verdict and stops. The asymmetry decides the design:
+a wrong "same" silently deletes an obligation nobody notices is missing; a wrong
+"different" leaves a duplicate a human can merge later.
+
+Calibration before spending: the top 14 pairs were judged by hand first, then by the
+model. **14 of 14 agreed** — including three "the statement is found in a relevant
+location" pairs I could not call from truncated text, which it correctly separated as
+community-engagement vs environmental vs child-safeguarding policies.
+
+Result over 510 pairs — 114 same, 396 different:
+
+| band | same | different | % same |
+|---|---|---|---|
+| 0.97+ | 23 | 45 | 34% |
+| 0.95–0.97 | 32 | 100 | 24% |
+| 0.93–0.95 | 59 | 251 | 19% |
+
+**Even at 0.97+ only a third aregenuine duplicates.** This is the measurement that
+retroactively justifies raising auto-merge to 0.99: similarity is a weak predictor of
+sameness across this whole band, so the verdicts — not the scores — are the artifact.
+
+Caveat worth carrying: the model is more permissive at the bottom. In the 0.93–0.95
+band some "same" verdicts are arguable ("you do not provide any payment or incentive"
+vs "you do not take deposits" — payment and deposit are not obviously the same
+prohibition). **Apply 0.97+ "same" first; hand-review 0.93–0.95 before merging.**
+`applied_at` / `applied_by` on `dedupe_verdicts` exist so an applied merge is never
+silently re-judged. Nothing has been applied: `applied_so_far = 0`.
+
+Cost: 57,216 in / 23,608 out = **USD 0.1753**, metered under run_ref
+`dedupe-backfill-2026-09-10`.
+
+### The metering bug this uncovered — finding #686
+
+`fn_meter_ai_call` was being called with a signature that does not exist, inside a bare
+`catch`, in BOTH standards-atomise and (copied from it) standards-dedupe-judge. Wrong
+argument names, silent failure, real spend. Both fixed; the RPC error is now returned as
+`metered` / `meter_error` rather than swallowed. standards-atomise's own historical spend
+is permanently unrecoverable — `net._http_response` had already been pruned.
+
+Also noted: deploying via the Supabase MCP forces `verify_jwt=true` with no option to
+preserve `false`. standards-atomise was flipped this way. Nothing calls it, so nothing
+broke — but check `verify_jwt` after any MCP redeploy.
