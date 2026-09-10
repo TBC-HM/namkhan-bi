@@ -1,4 +1,4 @@
-import { deptForSection, categoryForSection } from '../deptMap';
+import { deptForSection, categoryForSection, deptForProseHint } from '../deptMap';
 
 describe('deptForSection', () => {
   it.each([
@@ -96,5 +96,43 @@ describe('categoryForSection', () => {
   });
   it('classifies SLH Brand as brand', () => {
     expect(categoryForSection('SLH Brand')).toBe('brand');
+  });
+});
+
+describe('deptForProseHint — back of house', () => {
+  it.each([
+    ['food safety, HACCP, cold chain',            'kitchen'],
+    ['kitchen hygiene and pest control',          'kitchen'],
+    ['landscaping, irrigation, pool plant',       'grounds'],
+    ['energy consumption and metering',           'maintenance'],
+    ['water consumption and wastewater',          'maintenance'],
+    ['chemical storage and handling',             'maintenance'],
+    ['fire safety systems and drills',            'security'],
+    ['staff welfare, wages, working hours',       'hr'],
+    ['child protection policy',                   'hr'],
+    ['training and competency records',           'hr'],
+    ['supplier selection and local sourcing',     'purchasing'],
+    ['waste segregation and recycling',           'grounds'],
+    ['community engagement and donations',        'gm'],
+    ['guest communication of sustainability',     'gm'],
+  ])('maps %s to %s', (hint, dept) => {
+    expect(deptForProseHint(hint, '').dept_code).toBe(dept);
+  });
+
+  it('falls back to admin_general only when genuinely unmappable', () => {
+    expect(deptForProseHint('miscellaneous administrative matters', '').dept_code).toBe('admin_general');
+  });
+
+  it('uses the section text when the hint is null', () => {
+    expect(deptForProseHint(null, 'Kitchen waste and food storage temperatures').dept_code).toBe('kitchen');
+  });
+
+  it('only ever returns live dept codes', () => {
+    const LIVE = new Set(['front_office','housekeeping','kitchen','roots_service','maintenance',
+      'grounds','spa','activities','boat','security','finance','gm','hr','purchasing',
+      'sales_marketing','admin_general']);
+    for (const h of ['HACCP','energy','child protection','nonsense xyz', null]) {
+      expect(LIVE.has(deptForProseHint(h, '').dept_code)).toBe(true);
+    }
   });
 });

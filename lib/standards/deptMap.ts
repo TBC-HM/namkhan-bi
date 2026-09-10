@@ -39,6 +39,54 @@ export function deptForSection(section: string): Dept {
   return { dept_code: 'admin_general', dept_code_2: null };
 }
 
+// ---------------------------------------------------------------------------
+// Prose-source vocabulary -> Namkhan department.
+//
+// The SLH inspection above is a guest-journey audit: it never sees a kitchen,
+// a chemical store or a switchboard, so ten of the sixteen live departments
+// (kitchen, grounds, maintenance, security, hr, purchasing, boat, activities,
+// finance, sales_marketing) get zero requirements from it alone. The four
+// prose standards (GSTC, ASEAN Green Hotel, Travelife, ...) speak a
+// back-of-house vocabulary instead, and this table is what routes that
+// vocabulary onto the departments SLH cannot reach.
+//
+// PROSE_RULES must be ordered most-specific-first, same discipline as RULES
+// above, for the same reason: Plan A's final review found the *original*
+// SLH ordering had misfiled 26 real database rows because a broad
+// front_office rule outranked the narrower spa/dining rules it happened to
+// share substrings with. This table has the identical hazard —
+// "wastewater" contains "waste", so a bare /waste/ rule would let generic
+// wastewater (maintenance) get caught by a waste-segregation (grounds) rule,
+// and "pool plant" (grounds — pool filtration/irrigation plant) would get
+// caught by a hypothetical bare /plant/ maintenance rule. Every pattern below
+// is written specific enough to avoid that, and kitchen/security/hr/
+// purchasing are checked BEFORE grounds/maintenance so a requirement that is
+// unambiguously "kitchen" (e.g. "Kitchen waste and food storage
+// temperatures") is never grabbed by the later, broader waste/energy rules.
+// Do not reorder without re-checking every case below.
+const PROSE_RULES: Array<[RegExp, Dept]> = [
+  [/haccp|cold chain|food safety|food hygien|food storage|pest control|kitchen/i,
+                                   { dept_code: 'kitchen',      dept_code_2: null }],
+  [/fire safety|fire drill|fire suppression|life safety/i,
+                                   { dept_code: 'security',     dept_code_2: null }],
+  [/staff welfare|wages?|working hours|child protection|training|competenc|labour|labor/i,
+                                   { dept_code: 'hr',           dept_code_2: null }],
+  [/supplier|sourcing|procurement/i,
+                                   { dept_code: 'purchasing',   dept_code_2: null }],
+  [/landscap|irrigation|garden|waste segregat|recycl/i,
+                                   { dept_code: 'grounds',      dept_code_2: null }],
+  [/energy consumption|electricity|metering|water consumption|wastewater|chemical storage|chemical handling|hazardous material|hvac|boiler/i,
+                                   { dept_code: 'maintenance',  dept_code_2: null }],
+  [/community|donation|csr|stakeholder|guest communication|sustainab/i,
+                                   { dept_code: 'gm',           dept_code_2: null }],
+];
+
+export function deptForProseHint(hint: string | null, sectionText: string): Dept {
+  const s = `${hint ?? ''} ${sectionText ?? ''}`.trim();
+  for (const [re, dept] of PROSE_RULES) if (re.test(s)) return { ...dept };
+  return { dept_code: 'admin_general', dept_code_2: null };
+}
+
 export function categoryForSection(section: string): string {
   const s = (section || '').toLowerCase();
   if (/sustainab/.test(s)) return 'sustainability';
