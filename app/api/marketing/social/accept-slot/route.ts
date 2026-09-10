@@ -18,7 +18,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// Fallback area order when no photo found by asset_id (qc_score > 75 filter)
+// Fallback area order when no photo found by asset_id (quality_index > 75 filter)
 const PHOTO_AREA_FALLBACKS = ['lifestyle', 'restaurant', 'grounds', 'rooms', 'pool'];
 
 const SYSTEM_PROMPT =
@@ -104,15 +104,15 @@ export async function POST(req: NextRequest) {
       .eq('active', true)
       .order('is_pinned', { ascending: false })
       .limit(20),
-    // Top-scored photos (qc_score > 75) with captions — AI picks by asset_id
+    // Top-scored photos (quality_index > 75) with captions — AI picks by asset_id
     sb.from('mkt_v_media_ready')
       .select('asset_id,caption,alt_text,property_area,renders,raw_path')
       .eq('property_id', slot.property_id)
       .eq('asset_type', 'photo')
       .contains('usage_rights', ['social_organic'])
       .not('raw_path', 'is', null)
-      .gt('qc_score', 75)
-      .order('qc_score', { ascending: false })
+      .gt('quality_index', 75)
+      .order('quality_index', { ascending: false })
       .limit(20),
   ]);
 
@@ -174,7 +174,7 @@ ${channelContext ? `\n${channelContext}` : ''}
 Caption limit: ${captionMax} characters (HARD LIMIT — count every character including hashtags; do not exceed under any circumstances).
 ${titleLine}
 ${hashtagLine}
-PHOTO — pick the asset_id of the photo whose caption best matches this post's tone and subject. All listed photos have qc_score > 75. Return its UUID in "photo_id". You MUST pick one:
+PHOTO — pick the asset_id of the photo whose caption best matches this post's tone and subject. All listed photos have quality_index > 75. Return its UUID in "photo_id". You MUST pick one:
 ${photoMenu || '(no photos available — use null)'}
 
 LINK — pick the single most relevant link id. ALWAYS return a link_id number — never return null. Default to id 1 (booking) when no specific match:
@@ -215,7 +215,7 @@ Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_id":"<uu
     }
   } catch { /* draft keeps brief_md set by fn_social_slot_accept */ }
 
-  // 8. Resolve photo — AI-picked asset first, then fallback by area (qc_score > 75)
+  // 8. Resolve photo — AI-picked asset first, then fallback by area (quality_index > 75)
   let mediaUrl: string | null = null;
   const resolveUrl = (ph: { raw_path: string | null; renders: Record<string,string> | null } | null) => {
     if (!ph) return null;
@@ -228,7 +228,7 @@ Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_id":"<uu
     mediaUrl = resolveUrl(photoMap.get(photoId) ?? null);
   }
   if (!mediaUrl) {
-    // Fallback: best qc_score > 75 photo in preferred areas
+    // Fallback: best quality_index > 75 photo in preferred areas
     for (const area of PHOTO_AREA_FALLBACKS) {
       const { data: fallbackPhotos } = await sb.from('mkt_v_media_ready')
         .select('raw_path,renders')
@@ -237,8 +237,8 @@ Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_id":"<uu
         .eq('asset_type', 'photo')
         .contains('usage_rights', ['social_organic'])
         .not('raw_path', 'is', null)
-        .gt('qc_score', 75)
-        .order('qc_score', { ascending: false })
+        .gt('quality_index', 75)
+        .order('quality_index', { ascending: false })
         .limit(1);
       if (fallbackPhotos && fallbackPhotos.length > 0) {
         mediaUrl = resolveUrl(fallbackPhotos[0] as { raw_path: string | null; renders: Record<string,string> | null });

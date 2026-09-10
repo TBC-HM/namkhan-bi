@@ -20,22 +20,24 @@ const STORAGE_RAW     = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/obje
 
 // Quality gate. Two INDEPENDENT questions decide whether an asset may be offered:
 //   usage_rights  — MAY we publish it here? (licensing: web / ota / social_organic)
-//   qc_score      — SHOULD we? (is it good enough to represent the property)
+//   quality_index — SHOULD we? (is it good enough to represent the property)
 // Both must pass. Rights alone let low-scoring junk through; score alone would let a
 // web-only or expired-licence photo reach social. Neither substitutes for the other.
 //
-// Matches app/api/marketing/social/accept-slot/route.ts, which already gates its
-// AI-picked photos at qc_score > 75 — so the manual picker and the AI picker now agree.
-// Previously they did not, and the AI could choose a photo this library would not show.
+// Gate on quality_index, NOT qc_score. qc_score is a v1 leftover carried on ~8% of assets
+// (170 of 2,071); quality_index is what media-qa-score writes and covers 98.5%. Filtering
+// on qc_score silently drops ~92% of the library — it did exactly that here for one
+// afternoon, and in accept-slot since that route was written. Both now use quality_index.
 //
-// Per-channel so the bar can differ by surface. Pinterest sits at 75 today by PBS's call;
-// raise it here alone when the library is deep enough to support a stricter bar.
-const MIN_QC_SCORE: Record<string, number> = { pinterest: 75 };
-const MIN_QC_SCORE_DEFAULT = 75;
+// Per-channel so the bar can differ by surface. Measured 2026-09-10 across social-ready
+// photos: >75 = 784 assets, >85 = 181. Pinterest takes the stricter bar because there the
+// image IS the product; 181 sustains a daily pin programme for roughly six months.
+const MIN_QUALITY: Record<string, number> = { pinterest: 85 };
+const MIN_QUALITY_DEFAULT = 75;
 
 function minScoreFor(platform: string | null): number {
-  if (!platform) return MIN_QC_SCORE_DEFAULT;
-  return MIN_QC_SCORE[platform.toLowerCase()] ?? MIN_QC_SCORE_DEFAULT;
+  if (!platform) return MIN_QUALITY_DEFAULT;
+  return MIN_QUALITY[platform.toLowerCase()] ?? MIN_QUALITY_DEFAULT;
 }
 
 function thumbnailUrl(renders: Record<string, string> | null, raw_path: string | null): string | null {
@@ -66,12 +68,12 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabaseAdmin();
   let q = sb.from('mkt_v_media_ready')
-    .select('asset_id,asset_type,original_filename,caption,alt_text,primary_tier,property_area,usage_rights,raw_path,width_px,height_px,renders,tags,qc_score')
+    .select('asset_id,asset_type,original_filename,caption,alt_text,primary_tier,property_area,usage_rights,raw_path,width_px,height_px,renders,tags,quality_index')
     .eq('property_id', propertyId)
     .contains('usage_rights', ['social_organic'])
     // NOTE: .gt() excludes qc_score IS NULL — an unscored asset is not offered.
     // Same semantics as accept-slot. Run media-qa-score to bring an asset in.
-    .gt('qc_score', minScore)
+    .gt('quality_index', minScore)
     .order('captured_at', { ascending: false, nullsFirst: false })
     .order('asset_id', { ascending: false })
     .range((page - 1) * limit, page * limit - 1);
@@ -92,7 +94,7 @@ export async function GET(req: NextRequest) {
     width_px:    a.width_px,
     height_px:   a.height_px,
     tags:        a.tags,
-    qc_score:    a.qc_score,
+    quality_index: a.quality_index,
     thumbnail_url: thumbnailUrl(a.renders, a.raw_path),
     raw_path_url: a.raw_path ? `${STORAGE_RAW}/${a.raw_path}` : null,
     full_url:    a.renders?.web_2k
