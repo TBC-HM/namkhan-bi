@@ -58,12 +58,18 @@ function storageHeaders(url: string): Record<string, string> {
   return {};
 }
 
-// SDK v2.13.0 uses axios + npm form-data and hardcodes field name 'user' in _addCommonParams,
-// but the Upload Post REST API requires 'username' in form-data POST bodies.
-// Bypass the SDK for upload calls and use native Deno fetch + FormData directly.
-// Auth scheme is 'Apikey <key>', NOT 'Bearer' (Bearer is only for validate-jwt).
-// Using Bearer returns 'Invalid or expired token' with a perfectly valid key —
-// that regression broke all publishing 2026-09-09 18:31Z .. 09-10. Cf. app/api/marketing/social/connect/route.ts:48.
+// Upload Post REST contract — both halves verified empirically 2026-09-10, do not "fix" either:
+//
+//   Auth  : 'Apikey <key>'.  NOT 'Bearer' (Bearer is only for /uploadposts/users/validate-jwt).
+//           Wrong scheme => "Invalid or expired token" — an error that blames a perfectly valid key.
+//
+//   Field : 'user'.  NOT 'username', despite the API replying "Username required in form data"
+//           when it is absent. That message names the VALUE, not the field. Sending 'username'
+//           fails identically in every field order, on both /upload_text and /upload_photos.
+//
+// Both were misdiagnosed before: the misread error drove a user->username rewrite that broke
+// publishing outright, then a Bearer regression on top of it. The SDK had it right.
+// Bypass the SDK only because its axios + npm form-data stack is awkward under Deno.
 async function upPost(
   apiKey: string,
   endpoint: string,
@@ -168,7 +174,7 @@ Deno.serve(async (req: Request) => {
       }
       const pinFd = new FormData();
       for (const f of files) pinFd.append('photos[]', f);
-      pinFd.append('username', profileUsername as string);
+      pinFd.append('user', profileUsername as string);
       pinFd.append('title', pinTitle);
       pinFd.append('platform[]', 'pinterest');
       if (p.scheduled_at) pinFd.append('scheduled_date', String(p.scheduled_at));
@@ -180,7 +186,7 @@ Deno.serve(async (req: Request) => {
       );
     } else if (mediaUrls.length === 0) {
       const txtFd = new FormData();
-      txtFd.append('username', profileUsername as string);
+      txtFd.append('user', profileUsername as string);
       txtFd.append('platform[]', upPlatform(p.platform as string));
       txtFd.append('title', caption);
       if (p.scheduled_at) txtFd.append('scheduled_date', String(p.scheduled_at));
@@ -197,7 +203,7 @@ Deno.serve(async (req: Request) => {
       const ext = videoUrl.split('?')[0].split('.').pop()?.toLowerCase() ?? 'mp4';
       const vidFd = new FormData();
       vidFd.append('video', new File([buf], `video.${ext}`, { type: `video/${ext}` }));
-      vidFd.append('username', profileUsername as string);
+      vidFd.append('user', profileUsername as string);
       vidFd.append('platform[]', upPlatform(p.platform as string));
       vidFd.append('title', caption);
       if (p.scheduled_at) vidFd.append('scheduled_date', String(p.scheduled_at));
@@ -220,7 +226,7 @@ Deno.serve(async (req: Request) => {
       if (files.length === 0) {
         // All image fetches failed (e.g. storage auth) — publish text-only as fallback
         const txtFdFb = new FormData();
-        txtFdFb.append('username', profileUsername as string);
+        txtFdFb.append('user', profileUsername as string);
         txtFdFb.append('platform[]', upPlatform(p.platform as string));
         txtFdFb.append('title', caption);
         if (p.scheduled_at) txtFdFb.append('scheduled_date', String(p.scheduled_at));
@@ -231,7 +237,7 @@ Deno.serve(async (req: Request) => {
       } else {
         const photoFd = new FormData();
         for (const f of files) photoFd.append('photos[]', f);
-        photoFd.append('username', profileUsername as string);
+        photoFd.append('user', profileUsername as string);
         photoFd.append('platform[]', upPlatform(p.platform as string));
         photoFd.append('title', caption);
         if (p.scheduled_at) photoFd.append('scheduled_date', String(p.scheduled_at));
