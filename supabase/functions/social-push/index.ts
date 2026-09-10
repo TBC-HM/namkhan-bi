@@ -143,6 +143,17 @@ Deno.serve(async (req: Request) => {
     // from killing the process and leaving up_status=null.
     const SDK_TIMEOUT_MS = 20_000;
 
+    // The cron dispatches posts whose scheduled_at has ARRIVED — so by dispatch time it is
+    // always in the PAST. Forwarding it as scheduled_date makes Upload-Post reject the post
+    // ("Scheduled date must be in the future"), meaning a scheduled post could never publish;
+    // only unscheduled ones got through. Forward it only while still genuinely future,
+    // otherwise publish immediately — which is what "its time has come" means.
+    const schedAt = p.scheduled_at ? new Date(String(p.scheduled_at)).getTime() : NaN;
+    const sched: string | null =
+      Number.isFinite(schedAt) && schedAt > Date.now() + 60_000
+        ? new Date(schedAt).toISOString()
+        : null;
+
     // ── Pinterest: always images, separate title + description + board_id ──
     try {
     if ((p.platform as string) === 'pinterest') {
@@ -177,7 +188,7 @@ Deno.serve(async (req: Request) => {
       pinFd.append('user', profileUsername as string);
       pinFd.append('title', pinTitle);
       pinFd.append('platform[]', 'pinterest');
-      if (p.scheduled_at) pinFd.append('scheduled_date', String(p.scheduled_at));
+      if (sched) pinFd.append('scheduled_date', sched);
       if (p.link_url) pinFd.append('pinterest_link', String(p.link_url));
       if (p.pinterest_board_id) pinFd.append('pinterest_board_id', String(p.pinterest_board_id));
       result = await withTimeout(
@@ -189,7 +200,7 @@ Deno.serve(async (req: Request) => {
       txtFd.append('user', profileUsername as string);
       txtFd.append('platform[]', upPlatform(p.platform as string));
       txtFd.append('title', caption);
-      if (p.scheduled_at) txtFd.append('scheduled_date', String(p.scheduled_at));
+      if (sched) txtFd.append('scheduled_date', sched);
       result = await withTimeout(
         upPost(apiKey as string, '/upload_text', txtFd),
         SDK_TIMEOUT_MS, 'upload_text'
@@ -206,7 +217,7 @@ Deno.serve(async (req: Request) => {
       vidFd.append('user', profileUsername as string);
       vidFd.append('platform[]', upPlatform(p.platform as string));
       vidFd.append('title', caption);
-      if (p.scheduled_at) vidFd.append('scheduled_date', String(p.scheduled_at));
+      if (sched) vidFd.append('scheduled_date', sched);
       result = await withTimeout(
         upPost(apiKey as string, '/upload', vidFd),
         SDK_TIMEOUT_MS, 'upload_video'
@@ -229,7 +240,7 @@ Deno.serve(async (req: Request) => {
         txtFdFb.append('user', profileUsername as string);
         txtFdFb.append('platform[]', upPlatform(p.platform as string));
         txtFdFb.append('title', caption);
-        if (p.scheduled_at) txtFdFb.append('scheduled_date', String(p.scheduled_at));
+        if (sched) txtFdFb.append('scheduled_date', sched);
         result = await withTimeout(
           upPost(apiKey as string, '/upload_text', txtFdFb),
           SDK_TIMEOUT_MS, 'upload_text_fallback'
@@ -240,7 +251,7 @@ Deno.serve(async (req: Request) => {
         photoFd.append('user', profileUsername as string);
         photoFd.append('platform[]', upPlatform(p.platform as string));
         photoFd.append('title', caption);
-        if (p.scheduled_at) photoFd.append('scheduled_date', String(p.scheduled_at));
+        if (sched) photoFd.append('scheduled_date', sched);
         result = await withTimeout(
           upPost(apiKey as string, '/upload_photos', photoFd),
           SDK_TIMEOUT_MS, 'upload_photos'
