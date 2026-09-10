@@ -38,6 +38,29 @@ export interface DeptRow {
   slh_sections: number | null;
   /** the worst section's recorded cause */
   slh_top_miss: string | null;
+  /** what guests say, weighted across mapped OTA categories, normalised to 5 */
+  guest_score: number | null;
+  /** the lowest-scoring category feeding this department, with its platform */
+  guest_weakest: string | null;
+  guest_platforms: number | null;
+}
+
+export interface GuestPlatform {
+  source: string;
+  /** in the platform's own scale — Booking 9.1/10, TripAdvisor 4.8/5 */
+  overall: number | null;
+  scale: number | null;
+  /** normalised to 5 so platforms are comparable */
+  overall_5: number | null;
+  reviews: number | null;
+  rank: number | null;
+  rank_of: number | null;
+  rank_context: string | null;
+}
+
+export interface GuestSummary {
+  as_of: string | null;
+  platforms: GuestPlatform[];
 }
 
 /** Header summary of the most recent SLH blind visit. */
@@ -99,6 +122,8 @@ export interface StandardPayload {
   totals: StandardTotals;
   /** null when the property has no recorded SLH inspection */
   audit: AuditSummary | null;
+  /** OTA ratings; null when the property has none recorded */
+  guest: GuestSummary | null;
   authorities: AuthorityRow[];
   departments: DeptRow[];
   /** empty unless `dept` is set */
