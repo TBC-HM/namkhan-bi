@@ -3058,3 +3058,11 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 ### 2026-08-13 — bug-agent · fix #178
 - ## Bug #178 – Preview page lands in Namkhan menu (cockpit layout wraps it)  ### Root cause The preview page lives at `app/legal/docs/preview/[doc_id]/page.tsx`. Without a layout override, Next.js App Router inherits the root cockpit layout and wraps the preview in the full Namkhan menu.
 - touched `app/legal/docs/preview/layout.tsx`
+
+### 2026-09-10 — Operations · Quality: the Standard tab, and 6 tabs folded to 3
+- **New page** `app/h/[property_id]/operations/standard/` (page.tsx · StandardBrowser.tsx · types.ts) — the Namkhan Standard: 1,777 merged requirements from 7 authorities (SLH · ASEAN · Travelife · GSTC · Legal · Sustainability · PM), each tagged with every standard that asks for it. Server component, ONE RPC (`public.fn_standards_payload`), client filters only.
+- **Quality sub-strip folded 6 → 3** in `lib/nav-subgroups.ts`: Dashboard (how are we doing) · Standard (what must we do) · SOPs (how we do it). "QA registry", "Proposals", "Generate" and "Agent instructions" are no longer tabs. Every retired route stays a subgroup **member**, so those pages still work and still render their own strip — dropping them from `members` would have stranded four live pages outside their own navigation. Verified: none of the 15 `ops.qa_dash_action_rules` CTAs pointed at a retired tab.
+- **Coverage renders three strengths and never collapses them** — `exact` (emerald) / `declared` (amber) / `suggested` (sky), on a palette deliberately distinct from the authority chips, so "which standard asks for this" is never confused with "how well do we cover it". Collapsing them would report 504 of 1,777 covered when 208 are.
+- Formatting follows the sibling Quality dashboard: hand-built date/number helpers in UTC, no `Intl` — Node's ICU and the browser's disagree on invisible characters (NBSP vs U+202F), which React reports as hydration error #425 and a whitespace-normalising diff cannot see.
+- Department labels come from `ops.departments` per property, never a hardcoded map — the corpus is tenant-neutral but the vocabulary is not.
+- Governance: `cockpit_decisions` #315, `governance.protected_path_decisions` #18 (`lib/nav-subgroups.ts`).
