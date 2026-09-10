@@ -16,7 +16,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type {
   HoldingPlPayload, PlLineRow, ArAgeingRow, CashCollectedRow, PlMonthlyRow,
-  HoldingBudgetPayload,
+  HoldingBudgetPayload, BudgetLineRow,
 } from './types';
 
 /**
@@ -203,5 +203,48 @@ export async function fetchHoldingBudget(
     return { ok: true, data: data as HoldingBudgetPayload, error: null };
   } catch (e) {
     return { ok: false, data: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** The plan lines themselves, so the page can SHOW a budget, not only variance. */
+export async function fetchBudgetLines(
+  year: string | null,
+  scenario = 'budget',
+): Promise<Fetched<BudgetLineRow[]>> {
+  try {
+    const sb = getSupabaseAdmin();
+    let q = sb
+      .from('v_holding_budget_lines')
+      .select('*')
+      .eq('scenario', scenario)
+      .order('period_yyyymm', { ascending: true })
+      .limit(ROW_LIMIT);
+    if (year) q = q.gte('period_yyyymm', `${year}01`).lte('period_yyyymm', `${year}12`);
+    const { data, error } = await q;
+    if (error) return { ok: false, data: null, error: `v_holding_budget_lines failed: ${error.message}` };
+    return { ok: true, data: (data ?? []) as BudgetLineRow[], error: null };
+  } catch (e) {
+    return { ok: false, data: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Accounts available to plan against, from the live chart of accounts. */
+export async function fetchPlannableAccounts(): Promise<Array<{ code: string; label: string }>> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data, error } = await sb
+      .from('v_holding_budget_lines')
+      .select('account_code, account_name, dept_code')
+      .limit(ROW_LIMIT);
+    if (error || !data) return [];
+    const seen = new Map<string, string>();
+    for (const r of data as Array<{ account_code: string; account_name: string; dept_code: string }>) {
+      if (!seen.has(r.account_code)) seen.set(r.account_code, `${r.account_code} · ${r.account_name} (${r.dept_code})`);
+    }
+    return Array.from(seen.entries())
+      .map(([code, label]) => ({ code, label }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+  } catch {
+    return [];
   }
 }

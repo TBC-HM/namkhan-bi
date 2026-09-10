@@ -13,11 +13,15 @@
 // Access: middleware 403s /holding for any session whose holding_role claim is
 // empty, which is the same guard the sibling Finance pages rely on.
 
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { requireHoldingFromCookies } from '@/lib/holding/guard';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import {
   fetchHoldingPl, fetchPlLines, fetchArAgeing, fetchPlMonthly, fetchLineTypes,
-  fetchHoldingBudget, fetchArClients,
+  fetchHoldingBudget, fetchArClients, fetchBudgetLines, fetchPlannableAccounts,
 } from './_lib/fetchPayload';
 import { isoDateOrNull, dateLabel } from './_lib/format';
 import { PlSubTabs, ErrorPanel, TABS, PL_PATH, type TabKey } from './_components/ui';
@@ -31,6 +35,46 @@ import ArAgeingTab from './_components/ArAgeingTab';
 import LedgerTab from './_components/LedgerTab';
 import UploadTab from './_components/UploadTab';
 import BudgetTab from './_components/BudgetTab';
+import BudgetPlan from './_components/BudgetPlan';
+
+// Writing a plan line. Append-forward via fn_holding_budget_set_lines — saving
+// supersedes with version+1 and never overwrites. Holding-gated: middleware
+// covers this path, but a write does not lean on a path prefix alone.
+async function saveBudgetLine(formData: FormData): Promise<void> {
+  'use server';
+  const year = String(formData.get('period_yyyymm') ?? '').slice(0, 4);
+  const back = `${PL_PATH}?tab=budget${/^\d{4}$/.test(year) ? `&year=${year}` : ''}`;
+  let state = 'ok';
+  let msg = '';
+  try {
+    const gate = await requireHoldingFromCookies();
+    if (!gate.ok) throw new Error(gate.message);
+
+    const period = String(formData.get('period_yyyymm') ?? '').trim();
+    const account = String(formData.get('account_code') ?? '').trim();
+    const amount = Number(formData.get('amount_eur'));
+    const scenario = String(formData.get('scenario') ?? 'budget');
+    const notes = String(formData.get('notes') ?? '').trim() || null;
+
+    if (!/^\d{6}$/.test(period)) throw new Error('month must be six digits, e.g. 202701');
+    if (!account) throw new Error('choose an account');
+    if (!Number.isFinite(amount)) throw new Error('amount must be a number');
+
+    const { error } = await getSupabaseAdmin().rpc('fn_holding_budget_set_lines', {
+      p_lines: [{ period_yyyymm: period, account_code: account, amount_eur: amount, notes }],
+      p_scenario: scenario,
+      p_created_by: gate.email ?? 'holding user',
+      p_source: 'manual',
+    });
+    if (error) throw new Error(error.message);
+    msg = `${account} ${period} set to ${amount}`;
+  } catch (e) {
+    state = 'err';
+    msg = e instanceof Error ? e.message : String(e);
+  }
+  revalidatePath(back);
+  redirect(`${back}&saved=${state}&msg=${encodeURIComponent(msg)}`);
+}
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -39,6 +83,7 @@ export default async function HoldingPlPage({ searchParams }: {
   searchParams?: {
     tab?: string; from?: string; to?: string; year?: string;
     dept?: string; line_type?: string; flag?: string; client?: string;
+    saved?: string; msg?: string;
   };
 }) {
   const tab: TabKey = (TABS.some((t) => t.key === searchParams?.tab)
@@ -103,13 +148,15 @@ export default async function HoldingPlPage({ searchParams }: {
       }))
     : [];
 
-  const [monthly, arRows, ledgerRows, lineTypes, budget, arClients] = await Promise.all([
+  const [monthly, arRows, ledgerRows, lineTypes, budget, arClients, planLines, planAccounts] = await Promise.all([
     tab === 'departments' ? fetchPlMonthly(from, to) : Promise.resolve(null),
     tab === 'ar' ? fetchArAgeing(arClient) : Promise.resolve(null),
     tab === 'ledger' ? fetchPlLines({ from, to, dept, lineType, flag }) : Promise.resolve(null),
     tab === 'ledger' ? fetchLineTypes(from, to) : Promise.resolve([] as string[]),
     tab === 'budget' ? fetchHoldingBudget(qFrom, qTo) : Promise.resolve(null),
     tab === 'ar' ? fetchArClients() : Promise.resolve([] as string[]),
+    tab === 'budget' ? fetchBudgetLines(qYear) : Promise.resolve(null),
+    tab === 'budget' ? fetchPlannableAccounts() : Promise.resolve([] as Array<{ code: string; label: string }>),
   ]);
 
   return (
@@ -141,6 +188,16 @@ export default async function HoldingPlPage({ searchParams }: {
         <LedgerTab
           p={p} rows={ledgerRows} lineTypes={lineTypes}
           from={from} to={to} dept={dept} lineType={lineType} flag={flag}
+        />
+      )}
+      {tab === 'budget' && planLines && (
+        <BudgetPlan
+          lines={planLines}
+          currency={p.reporting_currency}
+          year={qYear}
+          accounts={planAccounts}
+          saveAction={saveBudgetLine}
+          saved={{ state: searchParams?.saved ?? null, msg: searchParams?.msg ?? null }}
         />
       )}
       {tab === 'budget' && budget && (

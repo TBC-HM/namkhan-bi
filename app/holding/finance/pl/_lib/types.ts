@@ -176,3 +176,19 @@ export type HoldingBudgetPayload = {
     has_plan: boolean;
   };
 };
+
+/** public.v_holding_budget_lines — the plan itself, latest version per key. */
+export type BudgetLineRow = {
+  scenario: string;
+  period_yyyymm: string;
+  dept_code: string;
+  dept_name: string;
+  account_code: string;
+  account_name: string;
+  line_type: string;
+  amount_eur: number;
+  version: number;
+  source: string;
+  notes: string | null;
+  created_by: string;
+};
