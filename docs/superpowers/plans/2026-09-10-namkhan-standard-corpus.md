@@ -378,7 +378,18 @@ import { getSupabaseAdmin } from './lib/supabaseAdmin';
 "
 ```
 
-Expected: **at least 300 questions parsed** and **exactly 24 misses** (the `[MISS]` markers loaded on 2026-09-10). If the miss count differs, the document changed — stop and reconcile before continuing.
+Expected: **338 questions parsed** and **exactly 28 misses**. These are ground truth, computed independently of the parser straight from the stored document on 2026-09-10:
+
+```sql
+WITH d AS (SELECT extracted_md AS t FROM dms.documents
+            WHERE doc_id='a1c2e6d0-5b7f-4e93-9d21-2026081900aa'),
+lines AS (SELECT ln FROM d, regexp_split_to_table(d.t, E'\n') AS ln)
+SELECT count(*) FILTER (WHERE ln ~ '^\s*\d{1,3}\s+\S') AS numbered_questions,
+       count(*) FILTER (WHERE ln ~ '\[MISS\]')          AS miss_markers
+FROM lines;   -- => 338, 28
+```
+
+If either number differs, the document changed — stop and reconcile before continuing.
 
 - [ ] **Step 6: Commit**
 
@@ -657,7 +668,7 @@ JOIN standards.sources s USING (source_id)
 WHERE s.source_key = 'slh_mystery_2026';
 ```
 
-Expected: `total` ≥ 300, `misses` = 24, `unmapped` = 0. **A non-zero `unmapped` means a section the mapper does not know — add a rule in `deptMap.ts` and a test for it, do not leave it in `admin_general`.**
+Expected: `total` = 338, `misses` = 28 (ground truth, see Task 2 Step 5), `unmapped` = 0. **A non-zero `unmapped` means a section the mapper does not know — add a rule in `deptMap.ts` and a test for it, do not leave it in `admin_general`.**
 
 - [ ] **Step 5: Re-run the route to prove idempotency**
 
