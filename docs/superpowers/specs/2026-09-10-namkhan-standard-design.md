@@ -114,9 +114,12 @@ Driven by the 2026 inspection, now in the register with 8 audit records and 30 f
 **Turndown is a policy regression, not a capability gap.** The 2025 inspection scored
 turndown 4/4 with a signature amenity — a hand-woven tea filter and a handwritten note.
 The 2025 inspector was told turndown runs 3x/week (Tue/Thu/Sat), asked for it, and got an
-excellent service. The 2026 inspector did not ask and scored 0/14. The SOP author must
-encode the 2025 execution, not invent one; the frequency question is an owner decision
-(labour cost) and is **not** delegated to the autorun.
+excellent service. The 2026 inspector did not ask and scored 0/14.
+
+**Settled by ADR-314: turndown is DAILY**, so the failure mode — a guest who does not know
+to ask — is removed outright. The SOP author's job is therefore to encode the 2025
+execution, including the signature amenity, and to specify the daily rota. It is not to
+invent a standard, and the frequency is no longer a question the autorun may reopen.
 
 Six of the slice-1 misses are zero-cost behaviour fixes: refills, pins, directory, order
 read-back, tray completeness, chef visit.
