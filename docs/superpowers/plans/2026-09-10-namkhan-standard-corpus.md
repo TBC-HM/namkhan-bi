@@ -775,7 +775,10 @@ SELECT public.fn_standards_gap_summary(260955) AS payload;
 ```
 
 Check by hand against `assertGapSummary`: all four top-level keys numeric, `by_dept` an array, and `covered + uncovered = total_atoms`.
-Expected before Task 6 seeds coverage: `covered` = 0, `uncovered` = `total_atoms`.
+At this point Task 6 has not run, so `total_atoms` is **0** and all three counts are 0.
+**What this step verifies is the payload SHAPE, not its values** — four numeric top-level
+keys and a `by_dept` array. A function that returned `null` or omitted `by_dept` would
+otherwise sail through a vacuous 0 = 0 check.
 
 - [ ] **Step 5: Confirm anon really cannot execute it**
 
@@ -794,7 +797,7 @@ git commit -m "feat(standards): gap summary bridge fn + payload contract test"
 
 ---
 
-### Task 6: Merge SLH requirements into atoms, and seed coverage from existing SOPs
+### Task 6: Merge SLH requirements into atoms
 
 **Files:**
 - Create: `app/api/standards/merge/route.ts`
@@ -803,7 +806,7 @@ git commit -m "feat(standards): gap summary bridge fn + payload contract test"
 
 **Interfaces:**
 - Consumes: `standards.requirements` (Task 4), schema (Task 1).
-- Produces: `export function atomKeyFor(dept: string, text: string): string`; `POST /api/standards/merge` → `{ ok, atoms_created, citations_created, coverage_seeded }`.
+- Produces: `export function atomKeyFor(dept: string, text: string): string`; `POST /api/standards/merge` → `{ ok, atoms_created, citations_created }`.
 
 - [ ] **Step 1: Write the failing test for the merge key**
 
@@ -926,7 +929,6 @@ export async function POST() {
     ok: true,
     atoms_created: byKey.size,
     citations_created: (merged as any)?.citations ?? 0,
-    coverage_seeded: 0,
   });
 }
 ```
@@ -952,7 +954,12 @@ Expected: `atoms` < `requirements` (the merge did something), `citations` = `req
 SELECT public.fn_standards_gap_summary(260955);
 ```
 
-Expected: `total_atoms` equal to the `atoms` count above, `covered` = 0, `uncovered` = `total_atoms`, and `by_dept` sorted with the largest gap first. **The department at the top of that list is where SOP authoring starts in Plan B.**
+Expected: `total_atoms` equal to the `atoms` count above, `covered` = **0**, `uncovered` = `total_atoms`, `by_dept` sorted with the largest gap first.
+
+**100% uncovered is the correct and intended result of Plan A**, not a bug: matching 51
+free-text SOP bodies onto ~300 atoms is a fuzzy problem that belongs to Plan B's AI
+atomiser. This is the honest baseline Plan B measures against. **The department at the top
+of `by_dept` is where SOP authoring starts in Plan B.**
 
 - [ ] **Step 8: Commit**
 
@@ -970,7 +977,7 @@ git commit -m "feat(standards): merge requirements into department-scoped atoms 
 
 **Interfaces:**
 - Consumes: everything above.
-- Produces: a green tree on `main`.
+- Produces: a green tree on branch `feat/namkhan-standard-corpus`.
 
 - [ ] **Step 1: Run the whole standards suite**
 
@@ -992,10 +999,10 @@ Expected: both pass. `guard-invariants` matches prose as well as code — if it 
 - [ ] **Step 4: Push and watch CI**
 
 ```bash
-git push origin main
+git push -u origin feat/namkhan-standard-corpus
 gh run list --limit 4
 ```
-Expected: `typecheck`, `CI` and `Backup on push` all `completed/success`. A push to `main` is a **preview** deployment; production runs from the `production` branch and is promoted separately.
+Expected: `typecheck`, `CI` and `Backup on push` all `completed/success`. Merging to `main` is the owner's call and happens at finishing-a-development-branch — do not merge from inside the task loop.
 
 - [ ] **Step 5: Record the outcome in the module doc**
 
