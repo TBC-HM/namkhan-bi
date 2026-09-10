@@ -120,7 +120,7 @@ JSON SCHEMA (return EXACTLY this shape):
 // app/api/sop/proposals/seed-batch/route.ts: vault first, env second, cached across
 // warm invocations.
 let CACHED_ANTHROPIC_KEY: string | null = null;
-async function getAnthropicKey(): Promise<string> {
+export async function getAnthropicKey(): Promise<string> {
   if (CACHED_ANTHROPIC_KEY) return CACHED_ANTHROPIC_KEY;
   try {
     const { getSupabaseAdmin } = await import('@/lib/supabaseAdmin');
