@@ -7,6 +7,8 @@
 
 type Dept = { dept_code: string; dept_code_2: string | null };
 
+// RULES must be ordered longest-prefix-first. Pool matches before "In Room" to prevent
+// "Pool Dining" mismatches. The order is load-bearing — changing it breaks section routing.
 const RULES: Array<[RegExp, Dept]> = [
   [/^pool|beach/i,                 { dept_code: 'housekeeping',  dept_code_2: 'roots_service' }],
   [/telephone|check ?in|check ?out|rooming|departure|arrival|request|concierge|booking/i,
@@ -31,6 +33,8 @@ export function categoryForSection(section: string): string {
   const s = (section || '').toLowerCase();
   if (/sustainab/.test(s)) return 'sustainability';
   if (/slh brand|differentiator/.test(s)) return 'brand';
+  // /survey/ must be checked BEFORE /clean/, because "Bedroom Survey" matches both.
+  // Reordering these would cause "Bedroom Survey" to return 'cleanliness' instead of 'product'.
   if (/survey/.test(s)) return 'product';          // SLH "Survey" blocks score the physical product
   if (/clean|housekeep|bathroom|bedroom/.test(s)) return 'cleanliness';
   return 'service';

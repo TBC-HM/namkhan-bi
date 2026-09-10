@@ -17,6 +17,12 @@ describe('parseSectionHeader', () => {
     expect(h).toEqual({ section: 'Turndown Service', got: 0, max: 14, pct: 0 });
   });
 
+  it('discards *** annotation even without space before it', () => {
+    // The .replace(/\s*\*\*\*.*$/, '') protects against *** directly adjacent to the ).
+    const h = parseSectionHeader('## Turndown Service 0/14 (0 %)*** HARD ZERO ***');
+    expect(h).toEqual({ section: 'Turndown Service', got: 0, max: 14, pct: 0 });
+  });
+
   it('keeps hyphens that are part of the section name', () => {
     const h = parseSectionHeader('## In Room Dining - Delivery 18.2/30.4 (59.9 %)');
     expect(h!.section).toBe('In Room Dining - Delivery');
@@ -37,6 +43,23 @@ describe('parseSlhInspection', () => {
     const r = parseSlhInspection(SAMPLE);
     expect(r.find(x => x.question_no === 117)!.section).toBe('Turndown Service');
     expect(r.find(x => x.question_no === 222)!.section).toBe('In Room Dining - Delivery');
+  });
+
+  it('extracts subsection from hyphenated section names', () => {
+    const r = parseSlhInspection(SAMPLE);
+    expect(r.find(x => x.question_no === 222)!.subsection).toBe('Delivery');
+  });
+
+  it('sets subsection to null for plain section names', () => {
+    const r = parseSlhInspection(SAMPLE);
+    expect(r.find(x => x.question_no === 117)!.subsection).toBeNull();
+  });
+
+  it('extracts subsection only up to the first hyphen when multiple hyphens present', () => {
+    const multiDashHeader = `## Spa - Treatment - Room 5 1/1 (100 %)
+1 Test question. Yes`;
+    const r = parseSlhInspection(multiDashHeader);
+    expect(r[0].subsection).toBe('Treatment - Room 5');
   });
 
   it('captures the verdict and strips it from the question text', () => {
