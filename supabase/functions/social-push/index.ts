@@ -179,6 +179,14 @@ Deno.serve(async (req: Request) => {
     try {
     if ((p.platform as string) === 'pinterest') {
       const pinTitle = String(p.title ?? '').slice(0, 100);
+      // Pinterest is the one platform with a SEPARATE title and description, and the
+      // description is what carries the keywords Pinterest ranks on. The v19 rewrite
+      // dropped `description` when it replaced the SDK call with hand-rolled FormData,
+      // so pins published with the title duplicated as the caption and no hashtags at
+      // all — confirmed live on pin 602989837656352546.
+      // Field name is 'description' (SDK: e.description -> append("description")).
+      const pinBody = [String(p.caption ?? p.title ?? ''), tags]
+        .filter(Boolean).join('\n\n').slice(0, 500);
       if (mediaUrls.length === 0) {
         try { await sb.rpc('fn_social_post_mark_pushed', {
           p_post_id: postId, p_up_request_id: null, p_up_job_id: null,
@@ -209,6 +217,7 @@ Deno.serve(async (req: Request) => {
       pinFd.append('user', profileUsername as string);
       pinFd.append('title', pinTitle);
       pinFd.append('platform[]', 'pinterest');
+      if (pinBody) pinFd.append('description', pinBody);
       if (sched) pinFd.append('scheduled_date', sched);
       if (p.link_url) pinFd.append('pinterest_link', String(p.link_url));
       if (p.pinterest_board_id) pinFd.append('pinterest_board_id', String(p.pinterest_board_id));
