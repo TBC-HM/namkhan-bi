@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
   if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 });
   const boardList = (boards ?? []) as Array<{ board_id: string; board_name: string | null; pin_count: number | null }>;
   if (boardList.length === 0) {
-    return NextResponse.json({ ok: false, error: 'no_boards — sync boards from Pinterest first (fix API key in vault, then Sync)' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'no_boards — marketing.pinterest_boards is empty for this property. Run a Pinterest '
+      + 'board sync (social-push mode=sync_profiles) to populate it. NOTE: this is not the '
+      + 'same table as marketing.social_post_boards, which the landing page used to read.' }, { status: 400 });
   }
 
   // 2. Get existing Pinterest programs to avoid duplicates
@@ -56,7 +58,13 @@ export async function POST(req: NextRequest) {
     const { error } = await sb.rpc('fn_social_program_upsert', {
       p_property_id:    propertyId,
       p_platform:       'pinterest',
-      p_category_code:  'board',
+      // category_code MUST be unique per (property_id, platform) — see constraint
+      // social_programs_property_id_platform_category_code_key. Passing a literal
+      // 'board' for every board meant only the FIRST one could ever insert; boards
+      // 2..n died on a duplicate-key error, so this route could never seed more than
+      // one programme. board_id is the stable key: it survives renaming the board on
+      // Pinterest, which board_name does not.
+      p_category_code:  `board_${board.board_id}`,
       p_label:          label,
       p_weekday_slots:  DEFAULT_WEEKDAY_SLOTS,
       p_posts_per_week: DEFAULT_POSTS_PER_WEEK,
