@@ -66,6 +66,10 @@ export default function ProgramsPanel({ propertyId, platform, initial }: Props) 
       weekday_slots,
       posts_per_week: Number(fd.get('posts_per_week')),
       notes:         (fd.get('notes') as string) || null,
+      content_brief: (fd.get('content_brief') as string) || null,
+      banned_phrases: ((fd.get('banned_phrases') as string) || '')
+        .split(',').map((x) => x.trim()).filter(Boolean),
+      asset_cooldown_days: Number(fd.get('asset_cooldown_days') ?? 30),
       active:        true,
       id:            editing._new ? undefined : editing.id,
     };
@@ -233,6 +237,39 @@ export default function ProgramsPanel({ propertyId, platform, initial }: Props) 
               <label style={labelSt}>
                 Notes (optional)
                 <input name="notes" defaultValue={editing.notes ?? ''} placeholder="AI direction, tone, themes…" style={inputSt} />
+              </label>
+              <label style={{ display: 'grid', gap: 4, gridColumn: '1 / -1' }}>
+                <span style={labelSt}>Content brief — what this programme is about</span>
+                <textarea
+                  name="content_brief"
+                  defaultValue={(editing as any).content_brief ?? ''}
+                  rows={6}
+                  placeholder={'Angle, vocabulary, what to avoid.\ne.g. "One bookable activity per post, with duration. Name it as guests book it. No hashtags on GBP. Title <=58 chars."'}
+                  style={{ ...inputSt, fontFamily: 'inherit', lineHeight: 1.45, resize: 'vertical' }}
+                />
+                <span style={{ fontSize: 10, color: INK_M }}>
+                  Read by the copy generator when drafting posts for this programme.
+                </span>
+              </label>
+              <label style={{ display: 'grid', gap: 4 }}>
+                <span style={labelSt}>Banned phrases (comma separated)</span>
+                <input
+                  name="banned_phrases"
+                  defaultValue={((editing as any).banned_phrases ?? []).join(', ')}
+                  placeholder="river mist, temple bells, stillness"
+                  style={inputSt}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 4 }}>
+                <span style={labelSt}>Asset cooldown (days)</span>
+                <input
+                  name="asset_cooldown_days" type="number" min={0} max={365}
+                  defaultValue={(editing as any).asset_cooldown_days ?? 30}
+                  style={inputSt}
+                />
+                <span style={{ fontSize: 10, color: INK_M }}>
+                  No photo reused inside this window. 0 disables.
+                </span>
               </label>
             </div>
 

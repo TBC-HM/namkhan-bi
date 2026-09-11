@@ -75,6 +75,15 @@ export async function POST(req: NextRequest) {
   void specRes;
 
   const slot = slotRes.data;
+
+  // Assets published within the programme's cooldown window (default 30d). Computed in SQL by
+  // fn_social_assets_on_cooldown, which recovers the asset id from the media URL.
+  const { data: cooling } = await sb.rpc('fn_social_assets_on_cooldown', {
+    p_property_id: slot.property_id, p_days: 30,
+  });
+  const onCooldown: string[] = ((cooling ?? []) as Array<{ asset_id: string }>).map(r => r.asset_id);
+  const excludeList = `(${onCooldown.join(',')})`;
+
   if (!slot) {
     return NextResponse.json({ ok: true, post_id: payload.post_id, already: false, ai_skipped: 'no_slot_context' });
   }
@@ -104,7 +113,9 @@ export async function POST(req: NextRequest) {
       .eq('active', true)
       .order('is_pinned', { ascending: false })
       .limit(20),
-    // Top-scored photos (quality_index > 75) with captions — AI picks by asset_id
+    // Top-scored photos (quality_index > 75) with captions — AI picks by asset_id.
+    // Assets on cooldown are excluded: ordering by quality_index alone has no memory, so the
+    // same top-ranked photos came back every run (43 posts / 10 images on 2026-09-11).
     sb.from('mkt_v_media_ready')
       .select('asset_id,caption,alt_text,property_area,renders,raw_path')
       .eq('property_id', slot.property_id)
@@ -112,6 +123,7 @@ export async function POST(req: NextRequest) {
       .contains('usage_rights', ['social_organic'])
       .not('raw_path', 'is', null)
       .gt('quality_index', 75)
+      .not('asset_id', 'in', onCooldown.length ? excludeList : '(00000000-0000-0000-0000-000000000000)')
       .order('quality_index', { ascending: false })
       .limit(20),
   ]);
@@ -243,6 +255,7 @@ Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_id":"<uu
         .contains('usage_rights', ['social_organic'])
         .not('raw_path', 'is', null)
         .gt('quality_index', 75)
+        .not('asset_id', 'in', onCooldown.length ? excludeList : '(00000000-0000-0000-0000-000000000000)')
         .order('quality_index', { ascending: false })
         .limit(1);
       if (fallbackPhotos && fallbackPhotos.length > 0) {

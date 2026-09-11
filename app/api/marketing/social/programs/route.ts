@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   if (!body?.property_id) return NextResponse.json({ error: 'property_id required' }, { status: 400 });
   const propertyId = await requirePropertyAccess(req, body.property_id);
 
-  const { category_code, label, weekday_slots, posts_per_week, platform, notes, active, id } = body;
+  const { category_code, label, weekday_slots, posts_per_week, platform, notes, active, id, content_brief, banned_phrases, asset_cooldown_days} = body;
   if (!category_code || !label || !weekday_slots || posts_per_week == null) {
     return NextResponse.json({ error: 'category_code, label, weekday_slots, posts_per_week required' }, { status: 400 });
   }
@@ -54,6 +54,21 @@ export async function POST(req: NextRequest) {
     p_active:        active !== false,
     p_id:            id ?? null,
   });
+
+  // Editorial brief is saved separately: fn_social_program_upsert has no brief parameter and
+  // with p_id NULL it always INSERTs, so widening it would risk the seed route. This setter is
+  // id-addressed AND property-scoped, so an id alone is not enough to write another tenant's row.
+  const savedId = (id ?? (data as any)?.id ?? (data as any)) as number | null;
+  if (savedId && (content_brief !== undefined || banned_phrases !== undefined || asset_cooldown_days !== undefined)) {
+    const { error: brErr } = await sb.rpc('fn_social_program_set_brief', {
+      p_property_id:   propertyId,
+      p_id:            savedId,
+      p_content_brief: content_brief ?? null,
+      p_banned:        banned_phrases ?? null,
+      p_cooldown_days: asset_cooldown_days ?? null,
+    });
+    if (brErr) return NextResponse.json({ ok: false, error: brErr.message }, { status: 500 });
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ id: data });
 }
