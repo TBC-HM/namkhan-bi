@@ -115,7 +115,12 @@ export default async function SocialPlatformPage({ params }: Props) {
   const dbRow = all.find((a: any) => a.platform.toLowerCase() === platform);
   const rule = rules.find((r) => r.platform === platform);
   const chanPrograms = programs.filter((p) => p.platform === platform);
-  const boardPrograms = chanPrograms.filter((p: any) => p.category_code === 'board');
+  // category_code is `board_<board_id>`, not the literal 'board' — social_programs has
+  // UNIQUE (property_id, platform, category_code), so one row per board REQUIRES a distinct
+  // code. Matching === 'board' showed only the single legacy row and reported every other
+  // board as "not seeded" while 9 programmes existed. startsWith keeps legacy rows visible.
+  const boardPrograms = chanPrograms.filter(
+    (p: any) => typeof p.category_code === 'string' && p.category_code.startsWith('board'));
   const posts = allPosts.filter((p) => p.platform === platform && p.status !== 'cancelled');
   const recentPosts = [...posts].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')).slice(0, 8);
   const exportQueue = posts.filter((p) => p.status === 'ready' || p.status === 'scheduled');

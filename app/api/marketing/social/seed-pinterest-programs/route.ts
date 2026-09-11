@@ -43,8 +43,10 @@ export async function POST(req: NextRequest) {
     .from('v_social_programs')
     .select('id, notes')
     .eq('property_id', propertyId)
-    .eq('platform', 'pinterest')
-    .eq('active', true);
+    .eq('platform', 'pinterest');
+  // NOTE: deliberately NOT filtered by active. A board switched off on purpose (no source
+  // photography, seasonal pause) is still "already seeded" — filtering active=true made it
+  // invisible to the dedupe, so every click re-seeded it and created a duplicate programme.
   const existingBoardIds = new Set((existing ?? []).map((p: { notes: string | null }) => p.notes).filter(Boolean));
 
   let seeded = 0;
