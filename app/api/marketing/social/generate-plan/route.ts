@@ -71,7 +71,8 @@ export async function POST(req: NextRequest) {
 
   const [programsRes, existingRes] = await Promise.all([
     (() => {
-      let q = sb.from('v_social_programs').select('id, platform, category_code, label, weekday_slots, posts_per_week, notes')
+      let q = sb.from('v_social_programs')
+        .select('id, platform, category_code, label, weekday_slots, posts_per_week, notes, content_brief, banned_phrases')
         .eq('property_id', propertyId).eq('active', true);
       if (platform) q = q.eq('platform', platform);
       return q;
@@ -111,8 +112,16 @@ export async function POST(req: NextRequest) {
       if (emptyOnly && existing.has(key)) { skipped++; continue; }
 
       const title = `${prog.label} — ${day.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })}`;
+      // content_brief is the editorial instruction for this programme and MUST reach the slot:
+      // brief_md is what fn_social_slot_accept copies into the post caption and what the AI
+      // drafter in accept-slot reads. Without it the briefs are decorative — every programme
+      // wrote in the same voice (river 79x, stillness 18x) precisely because nothing carried
+      // the per-programme direction this far down the chain.
+      const banned = (prog as any).banned_phrases as string[] | null;
       const brief = [
         `Program: ${prog.label} (${prog.category_code})`,
+        (prog as any).content_brief ? `BRIEF: ${(prog as any).content_brief}` : null,
+        banned && banned.length ? `NEVER USE these exhausted phrases: ${banned.join(', ')}.` : null,
         prog.notes ? `Direction: ${prog.notes}` : null,
         `Channel: ${prog.platform} · respect guardrails in marketing.social_channel_rules.`,
       ].filter(Boolean).join('\n');
