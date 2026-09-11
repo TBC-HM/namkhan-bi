@@ -137,7 +137,12 @@ export async function POST(req: NextRequest) {
 
   type PhotoCandidate = { asset_id: string; caption: string | null; alt_text: string | null; property_area: string | null; renders: Record<string,string> | null; raw_path: string | null };
   const photos: PhotoCandidate[] = (photosRes as any)?.data ?? [];
-  const STORAGE_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+  // Renders live in 'media-renders'; originals in 'media-raw'. The bucket 'media' holds ZERO
+  // objects. A single shared base also conflated the two, pointing raw_path at the renders
+  // bucket. This route created 42 posts on 2026-09-11 whose images 404'd, after which
+  // social-push silently fell back to publishing them text-only.
+  const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-renders`;
+  const STORAGE_RAW     = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-raw`;
   const photoMap = new Map(photos.map((p) => [p.asset_id, p]));
   const photoMenu = photos
     .map((p) => `${p.asset_id} | ${p.caption ?? p.alt_text ?? p.property_area ?? 'photo'} | ${p.property_area ?? ''}`)
@@ -220,8 +225,8 @@ Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_id":"<uu
   const resolveUrl = (ph: { raw_path: string | null; renders: Record<string,string> | null } | null) => {
     if (!ph) return null;
     return ph.renders?.web_2k
-      ? `${STORAGE_BASE}/${ph.renders.web_2k}`
-      : ph.raw_path ? `${STORAGE_BASE}/${ph.raw_path}` : null;
+      ? `${STORAGE_RENDERS}/${ph.renders.web_2k}`
+      : ph.raw_path ? `${STORAGE_RAW}/${ph.raw_path}` : null;
   };
 
   if (photoId) {

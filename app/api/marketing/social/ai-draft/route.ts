@@ -222,8 +222,9 @@ ${requiresTitle ? 'title: pin title (keyword-first, ≤' + titleMax + ' chars, n
   const suggestedLink = linkId != null ? links.find(l => l.id === linkId) ?? null : null;
 
   // Fetch one photo from the suggested area (fall back to any social_organic photo if AI picked null area)
-  // Renders live in the original 'media' bucket (paths from media_renders.file_path).
-  const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
+  // Renders live in 'media-renders' (paths from media_renders.file_path). The bucket 'media'
+  // is EMPTY — the comment this replaces was stale and had been copy-pasted across routes.
+  const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-renders`;
   const STORAGE_RAW     = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-raw`;
   let mediaUrl: string | null = null;
   {

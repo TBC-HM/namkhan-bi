@@ -91,9 +91,9 @@ const CREAM = '#F0EAE0';
 const GREEN = '#2C4A3E';
 const SERIF = 'Georgia, serif';
 
-// Supabase public storage URL for the media bucket
+// Supabase public storage URL. Renders live in 'media-renders'; bucket 'media' holds no objects.
 const STORAGE = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://kpenyneooigsyuuomgct.supabase.co')
-  + '/storage/v1/object/public/media';
+  + '/storage/v1/object/public/media-renders';
 
 function mediaUrl(path: string | null): string | null {
   return path ? STORAGE + '/' + path : null;
