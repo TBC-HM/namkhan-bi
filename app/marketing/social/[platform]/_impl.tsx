@@ -81,11 +81,16 @@ export default async function SocialPlatformPage({ params }: Props) {
       .eq('property_id', NAMKHAN_PID)
       .eq('platform', platform)
       .maybeSingle(),
-    // PBS 2026-08-22 · Pinterest boards (via v_social_post_boards) — LIVE 11 boards.
-    getSupabaseAdmin().from('v_social_post_boards')
-      .select('board_id, board_name, pin_count')
-      .eq('property_id', NAMKHAN_PID).eq('platform', platform)
-      .order('board_name'),
+    // Pinterest boards — read the SAME source as the seed route and /api/marketing/social/
+    // pinterest-boards: fn_pinterest_boards_for_property -> marketing.pinterest_boards,
+    // which fn_pinterest_boards_upsert refreshes on sync.
+    //
+    // This used to read v_social_post_boards, a SECOND board table that nothing refreshes:
+    // populated once on 2026-08-22 and orphaned since. Renaming a board on Pinterest never
+    // showed up here, and two boards deleted on Pinterest were still listed. Meanwhile the
+    // seed read the correct (empty) table and reported "no_boards", pointing at the API key.
+    // One source of truth now; the render below is already gated on platform === 'pinterest'.
+    getSupabaseAdmin().rpc('fn_pinterest_boards_for_property', { p_property_id: NAMKHAN_PID }),
     // PBS 2026-08-22 · Per-post metrics from Upload Post (getMedia + getCachedPostAnalytics).
     getSupabaseAdmin().from('v_social_posts_latest')
       .select('external_post_id, post_url, media_type, caption, posted_at, impressions, reach, views, likes, comments, shares, saves, pin_clicks, outbound_clicks, engagement_rate, raw')
@@ -257,7 +262,7 @@ export default async function SocialPlatformPage({ params }: Props) {
           </Section>
         </div>
 
-        {/* PBS 2026-08-22 · Pinterest Boards (LIVE from v_social_post_boards) */}
+        {/* Pinterest Boards — live from marketing.pinterest_boards via fn_pinterest_boards_for_property */}
         {platform === 'pinterest' && boards.length > 0 && (
           <Section title="Pinterest Boards" note={`${boards.length} boards · pin to schedule from Quick Post`}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
