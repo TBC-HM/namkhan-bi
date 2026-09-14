@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
   type LinkRow = { id: number; title: string; url: string; section: string; anchor_hint: string | null };
   const links: LinkRow[] = (linksRes as any)?.data ?? [];
-  const linkMenu = links.map(l => `${l.id}|${l.section}|${l.title}`).join(', ');
+  const linkMenu = links.map(l => `${l.id}|${l.section}|${l.title}|${l.url}`).join('\n');
 
   // Property knowledge base — real rooms, spa, activities, season, retreats
   const brief = (briefRes as any)?.data ?? {};
@@ -174,8 +174,20 @@ ${hashtagInstruction}
 PROPERTY DATA (use this, never invent):
 ${propertyKnowledge}
 
-LINK CATALOG (pick the most relevant id, or null):
+LINK CATALOG — ${requiresTitle ? 'MANDATORY (never return null for link_id)' : 'pick the most relevant id, or null'}:
+Format: id|section|title|url
 ${linkMenu}
+
+Link routing rules (first match wins):
+• Post topic = food, dish, dining, restaurant, Roots, farm-to-table → section "dining", prefer Roots Restaurant url
+• Post topic = specific room, suite, villa, glamping, accommodation → section "accommodation", match the room name
+• Post topic = wellness, retreat, yoga, detox, Qi Gong, mindfulness → section "retreats" or "spa"
+• Post topic = spa, massage, jungle spa, treatment → section "spa"
+• Post topic = eco-farm, sustainability, organic, environment, bamboo, green → /sustainability url
+• Post topic = activities, pool, beach, gym, playground, things to do → section "facilities" or "experiences"
+• Post topic = where to stay, booking, rates, reserve → section "booking"
+• Post topic = culture, temples, monks, Luang Prabang city, location → /location url
+${requiresTitle ? 'You MUST return a numeric link_id. Do NOT return null.' : 'Return null only if truly no link fits.'}
 
 PHOTO AREA (pick from: ${PHOTO_AREAS.join(', ')} — or null):
 Choose the area that best matches the post topic. Retreat posts → lifestyle or grounds. Spa posts → lifestyle. Restaurant posts → restaurant.
@@ -222,9 +234,8 @@ ${requiresTitle ? 'title: pin title (keyword-first, ≤' + titleMax + ' chars, n
   const suggestedLink = linkId != null ? links.find(l => l.id === linkId) ?? null : null;
 
   // Fetch one photo from the suggested area (fall back to any social_organic photo if AI picked null area)
-  // Renders live in 'media-renders' (paths from media_renders.file_path). The bucket 'media'
-  // is EMPTY — the comment this replaces was stale and had been copy-pasted across routes.
-  const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-renders`;
+  // Renders live in the original 'media' bucket (paths from media_renders.file_path).
+  const STORAGE_RENDERS = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media`;
   const STORAGE_RAW     = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-raw`;
   let mediaUrl: string | null = null;
   {

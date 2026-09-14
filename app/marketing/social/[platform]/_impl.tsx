@@ -81,16 +81,11 @@ export default async function SocialPlatformPage({ params }: Props) {
       .eq('property_id', NAMKHAN_PID)
       .eq('platform', platform)
       .maybeSingle(),
-    // Pinterest boards — read the SAME source as the seed route and /api/marketing/social/
-    // pinterest-boards: fn_pinterest_boards_for_property -> marketing.pinterest_boards,
-    // which fn_pinterest_boards_upsert refreshes on sync.
-    //
-    // This used to read v_social_post_boards, a SECOND board table that nothing refreshes:
-    // populated once on 2026-08-22 and orphaned since. Renaming a board on Pinterest never
-    // showed up here, and two boards deleted on Pinterest were still listed. Meanwhile the
-    // seed read the correct (empty) table and reported "no_boards", pointing at the API key.
-    // One source of truth now; the render below is already gated on platform === 'pinterest'.
-    getSupabaseAdmin().rpc('fn_pinterest_boards_for_property', { p_property_id: NAMKHAN_PID }),
+    // PBS 2026-08-22 · Pinterest boards (via v_social_post_boards) — LIVE 11 boards.
+    getSupabaseAdmin().from('v_social_post_boards')
+      .select('board_id, board_name, pin_count')
+      .eq('property_id', NAMKHAN_PID).eq('platform', platform)
+      .order('board_name'),
     // PBS 2026-08-22 · Per-post metrics from Upload Post (getMedia + getCachedPostAnalytics).
     getSupabaseAdmin().from('v_social_posts_latest')
       .select('external_post_id, post_url, media_type, caption, posted_at, impressions, reach, views, likes, comments, shares, saves, pin_clicks, outbound_clicks, engagement_rate, raw')
@@ -115,16 +110,12 @@ export default async function SocialPlatformPage({ params }: Props) {
   const dbRow = all.find((a: any) => a.platform.toLowerCase() === platform);
   const rule = rules.find((r) => r.platform === platform);
   const chanPrograms = programs.filter((p) => p.platform === platform);
-  // category_code is `board_<board_id>`, not the literal 'board' — social_programs has
-  // UNIQUE (property_id, platform, category_code), so one row per board REQUIRES a distinct
-  // code. Matching === 'board' showed only the single legacy row and reported every other
-  // board as "not seeded" while 9 programmes existed. startsWith keeps legacy rows visible.
-  const boardPrograms = chanPrograms.filter(
-    (p: any) => typeof p.category_code === 'string' && p.category_code.startsWith('board'));
+  const boardPrograms = chanPrograms.filter((p: any) => p.category_code === 'board');
   const posts = allPosts.filter((p) => p.platform === platform && p.status !== 'cancelled');
-  const recentPosts = [...posts].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')).slice(0, 8);
   const exportQueue = posts.filter((p) => p.status === 'ready' || p.status === 'scheduled');
   const openDrafts = posts.filter((p) => p.status === 'draft');
+  const pushedPosts = posts.filter((p) => p.status === 'pushed');
+  const recentPosts = [...pushedPosts].sort((a, b) => (b.pushed_at ?? b.created_at ?? '').localeCompare(a.pushed_at ?? a.created_at ?? '')).slice(0, 8);
   const WEEKDAY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   const account: any = dbRow ?? {
@@ -179,8 +170,8 @@ export default async function SocialPlatformPage({ params }: Props) {
       size: 'sm', footnote: snapshotFoot },
     { label: 'Profile views',    value: Number.isFinite(aProfileViews) ? aProfileViews.toLocaleString() : '—',
       size: 'sm', footnote: snapshotFoot },
-    { label: 'Open drafts',      value: openDrafts.length, size: 'sm', footnote: 'marketing.social_posts' },
-    { label: 'Ready to export',  value: exportQueue.length, size: 'sm', footnote: 'approved · awaiting upload' },
+    { label: 'Awaiting approval', value: openDrafts.length, size: 'sm', footnote: 'drafts · need review before publishing' },
+    { label: 'Auto-queue',        value: exportQueue.length, size: 'sm', footnote: 'ready · will publish on schedule' },
     { label: 'Total posts',      value: (account.posts ?? 0).toLocaleString(), size: 'sm', footnote: 'lifetime' },
   ];
 
@@ -267,7 +258,7 @@ export default async function SocialPlatformPage({ params }: Props) {
           </Section>
         </div>
 
-        {/* Pinterest Boards — live from marketing.pinterest_boards via fn_pinterest_boards_for_property */}
+        {/* PBS 2026-08-22 · Pinterest Boards (LIVE from v_social_post_boards) */}
         {platform === 'pinterest' && boards.length > 0 && (
           <Section title="Pinterest Boards" note={`${boards.length} boards · pin to schedule from Quick Post`}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
@@ -322,7 +313,7 @@ export default async function SocialPlatformPage({ params }: Props) {
 
                 {/* Recent posts + export queue */}
         <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-          <Section title={`Recent posts · ${label}`} note="marketing.social_posts">
+          <Section title={`Published posts · ${label}`} note="pushed status · marketing.social_posts">
             {recentPosts.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -336,7 +327,7 @@ export default async function SocialPlatformPage({ params }: Props) {
                 <tbody>
                   {recentPosts.map((p) => (
                     <tr key={p.post_id} style={{ borderBottom: `1px solid ${HAIR}` }}>
-                      <td style={tdSt}>{(p.scheduled_at ?? p.created_at ?? '').slice(0, 10) || '—'}</td>
+                      <td style={tdSt}>{(p.pushed_at ?? p.scheduled_at ?? p.created_at ?? '').slice(0, 10) || '—'}</td>
                       <td style={tdSt}>{p.title ?? '—'}</td>
                       <td style={tdMute}>{p.caption ? (p.caption.length > 80 ? p.caption.slice(0, 80) + '…' : p.caption) : '—'}</td>
                       <td style={{ ...tdSt, textAlign: 'right', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em', color: INK_M }}>{p.status}</td>
@@ -346,12 +337,12 @@ export default async function SocialPlatformPage({ params }: Props) {
               </table>
             ) : (
               <p style={{ margin: 0, fontSize: 12, color: INK_M }}>
-                No {label} posts yet — generate a plan on the social calendar and accept slots to draft posts.
+                No published {label} posts yet — posts appear here once status reaches &quot;pushed&quot;.
               </p>
             )}
           </Section>
 
-          <Section title="Export queue" note="approved · awaiting upload">
+          <Section title="Publishing queue" note="ready · publishes on schedule">
             {exportQueue.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {exportQueue.slice(0, 6).map((p) => (
@@ -368,9 +359,7 @@ export default async function SocialPlatformPage({ params }: Props) {
               </div>
             ) : (
               <p style={{ margin: 0, fontSize: 12, color: INK_M }}>
-                Nothing approved yet — approve drafts in the{' '}
-                <TenantLink href="/marketing/social?view=inbox" style={linkSt}>channel inbox</TenantLink>{' '}
-                and they queue here for channel-formatted zip export.
+                Nothing in queue yet — approve drafts and they will auto-publish on schedule.
               </p>
             )}
             <p style={{ margin: '10px 0 0', fontSize: 11, color: INK_M }}>
