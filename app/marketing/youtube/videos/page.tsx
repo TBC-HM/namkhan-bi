@@ -69,7 +69,7 @@ export default async function YtVideosPage() {
   const [vidRes, allRunsRes, allAuditRes] = await Promise.all([
     fetchRecentVideos(tok.access_token, tok.channel_id, 200),
     sb.from('v_yt_channel_audit_runs')
-      .select('id, generated_at, video_count, overall_grade')
+      .select('id, generated_at, video_count, overall_grade, next_page_token')
       .eq('property_id', NAMKHAN)
       .order('generated_at', { ascending: false }),
     sb.from('v_yt_channel_audit_videos')
@@ -84,7 +84,7 @@ export default async function YtVideosPage() {
     .select('entity_id')
     .eq('property_id', NAMKHAN).eq('entity_type', 'video').eq('action', 'applied');
   const appliedVideos = new Set((videoLogData ?? []).map(r => r.entity_id));
-  const runs = (allRunsRes.data ?? []) as Array<{ id: string; generated_at: string; video_count: number | null; overall_grade: string | null }>;
+  const runs = (allRunsRes.data ?? []) as Array<{ id: string; generated_at: string; video_count: number | null; overall_grade: string | null; next_page_token?: string | null }>;
   const latestRun = runs[0] ?? null;
 
   // Build run date map for recency comparison
@@ -146,7 +146,7 @@ export default async function YtVideosPage() {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-            <RunAuditButton />
+            <RunAuditButton initialNextToken={latestRun?.next_page_token ?? null} batchCount={runs.length} />
             <div style={{ fontSize: 10, color: INK_M, textAlign: 'right', maxWidth: 200 }}>
               Audits 25 most recent unreviewed videos. Run multiple times to cover all {total}.
             </div>
@@ -234,6 +234,7 @@ export default async function YtVideosPage() {
                       suggestedTitle={audit.suggested_title}
                       suggestedDescription={audit.suggested_description}
                       suggestedTags={audit.suggested_tags}
+                      initialApplied={appliedVideos.has(v.id)}
                     />
                   )}
                   <DeleteVideoButton videoId={v.id} videoTitle={v.title} />

@@ -86,7 +86,7 @@ export default function ApplyAuditButton({
           opacity: state === 'busy' ? 0.6 : 1,
         }}
       >
-        {state === 'busy' ? 'Applying…' : 'Apply to YT ↑'}
+        {state === 'busy' ? 'Applying…' : 'Review & apply ↑'}
       </button>
 
       {open && state !== 'busy' && (
