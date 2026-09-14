@@ -186,21 +186,21 @@ export default function MarketingDashboard({ pid, payload, initialTab }: { pid: 
             <div>
               <h2 className="font-serif text-lg font-semibold">Reach barometer</h2>
               <div className={`mt-2 font-serif text-5xl leading-none ${tone(composite?.change_pct, (n) => n < -5, (n) => n < 0)}`}>{nSigned(composite?.change_pct)}<small className="ml-2 font-sans text-sm text-neutral-500">audience touches</small></div>
-              <p className="mt-2 max-w-[34ch] text-sm text-neutral-500"><b className="text-neutral-900">{nInt(composite?.now_value)}</b> touches now against <b className="text-neutral-900">{nInt(composite?.before_value)}</b> {composite?.days_apart} days earlier: website sessions, search impressions and Instagram/TikTok/Pinterest impressions added together.</p>
+              <p className="mt-2 max-w-[34ch] text-sm text-neutral-500"><b className="text-neutral-900">{nInt(composite?.now_value)}</b> touches now against <b className="text-neutral-900">{nInt(composite?.before_value)}</b> {composite?.days_apart} days earlier: website sessions, search impressions, Instagram reach and TikTok/Pinterest impressions added together.</p>
               <p className="mt-2 max-w-[34ch] text-sm text-neutral-500">Published in the window: {nInt(m.published_30d)} posts, {nInt(m.sends_30d)} emails, {nInt(m.yt_published_pipeline)} videos.</p>
             </div>
             <div>
               <table className="w-full text-xs">
-                <thead><tr className="text-neutral-500"><th className="pb-1.5 text-left font-medium">Channel</th><th className="font-medium">Trend</th><th className="text-right font-medium">Now</th><th className="text-right font-medium">Before</th><th className="text-right font-medium">Change</th></tr></thead>
+                <thead><tr className="text-neutral-500"><th className="pb-1.5 text-left font-medium">Channel</th><th className="font-medium">Trend</th><th className="text-right font-medium">Latest</th><th className="text-right font-medium">Prior</th><th className="text-right font-medium">Change</th></tr></thead>
                 <tbody>
                   {([
                     ['website_sessions', 'Website sessions', 'ga4_sessions'], ['paid_search_sessions', 'Paid search sessions', undefined], ['search_impressions', 'Search impressions', 'gsc_impressions'],
-                    ['search_clicks', 'Search clicks', 'gsc_clicks'], ['social_instagram_impressions', 'Instagram impressions', 'social_instagram_impressions'], ['social_instagram_reach', 'Instagram reach', undefined],
+                    ['search_clicks', 'Search clicks', 'gsc_clicks'], ['social_instagram_impressions', 'Instagram impressions', 'social_instagram_impressions'], ['social_instagram_reach', 'Instagram reach (composite)', undefined],
                     ['social_tiktok_impressions', 'TikTok impressions', 'social_tiktok_impressions'], ['social_pinterest_impressions', 'Pinterest impressions', 'social_pinterest_impressions'],
                     ['yt_views_per_day', 'YouTube views per day', 'yt_views'], ['gbp_reviews', 'Google Business reviews', 'gbp_reviews'], ['newsletter_real_subscribers', 'Newsletter list (real)', undefined],
                   ] as [string, string, string | undefined][]).map(([k, label, sk]) => { const r = baro[k]; if (!r) return null; return (
                     <tr key={k} className="border-b border-neutral-200">
-                      <td className="py-1.5">{label} <span className="text-neutral-500">{nDate(r.before_asof)} → {nDate(r.now_asof)}</span></td>
+                      <td className="py-1.5">{label}</td>
                       <td className="w-[120px]"><Sparkline pts={sk ? S?.[sk] : undefined} up={r.direction === 'up'} /></td>
                       <td className="text-right">{nInt(r.now_value)}</td><td className="text-right text-neutral-500">{nInt(r.before_value)}</td>
                       <td className={`text-right font-semibold ${r.direction === 'down' ? 'text-red-800' : r.direction === 'up' ? 'text-emerald-900' : 'text-neutral-500'}`}>{nSigned(r.change_pct)}</td>
@@ -213,7 +213,7 @@ export default function MarketingDashboard({ pid, payload, initialTab }: { pid: 
                   )}
                 </tbody>
               </table>
-              <p className="mt-2 text-xs text-neutral-500">&ldquo;Before&rdquo; is the snapshot ≥30 days earlier, or the earliest one held; the gap lengthens automatically as snapshots accumulate. YouTube is excluded from the composite while its analytics are stale.</p>
+              <p className="mt-2 text-xs text-neutral-500">&ldquo;Prior&rdquo; is the snapshot ≥30 days earlier, or the earliest one held; the gap lengthens automatically as snapshots accumulate. Instagram reach (unique accounts reached) is used in the composite — impressions are excluded because their definition changed in Sep 2026. YouTube is excluded from the composite while its analytics are stale.</p>
             </div>
           </section>
 
