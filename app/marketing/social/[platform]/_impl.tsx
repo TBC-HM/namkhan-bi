@@ -110,7 +110,7 @@ export default async function SocialPlatformPage({ params }: Props) {
   const dbRow = all.find((a: any) => a.platform.toLowerCase() === platform);
   const rule = rules.find((r) => r.platform === platform);
   const chanPrograms = programs.filter((p) => p.platform === platform);
-  const boardPrograms = chanPrograms.filter((p: any) => p.category_code === 'board');
+  const boardPrograms = chanPrograms.filter((p: any) => (p.category_code as string)?.startsWith('board'));
   const posts = allPosts.filter((p) => p.platform === platform && p.status !== 'cancelled');
   const exportQueue = posts.filter((p) => p.status === 'ready' || p.status === 'scheduled');
   const openDrafts = posts.filter((p) => p.status === 'draft');
