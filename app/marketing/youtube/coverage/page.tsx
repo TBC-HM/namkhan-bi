@@ -93,7 +93,11 @@ export default async function YtCoveragePage() {
   const facilities = (facilitiesRes.data ?? []) as Array<{ facility_id: number; facility_name: string; category: string | null }>;
   const activities = (activitiesRes.data ?? []) as Array<{ activity_id: number; name: string }>;
   const retreats: Array<{ retreat_id: number; display_name: string }> = [];
-  const auditedTitles = (auditRes.data ?? []).map(r => (r as any).video_title ?? '');
+  // Deduplicate: v_yt_channel_audit_videos returns one row per audit run, not per video.
+  // Without dedup, a video audited 10 times would count 10× in coverage.
+  const auditedTitles = Array.from(new Set(
+    (auditRes.data ?? []).map(r => ((r as any).video_title ?? '') as string).filter(Boolean)
+  ));
 
   // Fetch playlist videos for coverage if token available
   let roomVideos: Array<{ title: string; duration?: string }> = [];
@@ -131,12 +135,12 @@ export default async function YtCoveragePage() {
   }
 
   const roomGaps = rooms.filter(r => {
-    const c = countCoverage(roomVideos, [r.room_type_name, ...r.room_type_name.split(' ').filter(w => w.length > 4)]);
+    const c = countCoverage(roomVideos, [r.room_type_name]);
     return c.short + c.regular + c.long === 0;
   }).length;
 
   const actGaps = activities.filter(a => {
-    const c = countCoverage(expVideos, [a.name, ...a.name.split(' ').filter(w => w.length > 4)]);
+    const c = countCoverage(expVideos, [a.name]);
     return c.short + c.regular + c.long === 0;
   }).length;
 
@@ -195,8 +199,7 @@ export default async function YtCoveragePage() {
               {/* ROOMS */}
               <SectionHeader label="Accommodation" count={rooms.length} gapCount={roomGaps} />
               {rooms.map(r => {
-                const keywords = [r.room_type_name, ...r.room_type_name.split(/\s+/).filter(w => w.length > 4)];
-                const c = countCoverage(roomVideos, keywords);
+                const c = countCoverage(roomVideos, [r.room_type_name]);
                 const total = c.short + c.regular + c.long;
                 return (
                   <tr key={r.room_type_id}>
@@ -221,8 +224,7 @@ export default async function YtCoveragePage() {
               {(() => {
                 const spaFacilities = facilities.filter(f => ['wellness', 'treatment_room', 'dining', 'f&b', 'restaurant', 'bar', 'food'].some(cat => (f.category ?? '').toLowerCase().includes(cat)));
                 const spaGaps = spaFacilities.filter(f => {
-                  const kw = [f.facility_name, ...f.facility_name.split(/\s+/).filter(w => w.length > 4)];
-                  const c = countCoverage(spaVideos, kw);
+                  const c = countCoverage(spaVideos, [f.facility_name]);
                   return c.short + c.regular + c.long === 0;
                 }).length;
                 if (spaFacilities.length === 0) return null;
@@ -230,8 +232,7 @@ export default async function YtCoveragePage() {
                   <>
                     <SectionHeader label="Jungle Spa & Dining" count={spaFacilities.length} gapCount={spaGaps} />
                     {spaFacilities.map(f => {
-                      const kw = [f.facility_name, ...f.facility_name.split(/\s+/).filter(w => w.length > 4)];
-                      const c = countCoverage(spaVideos, kw);
+                      const c = countCoverage(spaVideos, [f.facility_name]);
                       const total = c.short + c.regular + c.long;
                       return (
                         <tr key={f.facility_id}>
@@ -254,8 +255,7 @@ export default async function YtCoveragePage() {
               {/* ACTIVITIES */}
               <SectionHeader label="Experiences & Activities" count={activities.length} gapCount={actGaps} />
               {activities.map(a => {
-                const kw = [a.name, ...a.name.split(/\s+/).filter(w => w.length > 4)];
-                const c = countCoverage([...expVideos, ...spaVideos, ...roomVideos], kw);
+                const c = countCoverage([...expVideos, ...spaVideos, ...roomVideos], [a.name]);
                 const total = c.short + c.regular + c.long;
                 return (
                   <tr key={a.activity_id}>
@@ -275,8 +275,7 @@ export default async function YtCoveragePage() {
               {/* RETREATS */}
               <SectionHeader label="Wellness Retreats" count={retreats.length} gapCount={retGaps} />
               {retreats.map(r => {
-                const kw = [r.display_name, ...r.display_name.split(/\s+/).filter(w => w.length > 4), 'retreat'];
-                const c = countCoverage([...spaVideos, ...roomVideos], kw);
+                const c = countCoverage([...spaVideos, ...roomVideos], [r.display_name]);
                 const total = c.short + c.regular + c.long;
                 return (
                   <tr key={r.retreat_id}>
