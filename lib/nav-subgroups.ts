@@ -132,10 +132,24 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/qa/registry', '/operations/qa/proposals',
       '/operations/qa/generate', '/operations/qa/agent-instructions',
     ],
+    // PBS 2026-09-14 (protected_path_decisions #20): three tabs become TWO. The SOPs
+    // tab is removed — "the extra sop page is confusing. i want one standard page,
+    // where they all are, also the missing (cta to activate)."
+    //
+    // A separate SOP browser asked the reader to hold two lists in their head and
+    // reconcile them: 78 registered docs on one page, 2,164 obligations on the other,
+    // with no way to see which obligation a given SOP actually closed. The Standard now
+    // carries both — every requirement shows its SOP inline, or an "Activate" CTA where
+    // none exists. Browsing SOPs for their own sake was never the job; closing
+    // requirements is.
+    //
+    // /operations/sops STAYS A MEMBER (below). The viewer, editor, preview and send
+    // pages remain live and every existing link and bookmark still resolves — dropping
+    // it from `members` would strand them outside their own navigation, which is the
+    // same mistake the 2026-09-10 fold deliberately avoided.
     tabs: [
       { label: 'Dashboard', href: '/h/260955/operations/quality' },
       { label: 'Standard',  href: '/h/260955/operations/standard' },
-      { label: 'SOPs',      href: '/h/260955/operations/sops'    },
     ],
   },
   {

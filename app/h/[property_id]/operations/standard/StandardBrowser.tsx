@@ -86,6 +86,33 @@ function SopLink({ pid, code }: { pid: number; code: string | null }) {
   );
 }
 
+// A requirement with no written procedure behind it is the whole point of this page,
+// so it gets a door too. PBS 2026-09-14: "i want one standard page. where they all are
+// also the missing (cta to activate). the extra sop page is confusing."
+//
+// Generating is no longer a DESTINATION you visit and type into — which is what
+// produced 458 unlinked proposals from a prompt box before a standard existed. It is
+// an ACTION on a named, uncovered obligation, and it carries that obligation with it:
+// the atom, its department and its text, so the generator starts from the gap instead
+// of from a blank box.
+function ActivateLink({ pid, item }: { pid: number; item: AtomRow }) {
+  const q = new URLSearchParams({
+    atom: item.atom_id,
+    dept: item.dept_code,
+    title: item.title,
+    requirement: item.requirement_text ?? item.title,
+  });
+  return (
+    <a
+      href={`/h/${pid}/operations/qa/generate?${q.toString()}`}
+      className="rounded border border-emerald-800 px-1.5 py-0.5 text-[11px] font-medium leading-none text-emerald-900 hover:bg-emerald-800 hover:text-white"
+      title="Write the SOP that closes this requirement"
+    >
+      Activate — write this SOP
+    </a>
+  );
+}
+
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="border-l-[3px] border-neutral-200 px-3 py-1">
@@ -480,9 +507,15 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                         </span>
                         <SopLink pid={pid} code={i.suggested_sop} />
                         {i.suggested_note && <span className="text-neutral-500">· {i.suggested_note}</span>}
+                        <ActivateLink pid={pid} item={i} />
                       </>
                     )}
-                    {!i.covered && !i.has_suggested && <span className={badgeCls('none')}>No SOP</span>}
+                    {!i.covered && !i.has_suggested && (
+                      <>
+                        <span className={badgeCls('none')}>No SOP</span>
+                        <ActivateLink pid={pid} item={i} />
+                      </>
+                    )}
                   </div>
                 </li>
               ))}
