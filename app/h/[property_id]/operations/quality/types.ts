@@ -154,3 +154,24 @@ export const TABS: { key: TabKey; label: string }[] = [
   { key: 'verify', label: 'Audits & PM' },
   { key: 'guest', label: 'Guest signal & CAPA' },
 ];
+
+/** public.v_mkt_dash_reputation — one row per property.
+ *  The Reputation-vs-goals tile moved from the Marketing dashboard to Quality
+ *  (PBS 2026-09-14) and deliberately reads this same view, so the two surfaces can
+ *  never disagree about a number. Every field is optional: the view is a wide
+ *  aggregate and a property with no OTA presence legitimately has nulls. */
+export interface ReputationRow {
+  property_id: number;
+  total_reviews: Num;
+  last_month_avg: Num;
+  last_month_reviews: Num;
+  lifetime_avg: Num;
+  gbp_rating: Num;
+  tripadvisor_rank: Num;
+  tripadvisor_rank_of: Num;
+  ctrip_score: Num;
+  booking_score: Num;
+  expedia_score: Num;
+  unanswered: Num;
+  unanswered_pct: Num;
+}

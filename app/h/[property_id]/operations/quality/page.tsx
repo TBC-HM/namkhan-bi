@@ -21,7 +21,7 @@ import { DEPT_CFG } from '@/lib/dept-cfg';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import QualityDashboard from './QualityDashboard';
-import type { QaPayload } from './types';
+import type { QaPayload, ReputationRow } from './types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -80,6 +80,27 @@ export default async function OperationsQualityPage({ params, searchParams }: Pa
     );
   }
 
+  // Reputation vs goals — MOVED here from the Marketing dashboard (PBS 2026-09-14:
+  // "this is a very important kpi container for quality"). It reads the SAME view the
+  // marketing tile read, public.v_mkt_dash_reputation, rather than re-deriving the
+  // numbers — two places computing one KPI is how they drift apart.
+  //
+  // Fetched separately from the cached QA payload on purpose: that cache is owned by the
+  // qa-dash-refresh-15min cron, and adding a key to it would mean changing the payload
+  // builder and waiting for a refresh. A direct read of an already-granted view is
+  // smaller, and a reputation failure cannot take the dashboard down with it.
+  let reputation: ReputationRow | null = null;
+  try {
+    const rep = await getSupabaseAdmin()
+      .from('v_mkt_dash_reputation')
+      .select('*')
+      .eq('property_id', pid)
+      .maybeSingle();
+    reputation = (rep.data as ReputationRow | null) ?? null;
+  } catch {
+    reputation = null; // degrade to the tile's own "—" row, never a 500
+  }
+
   return (
     <DashboardPage title="Operations · Quality" tabs={deptTabs}>
       <div style={{ gridColumn: '1 / -1' }}>
@@ -88,7 +109,7 @@ export default async function OperationsQualityPage({ params, searchParams }: Pa
             Refresh did not finish ({refreshFailed}). Showing the last cached payload — its age is in the header below.
           </p>
         )}
-        <QualityDashboard pid={pid} payload={data as QaPayload} initialTab={sp.tab} />
+        <QualityDashboard pid={pid} payload={data as QaPayload} initialTab={sp.tab} reputation={reputation} />
       </div>
     </DashboardPage>
   );

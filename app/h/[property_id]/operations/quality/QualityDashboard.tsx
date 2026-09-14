@@ -17,8 +17,7 @@ import type {
   QaPayload, TabKey, Action, Row, Val, Loops,
   DeptMatrixRow, SopByDeptRow, StaffByDeptRow, CertCoverageRow, SkillDemandRow,
   PmByDeptRow, ThemeRow, LowReviewRow, GoalRow, FreshnessRow, AgendaRow,
-  Pillar, SusStandard, LegalCategoryRow,
-} from './types';
+  Pillar, SusStandard, LegalCategoryRow, ReputationRow } from './types';
 import { TABS } from './types';
 
 /* ---------- formatting (display only) ---------- */
@@ -82,7 +81,7 @@ function Tile({ title, sub, big, bigTone, chip, chipTone, rows, cta, ctaHref, no
 }
 const Th = ({ c, r }: { c: string; r?: boolean }) => <th className={`pb-1.5 font-medium text-neutral-500 ${r ? 'text-right' : 'text-left'}`}>{c}</th>;
 
-export default function QualityDashboard({ pid, payload, initialTab }: { pid: number; payload: QaPayload; initialTab?: string }) {
+export default function QualityDashboard({ pid, payload, initialTab, reputation }: { pid: number; payload: QaPayload; initialTab?: string; reputation?: ReputationRow | null }) {
   const base = `/h/${pid}`;
   // Action-rule route_paths are stored unprefixed (`/operations/staff`) and get the
   // tenant prefix here. `/holding/*` is a canonical top-level tree of its own (L6) —
@@ -245,6 +244,31 @@ export default function QualityDashboard({ pid, payload, initialTab }: { pid: nu
         <div role="tabpanel">
           <div className="mb-2 mt-5 flex items-baseline gap-3"><h2 className="font-serif text-lg font-semibold">Guest signal &amp; corrective action</h2><span className="text-sm text-neutral-500">marketing.reviews · guest.review_themes · knowledge.qa_findings</span></div>
           <div className="grid gap-px border border-neutral-200 bg-neutral-200 md:grid-cols-2 lg:grid-cols-4">
+            {/* Reputation vs goals — moved from the Marketing dashboard, PBS 2026-09-14.
+                It leads the Guest tab because it is the outcome the rest of this tab
+                explains: low reviews, themes and CAPA are all why this number moves.
+                Reads public.v_mkt_dash_reputation, the same view Marketing read. */}
+            {reputation && (
+              <Tile
+                title="Reputation vs goals"
+                sub={`${nInt(reputation.total_reviews)} reviews`}
+                big={String(reputation.last_month_avg ?? '—')}
+                bigTone={Number(reputation.last_month_avg ?? 5) < 4.3 ? cls.bad
+                         : Number(reputation.last_month_avg ?? 5) < 4.6 ? cls.warn : cls.ok}
+                chip={`last full month · lifetime ${reputation.lifetime_avg ?? '—'}`}
+                chipTone={Number(reputation.last_month_avg ?? 5) < 4.3 ? 'miss' : 'ok'}
+                rows={[
+                  ['Google Business Profile', `${reputation.gbp_rating ?? '—'} → 4.8 by 31 Oct`, cls.warn],
+                  ['TripAdvisor rank', `${reputation.tripadvisor_rank ?? '—'} of ${reputation.tripadvisor_rank_of ?? '—'} → top 3`, cls.bad],
+                  ['Trip.com', `${reputation.ctrip_score ?? '—'} → 4.5`, cls.bad],
+                  ['Booking · Expedia', `${reputation.booking_score ?? '—'} · ${reputation.expedia_score ?? '—'}`],
+                  ['Reviews last month · goal', `${nInt(reputation.last_month_reviews)} · ≥15`],
+                  ['Never answered', `${nInt(reputation.unanswered)} (${nPct(reputation.unanswered_pct, 1)})`, cls.bad],
+                ]}
+                cta="Open reputation"
+                ctaHref={`${base}/guest/reputation`}
+              />
+            )}
             <Tile title="Low reviews" sub="under 4, last 180 d" big={nInt(gs.low_180d)} bigTone={Number(gs.low_180d) > 0 ? cls.bad : cls.ok} chip={`${nInt(gs.low_90d)} in 90 d · avg 90 d ${gs.avg_90d ?? '—'}`} chipTone="miss" rows={[['Without a theme tag', nInt(gs.low_without_theme), cls.warn], ['Unanswered', nInt(gs.low_unanswered), cls.bad], ['Without a finding', nInt(gs.low_without_finding), cls.bad], ['Never answered (all time)', `${nInt(gs.unanswered)} of ${nInt(gs.reviews)} · ${nPct(gs.unanswered_pct, 0)}`, cls.bad], ['Recovery cases · NPS', `${nInt(gs.recovery_cases)} · ${nInt(gs.nps_responses)}`, cls.bad], ['Named staff in tags', `${nInt(gs.named_staff_tags)} of ${nInt(gs.theme_tags)}`]]} cta="Open reputation" ctaHref={`${base}/guest/reputation`} note="signal without a receiver" noteRed />
             <Tile wide title="Themes → departments" sub={`${nInt(gs.themed_reviews)} themed reviews · 180 d`} big={nInt(gs.negative_theme_tags_90d)} bigTone={Number(gs.negative_theme_tags_90d) > 0 ? cls.bad : cls.ok} chip="negative theme tags, 90 d" chipTone={Number(gs.negative_theme_tags_90d) > 0 ? 'miss' : 'ok'} cta="Open themes" ctaHref={`${base}/guest/reputation`} note="mapping lives in ops.qa_theme_dept_map">
               <table className="mt-2 w-full text-xs"><thead><tr><Th c="Theme" /><Th c="Mentions" r /><Th c="Positive" r /><Th c="Negative" r /><Th c="Mixed" r /><Th c="Owner" /></tr></thead><tbody>{(G.themes ?? []).map((t: ThemeRow) => (<tr key={t.theme} className="border-b border-neutral-200"><td className="py-1">{t.theme}</td><td className="text-right">{nInt(t.mentions_180d)}</td><td className="text-right">{nInt(t.positive)}</td><td className={`text-right ${Number(t.negative) > 0 ? cls.bad : ''}`}>{nInt(t.negative)}</td><td className="text-right">{nInt(t.mixed)}</td><td>{t.dept_code ?? '—'}{t.dept_code_2 ? ` · ${t.dept_code_2}` : ''}</td></tr>))}</tbody></table>
