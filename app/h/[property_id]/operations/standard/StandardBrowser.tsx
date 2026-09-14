@@ -162,7 +162,6 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
   // and a secondary owner alike, and falls back to the raw code rather than blanking.
   const deptName = (code: string | null) =>
     (code ? depts.find((d) => d.dept_code === code)?.dept_name ?? code : '—');
-  const coverPct = t && t.atoms > 0 ? (100 * t.covered) / t.atoms : 0;
 
   return (
     <div className="mx-auto max-w-[1320px] px-3 py-4">
@@ -176,7 +175,7 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
         <p className="mt-1 text-xs text-neutral-500">Generated {stamp(payload.generated_at)}</p>
       </header>
 
-      <div className="mb-4 grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 lg:grid-cols-7">
+      <div className="mb-4 grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Requirements" value={nInt(t?.atoms)} sub="the merged standard" />
         <Stat label="Citations" value={nInt(t?.requirements)} sub="raw questions behind them" />
         <Stat label="Merged" value={nInt(t?.multi_source)} sub="asked by more than one authority" />
@@ -189,8 +188,33 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
               sub={(t?.sop_unwritten ?? 0) > 0
                 ? `of ${nInt(t?.sop_docs)} registered · ${nInt(t?.sop_unwritten)} unwritten`
                 : `of ${nInt(t?.sop_docs)} registered`} />
-        <Stat label="Covered" value={`${coverPct.toFixed(1)}%`} sub={`${nInt(t?.covered)} of ${nInt(t?.atoms)}`} />
         <Stat label="Suggested" value={nInt(t?.suggested)} sub="awaiting your verdict" />
+      </div>
+
+      {/* "12% covered" was a category error: most of these obligations are not SOP-shaped.
+          Coverage is reported per discharge mode instead — procedure and evidence get a
+          real percentage; rule and observation get a stated reason, because there is no
+          training store on the platform and an observation is scored by audit, never
+          closed by a document. A 0% there would read as failure; a 100% would be a lie. */}
+      <div className="mb-4 border-l-[3px] border-neutral-300 px-3 py-2 text-sm text-neutral-700">
+        <p className="mb-1">Coverage, by how each requirement is actually discharged:</p>
+        <ul className="ml-4 list-disc space-y-0.5">
+          {(t?.by_mode ?? []).map((m) => (
+            <li key={m.mode} className="flex flex-wrap items-baseline gap-x-2">
+              <b className="capitalize">{m.mode}</b>
+              <span className="tabular-nums">{nInt(m.atoms)}</span>
+              {m.coverable
+                ? <span className="text-neutral-600">
+                    {nInt(m.covered)} covered · {((100 * m.covered) / Math.max(m.atoms, 1)).toFixed(1)}%
+                  </span>
+                : <span className="text-neutral-500">
+                    {m.mode === 'rule'
+                      ? 'no coverage measure — there is no training store yet'
+                      : 'scored by audit, never closed by a document'}
+                  </span>}
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* How we actually SCORED. The corpus says what we must do; this says where we

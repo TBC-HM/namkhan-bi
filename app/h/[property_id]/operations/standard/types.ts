@@ -126,6 +126,14 @@ export interface StandardTotals {
   authorities: number;
   /** active SOPs in the register */
   sops: number;
+  /** coverage split by how each obligation is actually discharged */
+  by_mode: Array<{
+    mode: 'procedure' | 'rule' | 'evidence' | 'observation';
+    atoms: number;
+    covered: number;
+    /** false for rule (no training store exists) and observation (scored, not closed) */
+    coverable: boolean;
+  }>;
 }
 
 export interface StandardPayload {
