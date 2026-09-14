@@ -68,6 +68,24 @@ describe('house commercial standards split on prohibition', () => {
   });
 });
 
+describe('brand category is always a rule', () => {
+  it('brand obligation is a rule even without prohibition wording', () => {
+    expect(dischargeModeFor({
+      authority: 'Namkhan', sourceTitle: 'SLH Brand Standards',
+      category: 'brand', text: 'Uniform must match approved palette.',
+    })).toBe('rule');
+  });
+});
+
+describe('evidence words trigger evidence mode independently of authority', () => {
+  it('written record in a non-evidence authority returns evidence (step 7)', () => {
+    expect(dischargeModeFor({
+      authority: 'Namkhan', sourceTitle: 'Namkhan Compliance Log',
+      category: null, text: 'A written record of fire drills is kept.',
+    })).toBe('evidence');
+  });
+});
+
 describe('unmatched defaults to procedure (asks the most, never silently excuses)', () => {
   it('falls through', () => {
     expect(dischargeModeFor({
