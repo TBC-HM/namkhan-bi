@@ -77,9 +77,9 @@ export default function FloatingHOSPanel() {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.18)' }} />
 
           <div style={{
-            position: 'fixed', bottom: 88, right: 16, zIndex: 1001,
-            width: 'min(700px, calc(100vw - 32px))',
-            height: 'calc(100vh - 108px)', maxHeight: 840,
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 1001,
+            width: 'min(980px, calc(100vw - 48px))',
+            height: 'min(88vh, 1000px)',
             background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 14,
             boxShadow: '0 16px 48px rgba(0,0,0,0.22)',
             overflow: 'hidden', display: 'flex', flexDirection: 'column',
