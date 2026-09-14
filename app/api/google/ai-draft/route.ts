@@ -45,14 +45,26 @@ export async function POST(req: NextRequest) {
   const propertyName = PROPERTY_NAME[property_id] ?? `Property ${property_id}`;
   const sb = getSupabaseAdmin();
 
-  // Brief for property context (soft fail — prompt still works without it)
-  let briefText = '';
-  try {
-    const { data } = await sb.rpc('fn_social_property_brief', { p_property_id: property_id });
-    if (typeof data === 'string') briefText = data;
-  } catch { /* non-blocking */ }
+  // Brand voice + property context — soft fail on both; prompts still work without them
+  const [briefRes, realityRes] = await Promise.allSettled([
+    sb.rpc('fn_social_property_brief', { p_property_id: property_id }),
+    sb.from('v_reality_profile').select('banned_phrases, tone_donts, forbidden').eq('property_id', property_id).maybeSingle(),
+  ]);
 
-  const contextBlock = briefText ? `\n\nProperty context:\n${briefText}` : '';
+  // fn_social_property_brief returns jsonb (JS object), never a raw string
+  const briefData = briefRes.status === 'fulfilled' ? briefRes.value.data : null;
+  const briefText = briefData && typeof briefData === 'object' ? JSON.stringify(briefData, null, 2) : '';
+  const contextBlock = briefText ? `\n\nProperty context (JSON):\n${briefText}` : '';
+
+  const reality = realityRes.status === 'fulfilled' ? realityRes.value.data : null;
+  const bannedPhrases = (reality?.banned_phrases ?? []) as string[];
+  const toneDonts    = (reality?.tone_donts    ?? []) as string[];
+  const forbidden    = (reality?.forbidden     ?? []) as string[];
+  const brandVoiceBlock = [
+    bannedPhrases.length ? `BANNED PHRASES (never write these): ${bannedPhrases.join(', ')}.` : '',
+    forbidden.length     ? `FORBIDDEN TOPICS/THEMES: ${forbidden.join(', ')}.` : '',
+    toneDonts.length     ? `TONE — NEVER: ${toneDonts.join(' · ')}.` : '',
+  ].filter(Boolean).join('\n');
 
   let systemPrompt: string;
   let userPrompt: string;
@@ -72,7 +84,7 @@ export async function POST(req: NextRequest) {
 - Rating ≤ 3: acknowledge sincerely, no defensiveness, invite private conversation
 - Rating ≥ 4: genuine gratitude, reinforce what made it special
 - Close with a genuine invitation to return
-- Return ONLY the reply text — no subject line, no preamble${contextBlock}`;
+- Return ONLY the reply text — no subject line, no preamble${brandVoiceBlock ? `\n\nBRAND CONSTRAINTS (hard rules):\n${brandVoiceBlock}` : ''}${contextBlock}`;
 
     userPrompt = `Reviewer: ${reviewerName}\nRating: ${rating}/5\n\nReview:\n${reviewText}`;
   } else {
@@ -84,7 +96,7 @@ export async function POST(req: NextRequest) {
 - Be specific and factual — no vague generalities
 - Brand voice: warm, knowledgeable, welcoming
 - Pricing / availability: direct them to the website
-- Return ONLY the answer text — no preamble${contextBlock}`;
+- Return ONLY the answer text — no preamble${brandVoiceBlock ? `\n\nBRAND CONSTRAINTS (hard rules):\n${brandVoiceBlock}` : ''}${contextBlock}`;
 
     userPrompt = `Question: ${question}`;
   }

@@ -88,6 +88,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: `no active programs for property ${propertyId} — seed marketing.social_programs first` }, { status: 400 });
   }
 
+  // Global brand-voice banned phrases — operator-editable, injected into every slot brief
+  const { data: realityData } = await sb.from('v_reality_profile')
+    .select('banned_phrases').eq('property_id', propertyId).maybeSingle();
+  const globalBanned = (realityData?.banned_phrases ?? []) as string[];
+
   const existing = new Set(
     (existingRes.data ?? [])
       .filter((s: any) => s.status !== 'rejected')
@@ -118,10 +123,11 @@ export async function POST(req: NextRequest) {
       // wrote in the same voice (river 79x, stillness 18x) precisely because nothing carried
       // the per-programme direction this far down the chain.
       const banned = (prog as any).banned_phrases as string[] | null;
+      const allBanned = [...new Set([...(banned ?? []), ...globalBanned])];
       const brief = [
         `Program: ${prog.label} (${prog.category_code})`,
         (prog as any).content_brief ? `BRIEF: ${(prog as any).content_brief}` : null,
-        banned && banned.length ? `NEVER USE these exhausted phrases: ${banned.join(', ')}.` : null,
+        allBanned.length ? `NEVER USE these phrases: ${allBanned.join(', ')}.` : null,
         prog.notes ? `Direction: ${prog.notes}` : null,
         `Channel: ${prog.platform} · respect guardrails in marketing.social_channel_rules.`,
       ].filter(Boolean).join('\n');

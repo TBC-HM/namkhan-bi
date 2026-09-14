@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   };
   const tagCats = TAG_CATEGORIES[platform] ?? ['subject','activity'];
 
-  const [specRes, tagsRes, linksRes, briefRes, vocabRes, channelRuleRes] = await Promise.all([
+  const [specRes, tagsRes, linksRes, briefRes, vocabRes, channelRuleRes, realityRes] = await Promise.all([
     sb.from('v_social_platform_specs')
       .select('platform, display_name, caption_max_chars, hashtags_allowed, hashtag_max, requires_title, notes')
       .eq('platform', platform).maybeSingle(),
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
       .eq('property_id', property_id)
       .eq('platform', platform)
       .maybeSingle(),
+    sb.from('v_reality_profile').select('banned_phrases, tone_donts').eq('property_id', property_id).maybeSingle(),
   ]);
 
   const spec = specRes.data;
@@ -123,6 +124,16 @@ export async function POST(req: NextRequest) {
     ? `NEVER mention these on ${platformLabel}: ${bannedTopics.join(', ')}.`
     : '';
 
+  // Brand-voice constraints from property.brand_reality (operator-editable, agent-dynamic)
+  const globalBannedPhrases = ((realityRes as any)?.data?.banned_phrases ?? []) as string[];
+  const globalToneDonts     = ((realityRes as any)?.data?.tone_donts     ?? []) as string[];
+  const brandVoiceLine = globalBannedPhrases.length
+    ? `BRAND BANNED PHRASES (never write these): ${globalBannedPhrases.join(', ')}.`
+    : '';
+  const toneDontsLine = globalToneDonts.length
+    ? `TONE — NEVER: ${globalToneDonts.join(' · ')}.`
+    : '';
+
   // Category-aware hashtag pools — infer from explicit code OR hint text (post title)
   const isRetreat = categoryCode.includes('retreat') || categoryCode.includes('wellness') || categoryCode.includes('mindful')
     || hint.toLowerCase().includes('retreat') || hint.toLowerCase().includes('wellness');
@@ -161,7 +172,9 @@ HARD RULES — violation = rejected post:
 3. Only use facts from the PROPERTY DATA below. Never invent room names, spa treatments, or experiences.
 4. BRAND VOCABULARY — never use these terms (use the luxury alternative instead):
   ${vocabBlock || '(none)'}
-${bannedTopicsLine ? `5. ${bannedTopicsLine}` : ''}
+${brandVoiceLine ? `5. ${brandVoiceLine}` : ''}
+${toneDontsLine ? `6. ${toneDontsLine}` : ''}
+${bannedTopicsLine ? `7. ${bannedTopicsLine}` : ''}
 ${titleInstruction}
 STYLE:
 - Voice: warm, evocative, sensory, understated luxury. Never sales-y. Max 1 emoji.
