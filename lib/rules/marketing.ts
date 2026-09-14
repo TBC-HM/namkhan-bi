@@ -160,7 +160,7 @@ const ruleOpenRateLow: Rule = (ctx) => {
   return {
     key: 'mkt_open_rate_low',
     priority: 'warning',
-    guardrail: 'open_rate_min',
+    guardrail: 'fixed',
     title: `Open rate ${ctx.openRatePct.toFixed(1)}% — below ${min}% target`,
     body: 'Below-target open rates signal subject-line fatigue or list quality issues. A/B test subjects on the next send; consider a re-engagement sub-segment.',
     evidence: `Target ≥ ${min}%`,
@@ -176,7 +176,7 @@ const ruleUnsubHigh: Rule = (ctx) => {
   return {
     key: 'mkt_unsub_rate_high',
     priority: ctx.unsubRatePct > max * 2 ? 'critical' : 'warning',
-    guardrail: 'unsub_rate_max',
+    guardrail: 'fixed',
     title: `Unsub rate ${ctx.unsubRatePct.toFixed(2)}% — above ${max}% ceiling`,
     body: 'High unsubscribes damage sender reputation and shrink the list. Narrow the send segment and review content relevance before the next broadcast.',
     evidence: `Ceiling ≤ ${max}%`,
@@ -192,7 +192,7 @@ const ruleNewsletterCadence: Rule = (ctx) => {
   return {
     key: 'mkt_newsletter_cadence_gap',
     priority: ctx.daysSinceLastNewsletter > max * 2 ? 'warning' : 'info',
-    guardrail: 'newsletter_cadence_days_max',
+    guardrail: 'fixed',
     title: `${ctx.daysSinceLastNewsletter}d since last newsletter — beyond ${max}-day cadence`,
     body: 'Irregular sends lose the habit loop. Use a quick property update or curated content piece to maintain momentum.',
     evidence: `Target ≤ ${max} days between sends`,
@@ -211,7 +211,7 @@ const ruleDirectShareLow: Rule = (ctx) => {
   return {
     key: 'mkt_direct_share_low',
     priority: gap > 20 ? 'critical' : 'warning',
-    guardrail: 'direct_share_min',
+    guardrail: 'fixed',
     title: `Direct share ${ctx.directSharePct90d.toFixed(1)}% — ${gap.toFixed(0)}pp below ${min}% goal`,
     body: 'OTAs are absorbing revenue that should route directly. Prioritise funnel pages, repeat-guest outreach, and SLH direct-booking incentives.',
     evidence: `OTA share ${ctx.otaSharePct90d != null ? ctx.otaSharePct90d.toFixed(1) + '%' : '—'} of last-90d revenue`,
@@ -227,7 +227,7 @@ const ruleOtaShareHigh: Rule = (ctx) => {
   return {
     key: 'mkt_ota_share_high',
     priority: 'warning',
-    guardrail: 'ota_share_max',
+    guardrail: 'fixed',
     title: `OTA share ${ctx.otaSharePct90d.toFixed(1)}% — above ${max}% ceiling`,
     body: 'OTA dependency erodes margin and repeat-guest ownership. Each percentage point shifted to direct saves ~15% commission.',
     evidence: `Direct ${ctx.directSharePct90d != null ? ctx.directSharePct90d.toFixed(1) + '%' : '—'} last 90 d`,
@@ -246,7 +246,7 @@ const ruleSocialPostGap: Rule = (ctx) => {
   return {
     key: 'mkt_social_post_gap',
     priority: noQueue ? 'warning' : 'info',
-    guardrail: 'social_post_cadence_days_max',
+    guardrail: 'fixed',
     title: `${ctx.daysSinceLastSocialPost}d since last social post — beyond ${max}-day cadence`,
     body: noQueue
       ? 'No scheduled posts in queue either. Algorithms penalise prolonged silence — publish even an evergreen repost to keep the feed alive.'
@@ -267,7 +267,7 @@ const ruleReachDrop: Rule = (ctx) => {
   return {
     key: 'mkt_reach_composite_drop',
     priority: drop > max * 1.5 ? 'critical' : 'warning',
-    guardrail: 'reach_composite_drop_pct_max',
+    guardrail: 'fixed',
     title: `Reach composite dropped ${drop.toFixed(1)}% — beyond ${max}% threshold`,
     body: 'Combined audience reach (sessions + search impressions + social) fell materially vs the prior snapshot. Review which channel drove the decline.',
     evidence: `Change: ${ctx.compositeChangePct.toFixed(1)}%`,

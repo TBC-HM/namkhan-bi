@@ -169,7 +169,28 @@ export const RULE_PAGE_MAP: Record<string, string> = {
   gbp_response_rate_target:           'google-business',
   gbp_rating_min:                     'google-business',
 
+  // ── Marketing · Campaigns ─────────────────────────────────────────
+  campaign_cadence_days_min:          'campaigns',
+
+  // ── Marketing · Funnels ───────────────────────────────────────────
+  cost_per_lead_max:                  'funnels',
+
+  // ── Marketing · Prospects ─────────────────────────────────────────
+  prospect_enrichment_min:            'prospects',
+  mx_verified_share_min:              'prospects',
+
+  // ── Marketing · Newsletter ────────────────────────────────────────
+  open_rate_min:                      'newsletter',
+  unsub_rate_max:                     'newsletter',
+  newsletter_cadence_days_max:        'newsletter',
+
+  // ── Marketing · Dashboard (channel mix / reach) ───────────────────
+  direct_share_min:                   'dashboard',
+  ota_share_max:                      'dashboard',
+  reach_composite_drop_pct_max:       'dashboard',
+
   // ── Marketing · Social ────────────────────────────────────────────
+  social_post_cadence_days_max:       'social-content',
   social_posting_cadence_min:         'social-content',
   social_response_rate_min:           'social-content',
 };

@@ -114,10 +114,17 @@ export const WIRING: Record<string, Record<string, RuleWiring>> = {
   },
 
   marketing: {
-    campaign_cadence_days_min: { status: 'live', consumedBy: 'ruleCampaignGap@marketing.ts',   requiresData: ['campaigns'] },
-    cost_per_lead_max:         { status: 'not_wired', notWiredReason: 'ad-spend CPL calc not threaded' },
-    prospect_enrichment_min:   { status: 'not_wired', notWiredReason: 'prospect enrichment % calc not threaded (web_analytics.subscribers)' },
-    mx_verified_share_min:     { status: 'not_wired', notWiredReason: 'MX-verified share calc not threaded' },
+    campaign_cadence_days_min:    { status: 'live',      consumedBy: 'ruleCampaignGap@marketing.ts',      requiresData: ['fn_mkt_dash_payload'] },
+    cost_per_lead_max:            { status: 'not_wired', notWiredReason: 'ad-spend CPL calc not threaded into fn_mkt_dash_payload' },
+    prospect_enrichment_min:      { status: 'not_wired', notWiredReason: 'prospect enrichment % not in fn_mkt_dash_payload yet' },
+    mx_verified_share_min:        { status: 'not_wired', notWiredReason: 'MX-verified share not in fn_mkt_dash_payload yet' },
+    open_rate_min:                { status: 'live',      consumedBy: 'ruleOpenRateLow@marketing.ts',      requiresData: ['fn_mkt_dash_payload'] },
+    unsub_rate_max:               { status: 'live',      consumedBy: 'ruleUnsubHigh@marketing.ts',        requiresData: ['fn_mkt_dash_payload'] },
+    direct_share_min:             { status: 'live',      consumedBy: 'ruleDirectShareLow@marketing.ts',   requiresData: ['fn_mkt_dash_payload'] },
+    social_post_cadence_days_max: { status: 'live',      consumedBy: 'ruleSocialPostGap@marketing.ts',    requiresData: ['fn_mkt_dash_payload'] },
+    newsletter_cadence_days_max:  { status: 'live',      consumedBy: 'ruleNewsletterCadence@marketing.ts',requiresData: ['fn_mkt_dash_payload'] },
+    ota_share_max:                { status: 'live',      consumedBy: 'ruleOtaShareHigh@marketing.ts',     requiresData: ['fn_mkt_dash_payload'] },
+    reach_composite_drop_pct_max: { status: 'live',      consumedBy: 'ruleReachDrop@marketing.ts',        requiresData: ['fn_mkt_dash_payload'] },
   },
 
   operations: {

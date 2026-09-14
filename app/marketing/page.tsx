@@ -97,6 +97,15 @@ export default async function MarketingHodPage() {
     mxVerifiedSharePct: null,
     activeCampaigns,
     scheduledCampaigns,
+    // Fields not available in the legacy page context — rules skip gracefully on null.
+    openRatePct: null,
+    unsubRatePct: null,
+    daysSinceLastNewsletter: null,
+    directSharePct90d: null,
+    otaSharePct90d: null,
+    daysSinceLastSocialPost: null,
+    scheduledPosts: null,
+    compositeChangePct: null,
     targets,
   };
   const insights = evaluateMarketingRules(mktCtx);
