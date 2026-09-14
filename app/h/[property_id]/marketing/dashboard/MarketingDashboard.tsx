@@ -185,6 +185,7 @@ export default function MarketingDashboard({ pid, payload, initialTab }: { pid: 
           <section className="grid gap-7 border-b border-neutral-200 py-5 lg:grid-cols-[300px_1fr]">
             <div>
               <h2 className="font-serif text-lg font-semibold">Reach barometer</h2>
+              {composite?.now_asof && <p className="mt-0.5 text-xs text-neutral-400">Last refreshed {nDate(composite.now_asof)}</p>}
               <div className={`mt-2 font-serif text-5xl leading-none ${tone(composite?.change_pct, (n) => n < -5, (n) => n < 0)}`}>{nSigned(composite?.change_pct)}<small className="ml-2 font-sans text-sm text-neutral-500">audience touches</small></div>
               <p className="mt-2 max-w-[34ch] text-sm text-neutral-500"><b className="text-neutral-900">{nInt(composite?.now_value)}</b> touches now against <b className="text-neutral-900">{nInt(composite?.before_value)}</b> {composite?.days_apart} days earlier: website sessions, search impressions, Instagram reach and TikTok/Pinterest impressions added together.</p>
               <p className="mt-2 max-w-[34ch] text-sm text-neutral-500">Published in the window: {nInt(m.published_30d)} posts, {nInt(m.sends_30d)} emails, {nInt(m.yt_published_pipeline)} videos.</p>
