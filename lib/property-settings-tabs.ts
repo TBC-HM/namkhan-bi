@@ -20,6 +20,7 @@ export function getSettingsTabs(propertyId: number, activeKey: string): Settings
     // hand-copied, drifted copies — so it had no entry point from any other settings
     // page. Canonical now; the inline copies are gone.
     { key: 'newsletter',     label: 'Newsletter',     path: `${base}/property/audience` },
+    { key: 'brand_voice',    label: 'Brand Voice',    path: `${base}/brand-voice`   },
     { key: 'guardrails',     label: 'Guardrails',     path: `${base}/guardrails`     },
     { key: 'documents',      label: 'Documents',      path: `${base}/documents`      },
     // PBS 2026-09-09: settings/archive is a working page (archive stats, retention
