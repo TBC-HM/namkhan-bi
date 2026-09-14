@@ -1,22 +1,18 @@
 // app/api/cron/briefing-evaluate/route.ts
 // PBS 2026-07-17 — dynamic briefing ingest.
-// GET  /api/cron/briefing-evaluate            → all properties (Namkhan + Donna)
-// GET  /api/cron/briefing-evaluate?pid=260955 → single property
-// POST is accepted with same behaviour (used by Refresh button on /revenue/briefing).
+// GET  /api/cron/briefing-evaluate              → all properties, revenue + marketing
+// GET  /api/cron/briefing-evaluate?pid=260955   → single property
+// GET  /api/cron/briefing-evaluate?domain=mkt   → marketing only (for fast refresh)
+// POST is accepted with same behaviour (used by Refresh buttons).
 //
 // Fires from Vercel cron @ 23:00 UTC daily = 06:00 Vientiane (Namkhan tz).
-// Also callable manually so the rev manager can hit "Refresh" for intra-day
-// evaluation without waiting 24h.
-//
-// Pipeline: for each property → load live context → evaluate all rules
-// (parity + rateplans + revenue forward-window) → upsert every fired Insight
-// into briefing.items via fn_briefing_upsert. Idempotent on (property_id,
-// source_area, source_key) so re-runs update existing rows in-place.
+// PBS 2026-09-14: Added marketing domain evaluation.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { automationGuard } from '@/lib/cron/guard';
 import { evaluateForBriefings, insightToUpsertArgs } from '@/lib/rules/evaluateForBriefings';
+import { evaluateForMarketingBriefings, mktInsightToUpsertArgs } from '@/lib/rules/evaluateForMarketingBriefings';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,37 +28,53 @@ async function handle(req: Request) {
 
   const url = new URL(req.url);
   const pidParam = url.searchParams.get('pid') ?? url.searchParams.get('propertyId');
+  const domainParam = url.searchParams.get('domain'); // 'mkt' | 'rev' | null (= both)
   const properties: number[] = pidParam
     ? [Number(pidParam)].filter((n) => Number.isFinite(n) && n > 0)
     : [NAMKHAN_ID, DONNA_ID];
 
+  const runRevenue   = !domainParam || domainParam === 'rev';
+  const runMarketing = !domainParam || domainParam === 'mkt';
+
   const sb = getSupabaseAdmin();
   const started_at = new Date().toISOString();
-  const results: Array<{ property_id: number; insights: number; upserted: number; errors: number; errorSample?: string }> = [];
+  const results: Array<{ property_id: number; domain: string; insights: number; upserted: number; errors: number; errorSample?: string }> = [];
+
+  async function upsertInsights(
+    propertyId: number,
+    domain: string,
+    insights: Awaited<ReturnType<typeof evaluateForBriefings>>,
+    toArgs: typeof insightToUpsertArgs | typeof mktInsightToUpsertArgs,
+  ) {
+    let upserted = 0; let errors = 0; let errorSample: string | undefined;
+    for (const insight of insights) {
+      const args = toArgs(propertyId, insight);
+      const { error } = await sb.rpc('fn_briefing_upsert', args);
+      if (error) { errors++; if (!errorSample) errorSample = error.message; }
+      else upserted++;
+    }
+    results.push({ property_id: propertyId, domain, insights: insights.length, upserted, errors, errorSample });
+  }
 
   for (const propertyId of properties) {
-    let insightCount = 0;
-    let upserted = 0;
-    let errors = 0;
-    let errorSample: string | undefined;
-    try {
-      const insights = await evaluateForBriefings(propertyId);
-      insightCount = insights.length;
-      for (const insight of insights) {
-        const args = insightToUpsertArgs(propertyId, insight);
-        const { error } = await sb.rpc('fn_briefing_upsert', args);
-        if (error) {
-          errors += 1;
-          if (!errorSample) errorSample = error.message;
-        } else {
-          upserted += 1;
-        }
+    if (runRevenue) {
+      try {
+        const insights = await evaluateForBriefings(propertyId);
+        await upsertInsights(propertyId, 'revenue', insights, insightToUpsertArgs);
+      } catch (e) {
+        results.push({ property_id: propertyId, domain: 'revenue', insights: 0, upserted: 0, errors: 1,
+          errorSample: e instanceof Error ? e.message : String(e) });
       }
-    } catch (e) {
-      errors += 1;
-      errorSample = e instanceof Error ? e.message : String(e);
     }
-    results.push({ property_id: propertyId, insights: insightCount, upserted, errors, errorSample });
+    if (runMarketing) {
+      try {
+        const insights = await evaluateForMarketingBriefings(propertyId);
+        await upsertInsights(propertyId, 'marketing', insights, mktInsightToUpsertArgs);
+      } catch (e) {
+        results.push({ property_id: propertyId, domain: 'marketing', insights: 0, upserted: 0, errors: 1,
+          errorSample: e instanceof Error ? e.message : String(e) });
+      }
+    }
   }
 
   return NextResponse.json({ ok: true, started_at, finished_at: new Date().toISOString(), results });
