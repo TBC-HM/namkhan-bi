@@ -141,6 +141,7 @@ interface VideosListResp {
     };
     contentDetails?: { duration?: string };
     statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
+    status?: { privacyStatus?: string };
   }>;
 }
 
@@ -185,10 +186,11 @@ export async function fetchRecentVideos(
 
   const all: VideoItem[] = [];
   for (const batch of batches) {
-    const vidUrl = `${API}/videos?part=snippet,statistics,contentDetails&id=${batch.join(',')}`;
+    const vidUrl = `${API}/videos?part=snippet,statistics,contentDetails,status&id=${batch.join(',')}`;
     const v = await ytFetch<VideosListResp>(vidUrl, accessToken);
     if (isErr(v)) return { ok: false, error: v.error, detail: v.detail };
     for (const it of v.data.items ?? []) {
+      if (it.status?.privacyStatus === 'private') continue; // exclude archived/private
       all.push({
         id:          it.id,
         title:       it.snippet?.title ?? '(untitled)',
