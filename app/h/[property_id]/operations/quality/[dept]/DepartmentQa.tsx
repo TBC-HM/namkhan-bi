@@ -266,8 +266,14 @@ function ObligationRow({
           </>
         )}
         {item.mode === 'procedure' && !item.covered && <ActivateLink pid={pid} deptCode={deptCode} item={item} />}
+        {/* `covered` here is derived from standards.sop_coverage (an SOP-coverage
+            signal), not from ops.sustainability_evidence — the store the spec names
+            for this mode, which is wired nowhere yet (a separate brief). A green/red
+            Held/Missing badge would be a claim this data cannot back, so evidence
+            gets the same no-claim treatment as `rule` below: a stated reason, no
+            coverage verdict. */}
         {item.mode === 'evidence' && (
-          <span style={{ color: item.covered ? GREEN : RED, fontWeight: 600 }}>{item.covered ? 'Held' : 'Missing'}</span>
+          <span style={{ color: MUTE }}>no evidence register wired yet</span>
         )}
         {item.mode === 'observation' && (
           <a href="#how-we-scored" style={{ color: MUTE, borderBottom: `1px dotted ${BORDER_STRONG}` }}>
@@ -363,21 +369,32 @@ export default function DepartmentQa({
           correct the mode or the wording on any row below — corrections are never overwritten
           by a future re-classification.
         </p>
-        {payload.by_mode.map((row) => {
-          // Grouped from the local, editable `obligations` state (not payload.obligations)
-          // so a HoD's mode correction moves the row into its new group immediately. The
-          // atoms/covered counts in the summary still come straight from the RPC's by_mode
-          // block (no metric is computed here) and may lag by one edit until reload — an
-          // acceptable trade for a HoD tool, not a CMS.
-          const items = obligations.filter((o) => o.mode === row.mode);
+        {/* Iterate the four fixed MODE_OPTIONS, not payload.by_mode (static, server-
+            computed at load). A HoD correction that moves an obligation into a mode
+            with no server-side row for this department (e.g. boat has only a
+            'procedure' row; reclassifying its one obligation to 'rule' produces no
+            'rule' row in payload.by_mode) used to make the row disappear with no
+            message — it read as a delete. Grouping from the local, editable
+            `obligations` state and falling back to a locally-computed atoms/covered
+            count when by_mode carries no row for the mode fixes that: every mode
+            that has items always gets a group. */}
+        {MODE_OPTIONS.map((mode) => {
+          const items = obligations.filter((o) => o.mode === mode);
+          if (items.length === 0) return null; // nothing in this mode — no empty group to show
+          const row = payload.by_mode.find((r) => r.mode === mode);
+          // Local fallback mirrors the RPC's own coverable rule (public.fn_dept_qa_payload):
+          // only 'procedure' has a real coverage signal.
+          const atoms = row?.atoms ?? items.length;
+          const covered = row?.covered ?? items.filter((o) => o.covered).length;
+          const coverable = row?.coverable ?? (mode === 'procedure');
           return (
-            <details key={row.mode} open style={{ marginBottom: 10, border: `1px solid ${BORDER}`, borderRadius: 6 }}>
+            <details key={mode} open style={{ marginBottom: 10, border: `1px solid ${BORDER}`, borderRadius: 6 }}>
               <summary style={{ cursor: 'pointer', padding: '8px 10px', background: BG_ELEV, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontWeight: 700, color: FG }}>{MODE_TITLE[row.mode]}</span>
+                <span style={{ fontWeight: 700, color: FG }}>{MODE_TITLE[mode]}</span>
                 <span style={{ fontSize: 12, color: MUTE }}>
-                  {row.coverable ? `${nInt(row.covered)} of ${nInt(row.atoms)} covered` : `${nInt(row.atoms)} obligations`}
+                  {coverable ? `${nInt(covered)} of ${nInt(atoms)} covered` : `${nInt(atoms)} obligations`}
                 </span>
-                <span style={{ fontSize: 12, color: MUTE, flexBasis: '100%' }}>{MODE_EXPLAIN[row.mode]}</span>
+                <span style={{ fontSize: 12, color: MUTE, flexBasis: '100%' }}>{MODE_EXPLAIN[mode]}</span>
               </summary>
               <ul style={{ listStyle: 'none', padding: '0 10px', margin: 0 }}>
                 {items.map((o) => (
@@ -387,7 +404,7 @@ export default function DepartmentQa({
             </details>
           );
         })}
-        {payload.by_mode.length === 0 && (
+        {obligations.length === 0 && (
           <p style={{ color: MUTE, fontSize: 14 }}>No obligations are mapped to this department.</p>
         )}
       </section>

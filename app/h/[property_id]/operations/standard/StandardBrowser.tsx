@@ -132,7 +132,10 @@ function ActivateLink({ pid, item }: { pid: number; item: AtomRow }) {
 function SourceDocLink({ doc }: { doc: SourceDocument }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const confidential = doc.sensitivity === 'confidential';
+  // Fails open (labelled), not closed (silently hidden) — same convention as
+  // DepartmentQa.tsx's `sensitive` check (a 'restricted' sensitivity exists on 29
+  // docs elsewhere and would render unlabelled under an exact 'confidential' match).
+  const sensitive = !!doc.sensitivity && doc.sensitivity !== 'internal' && doc.sensitivity !== 'public';
   const size = nBytes(doc.file_size_bytes);
 
   async function download() {
@@ -164,11 +167,11 @@ function SourceDocLink({ doc }: { doc: SourceDocument }) {
       >
         {pending ? 'Getting link…' : doc.doc_title}
       </button>
-      {/* Any HoD may download a confidential report — this labels what they are
+      {/* Any HoD may download a sensitive report — this labels what they are
           handling, it does not gate the download (PBS instruction). */}
-      {confidential && (
+      {sensitive && (
         <span className="rounded bg-amber-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">
-          confidential
+          {doc.sensitivity}
         </span>
       )}
       {size && <span className="text-[11px] text-neutral-500">{size}</span>}
@@ -194,11 +197,13 @@ export default function StandardBrowser({
 }: {
   pid: number;
   payload: StandardPayload;
-  /** public.fn_standards_source_documents() — fetched separately in page.tsx (no
-   *  arguments, tenant-neutral). Grouped by authority below: SLH carries three
-   *  documents against its one authority row, ASEAN/GSTC/Travelife carry one each,
-   *  and Legal/Sustainability/PM plus the two Namkhan house sources carry none —
-   *  those are registers this platform generates, not partner documents. */
+  /** public.fn_standards_source_documents(p_property_id) — fetched separately in
+   *  page.tsx, scoped to THIS property (the documents are property-scoped even
+   *  though the atom corpus they back is tenant-neutral — see types.ts). Grouped by
+   *  authority below: SLH carries three documents against its one authority row,
+   *  ASEAN/GSTC/Travelife carry one each, and Legal/Sustainability/PM plus the two
+   *  Namkhan house sources carry none — those are registers this platform
+   *  generates, not partner documents. */
   sourceDocs: SourceDocument[];
 }) {
   const t = payload.totals;
@@ -279,10 +284,13 @@ export default function StandardBrowser({
       </div>
 
       {/* "12% covered" was a category error: most of these obligations are not SOP-shaped.
-          Coverage is reported per discharge mode instead — procedure and evidence get a
-          real percentage; rule and observation get a stated reason, because there is no
-          training store on the platform and an observation is scored by audit, never
-          closed by a document. A 0% there would read as failure; a 100% would be a lie. */}
+          Coverage is reported per discharge mode instead — only procedure has a real
+          coverage signal (standards.sop_coverage). rule, evidence and observation each
+          get a stated reason instead of a claimed percentage: there is no training
+          store for rule, no evidence register wired yet for evidence (ops.
+          sustainability_evidence is a separate brief), and observation is scored by
+          audit, never closed by a document. A 0% there would read as failure; a 100%
+          would be a lie. */}
       <div className="mb-4 border-l-[3px] border-neutral-300 px-3 py-2 text-sm text-neutral-700">
         <p className="mb-1">Coverage, by how each requirement is actually discharged:</p>
         <ul className="ml-4 list-disc space-y-0.5">
@@ -291,12 +299,16 @@ export default function StandardBrowser({
               <b className="capitalize">{m.mode}</b>
               <span className="tabular-nums">{nInt(m.atoms)}</span>
               {m.coverable
-                ? <span className="text-neutral-600">
-                    {nInt(m.covered)} covered · {((100 * m.covered) / Math.max(m.atoms, 1)).toFixed(1)}%
-                  </span>
+                ? (m.atoms > 0
+                    ? <span className="text-neutral-600">
+                        {nInt(m.covered)} covered · {((100 * m.covered) / m.atoms).toFixed(1)}%
+                      </span>
+                    : <span className="text-neutral-500">—</span>)
                 : <span className="text-neutral-500">
                     {m.mode === 'rule'
                       ? 'no coverage measure — there is no training store yet'
+                      : m.mode === 'evidence'
+                      ? 'no evidence register wired yet'
                       : 'scored by audit, never closed by a document'}
                   </span>}
             </li>
@@ -393,15 +405,20 @@ export default function StandardBrowser({
                   <tr key={a.authority} className="border-b border-neutral-100 align-top">
                     <td className="py-1.5 pr-3"><Chip text={a.authority} /></td>
                     <td className="py-1.5 pr-3 text-neutral-700">
-                      {/* No partner document behind this authority (Legal, Sustainability,
-                          PM, the Namkhan house sources) renders nothing rather than a
-                          broken link or an apology — those are registers this platform
-                          generates itself, not partner documents (task-7 brief). */}
-                      {docs && docs.length > 0 && (
-                        <div className="flex flex-col">
-                          {docs.map((d) => <SourceDocLink key={d.doc_id} doc={d} />)}
-                        </div>
-                      )}
+                      {/* An authority with a linked partner document (a downloadable PDF/DOCX
+                          via SourceDocLink) shows that. An authority with none (Legal,
+                          Sustainability, PM, the Namkhan house sources — registers this
+                          platform generates itself, not partner documents, task-7 brief)
+                          falls back to the plain text a.documents already carries — never a
+                          blank cell, which reads as a regression from what this column showed
+                          before the links were added. */}
+                      {docs && docs.length > 0
+                        ? (
+                          <div className="flex flex-col">
+                            {docs.map((d) => <SourceDocLink key={d.doc_id} doc={d} />)}
+                          </div>
+                        )
+                        : <span>{a.documents ?? '—'}</span>}
                     </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(a.requirements)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(a.atoms)}</td>

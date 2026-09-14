@@ -73,16 +73,17 @@ export default async function OperationsStandardPage({ params, searchParams }: P
 
   // Partner source documents (PBS request, additional scope beyond the task-7 brief —
   // see task-7-report.md): "links... to the main documents, the standard from our
-  // partners... slh question list, asean standards etc." fn_standards_source_documents()
-  // takes no arguments — the source corpus is tenant-neutral, same as the atom corpus
-  // it backs (see the payload RPC's own comment above). Fetched separately from the
-  // main payload, same reasoning as fn_audit_documents on the sibling department QA
-  // page: a different RPC with a different failure mode, and a document listing that
-  // fails to load must never take the Standard's own numbers down with it — degrade
-  // to an empty list.
+  // partners... slh question list, asean standards etc." fn_standards_source_documents
+  // takes p_property_id and filters on it (invariant 3) — the DOCUMENTS behind the
+  // atom corpus are property-scoped even though the atom corpus itself is tenant-
+  // neutral, and two of them (the SLH Mystery Inspection reports) are confidential.
+  // Fetched separately from the main payload, same reasoning as fn_audit_documents on
+  // the sibling department QA page: a different RPC with a different failure mode, and
+  // a document listing that fails to load must never take the Standard's own numbers
+  // down with it — degrade to an empty list.
   let sourceDocs: SourceDocument[] = [];
   try {
-    const docs = await getSupabaseAdmin().rpc('fn_standards_source_documents');
+    const docs = await getSupabaseAdmin().rpc('fn_standards_source_documents', { p_property_id: pid });
     sourceDocs = (docs.data as SourceDocument[] | null) ?? [];
   } catch {
     sourceDocs = [];

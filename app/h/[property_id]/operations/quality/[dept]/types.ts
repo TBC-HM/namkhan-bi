@@ -44,8 +44,13 @@ export interface ModeRow {
   mode: DischargeMode;
   atoms: number;
   covered: number;
-  /** false for 'rule' (no training store to check) and 'observation' (scored by
-   *  audit, never closed by a document) — those modes never claim coverage. */
+  /** true for 'procedure' only. 'evidence' is NOT coverable — `covered` above is
+   *  derived from standards.sop_coverage (an SOP-coverage signal) for every mode,
+   *  and ops.sustainability_evidence (the store the spec names for evidence) is
+   *  wired nowhere; claiming evidence coverage from an SOP match would be a false
+   *  positive (a separate brief wires the real evidence register). 'rule' has no
+   *  training store to check, and 'observation' is scored by audit, never closed by
+   *  a document — neither ever claims coverage either. */
   coverable: boolean;
 }
 

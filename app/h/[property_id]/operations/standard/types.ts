@@ -131,16 +131,25 @@ export interface StandardTotals {
     mode: 'procedure' | 'rule' | 'evidence' | 'observation';
     atoms: number;
     covered: number;
-    /** false for rule (no training store exists) and observation (scored, not closed) */
+    /** true for 'procedure' only. 'evidence' is NOT coverable — `covered` is derived
+     *  from standards.sop_coverage for every mode, and ops.sustainability_evidence
+     *  (the store the spec names for evidence) is wired nowhere; claiming evidence
+     *  coverage from an SOP match would be a false positive (a separate brief wires
+     *  the real evidence register). 'rule' has no training store to check, and
+     *  'observation' is scored by audit, never closed by a document. */
     coverable: boolean;
   }>;
 }
 
-/** public.fn_standards_source_documents() — no arguments, tenant-neutral (the source
- *  corpus, like the atom corpus, is the same for every property). Six rows across
- *  four authorities today: ASEAN and GSTC one document each, SLH three (the minimum
- *  standards chart plus two mystery-inspection reports), Travelife one. Legal,
- *  Sustainability, PM and the two Namkhan house sources have none — those are
+/** public.fn_standards_source_documents(p_property_id) — takes p_property_id and
+ *  filters on it (invariant 3). The ATOM corpus is tenant-neutral, but the DOCUMENTS
+ *  behind it are property-scoped — two of the six are the SLH Mystery Inspection
+ *  2025/2026 reports, sensitivity='confidential', belonging to one property. A prior
+ *  zero-argument version ignored property_id and leaked those reports cross-tenant;
+ *  never call this without a verified p_property_id. For Namkhan (260955): six rows
+ *  across four authorities — ASEAN and GSTC one document each, SLH three (the
+ *  minimum standards chart plus the two mystery-inspection reports), Travelife one.
+ *  Legal, Sustainability, PM and the two Namkhan house sources have none — those are
  *  registers this platform generates, not partner documents, and correctly have zero
  *  rows here; that is not a data gap. Fetched server-side in page.tsx, same pattern
  *  as AuditDocument in the sibling quality/[dept]/types.ts — this client component
