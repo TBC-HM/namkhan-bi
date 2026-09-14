@@ -130,6 +130,7 @@ export default async function GuardrailsSettingsPage() {
           <GuardrailsClient
             rows={rows}
             statusById={statusById}
+            propertyId={PROPERTY_ID}
             stats={{
               total,
               activeCount,
