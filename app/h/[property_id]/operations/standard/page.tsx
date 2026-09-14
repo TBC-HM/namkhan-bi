@@ -20,7 +20,7 @@ import { DEPT_CFG } from '@/lib/dept-cfg';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import StandardBrowser from './StandardBrowser';
-import type { StandardPayload } from './types';
+import type { SourceDocument, StandardPayload } from './types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -71,10 +71,27 @@ export default async function OperationsStandardPage({ params, searchParams }: P
     );
   }
 
+  // Partner source documents (PBS request, additional scope beyond the task-7 brief —
+  // see task-7-report.md): "links... to the main documents, the standard from our
+  // partners... slh question list, asean standards etc." fn_standards_source_documents()
+  // takes no arguments — the source corpus is tenant-neutral, same as the atom corpus
+  // it backs (see the payload RPC's own comment above). Fetched separately from the
+  // main payload, same reasoning as fn_audit_documents on the sibling department QA
+  // page: a different RPC with a different failure mode, and a document listing that
+  // fails to load must never take the Standard's own numbers down with it — degrade
+  // to an empty list.
+  let sourceDocs: SourceDocument[] = [];
+  try {
+    const docs = await getSupabaseAdmin().rpc('fn_standards_source_documents');
+    sourceDocs = (docs.data as SourceDocument[] | null) ?? [];
+  } catch {
+    sourceDocs = [];
+  }
+
   return (
     <DashboardPage title="Operations · Standard" tabs={deptTabs}>
       <div style={{ gridColumn: '1 / -1' }}>
-        <StandardBrowser pid={pid} payload={data as StandardPayload} />
+        <StandardBrowser pid={pid} payload={data as StandardPayload} sourceDocs={sourceDocs} />
       </div>
     </DashboardPage>
   );

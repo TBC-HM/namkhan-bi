@@ -136,6 +136,30 @@ export interface StandardTotals {
   }>;
 }
 
+/** public.fn_standards_source_documents() — no arguments, tenant-neutral (the source
+ *  corpus, like the atom corpus, is the same for every property). Six rows across
+ *  four authorities today: ASEAN and GSTC one document each, SLH three (the minimum
+ *  standards chart plus two mystery-inspection reports), Travelife one. Legal,
+ *  Sustainability, PM and the two Namkhan house sources have none — those are
+ *  registers this platform generates, not partner documents, and correctly have zero
+ *  rows here; that is not a data gap. Fetched server-side in page.tsx, same pattern
+ *  as AuditDocument in the sibling quality/[dept]/types.ts — this client component
+ *  must never query Supabase directly (CLAUDE.md "Data access gotchas"). */
+export interface SourceDocument {
+  authority: string;
+  source_key: string;
+  source_title: string;
+  doc_id: string;
+  doc_title: string;
+  file_name: string;
+  mime: string | null;
+  file_size_bytes: number | null;
+  /** 'public' | 'internal' | 'confidential' today. Treat anything not 'public'/'internal'
+   *  as worth labelling — fails open (labelled), not closed (silently hidden) — same
+   *  convention as AuditDocument.sensitivity in the sibling department QA page. */
+  sensitivity: string | null;
+}
+
 export interface StandardPayload {
   generated_at: string;
   property_id: number;

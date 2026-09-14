@@ -14,7 +14,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { AtomRow, StandardPayload } from './types';
+import type { AtomRow, SourceDocument, StandardPayload } from './types';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const pad2 = (n: number) => (n < 10 ? '0' + n : String(n));
@@ -24,6 +24,14 @@ const nDate = (v: string | null) => {
   if (!v) return '—';
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? '—' : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+};
+// Same helper as DepartmentQa.tsx's nBytes — the 2025 SLH report is 21.5 MB, which
+// matters before tapping "Download" on a phone.
+const nBytes = (v: number | null) => {
+  if (v == null || !Number.isFinite(v)) return null;
+  if (v >= 1024 * 1024) return (v / (1024 * 1024)).toFixed(1) + ' MB';
+  if (v >= 1024) return Math.round(v / 1024) + ' KB';
+  return v + ' B';
 };
 const stamp = (v: string) => {
   const d = new Date(v);
@@ -113,6 +121,62 @@ function ActivateLink({ pid, item }: { pid: number; item: AtomRow }) {
   );
 }
 
+// Partner source documents — PBS 2026-09-14: "links... to the main documents, the
+// standard from our partners... slh question list, asean standards etc." These are
+// the actual PDFs/DOCX the merged Standard was built from, one door per document.
+//
+// Never link a storage path directly (invariant 3 — bridge objects are the only
+// crossing point). Same click-then-fetch pattern as DepartmentQa.tsx's audit-reports
+// block: GET /api/docs/signed-url?doc_id=... on click, then open the returned URL —
+// the signed URL is short-lived (exp=600) and must never be pre-fetched or cached.
+function SourceDocLink({ doc }: { doc: SourceDocument }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const confidential = doc.sensitivity === 'confidential';
+  const size = nBytes(doc.file_size_bytes);
+
+  async function download() {
+    setError('');
+    setPending(true);
+    try {
+      const res = await fetch(`/api/docs/signed-url?doc_id=${encodeURIComponent(doc.doc_id)}&exp=600`);
+      const json = (await res.json()) as { ok: boolean; url?: string; error?: string };
+      if (json.ok && json.url) {
+        window.open(json.url, '_blank', 'noopener,noreferrer');
+      } else {
+        setError(json.error ?? 'could not get a download link');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 py-0.5">
+      <button
+        type="button"
+        onClick={download}
+        disabled={pending}
+        className="text-left font-medium text-neutral-800 underline decoration-neutral-300 underline-offset-2 hover:decoration-neutral-800 disabled:cursor-wait disabled:opacity-60"
+        title={`Download ${doc.doc_title}`}
+      >
+        {pending ? 'Getting link…' : doc.doc_title}
+      </button>
+      {/* Any HoD may download a confidential report — this labels what they are
+          handling, it does not gate the download (PBS instruction). */}
+      {confidential && (
+        <span className="rounded bg-amber-600 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-white">
+          confidential
+        </span>
+      )}
+      {size && <span className="text-[11px] text-neutral-500">{size}</span>}
+      {error && <span className="text-[11px] text-red-700">{error}</span>}
+    </div>
+  );
+}
+
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="border-l-[3px] border-neutral-200 px-3 py-1">
@@ -123,11 +187,34 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-export default function StandardBrowser({ pid, payload }: { pid: number; payload: StandardPayload }) {
+export default function StandardBrowser({
+  pid,
+  payload,
+  sourceDocs,
+}: {
+  pid: number;
+  payload: StandardPayload;
+  /** public.fn_standards_source_documents() — fetched separately in page.tsx (no
+   *  arguments, tenant-neutral). Grouped by authority below: SLH carries three
+   *  documents against its one authority row, ASEAN/GSTC/Travelife carry one each,
+   *  and Legal/Sustainability/PM plus the two Namkhan house sources carry none —
+   *  those are registers this platform generates, not partner documents. */
+  sourceDocs: SourceDocument[];
+}) {
   const t = payload.totals;
   const depts = payload.departments ?? [];
   const auths = payload.authorities ?? [];
   const items = payload.items ?? [];
+
+  const docsByAuthority = useMemo(() => {
+    const m = new Map<string, SourceDocument[]>();
+    for (const d of sourceDocs) {
+      const arr = m.get(d.authority);
+      if (arr) arr.push(d);
+      else m.set(d.authority, [d]);
+    }
+    return m;
+  }, [sourceDocs]);
 
   const [q, setQ] = useState('');
   const [auth, setAuth] = useState('');
@@ -300,14 +387,27 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
               </tr>
             </thead>
             <tbody>
-              {auths.map((a) => (
-                <tr key={a.authority} className="border-b border-neutral-100 align-top">
-                  <td className="py-1.5 pr-3"><Chip text={a.authority} /></td>
-                  <td className="py-1.5 pr-3 text-neutral-700">{a.documents ?? '—'}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(a.requirements)}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(a.atoms)}</td>
-                </tr>
-              ))}
+              {auths.map((a) => {
+                const docs = docsByAuthority.get(a.authority);
+                return (
+                  <tr key={a.authority} className="border-b border-neutral-100 align-top">
+                    <td className="py-1.5 pr-3"><Chip text={a.authority} /></td>
+                    <td className="py-1.5 pr-3 text-neutral-700">
+                      {/* No partner document behind this authority (Legal, Sustainability,
+                          PM, the Namkhan house sources) renders nothing rather than a
+                          broken link or an apology — those are registers this platform
+                          generates itself, not partner documents (task-7 brief). */}
+                      {docs && docs.length > 0 && (
+                        <div className="flex flex-col">
+                          {docs.map((d) => <SourceDocLink key={d.doc_id} doc={d} />)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(a.requirements)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(a.atoms)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -341,9 +441,22 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                 return (
                   <tr key={d.dept_code} className={`border-b border-neutral-100 ${active ? 'bg-emerald-50' : ''}`}>
                     <td className="py-1.5 pr-3">
-                      <Link href={`${base}?dept=${encodeURIComponent(d.dept_code)}`} className="font-medium text-neutral-900 underline-offset-2 hover:underline">
-                        {d.dept_name}
-                      </Link>
+                      <div className="flex flex-col items-start gap-0.5">
+                        {/* In-page filter — scrolls the requirement list below to this
+                            department. Kept exactly as it was (task-7 brief). */}
+                        <Link href={`${base}?dept=${encodeURIComponent(d.dept_code)}`} className="font-medium text-neutral-900 underline-offset-2 hover:underline">
+                          {d.dept_name}
+                        </Link>
+                        {/* Second, distinct door — leaves this page for the department's
+                            own QA page (Task 5): its people, scores and findings, not
+                            just its requirement list. */}
+                        <Link
+                          href={`/h/${pid}/operations/quality/${encodeURIComponent(d.dept_code)}`}
+                          className="text-[11px] text-neutral-500 underline-offset-2 hover:text-neutral-800 hover:underline"
+                        >
+                          Open department →
+                        </Link>
+                      </div>
                     </td>
                     {/* Weighted department score, with the worst section called out beneath it.
                         Housekeeping is 92.6% overall and 79.3% on the pool deck; showing
