@@ -185,13 +185,13 @@ async function getOtaShare(pid: number): Promise<OtaShareRow | null> {
   return data as OtaShareRow | null;
 }
 
-async function getDqIssues(pid: number): Promise<DqRow[]> {
+async function getDqIssues(pid: number): Promise<DqRow[] | null> {
   const { data, error } = await supabase
     .from('v_dq_posture')
     .select('source,label,status,age_minutes')
     .eq('property_id', pid)
     .in('status', ['stale', 'unknown']);
-  if (error) throw new Error(`v_dq_posture: ${error.message}`);
+  if (error) { console.error('v_dq_posture error:', error.message); return null; }
   return (data ?? []) as DqRow[];
 }
 
@@ -551,8 +551,9 @@ export default async function RevenueCockpitPage({
     getJournaledActionIds(pid),
   ]);
 
-  const stale = dqIssues.filter((d) => d.status === 'stale');
+  const stale = dqIssues ? dqIssues.filter((d) => d.status === 'stale') : [];
   const showDqAlert = stale.length > 0;
+  const dqQueryFailed = dqIssues === null;
 
   // KPI calculation (next 30 days)
   const today = new Date().toISOString().slice(0, 10);
@@ -622,6 +623,18 @@ export default async function RevenueCockpitPage({
         }}>
           <strong style={{ color: 'var(--terracotta, #B8542A)' }}>⚠ Data quality alert:</strong>{' '}
           {stale.map((d) => d.label).join(', ')} — stale data may affect forecast accuracy
+        </div>
+      )}
+      {dqQueryFailed && (
+        <div style={{
+          padding: '6px 14px',
+          background: 'rgba(100, 100, 100, 0.06)',
+          border: '1px solid rgba(100, 100, 100, 0.18)',
+          borderRadius: 8,
+          fontSize: 11.5,
+          color: 'var(--ink-soft, #6B6B6B)',
+        }}>
+          Data freshness status unavailable — check v_dq_posture
         </div>
       )}
 
