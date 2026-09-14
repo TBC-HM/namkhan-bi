@@ -117,6 +117,11 @@ export interface StandardTotals {
   /** atoms owned by two departments — counted once here, twice across `departments` */
   shared: number;
   requirements: number;
+  /** SOP docs registered for THIS property (knowledge.sop_meta) — what the Quality
+      dashboard counts. Always >= sops. */
+  sop_docs: number;
+  /** registered SOPs with no active body — a title and no procedure */
+  sop_unwritten: number;
   sources: number;
   authorities: number;
   /** active SOPs in the register */

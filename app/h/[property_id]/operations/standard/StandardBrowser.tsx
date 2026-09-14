@@ -149,11 +149,19 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
         <p className="mt-1 text-xs text-neutral-500">Generated {stamp(payload.generated_at)}</p>
       </header>
 
-      <div className="mb-4 grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-4 grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 lg:grid-cols-7">
         <Stat label="Requirements" value={nInt(t?.atoms)} sub="the merged standard" />
         <Stat label="Citations" value={nInt(t?.requirements)} sub="raw questions behind them" />
         <Stat label="Merged" value={nInt(t?.multi_source)} sub="asked by more than one authority" />
         <Stat label="Authorities" value={nInt(t?.authorities)} sub={`${nInt(t?.sources)} documents`} />
+        {/* The Quality dashboard counts the REGISTER (sop_meta docs); this page counts
+            what is actually WRITTEN (an active sop_content body). Showing both kills the
+            apparent contradiction between the two pages and names the real finding:
+            SOPs that exist as a title with no procedure behind them. */}
+        <Stat label="SOPs written" value={nInt(t?.sops)}
+              sub={(t?.sop_unwritten ?? 0) > 0
+                ? `of ${nInt(t?.sop_docs)} registered · ${nInt(t?.sop_unwritten)} unwritten`
+                : `of ${nInt(t?.sop_docs)} registered`} />
         <Stat label="Covered" value={`${coverPct.toFixed(1)}%`} sub={`${nInt(t?.covered)} of ${nInt(t?.atoms)}`} />
         <Stat label="Suggested" value={nInt(t?.suggested)} sub="awaiting your verdict" />
       </div>
@@ -205,7 +213,7 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
       <div className="mb-5 border-l-[3px] border-neutral-300 px-3 py-2 text-sm text-neutral-700">
         <p className="mb-1">
           <strong>{nInt(t?.covered)}</strong> of {nInt(t?.atoms)} requirements are covered by
-          one of your {nInt(t?.sops)} active SOPs — and coverage comes in three strengths that
+          one of your {nInt(t?.sops)} written SOPs — and coverage comes in three strengths that
           this page deliberately keeps apart:
         </p>
         <ul className="ml-4 list-disc space-y-0.5">
