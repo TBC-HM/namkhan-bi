@@ -20,7 +20,11 @@ export interface DeptRow {
   dept_code: string;
   /** ops.departments.name for this property, falling back to the code */
   dept_name: string;
+  /** atoms this department owns FIRST. Sums across departments to totals.atoms. */
   atoms: number;
+  /** atoms where this department is the SECOND owner — real obligations, counted
+      under the primary owner's `atoms`, so never add the two columns together. */
+  shared: number;
   /** exact + declared. Suggestions are NOT counted here. */
   covered: number;
   /** an SOP names this requirement */
@@ -83,8 +87,12 @@ export interface AtomRow {
   source_count: number;
   covered: boolean;
   sop_code: string | null;
+  /** the department that owns this FIRST */
+  dept_code: string;
   /** second owning department for shared obligations (pool deck: F&B + housekeeping) */
   dept_code_2: string | null;
+  /** true when the department being viewed is the SECOND owner, not the first */
+  is_shared: boolean;
   /** an SOP names this exact requirement (sustainability req_code) */
   has_exact: boolean;
   /** an SOP names the law this came from — credited with all its obligations */
@@ -106,6 +114,8 @@ export interface StandardTotals {
   /** proposals awaiting a human verdict — never counted as covered */
   suggested: number;
   multi_source: number;
+  /** atoms owned by two departments — counted once here, twice across `departments` */
+  shared: number;
   requirements: number;
   sources: number;
   authorities: number;

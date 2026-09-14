@@ -129,6 +129,12 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
   }, [items, q, auth, cat, mergedOnly, cover]);
 
   const base = `/h/${pid}/operations/standard`;
+
+  // Codes are the join key; the vocabulary is the tenant's. `departments` already
+  // carries every code that owns an atom either way round, so this resolves a primary
+  // and a secondary owner alike, and falls back to the raw code rather than blanking.
+  const deptName = (code: string | null) =>
+    (code ? depts.find((d) => d.dept_code === code)?.dept_name ?? code : '—');
   const coverPct = t && t.atoms > 0 ? (100 * t.covered) / t.atoms : 0;
 
   return (
@@ -262,6 +268,7 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                 <th className="py-1.5 pr-3 text-right font-medium">SLH</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Guests</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Requirements</th>
+                <th className="py-1.5 pr-3 text-right font-medium">Shared</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Exact</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Declared</th>
                 <th className="py-1.5 pr-3 text-right font-medium">Suggested</th>
@@ -313,6 +320,15 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                       )}
                     </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums">{nInt(d.atoms)}</td>
+                    {/* Second-owner obligations. Kitchen owns 34 outright and shares 84
+                        more — reading the Requirements column alone understates it by 3x.
+                        Not added into `atoms`: that column must keep summing to the
+                        headline total, and the four coverage columns decompose it. */}
+                    <td className="py-1.5 pr-3 text-right tabular-nums">
+                      {d.shared > 0
+                        ? <span className="text-neutral-700" title={`also answers for ${d.shared} requirement${d.shared > 1 ? 's' : ''} owned first by another department`}>+{nInt(d.shared)}</span>
+                        : <span className="text-neutral-400">—</span>}
+                    </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-emerald-900">{nInt(d.exact)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-amber-800">{nInt(d.declared)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-sky-900">{nInt(d.suggested)}</td>
@@ -326,6 +342,12 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
             </tbody>
           </table>
         </div>
+        <p className="mt-1 text-xs text-neutral-500">
+          Requirements sums to {nInt(t?.atoms)} — every requirement counted once, under
+          the department that owns it first. <strong>Shared</strong> is on top of that:{' '}
+          {nInt(t?.shared)} requirements name a second department, which answers for them
+          too. Open a department to see both; shared ones are marked.
+        </p>
       </section>
 
       {payload.dept ? (
@@ -415,7 +437,16 @@ export default function StandardBrowser({ pid, payload }: { pid: number; payload
                       </span>
                     )}
                     {i.category && <span className="text-[11px] text-neutral-500">{i.category}</span>}
-                    {i.dept_code_2 && <span className="text-[11px] text-neutral-500">also {i.dept_code_2}</span>}
+                    {i.is_shared
+                      ? (
+                        <span className="rounded border border-violet-300 bg-violet-100 px-1.5 py-0.5 text-[11px] leading-none text-violet-900"
+                              title="Owned first by another department. You answer for it too.">
+                          shared · {deptName(i.dept_code)} leads
+                        </span>
+                      )
+                      : i.dept_code_2 && (
+                        <span className="text-[11px] text-neutral-500">also {deptName(i.dept_code_2)}</span>
+                      )}
                   </div>
                   {i.requirement_text && i.requirement_text !== i.title && (
                     <p className="mt-0.5 max-w-4xl text-sm text-neutral-600">{i.requirement_text}</p>
