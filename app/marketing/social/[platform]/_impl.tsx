@@ -204,6 +204,38 @@ export default async function SocialPlatformPage({ params }: Props) {
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
 
+        {/* Autopilot status banner */}
+        {rule && (
+          <div style={{ gridColumn: '1 / -1', borderRadius: 6, padding: '12px 16px',
+            background: rule.autonomy_phase === 'A' ? '#EBF5F0' : rule.autonomy_phase === 'B' ? '#FFF8EC' : '#F5F5F5',
+            border: `1px solid ${rule.autonomy_phase === 'A' ? '#84C9A8' : rule.autonomy_phase === 'B' ? '#F2CC6B' : '#DDD'}`,
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: rule.autonomy_phase === 'A' ? '#084838' : rule.autonomy_phase === 'B' ? '#7A5800' : '#666' }}>
+              {rule.autonomy_phase === 'A'
+                ? `Autopilot ON — ${label} posts publish automatically on schedule`
+                : rule.autonomy_phase === 'B'
+                ? `Approval mode — ${label} posts need your sign-off before publishing`
+                : `Manual mode — no automated ${label} posting`}
+            </div>
+            {exportQueue.length > 0 && (
+              <div style={{ fontSize: 12, color: '#444', marginLeft: 'auto' }}>
+                {exportQueue.length} post{exportQueue.length !== 1 ? 's' : ''} queued
+                {exportQueue[0]?.scheduled_at ? ` · next ${exportQueue[0].scheduled_at.slice(0, 10)}` : ''}
+              </div>
+            )}
+            {rule.autonomy_phase === 'A' && platform === 'pinterest' && (
+              <div style={{ fontSize: 11, color: '#084838', width: '100%', marginTop: 2 }}>
+                Boards are assigned automatically from your board rules. No manual board selection needed.
+              </div>
+            )}
+            {!analytics && (
+              <div style={{ fontSize: 11, color: '#888', width: '100%' }}>
+                Analytics tiles show — until the first Upload Post insights sync runs for {label}.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Profile panel */}
         <Section title="Profile" note="marketing.social_accounts">
           <dl style={{ display: 'grid', gridTemplateColumns: '180px 1fr', rowGap: 8, columnGap: 14, fontSize: 13, margin: 0 }}>
@@ -369,24 +401,26 @@ export default async function SocialPlatformPage({ params }: Props) {
         </div>
 
         {/* Content actions */}
-        <Section title="Content actions" note="quick links">
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: INK_S, lineHeight: 1.7 }}>
-            <li>
-              <TenantLink href={`/marketing/library?tag=${encodeURIComponent(account.platform)}`} style={linkSt}>
-                Browse media library tagged for {label} →
+        <Section title="Quick links" note={label}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <TenantLink href="/marketing/social?view=inbox" style={btnPrimary}>
+              Inbox — approve drafts →
+            </TenantLink>
+            <TenantLink href="/marketing/social?view=calendar" style={btnSecondary}>
+              Content calendar →
+            </TenantLink>
+            <TenantLink href="/marketing/social?view=channels" style={btnSecondary}>
+              Channel settings →
+            </TenantLink>
+            {platform === 'pinterest' && (
+              <TenantLink href="/marketing/social?view=queue" style={btnSecondary}>
+                Pinterest queue →
               </TenantLink>
-            </li>
-            <li>
-              <TenantLink href={`/marketing/campaigns?channel=${encodeURIComponent(account.platform)}`} style={linkSt}>
-                Open {label} campaigns →
-              </TenantLink>
-            </li>
-            <li>
-              <TenantLink href="/marketing/social" style={linkSt}>
-                Back to all social channels →
-              </TenantLink>
-            </li>
-          </ul>
+            )}
+            <TenantLink href={`/marketing/library?platform=${encodeURIComponent(account.platform)}`} style={{ ...btnGhost, textDecoration: 'none', border: `1px solid ${HAIR}` }}>
+              Media library →
+            </TenantLink>
+          </div>
         </Section>
       </DashboardPage>
     </div>
