@@ -96,14 +96,17 @@ async function run(req: NextRequest) {
   }
 
   // ── 2. Reference data ────────────────────────────────────────────────────────
-  const [{ data: rules }, { data: programs }, { data: cooling }, { data: links }] = await Promise.all([
+  const [{ data: rules }, { data: programs }, { data: cooling }, { data: links }, { data: reality }] = await Promise.all([
     sb.from('v_social_board_rules').select('*').eq('property_id', propertyId).eq('active', true),
     sb.from('v_social_programs').select('id, notes, label, content_brief, banned_phrases, asset_cooldown_days')
       .eq('property_id', propertyId).eq('platform', 'pinterest'),
     sb.rpc('fn_social_assets_on_cooldown', { p_property_id: propertyId, p_days: 30 }),
     sb.from('v_marketing_internal_link_catalog').select('title, url, section')
       .eq('property_id', propertyId).eq('active', true),
+    sb.from('v_reality_profile').select('banned_phrases, tone_donts').eq('property_id', propertyId).maybeSingle(),
   ]);
+  const globalBanned = (reality?.banned_phrases ?? []) as string[];
+  const globalToneDonts = (reality?.tone_donts ?? []) as string[];
 
   const ruleByBoard = new Map<string, Rule>((rules ?? []).map((r: any) => [r.board_id, r as Rule]));
   const progById = new Map<number, any>((programs ?? []).map((p: any) => [p.id, p]));
@@ -177,7 +180,8 @@ async function run(req: NextRequest) {
     }
 
     // ── 4. Write the pin from the brief ──────────────────────────────────────
-    const banned = (prog.banned_phrases ?? []) as string[];
+    // Merge per-program exhausted phrases with global brand-voice bans from property.brand_reality
+    const banned = [...new Set([...(prog.banned_phrases ?? []), ...globalBanned])] as string[];
     const link = (links ?? []).find((l: any) => l.title === rule.link_title)
               ?? (links ?? []).find((l: any) => l.section === rule.link_section);
 
@@ -186,6 +190,7 @@ async function run(req: NextRequest) {
         'You write Pinterest pins for a luxury eco-resort in Luang Prabang, Laos. Pinterest is a '
       + 'SEARCH engine: the title and description carry the keywords people search on. Write plainly '
       + 'and concretely — name the thing in the photograph. Never invent facilities, prices or awards. '
+      + (globalToneDonts.length ? `TONE — NEVER: ${globalToneDonts.join(' · ')}. ` : '')
       + `Return STRICT JSON only: {"title": string (max ${TITLE_MAX}), "description": string (max ${DESC_MAX}), `
       + `"hashtags": string[] (max ${HASHTAG_MAX}, no # prefix)}.`,
       userPrompt:
