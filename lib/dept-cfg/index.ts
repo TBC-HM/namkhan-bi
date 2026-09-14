@@ -555,7 +555,8 @@ const MARKETING_CFG: DeptCfg = {
     // to top-strip peers. YouTube moved under Digital sub-strip. SEO dropped from
     // nav (URL /marketing/seo still resolves — just no longer surfaced). Socials
     // label with singular /marketing/social href preserves existing page path.
-    { label: 'HoD',      href: '/h/260955/marketing'          },
+    { label: 'HoD',       href: '/h/260955/marketing'          },
+    { label: 'Briefing',  href: '/h/260955/marketing/briefing' },
     { label: 'Dashboard', href: '/h/260955/marketing/dashboard' },
     { label: 'Audience', href: '/h/260955/marketing/audience' },
     { label: 'Content',  href: '/h/260955/marketing/content'  },
