@@ -21,8 +21,11 @@ function isVideo(url: string): boolean {
   return ['mp4', 'mov', 'webm', 'avi', 'mkv'].includes(ext);
 }
 
+// Upload-Post API platform identifiers — most platforms use hyphens, but
+// google_business must keep its underscore (Upload-Post enum value).
+const UP_PLATFORM_OVERRIDES: Record<string, string> = { google_business: 'google_business' };
 function upPlatform(p: string): string {
-  return p.replace(/_/g, '-');
+  return UP_PLATFORM_OVERRIDES[p] ?? p.replace(/_/g, '-');
 }
 
 const MAX_MEDIA_BYTES = 100 * 1024 * 1024;
@@ -224,6 +227,19 @@ Deno.serve(async (req: Request) => {
       result = await withTimeout(
         upPost(apiKey as string, '/upload_photos', pinFd),
         SDK_TIMEOUT_MS, 'pinterest_upload_photos'
+      );
+    } else if ((p.platform as string) === 'google_business') {
+      // /upload_photos rejects GBP entirely. Use /upload_text (Local Post).
+      // Embed the first image URL in the caption body for visual reference.
+      const gbpCaption = mediaUrls[0] ? `${caption}\n\n${mediaUrls[0]}` : caption;
+      const gbpFd = new FormData();
+      gbpFd.append('user', profileUsername as string);
+      gbpFd.append('platform[]', 'google_business');
+      gbpFd.append('title', gbpCaption);
+      if (sched) gbpFd.append('scheduled_date', sched);
+      result = await withTimeout(
+        upPost(apiKey as string, '/upload_text', gbpFd),
+        SDK_TIMEOUT_MS, 'gbp_upload_text'
       );
     } else if (mediaUrls.length === 0) {
       const txtFd = new FormData();
