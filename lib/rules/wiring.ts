@@ -66,6 +66,60 @@ export const WIRING: Record<string, Record<string, RuleWiring>> = {
     markets_country_early_bird_closing: { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_country_stay_month_heatmap'] },
     markets_country_demand_surge:       { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_country_stay_month_heatmap'] },
     markets_country_new_market_signal:  { status: 'live', consumedBy: 'evaluateDynamicPageRules@dynamicPageRules.ts', requiresData: ['v_country_market_summary'] },
+
+    // ── HoD page rules (planned, not yet in dynamicPageRules.ts) ───────
+    hod_sold_out_tonight_underpriced: { status: 'not_wired', notWiredReason: 'tonight OCC + ADR check not threaded to HoD context yet' },
+    hod_sold_out_next7_underpriced:   { status: 'not_wired', notWiredReason: 'N+1..N+7 sold-out + BAR-stale check not threaded to HoD context yet' },
+    hod_cxl_storm_today:              { status: 'not_wired', notWiredReason: 'today cancellation σ check not threaded to HoD context yet' },
+
+    // ── Pulse rules (planned) ───────────────────────────────────────────
+    pulse_alos_shortening_next30:     { status: 'not_wired', notWiredReason: 'avg LOS next-30d vs LY comparison not threaded (requires pms.v_reservation_rooms lead-time agg)' },
+
+    // ── Demand rules (planned) ──────────────────────────────────────────
+    demand_window_compressed:         { status: 'not_wired', notWiredReason: 'avg lead-time L14 pickup vs LY not threaded to demand page context yet' },
+    demand_window_elongated:          { status: 'not_wired', notWiredReason: 'avg lead-time L14 pickup vs LY not threaded to demand page context yet' },
+
+    // ── Pace rules (planned) ────────────────────────────────────────────
+    pace_segment_split:               { status: 'not_wired', notWiredReason: 'direct vs OTA pace comparison not threaded to pace page context yet' },
+
+    // ── Pickup rules (planned) ──────────────────────────────────────────
+    pickup_miss_7d_streak:            { status: 'not_wired', notWiredReason: '7-day streak check not threaded — needs rolling pickup history from v_otb_pace' },
+    pickup_cxl_surge_3d:              { status: 'not_wired', notWiredReason: 'trailing 3d cancellation surge vs baseline not threaded' },
+    pickup_source_dry_spell:          { status: 'not_wired', notWiredReason: 'source-level zero-pickup streak not threaded (requires channel breakdown in pickup data)' },
+
+    // ── Rooms rules (planned) ───────────────────────────────────────────
+    rooms_underpriced:                { status: 'not_wired', notWiredReason: 'room-type OCC + ADR vs house avg not threaded to rooms page context yet' },
+    rooms_orphaned:                   { status: 'not_wired', notWiredReason: 'room-type 30d OCC vs house avg not threaded to rooms page context yet' },
+    rooms_price_ladder_broken:        { status: 'not_wired', notWiredReason: 'villa vs superior avg ADR comparison not threaded to rooms page context yet' },
+
+    // ── Channels rules (planned) ────────────────────────────────────────
+    channels_cxl_outlier:             { status: 'not_wired', notWiredReason: 'per-channel 30d cancel % vs house avg not threaded to channels page context yet' },
+    channels_share_slipping:          { status: 'not_wired', notWiredReason: 'L30 vs L365 channel share comparison not threaded to channels page context yet' },
+    channels_commission_leader_flip:  { status: 'not_wired', notWiredReason: 'commission-adj RevPAR leader tracking not threaded to channels page context yet' },
+
+    // ── Compset rules (planned) ─────────────────────────────────────────
+    compset_comp_soldout_ct:          { status: 'not_wired', notWiredReason: 'compset sold-out count within 3d shop window not threaded (requires v_lighthouse_rateshop sold-out flag)' },
+    compset_we_dearest_slow:          { status: 'not_wired', notWiredReason: 'cheapest comp + slow OCC check not threaded to compset page context yet' },
+
+    // ── Parity rules (planned) ──────────────────────────────────────────
+    parity_ota_soldout_but_inventory: { status: 'not_wired', notWiredReason: 'OTA sold-out vs PMS availability cross-check not threaded yet' },
+
+    // ── Leakage rules (planned) ─────────────────────────────────────────
+    leakage_bedbank_pair:             { status: 'not_wired', notWiredReason: 'bedbank net rate vs direct BAR comparison not threaded yet' },
+    leakage_cancel_rebook_pattern:    { status: 'not_wired', notWiredReason: 'cancel-then-rebook detection not threaded yet (requires pms.v_reservations guest + timing join)' },
+
+    // ── Markets rules (planned) ─────────────────────────────────────────
+    markets_country_adr_gap:          { status: 'not_wired', notWiredReason: 'country ADR vs house avg not threaded (partial data in v_country_stay_month_heatmap)' },
+    markets_country_cxl_outlier:      { status: 'not_wired', notWiredReason: 'country cancel rate vs house avg not threaded to markets page context yet' },
+
+    // ── Rate plan rules (planned) ───────────────────────────────────────
+    rateplans_cannibalisation:        { status: 'not_wired', notWiredReason: 'plan A vs B price + pickup cannibalisation detection not threaded (needs v_rate_plan_hygiene extension)' },
+    rateplans_nrr_pickup_share_low:   { status: 'not_wired', notWiredReason: 'NRR L30 pickup share vs nrr_share_target threshold not threaded (needs v_rate_plan_hygiene L30 pickup col)' },
+
+    // ── Pricing rules (planned) ─────────────────────────────────────────
+    pricing_bar_stale_stay_date:      { status: 'not_wired', notWiredReason: 'BAR change-date staleness not threaded to pricing page context yet' },
+    pricing_promo_stacking_below_floor:{ status: 'not_wired', notWiredReason: 'stacked promo floor check not threaded to pricing page context yet' },
+    pricing_bar_flat_across_dow:      { status: 'not_wired', notWiredReason: 'DoW BAR variance check not threaded to pricing page context yet' },
   },
 
   retention: {
