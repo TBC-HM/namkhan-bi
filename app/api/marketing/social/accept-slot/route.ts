@@ -88,9 +88,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, post_id: payload.post_id, already: false, ai_skipped: 'no_slot_context' });
   }
 
-  // 4. Fetch platform spec, channel rule, hashtag candidates, link catalog, and top photos in parallel
+  // 4. Fetch platform spec, channel rule, hashtag candidates, link catalog, top photos,
+  //    and global brand-voice constraints in parallel.
   const tagCategories = HASHTAG_CATEGORIES[slot.platform] ?? ['subject', 'activity'];
-  const [{ data: spec }, { data: rule }, tagsRes, linksRes, photosRes] = await Promise.all([
+  const [{ data: spec }, { data: rule }, tagsRes, linksRes, photosRes, { data: reality }] = await Promise.all([
     sb.from('v_social_platform_specs')
       .select('caption_max_chars,hashtags_allowed,hashtag_max,requires_title,title_max_chars')
       .eq('platform', slot.platform)
@@ -126,6 +127,13 @@ export async function POST(req: NextRequest) {
       .not('asset_id', 'in', onCooldown.length ? excludeList : '(00000000-0000-0000-0000-000000000000)')
       .order('quality_index', { ascending: false })
       .limit(20),
+    // Global brand-voice: banned_phrases + tone_donts enforced on every caption.
+    // Previously missing here (ai-draft had them; accept-slot did not), which is
+    // why posts containing "mist", "lemongrass", "stillness" passed through.
+    sb.from('v_reality_profile')
+      .select('banned_phrases,tone_donts')
+      .eq('property_id', slot.property_id)
+      .maybeSingle(),
   ]);
 
   const captionMax = (spec as any)?.caption_max_chars ?? 500;
@@ -134,8 +142,10 @@ export async function POST(req: NextRequest) {
   const requiresTitle = (spec as any)?.requires_title === true;
   const titleMax = (spec as any)?.title_max_chars ?? 100;
 
-  const audienceNotes = (rule as any)?.audience_notes as string | null;
-  const bannedTopics  = (rule as any)?.banned_topics  as string[] | null;
+  const audienceNotes  = (rule as any)?.audience_notes as string | null;
+  const bannedTopics   = (rule as any)?.banned_topics  as string[] | null;
+  const bannedPhrases  = ((reality as any)?.banned_phrases ?? []) as string[];
+  const toneDonts      = ((reality as any)?.tone_donts     ?? []) as string[];
 
   const hashtagCandidates = ((tagsRes as any)?.data ?? []).map(
     (t: { tag_slug: string; tag_label: string }) =>
@@ -175,6 +185,8 @@ export async function POST(req: NextRequest) {
   const channelContext = [
     audienceNotes && audienceNotes !== 'n/a' && `Target audience: ${audienceNotes}`,
     bannedTopics && bannedTopics.length > 0 && `Never mention: ${bannedTopics.join(', ')}`,
+    bannedPhrases.length > 0 && `BRAND BANNED PHRASES (never write these, violation = rejection): ${bannedPhrases.join(', ')}.`,
+    toneDonts.length > 0 && `TONE — NEVER: ${toneDonts.join(' · ')}.`,
   ].filter(Boolean).join('\n');
 
   const hashtagLine = hashtagMax > 0 && hashtagCandidates.length > 0
@@ -231,6 +243,19 @@ Return ONLY valid JSON: {"caption":"...","hashtags":["#tag",...],"photo_id":"<uu
       if (requiresTitle && parsed.title) aiTitle = String(parsed.title).slice(0, titleMax);
     }
   } catch { /* draft keeps brief_md set by fn_social_slot_accept */ }
+
+  // Hard-validation gate: reject captions containing brand-banned phrases.
+  // The AI prompt already lists them, but LLMs can still drift — this is the backstop.
+  if (caption && bannedPhrases.length > 0) {
+    const hay = caption.toLowerCase();
+    const hit = bannedPhrases.find((b) => b && hay.includes(b.toLowerCase()));
+    if (hit) {
+      await sb.rpc('fn_social_post_update', {
+        p: { post_id: payload.post_id, ai_notes: `banned-phrase-violation: "${hit}" found in draft — caption cleared for manual review` },
+      }).then(() => null, () => null);
+      caption = '';
+    }
+  }
 
   // 8. Resolve photo — AI-picked asset first, then fallback by area (quality_index > 75)
   let mediaUrl: string | null = null;
