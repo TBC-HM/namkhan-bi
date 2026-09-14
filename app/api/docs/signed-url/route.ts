@@ -61,6 +61,12 @@ export async function GET(req: NextRequest) {
       .select('property_id')
       .eq('storage_bucket', bucket)
       .eq('storage_path', path)
+      // status='active' is load-bearing, not tidiness. (storage_bucket, storage_path)
+      // is unique across ACTIVE documents but NOT across the table: 2,492 pairs are
+      // duplicated among inactive rows. Without this filter maybeSingle() throws on a
+      // multi-row result, which would turn a legitimate download into a 500 the moment
+      // any doc here is superseded.
+      .eq('status', 'active')
       .maybeSingle();
     if (docErr || !doc) {
       return NextResponse.json({ ok: false, error: docErr?.message || 'doc not found' }, { status: 404 });
