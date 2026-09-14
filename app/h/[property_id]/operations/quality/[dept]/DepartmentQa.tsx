@@ -16,7 +16,7 @@
 // Donna's cream palette.
 
 import { useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import type { AuditDocument, DeptQaPayload, DischargeMode, Obligation } from './types';
 
 /* ---------- theme tokens ---------- */
@@ -59,6 +59,9 @@ const MODE_TITLE: Record<DischargeMode, string> = {
   rule: 'Trained rules',
   observation: 'Scored by audit',
 };
+/** the four legal values fn_standards_edit_atom accepts — order matches MODE_TITLE
+ *  above, used to populate the HoD's mode <select> on each obligation row. */
+const MODE_OPTIONS: DischargeMode[] = ['procedure', 'rule', 'evidence', 'observation'];
 const MODE_EXPLAIN: Record<DischargeMode, string> = {
   procedure: 'Closed by a written SOP that names how staff do this.',
   evidence: 'Closed by proof kept on file — not scored by an SLH section.',
@@ -116,7 +119,129 @@ function SectionHeading({ children, id }: { children: ReactNode; id?: string }) 
   );
 }
 
-function ObligationRow({ pid, deptCode, item }: { pid: number; deptCode: string; item: Obligation }) {
+/** PATCH /api/quality/obligation — used by both the mode <select> and the
+ *  staff-wording field below. Throws on transport failure or a non-ok body so
+ *  callers can revert their optimistic update in one catch. */
+async function patchObligation(
+  pid: number,
+  atomId: string,
+  patch: { discharge_mode?: DischargeMode; staff_wording?: string },
+): Promise<void> {
+  const res = await fetch('/api/quality/obligation', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ property_id: pid, atom_id: atomId, ...patch }),
+  });
+  const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.error ?? `save failed (${res.status})`);
+  }
+}
+
+/** HoD correction UI — Task 6. Seeded values are a starting point, never canon
+ *  (PBS standing requirement): mode and plain-English wording are both editable
+ *  in place. The mode <select> PATCHes on change; fn_standards_edit_atom flips
+ *  mode_source to 'edited' whenever a mode is supplied, which is the latch
+ *  fn_standards_set_discharge_modes checks — an edited row is never clobbered by
+ *  a future re-seed (verified end-to-end, see task-6-report.md). Wording alone
+ *  does NOT flip mode_source — only a mode change does; that is the function's
+ *  contract, not a UI choice. Both fields update the parent's local state
+ *  optimistically and revert on failure. */
+function ObligationEditor({
+  pid,
+  item,
+  onUpdate,
+}: {
+  pid: number;
+  item: Obligation;
+  onUpdate: (atomId: string, patch: Partial<Obligation>) => void;
+}) {
+  const [wording, setWording] = useState(item.staff_wording ?? '');
+  const [savingMode, setSavingMode] = useState(false);
+  const [savingWording, setSavingWording] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleModeChange(e: ChangeEvent<HTMLSelectElement>) {
+    const next = e.target.value as DischargeMode;
+    const prevMode = item.mode;
+    const prevSource = item.mode_source;
+    setError('');
+    onUpdate(item.atom_id, { mode: next, mode_source: 'edited' }); // optimistic
+    setSavingMode(true);
+    try {
+      await patchObligation(pid, item.atom_id, { discharge_mode: next });
+    } catch (err) {
+      onUpdate(item.atom_id, { mode: prevMode, mode_source: prevSource }); // revert
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingMode(false);
+    }
+  }
+
+  async function handleWordingBlur() {
+    const trimmed = wording.trim();
+    const prevWording = item.staff_wording;
+    if (trimmed === (prevWording ?? '')) return; // no change
+    setError('');
+    onUpdate(item.atom_id, { staff_wording: trimmed || null }); // optimistic
+    setSavingWording(true);
+    try {
+      await patchObligation(pid, item.atom_id, { staff_wording: trimmed });
+    } catch (err) {
+      onUpdate(item.atom_id, { staff_wording: prevWording }); // revert
+      setWording(prevWording ?? '');
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingWording(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+      <select
+        value={item.mode}
+        onChange={handleModeChange}
+        disabled={savingMode}
+        title="Correct how this obligation is discharged"
+        style={{ border: `1px solid ${BORDER_STRONG}`, borderRadius: 4, padding: '2px 4px', background: BG, color: FG, fontSize: 12 }}
+      >
+        {MODE_OPTIONS.map((m) => (
+          <option key={m} value={m}>{MODE_TITLE[m]}</option>
+        ))}
+      </select>
+      {item.mode_source === 'edited' && (
+        <span
+          title="A HoD corrected this — the seeder will never overwrite it"
+          style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: AMBER, borderRadius: 4, padding: '0 5px', textTransform: 'uppercase' }}
+        >
+          edited
+        </span>
+      )}
+      <input
+        type="text"
+        value={wording}
+        onChange={(e) => setWording(e.target.value)}
+        onBlur={handleWordingBlur}
+        disabled={savingWording}
+        placeholder="Plain-English wording for staff — replaces the auditor text above"
+        style={{ flex: '1 1 260px', minWidth: 200, border: `1px solid ${BORDER}`, borderRadius: 4, padding: '2px 6px', background: BG, color: FG, fontSize: 12 }}
+      />
+      {error && <span style={{ fontSize: 11, color: RED, flexBasis: '100%' }}>{error}</span>}
+    </div>
+  );
+}
+
+function ObligationRow({
+  pid,
+  deptCode,
+  item,
+  onUpdate,
+}: {
+  pid: number;
+  deptCode: string;
+  item: Obligation;
+  onUpdate: (atomId: string, patch: Partial<Obligation>) => void;
+}) {
   const wording = item.staff_wording || item.text;
   return (
     <li style={{ borderBottom: `1px solid ${BORDER}`, padding: '8px 0' }}>
@@ -152,6 +277,7 @@ function ObligationRow({ pid, deptCode, item }: { pid: number; deptCode: string;
         {/* mode === 'rule': plain list entry, no coverage claim — a rule has no
             document store to check against. */}
       </div>
+      <ObligationEditor pid={pid} item={item} onUpdate={onUpdate} />
     </li>
   );
 }
@@ -169,6 +295,13 @@ export default function DepartmentQa({
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const [docError, setDocError] = useState<Record<string, string>>({});
+  // Local, editable copy of the obligations array — Task 6's optimistic-update
+  // surface. Everything else on this page still reads straight from `payload`;
+  // only the fields a HoD can correct (mode, staff_wording, mode_source) live here.
+  const [obligations, setObligations] = useState<Obligation[]>(payload.obligations);
+  const updateObligation = (atomId: string, patch: Partial<Obligation>) => {
+    setObligations((prev) => prev.map((o) => (o.atom_id === atomId ? { ...o, ...patch } : o)));
+  };
 
   const deptLabel = payload.dept_name ?? payload.dept_code;
   const s = payload.scores;
@@ -226,10 +359,17 @@ export default function DepartmentQa({
       <section style={{ borderBottom: `1px solid ${BORDER}`, paddingBottom: 16, marginBottom: 16 }}>
         <SectionHeading>What we must do</SectionHeading>
         <p style={{ color: MUTE, fontSize: 13, marginTop: 0, marginBottom: 10 }}>
-          {nInt(payload.obligations.length)} obligations, grouped by how they are discharged.
+          {nInt(obligations.length)} obligations, grouped by how they are discharged. A HoD can
+          correct the mode or the wording on any row below — corrections are never overwritten
+          by a future re-classification.
         </p>
         {payload.by_mode.map((row) => {
-          const items = payload.obligations.filter((o) => o.mode === row.mode);
+          // Grouped from the local, editable `obligations` state (not payload.obligations)
+          // so a HoD's mode correction moves the row into its new group immediately. The
+          // atoms/covered counts in the summary still come straight from the RPC's by_mode
+          // block (no metric is computed here) and may lag by one edit until reload — an
+          // acceptable trade for a HoD tool, not a CMS.
+          const items = obligations.filter((o) => o.mode === row.mode);
           return (
             <details key={row.mode} open style={{ marginBottom: 10, border: `1px solid ${BORDER}`, borderRadius: 6 }}>
               <summary style={{ cursor: 'pointer', padding: '8px 10px', background: BG_ELEV, display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 8 }}>
@@ -241,7 +381,7 @@ export default function DepartmentQa({
               </summary>
               <ul style={{ listStyle: 'none', padding: '0 10px', margin: 0 }}>
                 {items.map((o) => (
-                  <ObligationRow key={o.atom_id} pid={pid} deptCode={payload.dept_code} item={o} />
+                  <ObligationRow key={o.atom_id} pid={pid} deptCode={payload.dept_code} item={o} onUpdate={updateObligation} />
                 ))}
               </ul>
             </details>
