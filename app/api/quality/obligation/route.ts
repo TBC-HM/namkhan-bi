@@ -54,5 +54,12 @@ export async function PATCH(req: Request) {
     p_staff_wording: staffWording,
   });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 502 });
+  // fn_standards_edit_atom refuses an edit from a property that does not own
+  // the global registers (ops.qa_dash_source_map.owns_global_registers) —
+  // surface that specific refusal as 403, not a silent 200. Other ok:false
+  // outcomes (e.g. bad_mode) stay a plain 200 body, as before.
+  if (data && typeof data === 'object' && (data as { error?: string }).error === 'not_register_owner') {
+    return NextResponse.json(data, { status: 403 });
+  }
   return NextResponse.json(data);
 }
