@@ -1,11 +1,13 @@
 // app/api/marketing/briefing/decide/route.ts
 // PBS 2026-09-14 — marketing-domain briefing decision endpoint.
-// Identical contract to /api/revenue/briefing/decide but reads CTA from
-// v_marketing_briefings (source_area LIKE 'marketing%').
-// Auth: requirePropertyAccess — session must have a grant for the row's property.
+// Auth: verifies the caller's session can see the briefing's property before
+// allowing any write (IDOR guard). fn_briefing_decide + v_marketing_briefings
+// are SECURITY DEFINER — service-role only, no RLS — so tenancy enforcement
+// lives here, not in the DB function.
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { getSessionScope, canSeeProperty } from '@/lib/session-scope';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +22,12 @@ interface Req {
 const VALID_DECISIONS = new Set(['accept', 'dismiss', 'snooze']);
 
 export async function POST(req: Request) {
+  // 0. Authenticate the session first — must happen before any admin client use.
+  const scope = await getSessionScope();
+  if (!scope) {
+    return NextResponse.json({ ok: false, error: 'unauthenticated' }, { status: 401 });
+  }
+
   let body: Req;
   try {
     body = await req.json();
@@ -33,7 +41,24 @@ export async function POST(req: Request) {
 
   const sb = getSupabaseAdmin();
 
-  // 1. Record the decision via the SECURITY DEFINER RPC.
+  // 1. Look up the briefing row to get its property_id — then verify access (IDOR guard).
+  const { data: brief, error: briefErr } = await sb
+    .from('v_marketing_briefings')
+    .select('property_id, cta_target, cta_params, cta_kind')
+    .eq('id', body.id)
+    .maybeSingle();
+
+  if (briefErr) {
+    return NextResponse.json({ ok: false, error: briefErr.message }, { status: 502 });
+  }
+  if (!brief) {
+    return NextResponse.json({ ok: false, error: 'briefing_id_not_found' }, { status: 404 });
+  }
+  if (!canSeeProperty(brief.property_id, scope)) {
+    return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 });
+  }
+
+  // 2. Record the decision via the SECURITY DEFINER RPC.
   const { data: ok, error: decideErr } = await sb.rpc('fn_briefing_decide', {
     p_id: body.id,
     p_decision: body.decision,
@@ -45,32 +70,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: decideErr.message }, { status: 502 });
   }
   if (ok !== true) {
-    return NextResponse.json({ ok: false, error: 'briefing_id_not_found' }, { status: 404 });
+    return NextResponse.json({ ok: false, error: 'decide_failed' }, { status: 502 });
   }
 
-  // 2. If accept, fire the CTA — best-effort, reads from the marketing view.
+  // 3. If accept, fire the CTA — best-effort, data already loaded in step 1.
   let ctaResult: unknown = null;
   let ctaError: string | null = null;
 
-  if (body.decision === 'accept') {
-    const { data: rows, error: readErr } = await sb
-      .from('v_marketing_briefings')
-      .select('cta_target, cta_params, cta_kind')
-      .eq('id', body.id)
-      .maybeSingle();
-
-    if (readErr) {
-      ctaError = `cta_lookup_failed: ${readErr.message}`;
-    } else if (rows?.cta_target && typeof rows.cta_target === 'string' && rows.cta_target.startsWith('rpc:')) {
-      const fnName = rows.cta_target.slice(4).trim();
-      if (/^[a-z_][a-z0-9_]*$/i.test(fnName)) {
-        const params = (rows.cta_params ?? {}) as Record<string, unknown>;
-        const { data: r, error: rpcErr } = await sb.rpc(fnName, params);
-        if (rpcErr) ctaError = `rpc_failed: ${rpcErr.message}`;
-        else ctaResult = r;
-      } else {
-        ctaError = `rpc_name_invalid: ${fnName}`;
-      }
+  if (body.decision === 'accept' && brief.cta_target && typeof brief.cta_target === 'string' && brief.cta_target.startsWith('rpc:')) {
+    const fnName = brief.cta_target.slice(4).trim();
+    if (/^[a-z_][a-z0-9_]*$/i.test(fnName)) {
+      const params = (brief.cta_params ?? {}) as Record<string, unknown>;
+      const { data: r, error: rpcErr } = await sb.rpc(fnName, params);
+      if (rpcErr) ctaError = `rpc_failed: ${rpcErr.message}`;
+      else ctaResult = r;
+    } else {
+      ctaError = `rpc_name_invalid: ${fnName}`;
     }
   }
 
