@@ -424,14 +424,14 @@ export default async function GoogleBusinessProfilePage({ searchParams, property
           <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
             <div style={{ ...sectionHead, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Posts &amp; updates <span style={sectionNote}>seasonal offers · retreats · events</span></span>
-              <TenantLink href="/marketing/socials?tab=compose" style={btnPrimarySm}>+ New post</TenantLink>
+              <TenantLink href="/marketing/social?view=channels" style={btnPrimarySm}>+ New post</TenantLink>
             </div>
             {postRows.length === 0 ? (
               <EmptyPanel
                 icon="✎"
                 title="No GBP posts yet"
                 body="Google Business posts show up directly in your Search + Maps card. Namkhan's cadence: 2 posts/week (offer + story). Once the localPosts endpoint is wired, drafts staged via the Socials composer sync automatically."
-                cta={{ label: 'Draft first GBP post', href: '/marketing/socials?tab=compose' }}
+                cta={{ label: 'Draft first GBP post', href: '/marketing/social?view=channels' }}
               />
             ) : (
               <PostFeed rows={postRows} />
