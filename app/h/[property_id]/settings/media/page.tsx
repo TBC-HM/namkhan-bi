@@ -3,6 +3,10 @@
 // Photo upload → existing media pipeline (sign+finalize+Iris QA).
 // SettingsTab imported from marketing/media — no code duplication.
 // 2026-08-03 — SettingsTab moved to top of page (PBS: sub-menu was hidden at bottom).
+// 2026-09-14 — Confirmed as SOURCE OF TRUTH for tier thresholds, naming conventions,
+//   caption/alt rules, brand palette, text policy. media-qa-score v13 reads the same
+//   DB tables (marketing.media_tier_thresholds etc.) so operator edits here propagate
+//   to scoring on the next run. See app/marketing/media/page.tsx for the full-hub page.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSettingsTabs } from '@/lib/property-settings-tabs';

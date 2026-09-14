@@ -57,10 +57,12 @@ export default function GuardrailsClient({
   rows: initial,
   stats,
   statusById = {},
+  propertyId,
 }: {
   rows: Row[];
   stats: Stats;
   statusById?: Record<number, RuleStatus>;
+  propertyId: number;
 }) {
   const [rows, setRows] = useState<Row[]>(initial);
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -91,6 +93,7 @@ export default function GuardrailsClient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          property_id: propertyId,
           domain: row.domain,
           rule_key: row.rule_key,
           threshold_val: Number(row.threshold_val),
@@ -117,6 +120,7 @@ export default function GuardrailsClient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          property_id: propertyId,
           domain: row.domain,
           rule_key: row.rule_key,
           threshold_val: Number(row.threshold_val),
@@ -163,6 +167,7 @@ export default function GuardrailsClient({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          property_id: propertyId,
           domain,
           rule_key: f.rule_key.trim(),
           threshold_kind: f.threshold_kind,

@@ -182,6 +182,7 @@ type RealityRow = {
   location: string | null; region: string | null;
   landscape: string[] | null; palette: string[] | null; forbidden: string[] | null;
   vibe: string | null; brand_voice: string | null; positioning: string | null;
+  banned_phrases: string[] | null; tone_dos: string[] | null; tone_donts: string[] | null;
 };
 type RoomRow = { room_type_name: string; short_pitch: string | null; positioning_label: string | null; view_type: string | null };
 type FacilityRow = { facility_name: string; category: string | null; ai_description: string | null; facility_description: string | null };
@@ -207,7 +208,7 @@ async function loadContext(sb: ReturnType<typeof getSupabaseAdmin>, pid: number,
     group_slug
       ? sb.from('v_subscriber_groups').select('slug, name, voice_type, voice_summary').eq('property_id', pid).eq('slug', group_slug).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
-    sb.from('v_reality_profile').select('location, region, landscape, palette, forbidden, vibe, brand_voice, positioning').eq('property_id', pid).maybeSingle(),
+    sb.from('v_reality_profile').select('location, region, landscape, palette, forbidden, vibe, brand_voice, positioning, banned_phrases, tone_dos, tone_donts').eq('property_id', pid).maybeSingle(),
     sb.from('v_room_grounding').select('room_type_name, short_pitch, positioning_label, view_type').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }).limit(12),
     sb.from('v_facility_grounding').select('facility_name, category, ai_description, facility_description').eq('property_id', pid).eq('active', true).order('sort_order', { ascending: true }).limit(20),
     sb.from('v_transport_options').select('name, transport_type, route_from, route_to, duration_min, is_complimentary').eq('property_id', pid).eq('is_active', true).order('display_order', { ascending: true }).limit(8),
@@ -570,6 +571,9 @@ function assembleUserPrompt(
     if (ctx.reality.brand_voice) parts.push(`brand_voice: ${ctx.reality.brand_voice}`);
     if (ctx.reality.positioning) parts.push(`positioning: ${ctx.reality.positioning}`);
     if (ctx.reality.forbidden && ctx.reality.forbidden.length > 0) parts.push(`forbidden (never reference or evoke): ${ctx.reality.forbidden.join(', ')}`);
+    if (ctx.reality.banned_phrases && ctx.reality.banned_phrases.length > 0) parts.push(`banned phrases (never write these words or phrases): ${ctx.reality.banned_phrases.join(', ')}`);
+    if (ctx.reality.tone_dos && ctx.reality.tone_dos.length > 0) parts.push(`tone — always: ${ctx.reality.tone_dos.join(' · ')}`);
+    if (ctx.reality.tone_donts && ctx.reality.tone_donts.length > 0) parts.push(`tone — never: ${ctx.reality.tone_donts.join(' · ')}`);
   }
 
   parts.push('');
