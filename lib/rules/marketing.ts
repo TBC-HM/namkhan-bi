@@ -1,26 +1,53 @@
-// lib/rules/marketing.ts v1
+// lib/rules/marketing.ts v2
 // PBS 2026-07-07: Marketing HoD conclusion rules.
+// PBS 2026-09-14: Added open_rate, unsub_rate, direct_share, social cadence,
+//                 newsletter cadence, OTA share, and reach composite rules.
 // Consumes operator-editable thresholds from public.guardrails (domain='marketing').
 
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export interface MarketingTargets {
-  campaign_cadence_days_min?: number;   // gte days — max gap between sends
-  cost_per_lead_max?: number;           // lte currency
-  prospect_enrichment_min?: number;     // gte % — prospects with email + country
-  mx_verified_share_min?: number;       // gte % — MX-verified deliverable share
+  campaign_cadence_days_min?: number;      // gte days — max gap between sends
+  cost_per_lead_max?: number;              // lte currency
+  prospect_enrichment_min?: number;        // gte % — prospects with email + country
+  mx_verified_share_min?: number;          // gte % — MX-verified deliverable share
+  open_rate_min?: number;                  // gte % — newsletter open rate
+  unsub_rate_max?: number;                 // lte % — newsletter unsub rate
+  direct_share_min?: number;              // gte % — direct booking share last 90 d
+  social_post_cadence_days_max?: number;  // lte days — max gap between published posts
+  newsletter_cadence_days_max?: number;   // lte days — max days between sends
+  ota_share_max?: number;                 // lte % — OTA revenue share last 90 d
+  reach_composite_drop_pct_max?: number;  // lte % — max composite reach drop
 }
 
 export interface MarketingContext {
   currencySymbol: string;
 
-  // Live data (may be null when source not yet threaded)
+  // Campaign / sending
   daysSinceLastCampaignSend: number | null;
   costPerLead: number | null;
-  prospectEnrichmentPct: number | null;
-  mxVerifiedSharePct: number | null;
   activeCampaigns: number;
   scheduledCampaigns: number;
+
+  // Prospect list quality
+  prospectEnrichmentPct: number | null;
+  mxVerifiedSharePct: number | null;
+
+  // Newsletter performance
+  openRatePct: number | null;            // latest send open rate (%)
+  unsubRatePct: number | null;           // latest send unsub rate (%)
+  daysSinceLastNewsletter: number | null; // days since last broadcast
+
+  // Channel mix
+  directSharePct90d: number | null;      // direct % of booked revenue last 90 d
+  otaSharePct90d: number | null;         // OTA % (excl. SLH) last 90 d
+
+  // Social
+  daysSinceLastSocialPost: number | null; // days since last published post
+  scheduledPosts: number | null;          // posts scheduled in future
+
+  // Reach
+  compositeChangePct: number | null;      // composite reach change vs prior snapshot
 
   targets: MarketingTargets;
 }
@@ -32,19 +59,27 @@ const FB: Required<MarketingTargets> = {
   cost_per_lead_max: 25,
   prospect_enrichment_min: 60,
   mx_verified_share_min: 80,
+  open_rate_min: 25,
+  unsub_rate_max: 0.5,
+  direct_share_min: 60,
+  social_post_cadence_days_max: 7,
+  newsletter_cadence_days_max: 35,
+  ota_share_max: 65,
+  reach_composite_drop_pct_max: 25,
 };
 const T = (ctx: MarketingContext, k: keyof MarketingTargets) => ctx.targets[k] ?? FB[k];
 
-// Rule 1 — No campaigns sent in a while
+// ─── Campaign / cadence rules ─────────────────────────────────────────────────
+
 const ruleCampaignGap: Rule = (ctx) => {
   if (ctx.daysSinceLastCampaignSend == null) return null;
   const max = T(ctx, 'campaign_cadence_days_min');
   if (ctx.daysSinceLastCampaignSend <= max) return null;
   return {
-    key: 'campaign_cadence_gap',
+    key: 'mkt_campaign_cadence_gap',
     priority: ctx.daysSinceLastCampaignSend > max * 2 ? 'warning' : 'info',
     guardrail: 'fixed',
-    title: `${ctx.daysSinceLastCampaignSend}d since last campaign send — beyond ${max}-day cadence`,
+    title: `${ctx.daysSinceLastCampaignSend}d since last campaign — beyond ${max}-day cadence`,
     body: 'Silence trains the list to disengage. Even a short in-house update maintains permission + deliverability.',
     evidence: `Target ≤ ${max} days between sends`,
     action: 'See campaigns →',
@@ -52,11 +87,10 @@ const ruleCampaignGap: Rule = (ctx) => {
   };
 };
 
-// Rule 2 — Zero scheduled campaigns
 const ruleNoneScheduled: Rule = (ctx) => {
   if (ctx.scheduledCampaigns > 0) return null;
   return {
-    key: 'no_campaigns_scheduled',
+    key: 'mkt_no_campaigns_scheduled',
     priority: 'warning',
     guardrail: 'fixed',
     title: 'No campaigns scheduled',
@@ -67,7 +101,8 @@ const ruleNoneScheduled: Rule = (ctx) => {
   };
 };
 
-// Rule 3 — CPL over ceiling
+// ─── Prospect quality rules ───────────────────────────────────────────────────
+
 const ruleCplHigh: Rule = (ctx) => {
   if (ctx.costPerLead == null) return null;
   const max = T(ctx, 'cost_per_lead_max');
@@ -84,13 +119,12 @@ const ruleCplHigh: Rule = (ctx) => {
   };
 };
 
-// Rule 4 — Prospect enrichment low
 const ruleEnrichmentLow: Rule = (ctx) => {
   if (ctx.prospectEnrichmentPct == null) return null;
   const min = T(ctx, 'prospect_enrichment_min');
   if (ctx.prospectEnrichmentPct >= min) return null;
   return {
-    key: 'prospect_enrichment_low',
+    key: 'mkt_prospect_enrichment_low',
     priority: 'info',
     guardrail: 'fixed',
     title: `Prospect enrichment ${ctx.prospectEnrichmentPct.toFixed(0)}% — below ${min}% target`,
@@ -101,13 +135,12 @@ const ruleEnrichmentLow: Rule = (ctx) => {
   };
 };
 
-// Rule 5 — MX-verified share low
 const ruleMxLow: Rule = (ctx) => {
   if (ctx.mxVerifiedSharePct == null) return null;
   const min = T(ctx, 'mx_verified_share_min');
   if (ctx.mxVerifiedSharePct >= min) return null;
   return {
-    key: 'mx_verified_low',
+    key: 'mkt_mx_verified_low',
     priority: 'warning',
     guardrail: 'fixed',
     title: `MX-verified share ${ctx.mxVerifiedSharePct.toFixed(0)}% — below ${min}% target`,
@@ -118,12 +151,144 @@ const ruleMxLow: Rule = (ctx) => {
   };
 };
 
+// ─── Newsletter performance rules ─────────────────────────────────────────────
+
+const ruleOpenRateLow: Rule = (ctx) => {
+  if (ctx.openRatePct == null) return null;
+  const min = T(ctx, 'open_rate_min');
+  if (ctx.openRatePct >= min) return null;
+  return {
+    key: 'mkt_open_rate_low',
+    priority: 'warning',
+    guardrail: 'open_rate_min',
+    title: `Open rate ${ctx.openRatePct.toFixed(1)}% — below ${min}% target`,
+    body: 'Below-target open rates signal subject-line fatigue or list quality issues. A/B test subjects on the next send; consider a re-engagement sub-segment.',
+    evidence: `Target ≥ ${min}%`,
+    action: 'See newsletters →',
+    href: '/marketing/content/newsletters',
+  };
+};
+
+const ruleUnsubHigh: Rule = (ctx) => {
+  if (ctx.unsubRatePct == null) return null;
+  const max = T(ctx, 'unsub_rate_max');
+  if (ctx.unsubRatePct <= max) return null;
+  return {
+    key: 'mkt_unsub_rate_high',
+    priority: ctx.unsubRatePct > max * 2 ? 'critical' : 'warning',
+    guardrail: 'unsub_rate_max',
+    title: `Unsub rate ${ctx.unsubRatePct.toFixed(2)}% — above ${max}% ceiling`,
+    body: 'High unsubscribes damage sender reputation and shrink the list. Narrow the send segment and review content relevance before the next broadcast.',
+    evidence: `Ceiling ≤ ${max}%`,
+    action: 'See newsletters →',
+    href: '/marketing/content/newsletters',
+  };
+};
+
+const ruleNewsletterCadence: Rule = (ctx) => {
+  if (ctx.daysSinceLastNewsletter == null) return null;
+  const max = T(ctx, 'newsletter_cadence_days_max');
+  if (ctx.daysSinceLastNewsletter <= max) return null;
+  return {
+    key: 'mkt_newsletter_cadence_gap',
+    priority: ctx.daysSinceLastNewsletter > max * 2 ? 'warning' : 'info',
+    guardrail: 'newsletter_cadence_days_max',
+    title: `${ctx.daysSinceLastNewsletter}d since last newsletter — beyond ${max}-day cadence`,
+    body: 'Irregular sends lose the habit loop. Use a quick property update or curated content piece to maintain momentum.',
+    evidence: `Target ≤ ${max} days between sends`,
+    action: 'Draft a send →',
+    href: '/marketing/content/newsletters',
+  };
+};
+
+// ─── Channel mix rules ────────────────────────────────────────────────────────
+
+const ruleDirectShareLow: Rule = (ctx) => {
+  if (ctx.directSharePct90d == null) return null;
+  const min = T(ctx, 'direct_share_min');
+  if (ctx.directSharePct90d >= min) return null;
+  const gap = min - ctx.directSharePct90d;
+  return {
+    key: 'mkt_direct_share_low',
+    priority: gap > 20 ? 'critical' : 'warning',
+    guardrail: 'direct_share_min',
+    title: `Direct share ${ctx.directSharePct90d.toFixed(1)}% — ${gap.toFixed(0)}pp below ${min}% goal`,
+    body: 'OTAs are absorbing revenue that should route directly. Prioritise funnel pages, repeat-guest outreach, and SLH direct-booking incentives.',
+    evidence: `OTA share ${ctx.otaSharePct90d != null ? ctx.otaSharePct90d.toFixed(1) + '%' : '—'} of last-90d revenue`,
+    action: 'Build funnel pages →',
+    href: '/marketing/funnels',
+  };
+};
+
+const ruleOtaShareHigh: Rule = (ctx) => {
+  if (ctx.otaSharePct90d == null) return null;
+  const max = T(ctx, 'ota_share_max');
+  if (ctx.otaSharePct90d <= max) return null;
+  return {
+    key: 'mkt_ota_share_high',
+    priority: 'warning',
+    guardrail: 'ota_share_max',
+    title: `OTA share ${ctx.otaSharePct90d.toFixed(1)}% — above ${max}% ceiling`,
+    body: 'OTA dependency erodes margin and repeat-guest ownership. Each percentage point shifted to direct saves ~15% commission.',
+    evidence: `Direct ${ctx.directSharePct90d != null ? ctx.directSharePct90d.toFixed(1) + '%' : '—'} last 90 d`,
+    action: 'See channel mix →',
+    href: '/marketing/dashboard',
+  };
+};
+
+// ─── Social cadence rule ──────────────────────────────────────────────────────
+
+const ruleSocialPostGap: Rule = (ctx) => {
+  if (ctx.daysSinceLastSocialPost == null) return null;
+  const max = T(ctx, 'social_post_cadence_days_max');
+  if (ctx.daysSinceLastSocialPost <= max) return null;
+  const noQueue = ctx.scheduledPosts != null && ctx.scheduledPosts === 0;
+  return {
+    key: 'mkt_social_post_gap',
+    priority: noQueue ? 'warning' : 'info',
+    guardrail: 'social_post_cadence_days_max',
+    title: `${ctx.daysSinceLastSocialPost}d since last social post — beyond ${max}-day cadence`,
+    body: noQueue
+      ? 'No scheduled posts in queue either. Algorithms penalise prolonged silence — publish even an evergreen repost to keep the feed alive.'
+      : 'Last publish was over target cadence. Queued posts will cover this soon.',
+    evidence: `Scheduled posts: ${ctx.scheduledPosts ?? '—'}`,
+    action: 'See social →',
+    href: '/marketing/social',
+  };
+};
+
+// ─── Reach composite rule ─────────────────────────────────────────────────────
+
+const ruleReachDrop: Rule = (ctx) => {
+  if (ctx.compositeChangePct == null) return null;
+  const max = T(ctx, 'reach_composite_drop_pct_max');
+  const drop = -(ctx.compositeChangePct); // positive = dropped
+  if (drop <= max) return null;
+  return {
+    key: 'mkt_reach_composite_drop',
+    priority: drop > max * 1.5 ? 'critical' : 'warning',
+    guardrail: 'reach_composite_drop_pct_max',
+    title: `Reach composite dropped ${drop.toFixed(1)}% — beyond ${max}% threshold`,
+    body: 'Combined audience reach (sessions + search impressions + social) fell materially vs the prior snapshot. Review which channel drove the decline.',
+    evidence: `Change: ${ctx.compositeChangePct.toFixed(1)}%`,
+    action: 'See dashboard →',
+    href: '/marketing/dashboard',
+  };
+};
+
 const RULES: Rule[] = [
   ruleCampaignGap,
   ruleNoneScheduled,
   ruleCplHigh,
   ruleEnrichmentLow,
   ruleMxLow,
+  ruleOpenRateLow,
+  ruleUnsubHigh,
+  ruleNewsletterCadence,
+  ruleDirectShareLow,
+  ruleOtaShareHigh,
+  ruleSocialPostGap,
+  ruleReachDrop,
 ];
 
 export function evaluateMarketingRules(ctx: MarketingContext): Insight[] {

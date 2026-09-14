@@ -36,9 +36,14 @@ export const REVENUE_PAGES: PageDescriptor[] = [
 // Other dept catalogs.
 export const SALES_PAGES: PageDescriptor[]        = [];
 export const MARKETING_PAGES: PageDescriptor[]    = [
-  { page_slug: 'social-content',    page_label: 'Social Content',    page_href: '/marketing/social' },
-  { page_slug: 'tripadvisor-social', page_label: 'TripAdvisor',       page_href: '/marketing/social/tripadvisor' },
-  { page_slug: 'newsletter',         page_label: 'Newsletter',         page_href: '/guest/newsletters' },
+  { page_slug: 'briefing',           page_label: 'Briefing',           page_href: '/marketing/briefing' },
+  { page_slug: 'dashboard',          page_label: 'Dashboard',          page_href: '/marketing/dashboard' },
+  { page_slug: 'funnels',            page_label: 'Funnels',            page_href: '/marketing/funnels' },
+  { page_slug: 'campaigns',          page_label: 'Campaigns',          page_href: '/marketing/campaigns' },
+  { page_slug: 'social-content',     page_label: 'Social Content',     page_href: '/marketing/social' },
+  { page_slug: 'newsletter',         page_label: 'Newsletter',         page_href: '/marketing/content/newsletters' },
+  { page_slug: 'prospects',          page_label: 'Prospects',          page_href: '/marketing/prospects' },
+  { page_slug: 'tripadvisor-social', page_label: 'TripAdvisor',        page_href: '/marketing/social/tripadvisor' },
 ];
 export const OPERATIONS_PAGES: PageDescriptor[]   = [];
 export const CONTACTS_PAGES: PageDescriptor[]     = [];
