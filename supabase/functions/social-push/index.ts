@@ -229,17 +229,32 @@ Deno.serve(async (req: Request) => {
         SDK_TIMEOUT_MS, 'pinterest_upload_photos'
       );
     } else if ((p.platform as string) === 'google_business') {
-      // /upload_photos rejects GBP entirely. Use /upload_text (Local Post).
-      // Embed the first image URL in the caption body for visual reference.
-      const gbpCaption = mediaUrls[0] ? `${caption}\n\n${mediaUrls[0]}` : caption;
+      // GBP Local Post: send up to 3 photos via /upload_photos (google_business is in
+      // the platform enum). link_url is a separate CTA field, not embedded in text.
+      // Fall back to /upload_text only when all media fetches fail or there are no images.
+      const gbpText = [String(p.caption ?? p.title ?? ''), tags].filter(Boolean).join('\n\n');
+      const gbpLink = p.link_url ? String(p.link_url) : null;
+      const files: File[] = [];
+      for (const url of mediaUrls.slice(0, 3)) {
+        try {
+          const r = await fetch(url, { headers: storageHeaders(url) });
+          if (!r.ok) continue;
+          const buf = await r.arrayBuffer();
+          if (buf.byteLength > MAX_MEDIA_BYTES) continue;
+          const ext = url.split('?')[0].split('.').pop()?.toLowerCase() ?? 'jpg';
+          files.push(new File([buf], `photo.${ext}`, { type: `image/${ext}` }));
+        } catch { /* skip */ }
+      }
       const gbpFd = new FormData();
+      for (const f of files) gbpFd.append('photos[]', f);
       gbpFd.append('user', profileUsername as string);
       gbpFd.append('platform[]', 'google_business');
-      gbpFd.append('title', gbpCaption);
+      gbpFd.append('title', gbpText);
+      if (gbpLink) gbpFd.append('link_url', gbpLink);
       if (sched) gbpFd.append('scheduled_date', sched);
       result = await withTimeout(
-        upPost(apiKey as string, '/upload_text', gbpFd),
-        SDK_TIMEOUT_MS, 'gbp_upload_text'
+        upPost(apiKey as string, files.length > 0 ? '/upload_photos' : '/upload_text', gbpFd),
+        SDK_TIMEOUT_MS, files.length > 0 ? 'gbp_upload_photos' : 'gbp_upload_text'
       );
     } else if (mediaUrls.length === 0) {
       const txtFd = new FormData();
