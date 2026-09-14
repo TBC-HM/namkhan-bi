@@ -167,6 +167,20 @@ export default async function SocialPage({ searchParams }: Props) {
   const pushed30d = posts.filter((p) => p.status === 'pushed' && p.pushed_at && (now - new Date(p.pushed_at).getTime()) < 30 * 86400000).length;
   const failedPosts = posts.filter((p) => p.status === 'failed').length;
 
+  // Analytics aggregation — per-platform totals for the summary cards + bar chart
+  type PlatAgg = { impressions: number; likes: number; comments: number; shares: number; reach: number };
+  const analyticsAgg: Record<string, PlatAgg> = {};
+  for (const a of upAnalytics as any[]) {
+    if (!analyticsAgg[a.platform]) analyticsAgg[a.platform] = { impressions: 0, likes: 0, comments: 0, shares: 0, reach: 0 };
+    analyticsAgg[a.platform].impressions += a.impressions ?? 0;
+    analyticsAgg[a.platform].likes       += a.likes       ?? 0;
+    analyticsAgg[a.platform].comments    += a.comments    ?? 0;
+    analyticsAgg[a.platform].shares      += a.shares      ?? 0;
+    analyticsAgg[a.platform].reach       += a.reach       ?? 0;
+  }
+  const analyticsPlatforms = Object.entries(analyticsAgg).sort(([, a], [, b]) => b.impressions - a.impressions);
+  const analyticsMax = analyticsPlatforms.reduce((m, [, d]) => Math.max(m, d.impressions), 1);
+
   const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
     key: s.href, label: s.label, href: s.href,
     active: s.href === '/marketing/social',
@@ -263,41 +277,126 @@ export default async function SocialPage({ searchParams }: Props) {
         {view === 'inbox' && <SocialInbox posts={posts} rules={rules} />}
 
 
-        {/* ── Upload Post: Analytics ──────────────────────────────────── */}
+        {/* ── Analytics ───────────────────────────────────────────────── */}
         {view === 'analytics' && (
-          <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {(upAnalytics as any[]).length === 0 ? (
-              <div style={{ padding: '40px 16px', textAlign: 'center', color: INK_M }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>📊</div>
+              <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '40px 16px', textAlign: 'center', color: INK_M }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 6 }}>No analytics yet</div>
-                <div style={{ fontSize: 12, color: INK_M }}>Analytics sync daily at 08:00 UTC after posts are published via Upload Post.</div>
+                <div style={{ fontSize: 12 }}>Analytics sync daily at 08:00 UTC after posts are published via Upload Post.</div>
               </div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid ' + HAIR }}>
-                      {['Platform', 'Caption', 'Impressions', 'Likes', 'Comments', 'Shares', 'Reach', 'Date'].map(h => (
-                        <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 10, fontFamily: 'ui-monospace,monospace', letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: INK_M, fontWeight: 600, whiteSpace: 'nowrap' as const }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(upAnalytics as any[]).map((a: any, i: number) => (
-                      <tr key={i} style={{ borderBottom: '1px solid ' + HAIR }}>
-                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', fontSize: 10, textTransform: 'uppercase' as const, color: INK_M }}>{a.platform}</td>
-                        <td style={{ padding: '7px 10px', color: INK, fontStyle: 'italic', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{a.caption?.slice(0, 60) ?? a.up_request_id?.slice(0, 12) ?? '—'}</td>
-                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.impressions?.toLocaleString() ?? '—'}</td>
-                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.likes?.toLocaleString() ?? '—'}</td>
-                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.comments?.toLocaleString() ?? '—'}</td>
-                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.shares?.toLocaleString() ?? '—'}</td>
-                        <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.reach?.toLocaleString() ?? '—'}</td>
-                        <td style={{ padding: '7px 10px', color: INK_M, fontSize: 11, whiteSpace: 'nowrap' as const }}>{a.snapshot_date}</td>
-                      </tr>
+              <>
+                {/* Platform summary cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 12 }}>
+                  {analyticsPlatforms.map(([platform, d]) => {
+                    const eng = d.impressions > 0 ? ((d.likes + d.comments + d.shares) / d.impressions * 100).toFixed(1) : null;
+                    const PLAT_COLOR: Record<string, string> = {
+                      instagram: '#C13584', tiktok: '#010101', pinterest: '#E60023',
+                      x: '#000000', facebook: '#1877F2', linkedin: '#0A66C2', youtube: '#FF0000',
+                    };
+                    const dotColor = PLAT_COLOR[platform] ?? FOREST;
+                    return (
+                      <div key={platform} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                          <span style={{ fontSize: 10, fontFamily: 'ui-monospace,monospace', textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: INK_M }}>{platform}</span>
+                        </div>
+                        <div style={{ fontSize: 26, fontWeight: 700, color: INK, lineHeight: 1 }}>{d.impressions.toLocaleString()}</div>
+                        <div style={{ fontSize: 10, color: INK_M, marginBottom: 12, marginTop: 2 }}>impressions</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 10px', fontSize: 12, marginBottom: 10 }}>
+                          <div><span style={{ color: INK_M, fontSize: 11 }}>Likes </span><span style={{ fontWeight: 600 }}>{d.likes.toLocaleString()}</span></div>
+                          <div><span style={{ color: INK_M, fontSize: 11 }}>Comments </span><span style={{ fontWeight: 600 }}>{d.comments.toLocaleString()}</span></div>
+                          <div><span style={{ color: INK_M, fontSize: 11 }}>Shares </span><span style={{ fontWeight: 600 }}>{d.shares.toLocaleString()}</span></div>
+                          <div><span style={{ color: INK_M, fontSize: 11 }}>Reach </span><span style={{ fontWeight: 600 }}>{d.reach.toLocaleString()}</span></div>
+                        </div>
+                        {eng && (
+                          <div style={{ background: CREAM, borderRadius: 4, padding: '6px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 10, color: INK_M }}>Engagement rate</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: FOREST }}>{eng}%</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Impressions bar chart */}
+                <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 16 }}>Impressions by platform</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {analyticsPlatforms.map(([platform, d]) => (
+                      <div key={platform} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 80px', alignItems: 'center', gap: 10 }}>
+                        <div style={{ fontSize: 10, fontFamily: 'ui-monospace,monospace', textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: INK_M }}>{platform}</div>
+                        <div style={{ height: 18, background: CREAM, borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${(d.impressions / analyticsMax * 100).toFixed(1)}%`, background: FOREST, borderRadius: 3 }} />
+                        </div>
+                        <div style={{ fontSize: 12, fontFamily: 'ui-monospace,monospace', color: INK, textAlign: 'right' as const }}>{d.impressions.toLocaleString()}</div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                </div>
+
+                {/* Engagement rate bar chart */}
+                <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 16 }}>Engagement rate by platform <span style={{ fontSize: 11, fontWeight: 400, color: INK_M }}>(likes+comments+shares) ÷ impressions</span></div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {analyticsPlatforms
+                      .filter(([, d]) => d.impressions > 0)
+                      .map(([platform, d]) => {
+                        const engPct = (d.likes + d.comments + d.shares) / d.impressions * 100;
+                        return (
+                          <div key={platform} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 60px', alignItems: 'center', gap: 10 }}>
+                            <div style={{ fontSize: 10, fontFamily: 'ui-monospace,monospace', textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: INK_M }}>{platform}</div>
+                            <div style={{ height: 18, background: CREAM, borderRadius: 3, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.min(engPct * 10, 100).toFixed(1)}%`, background: AMBER, borderRadius: 3 }} />
+                            </div>
+                            <div style={{ fontSize: 12, fontFamily: 'ui-monospace,monospace', color: INK, textAlign: 'right' as const }}>{engPct.toFixed(1)}%</div>
+                          </div>
+                        );
+                      })
+                    }
+                  </div>
+                </div>
+
+                {/* Daily detail table */}
+                <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 12 }}>Daily detail</div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid ' + HAIR }}>
+                          {['Date', 'Platform', 'Impressions', 'Reach', 'Likes', 'Comments', 'Shares', 'Eng %'].map(h => (
+                            <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 10, fontFamily: 'ui-monospace,monospace', letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: INK_M, fontWeight: 600, whiteSpace: 'nowrap' as const }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...(upAnalytics as any[])]
+                          .sort((a, b) => (b.snapshot_date ?? '').localeCompare(a.snapshot_date ?? '') || (b.impressions ?? 0) - (a.impressions ?? 0))
+                          .map((a: any, i: number) => {
+                            const eng = a.impressions > 0
+                              ? (((a.likes ?? 0) + (a.comments ?? 0) + (a.shares ?? 0)) / a.impressions * 100).toFixed(1) + '%'
+                              : '—';
+                            return (
+                              <tr key={i} style={{ borderBottom: '1px solid ' + HAIR }}>
+                                <td style={{ padding: '7px 10px', color: INK_M, fontSize: 11, whiteSpace: 'nowrap' as const }}>{a.snapshot_date}</td>
+                                <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', fontSize: 10, textTransform: 'uppercase' as const, color: INK_M }}>{a.platform}</td>
+                                <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.impressions?.toLocaleString() ?? '—'}</td>
+                                <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.reach?.toLocaleString() ?? '—'}</td>
+                                <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.likes?.toLocaleString() ?? '—'}</td>
+                                <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.comments?.toLocaleString() ?? '—'}</td>
+                                <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: INK }}>{a.shares?.toLocaleString() ?? '—'}</td>
+                                <td style={{ padding: '7px 10px', fontFamily: 'ui-monospace,monospace', color: a.impressions > 0 ? FOREST : INK_M, fontWeight: a.impressions > 0 ? 600 : 400 }}>{eng}</td>
+                              </tr>
+                            );
+                          })
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -333,34 +432,80 @@ export default async function SocialPage({ searchParams }: Props) {
         )}
 
         {/* ── Comments ────────────────────────────────────────────────── */}
-        {view === 'comments' && (
-          <div style={{ gridColumn: '1 / -1' }}>
-            <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>Comment engagement</div>
-                <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
-                  planned · requires Upload Post comments API integration
-                </div>
-              </div>
-              {posts.filter((p: any) => p.up_request_id && p.up_status === 'published').length === 0 ? (
-                <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: INK_M }}>
-                  No published posts tracked via Upload Post yet. Push scheduled posts to activate.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {posts.filter((p: any) => p.up_request_id && p.up_status === 'published').slice(0, 10).map((p: any) => (
-                    <div key={p.post_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#FAFAF7', border: `1px solid ${HAIR}`, borderRadius: 4, fontSize: 12 }}>
-                      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: '#5DA46B', minWidth: 24 }}>{p.platform?.slice(0,2).toUpperCase()}</span>
-                      <span style={{ flex: 1, color: INK, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title ?? p.caption?.slice(0, 70) ?? '—'}</span>
-                      <span style={{ color: INK_M, fontSize: 10 }}>{p.up_request_id?.slice(0, 12)}</span>
-                      <span style={{ fontSize: 10, color: INK_M, fontStyle: 'italic' }}>comment fetch · planned</span>
-                    </div>
-                  ))}
+        {view === 'comments' && (() => {
+          const upPosts = (posts as any[]).filter((p) => p.up_request_id).sort((a, b) => (b.pushed_at ?? '').localeCompare(a.pushed_at ?? ''));
+          return (
+            <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Status strip */}
+              {upPosts.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
+                  {(['queued','published','failed'] as const).map((st) => {
+                    const count = upPosts.filter((p) => p.up_status === st).length;
+                    return (
+                      <div key={st} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: INK }}>{count}</div>
+                        <div style={{ fontSize: 10, fontFamily: 'ui-monospace,monospace', textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: INK_M, marginTop: 2 }}>{st} on UP</div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '12px 14px' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: INK }}>{upPosts.length}</div>
+                    <div style={{ fontSize: 10, fontFamily: 'ui-monospace,monospace', textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: INK_M, marginTop: 2 }}>total tracked</div>
+                  </div>
                 </div>
               )}
+
+              <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>Upload Post tracked posts</div>
+                  <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
+                    {upPosts.length} post{upPosts.length !== 1 ? 's' : ''} · comments available once platform-published
+                  </div>
+                </div>
+
+                {upPosts.length === 0 ? (
+                  <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: INK_M }}>
+                    <div style={{ fontWeight: 600, color: INK, marginBottom: 4 }}>No posts sent to Upload Post yet</div>
+                    <div>Approve drafts in Channel Inbox, then push via the Channels view to activate tracking.</div>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid ' + HAIR }}>
+                          {['Platform', 'Post title', 'UP status', 'Pushed', 'UP request ID'].map(h => (
+                            <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 10, fontFamily: 'ui-monospace,monospace', letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: INK_M, fontWeight: 600, whiteSpace: 'nowrap' as const }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {upPosts.slice(0, 20).map((p: any) => {
+                          const statusColor = p.up_status === 'published' ? '#5DA46B' : p.up_status === 'failed' ? '#C0392B' : AMBER;
+                          return (
+                            <tr key={p.post_id} style={{ borderBottom: '1px solid ' + HAIR }}>
+                              <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace,monospace', fontSize: 10, textTransform: 'uppercase' as const, color: INK_M, whiteSpace: 'nowrap' as const }}>{p.platform}</td>
+                              <td style={{ padding: '8px 10px', color: INK, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.title ?? p.caption?.slice(0, 70) ?? '—'}</td>
+                              <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' as const }}>
+                                <span style={{ fontSize: 10, fontFamily: 'ui-monospace,monospace', color: statusColor, fontWeight: 600 }}>{p.up_status ?? '—'}</span>
+                              </td>
+                              <td style={{ padding: '8px 10px', color: INK_M, fontSize: 11, whiteSpace: 'nowrap' as const }}>{p.pushed_at ? new Date(p.pushed_at).toISOString().slice(0, 10) : '—'}</td>
+                              <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace,monospace', fontSize: 10, color: INK_M }}>{p.up_request_id?.slice(0, 20) ?? '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                    {upPosts.filter((p: any) => p.up_status === 'queued').length > 0 && (
+                      <div style={{ marginTop: 12, padding: '10px 12px', background: '#FFF4D6', border: `1px solid ${AMBER}`, borderRadius: 4, fontSize: 12, color: INK }}>
+                        <strong>{upPosts.filter((p: any) => p.up_status === 'queued').length} post{upPosts.filter((p: any) => p.up_status === 'queued').length !== 1 ? 's are' : ' is'} queued on Upload Post</strong> — these will be published to the platform per the scheduled time. Comment data appears here automatically once they go live.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Bottom hardcoded blocks removed (2026-08-20 · PBS): Production loop / ICPs / Agent fleet
            were static — no CTAs, no live data. ICPs live in Sales · ICP Segments (dynamic).
