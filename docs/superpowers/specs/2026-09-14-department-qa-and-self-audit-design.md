@@ -67,6 +67,26 @@ starting point, never canon.
 
 ## 3. Scope
 
+### 3.0 Audience and language
+
+**v1 is English, and its user is the HoD.** PBS, 2026-09-14: *"we do in english, our hods
+speak english. translation module we build once the structure stands."*
+
+Staff-facing use is a later phase, gated on a translation module rather than on this
+build. That is a scope decision, not a deferral of a problem: designing a staff surface
+now, in a language 13 grounds staff and the housekeeping team do not read, would produce
+a page that looks finished and is unusable.
+
+**The one constraint it places on everything below.** Every string a user reads that is
+*content* — obligation text, `prompt_override`, SOP body, finding text — must live in a
+row with a `language` column, never in a component. Only *chrome* (column headings,
+button labels, status words) may be literal in the TSX. Then the translation module adds
+rows and flips a language preference; it never has to restructure a page or re-render a
+component tree.
+
+This is cheap to honour now and expensive to retrofit, which is the whole reason to
+write it down before the first slice.
+
 ### Part A — Discharge mode
 
 Add `discharge_mode` to `standards.atoms`, one of `procedure` / `rule` / `evidence` /
@@ -102,7 +122,8 @@ training store is explicitly out of scope here and should be its own brief.
 ### Part B — Department QA page
 
 `/h/[property_id]/operations/quality/[dept]` — one per department, the single door for
-HoD and staff. Five blocks:
+the HoD (§3.0 — English, HoD-facing; staff views come with the translation module).
+Five blocks:
 
 1. **Who we are** — people, HoD, skills, certifications held vs required
 2. **What we must do** — obligations grouped by discharge mode, never one flat list.
@@ -113,8 +134,10 @@ HoD and staff. Five blocks:
 4. **What's open** — findings, overdue reviews, past-due tasks
 5. **Run an audit** — CTA into the phone walk-through
 
-Every row is editable in place by the HoD: set mode, re-word into staff language,
-assign an owner, attach or write the SOP, mark evidence held.
+Every row is editable in place by the HoD: set mode, re-word the obligation into plain
+working English, assign an owner, attach or write the SOP, mark evidence held. That
+re-wording is the row a translator later works from — auditor language translates badly;
+the HoD's plain version is what should reach a member of staff in any language.
 
 The existing `/operations/standard` page becomes the cross-department roll-up; the
 department page is where work happens.
@@ -156,18 +179,19 @@ require data that does not exist yet (see Risks).
 ## 4. Out of scope
 
 - Telephony / voice agent (explicitly rejected in favour of the phone web page)
-- Lao translation of SOPs and obligations (see Risks)
+- **The translation module, and any Lao content.** English only; built after the
+  structure stands (§3.0). This build must not *block* it — hence the content-in-rows
+  constraint — but must not attempt it either.
+- Staff-facing (non-HoD) views and permissions
 - Re-ingesting SLH per-question scores (blocked on PBS supplying the PDFs)
 - The other 7 audit templates beyond the first 3
 - Changes to `/operations/sops` viewer/editor routes
 
 ## 5. Risks and honest limits
 
-**Lao is missing.** 0 of 78 SOPs are in Lao, at a property in Luang Prabang. A surface
-"easy for staff to navigate" is not achievable in English alone for the 13 grounds staff
-or the housekeeping team. Schema supports it — `sop_content.language`,
-`requirements` are per-row — but the content does not exist. This is a translation
-programme, not a UI change, and the page will be HoD-usable before it is staff-usable.
+**~~Lao is missing.~~ Resolved as scope, not risk (PBS, 2026-09-14).** Build in English.
+The audience for v1 is the **HoD**, and HoDs speak English. A translation module comes
+once the structure stands — see the constraint it places on this build in §3.0.
 
 **SLH question-level data was never stored.** `qa_audits.raw` is `{}` on all 8 rows;
 only section totals and a prose `top_miss` were kept. The 338 SLH 2026 questions are in
