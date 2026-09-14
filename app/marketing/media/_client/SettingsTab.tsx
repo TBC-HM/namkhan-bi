@@ -318,6 +318,16 @@ function GuardrailsPanel({ rows, setBanner }: { rows: Rule[]; setBanner: BannerF
         {btn('+ Add rule', openAdd, 'primary')}
       </div>
 
+      {/* PBS 2026-09-14 — rules are reference-only until enforcement is wired */}
+      <div style={{
+        background: '#FFF8E1', border: '1px solid #E8C84A', borderLeft: '3px solid #E8A000',
+        borderRadius: 4, padding: '6px 10px', fontSize: 11, color: '#5A4500', marginBottom: 10,
+      }}>
+        <strong>REFERENCE ONLY — NOT ENFORCED.</strong>
+        {' '}These rules are not evaluated by the scoring engine, publishing pipeline,
+        or any automated gate. Edits have no runtime effect until an enforcement layer is wired.
+      </div>
+
       <div style={{ overflowX:'auto' }}>
         <table style={{ width:'100%', fontSize:11, borderCollapse:'collapse' }}>
           <thead>

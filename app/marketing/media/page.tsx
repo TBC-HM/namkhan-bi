@@ -19,10 +19,20 @@ import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import MediaHub from './_client/MediaHub';
 
+// TWO-PAGE ARCHITECTURE (PBS 2026-09-14):
+// This file (/marketing/media) is the FULL MEDIA HUB — gallery, review queue, video
+// studio, settings tabs. It is Namkhan-specific (L22 known violation below).
+// The CANONICAL SETTINGS PAGE lives at /h/[property_id]/settings/media/page.tsx and
+// is properly tenant-scoped via route params. It imports SettingsTab + UploadDropzone
+// from this file's _client/ folder — no code duplication. Operators reach it from
+// Property Settings > Media. This page is reached from the Marketing nav.
+// L22 STATUS: NAMKHAN_PROPERTY_ID below is a known legacy violation at baseline count.
+// Fix requires routing this page through /h/[property_id]/marketing/media — deferred.
+
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const NAMKHAN_PROPERTY_ID = 260955;
+const NAMKHAN_PROPERTY_ID = 260955; // L22 — known violation at baseline; see comment above.
 
 // PBS 2026-07-21 — paginated fetch of v_marketing_media_page. PostgREST's
 // db-max-rows caps every .select() at 1000 rows even when .limit(5000) is
