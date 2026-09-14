@@ -1,6 +1,9 @@
 // supabase/functions/media-qa-score/index.ts
-// Media QA scoring engine v12 (PBS 2026-09-09).
+// Media QA scoring engine v13 (PBS 2026-09-14).
 //
+// v13: DB-driven tier thresholds — tierFromScores reads marketing.media_tier_thresholds
+//   via loadGuardrails().tiers so operators can tune cutoffs in Property Settings > Media.
+//   marketing_floor is now per-tier from the DB (0-10 scale → ×10 → AI 0-100 scale).
 // v12: marketing floor on shop-window tiers — see tierFromScores below.
 //
 // v11 changes — METERING. v10 made 5 Anthropic vision calls per asset and
@@ -207,26 +210,31 @@ async function callAnthropicVisionB64(apiKey: string, systemPrompt: string, user
   }
 }
 
-// The shop-window gate (PBS 2026-09-09).
-// quality_index is a STORED generated column, 0.5*technical + 0.5*aesthetic —
-// marketing_score carries no weight in it at all, despite being one of the five
-// vision calls we pay for. Live consequence on the first 77 Donna photos: two
-// technically excellent Naughty Suite shots the model itself scored 25 and 42
-// for marketing suitability were tiered tier_ota_profile — the OTA gallery.
-// Rather than change the generated column (which would need a full rescore),
-// cap promotion: a frame the model says is poor marketing material does not
-// reach the shop window on looks alone. It still lands in the social pool.
-// Mirrored at the write boundary by public.fn_media_marketing_floor_tier.
-const MARKETING_FLOOR_FOR_SHOPFRONT = 60;
-
-function tierFromScores(t: number, a: number, m: number): string | null {
+// Shop-window gate (PBS 2026-09-09, updated v13 2026-09-14).
+// quality_index is 0.5*technical + 0.5*aesthetic — marketing_score carries no weight
+// in the stored composite. Consequence: technically excellent but marketing-poor shots
+// (Donna pilot: two shots scored 25 and 42 marketing) were reaching the OTA gallery.
+// Fix: shopfront tiers (hero, ota_profile) require their per-tier marketing minimum;
+// failure falls to tier_social_pool (not the next shopfront tier).
+// Scale contract: min_quality_index is 0-100 (same as AI composite);
+//                 min_marketing/technical/aesthetic are 0-10 (×10 → AI 0-100 scale).
+// DB source: marketing.media_tier_thresholds via loadGuardrails().tiers.
+// Mirrored at the write boundary by public.fn_media_marketing_floor_tier (update separately).
+function tierFromScores(t: number, a: number, m: number, tiers: any[]): string | null {
   const q = t * 0.5 + a * 0.5;
-  const shopfrontOk = m >= MARKETING_FLOOR_FOR_SHOPFRONT;
-  if (q >= 90) return shopfrontOk ? 'tier_website_hero' : 'tier_social_pool';
-  if (q >= 80) return shopfrontOk ? 'tier_ota_profile' : 'tier_social_pool';
-  if (q >= 70) return 'tier_social_pool';
-  if (q >= 60) return 'tier_internal';
-  if (q >= 40) return 'tier_archive';
+  // Descending by quality threshold; exclude tier_logos (min_quality_index=0, catch-all bucket).
+  const ladder = [...tiers]
+    .filter((r: any) => (r.min_quality_index ?? 0) > 0)
+    .sort((ra: any, rb: any) => rb.min_quality_index - ra.min_quality_index);
+  const SHOPFRONT = new Set(['tier_website_hero', 'tier_ota_profile']);
+  for (const tier of ladder) {
+    if (q < (tier.min_quality_index ?? 0)) continue;
+    if (SHOPFRONT.has(tier.tier)) {
+      // Marketing failure on shopfront: demote to social_pool (not the next shopfront tier).
+      return m >= (tier.min_marketing ?? 0) * 10 ? tier.tier : 'tier_social_pool';
+    }
+    return tier.tier;
+  }
   return null;
 }
 
@@ -483,7 +491,7 @@ Deno.serve(async (req) => {
     if (t && new RegExp(t, 'i').test(blob)) failures.push({ rule_type: 'legacy_brand', rule_detail: `legacy brand token "${t}" survived into a generated field`, severity: 'blocker' });
   }
 
-  const autoTier = isHotel === false ? null : tierFromScores(tScore, aScore, mScore);
+  const autoTier = isHotel === false ? null : tierFromScores(tScore, aScore, mScore, guardrails.tiers);
 
   const notes = {
     technical, aesthetic, marketing,
@@ -500,13 +508,13 @@ Deno.serve(async (req) => {
     property: { property_id: propertyId, trading_name: identity.trading_name, brand_slug: identity.brand_slug },
     failures,
     auto_tier: autoTier,
-    marketing_floor: MARKETING_FLOOR_FOR_SHOPFRONT,
+    marketing_floor: (guardrails.tiers.find((r: any) => r.tier === 'tier_website_hero')?.min_marketing ?? 6) * 10,
     scored_at: scoredAt,
     payload_bytes: imageBase64.length,
     persona_len: persona.length,
     persona_role: role,
     guardrails_len: guardrailsBlock.length,
-    engine_version: 'v12',
+    engine_version: 'v13',
     tokens: tally,
     metering,
     errors: errors.length ? errors : undefined,
@@ -531,7 +539,7 @@ Deno.serve(async (req) => {
 
   return new Response(JSON.stringify({
     ok: true,
-    engine_version: 'v12',
+    engine_version: 'v13',
     asset_id,
     property_id: propertyId,
     property: identity.trading_name,
@@ -542,7 +550,7 @@ Deno.serve(async (req) => {
     marketing_score: mScore,
     quality_index: Math.round((tScore * 0.5 + aScore * 0.5)),
     auto_tier: autoTier,
-    marketing_floor: MARKETING_FLOOR_FOR_SHOPFRONT,
+    marketing_floor: (guardrails.tiers.find((r: any) => r.tier === 'tier_website_hero')?.min_marketing ?? 6) * 10,
     naming_convention: naming,
     failures,
     is_hotel_property: isHotel,
