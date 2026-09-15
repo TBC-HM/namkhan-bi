@@ -273,12 +273,16 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/marketing/campaigns',
       '/marketing/content/newsletters',
       '/marketing/media',
+      '/marketing/docs',
     ],
     tabs: [
       { label: 'Compiler',          href: '/h/260955/marketing/compiler'             },
       { label: 'Campaigns',         href: '/h/260955/marketing/campaigns'            },
       { label: 'Newsletter',        href: '/h/260955/marketing/content/newsletters'  },
       { label: 'Media',             href: '/h/260955/marketing/media'                },
+      // PBS 2026-09-15 · owner grant #22 (ADR-222 protected path): the marketing doc hub
+      // at app/marketing/docs already existed but nothing in the nav pointed at it.
+      { label: 'Docs',              href: '/h/260955/marketing/docs'                 },
     ],
   },
   // PBS 2026-07-21 · Digital sub-strip · YouTube moved here from Channels · SEO restored as 4th tab per PBS
