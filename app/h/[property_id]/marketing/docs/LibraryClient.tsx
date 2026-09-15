@@ -87,8 +87,11 @@ export default function LibraryClient({ propertyId }: { propertyId: number }) {
   if (loading) return <div style={{ ...mute, fontSize: 12.5 }}>Loading the library&hellip;</div>;
   if (error && assets.length === 0) return <div style={{ fontSize: 12.5 }}>{error}</div>;
 
-  const essentials = shelves.filter((s) =>
-    ['logos', 'brand', 'collateral', 'factsheets', 'menus', 'press'].includes(s.shelf));
+  // Every shelf gets a card. The old hardcoded six silently hid the rest — including
+  // Unsorted, which is the one a person most needs to see — and would have hidden any
+  // new shelf (SLH, Hilton) the moment SQL started emitting it. fn_marketing_shelves
+  // already returns them in sort_order, so the running order is the server's to decide.
+  const essentials = shelves;
   const byShelf = new Map<string, Asset[]>();
   for (const a of assets) {
     const list = byShelf.get(a.shelf) ?? []; list.push(a); byShelf.set(a.shelf, list);
