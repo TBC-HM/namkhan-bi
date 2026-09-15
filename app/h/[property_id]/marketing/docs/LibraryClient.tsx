@@ -7,9 +7,11 @@
 // 23 shelves and 278 files meant scrolling past everything to reach anything. This version is a
 // filter bar over ONE flat table: pick a shelf, a year, a file type, or type a name.
 //
-// Theme: property-scoped pages must use the --tbl-* tokens. The previous version used --hair /
-// --ink / --paper / --sand, which fall through to Namkhan globals and render black-on-black on
-// Donna's cream palette (.claude/rules/frontend.md).
+// Theme: --paper / --ink / --ink-soft / --hairline, matching the sibling (cockpit)/_design
+// components this page is built from. NOT the --tbl-* family: those default to the DARK Namkhan
+// table theme (globals.css --tbl-bg #15110c, --tbl-fg #e9e1ce) and ThemeInjector only flips them
+// to light for a property whose palette declares a `background` role. Using them here printed
+// gold text on black boxes on Namkhan (PBS, 2026-09-15).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 type Shelf = { shelf: string; label: string; sort_order: number; total: number;
@@ -22,26 +24,26 @@ type Asset = { doc_id: string; shelf: string; title: string | null; file_name: s
 
 type SortKey = 'title' | 'ext' | 'doc_year' | 'created_at' | 'updated_at' | 'size_kb';
 
-const BORDER = '1px solid var(--tbl-border, #E6DFCC)';
-const mute: React.CSSProperties = { color: 'var(--tbl-fg-mute, #5A5A5A)' };
+const BORDER = '1px solid var(--hairline, #E6DFCC)';
+const mute: React.CSSProperties = { color: 'var(--ink-soft, #5A5A5A)' };
 const pill: React.CSSProperties = {
   fontSize: 10.5, padding: '1px 6px', borderRadius: 4, border: BORDER,
-  color: 'var(--tbl-fg-mute, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.04em',
+  color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.04em',
   textDecoration: 'none', whiteSpace: 'nowrap', display: 'inline-block',
 };
-const btn: React.CSSProperties = { ...pill, cursor: 'pointer', background: 'var(--tbl-bg-elev, #FFFFFF)' };
+const btn: React.CSSProperties = { ...pill, cursor: 'pointer', background: 'var(--paper, #FFFFFF)' };
 const field: React.CSSProperties = {
   fontSize: 12.5, padding: '5px 8px', borderRadius: 5, border: BORDER,
-  background: 'var(--tbl-bg-elev, #FFFFFF)', color: 'var(--tbl-fg, #1B1B1B)', fontFamily: 'inherit',
+  background: 'var(--paper, #FFFFFF)', color: 'var(--ink, #1B1B1B)', fontFamily: 'inherit',
 };
 const th: React.CSSProperties = {
   textAlign: 'left', padding: '7px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-  textTransform: 'uppercase', color: 'var(--tbl-fg-mute, #5A5A5A)',
-  borderBottom: '1px solid var(--tbl-border-strong, #D8CFB4)', whiteSpace: 'nowrap', cursor: 'pointer',
+  textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)',
+  borderBottom: '1px solid var(--hairline, #E6DFCC)', whiteSpace: 'nowrap', cursor: 'pointer',
 };
 const td: React.CSSProperties = {
   padding: '7px 8px', fontSize: 12.5, borderBottom: BORDER,
-  color: 'var(--tbl-fg, #1B1B1B)', verticalAlign: 'top',
+  color: 'var(--ink, #1B1B1B)', verticalAlign: 'top',
 };
 
 function size(kb: number) { return kb >= 1024 ? `${Math.round(kb / 1024)} MB` : `${kb} kB`; }
@@ -147,7 +149,7 @@ export default function LibraryClient({ propertyId }: { propertyId: number }) {
   function head(key: SortKey, text: string, extra?: React.CSSProperties) {
     const on = sort === key;
     return (
-      <th style={{ ...th, ...extra, color: on ? 'var(--tbl-fg, #1B1B1B)' : th.color }}
+      <th style={{ ...th, ...extra, color: on ? 'var(--ink, #1B1B1B)' : th.color }}
           onClick={() => { if (on) setDesc(!desc); else { setSort(key); setDesc(true); } }}>
         {text}{on ? (desc ? ' ↓' : ' ↑') : ''}
       </th>
@@ -160,10 +162,10 @@ export default function LibraryClient({ propertyId }: { propertyId: number }) {
   const active = shelves.find((s) => s.shelf === shelf);
 
   return (
-    <div style={{ color: 'var(--tbl-fg, #1B1B1B)' }}>
+    <div style={{ color: 'var(--ink, #1B1B1B)' }}>
       {undo ? (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center',
-                      background: 'var(--tbl-bg-elev, #FFFFFF)', border: BORDER, borderRadius: 6,
+                      background: 'var(--paper, #FFFFFF)', border: BORDER, borderRadius: 6,
                       padding: '8px 10px', marginBottom: 10, fontSize: 12.5 }}>
           <span>Dismissed <strong>{undo.title}</strong> — it stays in the document register.</span>
           <button style={btn} disabled={busy === undo.doc_id} onClick={() => restore(undo.doc_id)}>Undo</button>
@@ -227,7 +229,7 @@ export default function LibraryClient({ propertyId }: { propertyId: number }) {
                 <tr key={a.doc_id}>
                   <td style={{ ...td, minWidth: 260 }}>
                     <a href={a.preview_url} target="_blank" rel="noreferrer"
-                       style={{ textDecoration: 'underline', color: 'var(--tbl-fg, #1B1B1B)' }}>
+                       style={{ textDecoration: 'underline', color: 'var(--ink, #1B1B1B)' }}>
                       {a.title || a.file_name || a.doc_id.slice(0, 8)}
                     </a>
                     {a.copies > 1 ? <span style={{ ...pill, marginLeft: 6 }}>{a.copies} copies</span> : null}
