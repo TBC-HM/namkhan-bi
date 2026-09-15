@@ -15,8 +15,15 @@
 //   · six press releases misfiled as lease agreements are back on Press & media kit
 //   · every row now has preview, download and dismiss
 // Shrink waiver #9: the shelf rendering moved into LibraryClient.tsx so dismiss updates without a reload.
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
+import { MARKETING_SUBPAGES } from '@/app/marketing/_subpages';
 import LibraryClient from './LibraryClient';
+
+// DashboardPage.smartTabs derives `active` from the pathname, so only key/label/href are needed
+// here — same mapping the sibling /marketing/media page uses.
+const MARKETING_TABS: DashboardTab[] = MARKETING_SUBPAGES.map((s) => ({
+  key: s.href, label: s.label, href: s.href,
+}));
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,6 +36,13 @@ export default async function MarketingDocsLibrary({ params }: { params: { prope
 
   return (
     <DashboardPage
+      // PBS 2026-09-15: this page was missing the Marketing department strip that every
+      // sibling has (← HoD · Briefing · Dashboard · Audience · Content · Socials · Web ·
+      // Reputation · Behaviour) — only the Compiler/Campaigns/Newsletter/Media/Docs sub-strip
+      // showed, because that one is derived from the pathname by nav-subgroups while the
+      // department row comes from the `tabs` prop, which this page never passed.
+      // MARKETING_SUBPAGES is the canonical strip (DEPT_CFG.marketing) — never inline tabs.
+      tabs={MARKETING_TABS}
       title="Marketing · Docs"
       subtitle={`${label} asset library — what you reach for, not what the file is called. Dismiss removes a document from this list only; it stays in the document register and stays answerable by the brain.`}
     >
