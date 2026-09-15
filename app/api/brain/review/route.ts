@@ -56,3 +56,26 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, result: data });
 }
+
+// PBS 2026-09-15 · the two dismiss paths. A generic "dismiss" is deliberately NOT offered:
+// fn_brain_review_dismiss raises unless the mode says what the dismissal means.
+//   not_brain_material → brain_excluded = true, gone for good
+//   wrong_guess        → proposal cleared, document returns to the classifier queue
+export async function PATCH(req: NextRequest) {
+  let body: { doc_id?: string; mode?: string; note?: string } = {};
+  try { body = await req.json(); } catch { /* noop */ }
+  const { doc_id, mode } = body;
+  if (!doc_id || !mode) {
+    return NextResponse.json({ ok: false, error: 'doc_id and mode required' }, { status: 400 });
+  }
+  if (mode !== 'not_brain_material' && mode !== 'wrong_guess') {
+    return NextResponse.json({ ok: false, error: 'mode must be not_brain_material or wrong_guess' }, { status: 400 });
+  }
+
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb.rpc('fn_brain_review_dismiss', {
+    p_doc_id: doc_id, p_mode: mode, p_note: body.note ?? null,
+  });
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, result: data });
+}
