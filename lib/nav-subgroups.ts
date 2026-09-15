@@ -131,6 +131,7 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       '/operations/sops', '/operations/qa',
       '/operations/qa/registry', '/operations/qa/proposals',
       '/operations/qa/generate', '/operations/qa/agent-instructions',
+      '/operations/quality/approvals',
     ],
     // PBS 2026-09-14 (protected_path_decisions #20): three tabs become TWO. The SOPs
     // tab is removed — "the extra sop page is confusing. i want one standard page,
@@ -150,6 +151,10 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     tabs: [
       { label: 'Dashboard', href: '/h/260955/operations/quality' },
       { label: 'Standard',  href: '/h/260955/operations/standard' },
+      // PBS 2026-09-15 · owner grant #23. The Standard page counted 288 coverage suggestions
+      // and 332 accepted-but-unwritten SOPs, and neither had anywhere to be decided. This is
+      // that place: confirm/reject a suggested link, triage a proposal. Two tabs become three.
+      { label: 'Approvals', href: '/h/260955/operations/quality/approvals' },
     ],
   },
   {
