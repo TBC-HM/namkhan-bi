@@ -67,6 +67,15 @@ const tdLeft: React.CSSProperties = { ...td, textAlign: 'left' };
 const tfoot: React.CSSProperties = { ...td, fontWeight: 600, borderBottom: 'none' };
 const tfootLeft: React.CSSProperties = { ...tfoot, textAlign: 'left' };
 const dim = (n: number): React.CSSProperties => (n === 0 ? { opacity: 0.35 } : {});
+const cellLink: React.CSSProperties = { color: 'inherit', textDecoration: 'none', borderBottom: '1px dotted var(--hair, #E6DFCC)' };
+
+// Every number is a door into the register, which filters on family / status / needs-review.
+// The register has no filter for brain_excluded or no-text yet, so those cells open the family
+// list unfiltered rather than pretending to a filter that does not exist.
+function Cell({ n, href, title }: { n: number; href?: string; title?: string }) {
+  if (!href || n === 0) return <>{n}</>;
+  return <a href={href} title={title} style={cellLink}>{n}</a>;
+}
 
 function sum(rows: Array<Record<string, number | string | null>>, key: string): number {
   return rows.reduce((acc, r) => acc + (typeof r[key] === 'number' ? (r[key] as number) : 0), 0);
@@ -159,12 +168,24 @@ export default async function ArchiveOverviewPage({ propertyId, propertyLabel, s
                         {f.label}
                         <span style={{ opacity: 0.5, fontSize: 11.5 }}> · {f.doc_type}</span>
                       </td>
-                      <td style={td}>{f.total}</td>
-                      <td style={{ ...td, ...dim(f.live_for_brain) }}>{f.live_for_brain}</td>
-                      <td style={{ ...td, ...dim(f.archived) }}>{f.archived}</td>
-                      <td style={{ ...td, ...dim(f.brain_excluded) }}>{f.brain_excluded}</td>
-                      <td style={{ ...td, ...dim(f.needs_human) }}>{f.needs_human}</td>
-                      <td style={{ ...td, ...dim(f.no_text) }}>{f.no_text}</td>
+                      <td style={td}>
+                        <Cell n={f.total} href={`${docsHref}?family=${encodeURIComponent(f.doc_type)}&nr=0&page=1`} title={`All ${f.label} documents in the register`} />
+                      </td>
+                      <td style={{ ...td, ...dim(f.live_for_brain) }}>
+                        <Cell n={f.live_for_brain} href={`${docsHref}?family=${encodeURIComponent(f.doc_type)}&nr=0&page=1`} title="Register has no live-for-brain filter yet — opens the whole family" />
+                      </td>
+                      <td style={{ ...td, ...dim(f.archived) }}>
+                        <Cell n={f.archived} href={`${docsHref}?family=${encodeURIComponent(f.doc_type)}&status=archived&nr=0&page=1`} title={`Archived ${f.label} documents`} />
+                      </td>
+                      <td style={{ ...td, ...dim(f.brain_excluded) }}>
+                        <Cell n={f.brain_excluded} href={`${docsHref}?family=${encodeURIComponent(f.doc_type)}&nr=0&page=1`} title="Register has no excluded filter yet — opens the whole family" />
+                      </td>
+                      <td style={{ ...td, ...dim(f.needs_human) }}>
+                        <Cell n={f.needs_human} href={`${docsHref}?family=${encodeURIComponent(f.doc_type)}&nr=1&page=1`} title={`${f.label} documents flagged for review — map them here`} />
+                      </td>
+                      <td style={{ ...td, ...dim(f.no_text) }}>
+                        <Cell n={f.no_text} href={`${docsHref}?family=${encodeURIComponent(f.doc_type)}&nr=0&page=1`} title="Register has no no-text filter yet — opens the whole family" />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
